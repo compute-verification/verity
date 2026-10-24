@@ -21,16 +21,19 @@ def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     return src
 
 
-def attach(engine: Any, layers: Sequence[Any], **committer: Any) -> tuple[Any, Any, CommitTap]:
-    """The Commit on ``engine`` (`engine.build.build_engine`'s), installed: a `NativeHostCommitter` (``committer`` its
-    keywords), the int8 source (`source`) and its `CommitTap`. Returns the committer, the source and the tap;
+def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, **committer: Any
+           ) -> tuple[Any, Any, CommitTap]:
+    """The Commit on ``engine`` (`engine.build.build_engine`'s, or a rank's, `pouw_h1_ranks.RankExtension.h1rank_commit`),
+    installed: a `NativeHostCommitter` (``committer`` its keywords), the int8 source (`source`) and its `CommitTap`
+    (``tap``, given its ``embed`` here, else a new one). Returns the committer, the source and the tap;
     ``committer.close()`` and ``tap.untap()`` remove them."""
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
     com = NativeHostCommitter(engine, **committer)
     src = source(com, com.model, layers)
     com.attach_source(src)
-    tap = CommitTap(next((n for n, m in com._modules if com._acquires_input(n, m)), None))
+    tap = tap if tap is not None else CommitTap()
+    tap.embed = next((n for n, m in com._modules if com._acquires_input(n, m)), None)
     if tap.embed is None:
         raise ValueError("the committer acquires no module's input: no embedding gives the step's token ids")
     tap.tap(com)
