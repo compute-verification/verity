@@ -283,4 +283,143 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
     all_goals (rw [hR] at h; conv at h => lhs; whnf)
     all_goals exact absurd h (by intro h; injection h)
 
+/-- What the decoder establishes of a Definition a node may call: a primitive is one gate with one output leaf and an empty
+body, a composite's body has its parameters and returns as many references as its type has leaves. -/
+def CalleeOk (c : Defn) : Prop :=
+  (c.prim = true → c.body = default ∧ c.gates = 1 ∧ c.outLeaves = 1 ∧ ∃ w, c.ret = .value w) ∧
+  (c.prim = false → c.body.params = c.params ∧ c.body.ret.count = c.ret.leaves ∧ c.outLeaves = c.ret.leaves)
+
+/-- What the decoder establishes of a node calling `c`: one argument per parameter, each as many references as its type
+has leaves, a primitive node calling a primitive and a call or scan a composite, and `buildNode`'s `Shape`. -/
+def NodeOk (c : Defn) (nd : Node) : Prop :=
+  nd.args.size = c.params.size ∧ (∀ i < nd.args.size, (nd.args[i]!).seq.count = (nd.args[i]!).ty.leaves) ∧
+  (nd.form = .prim → c.prim = true) ∧ (nd.form = .call ∨ nd.form = .scan → c.prim = false) ∧
+  Shape c nd.form nd.args nd.out nd.n nd.nxs
+
+theorem beq_prim_batch : (Form.prim == Form.batch) = false := rfl
+theorem beq_call_batch : (Form.call == Form.batch) = false := rfl
+theorem beq_batch_batch : (Form.batch == Form.batch) = true := rfl
+theorem beq_scan_batch : (Form.scan == Form.batch) = false := rfl
+
+theorem lt_mul_of (m n E j : ℕ) (hm : m < n) (hj : j < E) : m * E + j < n * E := by
+  have : (m + 1) * E ≤ n * E := Nat.mul_le_mul_right _ hm
+  rw [Nat.add_mul, Nat.one_mul] at this
+  omega
+
+theorem up_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Resolve.UpOk nd c := by
+  obtain ⟨hsz, hcnt, hpr, hco, hsh⟩ := hn
+  intro i hi j hj m hm
+  cases hp : c.prim
+  · obtain ⟨hbp, hbr, hol⟩ := hc.2 hp
+    rw [hbp] at hi hj
+    have hia : i < nd.args.size := by omega
+    obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
+    dsimp only at *
+    cases form
+    · exact absurd (hpr rfl) (by simp [hp])
+    · rw [hcnt i hia, hsh.2 i hia]; exact hj
+    · obtain ⟨-, hargs⟩ := hsh
+      change m < n at hm
+      rcases hargs i hia with ⟨hd, ht⟩ | ⟨ax, mt, hrm, hmt, hd⟩
+      · simp only [Resolve.memberIdx, hd]; rw [hcnt i hia, ht]; exact hj
+      · obtain ⟨L, hax, hlv, -, hb⟩ := axis_spec ax _ _ _ hrm
+        simp only [Resolve.memberIdx, hd, hax]; rw [hcnt i hia]
+        exact hb j (by rw [hmt]; exact hj) m hm
+    · obtain ⟨carry, y, hret, -, hp0, ha0, hrest⟩ := hsh
+      change m < n at hm
+      dsimp only
+      split
+      · subst i
+        split
+        · rw [hcnt 0 hia, ha0, ← hp0]; exact hj
+        · rw [hbr, hret, leaves_tuple2, ← hp0]; omega
+      · rename_i hi0
+        obtain ⟨hx, hs⟩ := hrest i hia hi0
+        split
+        · rename_i hix
+          obtain ⟨e, hte, hep, hd⟩ := hx hix
+          rw [hd, hcnt i hia, hte, leaves_array]
+          simp only [Option.map_some, Option.getD_some]
+          rw [hep]; exact lt_mul_of m n _ j hm hj
+        · rename_i hix
+          rw [hcnt i hia, hs hix]; exact hj
+  · obtain ⟨hbody, -, -, -⟩ := hc.1 hp
+    rw [hbody] at hi
+    exact (Nat.not_lt_zero _ hi).elim
+
+theorem down_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Resolve.DownOk nd c := by
+  obtain ⟨hsz, hcnt, hpr, hco, hsh⟩ := hn
+  intro j hj
+  obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
+  dsimp only at *
+  have hol : c.outLeaves = c.ret.leaves := by
+    cases hp : c.prim
+    · exact (hc.2 hp).2.2
+    · obtain ⟨-, -, h1, w, hw⟩ := hc.1 hp
+      rw [h1, hw, leaves_value]
+  cases form
+  · have hp := hpr rfl
+    exact ⟨hp, (hc.1 hp).2.1⟩
+  · have hp := hco (Or.inl rfl)
+    obtain ⟨-, hbr, -⟩ := hc.2 hp
+    rw [hsh.1] at hj
+    exact ⟨hp, by rw [hbr]; exact hj⟩
+  · obtain ⟨hout, -⟩ := hsh
+    rw [hout, leaves_array] at hj
+    have hL : 0 < c.ret.leaves := by
+      rcases Nat.eq_zero_or_pos c.ret.leaves with h0 | h0
+      · rw [h0] at hj; simp at hj
+      · exact h0
+    refine ⟨?_, fun hp => (hc.1 hp).2.1, fun hp => ?_⟩
+    · rw [hol]; exact (Nat.div_lt_iff_lt_mul hL).2 hj
+    · rw [hol, (hc.2 hp).2.1]; exact Nat.mod_lt _ hL
+  · have hp := hco (Or.inr rfl)
+    obtain ⟨-, hbr, -⟩ := hc.2 hp
+    obtain ⟨carry, y, hret, hout, -, -, -⟩ := hsh
+    refine ⟨hp, fun hn0 => ⟨carry, y, hret, ?_, ?_⟩⟩
+    · rw [hout, leaves_tuple2, leaves_array] at hj
+      split
+      · omega
+      · rename_i hjc
+        have hy : 0 < y.leaves := by
+          rcases Nat.eq_zero_or_pos y.leaves with h0 | h0
+          · rw [h0] at hj; simp at hj; omega
+          · exact h0
+        exact (Nat.div_lt_iff_lt_mul hy).2 (by omega)
+    · rw [hbr, hret, leaves_tuple2]
+      rw [hout, leaves_tuple2, leaves_array] at hj
+      split
+      · omega
+      · rename_i hjc
+        have hy : 0 < y.leaves := by
+          rcases Nat.eq_zero_or_pos y.leaves with h0 | h0
+          · rw [h0] at hj; simp at hj; omega
+          · exact h0
+        have := Nat.mod_lt (j - carry.leaves) hy
+        omega
+
+theorem op_ok (c : Defn) (nd : Node) (hn : NodeOk c nd) : Resolve.OpOk nd c := by
+  obtain ⟨hsz, hcnt, hpr, hco, hsh⟩ := hn
+  intro i hi m hm t ht
+  obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
+  dsimp only at *
+  cases form
+  case prim | call | scan =>
+    simp only [beq_prim_batch, beq_call_batch, beq_scan_batch, Bool.false_and, Bool.false_eq_true,
+      ↓reduceIte] at ht ⊢
+    exact ht
+  change m < n at hm
+  simp only [beq_batch_batch, Bool.true_and, ↓reduceIte] at ht ⊢
+  obtain ⟨-, hargs⟩ := hsh
+  rcases hargs i hi with ⟨hd, -⟩ | ⟨ax, mt, hrm, hmt, hd⟩
+  · rw [hd] at ht
+    simp only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at ht
+    simp only [Resolve.memberIdx, hd]; exact ht
+  · obtain ⟨L, hax, hlv, -, hb⟩ := axis_spec ax _ _ _ hrm
+    rw [hd, hax] at ht
+    simp only [Option.isSome_some, ↓reduceIte] at ht
+    simp only [Resolve.memberIdx, hd, hax]
+    rw [hcnt i hi]
+    exact hb t (by rw [hmt]; exact ht) m hm
+
 end NciCheck.Properties.SecurityProofs.BodiesOk
