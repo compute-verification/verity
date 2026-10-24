@@ -466,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("roots", type=Path, nargs="+", help="a corpus run's model directory, <out>/corpus/<model>")
     c.add_argument("--out", type=Path, required=True)
     c.add_argument("--folds", type=int, default=2)
+    c.add_argument("--label", help="the corpus as the table names it (its art: id, say); default the roots' names")
     a = ap.parse_args(argv)
     if a.cmd == "corpus":
         TC = _load("trace_corpus")
@@ -474,8 +475,8 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"{len(traces)} traces: need at least {max(a.folds, 2)} for {a.folds} folds")
         caps = dataclasses.replace(traces[0]["caps"], **{f.name: max(getattr(t["caps"], f.name) for t in traces)
                                                          for f in dataclasses.fields(traces[0]["caps"])})
-        names = ", ".join(r.name for r in a.roots)
-        res = run(traces, traces, caps, 600, 100_000, a.out, f"TRACE-CORPUS vLLM traces ({names})", folds=a.folds)
+        label = a.label or ", ".join(r.name for r in a.roots)
+        res = run(traces, traces, caps, 600, 100_000, a.out, f"TRACE-CORPUS vLLM traces ({label})", folds=a.folds)
         print((a.out / "table.md").read_text())
         print(f"{res['meta']['seconds']} s")
     if a.cmd == "synth":
