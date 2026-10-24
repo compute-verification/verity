@@ -467,12 +467,13 @@ def _app(tmp_path: Path, files: dict[str, str], edits: dict[str, str]) -> dict:
 
 def test_prose_paths_and_module_names_in_any_text_file_are_certified(tmp_path):
     r = _app(tmp_path, {
-        "README.md": "The store (`pkg/app/store/`, `app/store/remote.py`) is `app.store.remote.Session`.\n",
+        "README.md": "The store (`pkg/app/store/`, `app/store/remote.py`) is `app.store.remote.Session`.\n"
+                     "Its test is `tests/store/test_remote.py`.\n",
         "run.sh": 'git show "$SHA:pkg/app/store/host.py" > host.py  # app.linear.api\n',
         "keep.json": '{"app.linear.api": "pkg/app/linear/api.py"}\n',
         "pkg/app/doc.py": '"""Through `app.store.remote.Session` (pkg/app/store/remote.py)."""\n'}, {
         "README.md": "The store (`pkg/app/protocols/bandwidth/`, `app/protocols/bandwidth/remote.py`) is "
-                     "`app.protocols.bandwidth.remote.Session`.\n",
+                     "`app.protocols.bandwidth.remote.Session`.\nIts test is `tests/store/test_remote.py`.\n",
         "run.sh": 'git show "$SHA:pkg/app/protocols/bandwidth/host.py" > host.py  # app.protocols.linear.api\n',
         "keep.json": '{"app.protocols.linear.api": "pkg/app/protocols/linear/api.py"}\n',
         "pkg/app/doc.py": '"""Through `app.protocols.bandwidth.remote.Session` (pkg/app/protocols/bandwidth/remote.py)."""\n',
@@ -482,6 +483,29 @@ def test_prose_paths_and_module_names_in_any_text_file_are_certified(tmp_path):
     assert {e["path"]: e["kind"] for e in r["edits"]} == {
         "README.md": "text", "run.sh": "text", "keep.json": "text", "pkg/app/doc.py": "python", ".gitignore": "text",
         "pkg/tests/protocols/bandwidth/test_remote.py": "python"}
+
+
+PY_OLD = ("from app import linear, store as ST\nfrom app.store import remote as R\n\n"
+          'HOST = Path(__file__).resolve().parents[0] / "store" / "host.py"\nUP = Path(R.__file__).parents[1]\n')
+PY_NEW = ("from app.protocols import linear\nfrom app.protocols import bandwidth as ST\nfrom app.protocols.bandwidth import remote as R\n\n"
+          'HOST = Path(__file__).resolve().parents[0] / "protocols" / "bandwidth" / "host.py"\nUP = Path(R.__file__).parents[2]\n')
+
+
+def test_moved_modules_imported_by_name_and_anchors_with_a_path_are_certified(tmp_path):
+    r = _app(tmp_path, {"pkg/app/use.py": PY_OLD}, {"pkg/app/use.py": PY_NEW})
+    assert r["certified"], r["refusals"]
+
+
+def test_an_import_that_binds_another_name_is_refused(tmp_path):
+    [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
+               {"pkg/app/use.py": PY_NEW.replace("bandwidth as ST", "bandwidth as BW")})["refusals"]
+    assert f["path"] == "pkg/app/use.py" and "BW" in f["hunk"]
+
+
+def test_a_module_anchor_that_names_another_directory_is_refused(tmp_path):
+    [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
+               {"pkg/app/use.py": PY_NEW.replace("parents[2]", "parents[3]")})["refusals"]
+    assert f["path"] == "pkg/app/use.py" and "parents[3]" in f["hunk"]
 
 
 def test_a_word_that_names_no_moved_path_is_refused_in_prose(tmp_path):

@@ -5,14 +5,16 @@ train (Daniel, 4 Oct). It relaxes no gate: a certified move still goes through `
 
 Every path git sees changed must be one of:
 - a rename with byte-identical content and mode (git's 100% rename);
-- an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it is rewritten to
-  where it is now: a path from the root, or from a directory its old and new places share (`verity_vllm/predict/`); in
-  `RELATIVE_NAMES`, a quoted relative path (`".."`, `"../level3"`) resolved against the file's own directory first; in a
-  `*.py` file, a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed line left may only rewrite a dotted name
-  (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.store`'s) from where a renamed module was to where it is now; in a
-  `*.py` file, also the module of an `import M` / `from M import` line, a relative one (`.m`) read from the file's own
-  place, or a `Path(__file__).parents[N]` anchor recounted to name, from the file's new place, the directory the old one
-  named, moved;
+- an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root)
+  is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
+  the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
+  line left may only rewrite a moved path as written below a directory its old and new places share
+  (`verity_vllm/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.store`'s) from where a
+  renamed module was to where it is now; in a `*.py` file, also the module of an `import M` / `from M import` line (a
+  relative one, `.m`, read from the file's own place), the modules a run of import lines binds each name to
+  (`from a import m as M` to `from b import m2 as M`, a line split in two), or a `Path(__file__).parents[N]` anchor
+  (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
+  moved;
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`;
@@ -209,12 +211,15 @@ def map_path(p: str, pmap: dict[str, str]) -> str:
     return p
 
 
+@functools.lru_cache(maxsize=8)
+def _paths_pattern(olds: tuple[str, ...]) -> re.Pattern:
+    return re.compile(r"(?:(?<![\w.\-/])|(?<=^/))(" + "|".join(map(re.escape, olds)) + r")(?![\w.\-])", re.M)
+
+
 def substitute(text: str, pmap: dict[str, str]) -> str:
     if not pmap:
         return text
-    olds = sorted(pmap, key=len, reverse=True)
-    pattern = re.compile(r"(?:(?<![\w.\-/])|(?<=^/))(" + "|".join(map(re.escape, olds)) + r")(?![\w.\-])", re.M)
-    return pattern.sub(lambda m: pmap[m.group(1)], text)
+    return _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).sub(lambda m: pmap[m.group(1)], text)
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
@@ -306,24 +311,79 @@ def import_rewrite(old: str, new: str, modules: Modules, old_path: str = "", new
                                                                       absolute(gn[i + 1], new_path))
 
 
-#: `Path(__file__).parents[N]` or `Path(__file__).parent.parent`, the directory a file names its paths from
-ANCHOR = re.compile(r"(?P<head>Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?)(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent\b)+))")
+FROM = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+([\w\s,]+?)\s*(#.*)?$")
+IMPORT_AS = re.compile(r"^(\s*)import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*(#.*)?$")
 
 
-def anchored(m: re.Match, path: str) -> str | None:
+def bindings(lines: list[str], path: str) -> list[tuple[str, str, str, str]] | None:
+    """Each name the import lines bind, as (indent, comment, the dotted name it binds, the name), or None if a line isn't
+    one such import."""
+    out = []
+    for line in lines:
+        if m := FROM.match(line):
+            for part in m.group(3).split(","):
+                name, _, alias = (w.strip() for w in part.partition(" as "))
+                if not name.isidentifier() or (alias and not alias.isidentifier()):
+                    return None
+                out.append((m.group(1), m.group(4) or "", f"{absolute(m.group(2), path)}.{name}", alias or name))
+        elif m := IMPORT_AS.match(line):
+            out.append((m.group(1), m.group(4) or "", m.group(2), m.group(3) or m.group(2)))
+        else:
+            return None
+    return out
+
+
+def import_block(old: list[str], new: list[str], modules: Modules, old_path: str, new_path: str) -> bool:
+    """Whether the import lines `new` bind the names `old` did, each to where its module moved (`from a import m as M`
+    to `from b import m2 as M`, one line split in two)."""
+    a, b = bindings(old, old_path), bindings(new, new_path)
+    if a is None or b is None or len(a) != len(b):
+        return False
+    rest = list(b)
+    for indent, comment, x, name in a:
+        y = next((t for t in rest if t[:2] == (indent, comment) and (t[3] == name or name == x)
+                  and (t[2] == x or moved_name(x, t[2], modules))), None)
+        if y is None:
+            return False
+        rest.remove(y)
+    return True
+
+
+#: `Path(__file__).parents[N]` or `.parent.parent` (or a module's, `Path(m.__file__)`), the directory a file names its
+#: paths from, and the path joined to it (`ROOT / "a/b"`, a chain joined by `join_chains`)
+ANCHOR = re.compile(r"(?P<head>Path\((?:__file__|(?P<mod>[A-Za-z_]\w*)\.__file__)\)(?:\.resolve\(\)|\.absolute\(\))?)"
+                    r"(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent\b)+))(?:\s*/\s*\"(?P<rest>[^\"]+)\")?")
+
+
+def anchored(m: re.Match, path: str | None) -> str | None:
+    if path is None:
+        return None
     up = int(m.group("n")) if m.group("n") is not None else m.group("p").count(".parent") - 1
     dirs = [p for p in posixpath.dirname(path).split("/") if p]
-    return "/".join(dirs[:len(dirs) - up]) if up <= len(dirs) else None
+    if up > len(dirs):
+        return None
+    d = "/".join(dirs[:len(dirs) - up])
+    return posixpath.normpath(posixpath.join(d, m.group("rest"))) if m.group("rest") else d
 
 
-def anchor_rewrite(old: str, new: str, old_path: str, new_path: str, pmap: dict[str, str]) -> bool:
-    """Whether `new` is `old` with each `__file__` anchor recounted so that, from the file's new place, it names the
-    directory the old one named, moved by `pmap`."""
+def module_file(tree: Tree, text: str, alias: str) -> str | None:
+    """The file of the module `text` imports as `alias`, when exactly one file of `tree` is that module."""
+    m = re.search(rf"^\s*from\s+([\w.]+)\s+import\s+(\w+)\s+as\s+{alias}\b|^\s*import\s+([\w.]+)\s+as\s+{alias}\b", text, re.M)
+    if m is None:
+        return None
+    tail = (f"{m.group(1)}.{m.group(2)}" if m.group(1) else m.group(3)).replace(".", "/")
+    hits = [f for f in tree.files if ("/" + f).endswith(("/" + tail + ".py", "/" + tail + "/__init__.py"))]
+    return hits[0] if len(hits) == 1 else None
+
+
+def anchor_rewrite(old: str, new: str, at_old, at_new, pmap: dict[str, str]) -> bool:
+    """Whether `new` is `old` with each anchor recounted so that, from where it now is (`at_new(module alias or None)`),
+    it names the path the old one named, moved by `pmap`."""
     a, b = list(ANCHOR.finditer(old)), list(ANCHOR.finditer(new))
     if not a or len(a) != len(b) or ANCHOR.sub("\0", old) != ANCHOR.sub("\0", new):
         return False
     for x, y in zip(a, b):
-        dx, dy = anchored(x, old_path), anchored(y, new_path)
+        dx, dy = anchored(x, at_old(x.group("mod"))), anchored(y, at_new(y.group("mod")))
         if x.group("head") != y.group("head") or dx is None or dy is None or map_path(dx, pmap) != dy:
             return False
     return True
@@ -392,14 +452,16 @@ def hunk(a: list[str], b: list[str], i1: int, i2: int, j1: int, j2: int) -> str:
 
 
 def first_unexplained(a: list[str], b: list[str], na: list[str], nb: list[str], pair=None, line=None,
-                      added=None) -> str | None:
+                      added=None, block=None) -> str | None:
     """The first hunk of `na` -> `nb` (normalized, line for line `a` and `b`) whose changed lines are neither each a `pair`
-    rewrite, nor each a `line`, nor (lines only added) each an `added` line, in the file's own lines; None when every change
-    is explained."""
+    rewrite, nor each a `line`, nor (lines only added) each an `added` line, nor together a `block` rewrite, in the file's
+    own lines; None when every change is explained."""
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, na, nb, autojunk=False).get_opcodes():
         if tag == "equal":
             continue
         if pair and tag == "replace" and i2 - i1 == j2 - j1 and all(pair(x, y) for x, y in zip(na[i1:i2], nb[j1:j2])):
+            continue
+        if block and tag == "replace" and block(na[i1:i2], nb[j1:j2]):
             continue
         if line and all(line(x) for x in na[i1:i2] + nb[j1:j2]):
             continue
@@ -597,7 +659,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             entries.remove(a)
             d.update(status="R", score=100 if d["shas"][0] == a["shas"][1] else 0, new=new,
                      modes=(d["modes"][0], a["modes"][1]), shas=(d["shas"][0], a["shas"][1]))
-    spmap = {**short_forms(pmap, B), **pmap}
+    short = short_forms(pmap, B)
     renamed = [(e["old"], e["new"]) for e in entries if e["status"] == "R"]
     modules = Modules(renamed, dotted)
     lmods, dests = {}, {}
@@ -705,13 +767,20 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         else:
             rel, py = name in RELATIVE_NAMES, new.endswith(".py")
             na_text = resolve_relative(a, old, pmap) if rel else join_chains(a) if py else a
-            na = (na_text if a == b else substitute(na_text, spmap)).splitlines()
+            na = (na_text if a == b else substitute(na_text, pmap)).splitlines()
             nb = (resolve_relative(b, new, {}) if rel else join_chains(b) if py else b).splitlines()
 
-            def pair(x: str, y: str) -> bool:
-                return ((py and (import_rewrite(x, y, modules, old, new) or anchor_rewrite(x, y, old, new, pmap)))
-                        or dotted_rewrite(x, y, modules) or registry_pair(new, x, y))
-            h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y))
+            def at(tree: Tree, path: str, text: str):
+                return lambda mod: path if mod is None else module_file(tree, text, mod)
+
+            def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:
+                return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)))
+                           or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)
+                           for z in dict.fromkeys((x, substitute(x, short))))
+
+            def block(xs: list[str], ys: list[str]) -> bool:
+                return py and import_block(xs, ys, modules, old, new)
+            h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block)
             why = h and ("relative path now resolves elsewhere" if a == b else "edit beyond moved paths and module names", h)
         if why:
             refuse(e, *why)
