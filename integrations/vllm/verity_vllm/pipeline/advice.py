@@ -23,7 +23,8 @@ the advice's length go public, as the binding a window's registration carries (`
 ``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
     registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
-                          registered compiler with ℓ, the cap on the advice's length its digest covers (``compiler``), and the bits
+                          registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
+                          and the compiler it wraps (``compiler``), and the bits
                           I1 charges each egress window of `--T` buckets (``bits_by_window``)
     private/advice.bin    the prover's: the advice, I1's canonical encoding
     private/advice.json   the same advice, I1's `to_json`
@@ -60,35 +61,31 @@ SERVED = "verity-vllm/advice-windows-index/v1"
 COMPILER = "verity_vllm.predict.steps.compile_steps"
 
 
-#: ℓ when the registration names none, `predict.steps.CAP_BITS` (1 MiB of advice)
-CAP_BITS = 1 << 23
+#: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
+CAP_BITS = AW.CAP_BITS
 
 
 @dataclass(frozen=True)
 class Compiler:
-    """The registered compiler as the binding names it: ``name`` and ``digest`` (128 hex digits), and ℓ, the cap on the advice's
-    length in bits it is total up to (PRF-143), which the digest covers."""
+    """The compiler the cap wraps (`advice_windows.Capped`): ``name`` and ``digest`` (128 hex digits)."""
     name: str
     digest: str
-    cap_bits: int = CAP_BITS
 
 
-def compiler_digest(name: str, code: str, cap_bits: int) -> str:
-    """The registered compiler's digest: SHA-512 of its name, its code identity and ℓ, so the registration fixes ℓ before the
-    run as it fixes the code."""
-    return hashlib.sha512(canonical_json({"name": name, "code": code, "cap_bits": int(cap_bits)})).hexdigest()
+def compiler_digest(name: str, code: str) -> str:
+    """The inner compiler's digest: SHA-512 of its name and its code identity."""
+    return hashlib.sha512(canonical_json({"name": name, "code": code})).hexdigest()
 
 
-def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> Compiler:
-    """The compiler the advice is bound to, total up to ℓ = ``cap_bits``; without ``digest``, `compiler_digest` over `name`, the
-    tree's code identity (`source_identity.code_identity`) and ℓ.  A ``digest`` given is taken as one that covers ℓ."""
-    if isinstance(cap_bits, bool) or not isinstance(cap_bits, int) or cap_bits < 8:
-        raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {cap_bits!r}")
+def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
+    """The compiler the advice is bound to: `advice_windows.Capped` (PROVE-PATH's, whose digest names the inner compiler's and ℓ =
+    ``cap_bits``) over ``name``, whose digest is ``digest``, else `compiler_digest` over `name` and the tree's code identity
+    (`source_identity.code_identity`)."""
     if digest is None:
         # TODO: COMPILER's own registered digest once compile_steps lands with one
         from verity_vllm.pipeline import source_identity as SI
-        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"], cap_bits)
-    return Compiler(name, digest, int(cap_bits))
+        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+    return AW.Capped(Compiler(name, digest), cap_bits)
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -295,16 +292,17 @@ def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int) ->
     """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
     bits) and the bits I1 charges each egress window of ``T`` buckets.  Nothing of the advice itself."""
     return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(I1.total_bits(a))),
-            "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(getattr(compiler, "cap_bits", CAP_BITS))},
+            "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
+                         "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
             "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
             "bits_by_window": {str(w): int(n) for w, n in sorted(I1.bits_by_window(a, int(T)).items())}}
 
 
 def commit(compiler: Any, a: I1.Advice, T: int = 600, salts: list[bytes] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The advice committed: its public registration (`registration`) and its private opening (`advice_windows.opening`).  Advice
-    over the compiler's ℓ is refused: the compiler is total only up to it."""
+    over the compiler's ℓ (``compiler``: an `advice_windows.Capped`) is refused: the compiler is total only up to it."""
     data = I1.encode(a)
-    cap = int(getattr(compiler, "cap_bits", CAP_BITS))
+    cap = int(compiler.cap_bits)
     if 8 * len(data) > cap:
         raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
     reg = AW.commit_advice(compiler, data, salts)
@@ -445,11 +443,10 @@ class Options:
     window: int | None = option("--window", type=int, default=None, help="a server's run: only this Commit window (default every closed one)")
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
-                                         help="its digest, 128 hex digits, covering the cap (default: SHA-512 of the name, the tree's "
-                                              "code identity and --cap)")
+                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
-                      help="ℓ, the cap on the advice's length in bits the compiler is total up to (PRF-143), registered before the run "
-                           "and covered by the compiler's digest (default 2^23, 1 MiB)")
+                      help="ℓ, the cap on the advice's length in bits the compiler is total up to (PRF-143): the registered compiler is "
+                           "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
 

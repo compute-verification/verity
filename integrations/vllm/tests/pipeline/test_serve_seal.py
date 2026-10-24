@@ -1,5 +1,5 @@
 """A served window sealed as a deferred Commit's row dir (`serve_commit.seal_window`) and opened as PROVE-PATH opens it
-(`deferred_rows.of_record`), and the cap the advice compiler's registration carries (`advice.Compiler.cap_bits`).  CPU only."""
+(`deferred_rows.of_record`), and the registered advice compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
 from __future__ import annotations
 
 import json
@@ -81,16 +81,25 @@ def test_a_sealed_window_whose_record_is_not_its_bundles_is_refused(tmp_path, ta
 
 # ---------------------------------------------------------------------------------------------------------------- the advice's cap
 
-def test_the_cap_is_in_the_compiler_digest_and_the_registration(tmp_path):
+def test_the_registered_compiler_is_prove_paths_capped_compiler():
+    """registration.json's compiler digest is the one PROVE-PATH's capped re-commit binds: `advice_windows.Capped`'s formula."""
+    import hashlib
+
+    from verity.ml.circuits.codec import canonical_json
+    from verity_vllm.pipeline import advice_windows as AW
     from verity_vllm.predict import steps as ST
 
-    assert ADV.CAP_BITS == ST.CAP_BITS
-    a, b = ADV.registered_compiler("c"), ADV.registered_compiler("c", cap_bits=1 << 20)
-    assert a.cap_bits == ADV.CAP_BITS and b.cap_bits == 1 << 20 and a.digest != b.digest and len(bytes.fromhex(a.digest)) == 64
-    assert ADV.registered_compiler("c", digest="ab" * 64, cap_bits=64).digest == "ab" * 64
+    assert ADV.CAP_BITS == AW.CAP_BITS == ST.CAP_BITS == 1 << 23 and AW.CAPPED == "verity/prove-path/capped-compiler/v0"
+    c = ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096)
+    want = hashlib.sha512(canonical_json({"name": "verity/prove-path/capped-compiler/v0", "cap_bits": 4096,
+                                          "compiler": {"name": "inner-compiler", "digest": "cd" * 64}})).hexdigest()
+    assert isinstance(c, AW.Capped) and c.name == AW.CAPPED and c.digest == want
+    assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
+    assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
+    assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
 
 
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])
 def test_a_cap_that_is_not_a_bit_count_is_refused(cap):
-    with pytest.raises((ValueError, TypeError)):
-        ADV.registered_compiler("c", cap_bits=cap)
+    with pytest.raises(ValueError, match="whole number of bits"):
+        ADV.registered_compiler("c", digest="ab" * 64, cap_bits=cap)

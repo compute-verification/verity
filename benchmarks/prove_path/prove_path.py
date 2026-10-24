@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
 import json
 import multiprocessing
 import os
@@ -48,7 +47,6 @@ import sys
 import time
 from collections.abc import Iterator, Mapping
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -56,36 +54,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
-CAPPED = "verity/prove-path/capped-compiler/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
-#: bits a row)
-CAP_BITS = 1 << 23
-
-
-@dataclass(frozen=True)
-class Capped:
-    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
-
-    inner: Any
-    cap_bits: int = CAP_BITS
-    name: str = CAPPED
-
-    def __post_init__(self) -> None:
-        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
-            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
-
-    @property
-    def digest(self) -> str:
-        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
-                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
-
-    def load(self, rank: int, world: int, requests: Any) -> Any:
-        return self.inner.load(rank, world, requests)
+CAPPED, CAP_BITS, Capped = AW.CAPPED, AW.CAP_BITS, AW.Capped
 
 
 def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS) -> Capped:
