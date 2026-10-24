@@ -2482,6 +2482,12 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
   }
 }
 
+// H1U_JCTA = 1 (h1umj_sm): a CTA's warps take WARPS units in turn together, warp w the w-th, as h1umj's grid places them,
+// so they read their shared A rows (H1U_SWZ = 2: B columns) through one SM's L1 rather than each from L2; 0: each warp
+// takes its own, and neighbouring units run on any SMs
+#ifndef H1U_JCTA
+#define H1U_JCTA 0
+#endif
 // h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition, its last
 // CTA's fallback and its CAP too)
 template <bool CAP>
@@ -2493,13 +2499,26 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
-  for (;;) {
-    u32 gu = 0;
-    if (lane == 0) gu = atomicAdd(next, 1u);
-    gu = __shfl_sync(0xffffffffu, gu, 0);
-    if (gu >= total) break;
-    h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
-    __syncwarp();
+  if constexpr (H1U_JCTA) {
+    __shared__ u32 claim;
+    for (;;) {
+      __syncthreads();
+      if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
+      __syncthreads();
+      const u32 g0 = claim;
+      if (g0 >= total) break;
+      if (g0 + wp < total) h1umj_one(calls, ncalls, M, live, g0 + wp, smem[wp]);
+      __syncwarp();
+    }
+  } else {
+    for (;;) {
+      u32 gu = 0;
+      if (lane == 0) gu = atomicAdd(next, 1u);
+      gu = __shfl_sync(0xffffffffu, gu, 0);
+      if (gu >= total) break;
+      h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
   }
 }
 
