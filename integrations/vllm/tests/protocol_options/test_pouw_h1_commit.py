@@ -130,13 +130,13 @@ class _Laid(dict):
         return self.lay(super().pop(key, *default))
 
 
-def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, ks=(K, K)):
+def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
-    out (`_Laid`); ``ks`` the two linears' contractions."""
+    out (`_Laid`)."""
     _host(tmp_path, monkeypatch, rounds=STEPS)
-    model, com, tap = Model(edit, ks), Committer(), CT.CommitTap(EMBED)
+    model, com, tap = Model(edit), Committer(), CT.CommitTap(EMBED)
     src = HC.source(com, model, list(model.model.layers))
     tap.tap(com)
     src.install()
@@ -154,7 +154,8 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, ks=(
             src.on_step_begin()
             com._acquire(f"{EMBED}/in", torch.tensor(ids(s, _ids(run, s))), com._cur)
             for layer in model.model.layers:
-                layer((torch.randn(len(run.owners[s]), layer.weight.shape[1], generator=g) * 3).bfloat16())
+                k = layer.weight.shape[1] if isinstance(layer, Linear) else K
+                layer((torch.randn(len(run.owners[s]), k, generator=g) * 3).bfloat16())
             com._cur = None
     finally:
         comp.close()
@@ -214,7 +215,9 @@ def test_a_chunked_llama_windows_a_tables_are_the_commits_arow(tmp_path, monkeyp
     ``a/<K>@<s>``, M·|calls|·n leaves of `weights.leaf_words` (K) words (n = 1 at K = 4096, its words K/2 + 2 as before),
     and core's ROOTS1 steps pass: `credit._a_link` at the layout's rows and `credit._arow`."""
     ks = (4096, 14336)
-    record, run, tap = _window(tmp_path, monkeypatch, ks=ks)
+    two = Model
+    monkeypatch.setitem(globals(), "Model", lambda edit=None: two(edit, ks))
+    record, run, tap = _window(tmp_path, monkeypatch)
     assert run.details["roots1"]["tied"] and run.details["roots1"]["own_trees"] == 0 and tap.own == 0
     theirs = {e["value"]: e for e in _record_of(record)["registered"]}
     entries = {e["value"]: e for e in record["commitment"]["served"]["entries"]}
