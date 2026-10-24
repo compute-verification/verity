@@ -8,8 +8,30 @@ trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
 cp "$IN"/es.py "$IN"/newskill.py "$S"/
 cd "$S"
-PY=/workspace/jobs/tvi/venv-r1/bin/python
-export HF_HUB_CACHE=/workspace/hf/hub HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1
+V=/workspace/jobs/tvi/venv-r1
+PY=$V/bin/python
+mkdir -p /workspace/jobs/tvi
+if [ ! -f $V/READY ]; then
+  (
+    flock 9
+    if [ ! -f $V/READY ]; then
+      uv venv --allow-existing --python 3.12 $V
+      research keep $V --owner @training --expires 2026-10-27 --priority normal --why 'training-vs-inference program' || true
+      uv pip install --python $PY "torch==2.9.*" "transformers>=4.56,<5" numpy accelerate safetensors huggingface_hub | tail -3
+      date -u +%FT%TZ > $V/READY
+    fi
+  ) 9> /workspace/jobs/tvi/venv-r1.lock
+fi
+MODEL_NAME=${MODEL_NAME:-Qwen/Qwen2.5-0.5B-Instruct}
+if [ -d /workspace/hf/hub/models--${MODEL_NAME/\//--} ]; then
+  export HF_HUB_CACHE=/workspace/hf/hub
+else
+  export HF_HUB_CACHE=/workspace/jobs/tvi/hf
+  mkdir -p $HF_HUB_CACHE
+  research keep $HF_HUB_CACHE --owner @training --expires 2026-10-27 --priority normal --why 'training-vs-inference program' || true
+  (flock 8; "$PY" -c "from huggingface_hub import snapshot_download as s; print(s('$MODEL_NAME', allow_patterns=['*.json', '*.safetensors', '*.txt']))") 8> $HF_HUB_CACHE.lock
+fi
+export HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES host=$(hostname) $(date -u +%FT%TZ)"
 nvidia-smi --query-gpu=index,name,memory.used --format=csv
 IFS=, read -ra GPUS <<< "$CUDA_VISIBLE_DEVICES"
