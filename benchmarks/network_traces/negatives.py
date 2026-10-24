@@ -7,6 +7,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
     python benchmarks/network_traces/negatives.py n2 --run DIR
     python benchmarks/network_traces/negatives.py judge NAME --run DIR
     python benchmarks/network_traces/negatives.py advice --advice FILE [--ids REQUESTS.jsonl]
+    python benchmarks/network_traces/negatives.py warden --run DIR
 
 **A run** is a certifier-serve run's directory (`certifier_serve.py rehearse`'s, one per strategy): its `plan.json`,
 `calibration.json`, `deployment.json` and `certified.jsonl`, and, as their interfaces land, the advice (I1, ADV-SPEC:
@@ -69,6 +70,7 @@ sys.path.insert(0, str(HERE))
 import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
@@ -77,11 +79,15 @@ FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.core.protocols.certifier.advice"
 ADVISED_MODULE = "verity.core.protocols.certifier.advised"
 IO_TIE_MODULE = "verity.core.protocols.certifier.io_tie"
+WARDEN_ROWS_MODULE = "verity.core.protocols.certifier.warden_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
 ADVISED = "NetworkAdvisedCounts_v1"
 TIE = "IoTieWindow"
+#: the verifier's registered read of a warden cell at its position under the warden's signed root (`warden_rows.opens`,
+#: the Lean verifier's check of a unit's registered port)
+WARDEN_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
@@ -151,7 +157,49 @@ def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
 
 def frames_edit(src: Path, dst: Path) -> Path:
     raise NotApplicable("the run keeps its frames' root only (`certified.jsonl`'s heads); the frames negative waits "
-                        "for a record that keeps the cells (WARDEN's), and runs on the tie's fake upstream (--ids)")
+                        "for a record that keeps the cells (WARDEN's: `warden_frame` on a warden-serve run), and runs "
+                        "on the tie's fake upstream (--ids)")
+
+
+def cell_reads(WR, cells, k: int, row: bytes) -> bool:
+    """Whether `row`, opened at position `k` of the warden's committed `cells` (`warden_rows.Cells`) under that
+    position's salt and path, climbs to their root: the verifier's registered read (`warden_rows.opens`)."""
+    return WR.opens(cells.domain, cells.root, k, WR.bc(row, cells.salts[k]), cells.path(k))
+
+
+def warden_frame(run: Path, at: int | None = None) -> dict:
+    """`frame` on a warden-serve run's own cells (WARDEN's `warden_rows`: `cells.jsonl`'s registrations and the
+    prover's `cells.salts`): the first egress link-window with a data cell, its registration checked under the warden's
+    key and its rows (`window_rows` of its record) committed under their salts to the registered root; then that
+    cell's byte `at` (its first payload byte by default) changed and opened at its position. The honest cell's read
+    climbs to the signed root and the changed one's doesn't (`WARDEN_READ`)."""
+    try:
+        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("warden_serve")
+    except ModuleNotFoundError as err:
+        raise NotApplicable(f"no warden cells yet: {err.name} (WARDEN) hasn't landed") from None
+    dep = json.loads((run / "deployment.json").read_text())
+    params = WS.WardenParams(**dep["params"])
+    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    link, direction = WS.CERTIFIED[WS.EGRESS]
+    records = {r.window: r for r in WS.read_records(run, params)[WS.EGRESS]}
+    regs = {r["window"]: (r, salts) for d, salts in WS.read_cells(run) if (r := d.get("registration"))
+            and (r["link"], r["direction"]) == (link, direction.value)}
+    for w in sorted(set(regs) & set(records)):
+        rows = WR.window_rows(records[w], params.grid)
+        k = next((k for k, r in enumerate(rows) if r[0] == DATA), None)
+        if k is None:
+            continue
+        reg, salts = regs[w]
+        head, _ = WR.check_registration(reg, key, session, params.grid, params.digest, link, direction, w)
+        cells = WR.Cells.commit(link, direction, w, rows, params.digest, session, salts)
+        if cells.root != head.root:
+            raise ValueError(f"{run}: egress window {w}'s rows under their salts aren't its registered root")
+        bad = bytearray(rows[k])
+        bad[HEADER.size if at is None else at] ^= 1
+        honest, tampered = cell_reads(WR, cells, k, rows[k]), cell_reads(WR, cells, k, bytes(bad))
+        return {"negative": "frame", "window": w, "row": k, "rows": len(rows), "cell_bytes": len(rows[k]),
+                "code": WARDEN_READ, "honest_reads": honest, "tampered_reads": tampered, "ok": honest and not tampered}
+    raise NotApplicable(f"{run}: no registered egress link-window with a data cell")
 
 
 def shim(strategy: str) -> Callable[[Path, Path], Path]:
@@ -1001,7 +1049,8 @@ def main(argv=None) -> int:
     x = sub.add_parser("n2", help="N2's verdict of record on a run, with the refused link-windows' codes")
     j = sub.add_parser("judge", help="whether N2 refuses a negative's run by the code it names")
     j.add_argument("name", choices=list(NEGATIVES))
-    for q in (m, x, j):
+    w = sub.add_parser("warden", help="frame on a warden-serve run's own cells, by the verifier's registered read")
+    for q in (m, x, j, w):
         q.add_argument("--run", required=True, type=Path)
     a = sub.add_parser("advice", help="every advice negative of a run's advice, and N2-ADVICE's codes on it")
     a.add_argument("--advice", required=True, type=Path, help="the run's advice (I1's encode bytes)")
@@ -1028,6 +1077,13 @@ def main(argv=None) -> int:
     if args.command == "make":
         print(make(args.name, args.run, args.out, advice=args.advice, commit=args.commit))
         return 0
+    if args.command == "warden":
+        try:
+            out = warden_frame(args.run)
+        except NotApplicable as err:
+            raise SystemExit(str(err))
+        print(json.dumps(out))
+        return 0 if out["ok"] else 1
     verdict = n2(args.run)
     if args.command == "n2":
         print(json.dumps(verdict, indent=1))

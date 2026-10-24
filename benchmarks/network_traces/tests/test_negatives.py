@@ -9,7 +9,8 @@ only the I/O tie (IO-TIE, pending) reads. The advice's tamperings run on I1 v0 (
 importable, a stand-in of their fields until then): each changes exactly what its check reads and leaves the advice
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
 a stand-in of I3 as drafted. The I/O tie's (IO-TIE's `io_tie`, when importable) run on a fake upstream's cells and
-Commit port of the advice, under the map the verifier computes from it."""
+Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the warden's own committed
+cells (WARDEN's `warden_rows`, when importable), by the verifier's registered read."""
 
 from __future__ import annotations
 
@@ -692,3 +693,18 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
     (tmp_path / "run").mkdir()
     written = NG.make("wrong-token", tmp_path / "run", tmp_path / "out", commit=tmp_path / "commit.json")
     assert json.loads((written / "commit.json").read_text()) == NG.wrong_token(commit)
+
+
+def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
+    WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
+    from verity.core.protocols.certifier.active import DATA, HEADER, PAD
+
+    data = (HEADER.pack(DATA, 1, 3) + b"abc").ljust(64, b"\0")
+    rows = [data, HEADER.pack(PAD, 0, 0).ljust(64, b"\0"), bytes(64)]
+    salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(len(rows))]
+    cells = WR.Cells.commit("tie", Direction.EGRESS, 0, rows, bytes(64), SESSION, salts)
+    bad = bytearray(data)
+    bad[HEADER.size] ^= 1
+    assert NG.cell_reads(WR, cells, 0, data)
+    assert not NG.cell_reads(WR, cells, 0, bytes(bad))
+    assert not NG.cell_reads(WR, cells, 1, data)
