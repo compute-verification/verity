@@ -3,10 +3,11 @@
 input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
 * **The Commit** (`acquire.h1_commit.attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
-  Commit of record) with the int8 source (`acquire.sources.int8_source.Int8Source`) at each linear H1 records, at the
-  linear's Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), and the
-  embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids (at the model's forward
-  where vLLM gathers the embedding fused, `acquire.h1_commit.fused_embed`). `CommitTap` wraps the
+  Commit of record) with the int8 source (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's
+  Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), a routed expert's by
+  its H1 name (VLLM-80: under its call, an idle expert's zero rows too), and the embedding's input, which the committer
+  acquires as ``<embed>/in``, the step's input token ids (at the model's forward where vLLM gathers the embedding
+  fused, `acquire.h1_commit.fused_embed`). `CommitTap` wraps the
   committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q (``/0``)
   and s_a (``/1``), and the ids.
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s rows are the Commit's x_q and s_a of
@@ -121,7 +122,7 @@ class CommitTap:
             return
         if port == "0":
             x = _host(t)
-            self._x[op] = [step, x.reshape(len(x), -1).astype(np.int8), None]
+            self._x[op] = [step, x.reshape(len(x), int(np.prod(x.shape[1:]))).astype(np.int8), None]
         elif op in self._x and self._x[op][0] == step:
             self._x[op][2] = _host(t).reshape(-1).astype("<f4")
         else:

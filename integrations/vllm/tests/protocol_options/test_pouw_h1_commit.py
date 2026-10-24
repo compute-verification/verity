@@ -5,7 +5,8 @@ step and K and each round's input-ids table ``ids@<s>`` as its step's input ids,
 binds the record. A window whose served A is all zero codes, or one A row off the rows the Commit acquired, or whose
 step table holds its calls' rows shifted by a call, or whose Commit ids aren't its prompts, each with an honest Commit,
 credits nothing (`UNTIED`); core's credit refuses each at ``arow`` (here and `test_credit_gate`). The window here is a
-two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`)."""
+two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
+(VLLM-80, `MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
 from __future__ import annotations
 
 import hashlib
@@ -27,11 +28,14 @@ from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_hooks as PHK  # noqa: E402
 from verity_vllm.acquire import h1_commit as HC  # noqa: E402
+from verity_vllm.engine import int8_experts as X  # noqa: E402
+from verity_vllm.engine.hooks import Hooks  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_commit as CT  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 
-from tests.protocol_options.test_pouw_h1 import _host, _remote, _so  # noqa: E402
+from tests.protocol_options.test_pouw_h1 import Experts, _host, _remote, _so  # noqa: E402
 from tests.protocol_options.test_pouw_h1_served import _unit  # noqa: E402
 
 K, ROWS, STEPS = 64, 32, 2
@@ -87,6 +91,41 @@ class Model(nn.Module):
         self.model.layers = nn.ModuleList([Linear(64, 1, Arm(edit, calls)), Linear(32, 2, Arm(edit, calls))])
 
 
+#: the MoE layer's experts and intermediate width: gate_up [2I, K], down [K, I], so its downs are the calls of K = I
+EXPERTS, I = 3, 32
+MOE = "model.layers.1.experts"
+#: each step's top-1 expert per batch row: expert 2 gets no row at step 0, expert 0 none at step 1
+ROUTES = ([0, 1, 0, 1, 1], [2, 1])
+
+
+class MoE(nn.Module):
+    """A MoE layer's routed experts on `int8_experts.forward` (`Int8ExpertsMethod`'s, the `test_pouw_h1.Experts`
+    stand-in holding its sites), each step routed top-1 by `ROUTES`."""
+
+    def __init__(self, seed):
+        super().__init__()
+        g = torch.Generator().manual_seed(seed)
+        w13, w2 = (torch.randint(-127, 128, s, generator=g, dtype=torch.int8) for s in ((EXPERTS, 2 * I, K), (EXPERTS, K, I)))
+        s13, s2 = ((torch.rand(*s, generator=g) * 0.01 + 1e-4).float() for s in ((EXPERTS, 2 * I, 1), (EXPERTS, K, 1)))
+        self.quant_method, self.step = Experts(X.sites(MOE, w13, s13, w2, s2)), 0
+
+    def forward(self, x):
+        ids = torch.tensor(ROUTES[self.step]).reshape(-1, 1)
+        self.step += 1
+        return X.forward(self.quant_method.sites, x, torch.ones(len(x), 1), ids)
+
+
+class MoEModel(nn.Module):
+    """A dense linear, then a MoE layer of `EXPERTS` experts: H1's linears are the linear then each expert's gate_up and
+    down, 7 calls a step at K = 64 (the linear and the gate_ups) and K = I (the downs)."""
+
+    def __init__(self):
+        super().__init__()
+        self.model = nn.Module()
+        self.model.embed_tokens = nn.Module()
+        self.model.layers = nn.ModuleList([Linear(64, 1, Arm()), MoE(3)])
+
+
 class Committer:
     """The committer's face the int8 source and the tap use: the step being committed (``_cur``) and its acquire."""
 
@@ -129,14 +168,18 @@ class _Laid(dict):
         return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
 
 
-def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, order=(0, 1)):
+def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
+            order=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
-    out (`_Laid`); ``order`` the linears in the order the forward calls them."""
+    out (`_Laid`). ``model`` is the two-linear `Model` unless given (`MoEModel`), H1's linears `pouw_h1_hooks.layers`
+    of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`); ``order`` the model's layers in the
+    order the forward calls them (module order unless given)."""
     _host(tmp_path, monkeypatch, rounds=STEPS)
-    model, com, tap = Model(edit), Committer(), CT.CommitTap(EMBED)
-    src = HC.source(com, model, list(model.model.layers))
+    model, com, tap = model or Model(edit), com or Committer(), CT.CommitTap(EMBED)
+    layers = PHK.layers(model, (Linear,))
+    src = HC.source(com, model, layers)
     tap.tap(com)
     src.install()
     served = SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest(), tap=tap)
@@ -145,6 +188,10 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, orde
     settings = _remote(rows=ROWS, steps=STEPS, transcript_dir=str(tmp_path / "w"), served=served)
     runner = settings["pouw"]["runner"]
     comp = PO.install(model, PO.Context(stage="serve", enabled=(ENTRY,), settings=settings))
+    lied = Hooks("test-lie")
+    if lie is not None:
+        for m in layers:
+            lied.wrap(m.quant_method, "observe", lie)
     try:
         g, run = torch.Generator().manual_seed(9), pouw.h1_run(ENTRY)
         for s, so in enumerate((_so(*((q, p, 4) for q, p in PROMPTS.items())), _so(running={"a": 1, "b": 1}))):
@@ -152,10 +199,11 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, orde
             com._cur = SimpleNamespace(step=FIRST + s)
             src.on_step_begin()
             com._acquire(f"{EMBED}/in", torch.tensor(ids(s, _ids(run, s))), com._cur)
-            for w in order:
-                model.model.layers[w]((torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16())
+            for layer in (model.model.layers if order is None else [model.model.layers[w] for w in order]):
+                layer((torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16())
             com._cur = None
     finally:
+        lied.uninstall()
         comp.close()
         src.uninstall()
         tap.untap()
@@ -292,6 +340,54 @@ def test_the_commits_record_is_under_calls_root(tmp_path, monkeypatch):
                          CT.digest(c["commit"])).hex() == c["calls_root"]
 
 
+def _experts(name):
+    return [f"{MOE}.{e}.{name}" for e in range(EXPERTS)]
+
+
+def test_each_routed_expert_calls_rows_are_the_commits_and_an_idle_experts_its_zero_rows(tmp_path, monkeypatch):
+    """VLLM-80: a MoE layer's routed experts are no modules, and the Commit acquires each expert call's Int8RowQuant_v1
+    rows under the call's H1 name (`acquire.h1_commit.H1Source`), every expert at every step as `int8_experts.forward`
+    calls them, an expert no row routed to as its zero rows. Its record registers each step's A table of K = 64 (the
+    linear and the gate_ups) and of K = I (the downs) as their `credit.commit_rows`, the window's own trees; core's
+    ROOTS1 steps pass and every served call is credited."""
+    com = Committer()
+    record, run, tap = _window(tmp_path, monkeypatch, model=MoEModel(), com=com)
+    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 6, "own_trees": 0,
+                                     "steps": {"0": FIRST, "1": FIRST + 1}}
+    assert [c.module for c in run.calls[:7]] == ["model.layers.0", *(f"{MOE}.{e}.{p}" for e in range(EXPERTS)
+                                                                      for p in X.PROJECTIONS)]
+    sites = ["model.layers.0", *_experts(X.GATE_UP), *_experts(X.DOWN)]
+    for s, rows in ((0, [2, 3, 0]), (1, [0, 1, 1])):
+        assert tap.where[CR.commit_rows(s, I)] == {"round": s, "calls": [7 * s + 2, 7 * s + 4, 7 * s + 6],
+                                                   "steps": [FIRST + s] * 3, "sites": [CT.site(n) for n in _experts(X.DOWN)],
+                                                   "rows": rows}
+        assert tap.where[CR.commit_rows(s, K)]["calls"] == [7 * s, 7 * s + 1, 7 * s + 3, 7 * s + 5]
+        assert tap.where[CR.commit_rows(s, K)]["rows"] == [len(ROUTES[s]), *rows]
+        assert sorted(n for j, n in com.got if j == FIRST + s and "/row_quant/" in n) == sorted(
+            f"{CT.site(n)}/{p}" for n in sites for p in "01")
+    assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
+    assert all(v["credit"] for v in run.gated().values())
+
+
+def test_one_expert_calls_rows_off_the_commits_are_refused_by_core(tmp_path, monkeypatch):
+    """H1 handed all-zero codes at one routed expert call (`pouw_h1_gpu.editor`'s ``a-zero-expert``, expert 0's down at
+    step 0), with an honest Commit: the Commit registers its own tree for that step's A table of K = I, so the serving
+    process credits nothing and core's credit refuses the window at ``arow``, as the GPU harness's verdict reads it."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    ed = G.editor(G.EXPERT_NEGATIVE)
+    record, run, tap = _window(tmp_path, monkeypatch, model=MoEModel(), lie=lambda orig: G.edited(orig, ed))
+    assert ed.at == f"{MOE}.0.down" and tap.own == 1
+    assert run.details["roots1"]["reason"].startswith(
+        f"roots1: round 0's A table h1/a/{I}@0 of calls [2, 4, 6] is not the Commit's row-table/0/k{I} ")
+    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
+    a_link, arow = _core(record, run)
+    assert a_link is None and arow[0] == "arow" and arow[1].startswith(
+        f"round 0's A table of K = {I} h1/a/{I}@0 is not the Commit's row-table/0/k{I}"), arow
+    v = G.negative_verdict({"core": G.core_tie(record, run.served.program, tmp_path / "ev"),
+                            "roots1": run.details["roots1"], "edited": ed.at})
+    assert v["refused"] and v["edited"] == f"{MOE}.0.down", v
+
+
 def test_the_source_takes_every_linears_site_at_every_engine_step():
     """`source` names each of H1's linears by its module's name and taps its Int8RowQuant_v1 site at every engine step, so
     X-03's targets at any step are each site's x_q and s_a; a layer not in the model is refused."""
@@ -303,6 +399,15 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     with pytest.raises(ValueError, match="not named modules"):
         HC.source(Committer(), model, [Linear(32, 3, Arm())])
     assert CT.Sites(["q"]).get((5, "q")) == "q/row_quant"
+    moe = MoEModel()
+    layers = PHK.layers(moe, (Linear,))
+    src = HC.source(Committer(), moe, layers)
+    names = ["model.layers.0", *(f"{MOE}.{e}.{p}" for e in range(EXPERTS) for p in X.PROJECTIONS)]
+    assert src.modules == ["model.layers.0"] and list(src.experts) == names[1:]
+    assert src.targets_at(3) == {f"{CT.site(n)}/{p}": 1 for n in names for p in "01"}
+    from tests.protocol_options import pouw_h1_gpu as G
+    assert G.negatives_of(layers) == (*G.NEGATIVES, G.EXPERT_NEGATIVE)
+    assert G.negatives_of(list(model.model.layers)) == G.NEGATIVES
 
 
 class FusedEmbed(nn.Module):
