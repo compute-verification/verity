@@ -8,13 +8,15 @@ the node's largest process, beside a run holding about 150 GB on a 64 GB reserva
 
 Each pass, for every live run under the runs roots (status.json `running`), its processes are every pid whose environment names
 the run dir as RESEARCH_RUN_DIR (what the runner exports to its workload, so its workers that leave the group count) and the
-members of the run's process group (status.json's pgid, once a member with the variable is in it) that name no run dir; never its
-runner. Its use is their RssAnon + RssShmem (what reclaim can't free), its reservation the largest file in RAMLOCK naming its run
+members of the run's process group (status.json's pgid, once a member with the variable is in it) that name no run dir, and every
+process that names no run dir in a `.scope` cgroup holding the run's processes and no other run's: a run's workers that scrub its
+environment and leave its group still sit in its session scope (24 Oct, cpu-3: suites.py's verity-circuit-check run e48b held 383 GB
+in its scope with no reservation, read here at 0.1 GB, so the kernel took small runs and a reserved 80 GB verify first). Its use is their RssAnon + RssShmem (what reclaim can't free), its reservation the largest file in RAMLOCK naming its run
 id (or a pid of its), else none. A run of several processes that reads over its reservation that way is read again from their
 Pss_Anon + Pss_Shmem (smaps_rollup), which splits a page among the processes that share it: summed Rss counts a forked worker's
 copy-on-write pages once per worker, and read each PRF-131 share (one ~278 GB parent, up to 9 forked workers) at 2,505 GB against
-its 345 GB, so the share became the node's first pick (24 Oct, n2 00:09Z and 03:44Z, cpu-2 03:36Z). Pss only for those runs:
-reading it walks the process's page tables. Every process of the run gets one oom_score_adj:
+its 345 GB, so the share became the node's first pick (24 Oct, n2 00:09Z and 03:44Z, cpu-2 03:36Z). Pss only for those runs, and
+only ones with a reservation: reading it walks the process's page tables (12 s a pass on n2 with every unreserved vLLM server read). Every process of the run gets one oom_score_adj:
 
   over (use > reservation, or no reservation)   OVER + round(SPAN * (use - reservation) / MemTotal), at most 1000
   within                                         WITHIN (0)
@@ -43,6 +45,8 @@ PROC = Path("/proc")
 GB = 1e9                          # research.mem's GB
 OVER, SPAN, WITHIN, MAX = 500, 500, 0, 1000
 DISABLED = -1000
+#: a run's runner (`python3 -m research run`), in its run's scope but never one of its processes (nor its session's sshd)
+RUNNER = b"-m\0research\0run\0"
 
 
 def clock() -> datetime:
@@ -112,7 +116,9 @@ def scan(proc: Path = PROC) -> dict[int, dict]:
         for kv in (_read(d / "environ") or b"").split(b"\0"):
             if kv.startswith(b"RESEARCH_RUN_DIR="):
                 run_dir = kv.split(b"=", 1)[1].decode(errors="replace")
-        out[int(e)] = {"run_dir": run_dir, "pgid": pgid, "bytes": rss, "adj": cur}
+        cg = (_read(d / "cgroup") or b"").split(b"\n")[0]
+        scope = cg.split(b"::", 1)[1].decode(errors="replace") if cg.startswith(b"0::") and cg.endswith(b".scope") else None
+        out[int(e)] = {"run_dir": run_dir, "pgid": pgid, "bytes": rss, "adj": cur, "scope": scope}
     return out
 
 
@@ -121,6 +127,13 @@ def pss(pid: int, proc: Path = PROC) -> int | None:
     text = _read(proc / str(pid) / "smaps_rollup")
     vals = [int(ln.split()[1]) * 1024 for ln in (text or b"").splitlines() if ln.startswith((b"Pss_Anon:", b"Pss_Shmem:"))]
     return sum(vals) if vals else None
+
+
+def _runner(pid: int, proc: Path = PROC) -> bool:
+    """Whether pid is a run's runner or its session's sshd (its cmdline, read only for a scope's candidates: reading it can wait
+    on a large process's memory lock)."""
+    cmd = _read(proc / str(pid) / "cmdline") or b""
+    return RUNNER in cmd or cmd.startswith(b"sshd")
 
 
 def target(use: int, reserved: float, limit: int) -> int:
@@ -132,15 +145,23 @@ def target(use: int, reserved: float, limit: int) -> int:
 def plan(runs: dict[str, dict], res: list[dict], procs: dict[int, dict], limit: int, proc: Path = PROC) -> list[dict]:
     """Each live run with a process: {"run", "pids", "use", "reserved", "adj"}."""
     out = []
+    scope_runs: dict[str, set[str]] = {}
+    for x in procs.values():
+        if x.get("scope") and x["run_dir"]:
+            scope_runs.setdefault(x["scope"], set()).add(x["run_dir"])
     for run_dir, r in sorted(runs.items(), key=lambda kv: kv[1]["run"]):
         pids = {p for p, x in procs.items() if x["run_dir"] == run_dir}
         if r["pgid"] is not None and any(procs[p]["pgid"] == r["pgid"] for p in pids):
             pids |= {p for p, x in procs.items() if x["pgid"] == r["pgid"] and x["run_dir"] is None}
+        own = {procs[p].get("scope") for p in pids} - {None}
+        own = {s for s in own if scope_runs.get(s) == {run_dir}}
+        if own:
+            pids |= {p for p, x in procs.items() if x.get("scope") in own and x["run_dir"] is None and not _runner(p, proc)}
         if not pids:
             continue
         use = sum(procs[p]["bytes"] for p in pids)
         reserved = max([x["gb"] * GB for x in res if x["run_id"] == r["run"] or x["pid"] in pids], default=0.0)
-        if len(pids) > 1 and use > reserved:
+        if len(pids) > 1 and 0 < reserved < use:
             use = sum(v if (v := pss(p, proc)) is not None else procs[p]["bytes"] for p in pids)
         out.append({"run": r["run"], "pids": sorted(pids), "use": use, "reserved": reserved, "adj": target(use, reserved, limit)})
     return out

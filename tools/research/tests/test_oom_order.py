@@ -36,9 +36,11 @@ class Node:
         return str(d.resolve())
 
     def process(self, pid: int, *, pgid: int, anon_gb: float, shmem_gb: float = 0.0, adj: int = 0, run_dir: str | None = None,
-                pss_gb: float | None = None) -> None:
+                pss_gb: float | None = None, scope: str | None = None, cmdline: bytes = b"python\0") -> None:
         d = self.proc / str(pid)
         d.mkdir()
+        (d / "cgroup").write_text(f"0::{scope}\n" if scope else "0::/user.slice/user-1001.slice/user@1001.service/app.slice\n")
+        (d / "cmdline").write_bytes(cmdline)
         if pss_gb is not None:
             (d / "smaps_rollup").write_text(f"Rss:\t{int(anon_gb * GB) // 1024} kB\nPss:\t{int(pss_gb * GB) // 1024} kB\n"
                                             f"Pss_Anon:\t{int(pss_gb * GB) // 1024} kB\nPss_File:\t0 kB\nPss_Shmem:\t0 kB\n")
@@ -141,6 +143,27 @@ def test_forked_workers_copy_on_write_pages_count_once_so_a_share_within_its_res
     assert all(node.adj(70 + i) == 0 for i in range(9)), "Pss 292 GB, within 345"
     assert node.adj(90) == node.adj(91) == 500 + round(500 * 140 / 1000), "still over: Pss 50 + Rss 100 against 10"
     assert {r["run"]: r["use_gb"] for r in node.log()} == {"r20261024-011205-3333": 150.0}
+
+
+def test_workers_that_left_a_runs_group_and_environment_count_by_its_session_scope(node):
+    """24 Oct, cpu-3: suites.py's verity-circuit-check run e48b (no reservation) held 383 GB in its session scope, read here at
+    0.1 GB, so the kernel took small runs and a reserved 80 GB verify first. Its runner stays out; a scope two runs share counts
+    for neither."""
+    s = "/user.slice/user-1001.slice/session-14429.scope"
+    suite = node.run("r20261024-041008-e48b", pgid=10)
+    node.process(9, pgid=9, anon_gb=0.1, scope=s, cmdline=b"python3\0-m\0research\0run\0--id\0x\0")    # its runner
+    node.process(10, pgid=10, anon_gb=0.1, run_dir=suite, scope=s)
+    node.process(11, pgid=11, anon_gb=383, scope=s)                                                   # xdist worker, scrubbed
+    verify = node.run("r20261024-024255-adf9", pgid=20, gb=130)
+    node.process(20, pgid=20, anon_gb=80, run_dir=verify, scope="/user.slice/user-1001.slice/session-1.scope")
+    a, b = node.run("r-a", pgid=30), node.run("r-b", pgid=40)
+    shared = "/user.slice/user-1001.slice/session-2.scope"
+    node.process(30, pgid=30, anon_gb=1, run_dir=a, scope=shared)
+    node.process(40, pgid=40, anon_gb=1, run_dir=b, scope=shared)
+    node.process(41, pgid=41, anon_gb=50, scope=shared)
+    assert node.main() == 0
+    assert node.adj(10) == node.adj(11) == 500 + round(500 * 383.1 / 1000)
+    assert node.adj(9) == 0 and node.adj(20) == 0 and node.adj(41) == 0
 
 
 def test_a_dry_run_says_what_it_would_set_and_writes_nothing(node, capsys):
