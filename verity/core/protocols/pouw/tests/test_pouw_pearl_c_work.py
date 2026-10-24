@@ -19,6 +19,7 @@ import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
+from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
@@ -380,6 +381,65 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     given = CW.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
     again = CW.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
     assert again.audit.accepted and again.credit == (1 - h3.cap) * CW.cell_credit(h3, given[0]) * (m - 1) * n
+
+
+def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
+    """One m x n tile at depth ``k``, A row i carrying ``spikes[i]`` (`spiked_rows`), on spiked B: (record, tile, rows_a,
+    rows_b, ops) under the scheme's own `encode`."""
+    m = len(spikes)
+    rows_a = [spiked_rows(k, 1, 100 + i, s)[0] for i, s in enumerate(spikes)]
+    rows_b = spiked_rows(k, n, 900, 300.0)
+    work = Workload((Matmul(0, Shape(m, k, n), 1),))
+    prover = Prover(scheme, {1: rows_b}, salt_key=bytes(32))
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {0: rows_a})
+    tile = scheme.tiles(work.matmuls[0].shape)[0]
+    ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
+    return (W.UnitRecord(work.matmuls[0], m, k), tile, rows_a, rows_b,
+            scheme.encode(ctx, scheme.noise(ctx), rows_a, rows_b, tile))
+
+
+def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
+    """Daniel's card a6872606 (a): at the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
+    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.30ρ is
+    accepted (the ρ row cap refused it), a row at 10.4ρ is refused by the 4ρ row cap, and 16 rows each under 4ρ that
+    put the tile over ρ are refused by the tile cap."""
+    m = 16
+    h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
+    assert h3.census_ks == (256,) and h3.row_cap_at(256) == 4 * h3.cap == Fraction(1, 100)
+    assert CW.row_cap(h3) and CW.row_cap_multiple(h3, 256) == 4
+    rec, tile, a, b, ops = _census_tile(h3, [50.0] + [None] * (m - 1), 256)
+    debit, cap = CW._debit_cap(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
+    row = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
+    assert debit < cap / 2 and row[1] < row[0] < 4 * row[1]
+    assert CW.check_opened(h3, rec, tile, a, b, ops) is None
+    rec, tile, a, b, ops = _census_tile(h3, [100.0] + [None] * (m - 1), 256)
+    reason = CW.check_opened(h3, rec, tile, a, b, ops)
+    assert reason.startswith("A row 0's replayed debit") and "(the row cap: 4ρ·its credited cells' credit)" in reason
+    spikes = [50.0, 50.0, 50.0, 50.0, 30.0, 20.0, 20.0, 30.0, 30.0, None, 10.0, 20.0, 30.0, 20.0, None, 30.0]
+    rec, tile, a, b, ops = _census_tile(h3, spikes, 256)
+    rows = [CW._debit_cap(h3, rec, tile, ops, [i], [0, 1, 2, 3]) for i in range(m)]
+    debit, cap = CW._debit_cap(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
+    assert all(d <= 4 * c for d, c in rows) and debit > 2 * cap
+    assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed debit")
+
+
+def test_census_row_cap_leaves_k_from_k_min_unchanged():
+    """At every k >= k_min the row cap stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
+    without census ks, and at k = 1,024 a row over ρ is refused with the (C2) message, while at k = 256 the same row
+    shape, under 4ρ, passes."""
+    m = 16
+    h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
+    for k in (1024, 2048, 8192, 1 << 16):
+        assert h3.row_cap_at(k) == h3.cap and CW.row_cap_multiple(h3, k) == 1
+    for s in (S, C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), get("pearl-c-sm120-v1-h3")):
+        assert s.census_ks == () and all(CW.row_cap_multiple(s, k) == 1 for k in (128, 256, 1024))
+    rec, tile, a, b, ops = _census_tile(h3, [30.0] + [None] * (m - 1), 1024)
+    d, c = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
+    assert c < d < 4 * c
+    assert CW.check_opened(h3, rec, tile, a, b, ops) == (
+        f"A row 0's replayed debit {float(d):.0f} exceeds its cap {float(c):.0f} (the row cap: ρ·its credited cells' "
+        "credit)")
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():

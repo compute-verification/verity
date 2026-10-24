@@ -25,7 +25,8 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ times the credited cells' credit, their
     share of the unit's `creditDevRev1` (F1; `tile_cap`);
   - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
-    at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)).
+    at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)), and at most 4ρ at Pearl-C's census ks below k_min
+    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`; Daniel's card a6872606), the tile's cap staying ρ.
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **Voluntary rows (V-EX; the assessor's B at 17:32Z).**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
@@ -263,20 +264,28 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
         debit, cap = _debit_cap(scheme, record, tile, ops, rows, cols)
         if debit > cap * bound:
             return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
+        widen = row_cap_multiple(scheme, k)
         for i in rows if row_cap(scheme) else ():
             debit, cap = _debit_cap(scheme, record, tile, ops, [i], cols)
-            if debit > cap * bound:
-                return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap):.0f} (the row cap: ρ·its "
-                        "credited cells' credit)")
+            if debit > cap * widen * bound:
+                return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
+                        f"cap: {'' if widen == 1 else f'{widen}'}ρ·its credited cells' credit)")
     return None
 
 
 def row_cap(scheme) -> bool:
     """Whether the scheme's hashing format caps every credited row's debit as well as the tile's (`HashFormat.row_cap`,
     -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's debit over the tile's credited columns at
-    most ρ times its cells' share of the credit."""
+    most ρ times its cells' share of the credit, or `row_cap_multiple`·ρ (`pearlCTilesDevRev1RowCapAt`)."""
     hashing = getattr(scheme, "hashing", None)
     return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_cap
+
+
+def row_cap_multiple(scheme, k: int) -> Fraction:
+    """A credited row's cap at depth ``k`` over the tile's ρ: the scheme's `row_cap_at(k)`/ρ, 4 at Pearl-C's census ks
+    (`pearl_c.CENSUS_ROW_CAP`), and 1 for a scheme without one."""
+    at = getattr(scheme, "row_cap_at", None)
+    return Fraction(1) if at is None else Fraction(at(k)) / Fraction(scheme.cap)
 
 
 def _debit_cap(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
@@ -519,8 +528,9 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
                     rows, cols = cur.credited(tile)
                     if not (rows and cols):
                         break
-                    over = [(d - c, i) for i in (rows if row_cap(scheme) else ())
-                            for d, c in (_debit_cap(scheme, cur, tile, ops, [i], cols),) if d > c * tol]
+                    widen = row_cap_multiple(scheme, u.shape.k)
+                    over = [(d - c * widen, i) for i in (rows if row_cap(scheme) else ())
+                            for d, c in (_debit_cap(scheme, cur, tile, ops, [i], cols),) if d > c * widen * tol]
                     if over and len(va[u.index]) < voluntary_cap(u.shape.m):
                         va[u.index].add(max(over)[1])
                         changed = True
