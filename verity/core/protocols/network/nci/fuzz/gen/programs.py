@@ -1,6 +1,6 @@
 """Programs for `nci-desc-fuzz`, one `{"id", "family", "program"}` object per line.
 
-    python gen/programs.py random|chain|copies|unwalk --seed S --count N --out FILE [--mutate P]
+    python gen/programs.py random|big|chain|copies|unwalk --seed S --count N --out FILE [--mutate P]
     python gen/programs.py hand --out FILE
 
 `random` writes descriptor v1 JSON directly, not through `verity.ml.circuits`' Builder, so that every reference form the
@@ -359,11 +359,11 @@ def ret_of(body: Body, L_max: int = 6):
     return Tup(), {"affine": ["p", 0, 0, 0]}
 
 
-def composite(P: Program, budget: int) -> None:
+def composite(P: Program, budget: int, scale: int = 1) -> None:
     rng = P.rng
     params = [P.small_type(0) for _ in range(rng.choice([0, 1, 1, 2, 2, 3]))]
     body = Body(P, params, budget)
-    for _ in range(rng.choice([0, 0, 1, 1, 2, 3, 4, 6])):
+    for _ in range(rng.choice([0, 0, 1, 1, 2, 3, 4, 6]) * scale):
         body.add_random()
     if params and rng.random() < 0.45:
         carry = params[0]
@@ -390,12 +390,13 @@ def tower(P: Program, body: Body) -> None:
               A(WIDE, Tup()), [], 0, "batch")
 
 
-def program(seed: int, unwalk: bool = False) -> str:
+def program(seed: int, unwalk: bool = False, scale: int = 1) -> str:
+    """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`)."""
     rng = random.Random(seed)
     P = Program(rng)
     budget = rng.choice([8, 32, 128, 512])
-    for _ in range(rng.choice([0, 1, 2, 3, 4, 6, 8])):
-        composite(P, budget)
+    for _ in range(rng.choice([0, 1, 2, 3, 4, 6, 8]) * scale):
+        composite(P, budget, scale)
     root = Body(P, [], budget * 4)
     for _ in range(rng.choice([0, 1, 1, 2, 3])):
         w, reg = P.width(), rng.random() < 0.4
@@ -407,7 +408,7 @@ def program(seed: int, unwalk: bool = False) -> str:
             n = rng.choice([1, 1, 2, 3])
             root.push({"args": [], "axes": [], "fn": P.fn(key), "form": "batch", "n": n, "out": P.ty(A(n, out))},
                       A(n, out), [], n, "input")
-    for _ in range(rng.randint(1, 8)):
+    for _ in range(rng.randint(1, 8) * scale):
         root.add_random()
     t, r = ret_of(root, 12)
     if unwalk:
@@ -736,7 +737,7 @@ def hand() -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["random", "chain", "copies", "unwalk", "hand"])
+    ap.add_argument("what", choices=["random", "big", "chain", "copies", "unwalk", "hand"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--count", type=int, default=1000)
     ap.add_argument("--mutate", type=float, default=0.0)
@@ -749,7 +750,7 @@ def main() -> None:
             return
         force = {"force": True} if a.what == "unwalk" else {}
         for s in range(a.seed, a.seed + a.count):
-            text = {"random": program, "chain": chain, "copies": copies,
+            text = {"random": program, "big": lambda s: program(s, scale=3), "chain": chain, "copies": copies,
                     "unwalk": lambda s: program(s, unwalk=True)}[a.what](s)
             f.write(json.dumps({"id": f"{a.what}-{s}", "family": a.what, "program": text, **force}) + "\n")
             rng = random.Random(~s)
