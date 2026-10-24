@@ -74,7 +74,6 @@ EVALUATORS = {
                     "with block b guarding the rescale's running max of -inf only when b >= MASKED_FROM, max * scale in every block -- FA2's "
                     "per-iteration Check_inf, registry.fa2_check_inf; targets.fa2_check_inf)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
-    # [dead_free] RMSNormTriton_v1's / TokenSelect_v1's function without their dead gates (registry.dead_free): the same row kernels
     "RMSNormTriton_v5": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows (RMSNormTriton_v5 = RMSNormTriton_v1 word for word)",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
     **VR.EVALUATORS,
