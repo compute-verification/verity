@@ -88,10 +88,10 @@ def main() -> None:
             raise SystemExit("this TRL can't run vLLM colocate; rerun with --gen hf")
     cfg = GRPOConfig(**{k: v for k, v in want.items() if k in fields})
 
-    if tl is not None and args.gen == "vllm":
-        raise SystemExit("--adapter tinylora generates with --gen hf: vLLM's weight sync would push the base weights")
     trainer = GRPOTrainer(model=model, reward_funcs=[C.correctness_reward], args=cfg, train_dataset=ds,
                           processing_class=tok, peft_config=peft_cfg)
+    if tl is not None and args.gen == "vllm":
+        C.patch_vllm_sync(trainer, tl)
     n_train = C.trainable_count(trainer.model)
     print(f"trainable params {n_train} ({n_train * 32} bits fp32)", flush=True)
     t1 = C.now()

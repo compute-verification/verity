@@ -165,6 +165,18 @@ class TinyLoRA(torch.nn.Module):
             return [(f"{n}.weight", (mod.weight.data.float() + self.delta(mod).float()).to(mod.weight.dtype)) for n, mod in self.mods]
 
 
+def patch_vllm_sync(trainer, tl: TinyLoRA) -> None:
+    """TRL's colocate sync pushes `_iter_named_params()` into vLLM; under TinyLoRA only the target maps change, so push
+    their merged weights (W + delta) and never the `tinylora.*` tensors vLLM has no slot for."""
+    vg = trainer.vllm_generation
+
+    def merged():
+        for name, w in tl.merged_state():
+            yield vg._fix_param_name_to_vllm(name), w
+
+    vg._iter_named_params = merged
+
+
 def apply_adapter(model, args):
     """Returns (model, peft_config or None, tinylora or None)."""
     if args.adapter == "full":
