@@ -4,8 +4,8 @@ import Proofs.Flock.Claims.Recursion.LastBindsEC
 /-!
 # `KSBoundRoute` from the bridge, the last message bound modulo what `E*` reads (R1′)
 
-`ksBoundRoute_of_bridge` reads (P4, `Bound.LastBinds`) once, in `forksBind_nf`, and (P4) is false at the deployed
-record (`lastBinds_deployed_rejects`). This file proves the route with (P4) replaced by `Bound.LastBindsEC` and
+`ksBoundRoute_of_bridge` reads (P4, `Bound.LastBinds`) once, in `forksBind_nf`, and (P4) was false at the deployed
+record before S0 (a trailing space in the record's text, `BindsDeployed`). This file proves the route with (P4) replaced by `Bound.LastBindsEC` and
 `Bound.LastCoinFree`, through REC1's chain as it stands (`KS_of_flockKS_binds`):
 
 * The compiled record's inner view reads the last message as a representative of its reading (`RecDeploy.deployRecC`):

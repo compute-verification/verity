@@ -244,6 +244,12 @@ def main(src, out):
         (d / f"{table}.rep{rep}.bin").write_bytes(b)
         shutil.copy(src / f"{table}.rep{1 - rep}.bin", d / f"{table}.rep{1 - rep}.bin")
         manifest.append({"name": name, "rep": rep, "expect": expect})
+    d = out / "record-not-canonical"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "session.json").write_text(json.dumps(base, indent=1))
+    for rep in (0, 1):
+        shutil.copy(src / f"{table}.rep{rep}.bin", d / f"{table}.rep{rep}.bin")
+    manifest.append({"name": "record-not-canonical", "rep": 0, "expect": {**reject("S0:"), "upstream_accepted": True}})
     (out / "mutants.json").write_text(json.dumps(manifest, indent=1))
     print(f"{len(manifest)} mutants in {out}")
 

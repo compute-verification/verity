@@ -394,6 +394,20 @@ theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {l
   obtain ⟨_, h4, -⟩ := ebind_ok h
   exact ⟨beq_iff_eq.1 (check_ok_iff.1 h1), lv, h3, h4⟩
 
+/-- **The checks hold the record to its canonical text** (S0, last): it is what `printT` prints of what it parses to
+(`Flock.RecordText.check_ok`). -/
+theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : Flock.RecordText.check f.record = .ok () := by
+  unfold checks at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  exact h
+
 /-- **The checks pin the record's draw to the statement's, whatever its key order**: `drawEq` passes exactly on
 equivalent values (`drawEq_iff`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}

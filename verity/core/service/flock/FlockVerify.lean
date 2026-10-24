@@ -900,12 +900,14 @@ def verifyCmd (args : List String) : IO UInt32 := do
       else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a draw
+      -- short of every unit, then a session's over an inner record without a draw, then a record not in its canonical
+      -- text (S0)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
+      RecordText.check record
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

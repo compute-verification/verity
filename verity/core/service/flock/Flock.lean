@@ -51,6 +51,7 @@ import Flock.Registered
 import Flock.RegKnown
 import Flock.KnownRead
 import Flock.JsonKeys
+import Flock.RecordText
 import Flock.Keccak
 import Flock.RecCoins
 import Flock.RecSetup
