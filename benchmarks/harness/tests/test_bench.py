@@ -1632,7 +1632,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
         assert f"`{kind}`" in readme, kind
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
-    assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))
+    assert public == set(re.findall(r"^verity-bench ([a-z-]+) ", readme, re.M))
 
 
 def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):
