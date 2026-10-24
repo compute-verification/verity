@@ -360,8 +360,13 @@ def test_the_lease_is_sized_from_the_firewalls_l3_session(capsys) -> None:
     cmd = capsys.readouterr().out.split()
     assert "MODES=firewall" in cmd and "GPU_MAX_MIN=74" in cmd and "OPROVE_RUNS=1" in cmd
     assert int(cmd[cmd.index("--max-min") + 1]) > 9850 * 1.5 / 60       # every statement's firewalled session, one at a time
+    assert cmd[cmd.index("--mem-gb") + 1] == "128"                       # a queued node's MemoryMax; L0 peaked at 99 GB
     assert RUN.main(["run", "--dry-run", "--lease-min", "30", "--modes", "dev"]) == 0
-    assert "GPU_MAX_MIN=30" in capsys.readouterr().out.split()
+    cmd = capsys.readouterr().out.split()
+    assert "GPU_MAX_MIN=30" in cmd and cmd[cmd.index("--mem-gb") + 1] == "64"
+    assert RUN.main(["run", "--dry-run", "--mem-gb", "200"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[cmd.index("--mem-gb") + 1] == "200"
 
 
 def test_e2e_is_one_pass_with_its_negative(capsys) -> None:

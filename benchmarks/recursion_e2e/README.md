@@ -16,7 +16,7 @@ verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from
                                                                    records are fetched and read with this reader)
 verity bench recursion_e2e store RESULT... [--merge]              the results and their table as one art: id
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
-       --cpu --node N [--preemptible] --mem-gb 64 --cpus 32 --max-min M --env KEY=VALUE ...
+       --cpu --node N [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
 `--preemptible` is for a guest on another lane's node: vy-nebius-2 admits guests only as preemptible jobs.
@@ -29,7 +29,10 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   in `run.py`. That is the largest statement's sessions (alg-p1: 13.99 s in `dev`, about 2950 s with the firewall), scaled
   from L3, times 1.5: 74 min for one session. `--max-min` defaults to the same model over all ten statements, plus each
   other step's minutes per repeat. The leases are not preemptible (`job.sh`), because a preempted session is a lost
-  measurement.
+  measurement. The model is one point: measured with the CPU prover (r20261024-094937-6572), L1–L3 took 190–315 times
+  their dev session (r20261024-063425-1ec5), but L0 took 626 times (3740 s) and alg-p0 62 times (815 s), so it undersizes L0's lease.
+- **Memory.** `--mem-gb` defaults to 128 with a firewalled oprove, else 64. A queued node makes it the run's MemoryMax,
+  and L0's firewalled session peaked at 99 GB: 57 GB in the Lean session loop and 31 GB in the prover.
 - **The CPU prover under the firewall** (`--oprove-gpu auto`, which is 0 with `--modes firewall`). Node 1's lease pool
   stopped every firewalled L0 session at about 10 minutes (exit 143) despite a 74-minute, non-preemptible lease. The
   run was r20261024-075309-69be, and the GPU computes nothing while the Lean session loop works. So V*'s statements are
