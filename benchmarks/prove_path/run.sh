@@ -66,6 +66,9 @@ for I in 256 1536 8192; do   # the verifier's lowering: a synthetic input set pe
 done
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
+# flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
+# node; its own worker and verifier threads take 64 MiB
+export RUST_MIN_STACK=$((64 << 20))
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 PP="$PY benchmarks/prove_path/prove_path.py"
 
