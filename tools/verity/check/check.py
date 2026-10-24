@@ -8,6 +8,8 @@
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
                                                             post-landing run drive launches on `main`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
+    ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
+                                                            a regenerated record (drive's after-landing run)
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -19,7 +21,7 @@
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-1, vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
@@ -299,12 +301,16 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
     return out if len(out) > 1 else []
 
 
-#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
-AUTO = ("vy-nebius-1", "vy-nebius-2")
+#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
+#: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
+AUTO = ("vy-nebius-2",)
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
+            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
@@ -406,7 +412,8 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     else:
         mine = [s for s in check["slots"] if priority or not s.get("trains")]
         if not mine:
-            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains)")
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on an eyeball review, "
+                             "and no lane check is required; to run its tests anyway: " + LANE_RUN)
         free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
@@ -420,6 +427,26 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     free_lean = len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]])
     why += f"; Lean {pool}: {free_lean} of {p['n']} free" + (f", {len(p['waiters'])} waiting" if p["waiters"] else "")
     return room and free_lean > len(p["waiters"]), ahead, why
+
+
+def spare(doc: dict, priority: bool = False) -> int:
+    """How many more checks could take a slot now on a machine whose `read_slots` documents are ``doc``: its free check slots no
+    window or memory gate blocks, less the live waiters ahead (`placement`), and no more than its free Lean `check` slots less
+    their waiters; 0 where none can run.  A machine without check slots counts one.  Drive moves a train still waiting in
+    another machine's line onto it (`research.drive.free_slots`)."""
+    try:
+        room, ahead, _ = placement(doc, priority)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return 0
+    if not room:
+        return 0
+    check, lean = doc["check"], doc["lean"]
+    n = 1 if check["slots"] is None else len([s for s in check["slots"] if (priority or not s.get("trains"))
+                                                and s["holder"] is None and not s["blocked"]]) - ahead
+    if lean["pools"] is not None:
+        p = lean["pools"][next(k for k in ("check", "any") if k in lean["pools"])]
+        n = min(n, len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]]) - len(p["waiters"]))
+    return max(n, 0)
 
 
 def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
@@ -447,6 +474,49 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
     lead = ("a check slot and a Lean check slot are free" if room else
             "the fewest waiting ahead, as no machine has a check slot and a Lean check slot free")
     return name, f"{lead} ({why})", skipped
+
+
+#: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
+#: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
+#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
+#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
+PLACED_S = 1800
+
+
+def _trees(doc: dict) -> set[str]:
+    """The shortened commits a machine's check slots hold or wait for."""
+    check = doc.get("check") or {}
+    who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
+    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+
+
+def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
+          now=time.time) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+    """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
+    no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
+    import fcntl
+
+    path = path or PLACED
+    with open(path.with_name(path.name + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        docs = (read or read_slots)(names)
+        try:
+            placed = json.loads(path.read_text())
+        except (OSError, ValueError):
+            placed = {}
+        t = now()
+        placed = {c: p for c, p in placed.items() if c != commit and t - p["at"] < PLACED_S
+                  and not (isinstance(d := docs.get(p["on"]), dict) and c[:12] in _trees(d))}
+        for c, p in placed.items():
+            if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
+                d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
+                                              "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
+        got, why, skipped = choose(names, docs, priority)
+        if got:
+            placed[commit] = {"on": got, "at": t}
+            path.write_text(json.dumps(placed))
+    return docs, got, why, skipped
 
 
 def _who(h: dict) -> str:
@@ -607,11 +677,13 @@ def requires_outside(lean: Path) -> list[str]:
                    if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
 
 
-def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
+def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
+               regenerate: bool = True) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
-    is skipped by name.  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
+    is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
+    drive's after-landing run, where a record difference fails).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
@@ -638,7 +710,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
                             sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
-                            *(["--regenerate"] if lean_regenerates() else [])], ROOT),
+                            *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -835,8 +907,8 @@ def record(argv: list[str]) -> int:
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
-        docs = read_slots(names)
-        got, why, skipped = choose(names, docs, priority)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        docs, got, why, skipped = place(names, head, priority)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:
@@ -1057,7 +1129,7 @@ def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
-           only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+           only: list[str] | None = None, regenerate: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
     circuit-check when the other isn't among them."""
@@ -1076,7 +1148,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
-    lean = lean_steps(out, cache, urls)
+    lean = lean_steps(out, cache, urls, regenerate)
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
@@ -1719,7 +1791,8 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
-        only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None) -> tuple[bool, list[dict]]:
+        only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
+        regenerate: bool = True) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused)
@@ -1753,7 +1826,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
-            gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
+            gs = groups(out, n, cache, urls, regenerate=regenerate) if only is None else groups(out, n, cache, urls, only, regenerate)
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
             grant = None
@@ -1913,7 +1986,8 @@ def main(argv: list[str]) -> int:
         return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
     cache = "--no-cache" not in argv
     keep_going = "--keep-going" in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--keep-going")]
+    regenerate = "--no-regenerate" not in argv
+    rest = [a for a in argv if a not in ("--no-cache", "--keep-going", "--no-regenerate")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -1977,7 +2051,7 @@ def main(argv: list[str]) -> int:
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
     reused = Reused(run_dir, before) if before is not None else None
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused)
+        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused, regenerate)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)

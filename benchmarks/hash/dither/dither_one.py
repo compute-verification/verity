@@ -71,6 +71,11 @@ MIX_FORMS = {"mix": ("block2", "split")}
 PEEL_ENV = "DITHER_PEEL"
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
+# "1" (dither_so's -aom/-aomn without -ov; CA's ruling of 23 Oct, core's form not yet landed): one A table a K a step,
+# a/<K>@<s> (`a_step_fields`), its rows every call of that K's slots in call order (call c's slot r at row c T + r: the K
+# slots' buffer and their scales' rows of `scale_all`), built once after the forward; the a-step leaf of call w is the
+# root of its K's table
+A_STEP_ENV = "DITHER_A_STEP"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
@@ -89,9 +94,12 @@ class Window:
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
     group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
+    a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
+    h2d_pinned = False      # `before`'s inputs through pinned buffers, without a host wait (`_h2d`)
 
     def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
         self.t, self.key, self.dev = t, key, dev
+        self.pins: dict[int, torch.Tensor] = {}
         self.L = L = len(REG)
         if sorted(REG) != list(range(L)):
             raise RuntimeError(f"linears registered: {sorted(REG)}")
@@ -111,10 +119,15 @@ class Window:
                 self.slot.append(self.slot_groups[k][at[k]])
                 at[k] += 1
             self.scale_all = torch.zeros(L, t, dtype=torch.float32, device=dev)
-            self.scale = list(self.scale_all.unbind(0))
+            # under a_step the scales' rows a K in call order (`a_calls`), K by K, so a K's run is its table's tails
+            self.a_calls = {k: [w for w, (_, kk) in enumerate(self.nk) if kk == k] for k in ks}
+            order = [w for k in ks for w in self.a_calls[k]] if self.a_step else list(range(L))
+            self.spos = [order.index(w) for w in range(L)]
+            self.scale = [self.scale_all[self.spos[w]] for w in range(L)]
         else:
             self.slot = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, k in self.nk]
             self.scale = [torch.zeros(t, dtype=torch.float32, device=dev) for _ in self.nk]
+            self.spos = list(range(L))
         self.z = [torch.zeros(t, n, dtype=torch.int32, device=dev) for n, _ in self.nk]
         self.live = torch.zeros(t // 32, dtype=torch.uint8, device=dev)
         self.admit = torch.zeros(t // 16 * 2, dtype=torch.uint8, device=dev)
@@ -305,6 +318,19 @@ class Window:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
+    def _h2d(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        """dst from the host tensor src on the current stream; under `h2d_pinned` (dither_so's $DITHER_SO_ROOT_LAG=2)
+        through dst's own pinned buffer without a host wait, its last copy out (the engine waited on the forward after
+        it)."""
+        if not self.h2d_pinned:
+            dst.copy_(src)
+            return
+        buf = self.pins.get(dst.data_ptr())
+        if buf is None:
+            buf = self.pins[dst.data_ptr()] = torch.empty(src.shape, dtype=src.dtype).pin_memory()
+        buf.copy_(src)
+        dst.copy_(buf, non_blocking=True)
+
     def phase(self, name: str | None) -> None:
         """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's (stepprof.py gives each
         kernel the phase its launch was in)."""
@@ -320,6 +346,10 @@ class Window:
         """What a captured step's `before` fills with 0xA5."""
         return (self.slot + self.scale + self.z + list(self.ydump or [])
                 + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
+
+    def dead_from(self, m: int) -> int:
+        """The step's S[2] (after `before` sets its flags and capture): 0, every row past m's z/y records written."""
+        return 0
 
     def _a_step(self) -> None:
         a = self.pre["a"]
@@ -342,16 +372,20 @@ class Window:
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
-        self.live.copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
-        self.admit.copy_(torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
-        self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
+        self._put(self.live, torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
+        self._put(self.admit, torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
+        self._put(self.stepv, torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
-        self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        self._put(self.S, torch.tensor([0, m, self.dead_from(m), self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
             self.cap_sync()
         self.phase(None)
         self.t_before = time.perf_counter()
+
+    def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        """A step input from the host into `dst`, on the current stream (`_h2d`)."""
+        self._h2d(dst, src)
 
     def cap_sync(self) -> None:
         """A captured step's wait, after its poison and inputs, before its forward."""
@@ -680,6 +714,32 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     d = 1 - 2 * int(int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1)
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
+
+
+def a_step_fields(win: Window, k: int, s: int) -> dict:
+    """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count len(linears) T)."""
+    return {"window": win.window, "step": s, "k": k, "linears": win.a_calls[k], "slots": win.t, "schema": CM.SCHEMA}
+
+
+def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
+    """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
+    ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order)."""
+    calls, out = list(calls), {}
+    for w in calls:
+        k = win.nk[w][1]
+        if not win.a_step:
+            fa = {"window": win.window, "step": s, "linear": w, "module": win.names[w], "slots": win.t, "k": k,
+                  "schema": CM.SCHEMA}
+            out[w] = CM.s8_table(CM.domain(fa, win.t, "a-table"), win.key, f"a/{s}/{w}", q_of(w), sc_of(w)).root
+            continue
+        if w in out:
+            continue
+        cs = win.a_calls[k]
+        q = np.concatenate([q_of(v) for v in cs])
+        sc = np.concatenate([sc_of(v) for v in cs])
+        r = CM.s8_table(CM.domain(a_step_fields(win, k, s), len(cs) * win.t, "a-table"), win.key, f"a/{k}@{s}", q, sc).root
+        out.update(dict.fromkeys(cs, r))
+    return {w: out[w] for w in calls}
 
 
 def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:

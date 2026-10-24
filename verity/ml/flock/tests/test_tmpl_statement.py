@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from verity_flock import circuit as FC
@@ -125,6 +126,47 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
         FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
 
 
+def test_the_pin_and_class_hash_the_file_a_chunk_at_a_time(monkeypatch):
+    """`circuit.digest` and `circuit.class_digest`, which hash a templated file's META (most of the file) in chunks rather
+    than whole copies, are SHA-512 of the file and of the file with META's binding keys removed and re-serialized, across
+    chunk boundaries anywhere, a non-ASCII section included."""
+    import hashlib
+
+    meta = {"format": FC.TMPL_FORMAT, "template": [f"{i} 1 {i} 1 {i + 1}" for i in range(50)], "partition": {"digest": "p"},
+            "program_sha512": "q", "z": "é"}
+    text = f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(meta)}\nCIRCUIT hm96 1\nÿ 0\n"
+    kept = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
+    want = (hashlib.sha512(text.encode()).hexdigest(),
+            hashlib.sha512((f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(kept, sort_keys=True, separators=(',', ':'))}\n"
+                            "CIRCUIT hm96 1\nÿ 0\n").encode()).hexdigest())
+    assert FC.meta_of(text) == meta
+    for chunk in (1, 7, 64, 1 << 24):
+        monkeypatch.setattr(FC, "_HASH_CHUNK", chunk)
+        assert (FC.digest(text), FC.class_digest(text)) == want
+
+
+@pytest.mark.slow
+def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_template(tmp_path):
+    """`UnitStager`'s ``structural`` on the toy: META ``template`` is `struct_lower`'s template on the stager's ports (the
+    flat unit never built), ordered, its unit range that template's slot; the outputs a round stages and META ``dummy`` are
+    the flat stager's, from the template (`TmplLowering.evaluate`); META is the emitted templated statement's but for the
+    template, the unit's slot and the pins that read them; and a structural stager without a layout is refused."""
+    args, rows, _kw = _toy(0)
+    flat, tm = CS.UnitStager(*args, layout=MODE), CS.UnitStager(*args, layout=MODE, structural=True)
+    assert tm.low.circuit is None and isinstance(tm.low, CS.TmplLowering)
+    t = T.parse("\n".join(tm.meta["template"]) + "\n")
+    assert T.write(t) == T.write(tm.low.template) and T.ordered(t)["ok"]
+    assert tm.meta["unit_log"] == FC._slot_log(T.layout(t, MODE)[t.root].size)
+    assert tm.meta["dummy"] == flat.meta["dummy"]
+    diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
+    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"} and "template" in diff
+    a, b = flat.stage(rows, tmp_path / "flat", b"k" * 32), tm.stage(rows, tmp_path / "struct", b"k" * 32)
+    assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
+    assert (tmp_path / "struct" / "circuit.txt").read_text() == tm.text
+    with pytest.raises(ValueError, match="a structural unit is written as its template: name its layout"):
+        CS.UnitStager(*args, structural=True)
+
+
 #: the auditor's host runs the lowering on numpy and C-Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
@@ -159,6 +201,18 @@ def test_the_templated_statement_is_written_without_torch(tmp_path):
     exec(WRITE, {"OUT": tmp_path / "b.txt", "MODE": MODE})
     a = (tmp_path / "a.txt").read_text()
     assert a.startswith(f"{FC.TMPL_FORMAT} unit/tmpl-no-torch\n") and a == (tmp_path / "b.txt").read_text()
+
+
+def test_a_unit_past_k_max_is_refused_before_its_template_is_written(monkeypatch, tmp_path):
+    """A templated unit whose block passes ``K_MAX`` is refused before compose writes its template's text, which for a
+    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB)."""
+    def written(_t):
+        raise AssertionError("the template was written before the block was checked")
+
+    monkeypatch.setattr(FC, "K_MAX", 10)
+    monkeypatch.setattr(T, "write", written)
+    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^10\\)"):
+        exec(WRITE, {"OUT": tmp_path / "c.txt", "MODE": MODE})
 
 
 def _verifier() -> Path:

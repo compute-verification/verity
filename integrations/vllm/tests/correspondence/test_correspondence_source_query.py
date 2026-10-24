@@ -8,7 +8,7 @@ import json
 import pytest
 from verity_vllm.query.units import ValueRef, boundary
 from verity_vllm.correspondence import runtime as RC
-from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, parse_call_name
+from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, parse_call_name, recorded_names
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.compose import merge_ranks
@@ -74,6 +74,39 @@ def test_call_name_of_the_record():
     parsed = RC.CallCorrespondence(4, f"{W}.c", None, "all_reduce2_7", "verity_tp.all_reduce", None, "all_reduce", 3, None, (), (), {}, None,
                                    RC.CollectiveOccurrence("all_reduce", 7, (0, 1), 0, 1, "peers_7"))
     assert call_name_of(parsed) == CallName(f"{W}.c", "all_reduce2_7", "", "3", "all_reduce"), "a collective's kind is its tag, not a return slot"
+
+
+def test_recorded_names_are_call_name_of_each_record():
+    """A document's names and tensorless Calls read off its fields are those of its records, built and named, case for case."""
+    coll = {"kind": "all_reduce", "occurrence": 0, "operand_ranks": [0, 1], "own_operand": 0, "peer_operand": 1, "peer_input": "peers_0"}
+    view = {"shape": [4], "dtype": "bf16"}
+    occs = [{"node": "linear", "module": f"{W}.a", "op": "aten.mm", "outputs": [view], "inputs": [{"node": "x", "source": "input", "name": "x", "view": view}]},
+            {"node": "all_reduce2_7", "module": f"{W}.c", "op": "verity_tp.all_reduce", "collective": coll},
+            {"module": f"{W}.d", "collective": None},
+            {"node": "rope"},
+            {}]
+
+    def ret(**k):
+        return [{"port": 0, "leaves": [0, 4], **k}]
+    calls = [{"occ": 0, "member": "0", "row": 7, "returns": ret(output=0), "args": [{"input": 0, "leaves": [0, 4]}]},
+             {"occ": 0, "hint": f"{W}.b/rope/query[3]", "returns": ret()},
+             {"occ": None, "hint": "argmax_2[0]"},
+             {"occ": 1, "member": "all_reduce", "row": 3, "returns": ret(output=0)},
+             {"occ": 1, "member": "other", "row": None, "returns": ret(written_arg=0)},
+             {"occ": 1, "hint": f"{W}.c/all_reduce[3]/all_reduce", "returns": ret(output=None) + ret(output=None, written_arg=None)},
+             {"occ": 2, "member": None, "row": 0, "returns": []},
+             {"occ": 3, "member": "q", "returns": ret(output=0), "args": [{"input": None, "spans": [{"input": 0, "leaves": [0, 2]}]}]},
+             {"occ": 4, "row": 2, "hint": ""},
+             {"member": "m", "returns": ret(output=None) + ret(output=1)}]
+    doc = {"schema": RC.SCHEMA, "body": "program_fn", "inputs": ["x"], "weights": None, "rank": {"world": 2, "rank": 0},
+           "occurrences": occs, "calls": calls}
+    names, tensorless = recorded_names(doc)
+    recs = list(RC.RuntimeCorrespondence.records(doc))
+    assert names == {r.call: call_name_of(r) for r in recs} and list(names) == list(range(len(calls)))
+    assert tensorless == [r.call for r in recs if r.returns and all(x.output is None and x.written_arg is None for x in r.returns)] == [1, 5]
+    assert names[3] == CallName(f"{W}.c", "all_reduce2_7", "", "3", "all_reduce") and names[4] == CallName(f"{W}.c", "all_reduce2_7", "other", None, "")
+    with pytest.raises(ValueError, match="not a runtime-correspondence/v1 document"):
+        recorded_names(dict(doc, schema="runtime-correspondence/v0"))
 
 
 ATTN = f"{W}.layers.0.self_attn"
@@ -178,8 +211,9 @@ def test_of_reads_the_build_dir_and_picks(tmp_path):
     a, b, c = Correspondence.of(P, str(new)), Correspondence.of(P, str(old)), Correspondence.of(P, None)
     assert a.source == "correspondence" and a.digest == RC.correspondence_digest(doc) and a.problem is None
     assert b.source == "v1_annotations" and c.source == "v1_annotations"
-    t = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))       # `of` reads the document's records one at a time: the same reader
-    assert a.names == t.names and a.provenance() == t.provenance() and [a.site_path(k) for k in a.names] == [t.site_path(k) for k in t.names]
+    t = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))       # `of` reads the document's names off its fields: the table's
+    assert a.names == t.names and a.tensorless == t.tensorless and a.provenance() == t.provenance()
+    assert [a.site_path(k) for k in a.names] == [t.site_path(k) for k in t.names]
     assert [b.site_path(k) for k in b.names] == [k_.module for k_ in b.names.values()] and b.provenance()["schema"] is None
     (new / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": "0" * 64}}))
     d = Correspondence.of(P, str(new))
