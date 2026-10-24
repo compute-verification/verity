@@ -1178,12 +1178,15 @@ class _ProcessEngine:
 
 def arm_execution(arm: Arm, preset: Preset, eager: bool) -> tuple[Preset, bool]:
     """The preset and eagerness the arm's engine is built with: the spec's, or for a served variant
-    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`)."""
+    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`), on its own checkpoint
+    when it names one."""
 
     if arm.execution is None:
         return preset, eager
     eager = arm.execution == "eager"
     settings = {**preset.engine_settings, "serving_defaults": True, "cuda_graphs": not eager, "enforce_eager": eager}
+    if arm.model is not None:
+        preset = replace(preset, model=arm.model, revision=arm.revision, case=None, model_digest=None)
     return replace(preset, engine_settings=settings), eager
 
 

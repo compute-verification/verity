@@ -8,6 +8,9 @@
 # An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
+# Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
+# memory), or unbound with DITHER_NUMA=0 or without numactl or a node; numa.json, the `numa:` line and summary.json's "numa"
+# say which.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
@@ -59,6 +62,16 @@ case " $* " in *dither-a-hbc*)
   echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
   grep -B1 -A2 "h1k\|h1u" "$OUT/build-h1u_kc.log" | grep -i "registers\|spill" | head -8
   export HB_H1U_KC=$S/h1u_kc.so
+  # and, with HB_KC_FLAGS_B, a second such build for the ARM-kcb arms (HB_H1U_KC_B)
+  read -r -a kcb <<< "${HB_KC_FLAGS_B:-}"
+  if [ ${#kcb[@]} -gt 0 ]; then
+    nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+      -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" -o "$S/h1u_kcb.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kcb.log" 2>&1 \
+      || { echo "sbench: NVCC_FAIL h1u_kcb"; grep -v "^ptxas info" "$OUT/build-h1u_kcb.log" | tail -30; exit 11; }
+    echo "sbench: h1u_kcb.so with ${HB_KC_FLAGS_B}" | tee -a "$OUT/kc-flags.txt"
+    grep -B1 -A2 "h1um\|h1jr_rows" "$OUT/build-h1u_kcb.log" | grep -i "registers\|spill" | head -8
+    export HB_H1U_KC_B=$S/h1u_kcb.so
+  fi
   # and, with HB_KC_H1C_FLAGS (h1c.cu's knobs), its own libh1c.so: its A, z, y and receipt tables (DITHER_H1C_KC)
   read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
   if [ ${#kh[@]} -gt 0 ]; then
@@ -69,6 +82,16 @@ case " $* " in *dither-a-hbc*)
     export DITHER_H1C_KC=$S/libh1c_kc.so
   fi ;;
 esac
+# --bw-passes (dbw.py): the remote bandwidth audit's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
+case " $* " in *" --bw-passes"*)
+  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
+    -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
+  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
+    -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
+  export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
@@ -76,6 +99,16 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+# and with --bw-passes the remote audit's verifier of record, under the lock lean_verifier.build takes (BW_LEAN_EXE);
+# BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
+if [ -n "${BW_LIB:-}" ]; then
+  (mkdir -p verity/core/difftest/lean/.lake && cd verity/core/protocols/remote_bandwidth/lean \
+    && flock "$ROOT/verity/core/difftest/lean/.lake/harness-build.lock" lake build remote-audit-verifier) \
+    > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
+  export BW_LEAN_EXE=$ROOT/verity/core/protocols/remote_bandwidth/lean/.lake/build/bin/remote-audit-verifier
+  export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
+  [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
+fi
 # coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session
 # from infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
@@ -118,6 +151,18 @@ if [ -n "${H1V3_SHA:-}" ]; then
 else
   export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
+# J10R's Definition (h1tile.j10r_reference) for DITHER_SO_UNITS=j10r's gate (j10r_so.py): J10R_SHA's verity/, as H1V3_SHA's
+# (the archive: j10r-$J10R_SHA.tar.gz)
+if [ -n "${J10R_SHA:-}" ]; then
+  mkdir -p "$S/j10r"
+  if git cat-file -e "$J10R_SHA^{commit}" 2>/dev/null; then
+    git archive "$J10R_SHA" verity | tar -x -C "$S/j10r"
+  elif [ -f "$D/inputs/j10r-$J10R_SHA.tar.gz" ]; then
+    tar -xzf "$D/inputs/j10r-$J10R_SHA.tar.gz" -C "$S/j10r"
+  fi
+  [ -f "$S/j10r/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: J10R_NO_TREE at $J10R_SHA"; exit 14; }
+  export DITHER_J10R_TREE=$S/j10r DITHER_J10R_SHA=$J10R_SHA
+fi
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
@@ -140,13 +185,33 @@ fi
 # an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
-echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
-nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
+# SBENCH_LEASE_AT (a UTC time) holds the lease request until then, the builds done, so a timed lease (GPU_LEASE_TIMED=1)
+# starts inside its clean window; SBENCH_ON (e.g. 4,5,6,7) is the GPUs it may take
+if [ -n "${SBENCH_LEASE_AT:-}" ]; then
+  at=$(date -u -d "$SBENCH_LEASE_AT" +%s) || { echo "sbench: SBENCH_LEASE_AT $SBENCH_LEASE_AT is not a time"; exit 2; }
+  now=$(date -u +%s)
+  [ "$at" -gt "$now" ] && { echo "sbench: holding the lease request until $SBENCH_LEASE_AT"; sleep $((at - now)); }
+fi
+if [ -n "${SBENCH_ON:-}" ]; then
+  gpu-lease() { command gpu-lease "$1" --on "$SBENCH_ON" "${@:2}"; }
+fi
+echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)${SBENCH_ON:+ on $SBENCH_ON}${GPU_LEASE_TIMED:+ (timed)}"
+nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu,memory.used --format=csv -l 2 \
+  > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
+# SBENCH_MPS=1: in the lease, after the kgate, an MPS control daemon of the run's own for the leased GPU (its pipe and
+# logs under the scratch, so no other process finds it), every process of the run its client, which names the GPU as
+# device 0 within the server's set; quit when the run ends (out/mps-*.log)
+export SBENCH_MPS=${SBENCH_MPS:-} MPS_DIR=$S/mps
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
+# SBENCH_TIMED=1: a timed lease (gpu-lease --timed), the one a booked window grants, the node kept quiet while it's held
+[ "${SBENCH_TIMED:-}" = 1 ] && PRE+=(--timed)
+# SBENCH_MEM_GB=G: the host memory the lease reserves (gpu-lease --mem-gb), else gpu-lease's default
+[ -n "${SBENCH_MEM_GB:-}" ] && PRE+=(--mem-gb "$SBENCH_MEM_GB")
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+  bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
@@ -154,7 +219,18 @@ gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
     tail -1 "$0/kgate.log"
     if [ $g -ne 0 ]; then echo "sbench: kgate rc $g, nothing timed"; exit 4; fi
   fi
-  exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"' "$OUT" "${NSYS[@]}" "$PY" \
+  if [ "$SBENCH_MPS" = 1 ]; then
+    mkdir -p "$MPS_DIR/pipe" "$MPS_DIR/log"
+    export CUDA_MPS_PIPE_DIRECTORY=$MPS_DIR/pipe CUDA_MPS_LOG_DIRECTORY=$MPS_DIR/log
+    CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:?} nvidia-cuda-mps-control -d || { echo "sbench: MPS_FAIL"; exit 16; }
+    export CUDA_VISIBLE_DEVICES=0
+    echo "sbench: MPS on $GPU_LEASE_UUID"
+  fi
+  [ "$SBENCH_MPS" = 1 ] || exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"
+  timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"; rc=$?
+  echo quit | nvidia-cuda-mps-control
+  for f in "$MPS_DIR"/log/*.log; do cp "$f" "$0/mps-$(basename "$f")"; done
+  exit $rc' "$OUT" "${NSYS[@]}" "$PY" \
   "$ROOT/benchmarks/hash/dither/${SBENCH_SCRIPT:-sbench.py}" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 kill "$SMI" 2>/dev/null

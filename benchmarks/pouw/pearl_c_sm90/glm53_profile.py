@@ -19,12 +19,40 @@ kernels' summed durations) and host time (its range), and gives the call's host 
 call (the first call's first kernel to the last call's last, over `CALLS`); ``solo`` gives the GPU's span of one call alone,
 its critical path.  It lists the kernels by name with their mean durations, and names any reference SHA-512 launch
 (`FALLBACKS`) that ran where the fast ones (`HASH_FAST`, `HASH_DECODE`) should.  Writes profile.json, prints a table a call.
+
+  nsys profile -t cuda,nvtx --cuda-graph-trace=node -o DIR/prof python benchmarks/pouw/pearl_c_sm90/glm53_profile.py run \
+    --schedule deferred-a --graphs --calls 12 [--shapes N:K ...] [--m M ...]
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py lanes DIR/prof.sqlite --out DIR/lanes.json
+
+``run`` under a schedule with lanes, or graphed, names only the calls (their steps are lanes' launches or graph replays).
+``lanes`` reads where back-to-back calls' GPU time goes by stream: each activity goes to the call whose range its launch (a
+graph's nodes: the graph's launch) falls in, and each stream to its lane (`LANE_OF`).  Per label: the median period from one
+call's first activity to the next's; for each lane over the calls between the first and the last, its first activity since
+its call's first (``start_us``), span, busy time and the idle time before it since the call before's last activity there
+(``idle_before_us``); each lane's kernels' mean durations; and the middle call's activities in order.  Writes lanes.json.
+
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py stamps --out DIR/stamps.json [--shapes N:K ...] [--m M ...] [--schedule S ...]
+
+``stamps`` (no nsys) reads where A's commitment spends a decode call, inside pd_commit and pd_tree: at each shape, m (default
+`STAMP_M`) and schedule (default serial and deferred-a), after `WARM` calls, `CALLS` calls alone between synchronizations,
+each on the stamp twins (`run.Pipeline.stamps`: each phase's end, hash_decode.cuh's PS_* and PT_*, as the global timer and
+the SM's clock).  Per call: each phase's end since its CTA's start by the SM's clock (median and max over the rows' CTAs),
+the CTAs' start and end on the global timer since the first one's start, and the tail's (A's levels, seed_A, the padding
+rows' lines; pd_tree's entry when it runs apart).
+
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py host --out DIR/host.json [--shapes N:K ...] [--m M ...] [--schedule S ...] [--graphs]
+
+``host`` (no nsys) reads where a call's host time goes: at each shape (default `HOST_SHAPES`), m (default `STAMP_M`) and
+schedule (default serial, deferred and deferred-a; with hashing, and serial's without), after `WARM` calls, `HOST_CALLS`
+calls back to back, timed by the host's clock (until the last returns) and the GPU's events (until its work ends), then
+as many again under cProfile: each function's own time a call, the `HOST_TOP` largest.
 """
 
 from __future__ import annotations
 
 import argparse
 import bisect
+import itertools
 import json
 import sqlite3
 import statistics
@@ -45,6 +73,16 @@ MS = (16, 2048)
 HASH_FAST = ("s512_row_segs", "s512_tile_segs", "s512_folds")
 HASH_DECODE = ("pd_commit_", "pd_tiles_", "pd_tree_", "pl_")
 FALLBACKS = ("s512_rows", "s512_tile_leaves")
+STAMP_M = (16, 64)
+HOST_SHAPES = ((512, 6144), (4096, 6144))
+HOST_CALLS, HOST_TOP = 200, 25
+#: hash_decode.cuh's stamp slots: a pd_commit CTA's phases (PS_*), and the tail's (PT_*: level l + 1 at PT_LEVEL + l)
+PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed")
+PT = {0: "start", **{1 + level: f"level{level + 1}" for level in range(8)}, 9: "seed_a", 10: "fillers", 11: "entry"}
+PT_ROW = 15
+#: a stream's lane in ``lanes``: the streams that run each kernel in turn, of those not named yet, numbered in their order
+#: where there are several (a side lane a ring set); the others are named by their stream's id
+LANE_OF = (("pd_commit_", "main"), ("pd_tiles_", "side"), ("pd_tree_", "tree"))
 
 
 def _ranged(name: str, f):
@@ -78,12 +116,14 @@ def run_mode(a) -> int:
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)
-    run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin)
+    schedule = (a.schedule or ["serial"])[0]
+    run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin, schedule, a.graphs)
+    steps = schedule == "serial" and not a.graphs
     run.keys = _ranged("host keys", run.keys)
     run.uploads.put = _ranged("host upload", run.uploads.put)
     run._after = _ranged("host after", run._after)
     PPD.screen_into = _ranged("host screen", PPD.screen_into)
-    end_pass = run.end_pass
+    end_pass, calls = run.end_pass, a.calls or CALLS
     for w, W in weights.items():
         n, k = W.shape
         for m in a.m or MS:
@@ -93,10 +133,11 @@ def run_mode(a) -> int:
                 run.hashing = hashing
                 for _ in range(WARM):
                     run.gemm(w, x, W, None)
-                _instrument(run, PPD)
+                if steps:
+                    _instrument(run, PPD)
                 torch.cuda.synchronize()
                 label = f"{n}:{k} m{m} {'hash' if hashing else 'nohash'}"
-                for i in range(CALLS):
+                for i in range(calls):
                     torch.cuda.nvtx.range_push(f"call {label} #{i}")
                     run.gemm(w, x, W, None)
                     torch.cuda.nvtx.range_pop()
@@ -113,8 +154,162 @@ def run_mode(a) -> int:
     end_pass()
     print(json.dumps({"scheme": a.scheme, "device": torch.cuda.get_device_name(), "cubin_sha256": kernel.cubin_sha256,
                       "kernel_source_sha256": kernel.source_sha256, "shapes": shapes, "m": list(a.m or MS), "warm": WARM,
-                      "calls": CALLS}), flush=True)
+                      "calls": calls, "schedule": schedule, "graphs": a.graphs}), flush=True)
     return 0
+
+
+def stamp_rows(raw: bytes, count: int, slots: int) -> tuple[list[dict], dict]:
+    """The stamps' (timer ns, clock) pairs by phase: each pd_commit CTA's (rows 0 … count − 1, `PS`), and the tail's (row
+    count, `PT`, with ``cta``: the (row, SM) of pd_commit's last CTA when it ran the tail)."""
+    import struct
+    words = struct.unpack(f"<{len(raw) // 8}Q", raw)
+
+    def at(row: int, slot: int) -> tuple[int, int]:
+        return words[2 * (slots * row + slot)], words[2 * (slots * row + slot) + 1]
+    rows = [{nm: at(r, s) for s, nm in enumerate(PS) if at(r, s)[0]} for r in range(count)]
+    tail = {nm: at(count, s) for s, nm in PT.items() if at(count, s)[0]}
+    cta = at(count, PT_ROW)
+    return rows, {**tail, **({"cta": cta} if cta != (0, 0) else {})}
+
+
+def stamp_summary(rows: list[dict], tail: dict) -> dict:
+    """One call's stamps (`stamp_rows`) as the module's docstring gives them, in µs."""
+    rows = [r for r in rows if "start" in r]
+    if not rows:
+        return {"rows": 0}
+    t0 = min(r["start"][0] for r in rows)
+    spans = [(r[e][1] - r["start"][1], r[e][0] - r["start"][0]) for r in rows for e in [max(r, key=lambda nm: r[nm][0])]]
+    spans = [(c, ns) for c, ns in spans if ns > 2000]
+    ghz = statistics.median(c / ns for c, ns in spans) if spans else None
+    phases = {}
+    for nm in PS[1:]:
+        d = [(r[nm][1] - r["start"][1]) / ghz / 1e3 for r in rows if nm in r] if ghz else []
+        if d:
+            phases[nm] = {"median_us": statistics.median(d), "max_us": max(d)}
+    starts = [(r["start"][0] - t0) / 1e3 for r in rows]
+    ends = [(max(v[0] for v in r.values()) - t0) / 1e3 for r in rows]
+    return {"rows": len(rows), "clock_ghz": ghz, "since_cta_start_us": phases,
+            "cta_start_us": {"median": statistics.median(starts), "max": max(starts)},
+            "cta_end_us": {"median": statistics.median(ends), "max": max(ends)},
+            "tail_us": {nm: (v[0] - t0) / 1e3 for nm, v in tail.items() if nm != "cta"},
+            **({"tail_cta": list(tail["cta"])} if "cta" in tail else {})}
+
+
+def stamps_mode(a) -> int:
+    import torch
+    import glm53_timing as T
+
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(glm53.in_domain(a.scheme))
+    schedules = a.schedule or ["serial", "deferred-a"]
+    run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin, schedules[0])
+    R = kernel.run
+    buf = torch.zeros(R.PD_STAMP_BYTES, dtype=torch.uint8, device=run.device)
+    rows = []
+    for w, W in weights.items():
+        n, k = W.shape
+        for m in a.m or STAMP_M:
+            x = torch.randn(m, k, device=W.device, generator=gen).to(torch.bfloat16)
+            m16 = -(-m // 16) * 16
+            if R.pd_variant(m16, n, k) is None:
+                continue
+            for sc in schedules:
+                run.end_pass(schedule=sc)
+                for _ in range(WARM):
+                    run.gemm(w, x, W, None)
+                pipes = [p for p, _, _ in run.pipes.values()]
+                calls = []
+                try:
+                    for p in pipes:
+                        p.stamps = buf.data_ptr()
+                    for _ in range(CALLS):
+                        buf.zero_()
+                        torch.cuda.synchronize()
+                        run.gemm(w, x, W, None)
+                        torch.cuda.synchronize()
+                        calls.append(stamp_summary(*stamp_rows(buf.cpu().numpy().tobytes(), m16, R.PD_SLOTS)))
+                finally:
+                    for p in pipes:
+                        p.stamps = 0
+                end = sorted(calls, key=lambda c: c["cta_end_us"]["max"])[len(calls) // 2]
+                row = {"n": n, "k": k, "m": m, "schedule": sc, "variant": R.pd_variant(m16, n, k), "median_call": end,
+                       "calls": calls}
+                rows.append(row)
+                ph = end["since_cta_start_us"]
+                print(f"{n}:{k} m{m} {sc}: CTAs end by {end['cta_end_us']['max']:.1f} us (start skew "
+                      f"{end['cta_start_us']['max']:.1f}); phases " + ", ".join(f"{nm} {v['median_us']:.1f}/{v['max_us']:.1f}"
+                                                                                for nm, v in ph.items())
+                      + "; tail " + ", ".join(f"{nm} {v:.1f}" for nm, v in end["tail_us"].items()), flush=True)
+    run.end_pass(schedule="serial")
+    out = {"scheme": a.scheme, "device": torch.cuda.get_device_name(), "cubin_sha256": kernel.cubin_sha256,
+           "kernel_source_sha256": kernel.source_sha256, "warm": WARM, "calls": CALLS, "rows": rows}
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
+    return 0 if rows else 1
+
+
+def host_mode(a) -> int:
+    import cProfile
+    import pstats
+    import time
+
+    import torch
+    import glm53_timing as T
+
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(HOST_SHAPES)
+    schedules = a.schedule or ["serial", "deferred", "deferred-a"]
+    run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin, schedules[0], a.graphs)
+    arms = [(sc, True) for sc in schedules] + [(schedules[0], False)]
+    rows = []
+
+    def calls(f, n):
+        s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize()
+        s.record()
+        t = time.perf_counter()
+        for _ in range(n):
+            f()
+        host = (time.perf_counter() - t) * 1e6 / n
+        run.join_sides(torch.cuda.current_stream())
+        e.record()
+        e.synchronize()
+        return host, s.elapsed_time(e) * 1e3 / n
+
+    for w, W in weights.items():
+        n, k = W.shape
+        for m in a.m or STAMP_M:
+            x = torch.randn(m, k, device=W.device, generator=gen).to(torch.bfloat16)
+            for sc, hashing in arms:
+                run.end_pass(schedule=sc)
+                run.hashing = hashing
+
+                def f(w=w, x=x, W=W):
+                    run.gemm(w, x, W, None)
+                for _ in range(WARM):
+                    f()
+                host_us, gpu_us = calls(f, HOST_CALLS)
+                prof = cProfile.Profile()
+                prof.enable()
+                prof_host_us, _ = calls(f, HOST_CALLS)
+                prof.disable()
+                st = pstats.Stats(prof)
+                top = sorted(((v[2], v[3], fn) for fn, v in st.stats.items()), reverse=True)[:HOST_TOP]
+                row = {"n": n, "k": k, "m": m, "schedule": sc, "hashing": hashing, "graphs": run._graphed(-(-m // 16) * 16),
+                       "host_us": host_us, "events_us": gpu_us, "profiled_host_us": prof_host_us,
+                       "own_us": [{"fn": f"{fn[0].rsplit('/', 2)[-1]}:{fn[1]}({fn[2]})", "own": tt * 1e6 / HOST_CALLS,
+                                   "cum": ct * 1e6 / HOST_CALLS} for tt, ct, fn in top]}
+                rows.append(row)
+                print(f"{n}:{k} m{m} {sc} {'hash' if hashing else 'nohash'}{' graphs' if row['graphs'] else ''}: host "
+                      f"{host_us:.1f} us a call, events {gpu_us:.1f} (profiled host {prof_host_us:.1f}); own: "
+                      + ", ".join(f"{t['fn']} {t['own']:.1f}" for t in row["own_us"][:12]), flush=True)
+            run.end_pass(schedule=schedules[0])
+            run.hashing = True
+    out = {"scheme": a.scheme, "device": torch.cuda.get_device_name(), "cubin_sha256": kernel.cubin_sha256,
+           "kernel_source_sha256": kernel.source_sha256, "warm": WARM, "calls": HOST_CALLS, "rows": rows}
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
+    return 0 if rows else 1
 
 
 def _columns(db, table: str) -> set[str]:
@@ -127,7 +322,8 @@ def _tables(db) -> set[str]:
 
 def load(path: str) -> tuple[list, list]:
     """The export's ranges, (thread, start, end, text) sorted by start, and its GPU activities, (thread, launch time, start,
-    end, kind, name), each joined to its launch's API call by correlation id."""
+    end, kind, name, stream), each joined to its launch's API call by correlation id (a graph's nodes to its launch, under
+    nsys's ``--cuda-graph-trace=node``)."""
     db = sqlite3.connect(path)
     tables = _tables(db)
     strings = dict(db.execute("SELECT id, value FROM StringIds")) if "StringIds" in tables else {}
@@ -143,14 +339,14 @@ def load(path: str) -> tuple[list, list]:
     acts = []
     if "CUPTI_ACTIVITY_KIND_KERNEL" in tables:
         name = "shortName" if "shortName" in _columns(db, "CUPTI_ACTIVITY_KIND_KERNEL") else "demangledName"
-        for c, s, e, nm in db.execute(f"SELECT correlationId, start, end, {name} FROM CUPTI_ACTIVITY_KIND_KERNEL"):
+        for c, s, e, nm, st in db.execute(f"SELECT correlationId, start, end, {name}, streamId FROM CUPTI_ACTIVITY_KIND_KERNEL"):
             if c in api:
-                acts.append((*api[c], s, e, "kernel", strings.get(nm, str(nm))))
+                acts.append((*api[c], s, e, "kernel", strings.get(nm, str(nm)), st))
     for table, kind in (("CUPTI_ACTIVITY_KIND_MEMCPY", "memcpy"), ("CUPTI_ACTIVITY_KIND_MEMSET", "memset")):
         if table in tables:
-            for c, s, e in db.execute(f"SELECT correlationId, start, end FROM {table}"):
+            for c, s, e, st in db.execute(f"SELECT correlationId, start, end, streamId FROM {table}"):
                 if c in api:
-                    acts.append((*api[c], s, e, kind, kind))
+                    acts.append((*api[c], s, e, kind, kind, st))
     return ranges, acts
 
 
@@ -189,7 +385,7 @@ def report(ranges: list, acts: list, calls: int = CALLS) -> dict:
     for recs in calls_of.values():
         for rec in recs:
             rec["host"]["host other"] = rec["end"] - rec["start"] - rec["top"]
-    for t, launched, s, e, kind, name in acts:
+    for t, launched, s, e, kind, name, _ in acts:
         held = around(t, launched)
         outer = [r for r in held if r[2].startswith(("call ", "solo "))]
         if not outer:
@@ -239,6 +435,74 @@ def report(ranges: list, acts: list, calls: int = CALLS) -> dict:
     return out
 
 
+def lanes(ranges: list, acts: list) -> dict:
+    """Each label's back-to-back calls by stream (the module's docstring, ``lanes``)."""
+    by_tid = defaultdict(list)
+    for t, s, e, x in ranges:
+        if x.startswith("call "):
+            by_tid[t].append((s, e, x))
+    starts = {t: [r[0] for r in rs] for t, rs in by_tid.items()}
+    of = defaultdict(lambda: defaultdict(list))         # label -> call -> [(stream, name, start, end)]
+    for t, launched, s, e, _, name, st in acts:
+        i = bisect.bisect_right(starts.get(t, []), launched) - 1
+        if i < 0 or by_tid[t][i][1] < launched:
+            continue
+        label, n = by_tid[t][i][2][len("call "):].rsplit(" #", 1)
+        of[label][int(n)].append((st, name, s, e))
+    out = {}
+    for label, calls in of.items():
+        ids = sorted(calls)
+        role, ordered = {}, sorted((a for i in ids for a in calls[i]), key=lambda a: a[2])
+        for prefix, lane in LANE_OF:
+            got = list(dict.fromkeys(a[0] for a in ordered if a[1].startswith(prefix) and a[0] not in role))
+            for n, st in enumerate(got):
+                role[st] = lane if len(got) == 1 else f"{lane}{n}"
+        lane_of = {st: role.get(st, f"stream {st}") for i in ids for st, _, _, _ in calls[i]}
+        first = {i: min(a[2] for a in calls[i]) for i in ids}
+        steady = ids[1:-1] or ids
+        per = defaultdict(lambda: defaultdict(list))
+        spans = {i: defaultdict(lambda: [None, None, 0]) for i in ids}    # call -> lane -> [first start, last end, busy]
+        for i in ids:
+            for st, _, s, e in calls[i]:
+                v = spans[i][lane_of[st]]
+                v[0] = s if v[0] is None else min(v[0], s)
+                v[1] = e if v[1] is None else max(v[1], e)
+                v[2] += e - s
+        for i in steady:
+            for ln, (s, e, busy) in spans[i].items():
+                per[ln]["start_us"].append((s - first[i]) / 1e3)
+                per[ln]["span_us"].append((e - s) / 1e3)
+                per[ln]["busy_us"].append(busy / 1e3)
+        for a, b in itertools.pairwise(ids):
+            for ln in spans[b].keys() & spans[a].keys():
+                per[ln]["idle_before_us"].append((spans[b][ln][0] - spans[a][ln][1]) / 1e3)
+        kernels = defaultdict(list)
+        for i in steady:
+            for st, name, s, e in calls[i]:
+                kernels[(lane_of[st], name)].append((e - s) / 1e3)
+        mid = steady[len(steady) // 2]
+        periods = [(first[b] - first[a]) / 1e3 for a, b in itertools.pairwise(ids)]
+        out[label] = {
+            "calls": len(ids), "period_us": statistics.median(periods) if periods else None, "periods_us": periods,
+            "lanes": {ln: {k: statistics.median(v) for k, v in d.items()} for ln, d in per.items()},
+            "kernels": {f"{ln} {nm}": {"count": len(v) / len(steady), "mean_us": statistics.mean(v)}
+                        for (ln, nm), v in sorted(kernels.items())},
+            "timeline": [{"at_us": (s - first[mid]) / 1e3, "lane": lane_of[st], "name": name, "us": (e - s) / 1e3}
+                         for st, name, s, e in sorted(calls[mid], key=lambda a: a[2])],
+        }
+    return out
+
+
+def print_lanes(out: dict) -> None:
+    for label, r in out.items():
+        print(f"\n{label}: {r['calls']} calls, period {r['period_us'] or 0:.1f} us a call (median)")
+        for ln, v in sorted(r["lanes"].items()):
+            print(f"  {ln:<14} " + ", ".join(f"{k} {x:.1f}" for k, x in v.items()))
+        for nm, v in r["kernels"].items():
+            print(f"    {nm:<40} {v['mean_us']:8.1f} us" + (f" x{v['count']:g}" if v["count"] != 1 else ""))
+        print("  a steady call: " + "; ".join(f"{t['at_us']:.1f} {t['lane']} {t['name']} {t['us']:.1f}" for t in r["timeline"]))
+
+
 def print_report(out: dict) -> None:
     for label, r in out.items():
         print(f"\n{label}: host wall {r['host_wall_us']:.1f} us a call, GPU busy {r['gpu_busy_us']:.1f} us, GPU span "
@@ -253,18 +517,26 @@ def print_report(out: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("mode", choices=("run", "report"))
-    p.add_argument("sqlite", nargs="?", help="report: nsys's SQLite export")
-    p.add_argument("--out", help="report: the JSON to write")
+    p.add_argument("mode", choices=("run", "report", "lanes", "stamps", "host"))
+    p.add_argument("sqlite", nargs="?", help="report, lanes: nsys's SQLite export")
+    p.add_argument("--out", help="report, lanes, stamps, host: the JSON to write")
+    p.add_argument("--calls", type=int, help=f"run: back-to-back calls at each point (default {CALLS})")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin")
-    p.add_argument("--shapes", nargs="*", help="N:K (default the two expert shapes)")
+    p.add_argument("--shapes", nargs="*", help="N:K (default run: the two expert shapes; stamps: every in-domain linear)")
     p.add_argument("--m", nargs="*", type=int)
+    p.add_argument("--schedule", nargs="*", help="stamps: the schedules (default serial and deferred-a); host: (default "
+                                                  "serial, deferred and deferred-a); run: the first (default serial)")
+    p.add_argument("--graphs", action="store_true", help="host, run: calls of up to 256 rows replayed as CUDA graphs")
     a = p.parse_args(argv)
     if a.mode == "run":
         return run_mode(a)
-    out = report(*load(a.sqlite))
-    print_report(out)
+    if a.mode == "stamps":
+        return stamps_mode(a)
+    if a.mode == "host":
+        return host_mode(a)
+    out = (lanes if a.mode == "lanes" else report)(*load(a.sqlite))
+    (print_lanes if a.mode == "lanes" else print_report)(out)
     if a.out:
         Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
     return 0 if out else 1

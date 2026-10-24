@@ -1,10 +1,15 @@
 """A pod job's Lean step, fail closed (``85-rec-reprice.sh`` and ``86-zk-cpu-steps.sh``, STEP=lean): each part's
 flock-verify exit, as its ``/usr/bin/time -v`` record has it (``time-PART.txt``'s ``Exit status``), and the ``VERDICT``
 lines of its log (``PART.log``, one per session). An honest part passes when it exited 0 and has a VERDICT and every VERDICT
-accepts; a forgery (a part named ``forged-*``) when it exited 1, flock-verify's refusal, with a VERDICT and none accepting.
-``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from the verifier's program
-(``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has neither file and fails.
-One line per part, then the count; the exit is 0 only when there is a part and every part passes.
+accepts. A forgery is the parts named ``forged-KIND-PART``, PART one of the honest parts named (else the whole name is its
+kind): V* accepts only when every part does, so a forgery is refused when one of its parts exited 1, flock-verify's
+refusal, with a VERDICT and none accepting, and every other part of it has a VERDICT (a part the forgery leaves as the
+honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
+the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
+neither file and fails, except a forgery's part the firewall held back: its prover's ``LIVE`` lines (``PART.live``, the
+session verdicts oprove kept) stop at ``FIREWALL-REFUSED: …``, so no session reached Lean, and the part counts as
+refused by the firewall. One line per part, then the count; the exit is 0 only when there is a part, every honest part
+passes and every forgery is refused.
 
     python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
 """
@@ -44,16 +49,44 @@ def verdicts(log: Path) -> list[dict]:
     return out
 
 
-def check(d: Path, part: str) -> tuple[bool, str]:
+def firewall_refusal(live: Path) -> str | None:
+    """The firewall's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
+    if not live.exists():
+        return None
+    for line in live.read_text(errors="replace").splitlines():
+        try:
+            stopped = json.loads(line).get("prover_stopped")
+        except (ValueError, AttributeError):
+            continue
+        if isinstance(stopped, str) and stopped.startswith("FIREWALL-REFUSED"):
+            return stopped
+    return None
+
+
+def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, str]:
+    """``part``'s (passes, refused, line); a forgery's part (``kind``) passes when it has a VERDICT, and is refused when it
+    exited 1 with none accepting, or when no session reached Lean because the firewall refused it."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
+    fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
+    if fw:
+        line = (f"lean {part}{f' (forgery {kind}: one of its parts must be refused)' if kind else ''}: refused by the "
+                f"firewall before Lean, why {fw[:300]!r}{'' if kind else '  <- FAILS'}")
+        return bool(kind), True, line
     accepted = [v.get("accepted") is True for v in vs]
-    forged = part.startswith("forged-")
-    ok = bool(vs) and (rc == REFUSED and not any(accepted) if forged else rc == 0 and all(accepted))
+    refused = bool(vs) and rc == REFUSED and not any(accepted)
+    ok = bool(vs) and (refused or rc == 0 and all(accepted) if kind else rc == 0 and all(accepted))
     why = "; ".join(dict.fromkeys(str(v.get("why") or "") for v in vs if v.get("why"))) or ("" if vs else "no VERDICT")
     shown = [v.get("accepted") for v in vs]
-    line = (f"lean {part}{' (a forgery: Lean must refuse it)' if forged else ''}: exit {rc}, "
+    line = (f"lean {part}{f' (forgery {kind}: one of its parts must be refused)' if kind else ''}: exit {rc}, "
             f"accepted {json.dumps(shown[0] if len(shown) == 1 else shown)}, why {why[:300]!r}{'' if ok else '  <- FAILS'}")
-    return ok, line
+    return ok, refused, line
+
+
+def kind_of(part: str, honest: list[str]) -> str:
+    """The forgery ``forged-KIND-PART`` is KIND, PART the longest honest part it ends with; else the name without ``forged-``."""
+    name = part.removeprefix("forged-")
+    ends = [h for h in honest if name.endswith("-" + h)]
+    return name[: -len(max(ends, key=len)) - 1] if ends else name
 
 
 def main(argv: list[str]) -> int:
@@ -61,15 +94,23 @@ def main(argv: list[str]) -> int:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
     d, parts = Path(argv[0]), list(dict.fromkeys(argv[1:]))
-    results = {p: check(d, p) for p in parts}
-    for _, line in results.values():
-        print(line)
     honest = [p for p in parts if not p.startswith("forged-")]
-    forged = [p for p in parts if p.startswith("forged-")]
+    kinds = {p: kind_of(p, honest) for p in parts if p.startswith("forged-")}
+    results = {p: check(d, p, kinds.get(p)) for p in parts}
+    for _, _, line in results.values():
+        print(line)
+    groups: dict[str, list[str]] = {}
+    for p, k in kinds.items():
+        groups.setdefault(k, []).append(p)
+    refused = {k: all(results[p][0] for p in ps) and any(results[p][1] for p in ps) for k, ps in groups.items()}
+    for k, ps in groups.items():
+        if len(ps) > 1 or not refused[k]:
+            by = [p for p in ps if results[p][1]]
+            print(f"lean forgery {k}: refused by {by or 'no part'} of {len(ps)}{'' if refused[k] else '  <- FAILS'}")
     count = f"lean: {sum(results[p][0] for p in honest)}/{len(honest)} accepted"
-    if forged:
-        count += f", {sum(results[p][0] for p in forged)}/{len(forged)} forgeries refused"
-    ok = bool(parts) and all(r[0] for r in results.values())
+    if groups:
+        count += f", {sum(refused.values())}/{len(groups)} forgeries refused"
+    ok = bool(parts) and all(results[p][0] for p in honest) and all(refused.values())
     print(count + ("" if ok else ": the step fails" if parts else ": no part to check, the step fails"))
     return 0 if ok else 1
 

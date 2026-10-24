@@ -141,9 +141,9 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     assert (rec.appended, rec.released) == (6, 7)
 
 
-def test_a_registered_block_freed_at_its_values_last_read_leaves_every_later_plan() -> None:
-    """A free of a slot below N releases its registered block: the writer records it at the step that reads the
-    block's values for the last time (a weight only some steps read), so no later pass holds it and none credits it.
+def test_a_registered_block_freed_at_its_values_last_reader_leaves_every_later_plan() -> None:
+    """A free of a slot below N releases its registered block: the writer records it at the block's values' last
+    structural reader (a weight only the first steps read), so no later pass holds it and none credits it.
     The verifier takes the release, and a plan that still holds the block is refused (`plan`)."""
     st = store()
     replay, run = Replay(Header(st.registration.digest, N), st.registration), Run(st)

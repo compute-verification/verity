@@ -118,7 +118,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`benchmarks/census/`](benchmarks/census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
 - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `tools/verity/`: the `verity` command (`tools/verity/cli/`) and the tools it runs:
-  - [`tools/verity/check/`](tools/verity/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
+  - [`tools/verity/check/`](tools/verity/check/check.py): `check`, the one check, run on `main` after each landing, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
   - `tools/verity/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
   - [`tools/verity/lean/`](tools/verity/lean/README.md): the Lean check every Lean package passes
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
@@ -133,7 +133,7 @@ Install the workspace with [uv](https://docs.astral.sh/uv/), then run the tests 
 uv sync --all-packages --extra torch-cpu   # the workspace, every package editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/verity/check/suites.py        # every test suite whose inputs changed since it last passed; --quick skips slow tests
 uv run circuit-check --all                 # the property checks on every registered circuit
-uv run --extra torch-cpu verity check      # the one check a merge requires; its Lean steps need lake
+uv run --extra torch-cpu verity check      # the one check; its Lean steps need lake
 ~~~
 
 Each package's tests live in its own `tests/` and run as their own suite; the [testing skill](.agents/skills/testing/SKILL.md) has the rules. Serving, proving and hardware probes run on GPU pods through the research harness (`research run --on ...`), never on a laptop.
@@ -168,7 +168,7 @@ ml.randomness, ml.crypto, core.claims: import no other module of verity
 
 `tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.ml.circuits import Program`); `verity` itself re-exports nothing.
 
-There is no GitHub Actions CI. `check` is the one check, and `main` always passes it, kept fast by reusing a part's verdict while its declared inputs are unchanged. PRs land in trains whose `check` passed, and a landing that breaks `main` is reverted at once. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
+There is no GitHub Actions CI. `check` is the one check, kept fast by reusing a part's verdict while its declared inputs are unchanged. PRs land on a reviewer's verdict (a Lean change once its Lean check passed), `check` runs on `main` after each landing, and a landing it fails is reverted at once. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
 ## Documentation
 

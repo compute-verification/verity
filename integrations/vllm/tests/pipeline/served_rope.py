@@ -3,12 +3,14 @@ a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's wor
 committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.
 
-    python -m tests.pipeline.served_rope OUT [--served]        (from integrations/vllm)
+    python -m tests.pipeline.served_rope OUT [--served] [--commit-scheme rows-sha512|vllm-v1]        (from integrations/vllm)
 
 writes ``OUT/commit``, ``OUT/row`` and ``OUT/partition.json`` (every RoPE head, ``subset:1``) and prints them with the run root as
-one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`)."""
+one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`);
+``--commit-scheme`` is the members' (`commit`)."""
 from __future__ import annotations
 
+import argparse
 import gzip
 import json
 import sys
@@ -110,12 +112,17 @@ def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
 
 
 def main(argv: list[str]) -> int:
-    root = Path(argv[0])
+    ap = argparse.ArgumentParser()
+    ap.add_argument("out")
+    ap.add_argument("--served", action="store_true")
+    ap.add_argument("--commit-scheme", default="vllm-v1", choices=("rows-sha512", "vllm-v1"))
+    a = ap.parse_args(argv)
+    root = Path(a.out)
     root.mkdir(parents=True, exist_ok=True)
-    c = commit(root)
+    c = commit(root, commit_scheme=None if a.commit_scheme == "vllm-v1" else a.commit_scheme)
     out = {"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
            "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}
-    if "--served" in argv[1:]:
+    if a.served:
         out["hook"] = str(hook(c, root / "hook"))
     print(json.dumps(out))
     return 0

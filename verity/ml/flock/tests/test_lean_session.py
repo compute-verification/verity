@@ -406,11 +406,11 @@ def commit(roots: list[tuple[str, bytes]]) -> bytes:
             + struct.pack("<I", 0))
 
 
-def level0(lp: Loop, m: int, z: bytes, name: str = "00" * 64):
-    """The loop's answer to `level0 SESSION M LEN` and the witness `z` on its frames port, for the session named `name`:
-    `(line, draws, root)`, or the line."""
+def level0(lp: Loop, m: int, z: bytes, name: str = "00" * 64, table: int = 0):
+    """The loop's answer to `level0 SESSION TABLE M LEN` and the witness `z` on its frames port, for table `table` of the
+    session named `name`: `(line, draws, root)`, or the line."""
     with socket.create_connection(lp.frames) as s, s.makefile("rb") as r:
-        s.sendall(f"level0 {name} {m} {len(z)}\n".encode() + z)
+        s.sendall(f"level0 {name} {table} {m} {len(z)}\n".encode() + z)
         line = r.readline().decode().rstrip("\n")
         if not line.startswith("ok "):
             return line
@@ -435,20 +435,26 @@ def _zeros(m: int) -> bytes:
 @pytest.mark.slow
 def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     """The loop draws a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
-    in the hiding and the root. A `Commit` leaves only when each root it carries is one the loop drew for its own session
-    at its table's `m`: a root drawn for another session, or at another `m`, is refused, never reaching the auditor, and
-    one at the statement's leaves, its opening then checked (zero words refused). The `Commit` that leaves is the loop's
-    own, whatever the prover's carried beside its roots: `root_F` the session's Σ, no public words, nothing after."""
+    in the hiding and the root. It draws a table's once a session: a second request for the table, or one for a table the
+    session lacks, is refused, so the prover can't draw until a root suits it (NIGHTREV's grinding). A `Commit` leaves only
+    when each root it carries is the one the loop drew for its own session's table at its `m`: a root drawn for another
+    session, or at another `m`, is refused, never reaching the auditor, and one at the statement's leaves, its opening
+    then checked (zero words refused). The `Commit` that leaves is the loop's own, whatever the prover's carried beside
+    its roots: `root_F` the session's Σ, no public words, nothing after."""
     S = Sessions(_args(zk, "pub-16.bin"))
     s, name = S.session()
     why = reason(call(s, COMMIT))
     [table] = re.search(r"tables are \[(.*)\]$", why)[1].split(", ")
     other = 25
     _, d0, r0 = level0(S.lp, other, _zeros(other), name)
-    _, d1, r1 = level0(S.lp, other, _zeros(other), name)
+    assert level0(S.lp, other, _zeros(other), name) == (
+        "err a second level-0 request for table 0 of this session: the loop draws a table's level 0 once")
+    assert level0(S.lp, other, _zeros(other), name, table=1) == "err a level-0 request for table 1 of a session with 1 tables"
+    s2, name2 = S.session()
+    _, d1, r1 = level0(S.lp, other, _zeros(other), name2)
     assert len(d0) == len(d1) and d0 != d1 and r0 != r1
-    s2, _ = S.session()
-    assert reason(call(s2, commit([(table, r0)]))) == STOP + f"a Commit whose root of {table} no Lean level 0 drew for this session"
+    assert reason(call(s2, commit([(table, r0)]))) == (
+        STOP + f"a Commit whose root of {table} is not the level 0 the loop drew for this session's table 0")
     s.close()
     s2.close()
     s, name = S.session()
@@ -486,10 +492,10 @@ def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
     got = level0(S.lp, 25, _zeros(25), "ab" * 64)
     assert got == f"err a level-0 request for a session the loop is not serving (coin tree root {'ab' * 64})", got
     s, name = S.session()
-    for _ in range(2):
-        assert level0(S.lp, 25, _zeros(25), name)[0].startswith("ok ")
+    assert level0(S.lp, 25, _zeros(25), name)[0].startswith("ok ")
+    assert level0(S.lp, 25, _zeros(25), name).startswith("err a second level-0 request for table 0 of this session")
     s.close()
-    assert S.ended() == "level 0: session 0 ended; 2 drawn for it freed, 0 kept"
+    assert S.ended() == "level 0: session 0 ended; 1 drawn for it freed, 0 kept"
     (s1, n1), (s2, n2) = S.session(), S.session()
     for n in (n1, n2):
         assert level0(S.lp, 25, _zeros(25), n)[0].startswith("ok ")
@@ -535,6 +541,9 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     f.close()
     if isinstance(got, str):
         m = int(re.fullmatch(rf"err finish: a level 0 drawn at m = {other} for a table at m = (\d+)", got)[1])
+        s.close()
+        assert S.ended() == "level 0: session 0 ended; 1 drawn for it freed, 0 kept"
+        s, name = S.session()
         _, _, r0 = level0(lp, m, _zeros(m), name)
     f = finish()
     assert f.ask(f"level0 0 {len(r0)}", r0) == (f"ok {len(r0)}", r0)
@@ -557,7 +566,7 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     assert f.ask("salts 0 0 0") == "err table 0 rep 0's salts for levels ≥ 1 were drawn already"
     f.close()
     s.close()
-    assert S.ended().startswith("level 0: session 0 ended; ")
+    assert re.match(r"level 0: session \d+ ended; ", S.ended())
     f = finish()
     assert f.ask(f"level0 0 {len(r0)}", r0) == "err finish: table 0's root is no level 0's the session loop drew"
     f.close()

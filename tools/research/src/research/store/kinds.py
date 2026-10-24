@@ -100,6 +100,10 @@ KINDS: dict[str, str] = {
                            "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
+                          "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
+                          "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
+                          "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
                       "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
                       "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",

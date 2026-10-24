@@ -38,10 +38,10 @@ an `act` value, a run input under the root of the round that admits it, committe
   root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
   manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **The A rows under the round roots** (PRF-132, `credit.a_link`): the root round s's coin follows is over the round's
-  ``inner`` root (all of the above, `round_root`) and its ``a`` segments: the A table ``a/<K>@<c>`` of each call c of
-  step s, whole, as the aligned subtrees of its registered tree (`round_row`, `pouw_h1_served.Served.segments`),
-  registered as the run records the call. So each call's A rows, the ones its units read, are fixed under its own
-  round's root before that round's coin, and no other round lists them.
+  ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
+  rows of its calls of K call after call, whole, as the aligned subtrees of its registered tree (`round_row`,
+  `pouw_h1_served.Served.segments`), registered as the run records the step's last call of K. So each call's A rows, the
+  ones its units read, are fixed under its own round's root before that round's coin, and no other round lists them.
   Round s's input-ids table ``ids@<s>`` (ROOTS1, `pouw_h1_commit`) is listed there whole too. Round 0's is built at
   admission, before the window opens: its prompts' tokens in step 0's batch order (`first_ids`), each request's first
   rows at the first slot its entry names. Its root is inside round 0's request root (`credit.requests_root` of the

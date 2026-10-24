@@ -1002,7 +1002,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
 
 
 def test_r7_reuses_an_earlier_records_registered_value():
-    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<c>` as
+    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
     same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
     doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is

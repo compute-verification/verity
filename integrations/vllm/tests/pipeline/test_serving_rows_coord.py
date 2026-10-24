@@ -79,8 +79,10 @@ def row(monkeypatch):
 def test_a_pair_row_holds_its_n_coordinates():
     for routed in (False, True):
         spec = descriptor_id(gemm(routed, N))
-        assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(gemm(routed, 1)), N))
-        assert SRW.unit_templates(descriptor_id(gemm(routed, 1))) == ((descriptor_id(gemm(routed, 1)), 1),)
+        chunks = () if routed else tuple((descriptor_id(bind(X.MoeExpertFp8CoordinateChunk, E=E, K=K // 2, G=G, KB=KB, SWAP=False,
+                                                             DOT=HopperE4m3MmaV2Dot32, FIRST=f, LAST=not f)), N) for f in (True, False))
+        assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(gemm(routed, 1)), N), *chunks)
+        assert SRW.unit_templates(descriptor_id(gemm(routed, 1))) == ((descriptor_id(gemm(routed, 1)), 1), *((t, 1) for t, _n in chunks))
         assert SRW.template(descriptor_id(gemm(routed, 1))).layout == "coord"
     boolean = bind(BFM.MoeExpertFp8GemmWV2, E=E, K=K, N=1, G=G, KB=KB, SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)
     t = SRW.template(descriptor_id(boolean))
