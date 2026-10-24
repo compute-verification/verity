@@ -64,7 +64,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
-- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes. A rule with `"sealed": true` is
+  a layer of its own: its modules answer only to the rules at or under it, and another rule reaches it only by listing
+  a prefix at or under it, never through a shorter one that holds it (an area's `Guarantees` under the area's
+  vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
