@@ -1,6 +1,7 @@
 """vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): the replay is the served scheduler on
-every step, every window opens on a drained engine, ReplayStep_v1 is the scheduler on window 212 under the served async
-engine, and `replay_vectors --slice` builds the compile slice's w212 fixture from the run's own records."""
+every step, every window opens on a drained engine, ReplayStep_v1 is the scheduler on windows 212 and 1 under the served
+async engine, and `replay_vectors --slice` builds the compile slice's w212 fixtures and its async w1 fixture from the
+run's own records."""
 from __future__ import annotations
 
 import dataclasses
@@ -124,3 +125,41 @@ def test_a_class_smaller_than_the_window_is_refused(recs):
     sub, base = RV.served_window(recs, 212)
     with pytest.raises(ValueError, match="smaller than the window: D = 13 < 14, P = 19 < 20"):
         RV.slice_inputs(RP.load_step_trace(sub), R=2, W=1, A=2, base=base, D=13, P=19)
+
+
+def test_w1_is_async_only(recs):
+    """Window 1 (requests 4 to 7, 3 decisions) is the smallest of the 25 windows the sync slice refuses with more than one
+    request: its sync replay diverges at step 2, and under the served async engine each of its 39 units is ReplayStep_v1's
+    at the engine class (AS = 1), by its reference and by its circuit."""
+    sub, base = RV.served_window(recs, 1)
+    tr = RP.load_step_trace(sub)
+    with pytest.raises(ValueError, match="diverges from the trace at step 2"):
+        RV.slice_inputs(tr, R=8, W=1, A=9, base=base)
+    st, vs = RV.vectors(tr, R=8, W=1, A=9)
+    assert st["AS"] == 1 and len(vs) == 39 and all(RV.fits(st, *v) for v in vs)
+    assert RV.check(st, vs, circuit=True) == {"checked": 39, "reference_mismatches": 0, "reference_first": [],
+                                              "circuit_mismatches": 0, "circuit_first": []}
+
+
+def test_the_async_class_fixture_is_w1s(recs, tmp_path):
+    """`--slice 1 --AS 1` at the engine class writes `compile_slice_w1_class.json`: the engine with `async_scheduling`,
+    requests 4 to 7 with their cap (request 4 stops at its max_tokens), the 3 decisions, the 38 units the slice runs (the
+    last schedule, on the drained engine, dropped) and their rows, and the seal's 38 steps, one per unit with rows."""
+    out = tmp_path / "w1_class.json"
+    RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "1", "--served", str(RUN / "seal-w1.jsonl"), "--R", "8",
+             "--W", "1", "--A", "9", "--Q", "4", "--D", "32", "--P", "54", "--K", "4", "--AS", "1", "--out", str(out)])
+    got = json.loads(out.read_text())
+    assert got == json.loads(SLICE.with_name("compile_slice_w1_class.json").read_text())
+    assert got["engine"]["async_scheduling"] is True and got["IW"] == 9
+    assert got["arrivals"] == [[4, 78, 5, 1], [5, 190, 4, 0], [6, 157, 37, 0], [7, 196, 2, 0]]
+    assert got["decisions"] == [1, 1, 1] and got["steps"] == len(got["rows"]) == len(got["served"]) == 38
+    assert [len(s) for s in got["served"]] == [len(r) for r in got["rows"]]
+
+
+def test_the_seal_is_placed_by_unit():
+    """`by_unit` puts the sealed steps at the units that ran rows, and refuses a count or a step that doesn't match."""
+    assert RV.by_unit([[1], [], [2, 3]], [["a"], ["b", "c"]]) == [["a"], [], ["b", "c"]]
+    with pytest.raises(ValueError, match="1 sealed steps for 2 units with rows"):
+        RV.by_unit([[1], [], [2, 3]], [["a"]])
+    with pytest.raises(ValueError, match="unit 2: 2 rows, sealed 1"):
+        RV.by_unit([[1], [], [2, 3]], [["a"], ["b"]])
