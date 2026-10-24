@@ -10,8 +10,10 @@ path (`n2_zk.py`: its stager, firewall and received-pieces scan).
 * **The statement**: one template of n units, each the slice's rows under fresh salts. Unit 0 is honest; unit 1 has
   decision 5 flipped in its window row (the advice row stays the registered one); unit 2 declares the charge one below
   the coded length; unit 3 has arrival 1's prompt one token longer in its ``cert`` row (an arrival not in the certified
-  record); the rest are honest, enough of them that the statement fits `--zk`'s shape (`stage`). Every ``pub`` digest
-  is the clear recompile's: the replay's rows (the fixture's) under the unit's digest salt.
+  record); units 4 to 8 are REDTEAM's phase 9 choices (`compile_slice.phase9`: a context, frequencies, a prefix hit, a
+  decision read again, an arrival left in the queue); the rest are honest, enough of them that the statement fits
+  `--zk`'s shape (`stage`). Every ``pub`` digest is the clear recompile's: the replay's rows (the fixture's) under the
+  unit's digest salt.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
   ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
   to the registered root), and its ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under
@@ -46,7 +48,10 @@ from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURE = REPO / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
-KINDS = ("honest", "flip", "charge", "arrival")
+KINDS = ("honest", "flip", "charge", "arrival") + CS.PHASE9
+REFUSED = {"honest": set(), "flip": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
+           "context": {"code", "charge"}, "frequency": {"code", "charge"}, "hit": {"steps", "rows"},
+           "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}}
 OPENED = ("o0", "pub")
 
 
@@ -115,12 +120,12 @@ def corpus_check(x: SimpleNamespace) -> None:
 
 def cases(x: SimpleNamespace, n: int, secret: bytes) -> list[SimpleNamespace]:
     """The statement's n units (the module's docstring): kind, the unit's rows and the reference's verdict."""
-    out = []
+    out, red = [], CS.phase9(x.S, x.sl)
     for i in range(n):
         kind = KINDS[i] if i < len(KINDS) else "honest"
         salt = hashlib.sha512(secret + b"digest salt" + i.to_bytes(4, "big")).digest()[:CS.SALT]
         digest = CS.rows_digest(x.S, x.rows, salt)
-        kw = {}
+        kw = dict(red.get(kind, {}))
         if kind == "flip":
             flip = list(x.sl.decisions)
             flip[5] ^= 1
@@ -159,7 +164,7 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
 
 
 def population(meta: dict) -> int:
-    """The fewest units whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `n2_zk.stage`), at least the four kinds."""
+    """The fewest units whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `n2_zk.stage`), at least one unit a kind."""
     b = 25 - meta["k_log"]
     return len(KINDS) if b <= 3 else max(len(KINDS), meta["vus_per_block"] * ((1 << (b - 1)) + 1))
 
@@ -301,8 +306,7 @@ def blobs_of(units: list[SimpleNamespace], salts: dict) -> tuple[dict[str, bytes
 
 
 def expected(kind: str, flags: dict) -> bool:
-    bad = {f for f, ok in flags.items() if not ok}
-    return bad == {"honest": set(), "flip": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"}}[kind]
+    return {f for f, ok in flags.items() if not ok} == REFUSED[kind]
 
 
 def prove(a) -> int:
