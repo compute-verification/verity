@@ -96,8 +96,10 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
   (`row_tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
   registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
-  root. Negatives on one drawn chunk: no registered reads, another root, and its units reading another row
-  (`registered_negatives`). No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
+  root. The audit record's ``row_table_reads`` carries each drawn chunk's table and root from that file beside the
+  ``registered`` finding Lean's verdict reports opening its rows against (`row_tables.reported_reads`), and a5 accepts only
+  when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
+  (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
 """
 from __future__ import annotations
@@ -479,6 +481,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     linked = None       # the first drawn chunk that reads a row table: its session, for the registered-reads negatives
+    row_verdicts: dict[str, dict] = {}      # each drawn row-table chunk's Lean verdict, whose registered finding the record carries
     for mm in members:
         m, k = mm["m"], mm["k"]
         local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
@@ -510,8 +513,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                                          "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
-        if linked is None and mm["st"].get("registered_file"):
-            linked = (mm, sdir)
+        if m.key in reads:
+            row_verdicts[m.key] = verdicts[f"lean-verify/m{k}"]
+            linked = linked or (mm, sdir)
         statement[m.key] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                             "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                             "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
@@ -542,6 +546,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         result["coins"] = {"source": stream.coin_source, "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"]}
     result["draw_counts"] = counts
+    if row_verdicts:
+        result["row_table_reads"] = RTB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
@@ -571,15 +577,21 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     neg.update(coin_neg)
     if linked is not None:
         neg.update(registered_negatives(a, *linked))
+        key = next(iter(row_verdicts))
+        other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
+        neg["row-table-verdict-reports-another-root"] = {
+            "refused": not RTB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
+    if "row_table_reads" in result:
+        summary["audit"]["row_table_reads"] = result["row_table_reads"]["ok"]
     summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
     summary["audit"]["why"] = {x: y.get("why") for x, y in verdicts.items() if y.get("accepted") is not True}
     summary.update(draw=union_draw["units"], draw_counts=counts, served_is_lean_draw=sorted(served_units) == sorted(union_draw["units"]),
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    ok = bool(result.get("accepted")) and all(summary["negatives"].values())
+    ok = bool(result.get("accepted")) and result.get("row_table_reads", {"ok": True})["ok"] and all(summary["negatives"].values())
     shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}
     if "coins" in summary:
         shown["coins"] = {x: summary["coins"].get(x) for x in ("source", "coins_reason", "outcome", "run")}
