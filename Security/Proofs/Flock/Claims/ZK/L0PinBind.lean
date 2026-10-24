@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.L0PinSwitch
+import Proofs.Flock.Claims.ZK.L0PinRec
 
 /-!
 # The frame at a rep's binding
@@ -460,10 +461,14 @@ theorem sched_l0 {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteA
     (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
     (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
-    (hn0 : t.sch.n ≠ 0) {j : ℕ} (hj : j < t.sch.k0 + 4)
+    (hn0 : t.sch.n ≠ 0) (hm14 : 14 ≤ t.st.m) {j : ℕ} (hj : j < t.sch.k0 + 4)
     (hcr : cr.size = alg.size + (xs.size + 2) + 1 + j) :
     alg.size + (xs.size + 2) + 1 + j < sched.size ∧
-      ∃ T sws, ∀ i ≤ j,
+      ∃ T sws, (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt t.st.m t.st.fold.kLog
+            (FlockComplete.LigLock.Fed.recCoin (cr.extract 0 alg.size)) 0 zc lc ∧
+          sws = FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims t.st.m t.st.kLog zc lc ++ claimsOf xs)
+            ⟨fun k i => ((cr.extract alg.size cr.size).toList.getD k #[])[i]!,
+              fun i => ((cr.extract alg.size cr.size).toList.getD (xs.size + 2) #[])[i]!⟩) ∧ ∀ i ≤ j,
         (sched.getD (alg.size + (xs.size + 2) + 1 + i) (.empty, 0)).1.data.toList =
           FlockComplete.LigLock.l0BodyAt (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!)
             (xs.size + 2 + 1) [] T (FlockComplete.flat t.cm0.toC.cap) t.sch t.g
@@ -509,9 +514,13 @@ theorem sched_l0 {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteA
     exact this
   have key := hL0 (j := j) (ss := ss) (T := T) (sws := sws) (tr₂ := t') (l₂ := L') hj hk hn0 (by simp)
     (by rw [hLs]; exact hL) (by rw [hLs]; simp only [Array.size_empty, Nat.zero_add]; omega)
+  obtain ⟨zc, lc, hcl, hpts⟩ := FlockComplete.LigLock.Fed.repPiop_rec _ _ _ _ _ _ _ hm14 _ hp
+  obtain ⟨hsw, -, -⟩ := FlockComplete.ringSwitchCut_sws _ _ _ _ (by omega) hL
   rw [hLl, hLs, ht', empty_toList] at key
   simp only [Array.toList_empty, List.nil_append, Array.size_empty, Nat.sub_zero, hna] at key
-  refine ⟨T, sws, fun i hi => ⟨?_, ?_⟩⟩
+  refine ⟨T, sws, ⟨zc, lc, hpts, ?_⟩, fun i hi => ⟨?_, ?_⟩⟩
+  · rw [hsw, ← hcl]
+    simp only [Array.size_empty, Nat.zero_add, hna]
   · have hk2 := List.getElem_of_eq key (i := xs.size + 2 + 1 + i)
       (by simp only [List.length_map, List.length_take]; omega)
     rw [List.getElem_append_right (by simp)] at hk2

@@ -153,6 +153,7 @@ import Proofs.Flock.Claims.ZK.L0PinFrame
 import Proofs.Flock.Claims.ZK.L0PinQuiet
 import Proofs.Flock.Claims.ZK.L0PinFlags
 import Proofs.Flock.Claims.ZK.L0PinSwitch
+import Proofs.Flock.Claims.ZK.L0PinRec
 import Proofs.Flock.Claims.ZK.L0PinBind
 import Proofs.Flock.Claims.ZK.L0PinLive
 import Proofs.Flock.Claims.ZK.L0PinChain
@@ -719,6 +720,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   with nothing pending (`Switch.endE_repPiop`); from empty pending bytes the switch's first round is the opening's
   (`Flags.PcsRound`) and its later rounds and `γ`'s are quiet (`Switch.pcsRound_rs`, `Switch.qRound_rs`,
   `Switch.qRound_gamma`).
+* `L0PinRec`: a rep's PIOP on its recorded coins. Answered by the coins the frame recorded, the PIOP is the cut run
+  at those coins (`Fed.recSim`, `Fed.recCoin`), so it returns the zerocheck's and lincheck's claims at the recorded
+  coins' points (**`Fed.repPiop_rec`**, `Fed.PtsAt`), and the claims' points and switched claims read only their rounds'
+  first words (`Fed.ptsAt_congr`, `Fed.sws_coins_congr`).
 * `L0PinBind`: the frame at a rep's binding. Past the algebraic phase a rep's schedule is what its opening, fed, sent
   (`Bind.schedSoFar_sentQ`, `Bind.feed_part`); cut at `γ`, its first rounds are the ring switch's
   (`Bind.openStep_switch`), squeezing `7` a claim and then the claims' count (`Bind.sched_count`), so at `γ`'s coins
