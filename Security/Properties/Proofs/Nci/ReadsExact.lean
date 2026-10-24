@@ -14,6 +14,11 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * `PS.of` lays its segments end to end (`of_ok`), `ofPart` and `ofSeq` name a decoded sequence's references in order
   (`ofSeq_pos`, `partsPos_get`), where no strided part names a negative position, which the decoder ensures
   (`parsePartsIn_nonneg`), and `memberSpans` are a batch member's indices into its argument (`memberSpans_idx`);
+* a context's arguments name their references (`ctxOf_arg`), and a loop appending segments names its elements'
+  positions in order (`forIn_append_pos`);
+* `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
+* `Desc.Ivs.norm` keeps only leaves it was given (`norm_sub`), and every one of them where `Array.qsort` sorts, a named
+  `Prop` here, open (`norm_mem`): `QsortSorted`; `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
 * a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`).
 
 So `ReadsExact` holds wherever one statement about the positions `Desc.nodeReads` gives each root node does, a named
@@ -1735,5 +1740,187 @@ theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D :
     obtain ⟨segs, hs, rfl⟩ := hf x acc _ hx
     rw [forIn_append_pos F D f hf hF l (acc ++ segs) out h, segsPos_append, hF x segs hs, List.flatMap_cons,
       List.append_assoc]
+
+
+/-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
+theorem argSpans_batch (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hf : node.form = .batch)
+    (hL : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → ∀ p ∈ used.toList, p.2 ≤ p.1) :
+    spansPos (Desc.argSpans node i m used) = (spansPos used).map (Resolve.memberIdx node.args[i]! m) := by
+  unfold Desc.argSpans
+  rw [hf]
+  dsimp only
+  rw [← Array.foldl_toList]
+  have key : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)), (∀ p ∈ l, ∀ d L,
+      (node.args[i]!).dims = some (d, L) → L = 0 → p.2 ≤ p.1) →
+      spansPos (l.foldl (fun acc (p : Nat × Nat) => acc ++ Desc.memberSpans node.args[i]! m p.1 p.2) acc) =
+        spansPos acc ++ (l.flatMap fun p => List.range' p.1 (p.2 - p.1)).map (Resolve.memberIdx node.args[i]! m) := by
+    intro l
+    induction l with
+    | nil => intro acc _; simp
+    | cons p l ih =>
+      intro acc hl
+      rw [List.foldl_cons, ih _ (fun q hq => hl q (List.mem_cons_of_mem _ hq))]
+      unfold spansPos
+      rw [Array.toList_append, List.flatMap_append, List.flatMap_cons, List.map_append, List.append_assoc]
+      congr 1
+      have := memberSpans_idx node.args[i]! m p.1 p.2 (fun d L hd h0 => hl p List.mem_cons_self d L hd h0)
+      unfold spansPos at this
+      rw [this]
+  have := key used.toList #[] (fun p hp d L hd h0 => hL d L hd h0 p hp)
+  simp only [spansPos, List.flatMap] at this ⊢
+  simpa using this
+
+/-- An iteration's spans of a scan's `xs` are its used leaves `m · L` on. -/
+theorem argSpans_xs (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hf : node.form = .scan)
+    (hi : 1 ≤ i ∧ i ≤ node.nxs) :
+    spansPos (Desc.argSpans node i m used) =
+      (spansPos used).map fun t => m * (((node.args[i]!).dims.map (·.2)).getD 0) + t := by
+  unfold Desc.argSpans
+  rw [hf]
+  simp only [show (1 ≤ i && i ≤ node.nxs) = true by simp [hi.1, hi.2], ite_true]
+  unfold spansPos
+  rw [Array.toList_map, List.flatMap_map, List.map_flatMap]
+  apply flatMap_congr
+  intro p _
+  rw [show m * ((node.args[i]!).dims.map (·.2)).getD 0 + p.2 - (m * ((node.args[i]!).dims.map (·.2)).getD 0 + p.1) =
+    p.2 - p.1 by omega, List.map_add_range']
+
+/-- Any other argument's spans are its used leaves. -/
+theorem argSpans_other (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hb : node.form ≠ .batch)
+    (hs : node.form = .scan → ¬ (1 ≤ i ∧ i ≤ node.nxs)) : Desc.argSpans node i m used = used := by
+  unfold Desc.argSpans
+  rcases hf : node.form with _ | _ | _ | _
+  all_goals first | exact absurd hf hb | skip
+  all_goals dsimp only
+  have := hs hf
+  simp only [Bool.and_eq_true, decide_eq_true_eq]
+  rw [if_neg this]
+
+
+/-! ## The used leaves' intervals (`Desc.Ivs.norm`, `Desc.Ivs.covers`) -/
+
+/-- `Desc.Ivs.norm`'s step: an interval starting within the last one's extends it, else it follows. -/
+def normStep (acc : Array (Nat × Nat)) (p : Nat × Nat) : Array (Nat × Nat) :=
+  match acc.back? with
+  | some (c, e) => if p.1 ≤ e then acc.pop.push (c, max p.2 e) else acc.push p
+  | none => acc.push p
+
+theorem norm_eq (xs : Array (Nat × Nat)) :
+    Desc.Ivs.norm xs = ((xs.filter fun p => p.1 < p.2).qsort (fun x y => x.1 < y.1)).toList.foldl normStep #[] := by
+  unfold Desc.Ivs.norm
+  rw [← Array.foldl_toList]
+  rfl
+
+theorem inIvs_push (acc : Array (Nat × Nat)) (p : Nat × Nat) (a : Nat) :
+    Width.inIvs (acc.push p).toList a ↔ Width.inIvs acc.toList a ∨ (p.1 ≤ a ∧ a < p.2) := by
+  rw [Array.toList_push, Width.inIvs_append]
+  simp [Width.inIvs]
+
+/-- Every leaf `Desc.Ivs.norm`'s steps keep is in an interval they were given. -/
+theorem normFold_sub : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)) (a : Nat),
+    Width.inIvs (l.foldl normStep acc).toList a → Width.inIvs acc.toList a ∨ Width.inIvs l a
+  | [], acc, a, h => Or.inl h
+  | p :: l, acc, a, h => by
+    rw [List.foldl_cons] at h
+    have hp : Width.inIvs (p :: l) a ↔ (p.1 ≤ a ∧ a < p.2) ∨ Width.inIvs l a := by
+      rw [show p :: l = [p] ++ l from rfl, Width.inIvs_append]; simp [Width.inIvs]
+    rw [hp]
+    rcases normFold_sub l (normStep acc p) a h with h | h
+    · unfold normStep at h
+      rcases hb : acc.back? with _ | ⟨c, e⟩ <;> rw [hb] at h <;> dsimp only at h
+      · rw [inIvs_push] at h; tauto
+      · obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb
+        split at h
+        · rename_i hpe
+          rw [Array.pop_push, inIvs_push] at h
+          rw [inIvs_push]
+          rcases h with h | ⟨h1, h2⟩
+          · exact Or.inl (Or.inl h)
+          · by_cases hae : a < e
+            · exact Or.inl (Or.inr ⟨h1, hae⟩)
+            · exact Or.inr (Or.inl ⟨by omega, by omega⟩)
+        · rw [inIvs_push] at h; tauto
+    · exact Or.inr (Or.inr h)
+
+/-- Over intervals sorted by their starts, `Desc.Ivs.norm`'s steps keep every leaf they are given. -/
+theorem normFold_sup : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)), l.Pairwise (fun x y => x.1 ≤ y.1) →
+    (∀ p ∈ l, ∀ x, acc.back? = some x → x.1 ≤ p.1) → ∀ a,
+      Width.inIvs acc.toList a ∨ Width.inIvs l a → Width.inIvs (l.foldl normStep acc).toList a
+  | [], acc, _, _, a, h => by
+    rcases h with h | ⟨iv, hiv, -⟩
+    · exact h
+    · simp at hiv
+  | p :: l, acc, hs, hb, a, h => by
+    rw [List.foldl_cons]
+    have hs' := List.pairwise_cons.1 hs
+    apply normFold_sup l (normStep acc p) hs'.2
+    · intro q hq x hx
+      unfold normStep at hx
+      rcases hb' : acc.back? with _ | ⟨c, e⟩ <;> rw [hb'] at hx <;> dsimp only at hx
+      · rw [Array.back?_push] at hx; cases hx; exact hs'.1 q hq
+      · split at hx
+        · rw [Array.back?_push] at hx; cases hx
+          exact Nat.le_trans (hb p List.mem_cons_self (c, e) hb') (hs'.1 q hq)
+        · rw [Array.back?_push] at hx; cases hx; exact hs'.1 q hq
+    · have hp : Width.inIvs (p :: l) a ↔ (p.1 ≤ a ∧ a < p.2) ∨ Width.inIvs l a := by
+        rw [show p :: l = [p] ++ l from rfl, Width.inIvs_append]; simp [Width.inIvs]
+      rw [hp] at h
+      unfold normStep
+      rcases hb' : acc.back? with _ | ⟨c, e⟩ <;> dsimp only
+      · rw [inIvs_push]; tauto
+      · obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb'
+        have hc : c ≤ p.1 := hb p List.mem_cons_self _ hb'
+        split
+        · rename_i hpe
+          rw [Array.pop_push, inIvs_push]
+          rw [inIvs_push] at h
+          rcases h with (h | ⟨h1, h2⟩) | (⟨h1, h2⟩ | h)
+          · exact Or.inl (Or.inl h)
+          · exact Or.inl (Or.inr ⟨h1, by omega⟩)
+          · exact Or.inl (Or.inr ⟨by omega, by omega⟩)
+          · exact Or.inr h
+        · rw [inIvs_push]; tauto
+
+/-- **Open: `Array.qsort` sorts.** Its output by starts is sorted by them (`Properties.RemoteAudit.Sort` proves only that
+it permutes). -/
+def QsortSorted : Prop :=
+  ∀ xs : Array (Nat × Nat), (xs.qsort (fun x y => x.1 < y.1)).toList.Pairwise (fun x y => x.1 ≤ y.1)
+
+theorem inIvs_nonempty (xs : Array (Nat × Nat)) (a : Nat) :
+    Width.inIvs (xs.filter fun p => p.1 < p.2).toList a ↔ Width.inIvs xs.toList a := by
+  simp only [Width.inIvs, Array.toList_filter, List.mem_filter, decide_eq_true_eq]
+  constructor
+  · rintro ⟨iv, ⟨hiv, -⟩, h⟩; exact ⟨iv, hiv, h⟩
+  · rintro ⟨iv, hiv, h⟩; exact ⟨iv, ⟨hiv, by omega⟩, h⟩
+
+/-- **Every leaf of `Desc.Ivs.norm`'s intervals is in one it was given.** -/
+theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : Width.inIvs (Desc.Ivs.norm xs).toList a) :
+    Width.inIvs xs.toList a := by
+  rw [norm_eq] at h
+  rcases normFold_sub _ #[] a h with h | ⟨iv, hiv, h⟩
+  · obtain ⟨iv, hiv, -⟩ := h; simp at hiv
+  · rw [← inIvs_nonempty]
+    exact ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.1 hiv, h⟩
+
+/-- **`Desc.Ivs.norm` keeps its intervals' leaves**, where `Array.qsort` sorts (`QsortSorted`). -/
+theorem norm_mem (hq : QsortSorted) (xs : Array (Nat × Nat)) (a : Nat) :
+    Width.inIvs (Desc.Ivs.norm xs).toList a ↔ Width.inIvs xs.toList a := by
+  refine ⟨norm_sub xs a, fun h => ?_⟩
+  rw [norm_eq]
+  apply normFold_sup _ #[] (hq _) (fun p _ x hx => by simp at hx)
+  rw [← inIvs_nonempty] at h
+  obtain ⟨iv, hiv, h⟩ := h
+  exact Or.inr ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.2 hiv, h⟩
+
+/-- **What `Desc.Ivs.covers` checks**: every leaf below `n` is in an interval. -/
+theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (ha : a < n) :
+    Width.inIvs s.toList a := by
+  unfold Desc.Ivs.covers at h
+  simp only [Bool.or_eq_true, beq_iff_eq, Bool.and_eq_true, decide_eq_true_eq] at h
+  rcases h with h | ⟨⟨h1, h2⟩, h3⟩
+  · omega
+  · refine ⟨s[0]!, ?_, by omega, by omega⟩
+    rw [getElem!_pos s 0 (by omega)]
+    exact Array.getElem_mem_toList _
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
