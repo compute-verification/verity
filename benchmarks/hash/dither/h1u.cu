@@ -585,7 +585,10 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #define H1U_JRCPF 0
 #endif
 // H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column blocks are the row block's words, not
-// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe)
+// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe).
+// With JX, which reads no row block, they are a multiply of their stream position into the midstate's words. Bits 2
+// and 4 (any RW unit) hold B's and A's (X's) segment loads at their first segments, which stay in L1, so the probe's
+// time against the unit's bounds what those loads' L2 latency costs
 #ifndef H1U_JPROBE
 #define H1U_JPROBE 0
 #endif
@@ -669,6 +672,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   constexpr bool PI = RW && H1U_JPI;
   static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
+  constexpr bool PBK = RW && (H1U_JPROBE & 2), PAK = RW && (H1U_JPROBE & 4);
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -780,19 +784,19 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % NS
   uint2 pa[NS][4], pb[NS][4];
   const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[4]) {
-    const u32 kofs = 32 * sg + 8 * q;
+    const u32 ka = PAK ? 8 * q : 32 * sg + 8 * q, kb = PBK ? 8 * q : 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
       if constexpr (XS) {
         if (r % 2 == 0) {
-          const uint4 v = ld4<H1U_L2HINT>(Ab + 1024ull * sg + 256 * r + 16 * lane);
+          const uint4 v = ld4<H1U_L2HINT>(Ab + 1024ull * (PAK ? 0 : sg) + 256 * r + 16 * lane);
           a[r] = make_uint2(v.x, v.z);
           a[r + 1] = make_uint2(v.y, v.w);
         }
       } else {
-        a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+        a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + ka);
       }
-      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kb);
     }
   };
   // PI: the rows' pointers at segment PD of the ring pass to come (A's one under XS), the L2 prefetches' at segment 16
@@ -856,7 +860,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
     } else if constexpr (JX) {
       u64 s[8];
-      noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+      if constexpr (H1U_JPROBE & 1) {
+        const u64 x = ((u64)(32 * cj + lane) * cb + blk) * 0x9E3779B97F4A7C15ull;
+#pragma unroll
+        for (int j = 0; j < 8; ++j) s[j] = x ^ S.nm.mid[j];
+      } else {
+        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+      }
 #pragma unroll
       for (int j = 0; j < 8; ++j) {
         S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
@@ -890,7 +900,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
       } else {
         u64 s[8];
-        if constexpr (H1U_JPROBE) {
+        if constexpr (H1U_JPROBE & 1) {
 #pragma unroll
           for (int j = 0; j < 8; ++j)
             s[j] = ((u64)(j & 1 ? rv[j >> 1].z : rv[j >> 1].x) << 32 | (j & 1 ? rv[j >> 1].w : rv[j >> 1].y)) ^ (blk + cj);
@@ -1114,9 +1124,9 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
       if constexpr (PI) {
 #pragma unroll
-        for (int r = 0; r < (XS ? 1 : 4); ++r) par[r] += ASEG * NS;
+        for (int r = 0; r < (XS ? 1 : 4); ++r) par[r] += PAK ? 0 : ASEG * NS;
 #pragma unroll
-        for (int r = 0; r < 4; ++r) pbr[r] += 32 * NS;
+        for (int r = 0; r < 4; ++r) pbr[r] += PBK ? 0 : 32 * NS;
         pfa += ASEG * NS;
         pfb += 32 * NS;
       }
