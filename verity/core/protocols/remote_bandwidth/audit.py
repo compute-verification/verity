@@ -125,12 +125,12 @@ DELTA = 2.0 ** -40
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
-STEP_LIMIT = 1 << 64
-"""A step is an integer below this, memory-map/v1's."""
 RECEIPT_LIMIT = 1 << 64
 """A window's receipts, its passes' lengths summed, stay below this: `Session.receive` rejects with `plan` a pass that
 would take them to it, so each draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
 `U < 2^448`)."""
+STEP_LIMIT = 1 << 64
+"""A step is an integer below this, memory-map/v1's."""
 LIFETIME = 60
 """L, the lifetime cap, in windows: a block appended after the codec seed is in no plan of a window L or more after the
 window it joined (the window of the first root received after its append), so it leaves the credited store within L
