@@ -34,8 +34,8 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
   head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or
-  isn't tied to the certified ingress's requests (`advised.PromptTie`), which refuses every window), ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over
-  one egress link-window, `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows
+  isn't tied to the certified ingress's requests (`advised.PromptTie`), which refuses every window),
+  ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over one egress link-window, `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows
   of sampled ids open at the map's steps under the Commit's root, and every cell is the verifier's map's, computed from
   advice v0: a pad, or a data cell on the request's stream whose id is the port entry the map names; ``.map`` when the
   verifier can't compute the map from the advice, which refuses every window); and, until their owners name them,
