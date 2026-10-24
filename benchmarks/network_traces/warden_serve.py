@@ -22,18 +22,22 @@ with `Connection: close`, so the server's end of stream ends egress (the warden 
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as CERT-VARLEN's: Poisson arrivals at `--rate` a second, prompts of
 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
-(log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests.
+(log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
+`--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
+its own generation config to a request that omits them.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
 
     python warden_serve.py keys --dir KEYDIR [--height 10]
     python warden_serve.py traffic --out TRAFFIC.json --model NAME [--requests 100] [--rate 0.5] [--seed 0]
+        [--temperature T] [--top-p P]
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
-    python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [schedule]
+    python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
+        [--top-p P] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
@@ -105,17 +109,22 @@ TEMPERATURES = (0.0, 0.7, 1.0)
 # Traffic and the bytes on it.
 
 def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
-                   max_tokens: tuple[int, int] = (16, 256), start_s: float = 1.0) -> list[dict]:
-    """n requests, each {"at": seconds after the origin, "body": a streamed `/v1/completions` body}."""
+                   max_tokens: tuple[int, int] = (16, 256), start_s: float = 1.0, temperature: float | None = None,
+                   top_p: float | None = None) -> list[dict]:
+    """n requests, each {"at": seconds after the origin, "body": a streamed `/v1/completions` body}. `temperature` and
+    `top_p`, when given, are every request's (else a temperature drawn from `TEMPERATURES` and no top_p); the arrivals,
+    prompts, lengths and seeds are the seed's either way."""
     rng = random.Random(seed)
     at, out = start_s, []
     for _ in range(n):
         question = rng.choice(QUESTIONS)
         words = round(math.exp(rng.uniform(*map(math.log, prompt_tokens))) * 0.75) - len(question.split())
         filler = " ".join(FILLER[j % len(FILLER)] for j in range(max(0, words)))
+        most = round(math.exp(rng.uniform(*map(math.log, max_tokens))))
+        drawn = rng.choice(TEMPERATURES)
         body = {"model": model, "prompt": f"{filler}\n\n{question}" if filler else question,
-                "max_tokens": round(math.exp(rng.uniform(*map(math.log, max_tokens)))), "stream": True,
-                "temperature": rng.choice(TEMPERATURES), "stream_options": {"include_usage": True}}
+                "max_tokens": most, "stream": True, "temperature": drawn if temperature is None else temperature,
+                "stream_options": {"include_usage": True}} | ({} if top_p is None else {"top_p": top_p})
         if rng.random() < 0.5:
             body["seed"] = rng.randrange(1 << 31)
         out.append({"at": round(at, 3), "body": body})
@@ -560,7 +569,8 @@ def table(result: dict) -> str:
 
 def traffic_of(args, model: str) -> list[dict]:
     return varied_traffic(args.requests, model=model, rate=args.rate, seed=args.seed,
-                          prompt_tokens=(16, args.prompt_max), max_tokens=(16, args.max_tokens))
+                          prompt_tokens=(16, args.prompt_max), max_tokens=(16, args.max_tokens),
+                          temperature=args.temperature, top_p=args.top_p)
 
 
 def _params(args) -> WardenParams:
@@ -644,6 +654,8 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--seed", type=int, default=0)
         q.add_argument("--max-tokens", type=int, default=256, help="the most max_tokens a request draws")
         q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request draws")
+        q.add_argument("--temperature", type=float, help="every request's temperature (default: drawn, 0, 0.7 or 1)")
+        q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
     t.set_defaults(model="model")
     for q in (f, s):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")

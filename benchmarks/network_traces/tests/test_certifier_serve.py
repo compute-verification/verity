@@ -223,15 +223,36 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     assert all(r["raw"] == r["committed"] == "status:delivery-refused" for r in faulted)
 
 
+def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
+    """`certifier-rehearse`'s command (`benchmarks/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
+    temperature and top_p (0 and 1 by default) always among it, and they are the body every request sends."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    req = {"requests": 8, "tamper": None, "profile": "served", "in_flight": 2, "tokens": 32, "temperature": 0.6,
+           "top_p": 0.9}
+    args = cs.parser().parse_args(A.certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    assert (args.command, args.upstream, args.requests, args.in_flight, args.tokens, args.temperature, args.top_p,
+            args.profile, args.strategies) == ("rehearse", "http://127.0.0.1:40001", 8, 2, 32, 0.6, 0.9, "served",
+                                               "honest")
+    body = cs.request_body("m", args.tokens, cs.PROMPT, args.temperature, args.top_p)
+    assert (body["temperature"], body["top_p"]) == (0.6, 0.9)
+    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
+    assert (plain.temperature, plain.top_p) == (0.0, 1.0)
+    assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
+
+
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
     """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
-    `max_tokens`, `ignore_eos`, greedy, streamed) four at a time, the ingress releasing them two a bucket, and the
+    `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
+    alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them two a
+    bucket, and the
     endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
     traffic is accepted on every link-window."""
     endpoint = _SideBySide(2)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, response_frames=None,
-                              probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned")
+                              probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned",
+                              temperature=0.6, top_p=0.9)
 
     async def go():
         server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
@@ -253,7 +274,8 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
     probed, plan, out = asyncio.run(go())
     assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
-                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0}
+                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0.6,
+                              "top_p": 0.9}
     assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
     assert plan["served"]["in_flight"] == 4 and plan["request_major"]
     sends = [q["send_ms"] for q in plan["requests"]]
@@ -425,7 +447,7 @@ def merged(tmp_path_factory):
     endpoint = _SideBySide(2, merges=lambda request: request % 2 == 1)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
                               response_frames=None, probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None,
-                              profile="planned")
+                              profile="planned", temperature=0.0, top_p=1.0)
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -503,7 +525,7 @@ def served_profile(tmp_path_factory):
     endpoint = _SideBySide(1, merges=lambda request: request % 2 == 1)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
                               response_frames=None, probes=4, in_flight=4, requests=REQUESTS, delta_buckets=30,
-                              profile="served")
+                              profile="served", temperature=0.0, top_p=1.0)
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -659,7 +681,7 @@ def _rehearse(tmp: Path, endpoint, args, strategies=cs.STRATEGIES) -> tuple[dict
 def _glm_args(profile: str, response_frames: int | None = None) -> argparse.Namespace:
     return argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS,
                               response_frames=response_frames, probes=4, in_flight=4, requests=REQUESTS,
-                              delta_buckets=30, profile=profile)
+                              delta_buckets=30, profile=profile, temperature=0.0, top_p=1.0)
 
 
 @pytest.fixture(scope="module", params=cs.PROFILES)
