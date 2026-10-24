@@ -17,6 +17,7 @@ if [ "${PY_PREF:-auto}" != venv312 ] && [ -f /workspace/jobs/tvi/venv/READY ] \
   PY=/workspace/jobs/tvi/venv/bin/python
 fi
 echo "python: $PY"
+export PATH="$(dirname "$PY"):$PATH" VLLM_USE_FLASHINFER_SAMPLER=0
 if ! "$PY" -c 'import math_verify' 2>/dev/null; then
   uv pip install -q --python "$PY" --target "$S/extra" --no-deps math-verify latex2sympy2_extended antlr4-python3-runtime==4.13.2 \
     && export PYTHONPATH="$S/extra"
