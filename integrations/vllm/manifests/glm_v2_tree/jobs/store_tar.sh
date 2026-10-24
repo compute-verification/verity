@@ -29,9 +29,14 @@ RB=$S/research
 printf '#!/bin/sh\nexec %s -m research "$@"\n' "$PY" >"$RB" && chmod +x "$RB"
 art_of() { grep -oE 'art:[0-9a-f]{64}' | tail -1; }
 evict() { [ -z "${EVICT_FREE_GB:-}" ] || "$RB" data evict --target-free-gb "$EVICT_FREE_GB" --min-mb 64 >/dev/null 2>&1 || true; }
+label() {  # label KEY VALUE on this run, pushed: the custody store has no write-through, and another node's `get` reads the remote
+  "$RB" data label "$RESEARCH_RUN_ID" "$1" "$2" --by circuits --off-vocab >/dev/null 2>"$S/label.err" || { cat "$S/label.err"; return 1; }
+  "$PY" -c 'import sys; from research.store import labels_sync as LS; from research.store.local import LocalStore
+r = LS.push_targets(LocalStore(), [sys.argv[1]]); sys.exit("label push: " + "; ".join(r["failed"]) if r["failed"] else 0)' "$RESEARCH_RUN_ID"
+}
 
 if [ "$MODE" = fail ]; then
-  "$RB" data label "$RESEARCH_RUN_ID" "store_tar.parts.${NAME:?NAME}" "failed: ${MSG:-}" --by circuits --off-vocab >/dev/null || exit 5
+  label "store_tar.parts.${NAME:?NAME}" "failed: ${MSG:-}" || exit 5
   echo "$NAME: labelled failed on $RESEARCH_RUN_ID (${MSG:-})"; exit 0
 fi
 
@@ -71,8 +76,7 @@ EOF
   parts_art=$("$RB" data put --kind vllm-rowdir-parts/v1 --file "$OUT/$NAME.parts.json" --meta "{\"set\":\"$NAME\"}" --ref "list=$list_art" \
               --preserve | art_of)
   [ -n "$parts_art" ] || { echo "$NAME: parts.json put failed"; exit 5; }
-  "$RB" data label "$RESEARCH_RUN_ID" "store_tar.parts.$NAME" "$parts_art" --by circuits --off-vocab >/dev/null 2>"$S/label.err" ||
-    { cat "$S/label.err"; echo "$NAME: labelling $RESEARCH_RUN_ID failed"; exit 5; }
+  label "store_tar.parts.$NAME" "$parts_art" || { echo "$NAME: labelling $RESEARCH_RUN_ID failed"; exit 5; }
   echo "$NAME: $(wc -l <"$OUT/$NAME.parts.txt") parts, $(awk '{s+=$2} END {printf "%.1f", s/2^30}' "$OUT/$NAME.parts.txt") GiB, list $list_art," \
        "parts $parts_art (label store_tar.parts.$NAME on $RESEARCH_RUN_ID)"
   exit 0
