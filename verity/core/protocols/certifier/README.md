@@ -36,8 +36,9 @@ A spec-level reference for network accounting's timing channel:
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
-  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits charged
-  to the earliest egress window that can show each record (`bits`);
+  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
+  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
+  compressed length of the advice;
 - advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile unit's first part as a Boolean Definition, 1
   exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
   (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
