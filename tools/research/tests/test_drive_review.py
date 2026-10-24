@@ -26,12 +26,14 @@ def world(tmp_path):
 
 class Review(Harness):
     """A drive landing on reviews, whose verdicts are `reviewed` labels in the world's store, and whose after-landing launches are
-    recorded (`posted`) as `r-post-N`; the Harness's `launched` holds its Lean checks.  Unless ``baseline`` is off, ci has
-    recorded `main` green (`research queue baseline`), so a tick lands without first running the after-landing run on `main`."""
+    recorded (`posted`) as `r-post-N`; the Harness's `launched` holds its Lean checks, and `m1` has no free check slot unless a
+    test frees one (`d.slots`).  Unless ``baseline`` is off, ci has recorded `main` green (`research queue baseline`), so a tick
+    lands without first running the after-landing run on `main`."""
 
     def __init__(self, world, monkeypatch, baseline: bool = True, **kw):
         super().__init__(world, monkeypatch, **kw)
         self.d.review, self.posted = True, []
+        self.d.slots = lambda repo, on: {"m1": 0}
         self.d.reviews = lambda pr, head: world.store.labels(label_target(pr, head), key=vocab.REVIEWED)
         self.d.ready_by = lambda pr, head: next((lab.by for lab in sorted(world.store.labels(label_target(pr, head), key=vocab.READY),
                                                                           key=lambda lab: lab.ts, reverse=True)), None)
@@ -232,8 +234,6 @@ def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_com
 def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_settle_ticks(world, monkeypatch):
     """A PR marked moments ago is the one most likely to be re-marked: a check of the prefix's top through it would leave `next`
     at its next push, so the check stops below it."""
-    from research.drive import LEAN_SETTLE_TICKS
-
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
@@ -248,7 +248,52 @@ def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_sett
     h.run_state[h.lean_ids()[0]] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
     assert h.tick().startswith("landed #3") and _main(world) == three     # #3 changes no Lean
-    assert LEAN_SETTLE_TICKS > 1
+
+
+def test_a_member_that_came_onto_next_a_tick_ago_no_longer_stops_the_lean_check(world, monkeypatch):
+    """24 Oct: one new head at position 2 capped the check at position 1 for an hour (three settle ticks)."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    h.review(3)
+    assert not h.tick().startswith("landed") and h.launched == []         # #2 unreviewed: no reviewed Lean change
+    h.review(2)
+    h.tick()
+    assert h.launched == [(_tip(world), "m1", False)], world.logs         # #3 came a tick ago: the check reaches it
+
+
+def test_a_lean_check_is_stacked_at_the_reviewed_top_while_a_lower_one_runs_when_a_slot_is_free(world, monkeypatch):
+    """A check capped below churn ran alone until it ended, then the top was checked after it: two checks in a row before a
+    landing.  While the lower one runs, one at the top starts in the same tick when a machine has a free Lean check slot, at
+    most two running, and the landing takes the highest that passed."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (2, 3):
+        h.review(n)
+    h.tick()
+    two, three = (m.commit for m in h.q.chain())
+    assert h.launched == [(two, "m1", False)]                             # capped below #3, which just came
+    assert not h.tick().startswith("landed") and len(h.launched) == 1    # no free slot: it waits
+    h.d.slots = lambda repo, on: {"m1": 1}
+    assert not h.tick().startswith("landed")
+    assert h.launched == [(two, "m1", False), (three, "m1", False)], world.logs
+    world.gh.put(4, world.change({"d.txt": "4\n"}))
+    h.review(4)
+    h.tick()
+    h.tick()                                                              # #4 settled: two running, so no third
+    assert len(h.launched) == 2 and _tip(world) != three
+    rid = h.lean_ids()[1]
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #4"), world.logs                   # the top's check passed, the lower one still runs
+    assert _main(world) == _tip(world) and len(h.launched) == 2
 
 
 def test_an_ejection_during_a_lean_check_of_its_prefix_waits_to_rebuild_next_and_lands_nothing_from_it_up(
