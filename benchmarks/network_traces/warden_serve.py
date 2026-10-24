@@ -270,6 +270,15 @@ def _quantiles(xs: list[float]) -> dict:
     return {"n": len(xs), "p50": pick(0.5), "p99": pick(0.99), "max": pick(1.0)}
 
 
+def deployment_record(params: WardenParams, signer: LmsSigner, session: bytes, *, origin_unix: float, windows: int,
+                      listen: tuple[str, int], upstream: tuple[str, int], slack: float) -> dict:
+    """`deployment.json`, the auditor's record of a run: the warden's public key and session, the schedule's
+    parameters and their digest, the origin and where it listened."""
+    return {"key": cs.public_json(signer.public_key()), "session": session.hex(), "link": LINK,
+            "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
+            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream)}
+
+
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int],
                 signer: LmsSigner, session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce) -> dict:
@@ -282,10 +291,9 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, slack=slack)
     server = await asyncio.start_server(warden.handle, *listen)
-    deployment = {"key": cs.public_json(signer.public_key()), "session": session.hex(), "link": LINK,
-                  "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
-                  "origin_unix": time.time() + origin - time.monotonic(), "windows": windows,
-                  "listen": [listen[0], server.sockets[0].getsockname()[1]], "upstream": list(upstream)}
+    deployment = deployment_record(params, signer, session, origin_unix=time.time() + origin - time.monotonic(),
+                                   windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
+                                   upstream=upstream, slack=slack)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
     announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
     try:
@@ -306,6 +314,15 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float) -> dict:
+    """One connection's entry in `client.json`; times in ms after the origin."""
+    return {"index": index, "at": at, "sent_ms": round(sent * 1000, 3), "request_bytes": len(request),
+            "request_sha256": _sha(request), "ordinal": shim.ordinal, "outcome": shim.outcome,
+            "kinds": "".join(KIND_CHARS[k] for _, k in shim.arrivals),
+            "arrivals_ms": [round((t - origin) * 1000, 3) for t, _ in shim.arrivals], "data_bytes": len(shim.data),
+            "data_sha256": _sha(bytes(shim.data)), "response": parse_response(bytes(shim.data))}
+
+
 async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim; returns what `client.json` holds."""
@@ -323,12 +340,7 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
             shim = await Shim(params.cell_bytes, clock).read(reader)
         finally:
             writer.close()
-        return {"index": index, "at": item["at"], "sent_ms": round((sent - origin) * 1000, 3),
-                "request_bytes": len(request), "request_sha256": _sha(request), "ordinal": shim.ordinal,
-                "outcome": shim.outcome, "kinds": "".join(KIND_CHARS[k] for _, k in shim.arrivals),
-                "arrivals_ms": [round((t - origin) * 1000, 3) for t, _ in shim.arrivals],
-                "data_bytes": len(shim.data), "data_sha256": _sha(bytes(shim.data)),
-                "response": parse_response(bytes(shim.data))}
+        return connection_log(index, item["at"], sent - origin, request, shim, origin)
 
     got = await asyncio.gather(*(one(i, item) for i, item in enumerate(traffic)), return_exceptions=True)
     doc = {"connections": [g if isinstance(g, dict) else {"index": i, "error": f"{type(g).__name__}: {g}"}
