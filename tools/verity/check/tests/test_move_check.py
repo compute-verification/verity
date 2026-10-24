@@ -446,3 +446,132 @@ def test_runs_entry_with_a_changed_data_hash_is_refused(tmp_path):
 def test_runs_entry_duplicated_into_two_locks_is_refused(tmp_path):
     r = _runs_split(tmp_path, {"CoreProofs.Difftest": RUN}, spec_runs={"CoreProofs.Difftest": RUN})
     assert any("locks at HEAD" in f["reason"] for f in r["refusals"])
+
+
+WORD_MAP = ('[words]\n"Models/Core" = "Definitions/Core"\n"Models.Core" = "Definitions.Core"\n"Trusted" = "Checked"\n'
+            '\n[rewrite]\nexclude = []\n')
+WORD_BASE = {
+    "tools/move/demo_map.toml": WORD_MAP,
+    "S/lakefile.toml": 'name = "s"\n\n[[lean_lib]]\nname = "Models"\n',
+    "S/Models/Core/A.lean": "import Models.Core.B\n\n/-! Trusted: `Models/Core/B.lean` states `Models.Core.B`. -/\n",
+    "S/Models/Core/B.lean": "def x := 1\n",
+    "S/lean-audit.json": _lock(roots=["Models"], layers={"Models.Core": {"imports": ["Models.Core"]}},
+                               reads={"Models.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}}, dependencies={"m": "1"}),
+    "notes.md": "The core's statements are `S/Models/Core/` (`Models.Core`). Trusted.\n",
+    "p/TRUSTED.sha256": "",
+    "tools/research/src/research/store/moves.json": json.dumps({"about": "x", "moves": [{"paths": {"a/": "b/"}}]}, indent=2) + "\n",
+}
+
+
+def _sha(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _worded(tmp_path: Path, **over: str) -> dict:
+    """`Models/Core/` moved to `Definitions/Core/` with the map's words applied, as `tools/move/rename.py` does it."""
+    base_files = {**WORD_BASE, "p/TRUSTED.sha256": f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"}
+    repo, base = _repo(tmp_path, base_files)
+    for m in ("A", "B"):
+        _move(repo, f"S/Models/Core/{m}.lean", f"S/Definitions/Core/{m}.lean")
+    a = "import Definitions.Core.B\n\n/-! Trusted: `Definitions/Core/B.lean` states `Definitions.Core.B`. -/\n"
+    head = {
+        "S/Definitions/Core/A.lean": a,
+        "S/lean-audit.json": _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
+                                   reads={"Definitions.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}},
+                                   dependencies={"m": "2"}),
+        "notes.md": "The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Trusted.\n",
+        "p/TRUSTED.sha256": f"{_sha(a)}  ../S/Definitions/Core/A.lean\n",
+        "tools/research/src/research/store/moves.json": json.dumps(
+            {"about": "x", "moves": [{"paths": {"a/": "b/"}}, {"paths": {"S/Models/": "S/Definitions/"}}]}, indent=2) + "\n",
+    }
+    _write(repo, {**head, **over})
+    return _check(repo, base)
+
+
+def test_a_word_map_move_is_certified(tmp_path):
+    """What `tools/move/rename.py` writes: the map's words in any text file, a pin's digest following its file, the record of
+    the move appended to `moves.json`, a lock's `reads` keyed by the moved module and its `dependencies` record."""
+    r = _worded(tmp_path)
+    assert r["certified"], r["refusals"]
+    kinds = {e["path"]: e["kind"] for e in r["edits"]}
+    assert kinds["notes.md"] == kinds["S/Definitions/Core/A.lean"] == "words" and kinds["p/TRUSTED.sha256"] is None
+
+
+def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):
+    """`Trusted` is in the map, but no path or module the range moved has it, so the map doesn't explain renaming it."""
+    [f] = _worded(tmp_path, **{"notes.md": "The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked.\n"})["refusals"]
+    assert f["path"] == "notes.md" and "+The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked." in f["hunk"]
+
+
+def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
+    [f] = _worded(tmp_path, **{"p/TRUSTED.sha256": f"{'0' * 64}  ../S/Definitions/Core/A.lean\n"})["refusals"]
+    assert f["path"] == "p/TRUSTED.sha256"
+
+
+def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
+    moves = json.dumps({"about": "x", "moves": [{"paths": {"a/": "b/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
+    [f] = _worded(tmp_path, **{"tools/research/src/research/store/moves.json": moves})["refusals"]
+    assert "S/ -> T/" in f["reason"]
+
+
+def test_a_reads_record_that_changes_with_its_key_is_refused(tmp_path):
+    lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
+                 reads={"Definitions.Core.B": {"digest": "de", "definitions": {"x": "ee"}}}, dependencies={"m": "2"})
+    [f] = _worded(tmp_path, **{"S/lean-audit.json": lock})["refusals"]
+    assert f["reason"].startswith("`reads` changed")
+
+
+PROPS = 'name = "props"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Props"\nroots = ["Props.A", "Props.Proofs.A"]\n'
+PROPS_PATH = {"type": "path", "scope": "", "name": "props", "manifestFile": "lake-manifest.json", "inherited": False,
+              "dir": "../Sec/Props", "configFile": "lakefile.toml"}
+PP_PATH = {**PROPS_PATH, "name": "pp", "dir": "../Sec/Proofs/Props"}
+
+
+def _in_place(tmp_path: Path, **over: str) -> dict:
+    """`Props.Proofs` split out of package `props` into a new package `pp` inside `Sec/Proofs/`: `props` drops its roots,
+    `q`, which imports the proof, requires `pp`, and a suite's inputs name `pp`'s Lake files."""
+    repo, base = _repo(tmp_path, {
+        "Sec/Props/lakefile.toml": PROPS, "Sec/Props/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+        "Sec/Props/lake-manifest.json": _manifest("props"), "Sec/Props/lean-audit.json": _lock(roots=["Props.A", "Props.Proofs.A"]),
+        "Sec/Props/A.lean": "def a := 1\n", "Sec/Props/Proofs/A.lean": "import Props.A\n\ntheorem t : a = 1 := rfl\n",
+        "q/lakefile.toml": 'name = "q"\n\n[[require]]\nname = "props"\npath = "../Sec/Props"\n',
+        "q/lake-manifest.json": _manifest("q", PROPS_PATH), "q/Q.lean": "import Props.Proofs.A\n",
+        "x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n]\n'})
+    _move(repo, "Sec/Props/Proofs/A.lean", "Sec/Proofs/Props/A.lean")
+    _write(repo, {
+        "Sec/Proofs/Props/lakefile.toml": ('name = "pp"\nsrcDir = "../.."\n\n[[require]]\nname = "props"\npath = "../../Props"\n'
+                                           '\n[[lean_lib]]\nname = "PP"\nroots = ["Proofs.Props.A"]\n'),
+        "Sec/Proofs/Props/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+        "Sec/Proofs/Props/lake-manifest.json": _manifest("pp", {**PROPS_PATH, "dir": "../../Props"}),
+        "Sec/Proofs/Props/lean-audit.json": _lock(roots=["Proofs.Props.A"], guarantees={}),
+        "Sec/Props/lakefile.toml": PROPS.replace(', "Props.Proofs.A"', ""),
+        "Sec/Props/lean-audit.json": _lock(roots=["Props.A"], proved_in=["../Proofs/Props"]),
+        "q/lakefile.toml": ('name = "q"\n\n[[require]]\nname = "props"\npath = "../Sec/Props"\n\n# the proofs\n[[require]]\n'
+                            'name = "pp"\npath = "../Sec/Proofs/Props"\n'),
+        "q/lake-manifest.json": _manifest("q", PROPS_PATH, PP_PATH), "q/Q.lean": "import Proofs.Props.A\n",
+        "x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n    "Sec/Proofs/Props/lakefile.toml", "Sec/Proofs/Props/lean-toolchain",\n]\n',
+        **over})
+    return _check(repo, base)
+
+
+def test_a_split_into_a_package_inside_another_tree_is_certified(tmp_path):
+    r = _in_place(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert r["lean_modules"] == {"Props.Proofs.A": "Proofs.Props.A"}
+
+
+def test_an_in_place_lakefile_that_drops_a_root_that_did_not_move_is_refused(tmp_path):
+    [f] = _in_place(tmp_path, **{"Sec/Props/lakefile.toml": PROPS.replace('"Props.A", ', "").replace(', "Props.Proofs.A"', "")})["refusals"]
+    assert f["path"] == "Sec/Props/lakefile.toml"
+
+
+def test_an_in_place_require_of_an_existing_package_is_refused(tmp_path):
+    lakefile = 'name = "q"\n\n[[require]]\nname = "props"\npath = "../Sec/Props"\n\n[[require]]\nname = "q2"\npath = "../Sec"\n'
+    r = _in_place(tmp_path, **{"q/lakefile.toml": lakefile})
+    assert [f["path"] for f in r["refusals"]] == ["q/lakefile.toml"]
+
+
+def test_an_inputs_line_naming_an_existing_package_is_refused(tmp_path):
+    r = _in_place(tmp_path, **{"x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n    "Sec/Props/lean-toolchain",\n]\n'})
+    assert [f["path"] for f in r["refusals"]] == ["x/pyproject.toml"]

@@ -13,7 +13,8 @@ Every path git sees changed must be one of:
   `"a/b"`) or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`); in `research`'s sources, also the module of a `-m` line;
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
-  new Lake package with its `lean-audit.json`;
+  new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
+  files (its lakefile, manifest, lock or toolchain), as a suite's inputs list what Lake reads;
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
   proof modules a root of their own while their declarations keep their namespace;
@@ -710,7 +711,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def registered(path: str, y: str) -> bool:
         """Whether an added line registers exactly a package the range created: a workspace member or its uv source, or a
-        Lake package with its lock."""
+        Lake package with its lock; or, in any `pyproject.toml`, a line of quoted paths each a Lake file at the root of a new
+        Lake package (a suite's inputs naming what Lake reads to load it)."""
+        if posixpath.basename(path) == "pyproject.toml" and re.fullmatch(r'\s*("[^"]+"\s*,\s*)*"[^"]+"\s*,?\s*', y):
+            files = re.findall(r'"([^"]+)"', y)
+            if all(posixpath.basename(f) in LAKE_COPIES and new_lake(posixpath.dirname(f)) for f in files):
+                return True
         reg = REGISTRIES.get(path)
         if reg == "lean":
             m = re.match(r'^\s*(?:\w+\s*/\s*)?"([^"]+)"\s*,?\s*(#.*)?$', y)
@@ -760,15 +766,15 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         if a is None or b is None:
             refuse(e, "edited, not UTF-8 text")
             continue
-        same = a == b
-        if not same:
+        same, pins = a == b, name == PINS and posixpath.basename(old) == PINS
+        if not same and not pins:
             a = worded(a, old, maps, lock=k == "lock")
             if a == b:
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
                 continue
         al, bl = a.splitlines(), b.splitlines()
         why: tuple[str, str | None] | None = None
-        if name == PINS and posixpath.basename(old) == PINS:
+        if pins:
             h = pins_change(al, bl, old, new, B, H, pmap)
             why = h and ("a line beyond a file's digest at BASE rewritten to its digest at HEAD, under its moved path", h)
         elif old == new == MOVES:
