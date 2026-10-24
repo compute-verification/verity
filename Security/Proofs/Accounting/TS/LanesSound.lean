@@ -258,8 +258,11 @@ theorem k_of_check {T : PouwWindow.Lanes.Tile} (h : T.check = .ok ()) : 32 ∣ T
   unfold PouwWindow.Lanes.Tile.check at h
   by_cases h1 : T.k % 32 = 0
   · refine ⟨Nat.dvd_of_mod_eq_zero h1, Nat.lt_of_not_le fun h2 => ?_⟩
-    simp [h1, h2] at h <;> cases h
-  · simp [h1] at h <;> cases h
+    have h2' : 131072 ≤ T.k := h2
+    simp [h1, h2'] at h
+    cases h
+  · simp [h1] at h
+    cases h
 
 /-- **A leaf whose 33 statements hold at their committed rows is served right**: at a `K` the lanes bind at, where
 each session's committed rows are the port rows of a wire assignment its evaluation agrees with at every unit, each
