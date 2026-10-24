@@ -180,6 +180,25 @@ noncomputable def proofsOf {R : Type} (src : Msg → Flock.Wit → R → ℕ →
     let q ← repInOf x h spec sts k (draws ρ k) hi
     _root_.Flock.Firewall.Finish.proofFile t (k % 2) (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 q
 
+/-- **The roots the loop's `Commit` carries**: each table's drawn level-0 root (`level0Of`), the empty one where the
+draw is refused. -/
+def rootsOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) : Array ByteArray :=
+  (Array.range sts.size).map fun j => ((level0Of src x w ρ sts j).toOption.map (·.root)).getD .empty
+
+/-- **The link points the auditor saw** on the history `h` at `x`: the `Commit`'s coins, `spec.points` points of
+`spec.mPts` words each. -/
+noncomputable def pointsOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec) : Array (Array F128) :=
+  (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j =>
+    (wordsAt x (h.tail.map fun e => CoinLayer.rd e.2) 0).getD (p * spec.mPts + j) 0
+
+/-- **Rep stream `k`'s rounds as the auditor records them**: `seenRounds`, each with its coin count, no digest, its
+coins and its bytes (the prover transcript's shape, `squeezeP`). -/
+noncomputable def streamOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) :
+    Array _root_.Flock.Round :=
+  ((seenRounds x h (roundsOf spec sts) k).map fun (b, n, cs) =>
+    ({ n, sha := .empty, coins := cs, bytes := some b } : _root_.Flock.Round)).toArray
+
 /-- **The record the auditor assembles** on the history `h` at `x`, the witness `w` and the tape `ρ`, at the level-0 source
 `src` and the proof files `proofs`: `recordJson` at SHA-512 of each rep stream's rounds as they left the loop
 (`seenRounds`, each round's bytes retained), the roots of the level 0 the loop drew (`level0Of`, as its `Commit` carries
@@ -187,13 +206,8 @@ them) and the link points (the `Commit`'s coins). -/
 noncomputable def recordOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (h : List (Msg × Msg)) (spec : SessionSpec) (sts : Array Stmt)
     (proofs : Array ByteArray) : V String :=
-  let c1 := wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0
-  let points := (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j => c1.getD (p * spec.mPts + j) 0
-  let rootB := (Array.range sts.size).map fun j => ((level0Of src x w ρ sts j).toOption.map (·.root)).getD .empty
-  let streams := (Array.range spec.repStreams.size).map fun k =>
-    ((seenRounds x h (roundsOf spec sts) k).map fun (b, n, cs) =>
-      ({ n, sha := .empty, coins := cs, bytes := some b } : _root_.Flock.Round)).toArray
-  FlockComplete.recordJson (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) spec rootB points streams proofs
+  FlockComplete.recordJson (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) spec (rootsOf src x w ρ sts)
+    (pointsOf x h spec) ((Array.range spec.repStreams.size).map (streamOf x h spec sts)) proofs
 
 /-- **The loop's `Finish`** on the history `h` at `x`, the witness `w` and the tape `ρ`: the record and the proof files
 (`recordOf`, `proofsOf`), or why it stops. -/
