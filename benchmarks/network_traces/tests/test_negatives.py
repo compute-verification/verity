@@ -508,6 +508,26 @@ def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it()
                                                            "advice-release"}
 
 
+def test_an_advice_that_releases_in_its_requests_own_bucket_runs_no_negative_until_shifted(tmp_path):
+    """N2-ADVICE's floor wants every output a bucket after its request's: an honest advice that releases in bucket 0
+    is refused by the view, which its row says, and no negative runs; `advice_run`'s shift moves every release later,
+    and then honest is accepted and the negatives run."""
+    pytest.importorskip(NG.ADVISED_MODULE)
+    if V is sys.modules[__name__]:
+        pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
+    from verity.core.protocols.certifier.schedule import ClockSync
+
+    early = _advice(release=(0, 0, 0, 0, 5))
+    rows = NG.advice_suite(early, T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING, received=[3])
+    assert rows["honest"]["codes"] == [f"{NG.ADVISED}.view"] and "before its request" in rows["honest"]["why"]
+    assert all(not r["ran"] for k, r in rows.items() if k != "honest")
+    (tmp_path / "advice.bin").write_bytes(V.encode(early))
+    assert not NG.advice_run(tmp_path / "advice.bin", T=8, R=8)["negatives"]["honest"]["ok"]
+    doc = NG.advice_run(tmp_path / "advice.bin", T=8, R=8, shift=1)
+    assert doc["shift"] == 1 and doc["negatives"]["honest"]["ok"]
+    assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
+
+
 def test_an_advice_negative_waits_for_its_codec(tmp_path, monkeypatch):
     monkeypatch.setattr(NG, "advice_module", lambda: None)
     with pytest.raises(NG.NotApplicable, match="ADV-SPEC"):
