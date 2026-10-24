@@ -452,35 +452,51 @@ two ties between the advice's requests and the warden's certified ingress record
   egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
   is vllm's (the Commit's input port), as the egress ids' binding to `sampled_token_ids` is.
 
-**The ingress tie** (`io_request`, `IoTieRequest{B, T, R, OWN}`; the reference is built, the Boolean Definition
-isn't). It is one unit per ingress link-window at selection `All`, with one output bit, and it is what N2-ADVICE's
+**The ingress tie** (`io_request`, `IoTieRequest{B, T, R, OWN}`: the reference and the Boolean Definition, with
+its sidecar). It is one unit per ingress link-window at selection `All`, with one output bit, and it is what N2-ADVICE's
 advised verdict requires (REDTEAM's phase 6 showed that the advised floor accepts an acausal release under swapped
 prompt lengths). B is the ingress frame size (4,096), R the ingress allocation and OWN the certifier's own frame a
 window. It outputs 1 exactly when:
 1. the window's cells recompute the warden's registered cells root, committed as the egress cells are (one
    `hm96-sha512/row/v2` row a bucket in a dense `frame-v3-sha512` tree of T rows);
-2. every cell is a pad, the own frame at bucket 0's head when OWN = 1, or a request frame (`DATA` on
-   `CANONICAL_STREAM`, B − 9 bytes of payload), with each bucket's request frames before its pads;
+2. every cell is a pad, the own frame at bucket 0's head when OWN = 1 (`active.salt_frame` of the window and
+   `PLACEHOLDER`, as the grid holds it), or a request frame (`DATA` on `CANONICAL_STREAM`, B − 9 bytes of payload),
+   with each bucket's request frames before its pads;
 3. cut as `active.Requests` cuts the link (a request starts a frame with its LENGTH and ends at the frame that holds
-   its last byte; the k-th request is ordinal k), every request frame is that frame of a canonical id request
-   (`active.id_request`, CERT-VARLEN). The head and the fixed fields are at their places, with the content-length
-   LENGTH's, the prompt fields are 11 bytes (`[` or `,`, then a u32 in 10 characters), gap spaces come only where the
-   next piece would straddle a frame, and `]}` then zero fill ends the request at its last byte. Each frame parses
-   without its request's prompt length (`parse_frame`), so the count of prompt fields comes from the certified bytes;
-4. the cut, started from the view's carry, ends exactly the requests the view's `ended` names, in order, each with
-   its prompt_len, and the window holds `received` request frames.
+   its last byte), every request frame is that frame of a canonical id request (`active.id_request`, CERT-VARLEN).
+   The head and the fixed fields are at their places, with the content-length LENGTH's, the prompt fields are 11
+   bytes (`[` or `,`, then a u32 in 10 characters), gap spaces come only where the next piece would straddle a frame,
+   and `]}` then zero fill ends the request at its last byte. A name (`model`, `user`) is printable ASCII but `"`
+   and `\` in quotes: a request whose name needs a JSON escape is refused. Each frame parses without its request's
+   prompt length (`parse_frame`), so the count of prompt fields comes from the certified bytes;
+4. the cut, started from the view's carry, ends exactly as many requests as the view's `ended` has prompt lengths, in
+   order, each with its prompt_len, and the window holds `received` request frames.
 
 - **The view** (`request_view`) is public in the named gap. The verifier computes it from the opened advice's prompt
   lengths and `received`, as `advised.view` does:
   - the carry: the request in progress at the window's first request frame, with its ordinal, its bytes left and its
     prompt fields so far;
-  - `ended`: the (ordinal, prompt_len) of each request whose last frame falls in the window, from
+  - `ended`: the prompt lengths of requests carry.q, carry.q + 1, … whose last frame falls in the window, from
     Σ `active.id_request_frames`, which is `advised.ends` over the link's framing.
 
   At the target the unit reads both under the advice's hiding root, as the egress map is read. No carry-out is
   checked. On a link whose every ingress window is accepted, each carry is the true one by induction from window 0:
   every earlier request's prompt_len, and so its frames, is held to the cells, and a carry that disagrees with the
-  cells misplaces the `]}` or a request's head.
+  cells misplaces the `]}` or a request's head. The ordinals are the verifier's: the cells carry none, and by the same
+  induction the j-th request that ends in a window is the link's request carry.q + j, which is advice request
+  carry.q + j (`active.Requests` streams the link's k-th request, from 0, as k + 1).
+- **The circuit.** `IoTieRequest` recomputes the cells' root (`NetworkRowsRoot`), holds the own frame to the window
+  (`IoTieRequestOwn`), and scans the cells from the carry with one `IoTieRequestFrame{B}` and one
+  `IoTieRequestStep{D, NEW}` a cell. The frame reads its cell against its request's bytes left (0: a request starts
+  there) both ways, as a first frame and as a continuation, each with its prompt slots at fixed places. `]}` sits
+  where the bytes left put it, so each slot is a field, the end or zero fill by a comparison of the bytes left with a
+  constant, and the frame outputs whether it ends the request, the bytes left after it and its prompt fields. The
+  step keeps (left, fields, the requests ended, the request frames, a pad seen in the bucket, ok). The view's prompt
+  lengths, each with its index j, are routed by the prover's Beneš switches (`IoTieRoute`, W = 32 + D), and the step
+  holds the frame that ends the j-th request to entry j: its index and its count of fields. The count's carry past
+  2^32 is kept, so a sum that wraps is refused. `IoTieRequestEnd` holds the totals to `count` and `received`.
+  Public: the root, its domain id, the window, and in the named gap the carry's left and fields, `ended`, `count` and
+  `received`. Witness: the cells, their salts and the switches.
 - **What N2-ADVICE takes.** An advised link's verdict is 1 only if every ingress window's IoTieRequest outcome is 1
   on the view of the same advice (`advised.digest`) that its advised windows read. That makes `advised.ends`' premise
   a check: the link's j-th request is advice request j, an id request of its prompt length. With the egress tie's
@@ -488,13 +504,20 @@ window. It outputs 1 exactly when:
 - **The first negative** is REDTEAM phase 6's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 338 and 16 tokens take 2 frames and 1, released one a bucket. The forged advice swaps them, keeping the total,
   and `advised` accepts it with ends (1, 3) for (2, 3). The tie reads 338 fields in request 0's cells and refuses.
-  Lengths one off that keep every request's frames, which `advised.ends` can't see, are refused the same way.
+  Lengths one off that keep every request's frames, which `advised.ends` can't see, are refused the same way. The
+  circuit reads the same cells (`test_redteam_phase6_frames_read_their_prompt_lengths`: 337 fields and no end, then 1
+  and the end, then 16 and the end), and the unit refuses the split at B = 512 and every forgery, cell tamper and view
+  tamper the reference does, with a routing that matches the forged counts refused by the entries' indices
+  (`test_the_unit_is_its_reference`).
 - **Not in it:** the prompt ids' binding to `c00.input/ids` (vllm's); the advice's output_len ≤ max_tokens (an
   optional check); one request a user (`certified_io`'s). The ingress head signing each bucket's completed requests
   would bind the frames only, not prompt_len exactly, which the advice's prefill rows need.
-- **Cost, estimated:** every ingress byte is hashed once. At T = 600 and R = 9 (REDTEAM's RIN), the rows are 1.00 ×
-  10^10, the parse about 3.9 × 10^8 (`IoTieCell{4096}`'s 34,398 a frame plus about 100 a prompt field), and the
-  routing of `ended` to the frames that end each request about 8 × 10^6. That totals about 1.06 × 10^10 a window.
+- **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,108 ANDs, of which the rows are 3,888,916,
+  the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals 64.
+  `IoTieRequestFrame{4096}` is 170,994 (both readings check every prompt slot), the step 277 at D = 13 and the own
+  frame 32,767. Every ingress byte is hashed once. At T = 600 and R = 9 (REDTEAM's RIN, N = 5,400), the rows are
+  about 1.05 × 10^10, the frames 9.23 × 10^8, the routing 4.6 × 10^6 and the steps 1.5 × 10^6: about 1.14 × 10^10 a
+  window, the rows 92% of it.
 
 **The unit,** `IoTieWindow{B, T, R, P, S, DS}` (R = r):
 - **The cells** are the warden's per-window value. Each bucket's R cells are one `hm96-sha512/row/v2` row of R·B
@@ -731,8 +754,8 @@ Definitions above, and their tests:
   cells.
 
 Still to build: the warden writing and committing cells (`active`), the cells' registration, the port's real layout
-and registration (vllm's Commit), the target's map registration and its range read, and the ingress tie's Boolean
-Definition (`IoTieRequest`, "The ingress tie", whose reference is built), with its sidecar and pins.
+and registration (vllm's Commit), the target's map registration and its range read, the ingress tie's pins, and its
+view read under the advice's hiding root.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
@@ -747,8 +770,7 @@ request's number in the advice is its arrival ordinal. This holds for every cell
 length. What it doesn't establish:
 - zero knowledge for the advice: v4 reads the map and the steps in the clear from the opened advice, the named gap,
   which the target and the compile unit close;
-- the advice's prompt lengths against the ingress record, which is the ingress tie's (`IoTieRequest`, whose Boolean
-  Definition isn't built);
+- the advice's prompt lengths against the ingress record, which is the ingress tie's (`IoTieRequest`);
 - the port's layout and the registration of its root (vllm's and compute's);
 - anything about the text a client shows beyond the public tokenizer's decode.
 

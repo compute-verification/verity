@@ -1,51 +1,89 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on a fake upstream: the reference, in
-the clear, of one ingress link-window's tie, the unit at selection `All` that binds each request's prompt_len and
-arrival ordinal to the warden's certified ingress cells. Nothing here is in a Spec or proved, no warden commits these
-cells yet, and the Boolean Definition isn't built.
+"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on a fake upstream: one ingress
+link-window's tie, the unit at selection `All` that binds each request's prompt_len and arrival ordinal to the warden's
+certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
+Spec or proved, and no warden commits these cells yet.
 
 **The cells.** A link-window's ingress is N = T·R cells of B bytes, R a bucket (the ingress allocation), committed as
 the egress cells are (`io_tie.bucket_rows`, `io_tie.rows_root`). Bucket 0's first cell is the certifier's own frame
-when OWN = 1 (`active.salt_frame`); then each bucket holds its request frames, then pads. A request frame is
-`active.request_frames`' (`DATA` on `CANONICAL_STREAM`, B − 9 bytes of payload), and the requests are CERT-VARLEN's
-id requests (`active.id_request`), whose every field is at a place fixed by the prompt's length and B alone.
+when OWN = 1 (`active.salt_frame` of the window and `PLACEHOLDER`, as the grid holds it); then each bucket holds its
+request frames, then pads. A request frame is `active.request_frames`' (`DATA` on `CANONICAL_STREAM`, B − 9 bytes of
+payload), and the requests are CERT-VARLEN's id requests (`active.id_request`), whose every field is at a place fixed
+by the prompt's length and B alone.
 
 **The cut** (`cut`) runs as `active.Requests` does: a request starts a frame with its LENGTH and ends at the frame
-that holds its last byte; the k-th request is ordinal k. Each frame is parsed without its request's prompt length
-(`parse_frame`): the head and the fixed fields at their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10
-characters), the gap spaces only where the next piece would straddle a frame, and `]}` then zero fill at the
-request's last byte. So each request's prompt_len is its count of prompt fields, read from the certified bytes.
+that holds its last byte. The link's k-th request (from 0) is advice request k, its ordinal; `active.Requests` streams
+it as k + 1. Each frame is parsed without its request's prompt length (`parse_frame`): the head and the fixed fields at
+their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where the next piece
+would straddle a frame, and `]}` then zero fill at the request's last byte. So each request's prompt_len is its count
+of prompt fields, read from the certified bytes. A name (`model`, `user`) is printable ASCII but `"` and `\\` in
+quotes, so a request whose name needs a JSON escape is refused.
 
 **The view** (`request_view`, public in the named gap, computed by the verifier from the opened advice as
 `advised.view` is): the carry, the request in progress at the window's first request frame (its ordinal, its bytes
-left and its prompt fields so far), and `ended`, the (ordinal, prompt_len) of each request whose last frame falls in
-the window, from the advice's prompt lengths and `received`. At the target the unit reads them under the advice's
-hiding root.
+left and its prompt fields so far), and `ended`, the prompt lengths of the requests carry.q, carry.q + 1, … whose last
+frame falls in the window, from the advice's prompt lengths and `received`. At the target the unit reads them under
+the advice's hiding root.
 
 **What 1 means** (`reference`): the cells' root is their bucket rows', every cell is a pad, the own frame where it
-goes or a canonical request frame, each bucket's request frames come first, the cut from the carry ends exactly the
-requests `ended` names, in order, each with its prompt_len, and the window's request frames number `received`.
+goes or a canonical request frame, each bucket's request frames come first, the cut from the carry ends exactly as many
+requests as `ended` names, in order, each with its prompt_len, and the window's request frames number `received`.
 
 No carry-out is checked: on a link whose every ingress window is accepted, each window's carry is the true one by
 induction from window 0, since every earlier request's prompt_len, and so its frames, is held to the cells, and a
-carry that disagrees with the cells misplaces the `]}` or a request's head.
+carry that disagrees with the cells misplaces the `]}` or a request's head. The ordinals are the verifier's: the cells
+carry none, and the j-th request ending in a window is carry.q + j by the same induction.
+
+    IoTieRequestFrame{B}(cell: Array<B, Byte>, left: Array<32>) -> Array<68>
+        pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
+    IoTieRequestStep{D, NEW}(state: Array<131>, frame: Array<68>, routed: Array<32 + D>) -> Array<131>
+        state: left, fields (u32 each), over, the requests ended and the request frames so far (u32 each), padded, ok
+    IoTieRequestOwn{B}(cell: Array<B, Byte>, window: Array<64>) -> Value<1>
+    IoTieRequestEnd(state: Array<131>, count: Array<32>, received: Array<32>) -> Value<1>
+    IoTieRequest{B, T, R, OWN}(root, domain, cells: Array<N, Array<B, Byte>>, salts: Array<T, Salt>,
+        [window: Array<64>], left, fields: Array<32>, ended: Array<N, Array<32>>, count, received: Array<32>,
+        switches: Array<S_W>) -> Value<1>
+        N = T·R, M = 2^D ≥ N, S_W = (2D − 1)·2^(D − 1); `window` only when OWN = 1
+
+`IoTieRequest` is the unit: it recomputes the cells' root from every bucket row and salt (`io_tie.NetworkRowsRoot`),
+holds the own frame to its window, and scans the cells from the carry, one `IoTieRequestFrame` and one
+`IoTieRequestStep` a cell. The frame reads its cell against the bytes its request has left (0: a request starts here):
+both readings, a first frame's and a continuation's, each with its slots at fixed places and `]}` where the bytes left
+put it. The view's prompt lengths, each with its index j, are routed by the prover's switches (`io_tie.IoTieRoute`), and
+the step holds the frame that ends the j-th request to entry j: its index and its count of fields. `IoTieRequestEnd`
+holds the count of requests ended to `count` and of request frames to `received`. Public: the root and domain id, the
+window, and, until the named gap closes, the carry's left and fields, `ended`, `count` and `received`. Witness: the
+cells, their salts and the switches.
 """
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import dataclass
 from typing import NamedTuple, Sequence
 
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean.forms import OR, ONE, ZERO, add, and_reduce, const_bits, mux, sub
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.types import Array
+from verity.ml.commitments.gates.frame_v3 import _part
+from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES,
-                                                   ID_NAME_BYTES, ID_REQUEST_HEAD, LENGTH, SALT, SALT_STREAM,
-                                                   id_request, id_request_frames, request_frames)
+                                                   ID_NAME_BYTES, ID_REQUEST_HEAD, LENGTH, PLACEHOLDER,
+                                                   SALT_FRAME_BYTES, id_request, id_request_frames, request_frames,
+                                                   salt_frame)
 
+BIT, BYTE, DIGEST, SALT = HC.BIT, HC.BYTE, HC.DIGEST, HC.SALT
 END = b"]}"
 #: the variable fields of an id request's head: (key, width, kind)
 FIELDS = ((b'{"max_tokens":', ID_DIGITS, "u32"), (b',"temperature":', 8, "ratio"), (b',"top_p":', 8, "ratio"),
           (b',"seed":', ID_DIGITS, "u32"), (b',"model":', ID_NAME_BYTES, "name"),
           (b',"user":', ID_NAME_BYTES, "name"))
+#: the content-length's offset from the head: `ID_REQUEST_HEAD`, the length in `ID_DIGITS`, then CRLF CRLF
+BODY_AT = len(ID_REQUEST_HEAD) + ID_DIGITS + 4
+#: `IoTieRequestFrame`'s output: pad, req, start, ended, left and fields
+FRAME_OUT = 4 + 32 + 32
+#: `IoTieRequestStep`'s state: left, fields, over, ended, frames, padded, ok
+STATE = 32 + 32 + 1 + 32 + 32 + 1 + 1
 
 
 class Layout(NamedTuple):
@@ -68,7 +106,7 @@ def layout(B: int) -> Layout:
         raise ValueError(f"a {B}-byte frame has no room for an id request: {e}") from None
     payload = LENGTH.pack(len(zero)) + zero
     spans = [(0, LENGTH.size, "length"), (LENGTH.size + len(ID_REQUEST_HEAD), ID_DIGITS, "content-length")]
-    at = LENGTH.size + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
+    at = LENGTH.size + BODY_AT
     for key, width, kind in FIELDS:
         if payload[at:at + len(key)] != key:
             raise ValueError(f"at {B}-byte frames an id request's head doesn't fit frame 0 unmoved")
@@ -89,19 +127,15 @@ def _u32(field: bytes) -> bool:
 
 
 def _ratio(field: bytes) -> bool:
-    try:
-        return len(field) == 8 and b"%8.6f" % float(field) == field and 0 <= float(field) < 10
-    except ValueError:
-        return False
+    """`%8.6f` of a number in [0, 10): a digit, `.`, six digits."""
+    return len(field) == 8 and field[1:2] == b"." and (field[:1] + field[2:]).isdigit()
 
 
 def _name(field: bytes) -> bool:
+    """A JSON string of printable ASCII but `"` and `\\`, padded with spaces."""
     raw = field.rstrip(b" ")
-    try:
-        s = json.loads(raw)
-    except ValueError:
-        return False
-    return isinstance(s, str) and json.dumps(s).encode() == raw and len(field) == ID_NAME_BYTES
+    return len(field) == ID_NAME_BYTES and len(raw) >= 2 and raw[:1] == raw[-1:] == b'"' and \
+        all(0x20 <= c < 0x7F and c not in b'"\\' for c in raw[1:-1])
 
 
 CHECK = {"u32": _u32, "ratio": _ratio, "name": _name}
@@ -130,7 +164,7 @@ def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | 
             if not CHECK[kind](payload[o:o + w]):
                 return None
         cl = payload[lay.spans[1][0]:lay.spans[1][0] + ID_DIGITS]
-        if not _u32(cl) or int(cl) != length - len(ID_REQUEST_HEAD) - ID_DIGITS - 4:
+        if not _u32(cl) or int(cl) != length - BODY_AT:
             return None
         left, at, base = length, lay.start, LENGTH.size
     else:
@@ -165,18 +199,18 @@ class Carry(NamedTuple):
 
 
 class RequestView(NamedTuple):
-    """IoTieRequest's public inputs for one window, in the named gap: the carry, the requests that end in the window
-    with their prompt lengths, and the window's request frames."""
+    """IoTieRequest's public inputs for one window, in the named gap: the carry, the prompt lengths of the requests
+    carry.q, carry.q + 1, … that end in the window, and the window's request frames."""
 
     carry: Carry
-    ended: tuple[tuple[int, int], ...]
+    ended: tuple[int, ...]
     received: int
 
 
 @dataclass(frozen=True)
 class Shape:
     """An ingress link-window: T buckets of R cells of B bytes, OWN the certifier's own frame at bucket 0's head (0 or
-    1), and Q the most requests that can end in it (T·R)."""
+    1). At most N = T·R requests end in it, and the view's prompt lengths are routed over M = 2^D ≥ N positions."""
 
     B: int
     T: int
@@ -185,8 +219,11 @@ class Shape:
 
     def __post_init__(self) -> None:
         if not all(type(x) is int for x in (self.B, self.T, self.R, self.OWN)) or self.T < 2 or self.R < 1 or \
-                self.OWN not in (0, 1):
-            raise ValueError(f"an ingress window has T ≥ 2 buckets of R ≥ 1 cells and OWN 0 or 1, not {self!r}")
+                self.OWN not in (0, 1) or self.N >= 1 << 32:
+            raise ValueError(f"an ingress window has T ≥ 2 buckets of R ≥ 1 cells, fewer than 2^32, and OWN 0 or 1, "
+                             f"not {self!r}")
+        if self.B < SALT_FRAME_BYTES:
+            raise ValueError(f"a {self.B}-byte frame has no room for an id request or the own frame")
         layout(self.B)
 
     @property
@@ -194,8 +231,21 @@ class Shape:
         return self.T * self.R
 
     @property
-    def Q(self) -> int:
-        return self.N
+    def D(self) -> int:
+        return IT.route_depth(self.N, self.N)
+
+    @property
+    def M(self) -> int:
+        return 1 << self.D
+
+    @property
+    def W(self) -> int:
+        """A routed entry's bits: a prompt length and its index."""
+        return 32 + self.D
+
+    @property
+    def switches(self) -> int:
+        return (2 * self.D - 1) << (self.D - 1)
 
 
 def ends(prompt_lens: Sequence[int], B: int) -> tuple[int, ...]:
@@ -236,48 +286,56 @@ def request_view(prompt_lens: Sequence[int], received: Sequence[int], window: in
                          f"{sum(received)}")
     lo = sum(received[:window])
     hi = lo + received[window]
-    ended = tuple((q, n) for q, (n, x) in enumerate(zip(prompt_lens, e)) if lo < x <= hi)
+    ended = tuple(n for n, x in zip(prompt_lens, e) if lo < x <= hi)
     return RequestView(_carry_at(prompt_lens, B, lo), ended, received[window])
 
 
-def is_own(cell: bytes, window: int) -> bool:
-    kind, stream, n = HEADER.unpack(cell[:HEADER.size])
-    return kind == SALT and stream == SALT_STREAM and cell[HEADER.size:HEADER.size + 8] == window.to_bytes(8, "big")
+def own_frame(window: int, B: int) -> bytes:
+    """The certifier's own frame in window `window`'s grid: its salt frame carrying `PLACEHOLDER`."""
+    return salt_frame(window, PLACEHOLDER, B)
 
 
-def cut(shape: Shape, cells: Sequence[bytes], carry: Carry, window: int = 0
-        ) -> tuple[tuple[tuple[int, int], ...], int, Carry] | None:
-    """The cut of the window's cells from `carry`: the (ordinal, prompt fields) of each request that ends in it, its
-    request frames and the carry after it; None where a cell isn't a pad, the own frame where it goes or a canonical
-    request frame, or a request frame follows a pad in its bucket."""
+class Cut(NamedTuple):
+    """A window's cut: the prompt fields of each request that ends in it, its request frames, the carry after it, and
+    the cells that end the requests."""
+
+    ended: tuple[int, ...]
+    frames: int
+    carry: Carry
+    at: tuple[int, ...]
+
+
+def cut(shape: Shape, cells: Sequence[bytes], carry: Carry, window: int = 0) -> Cut | None:
+    """The cut of the window's cells from `carry`, or None where a cell isn't a pad, the own frame where it goes or a
+    canonical request frame, or a request frame follows a pad in its bucket."""
     lay, pad = layout(shape.B), IT.pad_cell(shape.B)
     q, left, fields = carry
-    ended, frames = [], 0
-    for t in range(shape.T):
-        bucket = cells[t * shape.R:(t + 1) * shape.R]
-        if t == 0 and shape.OWN:
-            if not is_own(bucket[0], window):
+    ended, at, frames, padded = [], [], 0, False
+    for i, c in enumerate(cells):
+        if shape.OWN and i == 0:
+            if c != own_frame(window, shape.B):
                 return None
-            bucket = bucket[1:]
-        padded = False
-        for c in bucket:
-            if len(c) != shape.B:
-                return None
-            if c == pad:
-                padded = True
-                continue
-            if padded or HEADER.unpack(c[:HEADER.size]) != (DATA, CANONICAL_STREAM, lay.room):
-                return None
-            p = parse_frame(lay, c[HEADER.size:], not left, left)
-            if p is None:
-                return None
-            if p.length is not None:
-                left, fields = p.length, 0
-            left, fields, frames = left - p.used, fields + p.fields, frames + 1
-            if not left:
-                ended.append((q, fields))
-                q, fields = q + 1, 0
-    return tuple(ended), frames, Carry(q, left, fields)
+            continue
+        if i % shape.R == 0:
+            padded = False
+        if len(c) != shape.B:
+            return None
+        if c == pad:
+            padded = True
+            continue
+        if padded or HEADER.unpack(c[:HEADER.size]) != (DATA, CANONICAL_STREAM, lay.room):
+            return None
+        p = parse_frame(lay, c[HEADER.size:], not left, left)
+        if p is None:
+            return None
+        if p.length is not None:
+            left, fields = p.length, 0
+        left, fields, frames = left - p.used, fields + p.fields, frames + 1
+        if not left:
+            ended.append(fields)
+            at.append(i)
+            q, fields = q + 1, 0
+    return Cut(tuple(ended), frames, Carry(q, left, fields), tuple(at))
 
 
 def rows(shape: Shape, cells: Sequence[bytes]) -> list[bytes]:
@@ -286,8 +344,8 @@ def rows(shape: Shape, cells: Sequence[bytes]) -> list[bytes]:
 
 
 class Instance(NamedTuple):
-    """One ingress link-window's tie: the cells and their salts (witness), the warden's root and domain id, and the
-    view."""
+    """One ingress link-window's tie: the cells and their salts (witness), the warden's root and domain id, the view
+    and the window."""
 
     cells: tuple[bytes, ...]
     salts: tuple[bytes, ...]
@@ -304,7 +362,7 @@ def reference(shape: Shape, inst: Instance) -> int:
     if IT.rows_root(inst.domain, rows(shape, inst.cells), inst.salts) != inst.root:
         return 0
     got = cut(shape, inst.cells, inst.view.carry, inst.window)
-    return int(got is not None and got[0] == inst.view.ended and got[1] == inst.view.received)
+    return int(got is not None and got.ended == inst.view.ended and got.frames == inst.view.received)
 
 
 # --- the fake upstream: a warden's ingress cells ---------------------------------------------------------------------
@@ -322,8 +380,7 @@ def windows_of(shape: Shape, requests: Sequence[bytes], counts: Sequence[int]) -
     for w in range(len(counts) // shape.T):
         cells = []
         for t in range(shape.T):
-            own = [HEADER.pack(SALT, SALT_STREAM, 72) + w.to_bytes(8, "big") + bytes(B - HEADER.size - 8)] \
-                if t == 0 and shape.OWN else []
+            own = [own_frame(w, B)] if t == 0 and shape.OWN else []
             n = counts[w * shape.T + t]
             if len(own) + n > shape.R:
                 raise ValueError(f"bucket {w * shape.T + t} releases {n} frames past the allocation {shape.R}")
@@ -341,5 +398,318 @@ def instance(shape: Shape, cells: Sequence[bytes], view: RequestView, window: in
     return Instance(tuple(cells), salts, IT.rows_root(dom, rows(shape, cells), salts), dom, view, window)
 
 
-__all__ = ["Carry", "Frame", "Instance", "Layout", "RequestView", "Shape", "cut", "ends", "instance", "is_own", "rows",
-           "layout", "parse_frame", "reference", "request_view", "windows_of"]
+def switches(shape: Shape, inst: Instance) -> list[int]:
+    """The prover's routing: entry j to the cell that ends the window's j-th request, the other positions in order
+    (the identity where the cut fails)."""
+    got = cut(shape, inst.cells, inst.view.carry, inst.window)
+    at = got.at if got is not None else ()
+    perm, taken = list(at) + [-1] * (shape.M - len(at)), set(at)
+    rest = iter(i for i in range(shape.M) if i not in taken)
+    return IT.benes([p if p >= 0 else next(rest) for p in perm])
+
+
+# --- the circuit -----------------------------------------------------------------------------------------------------
+
+#: the largest u32 in an id request's 10 characters
+U32_MAX = b"%10d" % ((1 << 32) - 1)
+
+
+class _Chars:
+    """Predicates of a frame's payload bytes (8 bits each, least significant first), each built once."""
+
+    def __init__(self, C, data: Sequence[Sequence]) -> None:
+        self.C, self.data, self.memo = C, data, {}
+
+    def eq(self, i: int, v: int):
+        if (i, v) not in self.memo:
+            self.memo[i, v] = and_reduce(self.C, [HC._same(self.data[i][b], v >> b & 1) for b in range(8)])
+        return self.memo[i, v]
+
+    def digit(self, i: int):
+        if (i, "d") not in self.memo:
+            # 0x30 ... 0x39: high nibble 0011, low nibble at most 9 (not b3 with b2 or b1)
+            C, c = self.C, self.data[i]
+            self.memo[i, "d"] = C.AND(and_reduce(C, [c[7].inv(), c[6].inv(), c[5], c[4]]),
+                                      C.AND(c[3], C.AND(c[2].inv(), c[1].inv()).inv()).inv())
+        return self.memo[i, "d"]
+
+    def nibble0(self, i: int):
+        if (i, "0") not in self.memo:
+            self.memo[i, "0"] = and_reduce(self.C, [self.data[i][b].inv() for b in range(4)])
+        return self.memo[i, "0"]
+
+
+def _eq(C, x: Sequence, y: Sequence):
+    return and_reduce(C, [(a ^ b).inv() for a, b in zip(x, y, strict=True)])
+
+
+def _eq_const(C, x: Sequence, k: int):
+    return and_reduce(C, [HC._same(b, k >> j & 1) for j, b in enumerate(x)]) if k < 1 << len(x) else ZERO
+
+
+def _gt_const(C, x: Sequence, k: int):
+    """x > k, x least significant bit first: one AND a bit."""
+    gt = ZERO
+    for j, b in enumerate(x):
+        gt = C.AND(b, gt) if k >> j & 1 else OR(C, b, gt)
+    return gt
+
+
+def _u32_ok(C, ch: _Chars, at: int) -> list:
+    """The checks that the 10 characters at `at` are a u32 as `_u32` reads one: spaces then digits, at least one, the
+    first nonzero unless it is the last, and, all ten digits, at most `U32_MAX` (compared digit by digit)."""
+    sp = [ch.eq(at + i, 0x20) for i in range(ID_DIGITS)]
+    dg = [ch.digit(at + i) for i in range(ID_DIGITS)]
+    oks = []
+    for i in range(ID_DIGITS):
+        oks.append(sp[i] ^ dg[i])
+        if i:
+            oks.append(C.AND(dg[i - 1], sp[i]).inv())
+        if i < ID_DIGITS - 1:
+            lead = dg[i] if i == 0 else C.AND(dg[i], sp[i - 1])
+            oks.append(C.AND(lead, ch.nibble0(at + i)).inv())
+    oks.append(dg[-1])
+    gt, same = ZERO, ONE
+    for i in range(ID_DIGITS):
+        nib, k = ch.data[at + i][:4], U32_MAX[i] & 0xF
+        gt = gt ^ C.AND(same, _gt_const(C, nib, k))
+        same = C.AND(same, _eq_const(C, nib, k))
+    return oks + [C.AND(dg[0], gt).inv()]
+
+
+def _ratio_ok(C, ch: _Chars, at: int) -> list:
+    return [ch.digit(at), ch.eq(at + 1, 0x2E)] + [ch.digit(at + i) for i in range(2, 8)]
+
+
+def _name_ok(C, ch: _Chars, at: int) -> list:
+    """`_name`: a quote, printable ASCII but `"` and `\\` up to the closing quote, then spaces."""
+    oks, open_ = [ch.eq(at, 0x22)], ONE
+    for i in range(at + 1, at + ID_NAME_BYTES):
+        c, quote = ch.data[i], ch.eq(i, 0x22)
+        # 0x20 ... 0x7e is b7 = 0 with b6 or b5, but 0x7f; the three exceptions exclude each other
+        plain = C.AND(C.AND(c[7].inv(), OR(C, c[6], c[5])), (ch.eq(i, 0x7F) ^ quote ^ ch.eq(i, 0x5C)).inv())
+        oks.append(mux(C, open_, [plain ^ quote], [ch.eq(i, 0x20)])[0])
+        open_ = C.AND(open_, quote.inv())
+    return oks + [open_.inv()]
+
+
+_SPANS = {"u32": _u32_ok, "ratio": _ratio_ok, "name": _name_ok}
+
+
+def _reading(C, ch: _Chars, zero: Sequence, lay: Layout, first: bool, L: Sequence) -> tuple:
+    """One reading of a request frame's payload: a first frame's (`first`, L its LENGTH) or a continuation's (L the
+    bytes left): (ok, ended, the bytes left after it, its prompt fields)."""
+    room = lay.room
+    s0, base = (lay.start, LENGTH.size) if first else (0, 0)
+    avail = room - base
+    oks = []
+    if first:
+        free = {i for o, w, _ in lay.spans for i in range(o, o + w)}
+        oks += [ch.eq(i, lay.head[i]) for i in range(LENGTH.size, lay.start) if i not in free]
+        o = lay.spans[1][0]
+        cl_ok, cl = IT._digits(C, ch.data[o:o + ID_DIGITS])
+        body = add(C, cl, const_bits(BODY_AT, 32), width=32, carry_out=True)
+        oks += cl_ok + [body[32].inv(), _eq(C, body[:32], L)]
+        for o, _, kind in lay.spans[2:]:
+            oks += _SPANS[kind](C, ch, o)
+    K, g = divmod(room - s0, ID_FIELD_BYTES)
+    at = [s0 + ID_FIELD_BYTES * k for k in range(K + 1)]
+    fields = [and_reduce(C, [ch.eq(at[k], 0x5B if first and k == 0 else 0x2C)] + _u32_ok(C, ch, at[k] + 1))
+              for k in range(K)]
+    last = _gt_const(C, L, avail).inv()
+    # not its last frame: every slot a field, then the gap's spaces, fewer than 2 if the request's `]}` is next
+    whole = fields + [ch.eq(i, 0x20) for i in range(at[K], room)]
+    if g >= len(END):
+        whole.append(_eq_const(C, L, avail + len(END)).inv())
+    # its last: `]}` at the place e[k] of slot k, which ends the request; every slot before it a field, zero past it
+    e = {k: _eq_const(C, L, at[k] + len(END) - base) for k in range(1 if first else 0, K + 1)
+         if at[k] + len(END) <= room}
+    lo, after = [ZERO], ZERO
+    for k in sorted(e):
+        lo[0] = lo[0] ^ e[k]
+    for k in range(K, -1, -1):
+        span = range(at[k], min(at[k] + ID_FIELD_BYTES, room))
+        ek = e.get(k, ZERO)
+        if k < K:
+            lo.append(C.AND(after, fields[k].inv()).inv())
+        if k in e:
+            lo.append(C.AND(ek, and_reduce(C, [ch.eq(at[k], END[0]), ch.eq(at[k] + 1, END[1])] +
+                                       [zero[i] for i in span[2:]]).inv()).inv())
+        lo.append(C.AND((after ^ ek).inv(), and_reduce(C, [zero[i] for i in span]).inv()).inv())
+        after = after ^ ek
+    ok = and_reduce(C, oks + [and_reduce(C, lo) ^ C.AND(last.inv(), and_reduce(C, whole))])
+    rest = [C.AND(last.inv(), b) for b in sub(C, L, const_bits(avail, 32), 32)[0]]
+    count = []
+    for j in range(32):
+        bit = ZERO
+        for k in e:
+            if k >> j & 1:
+                bit = bit ^ e[k]
+        count.append(bit ^ last.inv() if K >> j & 1 else bit)
+    return ok, last, rest, count
+
+
+def _sig_frame(S):
+    layout(S.B)
+    return (("cell", Array(S.B, BYTE)), ("left", Array(32, BIT))), Array(FRAME_OUT, BIT)
+
+
+def _build_frame(C, S, *e):
+    lay = layout(S.B)
+    H, room = HEADER.size, lay.room
+    cell, left = e[:S.B], list(e[S.B])
+    ch = _Chars(C, cell[H:])
+    zero = [ch.eq(i, 0) for i in range(room)]
+    pad = and_reduce(C, [cell[i][b].inv() for i in range(H) for b in range(8)] + zero)
+    header = HEADER.pack(DATA, CANONICAL_STREAM, room)
+    head = and_reduce(C, [HC._same(cell[i][b], header[i] >> b & 1) for i in range(H) for b in range(8)])
+    length = [cell[H + 3 - j // 8][j % 8] for j in range(32)]
+    f_ok, f_end, f_rest, f_count = _reading(C, ch, zero, lay, True, length)
+    c_ok, c_end, c_rest, c_count = _reading(C, ch, zero, lay, False, left)
+    start = and_reduce(C, [b.inv() for b in left])
+    ok, ended = mux(C, start, [f_ok, f_end], [c_ok, c_end])
+    return [[pad, C.AND(head, ok), start, ended, *mux(C, start, f_rest, c_rest), *mux(C, start, f_count, c_count)]]
+
+
+IoTieRequestFrame = _part(
+    "IoTieRequestFrame", ("B",), _sig_frame, _build_frame,
+    "(pad, req, start, ended, left, fields) of a B-byte ingress cell read against its request's bytes left before it "
+    "(left; 0: a request starts here, start): pad iff the cell is B zero bytes; req iff it is a DATA frame on stream 0 "
+    "of B − 9 bytes whose payload `io_request.parse_frame` accepts as that frame of a canonical id request; ended iff "
+    "the request's last byte is in it; left the bytes the request has after it and fields its prompt fields, u32 "
+    "each, least significant bit first")
+
+
+def _sig_step(S):
+    if type(S.D) is not int or not 1 <= S.D <= 32 or S.NEW not in (0, 1):
+        raise ValueError(f"a step has 1 <= D <= 32 and NEW 0 or 1, not D={S.D!r}, NEW={S.NEW!r}")
+    return (("state", Array(STATE, BIT)), ("frame", Array(FRAME_OUT, BIT)), ("routed", Array(32 + S.D, BIT))), \
+        Array(STATE, BIT)
+
+
+def _build_step(C, S, state, fo, routed):
+    left, fields, over, j, frames = state[0:32], state[32:64], state[64], state[65:97], state[97:129]
+    padded, ok = ZERO if S.NEW else state[129], state[130]
+    pad, req, start, ended, rest, count = fo[0], fo[1], fo[2], fo[3], fo[4:36], fo[36:68]
+    keep, stay = start.inv(), ended.inv()
+    total = add(C, [C.AND(keep, b) for b in fields], count, width=32, carry_out=True)
+    big = OR(C, C.AND(keep, over), total[32])
+    end = C.AND(req, ended)
+    match = and_reduce(C, [_eq(C, routed[:32], total[:32]), _eq(C, routed[32:], j[:S.D]), big.inv()])
+    ok = and_reduce(C, [ok, pad ^ C.AND(req, padded.inv()), C.AND(end, match.inv()).inv()])
+    return [[*mux(C, req, rest, left), *mux(C, req, [C.AND(stay, b) for b in total[:32]] + [C.AND(stay, big)],
+                                            [*fields, over]),
+             *add(C, j, [end], width=32), *add(C, frames, [req], width=32), OR(C, padded, pad), ok]]
+
+
+IoTieRequestStep = _part(
+    "IoTieRequestStep", ("D", "NEW"), _sig_step, _build_step,
+    "the ingress scan's state after one cell (`IoTieRequestFrame`'s output): its request's bytes left and prompt "
+    "fields so far (over: 2^32 or more), the requests ended and request frames so far, whether a pad has been seen "
+    "in the bucket (NEW: the cell starts one) and ok, which drops unless the cell is a pad or a request frame before "
+    "the bucket's pads, and, where it ends a request, the routed entry is (fields, the requests ended before it)")
+
+
+def _sig_own(S):
+    if type(S.B) is not int or S.B < SALT_FRAME_BYTES:
+        raise ValueError(f"an own frame has B >= {SALT_FRAME_BYTES}, not {S.B!r}")
+    return (("cell", Array(S.B, BYTE)), ("window", Array(64, BIT))), BIT
+
+
+def _build_own(C, S, *e):
+    cell, window, tmpl = e[:S.B], e[S.B], own_frame(0, S.B)
+    w = range(HEADER.size, HEADER.size + 8)
+    oks = [HC._same(cell[i][b], tmpl[i] >> b & 1) for i in range(S.B) if i not in w for b in range(8)]
+    # the window is u64 big-endian at bytes 9 ... 16: its bit j is bit j % 8 of byte 16 - j // 8
+    oks += [HC._same(cell[HEADER.size + 7 - j // 8][j % 8], window[j]) for j in range(64)]
+    return [and_reduce(C, oks)]
+
+
+IoTieRequestOwn = _part(
+    "IoTieRequestOwn", ("B",), _sig_own, _build_own,
+    "1 iff the B-byte cell is the certifier's own frame of the window (u64, least significant bit first) as the grid "
+    "holds it: `active.salt_frame(window, PLACEHOLDER, B)`")
+
+
+def _sig_end(S):
+    return (("state", Array(STATE, BIT)), ("count", Array(32, BIT)), ("received", Array(32, BIT))), BIT
+
+
+IoTieRequestEnd = _part(
+    "IoTieRequestEnd", (), _sig_end,
+    lambda C, S, state, count, received: [and_reduce(C, [state[130], _eq(C, state[65:97], count),
+                                                        _eq(C, state[97:129], received)])],
+    "1 iff the scan's state is ok, its requests ended are count and its request frames received")
+
+
+def _sig_request(S):
+    sh = Shape(S.B, S.T, S.R, S.OWN)
+    own = (("window", Array(64, BIT)),) if S.OWN else ()
+    return ((("root", DIGEST), ("domain", DIGEST), ("cells", Array(sh.N, Array(S.B, BYTE))),
+             ("salts", Array(S.T, SALT)), *own, ("left", Array(32, BIT)), ("fields", Array(32, BIT)),
+             ("ended", Array(sh.N, Array(32, BIT))),
+             ("count", Array(32, BIT)), ("received", Array(32, BIT)), ("switches", Array(sh.switches, BIT))), BIT)
+
+
+def _body_request(B, S, root, dom, cells, salts, *rest):
+    sh = Shape(S.B, S.T, S.R, S.OWN)
+    window, (left, fields, ended, count, received, switches_) = (rest[0], rest[1:]) if S.OWN else (None, rest)
+    K, cr, er = HC._Consts(B), HC._refs(cells), HC._refs(ended)
+    row = 8 * S.B * S.R
+    oks = [B.call(bind(IT.NetworkRowsRoot, N_BITS=row, COUNT=S.T), cells.reshape(Array(S.T, Array(row, BIT))), salts,
+                  root, dom)]
+    xs = []
+    for k in range(sh.M):
+        xs += (er[32 * k:32 * (k + 1)] if k < sh.N else K.bits(0, 32)) + K.bits(k, sh.D)
+    routed = HC._refs(B.call(bind(IT.IoTieRoute, W=sh.W, D=sh.D), HC._coll(Array(sh.M, Array(sh.W, BIT)), xs),
+                             switches_))
+
+    def cell(i: int):
+        return HC._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])
+
+    if S.OWN:
+        oks.append(B.call(bind(IoTieRequestOwn, B=S.B), cell(0), window))
+    state = HC._coll(Array(STATE, BIT), HC._refs(left) + HC._refs(fields) + K.bits(0, STATE - 65) + K.bits(1, 1))
+    for i in range(S.OWN, sh.N):
+        fo = B.call(bind(IoTieRequestFrame, B=S.B), cell(i), HC._coll(Array(32, BIT), HC._refs(state)[:32]))
+        state = B.call(bind(IoTieRequestStep, D=sh.D, NEW=int(i > 0 and i % S.R == 0)), state, fo,
+                       HC._coll(Array(sh.W, BIT), routed[sh.W * i:sh.W * (i + 1)]))
+    oks.append(B.call(bind(IoTieRequestEnd), state, count, received))
+    bits = [r for o in oks for r in HC._refs(o)]
+    return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
+
+
+IoTieRequest = CompositeDefinition(
+    "IoTieRequest", 1, ("B", "T", "R", "OWN"), _sig_request, _body_request, conformance="exact-model-tested",
+    doc="1 iff the cells' bucket rows are the root's (`NetworkRowsRoot`), the own frame is where it goes when OWN "
+        "(`IoTieRequestOwn`), and the cells scanned from the carry (left, fields), one `IoTieRequestFrame` and "
+        "`IoTieRequestStep` a cell, are pads and canonical id-request frames, each bucket's frames before its pads, "
+        "ending count requests whose prompt fields are ended's, in order (routed by the switches, `IoTieRoute`), in "
+        "received request frames (`IoTieRequestEnd`): the ingress tie of one link-window, every cell opened")
+
+
+# --- arguments -------------------------------------------------------------------------------------------------------
+
+def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int]) -> list[list[int]]:
+    """`IoTieRequestFrame`'s arguments for a batch of (cell, left), each its leaves' bits a row."""
+    return [[HC._bytes_bits(c) for c in cells], [HC._int_bits(x, 32) for x in lefts]]
+
+
+def arguments(shape: Shape, inst: Instance, bits: Sequence[int]) -> list[list[int]]:
+    """`IoTieRequest`'s arguments in its signature's order, each its leaves' bits."""
+    v, d = inst.view, HC._digest_bits
+    if len(v.ended) > shape.N or any(not 0 <= x < 1 << 32 for x in (*v.ended, v.carry.left, v.carry.fields,
+                                                                       v.received)):
+        raise ValueError(f"a view has at most N = {shape.N} prompt lengths and u32 values, not {v!r}")
+    ended = list(v.ended) + [0] * (shape.N - len(v.ended))
+    own = [HC._int_bits(inst.window, 64)] if shape.OWN else []
+    return [d(inst.root), d(inst.domain), [b for c in inst.cells for b in HC._bytes_bits(c)],
+            [b for s in inst.salts for b in d(s)], *own, HC._int_bits(v.carry.left, 32),
+            HC._int_bits(v.carry.fields, 32), [b for n in ended for b in HC._int_bits(n, 32)],
+            HC._int_bits(len(v.ended), 32), HC._int_bits(v.received, 32), list(bits)]
+
+
+__all__ = ["BODY_AT", "Carry", "Cut", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd",
+           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "RequestView", "STATE", "Shape",
+           "arguments", "cut", "ends", "frame_arguments", "instance", "layout", "own_frame", "parse_frame",
+           "reference", "request_view", "rows", "switches", "windows_of"]
