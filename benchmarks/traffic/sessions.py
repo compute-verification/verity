@@ -160,11 +160,15 @@ def _openai_msgs(msgs: list[dict]) -> list[tuple[str, str]]:
     return out
 
 
+MAX_FILES = int(os.environ.get("TRAFFIC_MAX_FILES", "0"))  # 0: every parquet file of a dataset
+
+
 def _parquet_sample(repo: str, columns: list[str], frac: float, seed: int):
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download, list_repo_files
     rng = np.random.default_rng(seed)
     files = sorted(f for f in list_repo_files(repo, repo_type="dataset") if f.endswith(".parquet"))
+    files = files[:MAX_FILES] if MAX_FILES else files
     for f in files:
         pf = pq.ParquetFile(hf_hub_download(repo, f, repo_type="dataset"))
         for g in range(pf.num_row_groups):

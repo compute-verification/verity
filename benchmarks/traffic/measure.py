@@ -11,7 +11,8 @@
   session.
 - **coverage(k)**: fraction of units whose unregistered tokens times bits per token are at most k bits.
 - **phi**: total FLOPs over total unregistered bits (traffic-weighted, per source); a class averages its sources with equal
-  weight. **eta(k, c)** = c / (k phi).
+  weight, every source under every rule (``eff``: a source without prefix or session structure counts under the rule
+  below, marked * in the tables). **eta(k, c)** = c / (k phi).
 - **c matched to typical traffic**: c = k phi_typ, with phi_typ the chat and API classes' phi pooled (equal weight per
   source), so eta = phi_typ / phi for each class at every k.
 """
@@ -53,9 +54,20 @@ def per_unit(d: dict[str, np.ndarray], rule: str) -> dict[str, np.ndarray]:
 
 def summarize(u: dict[str, np.ndarray]) -> dict:
     tok = u["tok"]
+    fit = {b: {kn: tok * bits <= 8 * kv for kn, kv in KS} for b, bits in BITS.items()}
+    # the units at k's scale: unregistered bits in (k/10, k]
+    band = {b: {kn: fit[b][kn] & (tok * bits > 0.8 * kv) for kn, kv in KS} for b, bits in BITS.items()}
     s = {"units": int(len(tok)), "tok_mean": float(tok.mean()),
          "tok_q": {p: float(np.percentile(tok, p)) for p in (50, 90, 99)}, "tok_max": float(tok.max()),
-         "cov": {b: {kn: float((tok * bits <= 8 * kv).mean()) for kn, kv in KS} for b, bits in BITS.items()},
+         "cov": {b: {kn: float(fit[b][kn].mean()) for kn, _ in KS} for b in BITS},
+         "cov_flops": {m: {b: {kn: float(u[m][fit[b][kn]].sum() / u[m].sum()) for kn, _ in KS} for b in BITS}
+                       for m in flops.MODELS},
+         "phi_band": {m: {b: {kn: (float(u[m][band[b][kn]].sum() / (tok[band[b][kn]].sum() * BITS[b]))
+                                   if band[b][kn].any() else None) for kn, _ in KS} for b in BITS}
+                      for m in flops.MODELS},
+         "band_units": {b: {kn: int(band[b][kn].sum()) for kn, _ in KS} for b in BITS},
+         "flops_p99_fit": {m: {b: {kn: (float(np.percentile(u[m][fit[b][kn]], 99)) if fit[b][kn].any() else None)
+                                   for kn, _ in KS} for b in BITS} for m in flops.MODELS},
          "flops_mean": {m: float(u[m].mean()) for m in flops.MODELS},
          "fits_c": {m: float((u[m] <= C_FIXED).mean()) for m in flops.MODELS}}
     return s
@@ -67,6 +79,22 @@ def phi(s: dict, model: str, b: str) -> float:
 
 def pooled(sums: list[dict], model: str, b: str) -> float:
     return np.mean([s["flops_mean"][model] for s in sums]) / (np.mean([s["tok_mean"] for s in sums]) * BITS[b])
+
+
+def eff(v: dict, rule: str) -> dict:
+    """A source's summary under ``rule``, or under the nearest rule below it that the source can speak to: without prefix
+    structure nothing is known to be registered (R2 = R1), and without sessions each request is its own (R3 = R2). Both
+    fallbacks can only overstate unregistered input."""
+    order = list(RULES)
+    for r in reversed(order[: order.index(rule) + 1]):
+        if r in v["rules"]:
+            return v["rules"][r]
+    raise KeyError(rule)
+
+
+def _mean(xs: list) -> float | None:
+    xs = [x for x in xs if x is not None]
+    return float(np.mean(xs)) if xs else None
 
 
 def main() -> None:
@@ -82,19 +110,27 @@ def main() -> None:
     for c in CLASSES:
         cls[c] = {}
         for r in RULES:
-            sums = [v["rules"][r] for v in src.values() if v["meta"]["cls"] == c and r in v["rules"]]
+            sums = [eff(v, r) for v in src.values() if v["meta"]["cls"] == c]
             if not sums:
                 continue
-            cls[c][r] = {"sources": [k for k, v in src.items() if v["meta"]["cls"] == c and r in v["rules"]],
+            cls[c][r] = {"sources": [k + ("" if r in v["rules"] else "*") for k, v in src.items()
+                                     if v["meta"]["cls"] == c],
                          "cov": {b: {kn: float(np.mean([s["cov"][b][kn] for s in sums])) for kn, _ in KS}
                                  for b in BITS},
+                         "cov_flops": {m: {b: {kn: float(np.mean([s["cov_flops"][m][b][kn] for s in sums]))
+                                               for kn, _ in KS} for b in BITS} for m in flops.MODELS},
                          "phi": {m: {b: float(pooled(sums, m, b)) for b in BITS} for m in flops.MODELS},
+                         "phi_band": {m: {b: {kn: _mean([s["phi_band"][m][b][kn] for s in sums]) for kn, _ in KS}
+                                          for b in BITS} for m in flops.MODELS},
                          "fits_c": {m: float(np.mean([s["fits_c"][m] for s in sums])) for m in flops.MODELS}}
-    typ = {}
+    typ, c_p99 = {}, {}
     for r in RULES:
-        sums = [v["rules"][r] for v in src.values() if v["meta"]["cls"] in ("chat", "api") and r in v["rules"]]
+        sums = [eff(v, r) for v in src.values() if v["meta"]["cls"] in ("chat", "api")]
         typ[r] = {m: {b: float(pooled(sums, m, b)) for b in BITS} for m in flops.MODELS} if sums else None
-    result = {"sources": src, "classes": cls, "phi_typ": typ, "c_fixed": C_FIXED, "ks": dict(KS), "bits": BITS}
+        c_p99[r] = {m: {b: {kn: max((s["flops_p99_fit"][m][b][kn] or 0.0) for s in sums) for kn, _ in KS}
+                        for b in BITS} for m in flops.MODELS} if sums else None
+    result = {"sources": src, "classes": cls, "phi_typ": typ, "c_p99_typ": c_p99, "c_fixed": C_FIXED, "ks": dict(KS),
+              "bits": BITS}
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "tables.json").write_text(json.dumps(result, indent=1))
     (args.out / "tables.md").write_text(render(result))
@@ -136,10 +172,26 @@ def render(res: dict) -> str:
     for r, t in typ.items():
         if t:
             out.append(f"| typical (chat + API) | {r} | {t['dsv4']['raw']:.2e} | {t['dense7b']['raw']:.2e} | |")
+    p99 = res["c_p99_typ"]
+    f = lambda x: "-" if x is None else f"{x:.2e}"
     for model in flops.MODELS:
+        out.append(f"\n### phi at k's scale (units with unregistered input in (k/10, k]), {flops.MODELS[model]['label']}, "
+                   "17 bits per token\n")
+        out.append(f"| class | rule | {kh} |")
+        out.append("|---|---|" + "---|" * len(KS))
+        for c, rr in cls.items():
+            for r, v in rr.items():
+                out.append(f"| {c} | {r} | " + " | ".join(f(v["phi_band"][model]["raw"][kn]) for kn, _ in KS) + " |")
+        out.append(f"\n### FLOP-weighted coverage(k), % of honest FLOPs in units that fit, {flops.MODELS[model]['label']}, "
+                   "17 bits per token\n")
+        out.append(f"| class | rule | {kh} |")
+        out.append("|---|---|" + "---|" * len(KS))
+        for c, rr in cls.items():
+            for r, v in rr.items():
+                out.append(f"| {c} | {r} | " + " | ".join(_pct(v["cov_flops"][model]["raw"][kn]) for kn, _ in KS) + " |")
         for b, bits in BITS.items():
             out.append(f"\n### eta(k, c = 1.4e17) = c / (k phi), {flops.MODELS[model]['label']}, {bits:g} bits per token\n")
-            out.append(f"| class | rule | {kh} | eta at c matched to typical traffic |")
+            out.append(f"| class | rule | {kh} | eta at c = k phi_typ |")
             out.append("|---|---|" + "---|" * len(KS) + "---|")
             for c, rr in cls.items():
                 for r, v in rr.items():
@@ -147,8 +199,22 @@ def render(res: dict) -> str:
                     em = typ[r][model][b] / p if typ.get(r) else float("nan")
                     out.append(f"| {c} | {r} | " + " | ".join(f"{C_FIXED / (8 * kv * p):.3g}" for _, kv in KS)
                                + f" | {em:.2f} |")
-            cm = " ; ".join(f"{r}: c = {8 * 1e4 * t[model][b]:.2e} at 10 kB" for r, t in typ.items() if t)
-            out.append(f"\nc matched to typical traffic (c = k phi_typ, scales with k): {cm}\n")
+            out.append(f"\n### eta(k, c = c99(k)), c99 = the 99th-percentile FLOPs of chat and API units that fit in k "
+                       f"(the most of any one source), {flops.MODELS[model]['label']}, {bits:g} bits per token\n")
+            out.append(f"| class | rule | {kh} |")
+            out.append("|---|---|" + "---|" * len(KS))
+            for r, t in p99.items():
+                if t:
+                    out.append(f"| c99 | {r} | " + " | ".join(f"{t[model][b][kn]:.2e}" for kn, _ in KS) + " |")
+            for c, rr in cls.items():
+                for r, v in rr.items():
+                    if not p99.get(r):
+                        continue
+                    p = v["phi"][model][b]
+                    out.append(f"| {c} | {r} | " + " | ".join(f"{p99[r][model][b][kn] / (8 * kv * p):.3g}"
+                                                             for kn, kv in KS) + " |")
+            cm = " ; ".join(f"{r}: {8 * 1e4 * t[model][b]:.2e}" for r, t in typ.items() if t)
+            out.append(f"\nc = k phi_typ at 10 kB (it scales with k): {cm}\n")
     return "\n".join(out) + "\n"
 
 

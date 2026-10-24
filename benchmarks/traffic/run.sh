@@ -4,7 +4,7 @@
 #     --timeout 90m -- bash benchmarks/traffic/run.sh
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-OUT=${OUT:?OUT is the run dir's out/}
+OUT=${OUT:?set by research run: the run dir out/}
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 export TRAFFIC_CACHE="$scratch/cache" HF_HOME="$scratch/hf" UV_CACHE_DIR="${UV_CACHE_DIR:-$scratch/uv}"
