@@ -2197,7 +2197,6 @@ class Driver:
         self.drop_hedges(drive, members, trains, main)
         running = sum(self.verdict(c, main, drive).state == "running" for c in self._counted(drive, main))
         running += self.prewarm(drive, running)
-        self.start_postland(drive)                          # a slot of its own: `max_running` counts the trains' checks
         # a landing below a failed member shifts the trains' indices off it, and a check above it holds the failure drive is
         # still settling (one told to `CI` is a person's to settle)
         settling = {chain[i].commit for i in failed_at if f"failed:{chain[i].commit}" not in drive["told"]} | {
@@ -2259,6 +2258,9 @@ class Driver:
             q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else "")
                   + (f", touched suites {' '.join(drive['launched'][m.commit].get('touched') or [])}" if "pytest" in self.defer else ""))
             what[k] = f"launched {' '.join(ids)}"
+        # after the trains' launches, whose own launch waits it held up to 15 min (24 Oct 00:5x-01:07Z): a slot of its own, since
+        # `max_running` counts only the trains' checks
+        self.start_postland(drive)
         if shadowed := self.per_pr(drive):
             what.append(shadowed)
         # a train that passed while this tick ran lands now, not a whole tick later (23 Oct: verdict to landed median 0.24 h,
