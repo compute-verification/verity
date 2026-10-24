@@ -248,6 +248,43 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     assert CT.Sites(["q"]).get((5, "q")) == "q/row_quant"
 
 
+class FusedEmbed(nn.Module):
+    """vLLM's DeepseekV32Model at TP1 (GLM-5.3's): its table whole on the rank, it gathers the embedding from its weight
+    (`fused_embed_norm`) and calls the embedding only for ``inputs_embeds``' runner path, never on its own."""
+
+    def __init__(self, replicated=True):
+        super().__init__()
+        self.embed_tokens, self.replicated_embed = nn.Module(), replicated
+
+    def forward(self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None):
+        return positions
+
+
+def test_a_model_that_gathers_its_embedding_fused_gives_the_commit_its_ids_at_its_forward():
+    """r20261024-015257-abac: GLM-5.3 at TP1 never calls its embedding, so the committer's pre-hook on it acquired no
+    step's ids and ROOTS1 refused every round (``the Commit acquired no input ids at engine step 0``). `fused_embed`
+    acquires them at the model's forward under the embedding's name, outside a step and for ``inputs_embeds`` (whose
+    embedding call the committer's own pre-hook takes) nothing, and hooks nothing on a model that calls its embedding."""
+    model, com, tap = nn.Module(), Committer(), CT.CommitTap(EMBED)
+    model.model = FusedEmbed()
+    tap.tap(com)
+    h = HC.fused_embed(com, model, EMBED)
+    try:
+        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
+        com._cur = SimpleNamespace(step=FIRST)
+        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
+        model.model(input_ids=torch.tensor([8]), positions=torch.arange(1), inputs_embeds=torch.zeros(1, 4))
+        model.model(torch.tensor([9]), torch.arange(1), None, torch.zeros(1, 4))
+    finally:
+        h.remove()
+        tap.untap()
+    assert com.got == [(FIRST, f"{EMBED}/in")] and com.errors == []
+    assert tap._ids[FIRST].tolist() == [5, 6, 7]
+    plain = nn.Module()
+    plain.model = FusedEmbed(replicated=False)
+    assert HC.fused_embed(com, plain, EMBED) is None
+
+
 def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monkeypatch):
     """`pouw_h1_gpu.core_verdict`, the GPU run's check of each Commit window under in-process coins: the honest window's
     record is one manifest under calls_root, its tables committed by their rounds (`credit._a_link`) and each the

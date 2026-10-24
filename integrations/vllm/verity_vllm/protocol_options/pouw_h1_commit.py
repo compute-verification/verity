@@ -5,7 +5,8 @@ token ids, layer 0's input. Core's credit holds each to the Commit's value of th
 * **The Commit** (`acquire.h1_commit.attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
   Commit of record) with the int8 source (`acquire.sources.int8_source.Int8Source`) at each linear H1 records, at the
   linear's Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), and the
-  embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids. `CommitTap` wraps the
+  embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids (at the model's forward
+  where vLLM gathers the embedding fused, `acquire.h1_commit.fused_embed`). `CommitTap` wraps the
   committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q (``/0``)
   and s_a (``/1``), and the ids.
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s AROW is the Commit's x_q and s_a of linear
