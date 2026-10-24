@@ -10,9 +10,10 @@ Every path git sees changed must be one of:
   the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
   line left may only rewrite a moved path as written below a directory its old and new places share
   (`verity_vllm/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.store`'s) from where a
-  renamed module was to where it is now; in a `*.py` file, also the module of an `import M` / `from M import` line (a
-  relative one, `.m`, read from the file's own place), the modules a run of import lines binds each name to
-  (`from a import m as M` to `from b import m2 as M`, a line split in two), or a `Path(__file__).parents[N]` anchor
+  renamed module was to where it is now; in any of them, the modules a run of import lines binds each name to
+  (`from a import m as M` to `from b import m2 as M`, a line split in two; in a heredoc, or in a string literal
+  `"from a import m\n"` whose quotes the move keeps); in a `*.py` file, also the module of an `import M` /
+  `from M import` line (a relative one, `.m`, read from the file's own place), or a `Path(__file__).parents[N]` anchor
   (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
   moved;
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
@@ -311,8 +312,10 @@ def import_rewrite(old: str, new: str, modules: Modules, old_path: str = "", new
                                                                       absolute(gn[i + 1], new_path))
 
 
-FROM = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+([\w\s,]+?)\s*(#.*)?$")
-IMPORT_AS = re.compile(r"^(\s*)import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*(#.*)?$")
+#: an import line, also one inside a string literal (`"from a import b\n"`), whose wrapper the move leaves as it was
+_OPEN, _CLOSE = r"""(\s*(?:[rbfu]*["'])?)""", r"""(#.*|(?:\\n)?["'][\s,)]*)?"""
+FROM = re.compile(rf"^{_OPEN}from\s+([\w.]+)\s+import\s+([\w\s,]+?)\s*{_CLOSE}$")
+IMPORT_AS = re.compile(rf"^{_OPEN}import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*{_CLOSE}$")
 
 
 def bindings(lines: list[str], path: str) -> list[tuple[str, str, str, str]] | None:
@@ -779,7 +782,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                            for z in dict.fromkeys((x, substitute(x, short))))
 
             def block(xs: list[str], ys: list[str]) -> bool:
-                return py and import_block(xs, ys, modules, old, new)
+                return import_block(xs, ys, modules, old, new)
             h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block)
             why = h and ("relative path now resolves elsewhere" if a == b else "edit beyond moved paths and module names", h)
         if why:

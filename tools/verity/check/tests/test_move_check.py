@@ -496,6 +496,20 @@ def test_moved_modules_imported_by_name_and_anchors_with_a_path_are_certified(tm
     assert r["certified"], r["refusals"]
 
 
+def test_imports_in_a_shell_heredoc_and_in_a_string_literal_are_certified(tmp_path):
+    r = _app(tmp_path, {"run.sh": "python - <<'EOF'\nfrom app import linear, store as ST\nEOF\n",
+                        "pkg/app/gen.py": 'SRC = (\n    "from app.store import remote as R\\n"\n)\n'},
+             {"run.sh": "python - <<'EOF'\nfrom app.protocols import linear\nfrom app.protocols import bandwidth as ST\nEOF\n",
+              "pkg/app/gen.py": 'SRC = (\n    "from app.protocols.bandwidth import remote as R\\n"\n)\n'})
+    assert r["certified"], r["refusals"]
+
+
+def test_an_import_in_a_string_literal_that_binds_another_name_is_refused(tmp_path):
+    [f] = _app(tmp_path, {"pkg/app/gen.py": 'SRC = (\n    "from app.store import remote as R\\n"\n)\n'},
+               {"pkg/app/gen.py": 'SRC = (\n    "from app.protocols.bandwidth import remote as S\\n"\n)\n'})["refusals"]
+    assert f["path"] == "pkg/app/gen.py" and "as S" in f["hunk"]
+
+
 def test_an_import_that_binds_another_name_is_refused(tmp_path):
     [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
                {"pkg/app/use.py": PY_NEW.replace("bandwidth as ST", "bandwidth as BW")})["refusals"]
