@@ -1934,9 +1934,12 @@ extern "C" int h1c_sizes(int* out) {
 }
 
 // a set of tables (on the device, tabs_dev) through domains, segments, leaves and every level, on `stream`; the host copy
-// (tabs) gives the grid's extents.  Tables whose leaves another set's roots write go in a later call.
-extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
-                         cudaStream_t stream) {
+// (tabs) gives the grid's extents.  Tables whose leaves another set's roots write go in a later call.  lvf = L >= 0:
+// the levels from L up in h1c_levels, one block a table (H1C_HB; a plain build has no h1c_levels and launches every
+// level), L < 0 every level its own launch.  h1c_build is the build's H1C_LVF; a set of few deep tables, whose
+// h1c_levels is a block or two on the whole GPU, takes a later L of its own here.
+extern "C" int h1c_build_lv(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
+                            int lvf_from, cudaStream_t stream) {
   if (ntab <= 0) return 0;
   long long max_segs = 0, max_width = 0;
   int max_depth = 0;
@@ -1966,7 +1969,11 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
 #else
   const int lv0 = 0;
 #endif
-  const int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
+#if H1C_HB
+  const int lvf = lvf_from < 0 ? max_depth : max(lv0, min(lvf_from, max_depth));
+#else
+  const int lvf = max_depth;
+#endif
   for (int lv = lv0; lv < lvf; ++lv) {
     const long long nodes = max_width >> (lv + 1);
     h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
@@ -1975,4 +1982,8 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
   if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
 #endif
   return (int)cudaGetLastError();
+}
+extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
+                         cudaStream_t stream) {
+  return h1c_build_lv(tabs, tabs_dev, ntab, step_dev, btab, domains, H1C_LVF, stream);
 }
