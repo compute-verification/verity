@@ -14,16 +14,97 @@ the session runs its schedules, level 0's commitments and the link, then the rep
 (`piopCut_shift`) and whose opening stops at `n` (`repCut_cutL0`). `runCut_body` can't serve: it reads the view rep's
 return, which is what this feeds.
 
+* `RankAt.ligeritoCut_grows`, `RankAt.innerCut_grows`: the cut's Ligerito opening and inner proof only add rounds, each
+  answered by its send's coin (`growS`).
+* `RankAt.repCut_roundPoints`, **`repCut_points`**: a cut rep's claim points are the zerocheck's and lincheck's
+  (`roundPoints_cut`), which later rounds only extend; from rep `q`'s first round at the opened coins, `ptsOpen`'s.
 * `getElem!_of_toList`: the stopped log's body at `|l₁| + j` is the `j`-th body sent after `l₁`.
 * `padsTreeCut_go`: a pads commitment returns, sending nothing, from every history.
 * **`runCut_cutL0`**: where the reps before `2j + r` return from their first round at the firewall's stop (with rep
   `0`'s claim points at the opened coins, `ptsOpen`) and rep `2j + r`'s PIOP returns, the cut session stopped at any
   `n` in `[ligP0, ligP0 + k₀ + 4)`, `n ≤ refK x`, sent at `n` level 0's body `n − ligP0` at the coins from `ligP0`, the
-  PIOP's target and basis `ligBasis`, any table `t`, and the pads `padsL0` of the source.
+  PIOP's target and basis `ligBasis`, any table `t`, and the pads `padsL0` of the source. **`runCut_cutL0_of_ret`** is
+  it with rep `0`'s claim points read off its return (`repCut_points`), so the earlier reps need only return.
 -/
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
+
+namespace FlockComplete.RankAt
+
+open Flock Transcript FlockComplete FlockDeploy With
+
+section Asks
+
+variable (coin : ℕ → ℕ → F128) (n L : ℕ)
+
+set_option maxHeartbeats 1000000 in
+theorem ligeritoCut_grows (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit)
+    (b : Array F128) (lay : Zk.PadLayout) (src : RepSrc) :
+    (growS coin L).R (ligeritoCut (asksCut coin n) (Hashes.ofSha512 h) ms sch T cm0 b lay src)
+      (ligeritoCut (asksCut coin n) (Hashes.ofSha512 h) ms sch T cm0 b lay src) := by
+  unfold ligeritoCut sampleVecP
+  sim_walk [liftT_grows coin L, squeezeP_grows coin n L, sampleP_grows coin n L, sampleKP_grows coin n L,
+    sendMsg_grows coin L, powP_grows coin L, challengeP_grows coin n L, oodIntroP_grows coin n L,
+    queryP_grows coin n L, commitP_grows coin L h, label_grows coin L, absorbF_grows coin L, absorbBytes_grows coin L,
+    absorbK_grows coin L, absorbSlice_grows coin L]
+
+theorem innerCut_grows (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (src : RepSrc)
+    (cons : Array (String × Zk.Lin)) :
+    (growS coin L).R (innerCut (asksCut coin n) lay ic finalC src cons)
+      (innerCut (asksCut coin n) lay ic finalC src cons) := by
+  unfold innerCut sampleVecP
+  sim_walk [sampleP_grows coin n L, squeezeP_grows coin n L, label_grows coin L, absorbF_grows coin L,
+    absorbSlice_grows coin L, absorbBytes_grows coin L]
+
+/-- **A cut rep's claim points**: where `repCut` answered by `asksCut coin n` returns from its domain's fresh
+transcript and a log `l`, its rounds' claim points are `claimPoints` at the coins from `l.size`: the zerocheck's and
+lincheck's (`roundPoints_cut`'s), which every later round only extends. -/
+theorem repCut_roundPoints (st : Setup) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog) (hfk : st.fold.kLog = st.kLog)
+    (sch : Schedule) (rep : ℕ) (dom : ByteArray) (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit)
+    (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) {l l' : Array Claims.Msg} {p : Zk.ZkProof}
+    {tr : Transcript}
+    (h : ((repCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src prior words).run
+      (Transcript.init #[] dom)).go l = (.ok (p, tr), l')) :
+    MaskRank.roundPoints st.m st.kLog tr.rounds = MaskRank.claimPoints st.m st.kLog fun j e => coin (l.size + j) e := by
+  dsimp only [repCut] at h
+  obtain ⟨⟨zp, lp, ss, T, sws⟩, t₃, l₃, hP, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  try dsimp only at h
+  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  try dsimp only at h
+  obtain ⟨tr', t₅, l₅, h₅, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  rw [Flock.Firewall.Finish.get_run_go] at h₅
+  simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
+  obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h₅
+  try dsimp only at h
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨-, rfl, rfl⟩ := Flock.Firewall.Finish.liftV_run_ok h₆
+  try dsimp only at h
+  obtain ⟨lgc, t₇, l₇, h₇, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨-, rfl, rfl⟩ := Flock.Firewall.Finish.liftV_run_ok h₇
+  try dsimp only at h
+  obtain ⟨inner, t₈, l₈, h₈, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  rw [Replay.pure_go] at h
+  simp only [Prod.mk.injEq, Except.ok.injEq] at h
+  obtain ⟨⟨-, rfl⟩, rfl⟩ := h
+  obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := piopCut_split hP
+  have hpre : Replay.Prefix t₂.rounds t₈.rounds :=
+    ((prefix_of_grows coin 0 (ringSwitchCut_grows coin n 0 _ _) h₃).trans
+      (prefix_of_grows coin 0 (ligeritoCut_grows coin n 0 _ _ _ _ _ _ _ _) h₄)).trans
+      (prefix_of_grows coin 0 (innerCut_grows coin n 0 _ _ _ _ _) h₈)
+  obtain ⟨hc2, hsz2, hr1⟩ := cut_coins coin n hm (by rw [hfk]; exact hk) rfl h₁ h₂
+  have key : ∀ j < t₂.rounds.size, ∀ e, e < t₂.rounds[j]!.n →
+      (t₈.rounds[j]!.coins).getD e 0 = coin (l.size + j) e := by
+    intro j hj e he
+    rw [prefix_get hpre hj, (hc2 j hj).2, Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range]
+    simp [he]
+  unfold MaskRank.roundPoints
+  exact ZkTables.claimPoints_congr_lt (by omega) hk (fun j hj => key j (by omega) 0 (hc2 j (by omega)).1)
+    (fun e he => key 1 (by omega) e (by omega))
+
+end Asks
+
+end FlockComplete.RankAt
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -247,6 +328,93 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     rw [hp, FlockComplete.go_bind]
     try simp only [StateT.run] at hL ⊢
     rw [hL]
+
+/-- **A cut rep of table `i` from its first round holds its claim points at the opened coins** (`ptsOpen`): where
+`repCut` answered by the opened coins returns from a log at rep `q`'s first round, its rounds' claim points are
+`ptsOpen`'s (`repCut_roundPoints`). -/
+theorem repCut_points {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) (N : ℕ) {i : ℕ}
+    (hi : i < (stsOf x).size) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm0 : FlockComplete.Commit)
+    (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) (src : FlockComplete.RepSrc)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) {q : ℕ} {l l' : Array Msg} (hl : l.size = repBase x q)
+    {p : _root_.Flock.Zk.ZkProof} {tr : _root_.Flock.Transcript}
+    (h : ((FlockComplete.repCut (FlockComplete.asksCut (ligCoin c) N) hsE (FlockDeploy.tabsOf (stsOf x))[i]! sch rep
+      dom cm0 extras ic src prior words).run (_root_.Flock.Transcript.init #[] dom)).go l = (.ok (p, tr), l')) :
+    FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[i]!.m (FlockDeploy.tabsOf (stsOf x))[i]!.kLog
+      tr.rounds = ptsOpen c (stsOf x)[i]! q := by
+  obtain ⟨hm, hk6⟩ := tab_bounds hx hi
+  have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi),
+      getElem!_pos (stsOf x) i hi]
+    simp [FlockDeploy.tabsOf]
+  rw [htab] at h ⊢
+  rw [FlockComplete.RankAt.repCut_roundPoints (ligCoin c) N (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!) hm hk6 rfl
+    _ _ _ _ _ _ _ _ _ h]
+  unfold ptsOpen
+  rw [hl]
+  try rfl
+
+/-- **The cut session in rep `2j + r`'s level 0 rounds, from the earlier reps' returns alone**: `runCut_cutL0` with
+rep `0`'s claim points at the opened coins read off its return (`repCut_points`). -/
+theorem runCut_cutL0_of_ret {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (c : Fin (refK x) → FlockDeploy.Coin) (src : ℕ → FlockComplete.TabSrc) {s0 : _}
+    {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
+    {schs : Array (_root_.Flock.Schedule × ℕ)}
+    (hs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (stsOf x)) : _root_.Flock.V _) = .ok schs)
+    {cms : Array FlockComplete.Commit}
+    (hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (stsOf x)).size).mapM fun i =>
+      FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash :
+          _root_.Flock.Hashes FlockComplete.PS)
+        (FlockDeploy.tabsOf (stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default) (src i)).go l = (.ok cms, l))
+    (j : Fin (jOf x)) (r : Fin 2)
+    (hexts : ∀ k < 2 * j.val + r.val, ∃ extras,
+      (FlockDeploy.tabsOf (stsOf x))[k / 2]!.extra (ptsE c spec) = .ok extras)
+    (hprev : ∀ k < 2 * j.val + r.val, ∀ extras,
+      (FlockDeploy.tabsOf (stsOf x))[k / 2]!.extra (ptsE c spec) = .ok extras → ∀ ic,
+      (∀ l, (FlockComplete.padsTreeCut hsE
+        (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
+          (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog schs[k / 2]!.1.k0).len +
+          _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
+        ((src (k / 2)).rep (k % 2))).go l = (.ok ic, l)) →
+      ∀ l : Array Msg, l.size = repBase x k →
+      ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (ligCoin c) (refK x)) hsE
+          (FlockDeploy.tabsOf (stsOf x))[k / 2]! schs[k / 2]!.1 (k % 2)
+          (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 cms[k / 2]! extras ic ((src (k / 2)).rep (k % 2))
+          (priorE c (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (stsOf x))[k / 2]!).run
+          (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
+          (.ok (p, tr), l') ∧ l'.size = repBase x (k + 1))
+    {extras : Array _root_.Flock.Claim}
+    (hext : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
+    {ic : FlockComplete.InnerCommit}
+    (hic : ∀ l, (FlockComplete.padsTreeCut hsE
+      (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+        (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0).len +
+        _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
+      ((src j.val).rep r.val)).go l = (.ok ic, l))
+    {l : Array Msg} (hl : l.size = repBase x (2 * j.val + r.val))
+    {res} {tr₁ : _root_.Flock.Transcript} {l₁ : Array Msg}
+    (hpiop : ((FlockComplete.piopCut (FlockComplete.asksCut (ligCoin c) (refK x))
+      (FlockDeploy.tabsOf (stsOf x))[j.val]!
+      (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+        (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)
+      ((src j.val).rep r.val) (FlockComplete.flat cms[j.val]!.cap) ic.root extras (priorE c j.val r.val)
+      (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!).run
+      (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8)).go l =
+      (.ok (res, tr₁), l₁))
+    (t : Array _root_.Flock.F128) (extra : ℕ → ℕ → _root_.Flock.F128)
+    {n : ℕ} (hn0 : ligP0 x j r ≤ n) (hn1 : n < ligP0 x j r + (zkTab x j).sch.k0 + 4) (hnN : n ≤ refK x) :
+    (runCut x c n spec src).2[n]! =
+      FlockComplete.LigLock.l0BodyAt (ligCoin c) (ligP0 x j r) tr₁.pending.data.toList res.2.2.2.1
+        (FlockComplete.flat cms[j.val]!.cap) (zkTab x j).sch t (ligBasis x c w τ j r extras) (layE x j)
+        (FlockComplete.LigLock.padsL0 (ligCoin c) (ligP0 x j r) (zkTab x j).sch t (ligBasis x c w τ j r extras)
+          (layE x j) extra r.val ((src j.val).rep r.val)) r.val extra (fun _ _ => 0) (n - ligP0 x j r) := by
+  have hj : j.val < (stsOf x).size := lt_of_jOf j
+  refine runCut_cutL0 hx w τ c src hsx hs hcms j r hexts (fun k hk extras' hxe ic' hic' l' hl' => ?_) hext hic hl
+    hpiop t extra hn0 hn1 hnN
+  obtain ⟨p, tr, l'', hrep, hsz⟩ := hprev k hk extras' hxe ic' hic' l' hl'
+  refine ⟨p, tr, l'', hrep, hsz, fun h0 => ?_⟩
+  have := r.isLt
+  exact repCut_points hx c (refK x) (i := k / 2) (by omega) _ _ _ _ _ _ _ _ _
+    (by rw [show 2 * (k / 2) = k by omega]; exact hl') hrep
 
 end Masked
 end Claims.ZKMal
