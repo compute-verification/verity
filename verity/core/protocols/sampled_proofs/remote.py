@@ -441,11 +441,11 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
 
 def main_lines(path: str | os.PathLike) -> list[str]:
     """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
-    newlines; a missing or unreadable file raises `CoinError`.  The file is the checked train heads
-    (``research queue checked-heads --out``, `merge.main_line`): the commits on main's first-parent line whose own
-    ``check`` passed and landed them, less a reverted train's.  The raw ``git rev-list --first-parent origin/main`` is
-    not equivalent, since it also lists a reverted train's commits and the in-flight commits whose check hasn't landed
-    them, none a tree main's check passed."""
+    newlines; a missing or unreadable file raises `CoinError`.  infra writes the file at each re-pin from
+    ``git rev-list --first-parent origin/main`` (vy-auditor-1 reads it from /opt/vy-verifier/main-first-parent.txt), so
+    the line is main's first-parent commits.  A deployment that wants `pouw.credit`'s freshness floor measured against the
+    checked train heads instead (the commits whose own ``check`` passed and landed them, less a reverted train's) writes
+    ``research queue checked-heads --out`` to the same file (`merge.main_line`)."""
     text = _read(Path(path), "copy of main's history")
     if text is None:
         raise CoinError(f"{Ch.NO_MAIN} (none at {path})")

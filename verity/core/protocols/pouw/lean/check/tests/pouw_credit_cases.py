@@ -79,11 +79,12 @@ malformed one, or naming no model credit pins (`MODEL_NAMES`: none, as a bare we
 checkpoint, an unpinned role), give one of two or three windows a ``b/<K>`` with one row's s_w changed (``other-sw``)
 or every code zero (``zero-codes``), each registered as the served path registers it (`registered_b`) and that window's
 open root over its own weights' root, and break the forms. The period's open records the commit it opened under
-(`credit.PERIOD_PIN_FIELD`, MAIN[-1], older than every window's) and a freshness floor (`credit.STALE_FIELD`); one
-window pinned to MAIN[4], the oldest the pins log records, is before the period's open pin when the open records main's
-head (``period-pin``) or past the floor when the open records a floor of one (``pin-floor``), each refused by
-`credit._pin_hygiene` after the per-window pin check. Every window of a period shares the weights its open signs;
-the window of another circuit registers them under its own.
+(`credit.PERIOD_PIN_FIELD`, MAIN[-1], older than every window's) and a freshness floor (`credit.STALE_FIELD`); a window
+counts only when its pin is at most the floor of first-parent commits behind that pin, counted from it and never from
+main's head (`credit._pin_hygiene`, after the per-window pin check). ``stale-pin`` records a nearer pin (MAIN[2]) and a
+floor of one and pins one window to MAIN[4], the oldest the pins log records, two first-parent commits before the open
+pin and so past the floor, refusing the period. Every window of a period shares the weights its open signs; the window of
+another circuit registers them under its own.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
@@ -1082,11 +1083,14 @@ def _evidence(d: dict) -> dict:
     return {k: d[k] for k in Cr.PROVED_KEYS}
 
 
-def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None) -> dict:
+def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None, *,
+                    period_pin: str | None = None, pin_floor: int | None = None,
+                    stale_window: int | None = None) -> dict:
     """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
     whose SHA-512 the period's open committed (one window layout's descriptor, `descriptor`), presented in its close's
     order, and a window of no period opened after the close; then mutation `name`. The period's open commits
-    `committed_too` too."""
+    `committed_too` too.  `period_pin`, `pin_floor` and `stale_window` override the period's open pin, its freshness floor
+    and which window runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3)
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng)
@@ -1142,21 +1146,25 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             for d, _s in wins:
                 if units_of(d["layout"]) >= past:
                     d["proofs"] = _window_proofs(rng, d, _served_units(d, k=past))
-    # the period's open pin (`credit.committed_pin`): MAIN[-1], older than every window's (PINS pin MAIN[4], [2], [0]),
-    # so honest sessions are at or after it; `period-pin` records main's head instead, newer than the stale window's.
-    period_pin = rc.MAIN[0] if name == "period-pin" else rc.MAIN[-1]
-    # the freshness floor (`credit.committed_floor`): 5 holds every honest session (at most 4 behind head, 5 with the
-    # branch commit prepended in `on_main`); `pin-floor` records 1, which the stale window at MAIN[4] is past.
-    pin_floor = 1 if name == "pin-floor" else 5
-    events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed,
-                                     Cr.PERIOD_PIN_FIELD: period_pin, Cr.STALE_FIELD: pin_floor,
-                                     "key_sha512": hashlib.sha512(pub).hexdigest()})]
+    # the period's open pin P (`credit.committed_pin`) and freshness floor f (`credit.committed_floor`): a window counts
+    # only if its pin is at most f first-parent commits behind P on main's line, counted from P and never from main's
+    # head.  Honest P is MAIN[-1], older than every logged session (PINS pin MAIN[4], [2], [0]), and no floor is recorded
+    # (default 0), so every honest session is at or after P; `stale-pin` records a nearer P (MAIN[2]) and floor 1 and pins
+    # one window to MAIN[4], two first-parent commits before P and so past the floor.
+    if period_pin is None:
+        period_pin = rc.MAIN[2] if name == "stale-pin" else rc.MAIN[-1]
+    if pin_floor is None and name == "stale-pin":
+        pin_floor = 1
+    open_body = {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, Cr.PERIOD_PIN_FIELD: period_pin,
+                 "key_sha512": hashlib.sha512(pub).hexdigest()}
+    if pin_floor is not None:
+        open_body[Cr.STALE_FIELD] = pin_floor
+    events = [("period-open", None, open_body)]
     pins = list(rc.PINS)
     branch = rng.randrange(n) if name == "branch-pin" else None
-    # a window pinned to MAIN[4], the oldest the pins log records: `period-pin` makes it older than the period's open
-    # pin, `pin-floor` makes it past the floor; the per-window pin check passes (it is logged and on main), the period
-    # hygiene refuses it (`credit._pin_hygiene`).
-    stale = rng.randrange(n) if name in ("period-pin", "pin-floor") else None
+    # the window pinned to MAIN[4], the oldest the pins log records: the per-window pin check passes (it is logged and on
+    # main) but the period hygiene refuses it when MAIN[4] is past P + f (`credit._pin_hygiene`).
+    stale = stale_window if stale_window is not None else (rng.randrange(n) if name == "stale-pin" else None)
     if branch is not None:
         pins.append(Ch.pin_line(rc.BRANCH, rc.MAIN[0], "2026-10-23T03:05:00Z"))
     for i, ((d, s), end) in enumerate(zip(wins, ends)):
@@ -1182,7 +1190,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin" | "no-weights" | "weights-form"
-              | "other-sw" | "zero-codes" | "period-pin" | "pin-floor"):
+              | "other-sw" | "zero-codes" | "stale-pin"):
             pass
         case _ if name in MODEL_NAMES:
             pass
@@ -1234,7 +1242,7 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
-                "zero-codes", "period-pin", "pin-floor"]
+                "zero-codes", "stale-pin"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 

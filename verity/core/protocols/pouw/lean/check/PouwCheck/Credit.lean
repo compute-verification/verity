@@ -1368,14 +1368,14 @@ private def periodBody (ledger : Json) (name : String) : Option Json :=
   | _ => none
 
 /-- `credit.committed_pin`: the commit period `name`'s open recorded it opened under (`PERIOD_PIN_FIELD`, a commit
-string), or `none` when its open records none: `periodCredit` holds every window's session to it, pinned at or after it
-on main's first-parent line. Optional. -/
+string), or `none` when its open records none: `periodCredit` holds every window's session to within the freshness floor
+of it on main's first-parent line (`pinHygiene`). Optional. -/
 def committedPin (ledger : Json) (name : String) : Option String :=
   (periodBody ledger name).bind fun b => str? (get b PERIOD_PIN_FIELD)
 
 /-- `credit.committed_floor`: the freshness floor period `name`'s open recorded (`STALE_FIELD`, a nonnegative integer),
-or `none` when its open records none: `periodCredit` counts no window whose pin is more than this many checked train
-heads behind main's head. Optional, like `committedPin`. -/
+or `none` when its open records none: `periodCredit` counts no window whose pin is more than this many first-parent
+commits behind the period's open pin (`committedPin`), default 0 when the open pins but records no floor. Optional. -/
 def committedFloor (ledger : Json) (name : String) : Option Nat :=
   (periodBody ledger name).bind fun b => nat? (get b STALE_FIELD)
 
@@ -1387,34 +1387,31 @@ def mainIndex? (main : Json) (commit : String) : Option Nat :=
   | _ => none
 
 /-- `credit._pin_hygiene`: why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line
-`main`, is too old for the period: its pin before the commit the period's open recorded (`periodPin`, `committedPin`), or
-more than `floor` checked train heads behind main's head (`committedFloor`); `none` when it is recent enough. The
-per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top (CMP74-FOLLOW). -/
+`main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
+commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
+but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
+(CMP74-FOLLOW). -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
     (floor : Option Nat) : Option (String × String) :=
-  match mainIndex? main pinned with
+  match periodPin with
   | none => none
-  | some pos =>
-    let byPeriod := periodPin.bind fun pp =>
+  | some pp =>
+    match mainIndex? main pinned with
+    | none => none
+    | some pos =>
       match mainIndex? main pp with
       | none => some ("pin", s!"period {name}'s open pins commit {pp.take 16}..., which is not on main's first-parent " ++
           s!"line in the verifier's copy ({PERIOD_PIN_FIELD}): open the period under a commit " ++
           "git rev-list --first-parent origin/main holds")
       | some base =>
-        if pos > base then
-          some ("pin", s!"window {i} of period {name} is pinned {pos - base} commit(s) before the commit its period " ++
-            s!"opened under ({pinned.take 16}... is behind {pp.take 16}... on main's first-parent line), so the " ++
-            "period earns nothing: open every window at or after its period's open pin")
+        let f := floor.getD 0
+        if pos > base + f then
+          some ("pin", s!"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
+            s!"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned.take 16}... is " ++
+            s!"that far behind {pp.take 16}... on main's first-parent line, so the period earns nothing; " ++
+            "open every window within the floor of its period's open pin")
         else none
-    let byFloor := floor.bind fun fl =>
-      if pos > fl then
-        some ("pin", s!"window {i} of period {name} is pinned {pos} commits behind main's head, past the period's " ++
-          s!"freshness floor of {fl} ({STALE_FIELD}): the pin is stale, so the period earns nothing; rerun the window " ++
-          "on a host pinned nearer main's head")
-      else none
-    match byPeriod with
-    | some why => some why
-    | none => byFloor
 
 /-- `credit.period_credit`'s credit: each window's credited calls in the close's order, the committed K, the δ the ε
 is reported at and each window's ε. -/
@@ -1432,10 +1429,11 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
 committed K (`committedK`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
-descriptor hashing to it, `SampledProofs.Challenger.creditedSession`), each window's session pinned at or after the
-commit the period's open recorded (`committedPin`) and within its freshness floor (`committedFloor`), both optional and
-refused with `pin` (`pinHygiene`), and each window is credited (`window`) drawn at K, a refused window refusing the
-period; each window's ε is what its draw of K established (`established`). -/
+descriptor hashing to it, `SampledProofs.Challenger.creditedSession`), each window's session pinned within the period's
+freshness floor (`committedFloor`, first-parent commits, default 0) of the commit the period's open recorded
+(`committedPin`), counted from that pin and never from main's head, both optional and refused with `pin` (`pinHygiene`),
+and each window is credited (`window`) drawn at K, a refused window refusing the period; each window's ε is what its draw
+of K established (`established`). -/
 def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := do
   let some ws := (match windows with
       | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none

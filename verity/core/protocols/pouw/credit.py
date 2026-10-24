@@ -192,11 +192,14 @@ PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.r
 MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "
              "pins (models.json)")
 #: the period-open's field holding the commit it opened under (40 lowercase hex on main's first-parent line): every
-#: window of the period must be pinned at or after it (`committed_pin`, CMP74-FOLLOW item 3). Optional: a period-open
-#: that records none isn't held to it
+#: window of the period must be pinned within the freshness floor (`STALE_FIELD`) of it, counted in first-parent commits
+#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`, CMP74-FOLLOW). Optional: a period-open that
+#: records none isn't held to it
 PERIOD_PIN_FIELD = "pinned"
-#: the period-open's field holding the freshness floor (a nonnegative integer): a window whose pin is more than this many
-#: checked train heads behind main's head counts nothing (`committed_floor`, CMP74-FOLLOW item 2). Optional, like the pin
+#: the period-open's field holding the freshness floor (a nonnegative integer): a window counts only when its pin is at
+#: most this many first-parent commits behind the period's open pin on main's line (`_pin_hygiene`, measured from that
+#: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
+#: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
@@ -1365,9 +1368,9 @@ def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, st
 
 def committed_pin(ledger: list, name: str) -> str | None:
     """The commit period `name`'s open recorded it opened under (`PERIOD_PIN_FIELD`, a commit string), or None when its
-    open records none: `_period_of` holds every window's session to it, pinned at or after it on main's first-parent
-    line.  Optional, so a period-open that records none keeps main's behavior of holding each window only to the pins log
-    and main (`challenger.credited_session`)."""
+    open records none: `_period_of` holds every window's session to within the freshness floor of it on main's
+    first-parent line (`_pin_hygiene`).  Optional, so a period-open that records none keeps main's behavior of holding
+    each window only to the pins log and main (`challenger.credited_session`)."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
     pin = body.get(PERIOD_PIN_FIELD)
@@ -1376,8 +1379,8 @@ def committed_pin(ledger: list, name: str) -> str | None:
 
 def committed_floor(ledger: list, name: str) -> int | None:
     """The freshness floor period `name`'s open recorded (`STALE_FIELD`, a nonnegative integer), or None when its open
-    records none: `_period_of` counts no window whose pin is more than this many checked train heads behind main's head.
-    Optional, like `committed_pin`."""
+    records none: `_period_of` counts no window whose pin is more than this many first-parent commits behind the period's
+    open pin (`committed_pin`), default 0 when the open pins but records no floor.  Optional, like `committed_pin`."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
     floor = body.get(STALE_FIELD)
@@ -1393,26 +1396,27 @@ def _main_index(main: Any, commit: Any) -> int | None:
 def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None
                  ) -> tuple[str, str] | None:
     """Why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line `main`, is too old
-    for the period: its pin before the commit the period's open recorded (`period_pin`, `committed_pin`), or more than
-    `floor` checked train heads behind main's head (`committed_floor`); None when it is recent enough.  The per-window
-    pin and circuit are `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW)."""
+    for the period: its pin more than the period's freshness floor of first-parent commits behind the commit the period's
+    open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
+    floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
+    None when it is recent enough or the open records no pin.  The per-window pin and circuit are
+    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW)."""
+    if period_pin is None:
+        return None
     pos = _main_index(main, pinned)
     if pos is None:
         return None
-    if period_pin is not None:
-        base = _main_index(main, period_pin)
-        if base is None:
-            return ("pin", f"period {name}'s open pins commit {period_pin[:16]}..., which is not on main's first-parent "
-                           f"line in the verifier's copy ({PERIOD_PIN_FIELD}): open the period under a commit "
-                           "git rev-list --first-parent origin/main holds")
-        if pos > base:
-            return ("pin", f"window {i} of period {name} is pinned {pos - base} commit(s) before the commit its period "
-                           f"opened under ({pinned[:16]}... is behind {period_pin[:16]}... on main's first-parent line), "
-                           "so the period earns nothing: open every window at or after its period's open pin")
-    if floor is not None and pos > floor:
-        return ("pin", f"window {i} of period {name} is pinned {pos} commits behind main's head, past the period's "
-                       f"freshness floor of {floor} ({STALE_FIELD}): the pin is stale, so the period earns nothing; "
-                       "rerun the window on a host pinned nearer main's head")
+    base = _main_index(main, period_pin)
+    if base is None:
+        return ("pin", f"period {name}'s open pins commit {period_pin[:16]}..., which is not on main's first-parent "
+                       f"line in the verifier's copy ({PERIOD_PIN_FIELD}): open the period under a commit "
+                       "git rev-list --first-parent origin/main holds")
+    f = floor if floor is not None else 0
+    if pos > base + f:
+        return ("pin", f"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit "
+                       f"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned[:16]}... is "
+                       f"that far behind {period_pin[:16]}... on main's first-parent line, so the period earns nothing; "
+                       "open every window within the floor of its period's open pin")
     return None
 
 
@@ -1438,10 +1442,11 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
     `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, commit, descriptor,
     entries, served, rounds, draw, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it,
-    every step of it, drawn at K over the layout of that same descriptor. Each window's session is also pinned at or
-    after the commit the period's open recorded (`committed_pin`) and within the period's freshness floor
-    (`committed_floor`), both optional and both refused with ``pin``; a refused window refuses the whole period
-    (``circuit``, ``pin`` or ``window``), so a period earns only when every window in it does."""
+    every step of it, drawn at K over the layout of that same descriptor. Each window's session is also pinned within the
+    period's freshness floor (`committed_floor`, first-parent commits, default 0) of the commit the period's open
+    recorded (`committed_pin`), counted from that pin and never from main's head, both optional and refused with ``pin``;
+    a refused window refuses the whole period (``circuit``, ``pin`` or ``window``), so a period earns only when every
+    window in it does."""
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
