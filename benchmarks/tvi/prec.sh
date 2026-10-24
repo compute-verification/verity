@@ -7,7 +7,10 @@ V=${TVI_PY:-/workspace/jobs/tvi/venv/bin/python}
 S=benchmarks/tvi
 M=${MODEL:-Qwen/Qwen2.5-0.5B-Instruct}
 STEPS=${STEPS:-150}
-LR=${LR:-5e-6}
+# 5e-6 is unstable at this batch (8 prompts x 8): bf16's training reward fell from 0.54 to 0.22 in 150 steps.
+LR=${LR:-1e-6}
+# vLLM's warmup samples top-k/top-p through flashinfer, which JIT-builds with ninja and nvcc; neither is on PATH here.
+export PATH="$(dirname "$V"):$PATH" VLLM_USE_FLASHINFER_SAMPLER=0
 CK=/workspace/jobs/tvi/ckpt/prec/$RESEARCH_RUN_ID
 EST=${EST_S:-1200}
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-} host=$(hostname) deadline=$(date -u -d @"$DEADLINE_EPOCH" +%TZ) arms=$ARMS"
