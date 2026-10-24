@@ -572,7 +572,8 @@ def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R:
     return [] if ok else [ADVISED]
 
 
-def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames, own: int = 0) -> list[tuple[list[int], list[int]]]:
+def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames,
+                 own: int = 0) -> list[tuple[list[int], list[int]]]:
     """Each window's (ingress, egress) head counts that an honest advised run of `link` (`n2_advice`) certifies under
     N2-ADVICE's rule: the egress the advice's releases, the ingress the request frames its floor needs by each bucket,
     the rest of the window's in its last bucket."""
