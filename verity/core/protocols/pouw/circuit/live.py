@@ -10,9 +10,13 @@ unit a round, proved every round (never sampled).
 
     PouwLiveSlots_v1{T}   (slot: Array<T, U32>, req: Array<T, Array<5, U32>>, m: U32) -> Value<1>
 
-T is the window's slot M (`h1window.slot`). ``slot`` is round s's slot leaves: q + 1 for a row of request q, 0
-(``EMPTY_SLOT``) past the batch. The step's rows are its requests' rows in order, row r spanning n_r slots of computed tokens
-(a cache hit is no row), so m_s = Σ_r n_r. ``req`` is the headers of the round's request table, leaf q request q in admission
+T is the tables' leaf count, the pouw setting ``rows`` (H1's T, a multiple of 32: `pouw_h1_requests.slot_table` and
+`request_table` write T leaves each), so m ≤ T. The window's slot M = `h1window.slot`, the least power of two at or above T
+(and at least R), is credit's tile grid, not the unit's: M - T slots have no leaf, and their rows are dead. ``slot`` is
+round s's slot leaves: q + 1 for a row of request q, 0 (``EMPTY_SLOT``) past the batch. The step's rows are its requests'
+rows in order, row r spanning n_r slots of computed tokens (a cache hit is no row, nor is a CUDA-graph pad row past Σ_r n_r,
+whose slot is ``EMPTY_SLOT``, so an m that counts one is refused), so m_s = Σ_r n_r. ``req`` is the headers of the round's
+request table, leaf q request q in admission
 order (index, round, slot, cap, prompt length, each a u32; ``EMPTY_REQUEST`` is all zero, and every entry has a prompt
 token). ``m``, the public row, is the step's served rows. These are the network advice's I1 request index and step rows. ok = 1
 iff all three hold:
@@ -119,7 +123,7 @@ def _refuse(b: dict) -> str | None:
 PouwLiveSlots = CompositeDefinition(
     "PouwLiveSlots", 1, ("T",), lambda S: (tuple(zip(PORTS, _types(S.T)[0])), _types(S.T)[1]),
     lambda B, S, *c: emit(traced(S.T), *_types(S.T), B, *c), conformance="protocol-defined", refuse=_refuse,
-    doc="Round s's served rows under rule A (`circuit.live`): T slot leaves (q + 1, or 0), the T headers of the requests "
-        "admitted before its root (index, round, slot, cap, prompt length) and the public m, to 1 iff m <= T, the live "
+    doc="Round s's served rows under rule A (`circuit.live`): T slot leaves (q + 1, or 0; T the tables' leaf count, the "
+        "pouw setting rows), the T headers of the requests admitted before its root (index, round, slot, cap, prompt length) and the public m, to 1 iff m <= T, the live "
         "requests (prompt length nonzero) are a prefix [0, N) each at its own index, every slot below m is in [1, N] and "
         "every slot from m on is 0.")

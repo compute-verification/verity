@@ -9,8 +9,9 @@ gate-signed request table under the window-open root. Round `s`'s request table 
 `s`'s root (round 0's under round-0-only admission): each round's session decodes its own, so a call's view is its round's
 tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
-(`verity/core/protocols/pouw/circuit/live.py`, `T` the window's slot `M`) at the public `m_s`. Its interface is
-note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
+(`verity/core/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
+`rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`. Its
+interface is note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
 
 * `liveOk`: **the unit on words** (`circuit.live.live_ok`). `m ≤ T`; the entries (prompt length ≠ 0) are a prefix, each
   at its own index; every slot below `m` names an entry (`1 ≤ slot ≤ N`, `N` the entries' count), and every slot from
@@ -27,7 +28,7 @@ note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
   tiles.
 * `population_work`, `credit_le_work`, `zero_call`, `population_admits`, `dead_not_drawn`, `live_credit`: over that
   population. Its work, `Σ_c ⌈m_c/R⌉·(n_c/C)·R·C·K_c`, is at least the credit. A call with `m = 0` has no unit and earns
-  0. Each unit holds a row that serves an admitted request, and no dead tile is a unit.
+  0. Each unit holds a row that serves an admitted request, no dead tile is a unit, and every `m_c` is at most `T`.
 
 What a decode reads from the port rows (the slot words, each header's index and prompt length, the public `m` and the
 `ok` word) is the statement's port layout, read through `dec`. That the decoded `m` is the call's public row, and the
@@ -259,40 +260,43 @@ theorem dead_not_drawn {ι : Type} (calls : Finset ι) {R C M : ℕ} (m n : ι �
   unfold Dead at hd
   omega
 
-/-- **Each unit of the population serves an admitted request**: where its call's round is accepted at the window's slot
-`M` with public row `m c`, the tile's first row is a slot that names an entry of the request table. -/
-theorem population_admits {ι σ : Type} (calls : Finset ι) (step : ι → σ) {R C M : ℕ} (m n : ι → ℕ)
-    (v : σ → LiveView) (hok : ∀ c ∈ calls, liveOk M (v (step c))) (hm : ∀ c ∈ calls, (v (step c)).m = m c)
-    {u : Σ _ : ι, ℕ × ℕ} (hu : u ∈ population calls R C M m n) : Admits M (v (step u.1)) (R * u.2.1) := by
+/-- **Each unit of the population serves an admitted request**: where its call's round is accepted at the tables' leaf
+count `T` with public row `m c`, the tile's first row is a slot that names an entry of the request table. -/
+theorem population_admits {ι σ : Type} (calls : Finset ι) (step : ι → σ) {R C M T : ℕ} (m n : ι → ℕ)
+    (v : σ → LiveView) (hok : ∀ c ∈ calls, liveOk T (v (step c))) (hm : ∀ c ∈ calls, (v (step c)).m = m c)
+    {u : Σ _ : ι, ℕ × ℕ} (hu : u ∈ population calls R C M m n) : Admits T (v (step u.1)) (R * u.2.1) := by
   simp only [population, mem_sigma, mem_product, liveBlocks, mem_filter, mem_range] at hu
   have hc := hu.1
   have hlt : R * u.2.1 < (v (step u.1)).m := by rw [hm _ hc]; exact hu.2.1.2
   exact (liveOk_admits (hok _ hc) (lt_of_lt_of_le hlt (hok _ hc).1)).2 hlt
 
-/-- **Dense credit over the live population** (`T = M`, the window's slot). Where each call's round has its
-`PouwLiveSlots_v1{M}` session accepted at the call's public row `m c`, and the draw's population `P` is the live tiles
-(a dead tile, every row at or past `m c`, never drawn): the rows rule A credits, times `n·K`, sum to
-`C = Σ_c m_c·n_c·K_c`; `C` is at most `P`'s work; every unit of `P` holds a row serving an admitted request; no dead tile
-is in `P`; and a call with `m c = 0` has no unit in `P` and earns 0. -/
-theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m : ι → ℕ) {R C M : ℕ} (hR : 0 < R)
-    (hC : 0 < C) (hRM : R ∣ M) (hCn : ∀ c ∈ calls, C ∣ n c)
+/-- **Dense credit over the live population.** `T` is the round tables' leaf count (the pouw setting `rows`), and `M`,
+at least `T`, the window's slot (`h1window.slot`), whose `M / R` row blocks are credit's tile grid. Where each call's round
+has its `PouwLiveSlots_v1{T}` session accepted at the call's public row `m c`, and the draw's population `P` is the live
+tiles (a dead tile, every row at or past `m c`, never drawn): every `m c` is at most `T`; the rows rule A credits, times
+`n·K`, sum to `C = Σ_c m_c·n_c·K_c`; `C` is at most `P`'s work; every unit of `P` holds a row serving an admitted
+request; no dead tile is in `P`; and a call with `m c = 0` has no unit in `P` and earns 0. -/
+theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m : ι → ℕ) {R C M T : ℕ} (hR : 0 < R)
+    (hC : 0 < C) (hRM : R ∣ M) (hTM : T ≤ M) (hCn : ∀ c ∈ calls, C ∣ n c)
     (sess : σ → RowsSession) (dec : RowsSession → (ℕ → ℕ → Option Bool) → LiveView)
-    (hchk : ∀ c ∈ calls, LiveSlotsChecks M (sess (step c)) dec) (vals : (s : σ) → Fin (sess s).Circ.N → Bool)
+    (hchk : ∀ c ∈ calls, LiveSlotsChecks T (sess (step c)) dec) (vals : (s : σ) → Fin (sess s).Circ.N → Bool)
     (heval : ∀ c ∈ calls, ∀ u, ∀ g ∈ (sess (step c)).P.io u, (sess (step c)).Circ.eval (vals (step c)) g = vals (step c) g)
     (hok : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).ok = true)
     (hm : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).m = m c)
     (P : Finset (Σ _ : ι, ℕ × ℕ)) (hP : P = population calls R C M m n) :
-    ∑ c ∈ calls, admitted M (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) * n c * K c =
+    (∀ c ∈ calls, m c ≤ T) ∧
+      ∑ c ∈ calls, admitted T (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))) * n c * K c =
         ∑ c ∈ calls, m c * n c * K c ∧
       ∑ c ∈ calls, m c * n c * K c ≤ ∑ u ∈ P, R * C * K u.1 ∧
-      (∀ u ∈ P, Admits M (dec (sess (step u.1)) (portRead (sess (step u.1)) (vals (step u.1)))) (R * u.2.1)) ∧
+      (∀ u ∈ P, Admits T (dec (sess (step u.1)) (portRead (sess (step u.1)) (vals (step u.1)))) (R * u.2.1)) ∧
       (∀ u : Σ _ : ι, ℕ × ℕ, Dead R (m u.1) u.2.1 → u ∉ P) ∧
       ∀ c ∈ calls, m c = 0 → (∀ u ∈ P, u.1 ≠ c) ∧ m c * n c * K c = 0 := by
   let v : σ → LiveView := fun s => dec (sess s) (portRead (sess s) (vals s))
-  have hv : ∀ c ∈ calls, liveOk M (v (step c)) := fun c hc => liveOk_of_accept (hchk c hc) _ (heval c hc) (hok c hc)
-  have hmM : ∀ c ∈ calls, m c ≤ M := fun c hc => hm c hc ▸ (hv c hc).1
+  have hv : ∀ c ∈ calls, liveOk T (v (step c)) := fun c hc => liveOk_of_accept (hchk c hc) _ (heval c hc) (hok c hc)
+  have hmT : ∀ c ∈ calls, m c ≤ T := fun c hc => hm c hc ▸ (hv c hc).1
+  have hmM : ∀ c ∈ calls, m c ≤ M := fun c hc => le_trans (hmT c hc) hTM
   subst hP
-  exact ⟨dense_credit_of_sessions calls step n K m M sess dec hchk vals heval hok hm,
+  exact ⟨hmT, dense_credit_of_sessions calls step n K m T sess dec hchk vals heval hok hm,
     credit_le_work calls m n K hR hC hRM hmM hCn,
     fun u hu => population_admits calls step m n v hv hm hu,
     fun u hd => dead_not_drawn calls m n u hd,

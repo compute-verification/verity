@@ -8,6 +8,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
+from verity.core.protocols.pouw.circuit import h1window as W
 from verity.core.protocols.pouw.circuit import live as L
 
 M32 = (1 << 32) - 1
@@ -80,7 +81,7 @@ def _round():
 @pytest.mark.parametrize("edit, want", [
     (lambda s, r, m: (s, r, m), 1),
     (lambda s, r, m: (s, r, 3), 0),                                          # slot 3 assigned, m says 3
-    (lambda s, r, m: (s, r, 5), 0),                                          # slot 4 counted but empty
+    (lambda s, r, m: (s, r, 5), 0),                                          # slot 4 counted but empty (a pad row)
     (lambda s, r, m: (s[:2] + [0] + s[3:], r, m), 0),                        # an empty slot inside [0, m)
     (lambda s, r, m: (s[:2] + [4] + s[3:], r, m), 0),                        # slot names request 3, not an entry
     (lambda s, r, m: (s[:6] + [1, 0], r, m), 0),                             # an assigned slot past m
@@ -100,6 +101,16 @@ def test_ok_iff_exactly_the_first_m_slots_name_admitted_requests(edit, want):
     assert _bits(slot, req, m) == want
     if want:
         assert L.admitted(slot, req) == m
+
+
+def test_m_reaches_the_leaf_count_not_the_window_slot():
+    """T is the tables' leaf count (the pouw setting ``rows``), below the window's slot M when it isn't a power of two: at
+    T = 96 (M = 128) every slot may be served, and an m past T is refused though it is within M."""
+    assert W.slot(96, (32, 32)) == 128
+    slot, req, _ = _valid(random.Random(96), 96, n=5, m=96)
+    assert L.live_ok(slot, req, 96) == _bits(slot, req, 96) == 1
+    for m in (97, 128):
+        assert L.live_ok(slot, req, m) == _bits(slot, req, m) == 0
 
 
 def test_ok_reads_every_slot_and_every_header_word_it_checks():
