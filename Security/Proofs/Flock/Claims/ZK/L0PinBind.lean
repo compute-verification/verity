@@ -225,7 +225,7 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
     rw [ringSwitchP_eq, cutAsks_toC]
     exact FlockComplete.bind_go_err hL
   have e2 := congrArg Array.toList (Prod.mk.inj (hro.symm.trans e)).2
-  rw [hL', hpe, empty_toList] at e2
+  rw [hL', hpe, empty_toList, hna] at e2
   simp only [Array.toList_append, List.toList_toArray, Array.toList_empty, List.nil_append, Array.size_empty,
     Nat.sub_zero] at e2
   exact e2.symm
