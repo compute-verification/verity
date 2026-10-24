@@ -189,7 +189,8 @@ class PearlCWholeArm(PearlCArm):
     capture sizes, without torch.compile, each captured with every call's graph steps inside it, each call's tile hashing
     beside the next call, its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline
     splits A's commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39,
-    r20261024-130722-5c44) and its A scales beside its A commitment (`whole_fork_stats`), so a decode step launches one
+    r20261024-130722-5c44), the GEMM leaving the tree's CTA its SM (`whole_tree_sm`), and its A scales beside its A
+    commitment (`whole_fork_stats`), so a decode step launches one
     graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each call of at most
     `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one pass per engine
     step as `PearlCArm`'s, each pass's commitment read back at the next pass's end (`lag_ends`), so the host prepares the
@@ -202,18 +203,22 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
     keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
-    and ``PEARLC_LAG_ENDS=0`` reads each pass's commitment back at its own end.
+    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, and ``PEARLC_LAG_ENDS=0`` reads each pass's
+    commitment back at its own end.
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
-    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True}
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True,
+                   "whole_tree_sm": True}
 
     def __init__(self) -> None:
         super().__init__()
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
-                            ("lag_ends", "PEARLC_LAG_ENDS")):
+                            ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
+        if "whole_defer_a" not in self.run_options:
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]

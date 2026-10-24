@@ -367,6 +367,8 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree")
     run.whole_fork_stats = True
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "stats")
+    run.whole_tree_sm = True
+    assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats")
     run.hashing = False
     assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
     run.cur, run.graphs = PPD._Pass(None), False
@@ -690,6 +692,36 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
     assert log[:5] == [*main(7, "rows_a"), *tree(7), *main(7, "stats_a", "eprime_a")]
 
 
+def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_pipelines_beside_set(monkeypatch):
+    """Under ``whole_tree_sm`` the steps a call launches between its cuts, beside its forked A tree (its forming and GEMM),
+    see the pipeline's ``beside`` at 1, so its persistent GEMMs leave the tree's CTA its SM; its A commitment before them,
+    its tile hashing after them, and every step without the option or without a forked tree see 0."""
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.whole_defer_a, run.whole_tree_sm, run.device, run._graphs = True, True, True, "cuda", {}
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
+    _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    sh, pipe, seen = SimpleNamespace(m16=32, k=8, n=16), SimpleNamespace(b={}, size={"tree_a": 64}, beside=0), []
+    names = ("rows_a", "tree_seed_a", "eprime_a", "gemm", "hash_leaf", "scatter")
+    steps = [lambda x=x: seen.append((x, pipe.beside)) for x in names]
+    run._graphs[run._graph_key(7, sh, 32)[0]] = PG._Graph(torch.zeros(1), torch.zeros(1), "graph", steps, (2, 4), 1)
+
+    def forward():
+        seen.clear()
+        run.whole_capture_begin(run.whole_key(False))
+        run._graph_call(7, sh, pipe, 1, 4, 32, 0, None)
+        run.whole_capture_end()
+        return seen
+
+    assert forward() == [("rows_a", 0), ("tree_seed_a", 0), ("eprime_a", 1), ("gemm", 1), ("hash_leaf", 0), ("scatter", 0)]
+    assert pipe.beside == 0
+    run.whole_tree_sm = False
+    assert [b for _, b in forward()] == [0] * 6
+    run.whole_tree_sm, run.whole_defer_a = True, False         # A's tree on the capturing stream: nothing beside the GEMM
+    assert [b for _, b in forward()] == [0] * 6
+
+
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
     pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x != "pad_a"])
     run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())
@@ -753,6 +785,14 @@ def test_forking_a_scales_needs_a_deferred_whole_capture():
     k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
     with pytest.raises(ValueError, match="whole_fork_stats"):
         PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_fork_stats=True)
+
+
+def test_leaving_a_tree_its_sm_needs_a_deferred_a_tree_on_a_kernel_whose_gemms_take_beside():
+    splits_a = {"tree_seed_a": ()}
+    for pipeline, defer_a in ((SimpleNamespace(FUSED=splits_a, beside=0), False), (SimpleNamespace(FUSED=splits_a), True)):
+        k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
+        with pytest.raises(ValueError, match="whole_tree_sm"):
+            PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=True, whole_defer_a=defer_a, whole_tree_sm=True)
 
 
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():

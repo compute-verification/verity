@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -632,3 +633,17 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert ev["smem"] == RUN.PD_PAIR_SMEM // 2
             else:
                 assert g[0] == tiles and ev["block"] == 32 and ev["smem"] == 0
+
+
+def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
+    """`Pipeline.beside` (a whole capture's deferred A tree: pd_tree's CTA holds its SM under PD_WHOLE) comes off a
+    persistent GEMM's grid, so no CTA waits for that launch to end; a grid the caller gives, and a GEMM of fewer tiles than
+    SMs, keep theirs."""
+    grids = []
+    dev = SimpleNamespace(sms=188, launch=lambda name, grid, *a, **k: grids.append(grid))
+    pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1}, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d")}, dev=dev, k=4096,
+                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0), m_real=16)
+    for beside, n, grid in ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None)):
+        pipe.beside = beside
+        RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
+    assert grids == [188, 187, 64, 64] and RUN.Pipeline.beside == 0

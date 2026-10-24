@@ -428,6 +428,9 @@ class Pipeline:
     #: E_A lines only with `fillers`)
     FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
              "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
+    #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
+    #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
+    beside = 0
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
@@ -677,7 +680,7 @@ class Pipeline:
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
-        self.dev.launch(name, min(tiles, grid or self.dev.sms), gemm_threads(name), self.GEMM_SMEM[name], p=ptrs,
+        self.dev.launch(name, min(tiles, grid or self.dev.sms - self.beside), gemm_threads(name), self.GEMM_SMEM[name], p=ptrs,
                         i=(M, N, self.k, RASTER))
 
     def extra(self) -> dict[str, object]:

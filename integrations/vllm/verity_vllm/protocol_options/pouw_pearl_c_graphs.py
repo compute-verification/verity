@@ -39,6 +39,9 @@ after its per-row keying onto a tree stream of the run's own, beside the call's 
 tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps, whose scatter copies
 A's root to the pass, and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a
 call of its shape joins that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persistent CTA fewer (the pipeline's ``beside``),
+since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
+computed as before, by another CTA.
 
 With ``whole_fork_stats`` too (deferring), a whole capture forks each call's A scales (``stats_a``, which reads A's words
 alone and writes its shape's alpha, beta, ia and aux) onto a stats stream before the call's A commitment, which reads and
@@ -160,6 +163,9 @@ class GraphCalls:
     #: alone) beside its A commitment, joined where the call's forming reads them; and the stats stream
     whole_fork_stats: bool = False
     _stats_stream: Any = None
+    #: with ``whole_defer_a``, whether a call's GEMMs beside its forked A tree leave the tree's CTA its SM (the pipeline's
+    #: ``beside``)
+    whole_tree_sm: bool = False
     #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
     #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
     #: `after(calls, tiles_at)` on the replaying stream (benchmarks/pouw/served_zk/statement.py's `Statement`)
@@ -213,6 +219,7 @@ class GraphCalls:
         retained = self.cur.retain is not None if retained is None else retained
         key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
         key = (*key, "a_tree") if self._defers_a() else key
+        key = (*key, "tree_sm") if self._defers_a() and self.whole_tree_sm else key
         key = (*key, "stats") if self._forks_stats() else key
         return (*key, "statement") if self._statement_on() else key
 
@@ -566,11 +573,15 @@ class GraphCalls:
                 if t is not None:
                     self._fork_tree(g.steps[t:a], raw)
                 self._join()
-                for i in range(a, b):
-                    if i == s:
-                        self._join_stats()
-                    else:
-                        g.steps[i]()
+                pipe.beside = int(t is not None and self.whole_tree_sm)
+                try:
+                    for i in range(a, b):
+                        if i == s:
+                            self._join_stats()
+                        else:
+                            g.steps[i]()
+                finally:
+                    pipe.beside = 0
                 self._fork(sh, g.steps[b:], raw)
                 if len(self._whole) == len(self.order):
                     self._join()

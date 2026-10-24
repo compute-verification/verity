@@ -299,23 +299,28 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_fork_stats: bool = False, lag_ends: bool = False):
+                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
         `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
         tree within a whole capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A
-        scales there beside its A commitment.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
-        ``step``) leaves its commitment's readback in flight (`end` with ``lag``), so the host goes on to the next step while
-        the GPU finishes this one."""
+        scales there beside its A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A
+        tree with one persistent CTA fewer, leaving the tree's CTA its SM.  `lag_ends`: an engine step's pass end
+        (`_ExecutorPass.end`, `end_pass` with ``step``) leaves its commitment's readback in flight (`end` with ``lag``), so
+        the host goes on to the next step while the GPU finishes this one."""
         if whole_defer_a and not (whole_defer and splits(kernel)):
             raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                              f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
         if whole_fork_stats and not whole_defer:
             raise ValueError(f"{entry}: whole_fork_stats forks A's scales within a deferred whole capture (whole_defer)")
+        if whole_tree_sm and not (whole_defer_a and hasattr(kernel.run.Pipeline, "beside")):
+            raise ValueError(f"{entry}: whole_tree_sm leaves a deferred A tree (whole_defer_a) its SM, on a kernel whose "
+                             f"pipeline's GEMMs take `Pipeline.beside`")
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
+        self.whole_tree_sm = whole_tree_sm
         self.lag_ends, self._lagged = lag_ends, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
@@ -373,6 +378,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                        f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
+                       + (" (the GEMM leaving the tree its SM)" if whole_tree_sm else "")
                        + (", its A scales beside its A commitment" if whole_fork_stats else "")) if self.graphs else None,
             "pass_end": "an engine step's commitment read back at the next end" if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}

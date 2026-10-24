@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -95,6 +96,20 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     assert S.WANT["form_s5_g"] == S.WANT["form_s5"]
     assert set(RUN.FORM_ALTS) == {"form_s5_scalar"}
     assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g"]
+
+
+def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
+    """`Pipeline.beside` (a whole capture's deferred A tree: pd_tree's CTA holds its SM under PD_WHOLE) comes off a
+    persistent GEMM's grid, so no CTA waits for that launch to end; a grid the caller gives, and a GEMM of fewer tiles than
+    SMs, keep theirs."""
+    grids = []
+    dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, **k: grids.append(grid))
+    pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1}, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d")}, dev=dev, k=4096,
+                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0))
+    for beside, n, grid in ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None)):
+        pipe.beside = beside
+        RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
+    assert grids == [132, 131, 64, 64] and RUN.Pipeline.beside == 0
 
 
 def test_operands_are_in_natural_order():
