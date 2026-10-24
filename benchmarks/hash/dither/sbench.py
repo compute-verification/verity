@@ -683,8 +683,10 @@ def main() -> int:
                          "(`dbw.py`: an idle session, each rep an off block and an on block, a tampered session)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
-    ap.add_argument("--bw-cover", type=float, default=2.0,
-                    help="an on block's session lasts this many times the off block before it, at the idle pass rate")
+    ap.add_argument("--bw-cover", type=float, default=4.0,
+                    help="an on block's session lasts this many times the off block before it (and 1.5 times the "
+                         "longest on block before it, the tampered one twice its dither op), at the idle session's "
+                         "stretch (`dbw.window_s`)")
     ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
     a = ap.parse_args()
     if a.bw_passes and not (os.environ.get("BW_LIB") and os.environ.get("BW_KV")):
@@ -823,12 +825,16 @@ def main() -> int:
                       flush=True)
                 side.start(0, dbw.paced(a.bw_idle_s, 1.0))
                 doc["sessions"][0] = side.end(0)
+                stretch_s, longest = dbw.window_s(doc["sessions"][0]), 0.0
                 for r in range(a.reps):
                     rr = i * a.reps + r
                     off = block(rr, "off", i)
                     doc["blocks"].append(off | {"k": None})
-                    side.start(1 + r, dbw.paced((off["hi"] - off["lo"]) / 1e9, a.bw_cover))
-                    doc["blocks"].append(block(rr, "on", i) | {"k": 1 + r})
+                    side.start(1 + r, dbw.paced(max(a.bw_cover * (off["hi"] - off["lo"]) / 1e9, 1.5 * longest), 1.0,
+                                                stretch_s))
+                    on = block(rr, "on", i)
+                    doc["blocks"].append(on | {"k": 1 + r})
+                    longest = max(longest, (on["hi"] - on["lo"]) / 1e9)
                     doc["sessions"][1 + r] = side.end(1 + r)
                     print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
                                       "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
@@ -836,7 +842,7 @@ def main() -> int:
                 est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
                           and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
                           and "spans_ns" in x)
-                side.start(k, dbw.paced(est, a.bw_cover))
+                side.start(k, dbw.paced(est, 2.0, stretch_s))
                 doc["blocks"].append(block(i * a.reps + a.reps - 1, "tamper", i, only=dither) | {"k": k})
                 doc["sessions"][k] = side.end(k)
                 doc["stopped"] = side.stop()

@@ -93,10 +93,21 @@ def plan(reps: int) -> list[str]:
     return ["honest"] * (1 + reps) + [TAMPER]
 
 
-def paced(block_s: float, cover: float) -> str:
-    """A K = 1 session whose passes outlast `cover` times a block of `block_s` seconds at the idle pass rate: W stretches
-    of T_MS (and the closing one), DRAWS openings a stretch, as the audit's 1 s sessions (`run.sh`'s, gate run 7's)."""
-    return f"1:{T_MS}:{DRAWS}:{max(1, math.ceil(cover * block_s * 1000 / T_MS) + 1)}"
+def paced(block_s: float, cover: float, stretch_s: float = T_MS / 1000) -> str:
+    """A K = 1 session whose passes outlast `cover` times a block of `block_s` seconds, a stretch taking `stretch_s`
+    (`window_s` of an earlier session; T_MS before any): W stretches of T_MS's groups (and the closing one), DRAWS
+    openings a stretch, as the audit's 1 s sessions (`run.sh`'s, gate run 7's)."""
+    return f"1:{T_MS}:{DRAWS}:{max(1, math.ceil(cover * block_s / stretch_s) + 1)}"
+
+
+def window_s(session: dict) -> float:
+    """The seconds a stretch of `session` took on the verifier's clock: its passes' span over its W stretches and the
+    closing one. A stretch's groups are counted at the calibration's bare pass, so a session's passes, slower than
+    that, take longer than T_MS a stretch, and more so beside the arms."""
+    p = session["passes_ns"]
+    if not p:
+        return T_MS / 1000
+    return (p[-1][1] - p[0][0]) / 1e9 / (session["pace"]["windows"] + 1)
 
 
 def stats(xs: list[float]) -> dict | None:
@@ -144,8 +155,23 @@ def tpot_gamma(dec: list[dict], arms: list[str]) -> dict:
 def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
     """The run's numbers beside the passes: each arm's TPOT off and on and each dither arm's γ (`tpot_gamma`), over
     every side's blocks and each side's own, each side's pass latency idle and by what ran beside it, its sessions'
-    verdicts, whether every on block lay inside its session's passes, and the memory lines."""
+    verdicts, whether every on block lay inside its session's passes, and the memory lines. An on row counts only when
+    its whole decode op lies inside its session's passes (`uncovered`, those that don't): one whose passes end in it
+    times its N1 and N2 runs under different loads, and its TPOT is noise (negative even)."""
     dec = [x for x in rows if x["op"] == "decode" and "bw" in x]
+    k_of = {(side["i"], blk["rep"], blk["phase"]): blk["k"] for side in sides for blk in side.get("blocks", ())}
+    passes = {(side["i"], k): s["passes_ns"] for side in sides for k, s in side.get("sessions", {}).items()}
+
+    def inside(x: dict) -> bool:
+        p = passes.get((x.get("side"), k_of.get((x.get("side"), x["rep"], x["bw"]))))
+        return bool(p) and "spans_ns" in x and p[0][0] <= x["spans_ns"][0] and x["spans_ns"][-1] <= p[-1][1]
+
+    timed = [x for x in dec if x["bw"] == "off" or inside(x)]
+    uncovered: dict[int, dict[str, int]] = {}
+    for x in dec:
+        if x["bw"] != "off" and not inside(x):
+            by = uncovered.setdefault(x.get("side"), {})
+            by[x["arm"]] = by.get(x["arm"], 0) + 1
     out_sides = []
     for side in sides:
         if "ready" not in side:
@@ -174,7 +200,8 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
         cal = side["ready"]["calibration"]
         out_sides.append({
             "i": side["i"], "prover_args": side["prover_args"], "gib": side["ready"]["gib"],
-            **tpot_gamma([x for x in dec if x.get("side") == side["i"]], arms),
+            **tpot_gamma([x for x in timed if x.get("side") == side["i"]], arms),
+            "uncovered": uncovered.get(side["i"], {}),
             "blocks": side["ready"]["blocks"], "allowance_ms": round(side["ready"]["allowance_ns"] / 1e6, 3),
             "calibration_pass_ms": {q: round(cal["pass_ns"][q] / 1e6, 4) for q in ("p50", "p99", "p999", "max")
                                     if q in cal.get("pass_ns", {})},
@@ -193,4 +220,4 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
             "memory": {k: {"memory": s["memory"], "paced": s["paced"]} for k, s in sorted(sessions.items())
                        if s["accepted"]},
             "stopped": side.get("stopped")})
-    return {**tpot_gamma(dec, arms), "sides": out_sides}
+    return {**tpot_gamma(timed, arms), "sides": out_sides}
