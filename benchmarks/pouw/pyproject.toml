@@ -28,11 +28,12 @@ verity-exact-kit = { workspace = true }
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own. benchmarks/pouw/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
-# so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_contents reads the README,
+# so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
+# imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
 # which holds no table (`contents.py` prints them). test_dither_zy_h1zy imports int8_exact, which imports
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
-# CUDA sources. test_dither_a_step_chunks imports dither_one (and forms.py through dither_fused) on the CPU.
+# CUDA sources.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
