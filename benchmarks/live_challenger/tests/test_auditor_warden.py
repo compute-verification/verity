@@ -123,7 +123,7 @@ def test_the_least_minutes_are_two_seconds_a_request_and_three_minutes_more_roun
 
 SALT_C = "5a" * 64
 CELL_SALTS = bytes(range(192))
-REGISTRATION = {"format": "verity-network-warden/registration/v1", "value": "warden/egress/0", "root": "ab" * 64}
+REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": "warden/egress/0", "root": "ab" * 64}
 CHECK = {"accepted": True, "problems": [], "summary": {
     "requests": 4, "ended": 4, "refused": 0, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
     "signer_refused": [], "cell_rows": {"registered": 4, "of": 4}, "cells": {"ingress": 9, "egress": 31},
@@ -133,8 +133,8 @@ CHECK = {"accepted": True, "problems": [], "summary": {
 #: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
-    f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 9600}}}}) + "\\n"'
-    f' + json.dumps({{"refused": ["warden", "ingress", 1], "cost": {{"rows": 9600}}}}) + "\\n")\n'
+    f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 600}}}}) + "\\n"'
+    f' + json.dumps({{"refused": ["warden", "ingress", 1], "cost": {{"rows": 600}}}}) + "\\n")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT_C!r}, "head": {{"root": "77" * 64}}, '
     f'"certificate": {{"digest": "cd" * 64, "signature": "ef"}}}}) + "\\n" + json.dumps({{"refused": ["warden-fails", '
     f'"egress", 1]}}) + "\\n")\n'
