@@ -36,6 +36,9 @@
 # directly; against a peeled tree that z is compared through the CPU's unpeel), and dither-1s-hbp's and -hbk's the tree
 # with the peel's too, the source's unless H1V3_PEEL_SHA names one; each from a sent h1v3-SHA.tar.gz (`git archive SHA
 # verity | gzip`; a --cwd source tree has no history), else the source's git.
+# Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
+# memory; the source's, else one sent), or unbound with DITHER_NUMA=0 or without numactl, a node or numabind.py;
+# env/numa.json, the `numa:` line and summary.json's "numa" say which.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
@@ -210,8 +213,15 @@ printf '%s\n' "$PY $SCRIPT --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
 case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${HB_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 read -r -a lease <<< "${LEASE:---max-min 14}"
+NUMA=()
+for f in "$ROOT/$DITHER/numabind.py" "$INPUTS/numabind.py"; do [ -f "$f" ] && { NUMA=("$PY" "$f" "$OUT/env/numa.json"); break; }; done
+if [ ${#NUMA[@]} = 0 ]; then
+  export DITHER_NUMA_RECORD='{"bound": false, "node": null, "reason": "no numabind.py in the source or inputs"}'
+  echo "$DITHER_NUMA_RECORD" > "$OUT/env/numa.json"
+  echo "numa: unbound (no numabind.py in the source or inputs)"
+fi
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c '
+GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
