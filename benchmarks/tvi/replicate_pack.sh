@@ -9,5 +9,5 @@ time tar -I "zstd -T0 -3" --exclude='__pycache__' --exclude='workspace/jobs/tvi/
   workspace/jobs/tvi/venv workspace/jobs/tvi/templates workspace/jobs/cache/python/cpython-3.12-linux-x86_64-gnu
 ls -l "$S/tvi-venv.tar.zst"
 sha256sum "$S/tvi-venv.tar.zst" | tee "$OUT/sha256.txt"
-time research data put --kind tvi-venv --file "$S/tvi-venv.tar.zst" --preserve --json \
+time research data put --kind tvi-venv/v1 --file "$S/tvi-venv.tar.zst" --preserve --json \
   --meta '{"what":"training-vs-inference shared venv /workspace/jobs/tvi/venv, its python and templates","unpack":"tar -I zstd -xf FILE -C /"}' | tee "$OUT/put.json"
