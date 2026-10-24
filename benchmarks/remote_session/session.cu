@@ -44,6 +44,9 @@
 #undef rb_set
 #undef rb_chain_set
 #undef rb_chain
+#include <cstdio>
+#include <cstdlib>
+#include <map>
 
 namespace rb {
 
@@ -433,6 +436,29 @@ __device__ __forceinline__ void pass_tile(const uint4 *__restrict__ data, u64 n,
   if (!lane) atomicAdd(ready + tile / tiles_per, 1u);
 }
 
+// PASS_SM=q/den in the prover's environment (a placement experiment, not the audit's): a CTA of a pass's receipt grid
+// or of one of its consumer grids that starts on an SM whose %smid % den < q (the SMs Dither's DITHER_SO_UNITS_SMQ=q/den
+// units run on) exits at entry once half its grid's share of the other SMs have started (*in counts them, the grid's
+// own, zeroed by rs_pass), and works where it is if they haven't within PASS_SM_WAIT cycles, so a pass whose other SMs
+// are full still has its CTAs. Exiting is safe: neither kernel's progress depends on a CTA being resident.
+constexpr long long PASS_SM_WAIT = 100000;
+
+__device__ __forceinline__ bool pass_sm_leave(unsigned q, unsigned den, unsigned *in) {
+  unsigned smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (smid % den >= q) {
+    atomicAdd(in, 1u);
+    return false;
+  }
+  const unsigned want = max(1u, gridDim.x * (den - q) / den / 2);
+  const long long t0 = clock64();
+  while (*(volatile unsigned *)in < want) {
+    if (clock64() - t0 > PASS_SM_WAIT) return false;
+    __nanosleep(256);
+  }
+  return true;
+}
+
 // The whole pass's receipts by a persistent grid, a warp taking the next tile of 32 blocks from ctr[0] and, once its
 // receipts are stored, counting it in ctr[1 + its consumer group], so a retained subtree can start while later
 // receipts are read, with no kernel boundary on the reads between groups. Each CTA first sets *started: from then on
@@ -440,9 +466,16 @@ __device__ __forceinline__ void pass_tile(const uint4 *__restrict__ data, u64 n,
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const uint4 *__restrict__ data, u64 n,
                                                                            u64 base, const u32 *__restrict__ pk,
                                                                            u64 *__restrict__ ys, unsigned *ctr,
-                                                                           unsigned tiles_per, unsigned *started) {
+                                                                           unsigned tiles_per, unsigned *started,
+                                                                           unsigned smq, unsigned smd, unsigned *smw) {
   __shared__ u32 sg[SK16_PACK];
   __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  if (smd) {
+    __shared__ bool leave;
+    if (!threadIdx.x) leave = pass_sm_leave(smq, smd, smw);
+    __syncthreads();
+    if (leave) return;
+  }
   if (!threadIdx.x) atomicExch(started, 1u);
   sk16_prologue(sg, pk);
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
@@ -509,10 +542,17 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
                                                                          u64 base_leaf, const u32 *__restrict__ pk,
                                                                          u64 *ys, unsigned *ctr, u64 *__restrict__ kept,
                                                                          u64 chunk, u64 ready_blocks, int h0, int hc,
-                                                                         u64 chunks) {
+                                                                         u64 chunks, unsigned smq, unsigned smd,
+                                                                         unsigned *smw) {
   extern __shared__ __align__(16) u64 scratch[];
   __shared__ unsigned claimed;
   __shared__ int chunk_last;
+  if (smd) {
+    __shared__ bool leave;
+    if (!threadIdx.x) leave = pass_sm_leave(smq, smd, smw);
+    __syncthreads();
+    if (leave) return;
+  }
   const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0, subtrees = n / (PER_LEAF << h0);
   const u64 tiles = n / 32, nl = n / PER_LEAF, base = base_leaf * PER_LEAF;
   const unsigned tiles_per = (unsigned)(ready_blocks / 32);
@@ -1177,12 +1217,30 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
   unsigned *started = ctr + 2 + ready_groups + chunks;
+  // PASS_SM=q/den (pass_sm_leave), read once; each grid's count of CTAs started on the other SMs (receipts, the side
+  // consumers, the tail consumers) in a buffer per ctr, since a segment's passes, which share its ctr, never overlap
+  static int smq = -1, smd = 0;
+  if (smq < 0) {
+    const char *e = getenv("PASS_SM");
+    unsigned a = 0, b = 0;
+    smq = 0;
+    if (e && *e && !(sscanf(e, "%u/%u", &a, &b) == 2 && 1 <= a && a <= b && b <= 64)) return 1;
+    if (e && *e) smq = (int)a, smd = (int)b;
+  }
+  unsigned *smw = nullptr;
+  if (smd) {
+    static std::map<const unsigned *, unsigned *> words;
+    unsigned *&w = words[ctr];
+    if (!w && cudaMalloc(&w, 4 * sizeof(unsigned))) return 4;
+    smw = w;
+    if (cudaMemsetAsync(smw, 0, 4 * sizeof(unsigned), sa)) return 4;
+  }
   if (cudaMemsetAsync(ctr, 0, 4 * (3 + ready_groups + chunks), sa) || cudaEventRecord(go[dev], sa) ||
       cudaStreamWaitEvent(sb, go[dev], 0))
     return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
-                                                         started);
+                                                         started, (unsigned)smq, (unsigned)smd, smw);
   if (cudaGetLastError()) return 4;
   // These nodes depend on this pass's seed, but not on its receipts: hashed at the start, under the reads.
   if (pad_n) {
@@ -1201,11 +1259,13 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   if (fused) {
     pass_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, base_leaf, pk, ys,
                                                                            ctr, kept, chunk, ready_blocks, h0, hc,
-                                                                           chunks);
+                                                                           chunks, (unsigned)smq, (unsigned)smd,
+                                                                           smw ? smw + 1 : nullptr);
     if (tail)
       pass_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>((const uint4 *)data, n, base_leaf, pk, ys,
                                                                              ctr, kept, chunk, ready_blocks, h0, hc,
-                                                                             chunks);
+                                                                             chunks, (unsigned)smq, (unsigned)smd,
+                                                                             smw ? smw + 2 : nullptr);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;
