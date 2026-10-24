@@ -1,0 +1,185 @@
+"""The recursion profile's reader (`rec_profile`) and CLI (`run.py`) on records written in 85-rec-reprice.sh's formats: the
+timed sessions' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's UPSTREAM line and Lean's VERDICT.
+No GPU, node or store: the job's own records are made here."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+import rec_profile as RP
+import run as RUN
+
+
+def timev(wall: str, rss_kb: int = 2 * 2**20, user: float = 1.5, sys_: float = 0.5) -> str:
+    return (f"\tUser time (seconds): {user}\n\tSystem time (seconds): {sys_}\n"
+            f"\tElapsed (wall clock) time (h:mm:ss or m:ss): {wall}\n\tMaximum resident set size (kbytes): {rss_kb}\n")
+
+
+def live(warm: bool, prove: float, e2e: float, buckets=None, accepted=True, proof=1000) -> str:
+    rec = {"warm": warm, "accepted": accepted, "prove_s": prove * 0.9, "prove_total_s": prove, "e2e_s": e2e,
+           "proof_bytes": [proof, proof], "wire_sent": 10, "wire_recv": 20, "k_log": 23, "dense_m": 27, "instances": 2,
+           "buckets": buckets or [{"t.zerocheck": prove * 0.1, "t.ligerito": prove * 0.3, "t.arithmetic": prove * 0.9},
+                                  {"t.zerocheck": prove * 0.1, "t.ligerito": prove * 0.3, "t.arithmetic": prove * 0.9}]}
+    return "1700000000.0\tLIVE " + json.dumps(rec) + "\n"
+
+
+def prover_dir(d: Path, proves=(2.0, 1.0, 3.0), accepted=True) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "prove.tsv").write_text(live(True, 9.0, 9.5) + "".join(live(False, p, p + 0.5, accepted=accepted) for p in proves))
+    (d / "time-prove.txt").write_text(timev("0:20.50", 3 * 2**20))
+    (d / "gpu-mib.txt").write_text("100\n4000\n2500\n")
+    (d / "serve.log").write_text("".join("SESSION\t" + json.dumps({"accepted": True, "verify_s": 0.2}) + "\n" for _ in range(4)))
+    (d / "sizes.txt").write_text("123\tinst.bin\n")
+
+
+def job(tmp: Path) -> Path:
+    """A job's out/ with every step: build once, inner and oprove (two modes) once, CPU steps twice."""
+    o = tmp / "out"
+    (o / "params.txt").parent.mkdir(parents=True)
+    (o / "params.txt").write_text("commit=abc123 K=4096 N=2 TAG=t WARM=1 RUNS=3 REPEAT=2\n")
+
+    def rep(step: str, i: int) -> Path:
+        r = o / "steps" / step / f"r{i}"
+        (r / "out").mkdir(parents=True)
+        (r / "rc").write_text("0\n")
+        (r / "time-step.txt").write_text(timev(f"1:{10 * i:02d}.00"))
+        return r / "out"
+
+    b = rep("build", 1)
+    (b / "stage").mkdir()
+    (b / "stage" / "time-stage.txt").write_text(timev("2:00.00"))
+    (b / "binary.sha256").write_text("ff  flock-circuit\n")
+    i = rep("inner", 1)
+    for sub in ("proxy", "m0", "zk"):
+        prover_dir(i / "inner" / sub)
+    p = rep("oprove", 1)
+    prover_dir(p / "oprove" / "L0-firewall", (5.0, 6.0, 7.0))
+    prover_dir(p / "oprove" / "L0-dev", (1.0, 1.0, 1.0))
+    prover_dir(p / "oprove" / "alg-p0-dev", (2.0, 2.0, 2.0), accepted=False)
+    for n in (1, 2):
+        c = rep("icheck", n)
+        (c / "icheck").mkdir()
+        (c / "icheck" / "time-replay-proxy.txt").write_text(timev(f"0:0{n}.00"))
+        (c / "icheck" / "replay-proxy.txt").write_text("UPSTREAM\t" + json.dumps({"verdict": {"accepted": True}}) + "\n")
+        (c / "icheck" / "time-vstar.txt").write_text(timev("0:03.00"))
+        v = rep("vstage", n)
+        (v / "vstage").mkdir()
+        for name in ("points", "fold", "L0", "alg"):
+            (v / "vstage" / f"time-{name}.txt").write_text(timev(f"0:1{n}.00"))
+        lr = rep("lean", n)
+        (lr / "lean").mkdir()
+        (lr / "lean" / "time-L0.txt").write_text(timev(f"1:0{n}.00", 9 * 2**20))
+        (lr / "lean" / "L0.log").write_text('VERDICT {"accepted": true, "why": "ok"}\n')
+        (lr / "lean" / "L0.err").write_text("inputs: 1000 ms\nsetup: 4000 ms\n/x/L0: 64000 ms\n")
+        (lr / "lean" / "time-alg-p0.txt").write_text(timev("0:30.00"))
+        (lr / "lean" / "alg-p0.log").write_text('VERDICT {"accepted": false, "why": "refused: the batched constraint fails"}\n')
+    return o
+
+
+def row(doc: dict, stage: str) -> dict:
+    return next(r for r in doc["rows"] if r["stage"] == stage)
+
+
+def test_wall_seconds_reads_both_forms() -> None:
+    assert RP.wall_seconds("1:02:03") == 3723.0
+    assert RP.wall_seconds("0:12.50") == 12.5
+
+
+def test_stat_is_median_and_range() -> None:
+    s = RP.Stat.of([3.0, None, 1.0, 2.0])
+    assert (s.median, s.min, s.max, s.values) == (2.0, 1.0, 3.0, (3.0, 1.0, 2.0))
+    assert RP.Stat.of([None]) is None
+
+
+def test_prover_row_counts_timed_sessions_only(tmp_path: Path) -> None:
+    doc = RP.read(job(tmp_path))
+    r = row(doc, "inner M0")
+    assert r["kind"] == "gpu" and r["wall_s"]["values"] == [2.0, 1.0, 3.0]          # the warm 9.0 s session left out
+    assert r["wall_s"]["median"] == 2.0 and r["e2e_s"]["median"] == 2.5
+    assert r["peak_rss_gb"] == 3.0 and r["gpu_peak_mib"] == 4000.0
+    assert r["proof_bytes"] == 2000 and r["ok"] is True
+    assert r["dominant"]["phase"] == "t.ligerito" and r["dominant"]["share"] == 0.6   # both reps' 0.3, aggregates excluded
+    assert r["extra"]["serve_verify_s"]["values"] == [0.2, 0.2, 0.2]
+
+
+def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
+    doc = RP.read(job(tmp_path))
+    fw = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")
+    assert fw["wall_s"]["median"] == 6.0 and fw["extra"]["statement"] == "L0"
+    alg = next(r for r in doc["rows"] if r["stage"] == "outer alg-p0")
+    assert alg["ok"] is False and alg["extra"]["mode"] == "dev"
+    s = doc["summary"]
+    assert s["outer"]["firewall"] == {"prove_s": 6.0, "e2e_s": 6.5, "proof_bytes": 2000, "statements": 1}
+    assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
+    assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
+    assert s["pipeline"]["outer prove (firewall) e2e_s"] == 6.5
+    assert "outer alg-p0" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
+
+
+def test_cpu_steps_over_their_repeats(tmp_path: Path) -> None:
+    doc = RP.read(job(tmp_path))
+    rep = row(doc, "inner replay")
+    assert rep["kind"] == "cpu" and rep["wall_s"]["values"] == [1.0, 2.0] and rep["ok"] is True
+    assert row(doc, "stage L0")["wall_s"]["values"] == [11.0, 12.0]
+    assert row(doc, "V* points")["wall_s"]["median"] == 11.5
+    lean = row(doc, "lean L0")
+    assert lean["ok"] is True and lean["peak_rss_gb"] == 9.0
+    assert lean["extra"]["setup_s"]["median"] == 4.0 and lean["extra"]["session_s"]["median"] == 60.0
+    refused = row(doc, "lean alg-p0")
+    assert refused["ok"] is False and refused["note"].startswith("refused: the batched constraint fails")
+    assert row(doc, "lean step")["wall_s"]["values"] == [70.0, 80.0]
+
+
+def test_build_is_once_and_steps_report_exit_codes(tmp_path: Path) -> None:
+    doc = RP.read(job(tmp_path))
+    b = row(doc, "build")
+    assert b["kind"] == "setup" and b["wall_s"]["values"] == [70.0] and b["extra"]["stage"]["wall_s"] == 120.0
+    assert doc["steps"]["icheck"] == ["0", "0"] and doc["params"]["K"] == "4096"
+
+
+def test_a_step_that_never_ran_is_not_a_row_and_a_failed_prover_says_so(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    (o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-dev").mkdir()
+    (o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-dev" / "prove.err").write_text("FIREWALL-REFUSED: the setup\n")
+    doc = RP.read(o)
+    assert not [r for r in doc["rows"] if r["step"] == "vcap"]
+    l1 = row(doc, "outer L1")
+    assert l1["ok"] is False and "FIREWALL-REFUSED" in l1["note"]
+
+
+def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
+    doc = RP.read(job(tmp_path))
+    md = RP.markdown(doc)
+    table = [ln for ln in md.splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
+    assert len(table) == len(doc["rows"])
+    assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "ligerito" in md
+    assert "Slowest repeated stage: lean L0" in md
+
+
+def test_result_command_writes_both_files(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    assert RUN.main(["profile", "result", "--dir", str(o), "--out", str(tmp_path / "p.json"), "--md", str(tmp_path / "t.md")]) == 0
+    doc = json.loads((tmp_path / "p.json").read_text())
+    assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion profile: K = 4096")
+
+
+def test_job_command_is_a_gpu_host_job_on_node_1(capsys) -> None:
+    assert RUN.main(["profile", "run", "--dry-run", "--N", "16", "--steps", "lean,build"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[:6] == ["research", "run", "--queue", "--on", "vy-nebius-1", "--gpu-host"]
+    assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
+    assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion/job.sh"]
+    assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
+
+
+def test_unknown_step_is_refused() -> None:
+    with pytest.raises(SystemExit, match="ostage"):
+        RUN.main(["profile", "plan", "--steps", "build,ostage"])
+
+
+def test_table_refuses_another_schema(tmp_path: Path) -> None:
+    (tmp_path / "x.json").write_text(json.dumps({"schema": "proof-throughput/v1"}))
+    with pytest.raises(SystemExit, match="not recursion-profile/v1"):
+        RUN.main(["profile", "table", str(tmp_path / "x.json")])

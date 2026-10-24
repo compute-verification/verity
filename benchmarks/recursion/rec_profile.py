@@ -54,11 +54,7 @@ class Row:
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
-        d = asdict(self)
-        for k in ("wall_s", "e2e_s"):
-            if d[k] is not None:
-                d[k]["values"] = list(d[k]["values"])
-        return d
+        return json.loads(json.dumps(asdict(self)))
 
 
 def text(p: Path) -> str:
@@ -194,8 +190,11 @@ def repeats(root: Path, step: str) -> list[Path]:
 
 
 def tool_rows(outs: list[Path], step: str, rel: dict[str, tuple[str, str]], verdict=None) -> list[Row]:
-    """One row per tool: its ``/usr/bin/time -v`` file (``rel``: name -> (path under out/, what)) over every repeat."""
-    rows = []
+    """One row per tool: its ``/usr/bin/time -v`` file (``rel``: name -> (path under out/, what)) over every repeat; none
+    for a step that never ran."""
+    rows: list[Row] = []
+    if not outs:
+        return rows
     for name, (path, what) in rel.items():
         ts = [timev(o / path) for o in outs]
         got = [t for t in ts if t]
@@ -204,7 +203,7 @@ def tool_rows(outs: list[Path], step: str, rel: dict[str, tuple[str, str]], verd
         if not got:
             r.note = "not run"
         if verdict:
-            vs = [verdict(o, name) for o in outs if (o / path).exists()]
+            vs = [v for o in outs if (o / path).exists() if (v := verdict(o, name)) is not None]
             r.ok = all(v is True for v in vs) if vs else None
         rows.append(r)
     return rows
