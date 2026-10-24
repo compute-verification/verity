@@ -624,8 +624,8 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 // stream's, the same in every row block's unit, so h1umj_sm's CTA takes its WARPS units as a tile of r live row blocks
 // by WARPS / r column blocks (r = G, else 2, else 1: the most that divides the live row blocks), the live tiles first,
 // and a column block's r warps share its blocks: each hashes 32 / r of its columns for r blocks a pass (sets of r
-// blocks, one set ahead, double-buffered in the CTA's shared memory) and they meet once a set. At r = 1 (decode's one
-// live row block) h1umj_sm runs h1umj_one's units unchanged; the same blocks and receipts
+// blocks, one set ahead, double-buffered in the CTA's shared memory) and they meet once a set. r = 1 is the units in
+// their own order, each warp hashing its own blocks; the same blocks and receipts
 #ifndef H1U_JCS
 #define H1U_JCS 0
 #endif
@@ -2872,14 +2872,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
   if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
 #if H1U_JCS
-  // r = 1: h1umj_one's units as they are, on WarpSmem; r > 1: h1umj_cs's on WarpSmemJC and the groups' buffers
-  __shared__ union {
-    WarpSmem one[WARPS];
-    struct {
-      WarpSmemJC w[WARPS];
-      u32 b[2 * WARPS][32][17];
-    } cs;
-  } smu;
+  __shared__ WarpSmemJC smem[WARPS];
+  __shared__ u32 jcb[2 * WARPS][32][17];
   __shared__ u32 claim;
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0, nrb = M / 32;
   // r: H1U_JCS live row blocks a tile, else 2, else 1, the most that divides them; more than 1 only where every call's
@@ -2901,8 +2895,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
     const u32 g0 = claim, gu = g0 + wp;
     if (g0 >= total) break;
     if (gu >= total) continue;
-    if (lr) h1umj_cs(calls, ncalls, M, live, gu, nl, lr, smu.cs.w[wp], smu.cs.b);
-    else h1umj_one(calls, ncalls, M, live, gu, smu.one[wp]);
+    h1umj_cs(calls, ncalls, M, live, gu, nl, lr, smem[wp], jcb);
     __syncwarp();
   }
 #else
