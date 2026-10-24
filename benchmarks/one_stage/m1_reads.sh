@@ -21,7 +21,7 @@ m1() {   # m1 TAG ARGS...: one m1_unit run, its records in $OUT/TAG (never the c
   local tag=$1; shift
   mkdir -p "$OUT/$tag"
   log "m1 $tag: $*"
-  ( ulimit -v $(( STAGE_GB * 1024 * 1024 )); "$PY" benchmarks/one_stage/m1_unit.py --out "$W/$tag" "$@" ) > "$OUT/$tag/m1.log" 2>&1
+  ( ulimit -v $(( STAGE_GB * 1024 * 1024 )); "$PY" "${RS_M1:-benchmarks/one_stage/m1_unit.py}" --out "$W/$tag" "$@" ) > "$OUT/$tag/m1.log" 2>&1
   local r=$?
   grep '^M1U ' "$OUT/$tag/m1.log" | cut -c1-2000 | tee -a "$OUT/job.log"
   [ $r = 0 ] || { log "m1 $tag: rc $r"; tail -30 "$OUT/$tag/m1.log" | tee -a "$OUT/job.log"; rc=1; }
