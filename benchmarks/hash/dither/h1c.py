@@ -54,7 +54,8 @@ class _Tab(C.Structure):
     _fields_ = [("data", C.c_void_p), ("tail", C.c_void_p), ("stride", C.c_longlong), ("tail_stride", C.c_longlong),
                 ("lab", C.c_void_p * 2), ("lab_len", C.c_int * 2), ("labs", C.c_int), ("len", C.c_int), ("body", C.c_int),
                 ("count", C.c_int), ("depth", C.c_int), ("dm", _Dom), ("dom", C.c_void_p), ("level", C.c_void_p),
-                ("segs", C.c_void_p), ("root", C.c_void_p), ("xd", C.c_void_p), ("rlive", C.c_void_p), ("rbw", C.c_int)]
+                ("segs", C.c_void_p), ("root", C.c_void_p), ("xd", C.c_void_p), ("rlive", C.c_void_p), ("rbw", C.c_int),
+                ("tdiv", C.c_int)]
 
 
 def words(b: bytes) -> np.ndarray:
@@ -113,8 +114,9 @@ class Tab:
     stride: int = 0
     body: int = 0
     length: int = 0
-    tail: torch.Tensor | None = None     # then length - body bytes at tail + i tail_stride
+    tail: torch.Tensor | None = None     # then length - body bytes at tail + (i // chunks) tail_stride
     tail_stride: int = 0
+    chunks: int = 1                      # rows a tail: a K row's n chunk leaves (`weights.chunks`) share its scale
     lab: tuple = ("", "")                 # lab[0] + str(s) + lab[1], or lab[0] alone (labs False)
     labs: bool = True
     out: int | None = None               # where the root goes (a device address), else the set's own
@@ -185,6 +187,9 @@ class Set:
             x.data = t.data.data_ptr() if t.data is not None else None
             x.tail = t.tail.data_ptr() if t.tail is not None else None
             x.stride, x.tail_stride = t.stride, t.tail_stride
+            if t.chunks < 1 or t.count % t.chunks:
+                raise ValueError(f"table {i}: {t.count} rows are no whole number of {t.chunks}-leaf rows")
+            x.tdiv = t.chunks
             for j in range(2):
                 x.lab[j], x.lab_len[j] = base + offs[t.lab[j].encode()], len(t.lab[j].encode())
             x.labs = int(t.labs)
