@@ -241,20 +241,26 @@ vocabulary's 136M to V = 154880. The sampler call stays one unit, not provable i
 | Build of record | r20261024-130454-422b at 0b241a11a1 (`vllm.build` r20261024-130513-3a11) | vy-glm53-cpu-2 | FAIL rc 10 at 14:08Z: all 72 derives passed (rank 0's step 0801afbcf2b8b218), then the manifest's word check refused the sampler as too-large |
 | Build of record, resumed | r20261024-145656-e91b at 0b241a11a1, `RESUME=1` (derives and composed workloads kept) with the allowance above | vy-glm53-cpu-2 | PASS at 15:33Z: `vllm.build` r20261024-145707-7573 (art:f187eb912167ba6625f542ddb47531b88a47bf8f01035cfdb16c2f47c6c6576e), manifest digest 6e1d2cfd…, complete; the allowance is a `qword.allowance` label on both runs and the art |
 | Match GPU legs | r20261024-131914-76bd at 0b241a11a1 | vy-glm53-h200-1 | FAIL at 13:52Z, both legs at engine warm-up (the DeepGEMM JIT under nvcc 12.4); no capture, no coins; its row dir moved aside to `<row>.legs-cuda124-r20261024-131914-76bd` |
-| Match GPU legs | r20261024-150302-044c at 0b241a11a1, after the toolkit and a tap rebuild with it | vy-glm53-h200-1 | |
+| Match GPU legs | r20261024-150302-044c at 0b241a11a1, after the toolkit and a tap rebuild with it | vy-glm53-h200-1 | PASS at 16:06Z: both legs rc 0 (capture 15:54Z, control 16:02Z), `vllm.match` r20261024-152827-6a6c (art:487919e1c2f643b1b31cca9a8d41c9fc81a58442b81c53ba37f99f9de5d22476); 341 GB, 1,192,898 files in `match.sha256`; nvcc 12.9.86 in `nvcc.txt` and `device_facts.txt` |
 | the Build into the store | r20261024-154123-3460 (`store_tar.sh put`, NAME=build) | vy-glm53-cpu-2 | PASS at 15:50Z: 774 files, 2 parts, 25.3 GiB, parts art:8e0b581e8faaccff2984b17f2dad07f5f44a989c5ecf077f1403b0e490d210b1, every file checked against e91b's `rowdir.sha256` |
-| the legs into the store | r20261024-154133-f0d3 (waits for 044c; `legs-small`, the files but the tensors, then `legs-full`) | vy-glm53-h200-1 | |
+| the legs into the store | r20261024-154133-f0d3 (waits for 044c; `legs-small`, the files but the tensors, then `legs-full`) | vy-glm53-h200-1 | `legs-small` PASS at 16:29Z: 504 files, 3 parts, 47.7 GiB, parts art:ef44b8efa767c42098418d6a17f254ecc1123916b67d78c92ce437aab72e723a; then cancelled at 16:30Z: one stream from the pod to the store ran at 22-80 MB/s, so `legs-full` (341 GB again) would have landed after the pod's balance |
+| the tensors into the store | r20261024-162504-a5e2 (`values-r0` .. `values-r7`, each rank's `capture/rank<r>/values`, four `store_tar.sh put`s at once) | vy-glm53-h200-1 | four streams 170-290 MB/s; r0-r3 PASS at 16:55Z (36.6 GiB each), r4-r7 running. With `legs-small` these are the whole legs |
 | Match CPU phase, rank 4 | r20261024-154212-ddfc (`match_rank.sh`, the Build in place) | vy-glm53-cpu-2 (450 GB) | |
 | Match CPU phase, rank 5 | r20261024-154712-05a2 (`match_rank.sh`; attempt 2's row dir moved aside) | vy-nebius-cpu-3 (400 GB) | |
 | Match CPU phase, rank 6 | r20261024-154534-a841 (`match_rank.sh`) | vy-nebius-cpu-4 (380 GB, infra 15:25Z) | |
-| Match CPU phase, rank 7 | r20261024-154554-7297 (`match_rank.sh`) | vy-nebius-cpu-5 (380 GB, infra 15:25Z) | |
-| ranks 0-3, the full Match, the Commit | r20261024-154813-da02 (`pod_chain.sh`: waits for 044c, ranks 0-3 in `rows-side` three GM-01 at once, ranks 4-7's documents from the store, `MATCH_REUSE=legs`, then `commit.sh`) | vy-glm53-h200-1 (1300 GB) | |
+| Match CPU phase, rank 7 | r20261024-154554-7297 (`match_rank.sh`) | vy-nebius-cpu-5 (380 GB, infra 15:25Z) | cancelled at 16:46Z, no label: its first Build part's fetch read at 13-170 KB/s for 55 min over three connections (R2 sending slowly: rcv_rtt 475 ms against rtt 2 ms), while fresh processes on the node fetched it at 45-70 MB/s |
+| Match CPU phase, rank 7 | r20261024-164708-d47e at 59249bbd54 (`LABEL_ALSO=r20261024-154554-7297`, which `da02`'s `RANK_SETS` names; `store_tar.sh get` refetches a part slower than 16 MB/s) | vy-nebius-cpu-5 (380 GB) | its parts prefetched into the node's store by r20261024-165043-9579 at 40-60 MB/s, after the same slow read on its second Build part |
+| ranks 0-3, the full Match, the Commit | r20261024-154813-da02 (`pod_chain.sh`: waits for 044c, ranks 0-3 in `rows-side` three GM-01 at once, ranks 4-7's documents from the store, `MATCH_REUSE=legs`, then `commit.sh`) | vy-glm53-h200-1 (1300 GB) | the Build in the row dir at 16:20Z; ranks 0-3's folds from about 16:27Z |
+| the pod's store copies | r20261024-165801-02e5 (after a5e2, `research data evict --target-free-gb 700`: every part above is preserved) | vy-glm53-h200-1 | |
 
 The CPU phase is split over five nodes (circuits, 14:46Z and 15:10Z; vy-glm53-cpu-3 couldn't be created, so infra offered
 vy-nebius-cpu-4 and -5 at 15:25Z), carried through the store rather than through an agent's VM: each node's inputs and outputs
 are `store_tar.sh` sets, and each consumer waits for its producer's `store_tar.parts.<set>` label. A failed rank labels its set
 failed, and the chain stops there with no Commit. Seven GM-01 legs run at once (the pod three, each other node one), so ranks
-0-3 on the pod set the length: a fold 2.1 h, then two rounds of GM-01 at 1.6 h.
+0-3 on the pod set the length: a fold 2.1 h, then two rounds of GM-01 at 1.6 h. Off the pod, the Commit's inputs are the sets
+`build`, `legs-small` and `values-r0` .. `values-r7` (their `get`s into one sweep give back the row dir and the legs file for
+file), the ranks' sets, and ranks 0-3's finished folds (`side-folds`, r20261024-155616-f1a4 at 19:10Z). One `put` stream from
+the pod to the store ran at 22-80 MB/s and four at once at 170-290 MB/s, so a large set goes in as several sets put together.
 
 DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
 rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside B8
