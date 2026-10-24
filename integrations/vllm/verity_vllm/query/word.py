@@ -39,7 +39,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
 from array import array
 from collections import Counter
 from pathlib import Path
@@ -387,7 +386,7 @@ def _code_version() -> str:
         import verity.ml.circuits
         from verity_vllm.query import call_scope, cross_call
         h = hashlib.sha256()
-        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), *(Path(m.__file__) for m in (sys.modules[__name__], cross_call, call_scope))]:
+        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), Path(__file__), *(Path(m.__file__) for m in (cross_call, call_scope))]:
             h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
         _CODE.append(h.hexdigest())
     return _CODE[0]
