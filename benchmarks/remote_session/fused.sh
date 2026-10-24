@@ -85,7 +85,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
         --mode serve --serve-dir "$B/serve-$CFG" > "$D/serve.log" 2>&1 & S=$!
       env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ${PP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$PP} "${PPIN[@]}" \
         "$PY" $RS/fused_beside.py --dir "$B/serve-$CFG" --lib "$B/session.so" --kv "$B/kv.so" --out "$D" --wait-s 300 \
-        ${PHASES:+--phases "$PHASES"} ${REF:+--reference "$REF"} > "$D/beside.log" 2>&1; RC=$?
+        ${PHASES:+--phases "$PHASES"} ${REF:+--reference "$REF"} --engine-pid $S > "$D/beside.log" 2>&1; RC=$?
       tail -3 "$D/beside.log"
       [ $RC = 0 ] && REF=$D/beside.json || { kill $S 2> /dev/null; R=$RC; }
       wait $S

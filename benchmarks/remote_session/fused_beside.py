@@ -105,6 +105,14 @@ def verify(s, roots: list[bytes], kept: dict, rng, openings: int) -> dict:
     return out
 
 
+def alive(pid: int) -> bool:
+    """Whether `pid` runs: an exited child its parent hasn't reaped yet is a zombie, state Z."""
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (FileNotFoundError, IndexError):
+        return False
+
+
 def host_state(ours: set[int]) -> dict:
     """The host's load and the compute processes on this lease's GPU other than `ours` and an MPS server, which would
     share it with the phase."""
@@ -134,6 +142,7 @@ def main() -> int:
     ap.add_argument("--settle-s", type=float, default=3.0)
     ap.add_argument("--warm-s", type=float, default=10.0)
     ap.add_argument("--wait-s", type=float, default=900.0)
+    ap.add_argument("--engine-pid", type=int, help="the stand-in's pid: stop waiting for its arena once it has exited")
     a = ap.parse_args()
     import torch
 
@@ -160,6 +169,8 @@ def main() -> int:
     while not (d / "engine.json").exists():
         if time.monotonic() - t0 > a.wait_s:
             raise TimeoutError("no engine.json from the engine stand-in")
+        if a.engine_pid is not None and not alive(a.engine_pid):
+            raise RuntimeError(f"the engine stand-in (pid {a.engine_pid}) exited before exporting its arena")
         time.sleep(0.5)
     export = json.loads((d / "engine.json").read_text())
     ours = {os.getpid(), export.get("pid", -1)}
