@@ -459,32 +459,127 @@ zero knowledge what `check/commit_tokens.py` does in the clear; the tie reads th
 - **At B = 4,096** the window is 1.123 × 10^10 and 1.923 × 10^12, with 16 times the bytes to hash.
 - **A row a cell** (and 8 slots a table row), the first layout: 5.219 × 10^9 and 7.739 × 10^11, 6.3 and 5.8 times
   this one.
-- **The K-draw tie** (K = 20 a window, B = 4,096, sampled, an ε at δ): 1.055 × 10^8 and 1.531 × 10^8 a window. The
-  All tie costs 7.8 and 873 times as much, and has no ε.
-- **A served link-day** (1,440 windows) is 1.925 × 10^14: against N2's 9.30 × 10^9, N3's design at 4.9 to 9.2 ×
-  10^14 and the K-draw tie's 2.2 × 10^11.
+- **A served link-day** (1,440 windows) is 1.925 × 10^14: against N2's 9.30 × 10^9 and N3's design at 4.9 to 9.2 ×
+  10^14.
+- **Every part scales with the capacity** N = T·R, not with what is served: a served window's 35,386 tokens (REDTEAM's
+  figure) fill 3.5% of N, and the pads are hashed, routed and matched as data cells are.
 
 **Prove seconds and proof bytes, extrapolated, not measured.** N2-ZK's unit was measured (`r20261024-044047-69ad`,
 `r20261024-050601-9e82`): `NetworkHeadCheckRows{6, 60, 1}` at k_log 23, 1,726,108 ANDs, `prove --zk` in 5.40 to 5.63
-s on 23 cores, a 153 KB proof, Lean verify in 4.68 to 4.8 s. Taken linearly in ANDs:
+s on 23 cores, a 153 KB proof, Lean verify in 4.68 to 4.8 s. Taken linearly in ANDs, with a machine being one such
+23-core prover, and the machines a link needs being the prove time over the window's span (6 s at the rehearsal, 60 s
+served):
 
-| | ANDs | N2-sized units | Prove, 23 cores | Proof | Lean verify |
-|---|---|---|---|---|---|
-| Rehearsal window, All | 8.26 × 10^8 | 479 | 43 to 45 min | 73 MB | 37 to 38 min |
-| Served window, All | 1.337 × 10^11 | 77,448 | 4.8 to 5.0 days | 11.8 GB | 4.2 to 4.3 days |
-| Rehearsal window, K = 20 (comparison) | 1.06 × 10^8 | 62 | 5.6 to 5.8 min | 9.5 MB | 4.8 to 5.0 min |
-| Served window, K = 20 (comparison) | 1.53 × 10^8 | 89 | 8.0 to 8.4 min | 13.6 MB | 7.0 to 7.1 min |
+| A window | ANDs | N2-sized units | Prove, 23 cores | Machines a link | Proof | Lean verify |
+|---|---|---|---|---|---|---|
+| Rehearsal, B = 256 (as built) | 8.26 × 10^8 | 478 | 43 to 45 min | 430 to 450 | 73 MB | 37 to 38 min |
+| Served, B = 256 (as built) | 1.337 × 10^11 | 77,447 | 4.8 to 5.0 days | 6,970 to 7,270 | 11.8 GB | 4.2 to 4.3 days |
+| Served, compact B = 16 | 2.03 × 10^10 | 11,751 | 17.6 to 18.4 h | 1,060 to 1,100 | 1.8 GB | 15.3 to 15.7 h |
+| Served, compact B = 8 | 1.65 × 10^10 | 9,561 | 14.3 to 15.0 h | 860 to 900 | 1.5 GB | 12.4 to 12.7 h |
 
-A served window is 60 s of traffic, so one link's tie at this rate needs about 7,000 such 23-core slots to keep up,
-and a rehearsal window (6 s) about 440. The proof bytes are an upper bound if one statement's proof grows slower than
-its ANDs. Before any prove at these sizes, `lms`'s `Sha512Compress` needs a `build` (N2-ZK's caveat: C-Flock lowers
-it gate by gate, and it is most of this unit).
+The proof bytes are an upper bound if one statement's proof grows slower than its ANDs. Before any prove at these
+sizes, `lms`'s `Sha512Compress` needs a `build` (N2-ZK's caveat: C-Flock lowers it gate by gate, and it is most of
+this unit).
 
-**A cheaper tie, for the lead.** The warden is the auditor's device and sees every cell. It could refuse a cell that
-is neither a pad nor one id's event (a fault, W6), and commit (stream, id) for each data cell instead of its 256 bytes.
-That leaves 8 bytes a cell to hash, and the served window drops to about 1.6 × 10^10, an eighth, with the table's
-rows then the largest part. But it moves the cell's parse into the trusted warden's code, which changes what a
-guarantee rests on, so it is Daniel's call.
+**Two ties, and the bound each gives.** The protocol can run the tie on every cell or on K draws a window, with live
+coins. In both, the head's counts are N2's and the release buckets advice v0's. What changes is the term the tie adds
+to the bound: a cell the tie never checks carries whatever the server wrote in it.
+
+| Tie | ANDs a window | Its term in the bound, at δ |
+|---|---|---|
+| **All**: every cell, as built | 1.337 × 10^11 served, 8.26 × 10^8 at the rehearsal | none: every cell is checked, so the bound has no content term from the tie |
+| **K-draw**: K data cells a window | K × 2.05 × 10^8 served at B = 256 with a row a bucket, plus the table's form (below) | ε·n·b: ε·n unchecked cells of b free bits each |
+
+- **ε·n.** A window whose wrong data cells are a fraction f_w of its n_w escapes K draws with probability (1 −
+  f_w)^K. So on a link whose windows are all accepted, Σ_w f_w ≤ ln(1/δ)/K at δ over all of them, and ε·n = ln(1/δ)·
+  n_w/K, n_w being the most data cells a window holds. It doesn't grow with the number of windows: REDTEAM's link-day
+  (W = 1,440, ε = ln(1/δ)/(K·W)) is one case of it. If a window can be full to capacity (n_w = N), the bound is 28.6
+  times the one at the served average.
+- **b.** It is log2|V| = 17.21 bits (V = 151,329) only when every other byte of every cell is fixed and the id is
+  below V. On the current framing that needs every cell's form checked, which hashes every byte: the cells' rows and
+  their parse, 1.214 × 10^11 a served window, 91% of the All tie, with an id < V compare that `IoTieCell` doesn't make
+  (it checks below 2^32). N3's design checks every frame's form too, at more than the All tie costs. Without that check,
+  an unchecked cell carries what the server wrote in it, up to B − 9 = 247 bytes at B = 256 (b = 1,976). With the
+  compact framing below, the warden's fixed cut leaves only the id's bytes to the server, so b = 32 with no check (24
+  with 3-byte ids). log2|V| then still needs id < V checked on every cell, and so every cell opened.
+
+  At δ = 2^−40 and n_w = 35,386 (REDTEAM's served average), restated at three values of K:
+
+  | K | ε at W = 1,440 | ε·n, cells | b = log2\|V\| | b = 32 | b = 1,976 |
+  |---|---|---|---|---|---|
+  | 20 | 0.0963% | 49,055 | 844 kbit | 1.57 Mbit | 96.9 Mbit |
+  | 100 | 0.0193% | 9,811 | 169 kbit | 314 kbit | 19.4 Mbit |
+  | 1,000 | 0.00193% | 981 | 16.9 kbit | 31.4 kbit | 1.94 Mbit |
+- **A draw's price** depends on the warden's rows. A draw opens its cell's row and the table slot that cell names.
+  With a row a bucket at B = 256, it hashes the bucket's 431,616 bytes: 2.05 × 10^8 a draw, 4.1 × 10^9 a window at K
+  = 20. Other row sizes, with what each costs the All tie's cells against bucket rows' 1.177 × 10^11:
+  - a row a cell: 8.2 × 10^6 a draw, 6.88 × 10^11 for the cells;
+  - 4 KiB rows of 16 cells: 9.2 × 10^6 a draw, 1.528 × 10^11 (30% more);
+  - 64 KiB rows: 3.7 × 10^7 a draw, 1.195 × 10^11 (1.5% more).
+
+  At compact B = 16, a bucket row is 26,976 bytes, and a draw costs 1.87 × 10^7 (3.7 × 10^8 at K = 20).
+- **What else a K-draw tie needs.**
+  - Under variable lengths, a drawn cell's index j in its stream isn't a function of its place. The All tie's match
+    finds it over every cell; a K-draw tie needs the warden's header to carry a per-stream sequence number, which is
+    warden framing as the stream is.
+  - Draws from the table's side too, so that a dropped output is caught as a wrong cell is.
+  - The table's form (sorted, each request's j consecutive, which the match checks over every slot) is then the port
+    binding's, or else an All pass over the table: about 10^10 a served window, its rows alone 9.86 × 10^9.
+  - A draw picks among the window's data cells, whose count is private, so the proof reduces the coins.
+
+So at B = 256, a K-draw tie whose term is ε·n·log2|V| costs nearly what the All tie does. A term near that at a
+K-draw tie's price needs the compact framing. There it is ε·n·32 bits (24 with 3-byte ids), 1.57 Mbit at K = 20, for
+K × 1.87 × 10^7 and the table's form. With the compact framing, the All tie, which has no term, costs 2.03 × 10^10 a
+served window.
+
+**The compact-framing lever.** 88% of the All tie is SHA-512 over the cells' bytes, and the 138-byte event is what
+fills a cell. The registered compiler (vllm's NET-61 default) could fix the server's response framing as one binary
+record a token: the id as u32be, with a client-side shim rendering OpenAI SSE from the records with the public
+tokenizer. The warden would then cut the server's bytes every 4 instead of at `\n\n`, a byte rule that still parses
+nothing. It would frame each record as now: its 9-byte header, the 4 bytes and 3 zero bytes, so B = 16. The stream
+stays in the warden's header, so the record carries none. A 5-byte header (a 24-bit stream and a 1-byte length) and
+3-byte ids (V < 2^24) make B = 8. The served window, by part, at B = 16:
+- the cells' rows, 7.75 × 10^9 (38%);
+- the table's rows, 9.86 × 10^9 (49%);
+- routing, 1.94 × 10^9; the match, 4.4 × 10^8;
+- the parse, 2.6 × 10^8, estimated at 256 ANDs a cell (no compact cell is built).
+
+The table is then the largest part, and its rows and 16-byte slots are the next levers: 64 KiB table rows take the
+served window to 1.82 × 10^10 at B = 16 (950 to 990 machines a link) and 1.44 × 10^10 at B = 8 (750 to 780). The
+rehearsal window drops from 8.26 × 10^8 to 1.66 × 10^8 at B = 16 (87 to 90 machines). `io_tie` takes B > 147 today,
+and the compact cell (`IoTieCell` over a binary record) isn't built.
+
+**The warden's rows, exactly.** The warden registers its cells as the following root a link-window, and the tie
+recomputes it. The reference is `io_tie.data_cell`, `pad_cell`, `bucket_rows`, `domain` and `rows_root`.
+- **A cell** is B bytes (B = 256; `io_tie` takes B > 147).
+  - A pad is B zero bytes: `HEADER` (`>BII`) of kind `PAD` = 0, stream 0 and length 0, then zero fill.
+  - A data cell is `HEADER` with kind `DATA` = 1, the stream as u32be and the payload's length, 138, as u32be. The
+    payload follows, `id_event(id)`: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal characters (`%10d`), then
+    `,"finish_reason":null}]}\n\n`. Zero fill runs to B.
+  - The server writes the payload; the warden writes the header and the fill.
+- **The stream** is q, the request's ingress ordinal on the link counted from 0 over the session: the index of the
+  request in advice v0's `requests` and of its slots in the table. `active.Requests` numbers its streams from 1, so
+  its stream is q + 1.
+- **A bucket's order:** its data cells first, sorted by stream, each stream's cells in their order; then pads to R
+  cells.
+- **Row t,** for t in 0 … T − 1, is bucket t's R cells concatenated: R·B bytes, 25,088 at the rehearsal (R = 98) and
+  431,616 served (R = 1,686). These rows aren't 4 KiB: the 4 KiB row (256 slots of 16 bytes) is the prover's table's.
+- **Its leaf value** is `head_check.hiding_value(row, salt)`, the `hm96-sha512/row/v2` leaf: hm96's (`hm96.SHA512`,
+  its default key) tree leaf over `commit_string(key, sha512_row_v2_digest(row, 8·R·B), salt)`. The salt is fresh for
+  each row: 192 bytes of the warden's own randomness.
+- **The tree** is the dense `frame-v3-sha512` domain of T rows, `io_tie.domain(binding, T)`, which is
+  `CommitmentDomain(binding, -1, RangeIndexedDomain(0, T), hash="sha512")`. The binding is a 64-byte digest naming the
+  link, the window and the cells, which the warden's registration fixes; the tie reads the domain id as public. Under
+  that domain:
+  - leaf t is `leaf_ref(domain_id, "hm96-sha512/row/v2", value_t, t)`;
+  - the pads are `_hash(b"pad", domain_id, uint(t))` for t in T … 2^⌈log2 T⌉ − 1;
+  - each node is `node_ref(domain_id, level, index, left, right)`.
+
+  This equals `tree_levels` over the domain's `row_leaf`s.
+- **Registered:** the root and the domain id, with the window w; bucket t is session bucket w·T + t. The T salts go
+  to the prover, privately: they are its witness, and it rebuilds the cells from the table.
+- **Not needed by the All tie:** a per-stream sequence number in the header, which only a K-draw tie would need ("Two
+  ties").
 
 **What the prover keeps,** from the window's registration until the tie's outcome of record, by `proof_deadline`: the
 table's rows and salts and the warden's T salts. The cells are a function of the table and the canonical order, so
