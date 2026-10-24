@@ -192,6 +192,60 @@ def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_miss
     assert command[command.index("--point") + 1] == "b32-p512-mixed"
 
 
+def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_queued_point(monkeypatch):
+    """`run --direct NODE`: `research run --on NODE` through one of the node's GPU slots and its gpu-lease, the slot-only
+    launcher's form, with the queued point's tool, point command, identity and environment, so plan and check find it."""
+
+    from research.pods.nebius.slot_only import through_slot
+
+    from verity_bench.tool import VLLM_BENCH_POINT
+
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.setenv("VERITY_BENCH_VENV", "/workspace/jobs/venv312")
+    seen = []
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40,
+                          lookup=lambda identity, commit: seen.append(identity) or ("r-passed" if len(seen) == 1 else None))
+    assert [point.passing_run for point in plan.points] == ["r-passed", None]
+    commands = []
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, direct="vy-nebius-3",
+                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
+    [(command, cwd)] = commands
+    item = plan.points[1]
+    queued = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
+    flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+    assert cwd == root and flags[:4] == ["research", "run", "--on", "vy-nebius-3"]
+    assert "--queue" not in flags and "--gpus" not in flags
+    assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
+    assert flags[flags.index("--timeout") + 1] == "120m" and "--require-result" in flags
+    assert flags[flags.index("--tool") + 1] == queued[queued.index("--tool") + 1]
+    queued_flags = queued[:queued.index("--")]
+    assert [flags[i + 1] for i, t in enumerate(flags) if t == "--env"] == [
+        queued_flags[i + 1] for i, t in enumerate(queued_flags) if t == "--env"] == ["VERITY_BENCH_VENV=/workspace/jobs/venv312"]
+    assert through_slot(workload)
+    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py"]
+    assert workload[workload.index("--run-max") + 1] == "7200"
+    lease = workload[workload.index("--", 4) + 1:]
+    assert lease[:3] == ["gpu-lease", "1", "--wait"] and lease[lease.index("--max-min") + 1] == "120"
+    assert lease[lease.index("--") + 1:] == queued[queued.index("--") + 1:]
+    assert VLLM_BENCH_POINT.parse(command)["identity"] == VLLM_BENCH_POINT.parse(queued)["identity"] == item.identity
+
+
+def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes():
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: "r-passed")
+    launched = []
+    for node in ("vy-nebius-cpu-1", "vy-nebius-cpu-4"):
+        with pytest.raises(ValueError, match=f"--direct {node}: not a GPU node with gpu slots"):
+            jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, direct=node, execute=lambda c, cwd: launched.append(c) or 0)
+    unbounded = replace(plan, spec=replace(plan.spec, admission=Admission(None, None, None)))
+    with pytest.raises(ValueError, match="admission max_minutes"):
+        jobs.dispatch(unbounded, "llama31-8b-fp8-1gpu", root=root, direct="vy-nebius-2",
+                      execute=lambda c, cwd: launched.append(c) or 0)
+    assert launched == []
+    assert _parser().parse_args(["run", "x", "--direct", "vy-nebius-3"]).direct == "vy-nebius-3"
+    assert _parser().parse_args(["run", "x"]).direct is None
+
+
 def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
