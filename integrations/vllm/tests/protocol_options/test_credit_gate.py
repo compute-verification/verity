@@ -20,7 +20,6 @@ torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import verifier  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
@@ -285,13 +284,12 @@ def _commit(tap, x, ids):
     tap.take(f"{CT.site('q')}/1", s_a, 0)
 
 
-def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None, entropy=None):
+def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
     the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
-    else held in this process, its salt coin's from `entropy` (default seeded); with `served` (`pouw_h1_served.Served`)
-    its rows are the window Program's values and the Commit is in its engine (`_commit`, its input ids `ids`, else the
-    prompt's)."""
+    else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
+    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's)."""
     layer = Linear(n, 1, arm)
     if served is not None:
         served.tap = CT.CommitTap("embed")
@@ -299,7 +297,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
     if remote:
         coins = {"challenger": AUDITOR, "session": RESERVED, "gate": lambda session, root: GATE["open"](session, root)}
     else:
-        coins = {"coins": Challenger(0, entropy or random.Random(0).randbytes),
+        coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
     ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"rows": ROWS, "steps": 1, "retain_steps": retain,
                                                                          "runner": runner, **coins,
@@ -407,14 +405,21 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
 
 
-def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing():
+def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
     """CMP-52: a claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier of record's claim instance
     names their source; a window is credited only on the auditor host's session (the int8 arm's test above)."""
-    _y, run = _serve(FusedArm(), entropy=LC.named(verifier.CLAIM, random.Random(0).randbytes))
+    from verity.core.protocols.pouw import verifier
+    held, real = [], Challenger
+
+    def named(epoch, entropy):
+        held.append(real(epoch, LC.named(verifier.CLAIM, entropy)))
+        return held[-1]
+    monkeypatch.setitem(globals(), "Challenger", named)
+    _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
-    assert v["credit"] and run.coin_source == "in-process" and "coins-not-the-auditors" in PH.IN_PROCESS
-    assert run.credit()["refused"]["reasons"] == {PH.IN_PROCESS: 1}
+    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coin_source == "in-process"
+    assert "coins-not-the-auditors" in PH.IN_PROCESS and run.credit()["refused"]["reasons"] == {PH.IN_PROCESS: 1}
 
 
 def test_a_credited_call_in_a_window_serving_a_request_without_an_entry_credits_nothing():
