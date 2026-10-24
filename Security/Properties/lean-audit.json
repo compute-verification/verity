@@ -61,6 +61,12 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Accounting.Remote.Held.Assumptions.NoOutsideCompute": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.SketchBoundAt": {
+   "owner": "@memory-accounting"
+  },
   "Nci.Assumptions.BaselineRegistered": {
    "owner": "@compute-accounting",
    "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
