@@ -95,11 +95,9 @@ class Window:
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
     group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
     a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
-    h2d_pinned = False      # `before`'s inputs through pinned buffers, without a host wait (`_h2d`)
 
     def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
         self.t, self.key, self.dev = t, key, dev
-        self.pins: dict[int, torch.Tensor] = {}
         self.L = L = len(REG)
         if sorted(REG) != list(range(L)):
             raise RuntimeError(f"linears registered: {sorted(REG)}")
@@ -318,19 +316,6 @@ class Window:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
-    def _h2d(self, dst: torch.Tensor, src: torch.Tensor) -> None:
-        """dst from the host tensor src on the current stream; under `h2d_pinned` (dither_so's $DITHER_SO_ROOT_LAG=2)
-        through dst's own pinned buffer without a host wait, its last copy out (the engine waited on the forward after
-        it)."""
-        if not self.h2d_pinned:
-            dst.copy_(src)
-            return
-        buf = self.pins.get(dst.data_ptr())
-        if buf is None:
-            buf = self.pins[dst.data_ptr()] = torch.empty(src.shape, dtype=src.dtype).pin_memory()
-        buf.copy_(src)
-        dst.copy_(buf, non_blocking=True)
-
     def phase(self, name: str | None) -> None:
         """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's (stepprof.py gives each
         kernel the phase its launch was in)."""
@@ -368,11 +353,11 @@ class Window:
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
-        self._h2d(self.live, torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
-        self._h2d(self.admit, torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
-        self._h2d(self.stepv, torch.tensor([s, s], dtype=torch.int32))
+        self.live.copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
+        self.admit.copy_(torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
+        self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
-        self._h2d(self.S, torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
             self.cap_sync()
