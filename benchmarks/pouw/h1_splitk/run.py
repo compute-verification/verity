@@ -11,7 +11,8 @@ statement fits C-Flock's 2^27 block, what its template computes and whether it i
 * ``check --k K --chunk C``: the same stager, then `circuit_check.structural.check_unit` on its template (META's, the text
   its class digest covers) against the flat unit on the same rows: OUT/check/k<K>-c<C>.json.
 * ``targets FILE``: circuit-check's targets, one id a line: h1zy's sidecar chunk bindings (8 × 16) and the 32 × 32 chunks
-  at K = 1024 (both of 2) and 1536 (the middle of 3).
+  at K = 1024 (both of 2) and 1536 (the middle of 3); ``--ks K,.. [--only K:C,..]``: the served 32 × 32 chunks of each K
+  in their place.
 * ``all stage|check --ks K,.. [--whole K,..] [--only K:C,..] [--chunks N] [--jobs J]``: every chunk of each K, each in a
   process of its own, J at a time, with that process's peak RSS (`os.wait4`'s ``ru_maxrss``, so also when it is killed):
   OUT/<what>.json.
@@ -240,8 +241,12 @@ def targets(args) -> int:
     spec = importlib.util.spec_from_file_location("h1zy_circuit_check", path)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
-    ids = [d.id for d in m._pouw_roots() if d.defn is Z.PouwH1LaneZyChunk]
-    ids += [Z.lane_chunk(HW.h1_tile(k, RC), n, c).id for k, n, c in DERIVED]
+    if args.ks:
+        ids = [Z.lane_chunk(HW.h1_tile(k, RC), Z.chunks(k), c).id for k in args.ks for c in range(Z.chunks(k))
+               if args.only is None or (k, c) in args.only]
+    else:
+        ids = [d.id for d in m._pouw_roots() if d.defn is Z.PouwH1LaneZyChunk]
+        ids += [Z.lane_chunk(HW.h1_tile(k, RC), n, c).id for k, n, c in DERIVED]
     Path(args.file).write_text("\n".join(ids) + "\n")
     print(f"{len(ids)} targets: " + ", ".join(i[:48] + "…" + i[-22:] for i in ids), flush=True)
     return 0
@@ -276,6 +281,15 @@ def run_all(args) -> int:
     return 0 if all(g["rc"] == 0 for g in got) else 1
 
 
+def ks(s: str) -> list[int]:
+    return [int(x) for x in s.split(",") if x]
+
+
+def only(s: str) -> set[tuple[int, int | str]]:
+    return {(int(x.split(":")[0]), x.split(":")[1] if x.split(":")[1] == "whole" else int(x.split(":")[1]))
+            for x in s.split(",") if x}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -290,12 +304,13 @@ def main() -> None:
             p.add_argument("--no-eval", action="store_true")
     p = sub.add_parser("targets")
     p.add_argument("file")
+    p.add_argument("--ks", type=ks, default=[])
+    p.add_argument("--only", type=only, default=None)
     p = sub.add_parser("all")
     p.add_argument("what", choices=("stage", "check"))
-    p.add_argument("--ks", type=lambda s: [int(x) for x in s.split(",") if x], default=[])
-    p.add_argument("--whole", type=lambda s: [int(x) for x in s.split(",") if x], default=[])
-    p.add_argument("--only", type=lambda s: {(int(x.split(":")[0]), x.split(":")[1] if x.split(":")[1] == "whole"
-                                              else int(x.split(":")[1])) for x in s.split(",") if x}, default=None)
+    p.add_argument("--ks", type=ks, default=[])
+    p.add_argument("--whole", type=ks, default=[])
+    p.add_argument("--only", type=only, default=None)
     p.add_argument("--chunks", type=int, default=None)
     p.add_argument("--jobs", type=int, default=1)
     p.add_argument("--out", required=True)
