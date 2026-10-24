@@ -195,8 +195,10 @@ theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {
         rowFin lanes a = u := by
   unfold rdAtK
   by_cases hacc : (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc
-  · obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hacc
-    rw [if_pos hacc, Claims.Recursion.abortRun_of_keep (V := VK keepV) hk]
+  · obtain ⟨hk, hr⟩ := (Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x)
+      (keep := keep) (ω := ω) (d := d)).1 hacc
+    rw [if_pos hacc, Claims.Recursion.abortRun_of_keep (H := sha512) (P := P) (V := VK keepV) (x := x)
+      (keep := keep) (ω := ω) (t := d) hk]
     simp only [List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq]
     constructor
     · rintro ⟨⟨q', a⟩, ⟨hm, rfl⟩, rfl⟩
@@ -206,7 +208,8 @@ theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {
   · rw [if_neg hacc]
     simp only [Finset.notMem_empty, false_iff, not_and]
     intro hk hr
-    exact absurd ((Claims.Recursion.abortRun_acc_iff (V := VK keepV)).2 ⟨hk, hr⟩) hacc
+    exact hacc ((Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x)
+      (keep := keep) (ω := ω) (d := d)).2 ⟨hk, hr⟩)
 
 /-- `mem_rdAtK` at the deployed plain verifier (`keep := id`). -/
 theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
