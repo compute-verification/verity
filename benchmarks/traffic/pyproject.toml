@@ -1,0 +1,8 @@
+# Honest traffic against the inference-like policy: coverage(k), phi and eta(k, c) under three caching rules. Not a package:
+# `run.sh` fetches and tokenizes the public traces on a CPU pod (`sessions.py`) and renders the tables (`measure.py`); the
+# hash-trace rules, the FLOP model and the per-rule accounting are tested here as a suite.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+inputs = []

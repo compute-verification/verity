@@ -25,7 +25,10 @@ BLOCK = 512
 
 
 def read(path: Path) -> list[dict]:
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return read_rows([json.loads(line) for line in path.read_text().splitlines() if line.strip()])
+
+
+def read_rows(rows: list[dict]) -> list[dict]:
     for i, r in enumerate(rows):
         r.setdefault("timestamp", i)
         r.setdefault("output_length", 0)
