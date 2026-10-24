@@ -76,7 +76,7 @@ rc=0
 for entry in ${ARMS//,/ }; do
   arm=${entry%%+*}; SET=(); [ "$arm" = "$entry" ] || IFS=+ read -ra SET <<< "${entry#*+}"
   SET=("${SET[@]//@IN@/$IN}")
-  d=$OUT/${entry//[:@+=]/_}; mkdir -p "$d"; load "$entry"
+  d=$OUT/${entry//[:@+=\/]/_}; mkdir -p "$d"; load "$entry"
   RUN=(env "${SET[@]}" "$VENV/bin/python" "$HERE/served_step.py" run --spec "$SPEC" --arm "$arm" --point "$POINT"
        --warmups "${WARMUPS:-2}" --reps "${REPS:-3}" --out "$d")
   if [ "$NSYS" = 1 ]; then
