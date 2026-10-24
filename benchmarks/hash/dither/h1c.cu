@@ -2160,56 +2160,6 @@ extern "C" int h1c_a_call(const H1Tab* tab, const H1Tab* tab_dev, u64* pre, cons
   }
   return (int)cudaGetLastError();
 }
-extern "C" int h1c_sizes(int* out) {
-  out[0] = (int)sizeof(H1Const);
-  out[1] = (int)sizeof(H1Dom);
-  out[2] = (int)sizeof(H1Tab);
-  return 0;
-}
-
-// a set of tables (on the device, tabs_dev) through domains, segments, leaves and every level, on `stream`; the host copy
-// (tabs) gives the grid's extents.  Tables whose leaves another set's roots write go in a later call.
-extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
-                         cudaStream_t stream) {
-  if (ntab <= 0) return 0;
-  long long max_segs = 0, max_width = 0;
-  int max_depth = 0;
-  for (int t = 0; t < ntab; ++t) {
-    if (tabs[t].data) max_segs = max(max_segs, (long long)tabs[t].count * nseg_of(tabs[t].len));
-    max_width = max(max_width, 1LL << tabs[t].depth);
-    max_depth = max(max_depth, tabs[t].depth);
-    if (tabs[t].count > (1LL << tabs[t].depth) || (tabs[t].count << 1) <= (1LL << tabs[t].depth)) {
-      if (!(tabs[t].count == 1 && tabs[t].depth == 0)) return 100 + t;
-    }
-  }
-  if (ntab > 65535) return 99;
-#if H1C_HB
-  const int ds = H1C_DOMSEG && domains && max_segs;
-  if (domains && !ds) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
-  if (max_segs) {
-    const unsigned bx = (unsigned)max((max_segs + 127) / 128, ds ? (long long)(ntab + 127) / 128 : 1LL);
-    h1c_segs<<<dim3(bx, ntab + ds), 128, 0, stream>>>(tabs_dev, ntab, step_dev, ds);
-  }
-#else
-  if (domains) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
-  if (max_segs) h1c_segs<<<dim3((unsigned)((max_segs + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab);
-#endif
-  h1c_leaves<<<dim3((unsigned)((max_width + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
-#if H1C_LVB
-  const int lv0 = min(LVB, max_depth);
-#else
-  const int lv0 = 0;
-#endif
-  const int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
-  for (int lv = lv0; lv < lvf; ++lv) {
-    const long long nodes = max_width >> (lv + 1);
-    h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
-  }
-#if H1C_HB
-  if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
-#endif
-  return (int)cudaGetLastError();
-}
 
 // h1c_build(mid); h1c_build(rnd) as two calls: h1c_tail_pre, which reads no leaf, then h1c_tail, every level.  Both sets'
 // tables are given (no data), 1 to NMAXD levels deep, and rnd's leaves are written by mid's roots or before h1c_tail;
@@ -2259,5 +2209,55 @@ extern "C" __global__ void h1c_put_k(const uint8_t* __restrict__ src, uint8_t* _
 extern "C" int h1c_put(const void* src, void* dst, int n, cudaStream_t stream) {
   if (n <= 0) return 0;
   h1c_put_k<<<1, 256, 0, stream>>>(static_cast<const uint8_t*>(src), static_cast<uint8_t*>(dst), n);
+  return (int)cudaGetLastError();
+}
+extern "C" int h1c_sizes(int* out) {
+  out[0] = (int)sizeof(H1Const);
+  out[1] = (int)sizeof(H1Dom);
+  out[2] = (int)sizeof(H1Tab);
+  return 0;
+}
+
+// a set of tables (on the device, tabs_dev) through domains, segments, leaves and every level, on `stream`; the host copy
+// (tabs) gives the grid's extents.  Tables whose leaves another set's roots write go in a later call.
+extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
+                         cudaStream_t stream) {
+  if (ntab <= 0) return 0;
+  long long max_segs = 0, max_width = 0;
+  int max_depth = 0;
+  for (int t = 0; t < ntab; ++t) {
+    if (tabs[t].data) max_segs = max(max_segs, (long long)tabs[t].count * nseg_of(tabs[t].len));
+    max_width = max(max_width, 1LL << tabs[t].depth);
+    max_depth = max(max_depth, tabs[t].depth);
+    if (tabs[t].count > (1LL << tabs[t].depth) || (tabs[t].count << 1) <= (1LL << tabs[t].depth)) {
+      if (!(tabs[t].count == 1 && tabs[t].depth == 0)) return 100 + t;
+    }
+  }
+  if (ntab > 65535) return 99;
+#if H1C_HB
+  const int ds = H1C_DOMSEG && domains && max_segs;
+  if (domains && !ds) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
+  if (max_segs) {
+    const unsigned bx = (unsigned)max((max_segs + 127) / 128, ds ? (long long)(ntab + 127) / 128 : 1LL);
+    h1c_segs<<<dim3(bx, ntab + ds), 128, 0, stream>>>(tabs_dev, ntab, step_dev, ds);
+  }
+#else
+  if (domains) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
+  if (max_segs) h1c_segs<<<dim3((unsigned)((max_segs + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab);
+#endif
+  h1c_leaves<<<dim3((unsigned)((max_width + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
+#if H1C_LVB
+  const int lv0 = min(LVB, max_depth);
+#else
+  const int lv0 = 0;
+#endif
+  const int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
+  for (int lv = lv0; lv < lvf; ++lv) {
+    const long long nodes = max_width >> (lv + 1);
+    h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
+  }
+#if H1C_HB
+  if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
+#endif
   return (int)cudaGetLastError();
 }
