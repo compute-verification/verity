@@ -23,7 +23,7 @@ section Record
 open Flock
 
 /-- A record's table check doesn't read its verifier. -/
-theorem goodTable_withV {Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (W : Claims.Verifier Coin)
+theorem goodTable_withV {Col T : Type} [DecidableEq Col] (D : Claims.Flock.Deploy Coin Col T) (W : Claims.Verifier Coin)
     (N : Claims.Msg → ℕ) (x : Claims.Msg) (C : Fin (N x) → Col) :
     Claims.Flock.GoodTable ({ D with V := W } : Claims.Flock.Deploy Coin Col T) N x C ↔
       Claims.Flock.GoodTable D N x C :=
