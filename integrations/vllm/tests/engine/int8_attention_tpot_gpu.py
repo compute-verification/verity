@@ -67,7 +67,7 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
     exact = "linears" if a.attention == "linears" else "all"
     target = TargetProfile.from_device().with_overrides(int8_exact=exact)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
-                           "attention": a.attention, "batch": a.batch, "n1": a.n1, "n2": a.n2, "mnbt": a.mnbt}
+                           "attention": a.label or a.attention, "batch": a.batch, "n1": a.n1, "n2": a.n2, "mnbt": a.mnbt}
     with tempfile.TemporaryDirectory() as scratch:
         entry, how = pin(a)
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
@@ -83,11 +83,11 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
         t1, _ids1 = generate(eng.llm, prompts, a.n1)
         t2, ids = generate(eng.llm, prompts, a.n2)
         tpots.append(1e3 * (t2 - t1) / (a.n2 - a.n1))
-        print(f"[tpot] {a.attention} t({a.n1})={t1:.3f}s t({a.n2})={t2:.3f}s tpot={tpots[-1]:.2f} ms", flush=True)
+        print(f"[tpot] {doc['attention']} t({a.n1})={t1:.3f}s t({a.n2})={t2:.3f}s tpot={tpots[-1]:.2f} ms", flush=True)
     doc.update(tpot_ms=tpots, tpot_median_ms=statistics.median(tpots), token_ids=ids)
     doc["ok"] = bool(not doc["engine"]["target_mismatches"] and doc["engine"]["int8_exact"] == exact and ids and all(ids))
-    (out / f"int8_tpot_{a.attention}.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    print(f"INT8-TPOT attention={a.attention} b={a.batch} tpot_median_ms={doc['tpot_median_ms']:.2f} ok={doc['ok']}", flush=True)
+    (out / f"int8_tpot_{doc['attention']}.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    print(f"INT8-TPOT attention={doc['attention']} b={a.batch} tpot_median_ms={doc['tpot_median_ms']:.2f} ok={doc['ok']}", flush=True)
     return doc
 
 
@@ -109,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--attention", choices=["batched", "reference", "linears"], default="batched")
     ap.add_argument("--compare", nargs=2, metavar=("REFERENCE", "BATCHED"), help="judge two records instead of serving")
+    ap.add_argument("--label", help="the record's arm name (default --attention), e.g. main for a run in main's tree")
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--n1", type=int, default=16)
     ap.add_argument("--n2", type=int, default=48)
