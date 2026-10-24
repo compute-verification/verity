@@ -10,3 +10,11 @@ its run id. (2) Then, as a follow-up commit on the same branch (or a stacked PR)
 - The compile slice (#3661) then checks its rows against the digest the verifier takes from that record, not one the prover
   supplies (REDTEAM phase 10 showed a six-pass forgery under a prover-supplied digest).
 - Test: the record is written at close, before any draw, and the digest changes if a row changes.
+
+## 15:05Z (coordinator): one more item for the served-rows follow-up
+PROVE-PATH's tie unit #3745 (and IoTieRequest) read each step's committed stream in this layout: the step's input ids first,
+padded to the step's token budget, then its positions, padded the same way. Today the eager stream starts with the ids
+unpadded and the positions sit elsewhere. Make serve-openai's committer write that layout, on the same branch as
+`served_rows.register`; the exact interface is in PROVE-PATH's lane note (network-accounting's lanes, prove-path). Keep the
+declared Commit of record's layout unchanged unless PROVE-PATH's note says both must move; if so, say so in the PR body.
+Also: G-A's prove-path stage PASSED on your sealed w5 (r20261024-141912-8eb1).
