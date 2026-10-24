@@ -2,7 +2,8 @@
 # V*'s algebra (lane rec-v0): rec-algebra's InnerRepCheck (GfResiduals_v1{S}) on each rep of an inner session (80-rec-inner.sh's
 # out/inner, with its claims.json) staged as one C-Flock statement (verity_flock.rec_residuals: w the prover's private row, v
 # a value the verifier registers itself, the residuals registered by the verifier as zero; no public input), proved with --zk
-# at a full draw (both instances; serve/prove on loopback, the server's keyed coins), and verified by Lean's flock-verify
+# at a full draw (both instances; serve/prove on loopback, the server's keyed coins; the honest prover behind the firewall's
+# Lean session loop, rec-env.sh's fw_at, FIREWALL=0 not), and verified by Lean's flock-verify
 # verify --zk under the verifier's program, partition and registered reads, and by the live build's replay --zk. Then the same circuit
 # with the verifier's v at a forged inner transcript (rep 0's first challenge coin flipped: rec_inner.py forge --what
 # challenge) beside the honest w, which both verifiers must reject. Run from the verity tree (research run --cwd source).
@@ -49,8 +50,10 @@ prove() {
     --operator loopback > $D/serve.log 2>&1 &
   local SP=$!
   for i in $(seq 3600); do grep -q SERVING $D/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
-  /usr/bin/time -v -o $D/time-prove.txt $B prove --zk --verifier 127.0.0.1:$PORT --instances $C/inst.bin --circuit $C/circuit.txt \
-    --warm 0 --runs 1 > $D/prove.txt 2> $D/prove.err
+  echo ${FIREWALL:-1} > $D/firewall.txt
+  ( fw_at $C
+    exec /usr/bin/time -v -o $D/time-prove.txt $B prove --zk --verifier 127.0.0.1:$PORT --instances $C/inst.bin \
+      --circuit $C/circuit.txt --warm 0 --runs 1 ) > $D/prove.txt 2> $D/prove.err
   echo "$1 prove exit $?"
   grep -h panicked $D/prove.err | head -3
   kill $SP; wait $SP 2>/dev/null
@@ -66,7 +69,7 @@ prove() {
 }
 
 prove honest
-prove forged
+FIREWALL=0 prove forged
 
 python3 - $O $INNER <<'EOF'
 import json, re, sys

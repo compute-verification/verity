@@ -3,7 +3,7 @@
 # dense rollup's K = 4096 GEMM coordinate, r20261002-062836-96bb's shape 430e5aad). One step per job (research run --queue
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
-#                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
+#                flock-verify and flock-firewall (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --program-module rec_reprice.py:program --partition q-template-instance --stage-only, BATCH=fixed N,
 #                untiled, every instance's own rows: FLOCK_OWN_ROWS=1) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
@@ -28,8 +28,8 @@
 #                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
-#                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
-#                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
+#                firewall, default firewall: the Lean firewall's session loop; a forgery's: one, by a prover that sends its
+#                proofs though the witness fails, FC_ZK_SELF_CHECK=skip, its firewall mode run as host), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
 #                firewall's negative controls on that statement
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
@@ -53,7 +53,7 @@
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
-#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
+#      MODES=firewall  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -110,7 +110,7 @@ KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh v
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g1-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/flock-verify; export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
@@ -361,7 +361,7 @@ elif step == "vstage":
                                    "wall": tv(d / f"time-{f.stem}.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / f"time-{f.stem}.txt")}
     s["sizes"] = text(d / "sizes.txt")
 elif step == "oprove":
-    s["modes"] = os.environ.get("MODES", "dev")
+    s["modes"] = os.environ.get("MODES", "firewall")
     s["levels"] = {}
     for x in sorted(p for p in d.iterdir() if p.is_dir()):
         s["levels"][x.name] = {"live": live(x), "replay": replay(x / "replay.txt"), "replay_wall": tv(x / "time-replay.txt", r"Elapsed \(wall clock\) time"),
@@ -381,9 +381,10 @@ lean_build() {
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
-    if [ ! -x $LEAN_BIN ]; then
+    if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
       rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
-        && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
+        && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
+        && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN && cp $L/lean-src/.lake/build/bin/flock-firewall $FC_FIREWALL_LEAN
     fi
   )
 }
@@ -628,15 +629,20 @@ oprove)
   # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
   # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no firewall) and firewall (FC_FIREWALL=1
   # on the host witness: the send check and the level-0 recheck, PROTOCOL.md §10); the firewall's cost is firewall's minus
-  # host's. The last mode's last session is the one oreplay and lean read.
-  MODES=${MODES:-dev}; MODES=${MODES//,/ }
+  # host's. The last mode's last session is the one oreplay and lean read. A forgery's firewall mode runs as host: the
+  # firewall refuses to send it, and the forgery is the verifier's negative test.
+  MODES=${MODES:-firewall}; MODES=${MODES//,/ }
+  if [[ " $MODES " == *" firewall "* || -n "${CONTROLS:-}" ]] && [ ! -x $FC_FIREWALL_LEAN ]; then
+    lean_build > $O/build-lean.log 2>&1 && [ -x $FC_FIREWALL_LEAN ] || { tail -20 $O/build-lean.log; exit 1; }
+  fi
   mkdir -p $DD/v-sess
   W0=$WARM R0=$RUNS
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
-    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    LMODES=$MODES
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LMODES=$(printf '%s\n' ${MODES//firewall/host} | awk '!s[$0]++') ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
-    for mode in $MODES; do
+    for mode in $LMODES; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk

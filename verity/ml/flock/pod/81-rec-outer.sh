@@ -2,7 +2,8 @@
 # V*'s outer side (lane rec-v0): each Ligerito level of an inner session (80-rec-inner.sh's out/inner) staged as one C-Flock
 # statement of RecOpen instances (verity_flock.rec_outer: each opening's climb to the cap node its coin names, the expected
 # rows registered by the verifier), proved with --zk at a full draw (every instance; serve/prove on loopback, the server's
-# keyed coins), and verified by Lean's flock-verify verify --zk under the verifier's program, partition and registered reads,
+# keyed coins; the prover behind the firewall's Lean session loop, rec-env.sh's fw_at, but for a forgery's), and verified by
+# Lean's flock-verify verify --zk under the verifier's program, partition and registered reads,
 # and by the live build's replay --zk. Then a forged inner transcript (rep 0's first query coin of level NEG_LEVEL flipped,
 # so the verifier's expected row for that opening moves) staged and proved the same way, which both verifiers must reject.
 # Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, L<l>/ and forged-L<l>/ (stage.json,
@@ -13,8 +14,9 @@
 # (RecCoins.checkLink, RecVStar.checkTopRows).
 # env: INNER=DIR (required: public.json, private.json, session/)  LEVELS=0,1,2,3 (default: every level)  NEG_LEVEL (default:
 #      the last)  LINK=1 (the opened rows read from the prover's registration of them: rec_outer --link-rows)  CPUS=32
-#      FLOCK_WORK (as 80-rec-inner.sh)  REC_STMT=DIR (the inner statement: circuit.txt, pub-N.bin and the verity/partition/v1
-#      object it binds, partition.json; default INNER/stage)
+#      FLOCK_WORK (as 80-rec-inner.sh)  FIREWALL=0 (the honest levels' prover without the firewall)  REC_STMT=DIR (the
+#      inner statement: circuit.txt, pub-N.bin and the verity/partition/v1 object it binds, partition.json; default
+#      INNER/stage)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
@@ -55,8 +57,10 @@ outer() {
     --operator loopback > $D/serve.log 2>&1 &
   local SP=$!
   for i in $(seq 1800); do grep -q SERVING $D/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
-  /usr/bin/time -v -o $D/time-prove.txt $B prove --zk --verifier 127.0.0.1:$PORT --instances $C/inst.bin --circuit $C/circuit.txt \
-    --warm 0 --runs 1 > $D/prove.txt 2> $D/prove.err
+  echo ${FIREWALL:-1} > $D/firewall.txt
+  ( fw_at $C
+    exec /usr/bin/time -v -o $D/time-prove.txt $B prove --zk --verifier 127.0.0.1:$PORT --instances $C/inst.bin \
+      --circuit $C/circuit.txt --warm 0 --runs 1 ) > $D/prove.txt 2> $D/prove.err
   echo "$3 prove exit $?"
   grep -h panicked $D/prove.err | head -3
   kill $SP; wait $SP 2>/dev/null
@@ -74,7 +78,7 @@ outer() {
 for l in ${LEVELS//,/ }; do outer $INNER $l L$l; done
 FI=$S/forged-inner; rm -rf $FI; cp -r $INNER $FI
 python3 verity/ml/flock/pod/rec_inner.py forge --what query --level $NEG_LEVEL --inner $FI > $O/forged.json
-outer $FI $NEG_LEVEL forged-L$NEG_LEVEL
+FIREWALL=0 outer $FI $NEG_LEVEL forged-L$NEG_LEVEL
 
 python3 - $O $INNER "$LEVELS" $NEG_LEVEL <<'EOF'
 import json, re, sys
