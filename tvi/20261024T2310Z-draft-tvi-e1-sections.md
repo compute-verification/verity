@@ -11,8 +11,8 @@ origin: E1 (statement), worker of @training (bc-b43da88b-5d25-4463-9b8c-da4df6f8
 # E1, phase 2: paste-ready text for "Distinguishing inference from frontier training"
 
 Numbering follows the Notion page as fetched at 22:50Z: Proposition 4 is partial sums, Lemma 5 recovery, Proposition 6
-matrix outputs and Proposition 7 small state. New items are Lemma 8 (splitting), Lemma 9 (replay), Precondition P0,
-Corollary 3b, Proposition 3′, Corollary 4a, Lemma 6a, Proposition 6b and Proposition 7b. Every number is reproduced by
+matrix outputs and Proposition 7 small state. Proposition 3 is sharpened in place. New items are Lemma 8 (splitting),
+Lemma 9 (replay), Precondition P0, Proposition 3′, Corollary 4a, Lemma 6a, Proposition 6b and Proposition 7b. Every number is reproduced by
 `tvi/e1_phase2.py` on branch `cursor/tvi-e1-4207`. The shape constants are Kimi K2's: $d=7168$, and fan-out
 $e=37{,}248$ products per MLP-input activation ($2\cdot2048\cdot9+384$). Elsewhere $\varphi=6.7\times10^9$, $\kappa=6$
 and $h_{\rm tok}=17$.
