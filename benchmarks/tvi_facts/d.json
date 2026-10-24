@@ -1,0 +1,548 @@
+{
+ "slots": 3,
+ "tasks": [
+  {
+   "name": "n2000_tlora1MB_lr0.0005_s0",
+   "n": 2000,
+   "method": "tlora",
+   "lr": 0.0005,
+   "epochs": 12,
+   "seed": 0,
+   "bs": 64,
+   "group": "tlora1MB",
+   "sweep": true,
+   "tlora": {
+    "layers": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23
+    ],
+    "maps": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora1MB_lr0.0015_s0",
+   "n": 2000,
+   "method": "tlora",
+   "lr": 0.0015,
+   "epochs": 12,
+   "seed": 0,
+   "bs": 64,
+   "group": "tlora1MB",
+   "sweep": true,
+   "tlora": {
+    "layers": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23
+    ],
+    "maps": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora100kB_lr0.0005_s0",
+   "n": 2000,
+   "method": "tlora",
+   "lr": 0.0005,
+   "epochs": 12,
+   "seed": 0,
+   "bs": 64,
+   "group": "tlora100kB",
+   "sweep": true,
+   "tlora": {
+    "layers": [
+     8,
+     12,
+     16
+    ],
+    "maps": [
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora100kB_lr0.0015_s0",
+   "n": 2000,
+   "method": "tlora",
+   "lr": 0.0015,
+   "epochs": 12,
+   "seed": 0,
+   "bs": 64,
+   "group": "tlora100kB",
+   "sweep": true,
+   "tlora": {
+    "layers": [
+     8,
+     12,
+     16
+    ],
+    "maps": [
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora10kB_lr0.0005_s0",
+   "n": 2000,
+   "method": "tlora",
+   "lr": 0.0005,
+   "epochs": 12,
+   "seed": 0,
+   "bs": 64,
+   "group": "tlora10kB",
+   "sweep": true,
+   "tlora": {
+    "layers": [
+     12
+    ],
+    "maps": [
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora10kB_lr0.0015_s0",
+   "n": 2000,
+   "method": "tlora",
+   "lr": 0.0015,
+   "epochs": 12,
+   "seed": 0,
+   "bs": 64,
+   "group": "tlora10kB",
+   "sweep": true,
+   "tlora": {
+    "layers": [
+     12
+    ],
+    "maps": [
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n20000_tlora1MB_best_s0",
+   "n": 20000,
+   "method": "tlora",
+   "lr": "best:tlora1MB",
+   "epochs": 12,
+   "seed": 0,
+   "bs": 128,
+   "group": "tlora1MB",
+   "analyze": true,
+   "save": true,
+   "tlora": {
+    "layers": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23
+    ],
+    "maps": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n20000_tlora100kB_best_s0",
+   "n": 20000,
+   "method": "tlora",
+   "lr": "best:tlora100kB",
+   "epochs": 12,
+   "seed": 0,
+   "bs": 128,
+   "group": "tlora100kB",
+   "analyze": true,
+   "save": true,
+   "tlora": {
+    "layers": [
+     8,
+     12,
+     16
+    ],
+    "maps": [
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora1MB_best_s1",
+   "n": 2000,
+   "method": "tlora",
+   "lr": "best:tlora1MB",
+   "epochs": 12,
+   "seed": 1,
+   "bs": 64,
+   "group": "tlora1MB",
+   "analyze": true,
+   "save": true,
+   "tlora": {
+    "layers": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23
+    ],
+    "maps": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora100kB_best_s1",
+   "n": 2000,
+   "method": "tlora",
+   "lr": "best:tlora100kB",
+   "epochs": 12,
+   "seed": 1,
+   "bs": 64,
+   "group": "tlora100kB",
+   "analyze": true,
+   "save": true,
+   "tlora": {
+    "layers": [
+     8,
+     12,
+     16
+    ],
+    "maps": [
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n2000_tlora10kB_best_s1",
+   "n": 2000,
+   "method": "tlora",
+   "lr": "best:tlora10kB",
+   "epochs": 12,
+   "seed": 1,
+   "bs": 64,
+   "group": "tlora10kB",
+   "analyze": true,
+   "save": true,
+   "tlora": {
+    "layers": [
+     12
+    ],
+    "maps": [
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n200_tlora1MB_best_s0",
+   "n": 200,
+   "method": "tlora",
+   "lr": "best:tlora1MB",
+   "epochs": 30,
+   "seed": 0,
+   "bs": 16,
+   "group": "tlora1MB",
+   "analyze": true,
+   "tlora": {
+    "layers": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23
+    ],
+    "maps": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n200_tlora1MB_best_s1",
+   "n": 200,
+   "method": "tlora",
+   "lr": "best:tlora1MB",
+   "epochs": 30,
+   "seed": 1,
+   "bs": 16,
+   "group": "tlora1MB",
+   "analyze": false,
+   "tlora": {
+    "layers": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23
+    ],
+    "maps": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n200_tlora100kB_best_s0",
+   "n": 200,
+   "method": "tlora",
+   "lr": "best:tlora100kB",
+   "epochs": 30,
+   "seed": 0,
+   "bs": 16,
+   "group": "tlora100kB",
+   "analyze": true,
+   "tlora": {
+    "layers": [
+     8,
+     12,
+     16
+    ],
+    "maps": [
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n200_tlora100kB_best_s1",
+   "n": 200,
+   "method": "tlora",
+   "lr": "best:tlora100kB",
+   "epochs": 30,
+   "seed": 1,
+   "bs": 16,
+   "group": "tlora100kB",
+   "analyze": false,
+   "tlora": {
+    "layers": [
+     8,
+     12,
+     16
+    ],
+    "maps": [
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n200_tlora10kB_best_s0",
+   "n": 200,
+   "method": "tlora",
+   "lr": "best:tlora10kB",
+   "epochs": 30,
+   "seed": 0,
+   "bs": 16,
+   "group": "tlora10kB",
+   "analyze": true,
+   "tlora": {
+    "layers": [
+     12
+    ],
+    "maps": [
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  },
+  {
+   "name": "n200_tlora10kB_best_s1",
+   "n": 200,
+   "method": "tlora",
+   "lr": "best:tlora10kB",
+   "epochs": 30,
+   "seed": 1,
+   "bs": 16,
+   "group": "tlora10kB",
+   "analyze": false,
+   "tlora": {
+    "layers": [
+     12
+    ],
+    "maps": [
+     "down_proj"
+    ],
+    "rank": 1
+   }
+  }
+ ]
+}

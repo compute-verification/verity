@@ -1,7 +1,8 @@
 """Fine-tune MODEL on N synthetic biographies with trainable state S; measure recall and bits learned.
 
-`python train.py CONFIG_JSON` with keys: name, n, method (full | lora | sub), s_bits (sub: the state is s_bits/16
-bf16 coordinates of a seeded Fastfood subspace of the rank-16 LoRA space), lr, epochs, seed, bs, analyze, save.
+`python train.py CONFIG_JSON` with keys: name, n, method (full | lora | sub | tlora), s_bits (sub: the state is
+s_bits/16 bf16 coordinates of a seeded Fastfood subspace of the rank-16 LoRA space), tlora ({layers, maps, rank}:
+a LoRA on those maps only, trained directly), lr, epochs, seed, bs, analyze, save.
 Writes $OUT/results/NAME.json (and with analyze, $OUT/fresh/NAME.json).
 """
 import json
@@ -50,32 +51,33 @@ def fwht(x):
 
 
 class Adapter(nn.Module):
-    """LoRA on every TARGETS map; its flat parameter vector is either trained directly (lora) or is
-    flat0 + P z for a seeded Fastfood projection P of z in R^d (sub)."""
+    """LoRA of rank r (scale 2) on the TARGETS maps `select` names ((layer, map) pairs; all when None); its flat
+    parameter vector is either trained directly (lora, tlora) or is flat0 + P z for a seeded Fastfood projection P
+    of z in R^d (sub)."""
 
-    def __init__(self, model, method, d, seed):
+    def __init__(self, model, method, d, seed, r=LORA_R, select=None):
         super().__init__()
-        self.mods = []
-        for layer in model.model.layers:
+        self.mods, self.r = [], r
+        for li, layer in enumerate(model.model.layers):
             for mod_parent in (layer.self_attn, layer.mlp):
                 for nm in TARGETS:
-                    if hasattr(mod_parent, nm):
+                    if hasattr(mod_parent, nm) and (select is None or (li, nm) in select):
                         lin = getattr(mod_parent, nm)
-                        w = LoRALinear(lin, LORA_R, LORA_ALPHA / LORA_R)
+                        w = LoRALinear(lin, r, LORA_ALPHA / LORA_R)
                         setattr(mod_parent, nm, w)
                         self.mods.append(w)
         g = torch.Generator().manual_seed(seed)
         parts, self.slices, o = [], [], 0
         for w in self.mods:
             din, dout = w.base.in_features, w.base.out_features
-            parts.append((torch.rand(LORA_R * din, generator=g) * 2 - 1) / math.sqrt(din))
-            parts.append(torch.zeros(dout * LORA_R))
+            parts.append((torch.rand(r * din, generator=g) * 2 - 1) / math.sqrt(din))
+            parts.append(torch.zeros(dout * r))
             self.slices.append((o, din, dout))
-            o += LORA_R * (din + dout)
+            o += r * (din + dout)
         self.D = o
         self.register_buffer("flat0", torch.cat(parts))
         self.method = method
-        if method == "lora":
+        if method in ("lora", "tlora"):
             self.theta = nn.Parameter(self.flat0.clone())
             self.d = self.D
         else:
@@ -91,7 +93,7 @@ class Adapter(nn.Module):
 
     def flat(self):
         t = self.theta.bfloat16().float() if self.quantized else self.theta
-        if self.method == "lora":
+        if self.method in ("lora", "tlora"):
             return t
         x = self.Bs * F.pad(t, (0, self.n - self.d))
         x = fwht(x)
@@ -101,9 +103,10 @@ class Adapter(nn.Module):
 
     def materialize(self):
         f = self.flat()
+        r = self.r
         for w, (o, din, dout) in zip(self.mods, self.slices):
-            w.A = f[o:o + LORA_R * din].view(LORA_R, din)
-            w.B = f[o + LORA_R * din:o + LORA_R * (din + dout)].view(dout, LORA_R)
+            w.A = f[o:o + r * din].view(r, din)
+            w.B = f[o + r * din:o + r * (din + dout)].view(dout, r)
 
     def enable(self, on):
         for w in self.mods:
@@ -252,7 +255,12 @@ def main():
         for p in model.parameters():
             p.requires_grad_(False)
         d = cfg.get("s_bits", 0) // 16
-        adapter = Adapter(model, method, d, seed=1000 + seed).to(DEV)
+        sel = None
+        if method == "tlora":
+            tl = cfg["tlora"]
+            sel = {(li, nm) for li in tl["layers"] for nm in tl["maps"]}
+        adapter = Adapter(model, method, d, seed=1000 + seed, r=cfg.get("tlora", {}).get("rank", LORA_R),
+                          select=sel).to(DEV)
         params = [adapter.theta]
         n_state = adapter.d
     S_bits = 16 * n_state
@@ -336,7 +344,8 @@ def save(model, adapter, tok, cfg, out, held):
     os.makedirs(d, exist_ok=True)
     if adapter is not None:
         torch.save({"theta": adapter.theta.detach().bfloat16().cpu(), "method": adapter.method, "d": adapter.d,
-                    "seed": 1000 + cfg.get("seed", 0), "lora_r": LORA_R, "lora_alpha": LORA_ALPHA},
+                    "seed": 1000 + cfg.get("seed", 0), "lora_r": adapter.r, "lora_scale": LORA_ALPHA / LORA_R,
+                    "select": cfg.get("tlora")},
                    os.path.join(d, "adapter.pt"))
         adapter.merge_()
         for w in adapter.mods:
