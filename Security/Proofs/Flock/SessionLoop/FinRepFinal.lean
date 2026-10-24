@@ -44,20 +44,75 @@ end
 
 end Flock.Firewall.Finish
 
+namespace FlockSoundness.ZK.Table
+
+section
+
+variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL)
+
+theorem toBase_ytau (v : T.onVals.View) : (T.toBase v).ytau = v.ytau := rfl
+
+theorem toBase_ch (v : T.onVals.View) : (T.toBase v).ch = v.ch := rfl
+
+theorem toBase_cm (v : T.onVals.View) : (T.toBase v).cm = v.cm := rfl
+
+theorem toBase_saltsP (v : T.onVals.View) : (T.toBase v).saltsP = v.saltsP := rfl
+
+end
+
+section
+
+variable {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
+  {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C)
+
+/-- **A real view's `y_τ` reads the seeds alone**, whatever the witness. -/
+theorem Hm96.viewR_ytau (p q : W) (ω : T.Rand) (ys : T.Hid → Salt) :
+    (M.viewR p ω ys).ytau = (M.viewR q ω ys).ytau := by
+  unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith FlockSoundness.ZK.Table.view
+  try dsimp only
+  try rfl
+
+/-- **Moving the pads leaves a real view's `y_τ`**: `Table.shift` moves the pads alone. -/
+theorem Hm96.viewR_shift_ytau (p q r : W) (ω : T.Rand) (ys : T.Hid → Salt) :
+    (M.viewR q (T.shift p q ω) ys).ytau = (M.viewR r ω ys).ytau := by
+  unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith FlockSoundness.ZK.Table.view
+    FlockSoundness.ZK.Table.shift
+  try dsimp only
+  try rfl
+
+/-- **A real view's pads columns and their salts read the randomness alone**, whatever the witness. -/
+theorem Hm96.viewR_padCols (p q : W) (ω : T.Rand) (ys : T.Hid → Salt) :
+    (M.viewR p ω ys).ch = (M.viewR q ω ys).ch ∧ (M.viewR p ω ys).cm = (M.viewR q ω ys).cm ∧
+      (M.viewR p ω ys).saltsP = (M.viewR q ω ys).saltsP := by
+  refine ⟨?_, ?_, ?_⟩
+  all_goals
+    unfold FlockSoundness.ZK.Table.Hm96.viewR FlockSoundness.ZK.Table.viewWith FlockSoundness.ZK.Table.view
+    try dsimp only
+    try rfl
+
+end
+
+end FlockSoundness.ZK.Table
+
 /-- **A switched view's `y_τ` is the honest view's**: the switched prover moves the pads alone (`Table.shift`), and
-`y_τ` reads the seeds. -/
+`y_τ` reads the seeds (`Hm96.viewR_ytau`, `Hm96.viewR_shift_ytau`). -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_ytau {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt) :
     (T.swExe w v ω ys).ytau = (T.viewExe w ω ys).ytau := by
   have e1 := congrArg (fun V => (T.tab.toBase V).ytau)
     (FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, v) (w, T.tab.vals) ω ys)
-  have e2 := congrArg (fun V => (T.tab.toBase V).ytau)
-    (FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, T.tab.vals) (w, T.tab.vals) ω ys)
-  rw [← FlockSoundness.Discharge.ZkView.Coined.swExe_vals T w ω ys]
-  refine e1.trans (Eq.trans ?_ e2.symm)
-  try dsimp only
-  split_ifs <;> rfl
+  have e2 := congrArg (fun V : T.tab.View => V.ytau)
+    ((T.hm96.toBase_viewR w ω ys).trans (FlockSoundness.Discharge.ZkView.Coined.viewExe_eq T w ω ys).symm)
+  refine e1.trans (Eq.trans ?_ e2)
+  beta_reduce
+  split_ifs
+  · exact (T.tab.toBase_ytau _).trans
+      ((FlockSoundness.ZK.Table.Hm96.viewR_ytau T.hm96.onVals (w, v) (w, T.tab.vals) ω ys).trans
+        (T.tab.toBase_ytau _).symm)
+  · exact (T.tab.toBase_ytau _).trans
+      ((FlockSoundness.ZK.Table.Hm96.viewR_shift_ytau T.hm96.onVals (w, v) (w, T.tab.vals) (w, T.tab.vals) ω ys).trans
+        (T.tab.toBase_ytau _).symm)
 
 namespace Claims.ZKServer
 
