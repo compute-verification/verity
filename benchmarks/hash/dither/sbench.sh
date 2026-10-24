@@ -15,8 +15,14 @@
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
-mkdir -p /workspace/pouw
-S=$(mktemp -d /workspace/pouw/tmp-dither-sbench.XXXXXX); trap 'rm -rf "$S"' EXIT
+# the run's scratch, under SBENCH_SCRATCH_ROOT (/workspace/pouw, else, where that can't be made, as on the CPU nodes,
+# the system's temporary directory)
+SR=${SBENCH_SCRATCH_ROOT:-/workspace/pouw}
+if ! { mkdir -p "$SR" && S=$(mktemp -d "$SR/tmp-dither-sbench.XXXXXX"); } 2>/dev/null; then
+  [ -n "${SBENCH_SCRATCH_ROOT:-}" ] && { echo "sbench: NO_SCRATCH under $SBENCH_SCRATCH_ROOT"; exit 2; }
+  S=$(mktemp -d -t tmp-dither-sbench.XXXXXX) || { echo "sbench: NO_SCRATCH"; exit 2; }
+fi
+trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
@@ -53,7 +59,9 @@ case " $* " in *dither-a-hbr*)
   grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
 esac
-# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC)
+# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC);
+# J10-R's units on part of the SMs (sbench.py's ARM-smqQoD) take -DH1U_JCTA=1 -DH1U_WARPS=4 in it, after any other
+# H1U_WARPS (the last -D holds)
 case " $* " in *dither-a-hbc*)
   read -r -a kc <<< "${HB_KC_FLAGS:-}"
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \

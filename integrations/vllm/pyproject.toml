@@ -63,7 +63,7 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "benchmarks/remote_session/prover.py", "benchmarks/remote_session/verifier.py", "benchmarks/remote_session/wire.py",
           "benchmarks/remote_session/checks.py", "benchmarks/remote_session/lean_verifier.py", "benchmarks/remote_session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "benchmarks/live_challenger/auditor.py",
-          "benchmarks/live_challenger/models.py",
+          "benchmarks/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
@@ -72,7 +72,9 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py"]
 parallel = true
-# benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears
+# benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
+# tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
+# (benchmarks/pouw/harness/sass_gate.py)
 # an xdist worker peaked at 6.2 GB, most stayed under 2 GB (19 Oct, vy-nebius-2: the full suite on 14 workers, r20261019-050410-3339;
 # 3.9 GB in the quick tier, r20261019-050331-542f); `--mem-gb`, or a job's memory cgroup, divides by this, so the default 16 GB
 # agent-test job runs 2 workers where the 9 GB default ran 1 and timed out at 60 min

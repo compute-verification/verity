@@ -51,12 +51,18 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     and the replay's arrivals, and ``commitment``, the scheme the record was committed in (the store's: its run root and its step
     roots folded are the run root of record, 32 bytes under vllm-v1 and 64 under rows-sha512).  A slim bundle holds the replay's
     picks only: refused.  The Definitions the Build bound are not held to this tree's: no row is evaluated here, and the one-stage
-    proof is over the verifier's own template."""
+    proof is over the verifier's own template.  A served window's bundle (`serve_seal.seal_window`) names no Programs: its
+    Programs are the registered compiler's for the window's advice, so it opens with none (``programs`` empty, each request's
+    arrival its first step in the window)."""
     b = RB.open_bundle(bundle)
     ctx, bdir = b["context"], Path(b["path"])
     if ctx.get("slim"):
         raise CPU.Refused(f"{bdir} is a slim bundle: it holds the replay's picks, not every unit of the population")
     _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
+    if ctx.get("served_window"):
+        return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
+                               commitment=store.commit_scheme, manifest=None, loaded={}, digests={}, programs={}, program_dirs={},
+                               arrivals={str(q["request_id"]): int(q["arrive_step"]) for q in ctx["requests"]})
     o = SimpleNamespace(row_dir=row_dir, replay_workers=None, required_manifest=required_manifest)
     args = CPU.replay_args(o, ctx)
     _path, man = CPU.manifest_of(o, ctx, args)
