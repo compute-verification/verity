@@ -474,6 +474,8 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
     sh = {(w, m16): SimpleNamespace(m16=m16, k=wt.k, n=16, xa=torch.zeros(m16 + 16, wt.k),
                                     b={"tree_a": torch.zeros(4 * m16, dtype=torch.uint8)})
           for w, wt in run.weights.items() for m16, _ in sizes}
+    for s in sh.values():
+        s.buf = s.b.__getitem__
     pipe = {m16: SimpleNamespace(size={"tree_a": 2 * m16}) for m16, _ in sizes}
     calls = {}
     run.whole_capture_begin(run.whole_key(True))
