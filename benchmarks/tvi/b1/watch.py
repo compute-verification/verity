@@ -29,7 +29,7 @@ def scan(claim):
             except (OSError, json.JSONDecodeError):
                 meta = {}
             text = os.environ.get("TEXT_OVERRIDE") or text_for(fam, meta)
-            out.append((d, name, meta.get("model") or "Qwen/Qwen2.5-1.5B", text))
+            out.append((d, name, meta.get("model") or "Qwen/Qwen2.5-1.5B", text, meta.get("S_bits") or float("inf")))
     return out
 
 
@@ -51,8 +51,8 @@ def main():
             time.sleep(60)
             continue
         last_new = time.monotonic()
-        todo.sort(key=lambda t: (t[2], t[3]))
-        for d, name, base, text in todo:
+        todo.sort(key=lambda t: (t[2], t[4]))  # smallest S first: the cliff is at small S
+        for d, name, base, text, _ in todo:
             try:
                 if cur["base"] != base:
                     cur.clear()

@@ -179,15 +179,18 @@ def main():
     dst, dirs = sys.argv[1], sys.argv[2:]
     os.makedirs(dst, exist_ok=True)
     files = sorted({p for d in dirs for p in glob.glob(os.path.join(d, "counted_*.json"))})
-    entries, layers, seen = [], {}, set()
+    best = {}
     for p in files:
         r = json.load(open(p))
-        if "summary" not in r or r["name"] in seen:
+        if "summary" not in r:
             continue
-        seen.add(r["name"])
+        if r["name"] not in best or len(r.get("retention", {})) > len(best[r["name"]].get("retention", {})):
+            best[r["name"]] = r  # a re-analysis with more probed boundaries supersedes
+    entries, layers = [], {}
+    for name, r in best.items():
         e, lay = entry(r)
         entries.append(e)
-        layers[r["name"]] = lay
+        layers[name] = lay
     entries.sort(key=lambda e: (e["fam"], e["model"], e["cond"], e["step"] or 0))
     rng, clf = ranges(entries), cliff(entries)
     for e in entries:
