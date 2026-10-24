@@ -191,6 +191,30 @@ def mlp(dims: tuple[int, ...] = (2, 2, 2), batch: int = 1, steps: int = 2) -> Gr
     return G
 
 
+def inference(dims: tuple[int, ...] = (2, 2, 2), tokens: int = 4) -> Graph:
+    """Honest inference with the same model: the registered weights' forward pass on `tokens` independent tokens, each
+    reading its `x`. Its covering at `(s, k)` is the baseline training's slowdown is measured against."""
+    G = Graph()
+    L = len(dims) - 1
+    W = [[[G.add("theta", theta=True, kind="w", slot=(l, r, c), step=0) for c in range(dims[l])] for r in range(dims[l + 1])]
+         for l in range(L)]
+    G.meta = {"model": "mlp-inference", "dims": list(dims), "batch": tokens, "steps": 1,
+              "state_words": sum(dims[l] * dims[l + 1] for l in range(L)), "data_words_per_token": dims[0]}
+    for b in range(tokens):
+        tg = dict(step=0, token=(0, b))
+        a = [G.add("data", kind="x", i=i, **tg) for i in range(dims[0])]
+        for l in range(L):
+            zs = []
+            for r in range(dims[l + 1]):
+                z = _dot(G, W[l][r], a, mul_tags=[dict(slot=(l, r, c)) for c in range(dims[l])], phase="fwd", layer=l, **tg)
+                G.tag[z]["value"] = (l, r)
+                G.values.append(z)
+                zs.append(z)
+            a = [G.add("relu", (z,), phase="fwd", layer=l, act=True, **tg) for z in zs] if l < L - 1 else zs
+        G.outputs += a
+    return G
+
+
 def _index_mul_blocks(G: Graph) -> None:
     """`P`: forward products of updated weights (every step after the first), keyed `(slot, token)`."""
     for g in range(G.N):

@@ -201,28 +201,90 @@ def _br(sol: dict | None) -> str:
     return f"{sol['n']}" if sol["optimal"] else f"[{sol['lb']}, {sol['n']}]"
 
 
+def why(G: TG.Graph, comp: set[int], ins: set[int], targets: set[int]) -> str:
+    """Which section-4 assumption a block that beats a word-per-value count breaks, from the gates it computes."""
+    steps = {G.tag[g]["step"] for g in comp & targets}
+    if max(steps, default=0) >= 1 and any(G.tag[g].get("phase") == "upd" for g in comp):
+        return "decoding (it recomputes the update from earlier steps' data within s)"
+    if steps <= {0}:
+        return "cap (cheap inputs: the registered weights' values on token data)"
+    if any(G.tag[g].get("kind") == "w" and G.preds[g] for g in ins):
+        return "cap (a tile: the update's words plus cheap token inputs)"
+    return "cap (cheap inputs: activations and partial sums it reads)"
+
+
+def densest(G: TG.Graph, sol: dict, targets: set[int]) -> tuple[set[int], set[int]]:
+    """The block of a solution with the most target gates per unregistered input."""
+    best = max(sol["cover"], key=lambda b: len(set(b[0]) & targets) / max(1, sum(not G.theta[g] for g in b[1])))
+    return set(best[0]), set(best[1])
+
+
+def flags(r: dict) -> list[str]:
+    G = build(r["instance"])
+    out = []
+    k = r["k"]
+    V = set(G.values)
+    dV = why(G, *densest(G, r["V"], V), V)
+    if r["V"]["n"] < r["production_beta1"]["n_lb"] - 1e-9:
+        out.append("P-total: " + dV)
+    if r["cap"]["V"]["n"] and r["cap"]["V"]["n"] > k:
+        out.append(f"P-block: one block computes {r['cap']['V']['n']} values from {k} words; densest V-block: " + dV)
+    if r.get("M") and r["M"]["n"] < r["lean_cw1"]["n_lb"] - 1e-9:
+        M = set(BD.chained(G, r["lean_cw1"]["D"]))
+        out.append("L-c_w=1: " + why(G, *densest(G, r["M"], M), M))
+    lm = r.get("lean_measured")
+    if lm and r.get("M_measured") and r["M_measured"]["n"] < lm["n_lb"] - 1e-9:
+        out.append("L-measured: THEOREM VIOLATED (a solver or statement bug)")
+    return out
+
+
 def table(outdir: Path, names: list[str]) -> str:
     lines = [
-        "| instance | k | s | n* | rho | n*_V | |V|/k | k/cap_V | |M*| (D) | n*_M | Lean, c_w=1 | c_w(s) | Lean, c_w(s) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| instance | k | s | n* | rho | n*/trivial | n*_V | \\|V\\|/k | cap_V | \\|M*\\| (D) | n*_M | Lean c_w=1 | c_w(s) | Lean c_w(s) | flags |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for name in names:
         p = outdir / f"{name}.json"
         if not p.exists():
             continue
         for r in sorted(json.loads(p.read_text()), key=lambda r: (r["k"], MODES.index(r["mode"]))):
-            capV = r["cap"]["V"]["ub"]
             lean1 = r["lean_cw1"]
             lm = r.get("lean_measured")
             rho = f"{r['rho']:.2f}" if "rho" in r else "-"
-            cw = f"{r['cw']['cw']:.3f}" if r.get("cw") else "-"
+            triv = f"{r['full']['n'] / r['trivial']:.1f}" if r["trivial"] else "-"
+            cw = f"{r['cw']['cw']:.2f}" if r.get("cw") else "-"
             lms = f"{lm['n_lb']:.2f} (D={lm['D']}, M*={lm['M_star']}, n*_M={_br(r.get('M_measured'))})" if lm else "-"
             lines.append(
-                f"| {name} | {r['k']} | {r['s'] if r['s'] is not None else 'inf'} | {_br(r['full'])} | {rho} | "
-                f"{_br(r['V'])} | {r['production_beta1']['n_lb']:.2f} | {r['k'] / max(capV, 1):.2f} | "
-                f"{lean1['M_star']} ({lean1['D']}) | {_br(r['M'])} | {lean1['n_lb']:.2f} | {cw} | {lms} |"
+                f"| {name} | {r['k']} | {r['s'] if r['s'] is not None else 'inf'} | {_br(r['full'])} | {rho} | {triv} | "
+                f"{_br(r['V'])} | {r['production_beta1']['n_lb']:.2f} | {r['cap']['V']['ub']} | "
+                f"{lean1['M_star']} ({lean1['D']}) | {_br(r['M'])} | {lean1['n_lb']:.2f} | {cw} | {lms} | "
+                f"{'; '.join(f.split(':')[0] for f in flags(r)) or '-'} |"
             )
     return "\n".join(lines) + "\n"
+
+
+def caps(name: str, ks: list[int], workers: int, cw: dict) -> list[dict]:
+    """The Lean bound's counting step, per block: the most `M*` products one `(s, k)`-block computes (CP-SAT's proven
+    cap) against `(k / c_w)(k / c_a) + k`, at `c_w = 1` and at the measured `c_w(s)` (`cw`: `s` to `c_w`), with `M*` at
+    each one's smallest admissible `D`; and the most forward products of updated weights, chained or not (`P`)."""
+    G = build(name)
+    P = list(G.mul.values())
+    rows = []
+    for k in ks:
+        for mode in modes(name):
+            s = gate_budget(G, k, mode)
+            r = {"instance": name, "k": k, "mode": mode, "s": s,
+                 "cap_P": CV.block_capacity(G, k, s, P, time_limit=60.0, workers=workers)}
+            for label, c in (("cw1", 1.0), ("cw_meas", cw.get(s))):
+                if not c:
+                    continue
+                lb = BD.lean_two_costs(G, k, cw=c)
+                ms = BD.chained(G, lb["D"])
+                r[label] = {**lb, "cw": c,
+                            "cap": CV.block_capacity(G, k, s, ms, time_limit=60.0, workers=workers) if ms else None}
+            rows.append(r)
+            print(json.dumps(r), flush=True)
+    return rows
 
 
 def main() -> None:
@@ -233,8 +295,19 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--budget", type=float, default=120.0, help="column generation's seconds per covering problem")
     ap.add_argument("--cw", action="append", default=None, help="instances whose c_w(s) to measure (default: the smallest)")
+    ap.add_argument("--caps", action="store_true", help="only the per-block cap test (`caps`), from OUT's meta files")
     a = ap.parse_args()
     names = a.instance or list(INSTANCES)
+    if a.caps:
+        out = []
+        for name in names:
+            meta = a.out / f"{name}.meta.json"
+            cw = {}
+            if meta.exists():
+                cw = {(None if s == "None" else int(s)): v["cw"] for s, v in json.loads(meta.read_text())["cw"].items()}
+            out += caps(name, KS[name], a.workers, cw)
+        (a.out / "caps.json").write_text(json.dumps(out, indent=1))
+        return
     cw = set(a.cw) if a.cw else {"mlp222-b1-t2", "mlp2222-b1-t2", "mlp4444-b1-t2"}
     run(names, a.out, a.jobs, a.budget, a.workers, cw)
 
