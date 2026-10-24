@@ -195,8 +195,18 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     W, X, P = audit.pooled(r)[0], 3.0, r.passes
     assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
-    assert snap.delta == r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.sketch(r, n)
+    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
+                          + ledger.sketch(r, n))
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
+
+
+def test_the_coin_commitments_hiding_is_charged(store) -> None:
+    """`ledger.hiding` is `PooledDraw`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries."""
+    s, prover, passes, clock = drive(store, params(), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r = s.record()
+    assert len(r.windows) > 1 and ledger.hiding(r) == pytest.approx(len(r.windows) * 2.0 ** -191, rel=1e-12)
 
 
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:

@@ -19,8 +19,10 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
   time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
   v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
-The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
-pass) plus, under sketch-sha512, `timing.sketch_failure` over the session: the statements' δc and δs."""
+The memory line counts registered blocks only.  δ is the statements' error: the record's δ (δc), 2^-slack_log2 a pass
+(the allowance for `PooledDraw`'s draw terms: Σk_t/2^64 over the windows' k_t draws, and the PRFs' advantages
+Σadv_t), the coin commitment's
+hiding terms (`hiding`) and, under sketch-sha512, `timing.sketch_failure` over the session (δs)."""
 from __future__ import annotations
 
 import math
@@ -128,6 +130,14 @@ def sketch(record: audit.Record, node: Node) -> float:
         return 0.0
     return float(timing.sketch_failure(compressions(record, node), record.passes, record.rows, blocks=record.blocks,
                                        outside=node.sketch_outside))
+
+
+def hiding(record: audit.Record) -> float:
+    """The coin commitment's hiding terms over the record's n windows (`Committed.hiding`,
+    `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
+    committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
+    `common-reference-string`, `hash-derived-key`)."""
+    return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(len(record.windows), key_failure_log2=64)
 
 
 def compressions(record: audit.Record, node: Node) -> int:
@@ -294,7 +304,7 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + sketch(record, node)
+    delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + sketch(record, node)
     S = -(-node.chip_bytes // b)
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
