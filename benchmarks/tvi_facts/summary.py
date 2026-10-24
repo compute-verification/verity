@@ -84,7 +84,7 @@ def main():
             fresh[s["name"]] = s
     best_lr = {}
     for r in res:
-        if r["n"] == 2000 and r.get("seed", 0) == 0 and "_lr" in r["name"]:
+        if r["n"] == 2000 and r.get("seed", 0) == 0 and "_lr" in r["name"] and not r["name"].startswith("e_"):
             k = (r.get("model"), r["group"])
             cand = (r["trainq"]["bits"], r["held"]["bits"], r["lr"])
             best_lr[k] = max(best_lr.get(k, cand), cand)
