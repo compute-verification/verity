@@ -14,8 +14,8 @@ from verity_vllm.program.registry import b1
 
 
 def serve_family(C: dict, *, LP: int = 32, STEPS: int = 15, BN: int | None = None) -> SpecializedDefinition:
-    """`Serve_v4{C, LP, STEPS, BN}`, exactly `compare_structure`'s default: `BN` defaults as it does (the config's `BN`, else the FA2 rule
-    at `C["D"]`); `C` is passed without `BN`."""
+    """`Serve_v4{C, LP, STEPS, BN}`: `BN` defaults to the config's `BN`, else the FA2 rule at `C["D"]`; `C` is passed without
+    `BN`."""
     if BN is None:
         BN = C.get("BN") or b1.fa2_kblock_n(C["D"])
     return bind(b1.ServeV4, C={k: v for k, v in C.items() if k != "BN"}, LP=LP, STEPS=STEPS, BN=BN)
