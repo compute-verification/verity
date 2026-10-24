@@ -54,7 +54,44 @@ def test_templates_hold_their_declared_verdicts():
     assert _got(vs, "token select (top-p, S = SplitsFor_v1") == (True, False)
     assert _got(vs, "token select (top-p, registered S)") == (True, True)
     assert _got(vs, "GP-01 over 2 requests (greedy)") == (True, None)
+    assert _got(vs, "GP-01 over 2 requests (top-p, registered S)") == (True, None)
     assert _got(vs, "GP-01 over 2 requests (top-p, derived S)") == (False, None)
+
+
+def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_position():
+    """The top-p template's keep set (`topp_split.topp_keep_row`, which `TopPMaskWordx{V}s{S}` evaluates) for a row served at
+    batch size B and position i.  The template reads each row by itself, so the batch reaches the keep set only through S.  At
+    the S vLLM derives from the batch (SplitsFor_v1(B, 188) on the RTX PRO 6000) the keep set moves for some rows; the pinned
+    engine (`engine.topp_pin`: vLLM's loop at num_sm = registered S x B) launches the registered S at every B, and the keep set
+    is the same at every (B, i)."""
+    import numpy as np
+
+    from verity_vllm.pipeline.topp_split_probe import gen_random
+    from verity_vllm.program.registry.topp_geometry import registered_splits, splits_for
+    from verity_vllm.program.registry.topp_split import topp_keep_row
+
+    nsm, V = RTX["num_sms"], 4096
+    S_reg = registered_splits(nsm)
+    rows = [gen_random(seed, V) for seed in range(6)]
+    keep = {}
+
+    def kept(r: int, p: float, S: int) -> np.ndarray:
+        if (r, p, S) not in keep:
+            keep[r, p, S] = topp_keep_row(rows[r], p, S)
+        return keep[r, p, S]
+
+    moved = 0
+    for r in range(len(rows)):
+        for p in (0.9, 0.95):
+            pinned, derived = [], []
+            for B in (1, 6, 12, 24, 48, 64):
+                for i in sorted({0, B // 2, B - 1}):
+                    assert splits_for(B, S_reg * B) == S_reg
+                    pinned.append(kept(r, p, splits_for(B, S_reg * B)))
+                    derived.append(kept(r, p, splits_for(B, nsm)))
+            assert all((k == pinned[0]).all() for k in pinned)
+            moved += any((k != derived[0]).any() for k in derived)
+    assert moved >= 1
 
 
 @pytest.mark.slow

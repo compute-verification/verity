@@ -4,8 +4,9 @@
 A request's outputs may depend on its own certified inputs (its prompt, its seed) and on what the registration fixes (weights,
 tables, constants), never on its batch-mates. The batch reaches a Program two ways an owner-labelled check alone wouldn't see:
 
-- a request-owned Input whose value the batch picks: the seeded top-p sampler's split count, S = SplitsFor_v1(live rows,
-  num_SMs) ("splits": "derived"), which changes the top-p keep set at top_p < 1;
+- a request-owned Input whose value the batch picks: the seeded top-p sampler's split count in its derived form, S =
+  SplitsFor_v1(live rows, num_SMs) ("splits": "derived"), which changes the top-p keep set at top_p < 1.  Serving pins S to the
+  registered split count instead (`topp_geometry.registered_splits`, `engine.topp_pin`), a constant of the registration;
 - a launch static: a kind bound from the launch's shape (RMSNorm's BLOCK from its rows off batch invariance, FA3's tile from
   max_seqlen_q, FA2's guard `MASKED_FROM` from the launch's causal flag on cc 12.0).
 
@@ -14,8 +15,8 @@ role's launch statics are held to (b) across the launch shapes the registration 
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 
-- R3: a derived split count. At top_p = 1 the keep set is every lane for any S, so the compiler emits the constant form
-  ("splits": SplitsFor_v1(1, num_SMs)); at top_p < 1 serving must pin S first.
+- R3: a derived split count. The served engine runs every top-p launch at the registered split count, so the compiler emits the
+  constant form ("splits": registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)) at any top_p.
 - R2: a request whose unit (LP, T, policy, seed, id, C), rows or discarded rows differ when its advice is compiled alone (its rows
   renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
@@ -106,7 +107,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
               composition: tuple[tuple[int, int], ...] = ((4, 2), (3, 1))) -> list[Template]:
     """Every template a request-major compilation of ``phi`` calls, each with its labels, the launch shapes the registration
     allows (launches of up to ``max_tokens`` rows, ``max_seqs`` sampled rows, ``max_model_len`` positions) and its declared
-    verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy and under a derived split count."""
+    verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy, at the registered split count, and under a derived one."""
     tp, C = phi.target_profile(), model_shape(phi.model["hf_config"])
     if not tp.batch_invariant:
         raise Unexpressible(f"{phi.execution!r}: the request-major compiler serves batch-invariant targets only")
@@ -150,20 +151,23 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     fn = kind("token_select_stochastic", V=V, CONSTRUCTION=tp.effective_sampler_construction())
     out.append(Template(f"token select (top-p, derived S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, BATCH), own("r"),
                         expect=(False, None), why="its S operand is SplitsFor_v1(live rows): the batch picks the nucleus at top_p < 1"))
-    from verity_vllm.program.registry.topp_geometry import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import registered_splits, splits_for_v1
     at = lambda n: kind("token_select_stochastic_split", V=V, S=splits_for_v1(n, tp.num_sms))  # noqa: E731
-    fn = at(1)
+    S_reg = registered_splits(tp.num_sms)
+    fn = kind("token_select_stochastic_split", V=V, S=S_reg)
     sampled = tuple(((), n) for n in range(1, max_seqs + 1))
-    out.append(Template(f"token select (top-p, S = SplitsFor_v1(live rows)) {fn.id.split('{')[0]}", fn,
+    out.append(Template(f"token select (top-p, S = SplitsFor_v1(live rows)) {fn.id.split('{')[0]}", at(1),
                         (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED), own("r"), bind_at=lambda _req, n: at(n), shapes=sampled,
                         expect=(True, False), why="binding S per step makes it a launch static: five Definitions over 1-64 sampled rows"))
     out.append(Template(f"token select (top-p, registered S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED),
                         own("r"), bind_at=lambda _req, n: fn, shapes=sampled))
 
     greedy = {"kind": "greedy"}
-    derived = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+    topp = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True}
     for name, policy, expect, why in (("greedy", greedy, (True, None), ""),
-                                      ("top-p, derived S", derived, (False, None), "each request's `splits` Input is the batch's")):
+                                      ("top-p, registered S", {**topp, "splits": S_reg}, (True, None), ""),
+                                      ("top-p, derived S", {**topp, "splits": "derived"}, (False, None),
+                                       "each request's `splits` Input is the batch's")):
         wl = _workload(phi, list(composition), policy)
         labels, ret = workload_labels(wl)
         out.append(Template(f"GP-01 over {len(composition)} requests ({name})", wl.fn, labels, ret, expect=expect, why=why))
@@ -235,8 +239,8 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
     for u in units:
         if u is not None and u.policy.get("kind") == "stochastic" and u.policy.get("splits") == "derived":
             raise BatchDependent(f"request {u.request}: its top-p sampler's split count is derived from the step's live rows (S = "
-                                 f"SplitsFor_v1), so its batch picks its nucleus; at top_p = 1 compile the constant form (splits = "
-                                 f"SplitsFor_v1(1, num_SMs)), at top_p < 1 serving must pin S first")
+                                 f"SplitsFor_v1), so its batch picks its nucleus; compile the registered split count the served engine "
+                                 f"pins (splits = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs))")
     for s, rows in enumerate(compiled.steps):
         for rr in rows:
             u = units[rr.request]
