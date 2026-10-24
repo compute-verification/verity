@@ -7,9 +7,10 @@ leaf, its commitment and how many hellos it refused. The verifier reads `directo
 `Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. Each seals the host's
 pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as the gate does (``pins: {lines, sha512}``),
 and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
-session to it. Each holds a `Registry`, infra's model registry in this process, whose registration a period opened with
-``model`` signs (the gate's ``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``).
-#2643's `tests/check/challenger_host.py`, over any challenger."""
+session to it, and to the verifier's copy of main's first-parent history `MAIN`, which holds `PINNED`. Each holds a
+`Registry`, infra's model registry in this process, whose registration a period opened with ``model`` signs (the gate's
+``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``). #2643's
+`tests/check/challenger_host.py`, over any challenger."""
 from __future__ import annotations
 
 import functools
@@ -34,9 +35,11 @@ from verity.ml.crypto import lms
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 HOST = "vy-challenger-1"
-#: the commit every open here was run from (``pinned``), and the host's pins log recording it as main's
+#: the commit every open here was run from (``pinned``), the host's pins log recording it as main's, and the
+#: verifier's own ``git rev-list --first-parent origin/main``, which holds it (`challenger.pinned_session`)
 PINNED = "0" * 40
 PINS = (LC.pin_line(PINNED, PINNED, "2026-10-20T10:00:00Z"),)
+MAIN = ("e1" * 20, PINNED)
 #: the int8 checkpoint role a period's open names with its weights' root (``--model``), one core's credit pins
 MODEL = "LLAMA31_8B_INT8"
 #: the tree infra's model registry reads core's pins in (`models.PINS`)
@@ -296,10 +299,10 @@ class Gate:
         self._complete[session] = body["complete"] is True
         return self.append("end", session, body)
 
-    def ledger(self, pins=None) -> PHC.Ledger:
+    def ledger(self, pins=None, main=MAIN) -> PHC.Ledger:
         """The ledger as `pouw_h1_challenger.Ledger` reads it, under the host's pins log `pins` (its lines; by default
-        the gate's own)."""
-        return PHC.Ledger.of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)])
+        the gate's own) and the verifier's copy of main's first-parent history `main` (None: no copy)."""
+        return PHC.Ledger.of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)], main=main)
 
     def pins_head(self, path: Path) -> Path:
         """The gate's pins log at `path`, as infra publishes it."""

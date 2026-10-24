@@ -32,8 +32,8 @@ from verity.core.protocols.certifier.schedule import expected_grids
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-records/v2"
-COMMITMENT_TAG = "verity-network-certifier/records/v1"
+ID = "verity/network-records/v3"
+COMMITMENT_TAG = "verity-network-certifier/records/v2"
 KINDS = ("raw", "committed", "certified", "mixed")
 
 # --- the reference --------------------------------------------------------------------------------------------------------

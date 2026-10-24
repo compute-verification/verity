@@ -57,7 +57,7 @@ theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} 
     | error _ => rw [hdig] at hdg; cases hdg
     | ok dg =>
       rw [hdig] at hdg
-      have hcdg : r.certificate.digest = dg := ba_beq.mp hdg
+      have hcdg : r.certificate.digest = certificateDigest r.salt dg := ba_beq.mp hdg
       refine ⟨dg, hr, rfl, hcdg, hk, hcl.trans hl, hcd.trans hd, ?_, ?_⟩
       · have := hcw.trans hw
         exact_mod_cast this
@@ -237,7 +237,7 @@ theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray
           RecordHead.digest) with
       | error _ => rw [hrd] at hv; cases hv
       | ok d =>
-        rw [hrd] at hv
+        rw [hrd, hset.1.2.1] at hv
         dsimp only at hv
         split at hv
         · rename_i heq
@@ -245,7 +245,7 @@ theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray
           obtain ⟨h, hh, hd⟩ := bind_ok hrd
           rw [expectedGrid_eq hdecl] at hh
           refine ⟨h, hh, ?_⟩
-          rw [hd, ← ba_beq.mp heq, hset.1.2.2.1]
+          rw [hd, ← ba_beq.mp heq]
         · cases hv
   · rintro ⟨r, dg, hset, hadm, hrec⟩
     unfold egressVerdict
@@ -264,9 +264,9 @@ theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray
       rw [← expectedGrid_eq hd] at hh
       have : (recordHead l .egress w (expectedGrid p.grid p.windows link w) none p.grid eg true >>=
           RecordHead.digest) = .ok dg := by rw [hh]; exact hdg
-      rw [this]
+      rw [this, hset.1.2.1]
       dsimp only
-      rw [ite_eq_left (ba_beq.mpr hset.1.2.2.1)]
+      rw [ite_eq_left (ba_beq.mpr rfl)]
 
 /-- **An egress link-window's violation is `no-verdict` exactly when it is `Pending`.** -/
 theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}

@@ -203,5 +203,6 @@
   "replace": {"Control/Defs.lean": ["def Small (n : Nat) : Prop := n < 10",
                                     "def Small (n : Nat) : Prop := n < 10\n\ndef Big (n : Nat) : Prop := 10 ≤ n"]},
   "fails": "claims: Control.Big (Control.Defs) is a claim definition with no witnesses"
- }
+ },
+ "premise_under_let": {"replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"], "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem let_thm : let k := 1; Control.Hyp2 k → double k = k + k := by\n  intro k _\n  unfold double\n  omega\n\ntheorem helper : double 0 = 0 := rfl"]}, "policy": {"guarantees": {"Control.let_thm": {"owner": "@lean"}}}, "fails": "assumptions: Control.Hyp2 is a premise of Control.let_thm, an assumption the lock doesn't list"}
 }

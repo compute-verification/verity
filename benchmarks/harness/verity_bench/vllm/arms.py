@@ -60,7 +60,14 @@ BUILTINS = {
     # stock arms are independent references; protocol arms use stock FP8 as
     # their bit-exact control.
     "stock-fp8": Arm("stock-fp8", precision="fp8"),
+    # The eager int8_exact engine without a protocol: PoUW H1's token control, since H1's arm serves its own y.
+    "stock-int8": Arm("stock-int8", precision="int8_exact"),
 }
+#: PoUW's H1 + fx1 on the int8_exact engine (`pouw_h1.SCHEME`): its settings need the built engine's model runner, so the
+#: harness installs it on the engine itself, one window a run (`h1_window`), not through `verity_vllm.LLM`
+H1 = "pouw:eps1-sm120-h1fx1"
+#: H1's pouw settings the harness supplies for each window: a spec naming one is refused
+H1_SUPPLIED = ("coins", "rounds", "runner", "steps", "challenger", "session", "gate")
 
 
 def _protocols(value: Any) -> tuple[str, ...]:
@@ -170,6 +177,41 @@ def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str
     from verity_vllm.protocol_options import pouw
 
     return pouw.challenged(config, arm.protocols)
+
+
+def is_h1(arm: Arm) -> bool:
+    return H1 in arm.protocols
+
+
+def window_steps(point: Any, rows: int) -> int:
+    """S for one run of `point` at `rows` tokens a step: an upper bound on the engine steps that run takes. A step that
+    schedules fewer than `rows` tokens leaves no request waiting on its prefill, so each such step moves every running
+    request on by its whole prefill or one token: at most ceil(tokens / rows) full steps, and at most the longest output,
+    the arrival steps and one step a request besides."""
+
+    shapes = point.requests()
+    tokens = sum(r.prompt_tokens + r.output_tokens for r in shapes)
+    return (-(-tokens // rows) + max(r.output_tokens for r in shapes) + max(r.arrive_step for r in shapes)
+            + len(shapes) + 8)
+
+
+def h1_window(config: Mapping[str, Mapping[str, Any]], runner: Any, steps: int, epoch: int) -> dict[str, dict[str, Any]]:
+    """H1's protocols config for one window of `steps` engine steps: the engine's model `runner`, and the window's coins
+    held in this process (epoch `epoch`'s salt coin and its `steps` round coins, the Lean verifier of record's entropy),
+    which a verifier doesn't trust: the window credits nothing (`pouw_h1.IN_PROCESS`), so it measures cost only."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+
+    pouw = {k: v for k, v in config.get("pouw", {}).items() if k != "coins"}
+    supplied = sorted(set(pouw) & set(H1_SUPPLIED))
+    if supplied:
+        raise ValueError(f"{H1}: the harness supplies the pouw settings {supplied} for each window")
+    rounds = LiveRecord(Wd.live_challenger(epoch, steps, verifier.coins), Wd.ROUND)
+    pouw.update(coins=Challenger(epoch, verifier.coins), rounds=rounds, runner=runner, steps=steps)
+    return {**{k: dict(v) for k, v in config.items()}, "pouw": pouw}
 
 
 def resolve_arms(names: str | list[str] | tuple[str, ...], module_specs: tuple[str, ...] = (),
