@@ -773,6 +773,53 @@ each a change to what the Definition states, so none is taken here:
   compare nothing, and an in-order check, in place of the comparators;
 - a public cap on w_len below 63 bits, which narrows the 126 value bits each event carries.
 
+## The replay's state chain (`replay_chain`)
+
+Under advice v1 the compile unit replays the scheduler one step unit per engine step. Each unit is ENC-REPLAY's
+`ReplayStep_v1` (`replay_step`): the committed queue state, the next A certified arrivals and the next A decisions go
+in, and the step's rows and next state come out. The chain hands the state from unit to unit as the rows of one
+produced value a window (`one_stage.produced`, value `replay-state`, `hm96-sha512/row/v2` bit rows). Each unit reads
+its own row and the next at public positions, and no gate hashes a row: the Lean verifier checks each read's path.
+
+**The step's cursors are private.** The step reads its arrivals and decisions at the scan's cursors, which move by its
+`taken` and `used`, and where a step stands in the certified arrivals or the window's decisions is the schedule
+itself. A registered read sits at a position the verifier derives, so no unit can read the arrival record at the
+cursor. The row carries them instead:
+- the certified arrivals not yet taken (`queue`, at most Q) and the window's decisions not yet read (`decisions`, at
+  most D), front first. The step reads their first A, and `ReplayAdvance` shifts them by what it took and read;
+- once a window, `ReplayLoad` appends the window's certified arrivals (K warden slots) and loads its decoded decisions
+  and its count of executed steps, all read at public positions.
+
+**The row** is `width` bits: each field's elements in turn, each least significant bit first, zero-padded to a whole
+16-bit word.
+
+    state    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW
+             | wait_valid W×1 | wait_id W×IW | wait_P W×LW | wait_O W×LW | wait_out W×LW | free 1×BW
+    queue    q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW
+    window   dec D×1 | left 1×DW | steps 1×PW
+
+- `state` is ReplayStep_v1's state input and next-state output, bit for bit. It holds the running slots (id, prompt
+  length, certified output length, outputs so far, tokens computed), the waiting slots, and the free block count. A
+  running request holds ⌈computed / B⌉ blocks, so the KV pool needs no count per request.
+- The widths are LW = bitlen(L), BW = bitlen(NB), DW = bitlen(D) and PW = bitlen(P).
+- In every row the valid elements of each group are a prefix and the rest are zero bits, as are the decisions past
+  `left`. `decode` refuses any other row.
+
+**A window** is the rows S_0 … S_{P+1}, with P the public cap on its steps. Unit 0, `ReplayLoad`, reads rows 0 and 1.
+Unit u ≥ 1 is step u: ReplayStep_v1 on row u, with `ReplayAdvance` checking row u + 1. Steps past the window's executed
+count are idle: the next row is the row, and `ReplayAdvance`'s `active` = 0 drops the unit's rows.
+- The load refuses a row 0 that leaves decisions or steps unread, a queue past Q, more than D decisions or P steps,
+  and decisions with no step. The window's last executed step must read its last decision.
+- **The carry.** Window w's row 0 is window w − 1's last row under the same salt (`commit_window(carry=…)`), so the
+  verifier checks that their openings b‖c are equal (`check_chain`, `C-carry`).
+- **The start.** The session's first row is the empty engine (`empty`, with NB − 1 free blocks) under the public salt
+  `empty_salt`, whose opening the verifier computes (`C-first`).
+
+**Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the queue's shift, Q·(1 + IW + 2·LW)·bitlen(A), the
+decisions' shift, D·bitlen(A), and about 2·width for the idle select and the equality. It also costs two reads and one
+row. A window costs P steps and one `ReplayLoad`, P + 2 rows, and 2(P + 1) reads, each a frame-v3 path of depth
+⌈log2(P + 2)⌉.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
@@ -1053,6 +1100,19 @@ and seven lemmas, and three more proved lemmas:
     differ decode's reason is a `DEFERRED` one; each deferred refusal is one named string the circuit takes;
   - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
     pinned at L = 240 and at the 60 s window;
+- **`test_network_certifier_replay_chain.py`:** the replay's state chain:
+  - the row's layout is pinned field by field, its state part is ReplayStep_v1's fields and bits (once `replay_step`
+    is in the tree), and the empty row and random rows round-trip. `decode` refuses a gap, an empty slot with a bit
+    set, a decision past `left`, `left` past D, steps past P, nonzero padding, a short row and a non-bit;
+  - `ReplayAdvance` and `ReplayLoad` compute `advance` and `load` on random rows, each with its next row right and
+    one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, decisions overread or left at
+    the window's last step, and the idle step. For `ReplayLoad` they are the last window's decisions or steps left, a
+    queue past Q, steps past P, decisions with no step, a decision past the count, a count past D and a gap in the
+    arrivals;
+  - a two-window session runs through both parts, with every unit's reads opened under the window's root.
+    `check_chain` accepts it, and refuses a short window, the empty row under a fresh salt or another program's, the
+    carried row under a fresh salt, and another row of the last window;
+  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;

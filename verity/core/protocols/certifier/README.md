@@ -43,6 +43,11 @@ A spec-level reference for network accounting's timing channel:
   exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
   (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
   `verity` it takes the circuits and their evaluator;
+- the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step unit to the next as the rows
+  of one produced value a window, with the certified arrivals not yet taken and the window's unread decisions, since
+  the step's cursors are private. `ReplayAdvance` sits beside each step and `ReplayLoad` runs once a window; the
+  windows join by equal openings and the session starts from the empty engine under a public salt (`check_chain`). Its
+  cost at a shape is `size`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
