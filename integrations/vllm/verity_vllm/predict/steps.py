@@ -9,10 +9,11 @@
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice.
 
 - A request's Program is the Build's request wrapper at the shape the advice ran it at, `build.build_program(φ_r, "request", LP,
-  T)`, under the policy its body names (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
-  (`output_len` − 1). The one row async scheduling runs past a request's last kept output samples nothing kept: it is
-  `discarded`, in no Program. A request's (LP, T, policy) reads its own advice record and body alone, never its batch; requests of
-  one (LP, T, policy) share one Program.
+  T, C)`, under the policy its body names (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
+  (`output_len` − 1), C its prefix-cache hit (the cached request wrapper: every layer's first C key and value rows are its `prefix`
+  input, the producers' rows, which GP-01 records per block). The one row async scheduling runs past a request's last kept output
+  samples nothing kept: it is `discarded`, in no Program. A request's (LP, T, C, policy) reads its own advice record and body
+  alone, never its batch; requests of one (LP, T, C, policy) share one Program.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
@@ -25,14 +26,16 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
   whose `output_len` and `finish` its `max_tokens` contradicts;
 - a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
-  request's (the KV at a position reads every token up to it);
-- what v0 doesn't compile: a prefix-cache hit (the cached request wrapper isn't ported) or a chunked prefill (no chunked request
-  wrapper on either side); a preemption (whose resume's sources go unchecked, as the request compiles to nothing), or decode rows
-  that aren't one position a step in consecutive steps; positions past the model's; sampling other than greedy or seeded top-p
-  with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know).
+  request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size;
+- what v0 doesn't compile: a chunked prefill (no chunked request wrapper on either side); a prefix-cache hit on a stochastic
+  request (the cached stochastic wrapper isn't ported); a preemption (whose resume's sources go unchecked, as the request compiles
+  to nothing), or decode rows that aren't one position a step in consecutive steps; positions past the model's; sampling other
+  than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler
+  doesn't know).
 
 A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
-request instead: a refused request's rows and Program leave the compilation, and `refused` names why.
+request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
+KV; `refused` names why.
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `trace_commands` lists the Build traces (`verity-vllm build
 --wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
@@ -48,6 +51,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+
+from verity_vllm.program import prefix_plan as PP
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
@@ -102,7 +107,8 @@ class RowRef:
 
 @dataclass(frozen=True)
 class RequestUnit:
-    """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, its first step and its id."""
+    """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, its first step and its id;
+    with a prefix-cache hit, its C cached rows and the request that computed each cached block."""
 
     request: int
     digest: str
@@ -112,9 +118,11 @@ class RequestUnit:
     seed: int | None
     first_step: int
     id: str = ""
+    C: int = 0
+    producers: tuple[int, ...] = ()
 
     def key(self) -> str:
-        return json.dumps([self.LP, self.T, self.policy], sort_keys=True)
+        return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else [])], sort_keys=True)
 
 
 @dataclass
@@ -131,7 +139,7 @@ class Compiled:
         from .score import code_version
         return {"schema": SCHEMA, "compiler": code_version(), "cap_bits": self.cap_bits, "workload_digest": self.workload.digest,
                 "lag": self.workload.lag, "programs": sorted(self.programs),
-                "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T,
+                "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
                                                      "policy": u.policy, "seed": u.seed, "first_step": u.first_step} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())}}
@@ -225,18 +233,19 @@ def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -
         at = end
 
 
-def shape_of(i: int, prompt_len: int, rows: list[tuple[int, I1.Row]], output_len: int) -> tuple[int, int, int]:
-    """Request `i`'s (LP, T, first step) from its rows: the whole prompt at its first step from position 0, then one decode row a
-    step; anything else refused by name. T counts the live decode rows, `output_len` − 1 (one row past the last kept output may
-    follow, discarded)."""
+def shape_of(i: int, prompt_len: int, rows: list[tuple[int, I1.Row]], output_len: int) -> tuple[int, int, int, int]:
+    """Request `i`'s (LP, T, first step, C) from its rows: at its first step the whole prompt after its C cached rows (0 without a
+    prefix-cache hit), then one decode row a step; anything else refused by name. T counts the live decode rows, `output_len` − 1
+    (one row past the last kept output may follow, discarded)."""
     LP = int(prompt_len)
     s0, first = rows[0]
-    if first.cache_hit or first.start:
-        raise Unexpressible(f"request {i}: a prefix-cache hit of {first.cache_hit or first.start} tokens at step {s0} (the cached request "
-                            f"wrapper isn't ported: v0 needs prefix caching off)")
-    if first.n != LP:
-        raise Unexpressible(f"request {i}: a chunked prefill, {first.n} of its {LP} prompt tokens at step {s0} (no chunked request "
-                            f"wrapper: v0 needs chunked prefill off)")
+    C = int(first.cache_hit)
+    if first.start != C or not C < LP:
+        raise Unexpressible(f"request {i}: its first row starts at position {first.start} with a cache hit of {C} tokens, for a prompt of "
+                            f"{LP} (a prefill computes the positions after its hit, and at least the last)")
+    if first.n != LP - C:
+        raise Unexpressible(f"request {i}: a chunked prefill, {first.n} of its {LP - C} uncached prompt tokens at step {s0} (no chunked "
+                            f"request wrapper: v0 needs chunked prefill off)")
     for k, (s, row) in enumerate(rows[1:], start=1):
         got, want = (s, row.start, row.n), (s0 + k, LP + k - 1, 1)
         if got != want:
@@ -244,7 +253,19 @@ def shape_of(i: int, prompt_len: int, rows: list[tuple[int, I1.Row]], output_len
                                 f"chunk: v0 runs each request one position a step from its prefill)")
     if not output_len <= len(rows) <= output_len + 1:
         raise Unexpressible(f"request {i}: {len(rows)} rows for {output_len} kept outputs (a row each, and at most one past the last)")
-    return LP, int(output_len) - 1, s0
+    return LP, int(output_len) - 1, s0, C
+
+
+def producers_of(i: int, s: int, row: I1.Row, bs: int) -> tuple[int, ...]:
+    """The request that computed each cached block of `row`'s hit (`program.prefix_plan`'s producers), from its sources: whole blocks
+    of the engine's `bs` tokens, as vLLM's prefix cache serves them."""
+    out: list[int] = []
+    for src in row.sources:
+        if src.n % bs:
+            raise Unexpressible(f"request {i}: step {s}'s cache hit reads {src.n} tokens of request {src.request}'s KV, not whole blocks of "
+                                f"{bs} (vLLM's prefix cache serves whole blocks)")
+        out += [src.request] * (src.n // bs)
+    return tuple(out)
 
 
 @dataclass
@@ -269,8 +290,8 @@ class Plan:
 
 
 def request_program(registered: Registered, unit: RequestUnit) -> Any:
-    """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy."""
-    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T)
+    """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows."""
+    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T, C=unit.C)
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Compiled:
@@ -291,7 +312,8 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r, canon)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
-    wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.T + 1, u.first_step, comps[u.key()], T=u.T)
+    wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.T + 1, u.first_step, comps[u.key()], T=u.T,
+                                              prefix={"rows": u.C, "producers": list(u.producers)} if u.C else None)
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
@@ -336,20 +358,29 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                     check_sources(s, row, prompts)
                 except Unexpressible as e:
                     refuse(row.request, str(e))
+    bs = int((phi0.engine or {}).get("block_size") or PP.DEFAULT_BLOCK_SIZE)
     units: list[RequestUnit | None] = []
     for i, q in enumerate(adv.requests):
         if i not in refused:
             try:
-                LP, T, s0 = shape_of(i, q.prompt_len, rows[i], q.output_len)
+                LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len)
                 if LP + T > shape.max_pos:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
                 policy, seed = policy_of(i, params[i], registered.default_seed)
+                if C and policy["kind"] != "greedy":
+                    raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
+                                        f"request wrapper isn't ported)")
+                producers = producers_of(i, s0, rows[i][0][1], bs) if C else ()
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
-                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id))
+                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers))
                 continue
         units.append(None)
+    while partial and (lost := [(u.request, p) for u in units if u is not None for p in u.producers if units[p] is None][:1]):
+        (i, p), = lost
+        refuse(i, f"request {i}: its cache hit reads request {p}'s KV, and request {p} is refused")
+        units[i] = None
     if all(u is None for u in units):
         raise Unexpressible(f"every request is refused, request {min(refused)} first: {refused[min(refused)]}")
     steps: list[list[tuple[int, int, int, int]]] = []
@@ -404,9 +435,9 @@ def _label(policy: dict) -> str:
 
 
 def trace_dir(u: RequestUnit | dict) -> str:
-    """The derive dir name of a request Program's trace: `build_request_LP<LP>_T<T>_<policy>`."""
-    LP, T, policy = (u.LP, u.T, u.policy) if isinstance(u, RequestUnit) else (u["LP"], u["T"], u["policy"])
-    return f"build_request_LP{LP}_T{T}_{_label(policy)}"
+    """The derive dir name of a request Program's trace: `build_request_<prefix_plan.shape_name>_<policy>`."""
+    LP, T, C, policy = (u.LP, u.T, u.C, u.policy) if isinstance(u, RequestUnit) else (u["LP"], u["T"], u.get("C") or 0, u["policy"])
+    return f"build_request_{PP.shape_name(PP.shape(LP, T, C))}_{_label(policy)}"
 
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
@@ -422,6 +453,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
         pol = u["policy"]
         sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
+                     *(["--cached", str(u["C"])] if u.get("C") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
                      "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling])
     return cmds
