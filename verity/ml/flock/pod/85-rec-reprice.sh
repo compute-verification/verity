@@ -31,7 +31,9 @@
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
 #                firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
-#                peaks sum to at most OPROVE_MEM_GB=48
+#                peaks sum to at most OPROVE_MEM_GB=48. MODES=firewall alone, WARM=0 RUNS=1: each statement fixed before
+#                any session starts gets exactly one independent session, never drawn again, every exit recorded
+#                (out/oprove/statements.sha512, exits.tsv)
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
@@ -653,15 +655,28 @@ oprove)
   [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
     || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $DD/v-sess $O/oprove
+  # Outer proofs through the firewall are independent sessions (AGENTS.md, Daniel's provisional batch of 24 Oct): every
+  # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
+  # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
+  # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv), an
+  # honest one's failure failing the step.
+  if [[ " $MODES " == *" firewall "* ]]; then
+    [ "$MODES" = firewall ] || { echo "REFUSED: MODES=$MODES: a firewalled oprove gives each staged statement exactly one session; run MODES=dev or host in a job of its own"; exit 2; }
+    [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
+    export GPU_TRIES=1 GPU_PREEMPTIBLE=
+  fi
+  (cd $V && find . \( -name circuit.txt -o -name pub.bin -o -name inst.bin -o -name partition.json -o -name program.json \
+    -o -name registered.json \) | LC_ALL=C sort | xargs sha512sum) > $O/oprove/statements.sha512
+  : > $O/oprove/exits.tsv
   W0=$WARM R0=$RUNS
   oprove_one() {
-    local C=$1 l=${1//\//-} n mode
+    local C=$1 l=${1//\//-} n mode rc=0
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
     for mode in $MODES; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
-      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
+      LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
     done
     PENV=
     # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
@@ -675,6 +690,7 @@ oprove)
       echo "$n replay exit $?"
     fi
     rm -rf $DD/v-sess/$l && cp -r $LAST $DD/v-sess/$l && echo $V/$C > $DD/v-sess/$l.stmt && echo $mode > $DD/v-sess/$l.mode
+    return $rc
   }
   # oprove_gb: each statement's estimated peak GB, largest first. The fit to the CPU prover's peaks at K=64 N=64
   # (r20261024-055050-962e: RecOpen 6.4 to 32.5, InnerRepCheck 22.3, RecCap 2.3) is linear in the circuit text's GB, 2^(k_log
@@ -703,11 +719,19 @@ EOF
     while [ ${#RUNNING[@]} -gt 0 ] && { [ ${#RUNNING[@]} -ge ${OPROVE_JOBS:-4} ] || [ $((USED + gb)) -gt ${OPROVE_MEM_GB:-48} ]; }; do
       wait -n -p FIN; [ -n "${RUNNING[$FIN]:-}" ] && USED=$((USED - ${RUNNING[$FIN]%% *})) && echo "oprove ${RUNNING[$FIN]#* } done" && unset "RUNNING[$FIN]"
     done
-    oprove_one $C > $O/oprove/$l.log 2>&1 &
+    { oprove_one $C > $O/oprove/$l.log 2>&1; printf '%s\t%s\n' $l $? >> $O/oprove/exits.tsv; } &
     RUNNING[$!]="$gb $l"; USED=$((USED + gb)); echo "oprove $l started (${gb} GB est, ${USED} GB running)"
   done
   wait
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
+  (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
+  python3 - $O/oprove/exits.tsv "${TODO[@]#* }" <<'EOF' || exit 1
+import sys
+got = dict(l.rstrip("\n").split("\t") for l in open(sys.argv[1]) if l.strip())
+bad = [f"{l}: exit {got[l]}" for l in (c.replace("/", "-") for c in sys.argv[2:]) if got.get(l, "0") != "0" and not l.startswith("forged-")]
+print(f"oprove: {len(got)} statements, one session each: exits {dict(sorted(got.items()))}")
+sys.exit(f"oprove: an honest statement's session failed, and none is drawn again: {', '.join(bad)}" if bad else 0)
+EOF
   # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
