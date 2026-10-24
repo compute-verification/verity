@@ -1766,7 +1766,7 @@
    "digest": "11b0df76ee505ea115448540bad130def9ee3e11023f5c2d8e9804b0affabb5d"
   },
   "Pouw.PearlC.Assumptions.TTOutW1": {
-   "owner": "@memory-accounting",
+   "owner": "@compute-accounting",
    "digest": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
   }
  },
