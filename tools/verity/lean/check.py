@@ -950,8 +950,10 @@ _programs_lock = threading.Lock()
 
 def facts_program(pkg: Path) -> str:
     """`Facts.lean` compiled (`lean -c`, then `leanc`) with ``pkg``'s toolchain, once per toolchain and source in a process:
-    interpreted (`lean --run`), its own walks were most of a large package's facts run. The program is checked against the
-    digest it had when compiled before each use. Raises RuntimeError when it does not compile or has changed."""
+    interpreted (`lean --run`), its own walks were most of a large package's facts run. It exports its symbols
+    (`-rdynamic`, Lake's `supportInterpreter`): elaborating a pin's statement runs the interpreter, which calls the library's
+    native code by symbol, as in `lean`. The program is checked against the digest it had when compiled before each use.
+    Raises RuntimeError when it does not compile or has changed."""
     src = TOOL / "Facts.lean"
     toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
     key = (str(PROGRAMS), toolchain, sha256(src))
@@ -964,7 +966,7 @@ def facts_program(pkg: Path) -> str:
                 d = PROGRAMS / hashlib.sha256("\0".join(key[1:]).encode()).hexdigest()[:16]
                 d.mkdir(parents=True, exist_ok=True)
             for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / "Facts.c"), str(src)],
-                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", str(d / "Facts.c"), "-o", str(d / "facts")]):
+                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / "Facts.c"), "-o", str(d / "facts")]):
                 rc, text = run(argv, pkg, d / "compile.log")
                 if rc:
                     raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
