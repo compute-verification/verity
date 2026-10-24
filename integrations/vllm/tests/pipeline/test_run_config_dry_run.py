@@ -57,7 +57,7 @@ def test_dry_run_gpu_phase():
 @pytest.mark.slow
 def test_dry_run_cpu_phase():
     c = dry("--phase", "cpu", "--laptop", "--full-replay", "--seed", "12345")
-    assert list(c) == ["resolve", "census_reconcile", "nonint_compare", "fold", "fold_2", "golden", "gates"]
+    assert list(c) == ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "golden", "gates"]
     log = "/r/RUN/capture/log.jsonl.gz"
     r = c["resolve"]
     assert r[:5] == ["/pod/py312", "-m", "verity_vllm.pipeline.cli", "resolve-log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
@@ -65,6 +65,9 @@ def test_dry_run_cpu_phase():
     assert cr[cr.index("--reconcile") + 1] == "/r/RUN/census/census.json" and cr[cr.index("--report") + 1] == "/r/RUN/census_reconcile"
     nc = c["nonint_compare"]
     assert "--compare" in nc and nc[nc.index("--case") + 1] == "B1" and nc[nc.index("--accepted-ctl") + 1] == "/r/RUN/control/tokens.json"
+    cp = c["compare"]
+    assert cp[1:4] == ["-m", "verity_vllm.pipeline.cli", "fold-compare"] and cp[cp.index("--out") + 1] == "/r/RUN/compare.json"
+    assert cp[cp.index("--snapshots") + 1] == "/r/RUN/capture" and cp[cp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     for st, out in (("fold", "/r/RUN/fold_summary.json"), ("fold_2", "/r/RUN/fold_summary_2.json")):
         f = c[st]
         assert f[1:6] == ["-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold"] and f[f.index("--out") + 1] == out
@@ -79,12 +82,12 @@ def test_dry_run_no_laptop_and_skip():
     assert "--max-arg-leaves" not in c["fold"]
     for st in ("census_reconcile", "nonint_compare", "golden", "replay_a", "replay_chain"):
         assert c[st][0].startswith("SKIP")
-    assert c["resolve"][0] == "/pod/py312"
+    assert c["resolve"][0] == "/pod/py312" and c["compare"][0] == "/pod/py312"
 
 
 @pytest.mark.slow
 def test_the_stage_names_without_a_command_run_nothing_and_a_skip_naming_them_is_printed():
-    retired = ("compare", "root_policy", "wiring", "replay_a", "replay_chain")
+    retired = ("root_policy", "wiring", "replay_a", "replay_chain")
     c = dry("--phase", "cpu")                                         # no --seed: no stage draws a sample
     assert not set(retired) & set(c)
     c = dry("--phase", "cpu", "--skip", ",".join(retired))
@@ -122,7 +125,7 @@ def test_dry_run_snapshot_caps_reach_the_capture_only():
 def test_dry_run_existing_capture_paths():
     c = dry("--phase", "cpu", "--log", "/data/x/log.jsonl.gz", "--snapshots", "/data/x", "--control-tokens", "/data/ctl.json", "--other-log", "/data/y.jsonl.gz",
             "--seed", "7")
-    assert c["resolve"][4] == "/data/x/log.jsonl.gz"
+    assert c["resolve"][4] == "/data/x/log.jsonl.gz" and c["compare"][c["compare"].index("--snapshots") + 1] == "/data/x"
     assert c["nonint_compare"][c["nonint_compare"].index("--accepted-ctl") + 1] == "/data/ctl.json"
     assert c["fold_other"][c["fold_other"].index("--log") + 1] == "/data/y.jsonl.gz"
 

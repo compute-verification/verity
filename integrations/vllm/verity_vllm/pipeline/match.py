@@ -18,10 +18,11 @@ CPU phase (Python 3.12, torch-free; pod or laptop):
     resolve           bench.resolve_log -> RUN_DIR/resolution.json
     census_reconcile  census --reconcile -> RUN_DIR/census_reconcile.json
     nonint_compare    noninterference --compare -> RUN_DIR/nonint/noninterference.json
+    compare           verity_vllm.check.fold_compare -> RUN_DIR/compare.json (tokens, boundary, subcircuits, structure)
     fold, fold_2      this module's fold worker in two separate processes -> RUN_DIR/fold_summary.json, fold_summary_2.json
     fold_other        (with --other-log) a second capture's digest -> RUN_DIR/fold_summary_other.json (G6 detail only)
     golden            verity_vllm.properties.golden --check -> RUN_DIR/golden.json
-    compare, root_policy, wiring, replay_a, replay_chain
+    root_policy, wiring, replay_a, replay_chain
                       no command: stage names a `--skip` still gives (the row's does), recorded as skipped; unskipped they run nothing
     gates             in-process: gates.evaluate_gates -> RUN_DIR/gates.json; card -> RUN_DIR/card.json, RUN_DIR/CARD.md,
                       <cards-dir>/<config_id>.json
@@ -156,6 +157,15 @@ class Plan:
     def control_tokens_path(self) -> Path:
         return Path(self.a.control_tokens).resolve() if self.a.control_tokens else self.control_dir / "tokens.json"
 
+    def safetensors_glob(self) -> str | None:
+        cd = self.checkpoint_dir
+        if not cd:
+            return None
+        if any(ch in cd for ch in "*?["):
+            return cd
+        p = Path(cd)
+        return str(p / "model*.safetensors") if p.is_dir() or not p.suffix else str(p)
+
     # commands ------------------------------------------------------------------------------------------
 
     def engine_args(self) -> list[str]:
@@ -191,6 +201,13 @@ class Plan:
         if stage == "nonint_compare":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
                     "--case", a.case, "--accepted-ctl", str(self.control_tokens_path())]
+        if stage == "compare":
+            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
+                 "--out", str(self.p("compare"))]
+            g = self.safetensors_glob()
+            if g:
+                c += ["--safetensors", g]
+            return c
         # [R17-42 route A (4)] the fold folds the MoE scope under the workload's DECLARED construction (manifest target.moe_construction) and the top-p
         # select under the one the Build's Programs declare (--program-dir: a single-request select has no shared-greedy form); never off the trace
         mc, sc, rv = _workload_moe_construction(a.workload), program_sampler_construction(a.program_dir or ()), program_registered_values(a.program_dir or ())
@@ -210,7 +227,7 @@ class Plan:
         gpu = list(GPU_STAGES) if phase in ("gpu", "all") else []
         cpu: list[str] = []
         if phase in ("cpu", "all"):
-            # compare, root_policy, wiring, replay_a and replay_chain have no command: they stay so that a `--skip` naming them
+            # root_policy, wiring, replay_a and replay_chain have no command: they stay so that a `--skip` naming them
             # records the skip it always has in stages.json (the row's does)
             cpu = ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2"]
             if self.a.other_log:
@@ -535,7 +552,7 @@ class Options:
     snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a " "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton " "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a " "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (compare --safetensors)")
     hf_config: str | None = option("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
     family: str | None = option("--family", default=None, help="hand-authored family reference name (default Serve_v4 in the card)")
     log: str | None = option("--log", default=None, help="reuse an existing raw log instead of RUN_DIR/capture/log.jsonl.gz")

@@ -19,7 +19,8 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
     RUN_DIR/golden.json              `verity_vllm.properties.golden --check` (integrator)
     RUN_DIR/quarantine.json          differential tests of newly registered definitions (when the run uses any)
     RUN_DIR/holdouts.json            written by the ORCHESTRATOR: the same gates G1..G6 over holdout workloads
-    RUN_DIR/compare.json, wiring.json, replay_a.json, replay_chain.json, replay_b_step<N>.json, root_policy.json, provenance.json
+    RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
+    RUN_DIR/wiring.json, replay_a.json, replay_chain.json, replay_b_step<N>.json, root_policy.json, provenance.json
                                      no producer in this tree: a gate that reads one is skipped with the file missing as
                                      its reason
 
