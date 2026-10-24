@@ -1154,6 +1154,58 @@
    "owner": "@lean",
    "digest": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e"
   },
+  "Nci.Cover.Assumptions.ActivationReads": {
+   "owner": "@training",
+   "digest": "1c8c87ab3ebdada3e60cdcaeea235d0ef229573362c93d7c9172c67581a160da"
+  },
+  "Nci.Cover.Assumptions.ColumnsIncompressible": {
+   "owner": "@training",
+   "digest": "db289a17daf39dbe23016dfadb6521dbcfae1cd0257a7ac5675fd21b6d35d295"
+  },
+  "Nci.Cover.Assumptions.ConditionalParameterHardAt": {
+   "owner": "@training",
+   "digest": "80287a42cbb5ffc13ca43712b0bdec36063c3c78f35dd195573dae179936034b"
+  },
+  "Nci.Cover.Assumptions.ConditionalUpdateHardness": {
+   "owner": "@training",
+   "digest": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69"
+  },
+  "Nci.Cover.Assumptions.UpdateHardness": {
+   "owner": "@training",
+   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
+  },
+  "Nci.Cover.Assumptions.ValueReadHardness": {
+   "owner": "@training",
+   "digest": "57ea393e0e74990c91150c14cbf3ed105998975f2b901e260a67d1861dda1f2c"
+  },
+  "Nci.Cover.Circuit.Covers": {
+   "owner": "@training",
+   "digest": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a"
+  },
+  "Nci.Cover.Circuit.InferenceBlock": {
+   "owner": "@training",
+   "digest": "956c51257ab4bb0a3bb4a53911d811a4daf5e6cd6e79c2ebc2c7a0e11a32a98b"
+  },
+  "Nci.Cover.Circuit.IsPath": {
+   "owner": "@training",
+   "digest": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949"
+  },
+  "Nci.Cover.Circuit.ReachesIn": {
+   "owner": "@training",
+   "digest": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97"
+  },
+  "Nci.Cover.Cube.Wide": {
+   "owner": "@training",
+   "digest": "f0426dfa5650e80833a49031dcf0d30d9197d7a8b5945b32c797d3513d4b1462"
+  },
+  "Nci.Cover.Keyed.PerValueCut": {
+   "owner": "@training",
+   "digest": "993cfcb7318abfa807ffda646f89563e0bd784eeb3bb46fbf09bab7414abf0b3"
+  },
+  "Nci.Cover.MulBlocks.Upstream": {
+   "owner": "@training",
+   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
+  },
   "Nci.Covering.Covers": {
    "owner": "@compute-accounting",
    "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
@@ -7432,6 +7484,94 @@
    "assumptions": [],
    "type_hash": "1ad81857586f7b7d31994f0793364f85a65fc836785f058f640191a61ecff010"
   },
+  "Nci.Cover.SecurityProofs.CoverTraining": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.CoverTraining : Nci.Cover.Guarantees.CoverTraining"],
+   "assumptions": [],
+   "type_hash": "297f564870b1cc44aedb600a0d4bcde1b61cec7a46c12de4f1ddc0f18b3a7c2d"
+  },
+  "Nci.Cover.SecurityProofs.CoverTrainingAligned": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.CoverTrainingAligned : Nci.Cover.Guarantees.CoverTrainingAligned"],
+   "assumptions": [],
+   "type_hash": "29c9c2c38c76177811ea5bcb0c6f42fe547c4cfcdc9c46e78b9415d13b34cf35"
+  },
+  "Nci.Cover.SecurityProofs.CoveringBoundAdditive": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive : Nci.Cover.Guarantees.CoveringBoundAdditive"],
+   "assumptions": [],
+   "type_hash": "7202ba91fb38c6aea8a9f02d5218fa881c7af90399622ae8fc80df0718d05366"
+  },
+  "Nci.Cover.SecurityProofs.FanOutCoverBound": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.FanOutCoverBound : Nci.Cover.Guarantees.FanOutCoverBound"],
+   "assumptions": [],
+   "type_hash": "ab5acfc42c21ac54996a7dd1b8dcf011976b9734361c52eee8b5efb5a8e9fa86"
+  },
+  "Nci.Cover.SecurityProofs.FanOutIntensity": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.FanOutIntensity : Nci.Cover.Guarantees.FanOutIntensity"],
+   "assumptions": [],
+   "type_hash": "b93da7cdd1fce3f0c4209075f1205af31ed1acc614f8f365ff1013eb02a994eb"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadCoverBound": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.FanOutReadCoverBound : Nci.Cover.Guarantees.FanOutReadCoverBound"],
+   "assumptions": [],
+   "type_hash": "66fd20279eaefb68a8ce3b6a683c9e6368d50dfa5a7b9626ec3187098b687968"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural : Nci.Cover.Guarantees.FanOutReadCoverBoundStructural"
+   ],
+   "assumptions": [],
+   "type_hash": "b10e405e259e4329ebb7f6b91492a36294efd26fbb0f08749fe17e533efcb15e"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadIntensity": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.FanOutReadIntensity : Nci.Cover.Guarantees.FanOutReadIntensity"],
+   "assumptions": [],
+   "type_hash": "ac9831fb6c362524df01692ee8e5e7ca8fda9e58976a34a77d2f112ed7af3e01"
+  },
+  "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural : Nci.Cover.Guarantees.FanOutReadIntensityStructural"
+   ],
+   "assumptions": [],
+   "type_hash": "c567b9353add78a325029998224bb67a39fe7deba2864c6776f3a599867f5796"
+  },
+  "Nci.Cover.SecurityProofs.KeyedActivationReads": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.KeyedActivationReads : Nci.Cover.Guarantees.KeyedActivationReads"],
+   "assumptions": [],
+   "type_hash": "f23c4450c7cae6627f6d4491fe5bb52fe3e3a2b8a05ebef10cf1e847f0ab869d"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumCoverBound": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.PartialSumCoverBound : Nci.Cover.Guarantees.PartialSumCoverBound"],
+   "assumptions": [],
+   "type_hash": "f5982908315cfea86e847ab4e784dd0a0639d8757620872d76e172ac649b9442"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumIntensity": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.PartialSumIntensity : Nci.Cover.Guarantees.PartialSumIntensity"],
+   "assumptions": [],
+   "type_hash": "2efc7fc52490758c9a3e08119a4ea558bc64e80406c467f7ad6efeb6269ce59d"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound : Nci.Cover.Guarantees.PartialSumKeyedCoverBound"],
+   "assumptions": [],
+   "type_hash": "9e1679680046e70f4d4f6567abff36a8b08e9b93d6bfd6980f903038210fd013"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumsRead": {
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.PartialSumsRead : Nci.Cover.Guarantees.PartialSumsRead"],
+   "assumptions": [],
+   "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
@@ -10651,7 +10791,21 @@
    "Verity.SecurityProofs.SoundBind": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance."
+   "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, Security/Definitions/Nci/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/Checked.lean joins it to a verdict (coverTrained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CoverTrainingAligned": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit bit by bit (Circuit.ofDecl, with activation regions of whole words, wordBits, Security/Definitions/Nci/BitView.lean) and a declaration that contains it with its baseline registered (the named BaselineRegistered), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; stating its join to a verdict among the properties, as for CoverTraining, is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumsRead": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and a cover of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), a fact of their wiring, not about the NCI check's code; a check of declared inference blocks joined to the cover theorem is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ActivationReads (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ActivationReads (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.KeyedActivationReads": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named ColumnsIncompressible (Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, concluding the named ActivationReads (Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CoveringBoundAdditive": "frozen (no-function): CoveringBoundTwoCosts's additive form: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ConditionalParameterHardAt (Security/Models/Nci/Assumptions/CoverAdditive.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14894,6 +15048,9 @@
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -14984,6 +15141,9 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -15130,6 +15290,8 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -15668,6 +15830,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -15715,6 +15879,129 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Definitions.Nci.BitView": {
+   "digest": "8edbc5d8b8b0082729a659ccbf984ffed9cda63f3a0b684bbf8d63a6c9c29efe",
+   "definitions": {
+    "Nci.Cover.BitView.Bit": "3189d9f22d511dbfed9bb55af5fa32bc750f94c8a1868ae35a65a2df02165bd9",
+    "Nci.Cover.BitView.W": "4a6abe1976948fb2c589f0746a9df04f7b034dff593c1f7517b82fadef06e9ad",
+    "Nci.Cover.BitView.bitPred": "5dfcec710040896026b647212dbbdaff6c409a3eb910e95b7935cf67d022991d",
+    "Nci.Cover.BitView.bits": "71ed26386d7f0700b6465cafc53d89efe6469248264555848f0e358fce113e59",
+    "Nci.Cover.BitView.enc": "dcb859ecddbdda140792cbaf037621a7df74e8cabfb744b1eb2ca1c5eb124d35",
+    "Nci.Cover.BitView.free": "0d47b7cfa698b036130e2916791aae63fcc02757030ae2d55402f8072816899e",
+    "Nci.Cover.Circuit.ofDecl": "224803c8fb29aa0e82c3527b9a2e7acccd82a02cfb0643d1aefe8cb2342e14a4",
+    "Nci.Cover.wordBits": "e23d023ad86ce9c28bfd0db52cc849bade668fb6a5d9015b008232352af25648"
+   },
+   "guarantees": ["Nci.Cover.SecurityProofs.CoverTraining", "Nci.Cover.SecurityProofs.CoverTrainingAligned"]
+  },
+  "Definitions.Nci.Cover": {
+   "digest": "97e5ed9a6da9e826e070285b6cf2daabc9f0f46f9cc7f6ca3212c801c9b6ef7d",
+   "definitions": {
+    "Nci.Cover.Circuit": "25aef445443bc925efdcb08eaf48e75c7b0372dfd7b76cba8153f160f3257219",
+    "Nci.Cover.Circuit.Covers": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a",
+    "Nci.Cover.Circuit.InferenceBlock": "956c51257ab4bb0a3bb4a53911d811a4daf5e6cd6e79c2ebc2c7a0e11a32a98b",
+    "Nci.Cover.Circuit.IsPath": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949",
+    "Nci.Cover.Circuit.N": "91b884841166c02cc43c97336c4bc5df52ceaeec6668cf3352576333e4751bdc",
+    "Nci.Cover.Circuit.ReachesIn": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97",
+    "Nci.Cover.Circuit.computed": "39abffbb936a1148261dd298ee8b13a2f191f8de3e97c82350ad1e183883b792",
+    "Nci.Cover.Circuit.inputs": "568f686ecb438f38991d299b092c5f67550f8367ee6af07cea3483f5a2ba6e87",
+    "Nci.Cover.Circuit.outputs": "b32817c9c6ef508afe011fced0c1e57ceff37910f928cc78c43e26f548b9698c",
+    "Nci.Cover.Circuit.pred": "c299d020da7fcb18af95f532bf3b3bcfb0388aa36123a61fe3b7eaae836a3508",
+    "Nci.Cover.Circuit.θ": "03e67d1fb23f4fd4382890336e039acfa062af86e09c30fb38ba80fc2ba0d88c",
+    "Nci.Cover.MulBlocks": "576dd6896410ba4f9d55a2872b6a02481b4c2acaf2ddf37aa103aafd8de157e6",
+    "Nci.Cover.MulBlocks.P": "662070ced616aca80b32325df4f846c2c52ebe3613b25b34d75de97ec30320b8",
+    "Nci.Cover.MulBlocks.Pall": "03ae6066aeceac4cba24ab07d95b26cedd93508092f490db009c03a12f56831f",
+    "Nci.Cover.MulBlocks.Upstream": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
+    "Nci.Cover.MulBlocks.finished": "97320bfa4eff842bc4cb2ad893efec39347452be1d3197984f286640e8e7f184",
+    "Nci.Cover.MulBlocks.m": "a4ef1a48b5c5fd399814ca11324c5120bd4610cc71af3f0e28388028d0953011",
+    "Nci.Cover.MulBlocks.o": "6a53c2e156b127cfd3bcb81793ac3544d55c5f46bf17dd3fe96903fe04ed1e27",
+    "Nci.Cover.MulBlocks.uses": "a3117bfc1cc59a173f13e623686eb32ead5833978976b4f6da36ffb545052601",
+    "Nci.Cover.MulBlocks.whole": "8478789905bc5f64d79ca9898af4e362d0530ae99eb8e513d7082136131ab8d7"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.FanOutCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural",
+    "Nci.Cover.SecurityProofs.KeyedActivationReads",
+    "Nci.Cover.SecurityProofs.PartialSumCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumIntensity",
+    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumsRead"
+   ]
+  },
+  "Definitions.Nci.CoverFanOut": {
+   "digest": "4aa6c34efa27a6b7ef09bf38062b708d2262d13f70ac5e8617540256f61d63d1",
+   "definitions": {
+    "Nci.Cover.Circuit.Link": "8ae661f01cf30385ff5499c6bc5c17ad07e6d13dec04941026635f1e1abc5e17",
+    "Nci.Cover.Circuit.exits": "6258e8a82f4e94cd5b4d22e1b2ac9ba652ee0d674a1d46306f495615155283ab",
+    "Nci.Cover.Follows": "6d4a01f9f73e940b384a5898c34f653a37eb2bca5295c91a8f12eed5a8df2937",
+    "Nci.Cover.Follows.refl": "b712f14f3d7c8c0665c389acbcc197706594e03676746498cc7c236f0e1bb30d",
+    "Nci.Cover.Follows.step": "0b5f077189cf8388a62e1bfc934db9ea6c41689c43c2e483ab5427fb7a3da846",
+    "Nci.Cover.Keyed": "b944a8c0e1e2bc2bf770fc9ee7ec3f5af58747b92eb2fae98ccf631276e15139",
+    "Nci.Cover.Keyed.Spent": "1d6044394648608a039ca8ef69460e42286330786ced191862fe67b7c4fc8a2b",
+    "Nci.Cover.Keyed.act": "d08b5306013989c18f9afcaf8fff4c6e38215b0abe7bf5aa43006152221029c6",
+    "Nci.Cover.Keyed.col": "2d9ee90fc4766488e0fe70cad5d3e37e58560d4267ec4e5d1e03fa62042d1079",
+    "Nci.Cover.Keyed.gates": "428f08ff1dc1351541567c72a53c9cbf32757625cc49eb8ec4487147dfd40750",
+    "Nci.Cover.Keyed.heldSet": "e88a540d18d3a7db78cb0104067afb4aaeba1fdc825d3315a1937a38eafdee22",
+    "Nci.Cover.Keyed.key": "bd138e9868e9a67828f0301c90d26b1d6692fef5bc96169169d0ea788f1fe9f5",
+    "Nci.Cover.Keyed.legs": "982e6b989e601fbebbdf40a683f8240ed69eb1b8405368fbf7adff96b0d12a9b",
+    "Nci.Cover.Keyed.lookups": "c60d10bd8a3a097714753bf66e776963bfbb90f6e23c11b690c04e267154cd78",
+    "Nci.Cover.Keyed.readSet": "4aff0a7a2a475a0fdaabb193c8722f8e262b58c67e6c614ddda780677c6fb08d",
+    "Nci.Cover.Keyed.roots": "8161dd740fe2e907ce086ddb42e03975f28bc9be614166a29f5045e6cb25a825",
+    "Nci.Cover.Keyed.stops": "f5e49619114bb81e6c165eb34c7deff51a5302d27ff238a545db23d5a4555111",
+    "Nci.Cover.Keyed.tok": "59a5ce89c2e93528e9a49a8bcc26d08841fcdfb1efddfd9da21346c1ab030b1d",
+    "Nci.Cover.Keyed.vals": "faaede3461ee7035d6ca4cd6891d35ed31446d4a2b6769ca2e0a4412fbed4e02"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.FanOutCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural",
+    "Nci.Cover.SecurityProofs.KeyedActivationReads",
+    "Nci.Cover.SecurityProofs.PartialSumCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumIntensity",
+    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumsRead"
+   ]
+  },
+  "Definitions.Nci.CoverFanOutValue": {
+   "digest": "a84459d6fed5c1ff28926418e4314009681fa09ed8e7236d73dc9a9d204c5424",
+   "definitions": {
+    "Nci.Cover.Keyed.PerValueCut": "993cfcb7318abfa807ffda646f89563e0bd784eeb3bb46fbf09bab7414abf0b3",
+    "Nci.Cover.Keyed.pathGates": "f513694579bbbd3316940a503abaa23892b2176f146e228e7557f37a981a3e27"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural"
+   ]
+  },
+  "Definitions.Nci.CoverPartialSum": {
+   "digest": "1606239118af60691cd106639823cca6e786b8a5d3d69f35a216bcdeb0dff195",
+   "definitions": {
+    "Nci.Cover.Cube": "a00bed49e3950090790859ab597b7e7aedf12a58f9ff597d8528f4a17c2da538",
+    "Nci.Cover.Cube.Wide": "f0426dfa5650e80833a49031dcf0d30d9197d7a8b5945b32c797d3513d4b1462",
+    "Nci.Cover.Cube.acc": "e4e58356f2116ea261cb6fac0eeab1b9665b1d7220450b247eaa93bdf5a39acf",
+    "Nci.Cover.Cube.accGates": "92251e5d9709458082b0c76c6608aa1240fb40c9a1692a74cf369f7c942fff40",
+    "Nci.Cover.Cube.crossings": "8dba31c97da4472adc56796b4c0c7cfce45ff57af6b12cbb7fb8b458996ee02e",
+    "Nci.Cover.Cube.entry": "f9c5d7f2904a4528aad925c0f4be3b1aeebbe7b76541d81bd6185c5646655ce1",
+    "Nci.Cover.Cube.mat": "8f70af30d5a8d7ab6f22896f48c55f51c61a1b27a9991196c4adb0c7603bd7ad",
+    "Nci.Cover.Cube.row": "0840089bef8560627fd4b41bb587595669665afc00dcaf17c1cfb5fdcba4ecef",
+    "Nci.Cover.Keyed.tokReads": "0187e4242dbc03d575c1f445d345b1f5a75f8fe4a86dc87c8a70281b6d71d73e"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.KeyedActivationReads",
+    "Nci.Cover.SecurityProofs.PartialSumCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumIntensity",
+    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumsRead"
+   ]
+  },
   "Definitions.Nci.Covering": {
    "digest": "e87493a09175845b1f3cff2bc23d2de4a197853a99f1892dfa665d6dfd6c36c6",
    "definitions": {
@@ -15739,7 +16026,11 @@
     "Nci.Covering.Subcircuit.ins": "7f43bb2cdc5f6d654f627d3404a73a718a10a0a998cebff2c128a3c96caa586e",
     "Nci.Covering.sources": "44f69afea9a52095487a6242bfebd1c0237a99e37f99a1f5e336340b697cf353"
    },
-   "guarantees": ["Nci.SecurityProofs.CoveringBound", "Nci.SecurityProofs.CoveringBoundTwoCosts"]
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundTwoCosts"
+   ]
   },
   "Definitions.Nci.Dampener": {
    "digest": "9e79c6755cea0343785155cd5a462c7ef001290ee919b4ee904728810d59f561",
@@ -15774,6 +16065,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -28622,6 +28915,8 @@
     "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
    },
    "guarantees": [
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -28653,6 +28948,59 @@
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
+  "Models.Nci.Assumptions.Cover": {
+   "digest": "a04704eebdfb82ed9aaabe753c8da10d9545f1ee04005c218cfb94db51c21f77",
+   "definitions": {
+    "Nci.Cover.Assumptions.ConditionalUpdateHardness": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69",
+    "Nci.Cover.Assumptions.UpdateHardness": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.CoverTraining",
+    "Nci.Cover.SecurityProofs.CoverTrainingAligned",
+    "Nci.Cover.SecurityProofs.FanOutCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural",
+    "Nci.Cover.SecurityProofs.PartialSumCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumIntensity",
+    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound"
+   ]
+  },
+  "Models.Nci.Assumptions.CoverAdditive": {
+   "digest": "487d20151ba40d5c3cbfd2e1ad071340776be5cf2fb08c6f084af3a264fb4a03",
+   "definitions": {
+    "Nci.Cover.Assumptions.ConditionalParameterHardAt": "80287a42cbb5ffc13ca43712b0bdec36063c3c78f35dd195573dae179936034b"
+   },
+   "guarantees": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive"]
+  },
+  "Models.Nci.Assumptions.CoverFanOut": {
+   "digest": "16ead08609b3bee1f832ddbd532fa75c86d597561185be59a52a7ba9bff40b05",
+   "definitions": {
+    "Nci.Cover.Assumptions.ColumnsIncompressible": "db289a17daf39dbe23016dfadb6521dbcfae1cd0257a7ac5675fd21b6d35d295",
+    "Nci.Cover.Assumptions.ValueReadHardness": "57ea393e0e74990c91150c14cbf3ed105998975f2b901e260a67d1861dda1f2c"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.FanOutCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural",
+    "Nci.Cover.SecurityProofs.KeyedActivationReads",
+    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound"
+   ]
+  },
+  "Models.Nci.Assumptions.CoverPartialSum": {
+   "digest": "aac19ecab5cc45fbdd11301f6f85fd904941416dcde52e351203f6a9d3b5f6d5",
+   "definitions": {
+    "Nci.Cover.Assumptions.ActivationReads": "1c8c87ab3ebdada3e60cdcaeea235d0ef229573362c93d7c9172c67581a160da"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.KeyedActivationReads",
+    "Nci.Cover.SecurityProofs.PartialSumCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumIntensity"
+   ]
+  },
   "Models.Nci.Assumptions.Covering": {
    "digest": "4ad4d4b3fc5e7a3fa22aa86d692e765b1959ff61fcf2fbcf810cd50aa414145f",
    "definitions": {
@@ -28669,7 +29017,7 @@
     "Nci.Assumptions.ParameterHardAt": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342",
     "Nci.Assumptions.chainedBlocksAt": "3b0afb53886322999c7c5f243a6a134c42c4c8831e2249a577ffaf92f1ff962b"
    },
-   "guarantees": ["Nci.SecurityProofs.CoveringBoundTwoCosts"]
+   "guarantees": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive", "Nci.SecurityProofs.CoveringBoundTwoCosts"]
   },
   "Models.Nci.Assumptions.Fit": {
    "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
@@ -28847,6 +29195,65 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn"
    ]
+  },
+  "Models.Nci.Guarantees.CoverAdditive": {
+   "digest": "f373762273d0913e80202e896b12a54241bfe24fe9ab83120f9caefac897e42a",
+   "definitions": {
+    "Nci.Cover.Guarantees.CoveringBoundAdditive": "09dc1d6cac36528af72b1aa769b64dc1b46ec8c196f568db6a333a1c4502a240"
+   },
+   "guarantees": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive"]
+  },
+  "Models.Nci.Guarantees.CoverFanOut": {
+   "digest": "ac8c76d33a1a0e92360642e40ce0f70560bd65f02ecf5cfdf4d659cedd4eca98",
+   "definitions": {
+    "Nci.Cover.Guarantees.FanOutCoverBound": "fe4cb3eee99d29e79bbe40afeb11d2665ff9594585404fc3195e709a5d7d32e9",
+    "Nci.Cover.Guarantees.FanOutIntensity": "08fd264291410715f065e257e79b13c4d1cc4c164c5d7a8f062334a808f67357",
+    "Nci.Cover.Guarantees.FanOutReadCoverBound": "ad90d20c37de95e490fb730b65effcdd8aefd9ef0a18d5d34487ee493073d39d",
+    "Nci.Cover.Guarantees.FanOutReadIntensity": "8a20e1a965f4ceb7b1ad9d64a950e8fdb351d982384fca64d668bbf90afcf008"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.FanOutCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutIntensity",
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBound",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensity"
+   ]
+  },
+  "Models.Nci.Guarantees.CoverFanOutValue": {
+   "digest": "bc058845323c3483dec4aa40b190e9eaef3008c85fe39d5fb4901528d3200dbc",
+   "definitions": {
+    "Nci.Cover.Guarantees.FanOutReadCoverBoundStructural": "d3c508ff30ba133388d3b07d52195373112990123e2d9aecca625c5303783327",
+    "Nci.Cover.Guarantees.FanOutReadIntensityStructural": "07c2c43ac8ce1429558320c09c161489a594e58f93ac259f08159aa74d89fbcc"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural",
+    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural"
+   ]
+  },
+  "Models.Nci.Guarantees.CoverPartialSum": {
+   "digest": "f68de47399d1eee8653e50a95d18b90e0c03401152e31eeceb26dbacb9e682a6",
+   "definitions": {
+    "Nci.Cover.Guarantees.KeyedActivationReads": "529e5a905f3fcea33b30f6ee9fb94f533298d116003ee9e27d1d4e3516b3d61b",
+    "Nci.Cover.Guarantees.PartialSumCoverBound": "a734ce79e309876435fb465b616c0afc74450eea71180aadb04a4f167a4699e9",
+    "Nci.Cover.Guarantees.PartialSumIntensity": "2bed6704c85f0c8dc7f34b40ea856e27b5ef31669927145c5df06943f9409c5b",
+    "Nci.Cover.Guarantees.PartialSumKeyedCoverBound": "ff507838e0da2daf03a014cc6f8c4d3944159de05b34658c8a76d31baf8db537",
+    "Nci.Cover.Guarantees.PartialSumsRead": "cca7ffb0a4c4dbb9837838c254acfedfba135e0d4f37d5354b823cea3358ef85",
+    "Nci.Cover.Guarantees.psRate": "8793ef4f8844a369cad317e23e095ca92ae61a9e009943841265dbfed78106ba"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.KeyedActivationReads",
+    "Nci.Cover.SecurityProofs.PartialSumCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumIntensity",
+    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound",
+    "Nci.Cover.SecurityProofs.PartialSumsRead"
+   ]
+  },
+  "Models.Nci.Guarantees.CoverTraining": {
+   "digest": "e927a3985428cd33c791a3cdcd467e27b2bff7773d72be93071acc655e7e27b8",
+   "definitions": {
+    "Nci.Cover.Guarantees.CoverTraining": "0e2f36cdbbb7cb321b3b05508f4ad6f46c65836ba5d54a5dbed20e37a35a59ee",
+    "Nci.Cover.Guarantees.CoverTrainingAligned": "f2043a21d78ee683389eff11313e90b773ec40557d71dbf069d7a4bd22b26937"
+   },
+   "guarantees": ["Nci.Cover.SecurityProofs.CoverTraining", "Nci.Cover.SecurityProofs.CoverTrainingAligned"]
   },
   "Models.Nci.Guarantees.Covering": {
    "digest": "16e0d16fc4e352d45128cfca5ecb127bc3ab42b27c1754f7c982d8d699f600e7",
