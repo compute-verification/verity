@@ -197,6 +197,9 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Graph steps only, and never a step that holds a capture or a fault, nor a window's last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
+# "1" (an H1C_MK h1c build): the receipt tables' row leaves' salt part (c and M_key y, h1c_presalt) hashed on a stream
+# of its own from the units' start, beside the units, and their leaves read it (`SoSide._units`): the same leaves
+PRESALT_ENV = "DITHER_SO_PRESALT"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -1072,6 +1075,12 @@ class SoSide(DA.Side):
             self.r_live, nrb = torch.empty_like(win.live), win.t // 32
             win.rset = win.c.set([dataclasses.replace(t, xd=H1CM.dead_x([bytes(t.length)] * (t.count // nrb), dev),
                                                       rlive=self.r_live, rbw=t.count // nrb) for t in win.rset.tabs])
+        self.presalt = os.environ.get(PRESALT_ENV) == "1"
+        if self.presalt:
+            if not win.c.has_pre:
+                raise ValueError(f"${PRESALT_ENV}=1: needs an H1C_MK h1c build (h1c_presalt)")
+            self.pre_buf = win.c.pre_buf(win.rset)
+            self.ps_stream = torch.cuda.Stream(device=dev, priority=self.side.priority)
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
@@ -1269,6 +1278,12 @@ class SoSide(DA.Side):
         replay as one graph (`dispatch`)."""
         win, st, L = self.win, self.side, self.win.L
         tab = self.tables[p]
+        if self.presalt:
+            # one buffer: each step's presalt waits for the step before's units (and their leaves) on st
+            ps = self.ps_stream
+            ps.wait_stream(st)
+            with torch.cuda.stream(ps):
+                win.c.presalt(win.rset, self.ring_stepv[p][0:1], self.pre_buf)
         if self.j10r:
             rc = self.h.kh_seeds_j10r_h1r(tab.table.data_ptr(), L, tab.max_units, self.ring_salt[p].data_ptr(),
                                           self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), st.cuda_stream)
@@ -1324,7 +1339,9 @@ class SoSide(DA.Side):
                                BLOCK=triton.next_power_of_2(L))
         if self.rdead:
             self.r_live.copy_(self.ring_live[p])
-        win.c.build(win.rset, self.ring_stepv[p][0:1])
+        if self.presalt:
+            st.wait_stream(self.ps_stream)
+        win.c.build(win.rset, self.ring_stepv[p][0:1], pre=self.pre_buf if self.presalt else None)
         self.rroots[p].copy_(win.rset.roots)
         return 0
 
@@ -1421,7 +1438,8 @@ class SoSide(DA.Side):
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
-                "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
+                "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms,
+                                   "prequeued": self.preq, "presalt": self.presalt},
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
                                 "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None,
                                 "sm_cap": self.units_cap or None},

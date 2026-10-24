@@ -5,6 +5,7 @@
     lib.build(st, step)                          # domains, segments, leaves, levels on the current stream; step (1,) int32
     st.root(i)                                   # table i's root: 8 int64 big-endian words, a device view
     lib.build(lib.union([st, st2]), step)        # both sets in one h1c_build (`Union`), into each set's own buffers
+    pre = lib.pre_buf(st); lib.presalt(st, step, pre); lib.build(st, step, pre=pre)  # the salts' part first (H1C_MK)
 
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
@@ -36,6 +37,7 @@ from verity.ml.commitments.merkle import merkle_depth  # noqa: E402
 
 U64_8, U64_16 = C.c_uint64 * 8, C.c_uint64 * 16
 A_FORM_ENV = "DITHER_A_FORM"
+PRE_W = 16  # h1c.cu's: a row leaf's c and M_key y in h1c_presalt's buffer
 
 
 class _Const(C.Structure):
@@ -198,6 +200,7 @@ class Set:
             host[i] = x
         self.host = host
         self.dev = torch.frombuffer(bytearray(bytes(host)), dtype=torch.uint8).to(dev)
+        self.pre_stride = _pre_stride(tabs)
 
     def root(self, i: int) -> torch.Tensor:
         return self.roots[8 * i:8 * i + 8]
@@ -227,6 +230,11 @@ class Union:
                     raise ValueError(f"a table's root goes into a union table's levels ({r:#x}): build those sets apart")
         self.host = (_Tab * self.n)(*[st.host[i] for st in sets for i in range(st.n)])
         self.dev = torch.frombuffer(bytearray(bytes(self.host)), dtype=torch.uint8).to(dev)
+        self.pre_stride = _pre_stride(self.tabs)
+
+
+def _pre_stride(tabs: list[Tab]) -> int:
+    return max((t.count for t in tabs if t.data is not None), default=0)
 
 
 class H1C:
@@ -238,6 +246,12 @@ class H1C:
         self.lib.h1c_a_init.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_int, C.c_void_p]
         self.lib.h1c_a_step.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_int] + [C.c_void_p] * 4
         self.lib.h1c_a_call.argtypes = [C.c_void_p] * 8 + [C.c_int, C.c_void_p]
+        self.has_pre = hasattr(self.lib, "h1c_pre_ok") and bool(self.lib.h1c_pre_ok())
+        if self.has_pre:
+            self.lib.h1c_presalt.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p,
+                                             C.c_longlong, C.c_void_p]
+            self.lib.h1c_build_pre.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
+                                               C.c_void_p, C.c_longlong, C.c_void_p]
         sz = (C.c_int * 3)()
         self.lib.h1c_sizes(sz)
         if tuple(sz) != (C.sizeof(_Const), C.sizeof(_Dom), C.sizeof(_Tab)):
@@ -277,8 +291,27 @@ class H1C:
     def union(self, sets: list[Set]) -> Union:
         return Union(sets, self.dev)
 
-    def build(self, st: Set | Union, step: torch.Tensor, domains: bool = True) -> None:
-        rc = self.lib.h1c_build(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),
-                                int(domains), torch.cuda.current_stream().cuda_stream)
+    def pre_buf(self, st: Set | Union) -> torch.Tensor:
+        """`presalt`'s buffer for st: each table's row leaves' c and M_key y."""
+        return torch.empty(max(st.n * PRE_W * st.pre_stride, 1), dtype=torch.int64, device=self.dev)
+
+    def presalt(self, st: Set | Union, step: torch.Tensor, pre: torch.Tensor) -> None:
+        """Each of st's row leaves' c and M_key y at step into pre (`pre_buf`), from the salts alone, on the current
+        stream: `build(st, step, pre=pre)` at the same step reads them in place of hashing them (an H1C_MK build)."""
+        if not self.has_pre:
+            raise RuntimeError("this h1c build has no h1c_presalt (an H1C_MK build's)")
+        rc = self.lib.h1c_presalt(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),
+                                  pre.data_ptr(), st.pre_stride, torch.cuda.current_stream().cuda_stream)
         if rc:
-            raise RuntimeError(f"h1c_build returned {rc}")
+            raise RuntimeError(f"h1c_presalt returned {rc}")
+
+    def build(self, st: Set | Union, step: torch.Tensor, domains: bool = True, pre: torch.Tensor | None = None) -> None:
+        stream = torch.cuda.current_stream().cuda_stream
+        if pre is None:
+            rc = self.lib.h1c_build(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),
+                                    int(domains), stream)
+        else:
+            rc = self.lib.h1c_build_pre(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(),
+                                        self.btab.data_ptr(), int(domains), pre.data_ptr(), st.pre_stride, stream)
+        if rc:
+            raise RuntimeError(f"h1c_build{'_pre' if pre is not None else ''} returned {rc}")

@@ -13,10 +13,13 @@ Gates before any timing, on every build (a failed gate exits 4 and nothing is ti
   * the step: every set rebuilt at s + 1 in place, layer 0's roots against commit.py at s + 1;
   * the control: one record byte of one call flipped moves that call's zy root and no other;
   * the union: zy, ys and yu poisoned and built as one h1c_build (`h1c.Union`, dither_a's DITHER_ZY1): no poison left,
-    every word = the three sets' own builds', the roots against commit.py.
+    every word = the three sets' own builds', the roots against commit.py;
+  * an H1C_MK build's presalt: every set poisoned, then h1c_presalt and h1c_build_pre (`H1C.presalt`, `build(pre=)`):
+    no poison left, every word = the set's own build's.
 Timing (CUDA graphs, builds interleaved rep by rep): each set's build (`zy`, the z tables; `ys` and `yu`, the y tables;
 `receipts`, the receipt trees), `z3` zy, ys and yu built one after another in one graph (the served z tables phase) and
-`zyu` the three as one h1c_build. --profile skips the timing and builds each gated build's sets once between
+`zyu` the three as one h1c_build; an H1C_MK build's receipts also as `presalt` alone, `receipts_build_pre` (the build
+reading it) and `receipts_pre` (the two). --profile skips the timing and builds each gated build's sets once between
 torch.cuda.profiler.start and stop (for ncu --profile-from-start off), and writes its gates to z-prof.json.
 """
 from __future__ import annotations
@@ -44,6 +47,8 @@ from h1cgate import POISON, cpu_receipts, linears, n_digits
 SETS = ("zy", "ys", "yu", "receipts")
 ZYU = ("zy", "ys", "yu")
 BUFS = ("level", "segs", "dom", "roots")
+# an H1C_MK build's receipts through h1c_presalt: the presalt alone, the build reading it, and the two in one graph
+PRE_ROWS = ("presalt", "receipts_build_pre", "receipts_pre")
 LAB = {"zy": "zy", "ys": "y", "yu": "y"}
 
 
@@ -110,6 +115,7 @@ class Build:
         self.name, self.lib = name, H1C(path, key, dev)
         self.sets = {s: self.lib.set(rec.tabs(s)) for s in SETS}
         self.zyu = self.lib.union([self.sets[s] for s in ZYU])
+        self.pre = {s: self.lib.pre_buf(st) for s, st in self.sets.items()} if self.lib.has_pre else {}
 
     def poison(self) -> None:
         for st in self.sets.values():
@@ -142,6 +148,19 @@ def gate(b: Build, base: Build | None, rec: Records, key: bytes, ref: dict, ref1
     if base is not None:
         g["vs_base_bad_words"] = {s: sum(int((getattr(b.sets[s], x) != getattr(base.sets[s], x)).sum()) for x in BUFS)
                                   for s in SETS}
+    if b.pre:
+        # h1c_presalt then h1c_build_pre over poisoned sets and buffers at s, every word = the sets' own builds'
+        own = {s: [getattr(b.sets[s], x).clone() for x in BUFS] for s in SETS}
+        b.poison()
+        for s in SETS:
+            b.pre[s].fill_(POISON)
+            b.lib.presalt(b.sets[s], step, b.pre[s])
+            b.lib.build(b.sets[s], step, pre=b.pre[s])
+        torch.cuda.synchronize()
+        g["pre"] = {"poison_left": b.poison_left(),
+                    "vs_build_bad_words": {s: sum(int((getattr(b.sets[s], x) != y).sum()) for x, y in zip(BUFS, own[s]))
+                                           for s in SETS}}
+        b.build(step)
     # the union: zy, ys and yu poisoned, then built as one h1c_build at s, every word = the sets' own builds'
     sep = {s: [getattr(b.sets[s], x).clone() for x in BUFS] for s in ZYU}
     b.poison()
@@ -171,7 +190,8 @@ def gate(b: Build, base: Build | None, rec: Records, key: bytes, ref: dict, ref1
                and all(v == 0 for v in g.get("vs_base_bad_words", {}).values()) and not any(g["step_cpu_bad"].values())
                and all(g["step_moved"].values()) and all(g["control"].values())
                and all(v == 0 for v in u["poison_left"].values()) and all(v == 0 for v in u["vs_sets_bad_words"].values())
-               and not any(u["cpu_bad"].values()))
+               and not any(u["cpu_bad"].values())
+               and all(v == 0 for x in g.get("pre", {}).values() for v in x.values()))
     return g
 
 
@@ -227,11 +247,17 @@ def main() -> int:
         return 0
     graphs = {}
     for b in builds:
-        for s in SETS + ("z3", "zyu"):
+        for s in SETS + ("z3", "zyu") + (PRE_ROWS if b.pre else ()):
             gr = torch.cuda.CUDAGraph()
+            rs, rp = b.sets["receipts"], b.pre.get("receipts")
             with torch.cuda.graph(gr):
                 if s == "z3":
                     b.build(step, ZYU)
+                elif s in PRE_ROWS:
+                    if s != "receipts_build_pre":
+                        b.lib.presalt(rs, step, rp)
+                    if s != "presalt":
+                        b.lib.build(rs, step, pre=rp)
                 else:
                     b.lib.build(b.zyu if s == "zyu" else b.sets[s], step)
             graphs[b.name, s] = gr
@@ -249,9 +275,10 @@ def main() -> int:
             ms[k].append(e0.elapsed_time(e1))
     timing = {}
     for b in builds:
-        row = {s: round(statistics.median(ms[b.name, s]), 4) for s in SETS + ("z3", "zyu")}
+        keys = SETS + ("z3", "zyu") + (PRE_ROWS if b.pre else ())
+        row = {s: round(statistics.median(ms[b.name, s]), 4) for s in keys}
         row["z_tables_ms"] = row["zy"] + row["ys"] + row["yu"]
-        row["all"] = {s: [round(x, 4) for x in ms[b.name, s]] for s in SETS + ("z3", "zyu")}
+        row["all"] = {s: [round(x, 4) for x in ms[b.name, s]] for s in keys}
         timing[b.name] = row
         print(json.dumps({"time": {b.name: {k: v for k, v in row.items() if k != "all"}}}), flush=True)
     doc["timing"] = timing

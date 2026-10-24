@@ -978,9 +978,7 @@ __device__ __forceinline__ void leaf_salt(const H1Tab& T, long long i, const int
     hb_final(s, y + 8 * cc);
   }
 }
-__device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
-                                         u64 mk[8], u64 out[8], const u64* sn = nullptr) {
-  u64 c[8], h[8];
+__device__ __forceinline__ void leaf_c(uint8_t* b, const u64 y[24], u64 c[8], const u64* sn) {
   Hb s;
   if (sn) {
     hb_load(s, sn + SNW, b);
@@ -990,6 +988,12 @@ __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b
   }
   hb_words(s, y, 24);
   hb_final(s, c);
+}
+// the frame leaf from x, c and M_key y (mk, x folded in on return)
+__device__ __forceinline__ void leaf_fin(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 c[8],
+                                         u64 mk[8], u64 out[8], const u64* sn) {
+  u64 h[8];
+  Hb s;
 #pragma unroll
   for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
   if (sn) {
@@ -1015,6 +1019,17 @@ __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b
   hb_words(s, h, 8);
   hb_final(s, out);
 }
+__device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
+                                         u64 mk[8], u64 out[8], const u64* sn = nullptr) {
+  u64 c[8];
+  leaf_c(b, y, c, sn);
+  leaf_fin(T, i, b, x, c, mk, out, sn);
+}
+
+// H1C_MK: h1c_presalt puts table t's row leaf i's c and M_key y (PRE_W words, c first) at word k of
+// pre + PRE_W pre_stride t + k pre_stride + i, from its step's salts alone (no row byte), and h1c_leaves_pre reads them
+// in place of leaf_salt, hb_mk and c's hash: the salts' part of a set's leaves runs ahead of, or beside, the rows
+constexpr int PRE_W = 16;
 
 __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx);
 
@@ -1022,9 +1037,10 @@ __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long
 constexpr int LVB = 7;
 static_assert(HT == 1 << LVB, "a leaves block is a subtree of LVB levels");
 
-extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
-                                                                      const int* __restrict__ step,
-                                                                      const u64* __restrict__ btab) {
+template <bool PRE>
+__device__ __forceinline__ void leaves_k(const H1Tab* __restrict__ tabs, const int* __restrict__ step,
+                                         const u64* __restrict__ btab, const u64* __restrict__ pre,
+                                         long long pre_stride) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
   const H1Tab& T = tabs[blockIdx.y];
   const long long width = 1LL << T.depth;
@@ -1036,7 +1052,6 @@ extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1T
   if (T.data && (long long)blockIdx.x * blockDim.x < T.count) {
     // a block with a row leaf: every thread runs hb_mk's barriers, the row leaves' threads hash their salts first
     const bool real = i < T.count;
-    u64 x[8], y[24], mk[8];
 #if H1C_MID
     __shared__ u64 sn[4 * SNW];  // lane 0 of warp k writes snapshot k; hb_mk's first barrier publishes them
     static_assert(HT == 4 * 32, "a warp a snapshot");
@@ -1045,11 +1060,29 @@ extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1T
 #else
     const u64* snp = nullptr;
 #endif
-    if (real) leaf_salt(T, i, step, b, y);
-    hb_mk(y, mk, btab, bf, real);
-    if (real) {
-      leaf_x(T, i, b, x, snp);
-      leaf_out(T, i, b, x, y, mk, out, snp);
+    if constexpr (PRE) {
+      u64 x[8], c[8], mk[8];
+      if (real) {
+        const u64* q = pre + (long long)blockIdx.y * PRE_W * pre_stride + i;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+          c[k] = q[k * pre_stride];
+          mk[k] = q[(8 + k) * pre_stride];
+        }
+      }
+      if (H1C_MID) __syncthreads();
+      if (real) {
+        leaf_x(T, i, b, x, snp);
+        leaf_fin(T, i, b, x, c, mk, out, snp);
+      }
+    } else {
+      u64 x[8], y[24], mk[8];
+      if (real) leaf_salt(T, i, step, b, y);
+      hb_mk(y, mk, btab, bf, real);
+      if (real) {
+        leaf_x(T, i, b, x, snp);
+        leaf_out(T, i, b, x, y, mk, out, snp);
+      }
     }
   }
   const bool mine = i < width && (i >= T.count || T.data);
@@ -1110,6 +1143,49 @@ extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1T
     const long long n = HT >> (lv + 1), idx = (long long)blockIdx.x * n + threadIdx.x;
     if (threadIdx.x < n && idx < (width >> (lv + 1))) hb_node(T, b, lv, idx);
     __syncthreads();
+  }
+#endif
+}
+extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
+                                                                      const int* __restrict__ step,
+                                                                      const u64* __restrict__ btab) {
+  leaves_k<false>(tabs, step, btab, nullptr, 0);
+}
+extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves_pre(const H1Tab* __restrict__ tabs, int ntab,
+                                                                          const int* __restrict__ step,
+                                                                          const u64* __restrict__ btab,
+                                                                          const u64* __restrict__ pre,
+                                                                          long long pre_stride) {
+  leaves_k<true>(tabs, step, btab, pre, pre_stride);
+}
+extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_presalt_k(const H1Tab* __restrict__ tabs,
+                                                                         const int* __restrict__ step,
+                                                                         const u64* __restrict__ btab,
+                                                                         u64* __restrict__ pre, long long pre_stride) {
+#if H1C_MK
+  __shared__ __align__(16) uint8_t bf[HT * HB];
+  const H1Tab& T = tabs[blockIdx.y];
+  if (!T.data || (long long)blockIdx.x * blockDim.x >= T.count) return;
+  const long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  const bool real = i < T.count;
+  uint8_t* b = bf + threadIdx.x * HB;
+  u64 y[24], mk[8], c[8];
+#if H1C_MID
+  __shared__ u64 sn[2 * SNW];  // leaf_c reads salt_prefix's snapshot at sn + SNW; hb_mk's first barrier publishes it
+  if (threadIdx.x == 0) leaf_head(T, 1, b, sn + SNW);
+  const u64* snp = sn;
+#else
+  const u64* snp = nullptr;
+#endif
+  if (real) leaf_salt(T, i, step, b, y);
+  hb_mk(y, mk, btab, bf, real);
+  if (!real) return;
+  leaf_c(b, y, c, snp);
+  u64* q = pre + (long long)blockIdx.y * PRE_W * pre_stride + i;
+#pragma unroll
+  for (int k = 0; k < 8; ++k) {
+    q[k * pre_stride] = c[k];
+    q[(8 + k) * pre_stride] = mk[k];
   }
 #endif
 }
@@ -2004,8 +2080,8 @@ extern "C" int h1c_sizes(int* out) {
 
 // a set of tables (on the device, tabs_dev) through domains, segments, leaves and every level, on `stream`; the host copy
 // (tabs) gives the grid's extents.  Tables whose leaves another set's roots write go in a later call.
-extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
-                         cudaStream_t stream) {
+static int build_k(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
+                   const u64* pre, long long pre_stride, cudaStream_t stream) {
   if (ntab <= 0) return 0;
   long long max_segs = 0, max_width = 0;
   int max_depth = 0;
@@ -2029,7 +2105,13 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
   if (domains) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
   if (max_segs) h1c_segs<<<dim3((unsigned)((max_segs + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab);
 #endif
-  h1c_leaves<<<dim3((unsigned)((max_width + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
+  const dim3 lg((unsigned)((max_width + 127) / 128), ntab);
+#if H1C_MK
+  if (pre) h1c_leaves_pre<<<lg, 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab, pre, pre_stride);
+  else h1c_leaves<<<lg, 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
+#else
+  h1c_leaves<<<lg, 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
+#endif
 #if H1C_LVB
   const int lv0 = min(LVB, max_depth);
 #else
@@ -2044,4 +2126,41 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
   if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
 #endif
   return (int)cudaGetLastError();
+}
+extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, int domains,
+                         cudaStream_t stream) {
+  return build_k(tabs, tabs_dev, ntab, step_dev, btab, domains, nullptr, 0, stream);
+}
+extern "C" int h1c_pre_ok() { return H1C_MK; }
+// pre_stride's room for each table's row leaves (97 a table with more), on an H1C_MK build (98 without)
+static int pre_rows(const H1Tab* tabs, int ntab, long long pre_stride, long long* max_rows) {
+  if (!H1C_MK) return 98;
+  *max_rows = 0;
+  for (int t = 0; t < ntab; ++t) {
+    if (!tabs[t].data) continue;
+    if (tabs[t].count > pre_stride) return 97;
+    *max_rows = max(*max_rows, (long long)tabs[t].count);
+  }
+  return 0;
+}
+// each row leaf's c and M_key y at step_dev into pre (PRE_W pre_stride words a table), from the salts alone
+extern "C" int h1c_presalt(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab, u64* pre,
+                           long long pre_stride, cudaStream_t stream) {
+  long long rows = 0;
+  if (ntab <= 0) return 0;
+  if (ntab > 65535) return 99;
+  if (const int rc = pre_rows(tabs, ntab, pre_stride, &rows)) return rc;
+#if H1C_MK
+  if (rows) h1c_presalt_k<<<dim3((unsigned)((rows + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, step_dev, btab, pre,
+                                                                                         pre_stride);
+#endif
+  return (int)cudaGetLastError();
+}
+// h1c_build with each row leaf's c and M_key y from h1c_presalt's pre at the same step
+extern "C" int h1c_build_pre(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int* step_dev, const u64* btab,
+                             int domains, const u64* pre, long long pre_stride, cudaStream_t stream) {
+  long long rows = 0;
+  if (!pre) return 98;
+  if (const int rc = pre_rows(tabs, ntab, pre_stride, &rows)) return rc;
+  return build_k(tabs, tabs_dev, ntab, step_dev, btab, domains, pre, pre_stride, stream);
 }
