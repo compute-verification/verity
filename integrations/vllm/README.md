@@ -112,8 +112,9 @@ runtime metadata in the identity tuple.
 `batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
 `stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
 `verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
-`fold_compare.py`, `operand_provenance.py`, and input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
-`root_policy.py`); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
+`fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
+`root_policy.py`), and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
+pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
 
 **`properties/`** holds the property harnesses: `noninterference.py`, `census.py` + `kernel_allowlist.py`, `golden.py` +
 `golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`, `protected.py`,
