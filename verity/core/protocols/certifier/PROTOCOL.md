@@ -1028,7 +1028,8 @@ for symbol to `code.py`'s encoder (`benchmarks/network_e2e/encodings/arith_vecto
 high are code.py's, and a pending run is open exactly when code.py has pending bits. Each window's finish ends at its
 segment's end, and every changed segment is refused. The streams are v1's decisions on ENC-REPLAY's step traces and on
 all 14 corpus traces, and `code_v1`'s symbols for ENC-DERIVED's still-sent fields (the hits past the pool bound, the
-resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches, circuits included.
+resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches, circuits included
+(art:57999badc194b6f7085c8f445f6965472edf1f750ea67ad323bbdebcaadf3628, with each trace's decisions per replay step).
 - *Per decision.* `KTContext_v1{3, 24}` gives (f0, f1) for the decision's context and adds the decision to that
   context's counts. `ArithEncodeStep_v1{18, 1}` codes (bit, f0, f1) as code.py does. The counts table starts public, at
   the registered model's priors (v1's plain contexts have none, so it starts at zero), and KTContext indexes it by the
