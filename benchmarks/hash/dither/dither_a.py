@@ -127,6 +127,9 @@ ZDEAD_ENV = "DITHER_ZDEAD"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
+# "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
+# entry (MMAX, ..) takes.  A split K's int32 partial sums add up to the same z, so z and y are the same bits
+MM_CFG_ENV = "DITHER_MM_CFG"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -363,6 +366,8 @@ class Side:
             self.u_rec: set[int] = set()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
+        self.mm_cfg = {tuple(int(v) for v in nk.split(",")): EL.Cfg.parse(c)
+                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
         self.shift = int(win.o.h1o_fault_shift())
@@ -454,7 +459,11 @@ class Side:
         win = self.win
         M, k = xq.shape
         n = wt.shape[0]
-        cfg = EL.pick(M, n, k, self.arch)
+        cfg = None
+        if self.mm_cfg:
+            mmax = next((m for m, _ in EL.CONFIGS.get(self.arch, {}).get((n, k), ()) if M <= m), None)
+            cfg = self.mm_cfg.get((n, k, mmax))
+        cfg = cfg or EL.pick(M, n, k, self.arch)
         self.cfgs[(n, k, M)] = str(cfg)
         bm, bn, bk, warps, stages, split, tma = cfg
         if self.zy:
