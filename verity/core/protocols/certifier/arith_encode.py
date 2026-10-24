@@ -178,7 +178,8 @@ def scaled(f0: int, f1: int) -> tuple[int, int]:
 
 def reference_kt(C: int, NW: int, counts: Sequence[tuple[int, int]], en: int, ctx: int,
                  bit: int) -> tuple[int, int, int, tuple[tuple[int, int], ...]]:
-    """(ok, f0, f1, counts') of one decision under ENC-REPLAY's KT counts per context, scaled as advice v1 does."""
+    """(ok, f0, f1, counts') of one decision under ENC-REPLAY's KT counts per context, scaled as advice v1 does. A
+    refusal returns ok 0, and then only ok is specified."""
     counts = tuple(tuple(c) for c in counts)
     if not en:
         return 1, 0, 0, counts
