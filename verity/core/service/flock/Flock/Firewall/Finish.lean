@@ -247,9 +247,7 @@ def switchPart (g e : Array F128) (lo n : Nat) : Array F128 :=
 theorem switchPart_get (g e : Array F128) (lo n : Nat) {v : Nat} (hv : v < 128) :
     (switchPart g e lo n)[v]! = sumF n fun y => if (g[lo + y]!).bit v then e[lo + y]! else 0 := by
   unfold switchPart
-  rw [getElem!_range_map _ hv]
-  dsimp only
-  rw [getElem!_range_map _ (show v / 8 < 16 by omega)]
+  rw [getElem!_range_map _ hv, getElem!_range_map _ (show v / 8 < 16 by omega)]
   have h := (byteBuckets_go g e (v / 8) lo (by omega) (show v % 8 < 8 by omega) n).2
   rwa [show 8 * (v / 8) + v % 8 = v by omega] at h
 
