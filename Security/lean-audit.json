@@ -829,6 +829,14 @@
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs"
   },
+  "Flock.Guarantees.OuterSessionsZK": {
+   "owner": "@proofs",
+   "digest": "01f985e5d645aefddc92875b62cf33834d3b66976f0f8791aa30a88372270d94"
+  },
+  "Flock.Guarantees.OuterViewZK": {
+   "owner": "@proofs",
+   "digest": "002a8a72fb2acb6018f56a8187b93d942d09335444dca0828c4f13f5e91d000c"
+  },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
    "digest": "ab28d1707da3d17764910d77bb753fff4d819a925426b03e90595154924c080d"
@@ -10067,7 +10075,7 @@
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.RecursiveSound": "frozen (obligation,world-unlisted,scope): In fork form it assumes no hash, but it takes InnerSound as an open obligation; beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope).",
-   "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
+   "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge (OuterViewZK) as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (scope): It takes avoidsMask (_hdm) as a scope condition that the verifier doesn't refuse; Security/Proofs/Flock/Soundness/Discharge/FailClosed/Mask.lean:9-11 derives it from the setup, so restating on that removes the scope reason.",
    "FlockSoundness.Audit.Law.closure_escape": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Law.covers_window": "lemma: leaves the list under the 5:11 PM ruling",
@@ -10328,9 +10336,9 @@
    "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check.",
    "Flock.SecurityProofs.PublicAudit": "restatable: (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, and the obligations _hob (VStarParses) and _hF (TagsFound), none a premise; it fits once the recursive model's inputs and count curve, and those two obligations, are restated as premises (constants of Proofs.Flock.Recursive.Premises).",
    "Flock.SecurityProofs.RanRegisteredRun": "frozen (obligation,no-function): It is about an abstract session (a game G and its acceptance acc) rather than a Lean function, and takes that session's soundness bound (prob (acc ∧ Q) ≤ B) as an open obligation, beside the commitment's binding (com.Binding, an extractor's pair, no hash assumed) and the registrant's opening. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
+   "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
+   "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
+   "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list.",
    "Accounting.SecurityProofs.Joint": "frozen (no-function): It composes the compute, bandwidth and capacity audits' guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
@@ -31927,15 +31935,17 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Statements": {
-   "digest": "202a2aa868641b1f3574de283889c3251bb0dd985f512bc1e261ba50f5874288",
+   "digest": "6954fb57ebbabf236d1c0580878620721971831b89ab06477ecaa8db8d89b534",
    "definitions": {
+    "Flock.Guarantees.OuterSessionsZK": "01f985e5d645aefddc92875b62cf33834d3b66976f0f8791aa30a88372270d94",
+    "Flock.Guarantees.OuterViewZK": "002a8a72fb2acb6018f56a8187b93d942d09335444dca0828c4f13f5e91d000c",
     "Flock.Guarantees.RanRegisteredRun": "357eb6ee0e5f33e3799142ff03cbf4c387f7347984218122d665618f1bcdd042",
-    "Flock.Guarantees.RecursiveCircuitIndist": "c7719ac1a7546988710606e7c8d87c4cadb89067cc71247f6acd846e39f8e5dd",
-    "Flock.Guarantees.RecursiveCircuitPrivate": "ec182dfaa95ded7bc6d76f6a562d6929123610f1a159cf5338092d5aa898417a",
-    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "c345a2937c296bd2a103b1a6fab01bd5acfa145e54d1e2a1dd0ef8b9ea29a338",
+    "Flock.Guarantees.RecursiveCircuitIndist": "e662d304f4844c9a0df43b16c5e94fb11c2c375f38422fc53f51f0e334e65386",
+    "Flock.Guarantees.RecursiveCircuitPrivate": "20cd4ca70acb792f2f6e773231476751245f560e802eab85e4d642a2e1b03741",
+    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "b4bed4b4c88055764acfab1b906a8c61050d26358cba09337bccdd2c85f4c68e",
     "Flock.Guarantees.RecursiveRanRegistered": "cbd0e57ce4fc9253057b6db874e150ae39a51b04e588cbaafd46333d51d078ab",
     "Flock.Guarantees.RecursiveSound": "b970e13167b07e04d890297338c2fd6a8c78990cf67e47754c426e6b9268c134",
-    "Flock.Guarantees.RecursiveZK": "75282f8fffeab43e8a2ef38430a9f20fa2d1e6f6c14ed9696277de4cf5402194",
+    "Flock.Guarantees.RecursiveZK": "78531c59a827b6e06baf1881dab68e17a083a40a2ac4563189c53a0b20779d1d",
     "Flock.Guarantees.commitBytes": "a306696805093574152e21a9d23a447fe66f455f97fb09d60ccbdb5542499079",
     "Flock.Guarantees.firewallCommits": "4bf63ec6548cda121d11b679e1facd58fea3cdc1e35a4ba31065f84201c7dc1f",
     "Flock.Guarantees.firewallLeaf": "fddc41ec1f4b4e2810231afa00a4c024566a4b2b2e9daefba922aeb3695bd425",
