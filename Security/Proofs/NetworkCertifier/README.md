@@ -29,14 +29,14 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                a window's charge (window) and a run's (charges), the streams no window refuses (Streams)
 ../../Definitions/NetworkCertifier/AdviceV1Counted.lean  trusted: advice v1's charge with a separate count code
                                (CountCode, lengths meeting Kraft): a window's charge (windowCounted) and a run's
-../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
+../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
 ../../Models/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: the leak bound through the wire with advice v1's charge
 ../../Definitions/NetworkCertifier/WindowCharge.lean  trusted: advice v1's whole window charged, `ChargeCount_v2{N, H, O}`'s
                                reference one for one: the window's symbols in `code_v1`'s order (syms: n_arrived, the
                                decisions, n_hits, the hits, n_resumes, n_order, the order entries, n_lag), each integer
                                a bin and a uniform offset (binned, uniform), counted in one segment (window), the carry
                                the decisions' and the last order entry's position and rank, a run's charges (charges)
-../../Definitions/NetworkCertifier/Guarantees/WindowCharge.lean  trusted: the whole-window charge counts (Kraft), and the
+../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean  trusted: the whole-window charge counts (Kraft), and the
                                leak bound with it
 ../../Models/NetworkCertifier/Guarantees/WindowCharge.lean  trusted: the leak bound through the wire with the whole-window
                                charge
@@ -180,8 +180,8 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarantees.lean`, the leak bound's three
 (`Guarantees/AdviceString.lean`), advice v1's eight, four for decision-only windows and four with a separate count
-code (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean` and `Guarantees/AdviceV1.lean`), the whole window's
-four (`../../Definitions/NetworkCertifier/Guarantees/WindowCharge.lean` and `Guarantees/WindowCharge.lean`), the warden's three (`Guarantees/Warden.lean`) and the sampled audit's charge
+code (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean` and `Guarantees/AdviceV1.lean`), the whole window's
+four (`../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean` and `Guarantees/WindowCharge.lean`), the warden's three (`Guarantees/Warden.lean`) and the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
 by the lemma of the same statement whose name it spells in UpperCamelCase. All 41 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
