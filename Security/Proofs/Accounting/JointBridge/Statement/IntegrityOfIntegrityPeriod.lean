@@ -27,7 +27,7 @@ open scoped ENNReal
   coins, and the sampled audit's own coins (`r.own .sampled`), drawn uniformly, drive that game: every event of the
   windows' records has the probability, over those coins, that the game's run gives it at that strategy. This is the
   live coin flow: each window's subset draw comes from the verifier's byte source, which the period's sampled
-  coordinate is (A3, `Assumptions.UniformRandomBytes`, stays a hypothesis of the guarantee).
+  coordinate is (A3, `FlockSoundness.Assumptions.UniformRandomBytes`, stays a hypothesis of the guarantee).
 * `accepts_iff`: the sampled audit accepts exactly when flock-verify accepts every window.
 * `wrong_eq`: the wrong units of the run's partition in its committed transcript are, in number, the windows' wrong
   units (`HiddenWindow.wrongSet`: `wrongRegZ` in the transcript fixed at registration, over the key program's
@@ -38,19 +38,19 @@ open scoped ENNReal
   bounds. -/
 structure RealizesIntegrityOfIntegrityPeriod {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω)
-    (W : ℕ → HiddenWindow) (T : ℕ) where
+    (W : ℕ → Flock.Guarantees.HiddenWindow) (T : ℕ) where
   /-- the prover strategy the node plays the period's game with, at the coins (it reads only the other audits') -/
-  strat : ((i : I) → Ω i) → Strategy (Period.game W T)
+  strat : ((i : I) → Ω i) → FlockSoundness.Game.Strategy (Flock.Guarantees.Period.game W T)
   /-- the windows' records at the coins: flock-verify's verdict and the wrong units of each window -/
-  record : ((i : I) → Ω i) → List WindowRec
+  record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
   /-- the sampled audit's own coins drive the period's game at the strategy -/
-  law : ∀ (ξ : (i : I) → Ω i) (E : List WindowRec → Prop),
+  law : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
-      value E (Period.run W T (strat ξ))
+      FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
   /-- the sampled audit accepts exactly when flock-verify accepts every window -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the run's wrong units are the windows' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map WindowRec.wrong).sum
+  wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
   /-- the partition's units are the windows' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
   /-- every unit of the partition has at least one gate -/
@@ -66,11 +66,12 @@ period's units is at least `ln(1/δ)/q`, the sampled audit has its per-period gu
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}),$$
 `Flock.Guarantees.IntegrityHorizon`'s, when that is finite. -/
 def IntegrityOfIntegrityPeriod : Prop :=
-  ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type) [DecidableEq I]
-    [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (W : ℕ → HiddenWindow) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
+  ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
+    [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (W : ℕ → Flock.Guarantees.HiddenWindow) (T : ℕ)
+    (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
-    (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ R : RealizesIntegrityOfIntegrityPeriod r W T, (∀ ξ, Period.CR W T (R.strat ξ)) →
+    (∀ t < T, FlockSoundness.Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
+    ∀ R : RealizesIntegrityOfIntegrityPeriod r W T, (∀ ξ, Flock.Guarantees.Period.CR W T (R.strat ξ)) →
     ∀ (c : Certificates) (p : Price), Real.log (1 / δ) / q ≤ c.ε * r.units →
     ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link) ≠ ⊤ →
     r.Sound c p .sampled (ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)).toReal
