@@ -3,7 +3,8 @@
     verity.ml.circuits.silicon      the tensor-core accumulator step (stdlib only; no IR dependency)
     verity.ml.circuits.ops.prims   IR primitives: AmpereBF16TcDot16, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32, BlackwellE4m3QmmaDot32,
                       Bf16ToF32, F32ToBf16Rn, F2fpBf16, F32ToE4m3Sat, const
-    verity.ml.circuits.ops.scalar  IR primitives: integer, bit, select and comparison operations; FP32 abs / neg / max / min / cvt.sat
+    verity.ml.circuits.ops.scalar  IR primitives: integer, bit, select and comparison operations; FP32 abs / neg / max / min / cvt.sat;
+                      the f32 -> s8 rounding cast and a 32-bit word's 16-bit halves
     verity.ml.circuits.ops.fp32    IR primitives: FP32 add / mul / fma / div (RN-even), the FTZ family, FA2 max and -inf guard, BF16
                       element-wise add / mul
     verity.ml.circuits.ops.mufu    IR primitives: the MUFU ex2 / rcp / sqrt / rsqrt / tanh approximations over their measured sm_89 tables
@@ -16,6 +17,8 @@
     verity.ml.circuits.ops.moe     IR composites: a padded static MoE layer's expert GEMMs, one unit per (token slot, top-k slot) pair
                       with the expert a value selected inside it (MoeSelectBf16x{E}, MoePairCoordinate(W), MoePairGemm(W)),
                       and their numpy kernels; `ops.boolean.moe` has them on bits
+    verity.ml.circuits.ops.quant   IR composites: the torch loop's ReLU and per-row s8 quantize of a bf16 row, QuantS8Pair (two
+                      codes) and QuantS8Scale (one 16-bit half of the scale); `ops.boolean.quant` has them on bits
     verity.ml.circuits.ops.boolean word arithmetic as Boolean circuits, built with `verity.ml.circuits.boolean`'s builders
                       (`forms`, `gather`, the multiplexer tree, and `trace`, Boolean Definitions from builders) and
                       `verity.ml.circuits.silicon`'s (`fp`, `tc_step`, `fp4`): `softmax`, attention's circuits over `forms`,
