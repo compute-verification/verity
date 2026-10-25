@@ -188,59 +188,18 @@ theorem oneWaitAbort_of_tableBoundR (H : Msg → Msg) (D : Flock.Deploy Coin Col
     (hone : ∀ x, (∃ s, D.parse x = some s ∧ s.tables = 1) ∨ NoAcc H D.V x) (Ok : Msg → Col → Prop) (hz : ∀ x, Ok x 0)
     (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N) (htab : TableBoundθAbortR H D N Ok) :
     OneWaitAbort H D := by
-  classical
   intro x Ω _ _ P A _ _ keep
   obtain ⟨e₀, hfit, hb⟩ := htab x Ω P A keep
-  set j₀ : Fin (D.V.k x) := ⟨0, hVk x⟩
-  set ev : Ω → (Fin (D.V.k x) → Coin) × A → (Fin (D.V.k x) → Coin) × A → Prop :=
-    fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p with hev
-  have tied : ∀ ω d d', ev ω d d' → TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-      (abortRun H P D.V x keep ω (forkDraw j₀ d d')).vLog) := by
-    intro ω d d' ⟨p, h1, h2, h3⟩
-    have hfd : forkDraw j₀ d d' = d' := by
-      show (forkCoins j₀ d.1 d'.1, d'.2) = d'
-      rw [Claims.Bridge.forkCoins_zero j₀ rfl]
-    rw [hfd]
-    simp only [opD] at h1 h2 h3
-    split_ifs at h1 h2 h3 with ha ha'
-    · obtain ⟨hk1, hr1⟩ := abortRun_acc_iff.1 ha
-      obtain ⟨hk2, hr2⟩ := abortRun_acc_iff.1 ha'
-      obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
-      obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h2
-      have hne : u ≠ v := fun huv => h3 (by rw [hu, hv, huv])
-      rw [abortRun_of_keep hk1] at hu ⊢
-      rw [abortRun_of_keep hk2] at hv ⊢
-      exact hconf x Ω P ω d.1 d'.1 p.val u v hr1 hr2 p.isLt hu hv hne
-    all_goals simp at h1 h2
-  refine ⟨(e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied).mergeR,
-    (e₀.fitsR_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) j₀ rfl ev tied hfit).fits_mergeR, fun ω hε => ?_⟩
-  have hacc : ¬ NoAcc H D.V x := fun hno => by
-    have : accPrD (abortRun H P D.V x keep ω) = 0 := by
-      unfold accPrD
-      rw [Pr_congr (q := fun _ => False) fun d =>
-        ⟨fun h => hno Ω P ω d.1 (abortRun_acc_iff.1 h).2, False.elim⟩, Pr_false]
-    linarith
-  have hk1 : 1 ≤ D.k x := (hk x).resolve_right hacc
-  obtain ⟨s, hs, h1⟩ := (hone x).resolve_right hacc
-  have hokD : ∀ d q u, (abortRun H P D.V x keep ω d).out = .acc → q < N x →
-      lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) q = some u → Ok x u := by
-    intro d q u ha hq hu
-    obtain ⟨hkeep, hr⟩ := abortRun_acc_iff.1 ha
-    rw [abortRun_of_keep hkeep] at hu
-    exact hok x Ω P ω d.1 q u hr hq hu
-  have hεc : 0 ≤ D.εtable x + e₀.term ω := add_nonneg (hεt x) (e₀.term_nonneg ω)
-  have hj := oneWaitD D N x (abortRun H P D.V x keep ω) hs h1 Ok (hz x) hokD _ hεc
-    (fun C hC hg => hb ω C hC hg) (D.k x) hk1
-  have hE : (Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) =>
-      ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) s p) =
-      Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) => ev ω s.1 s.2 := rfl
-  rw [hE] at hj
-  have hm := (e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied).term_le_mergeR ω
-  rw [EscapesD.term_addFork] at hm
-  have hrate : (N x : ℝ) * accPrD (abortRun H P D.V x keep ω) / (Real.exp 1 * D.k x) ≤
-      D.N₀ x / (Real.exp 1 * D.k x) * accPrD (abortRun H P D.V x keep ω) := by
-    rw [div_mul_eq_mul_div]
-    exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right (hN x) hε.le) (by positivity)
+  refine ⟨(e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+      (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+      (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl)).mergeR,
+    (e₀.fitsR_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩ rfl
+      (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+      (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl) hfit).fits_mergeR, fun ω hε => ?_⟩
+  have hm := (e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+    (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+    (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl)).term_le_mergeR ω
+  have := oneWaitAbort_le_of_tableBound H D N hN hεt hVk hk hone Ok hz hok hconf x P keep e₀ hb ω hε
   linarith
 
 /-- **Flock as the inner protocol meets `Inner.KSAbort`, from the KS chain's obligations counted per round**:
