@@ -71,6 +71,7 @@ import Proofs.Flock.Claims.KS.PlainDrawJMove
 import Proofs.Flock.Claims.KS.PlainDrawJRun
 import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Claims.KS.PlainDrawAccK
 import Proofs.Flock.Claims.KS.PlainDrawDecK
@@ -78,8 +79,6 @@ import Proofs.Flock.Claims.KS.PlainLeafDecK
 import Proofs.Flock.Claims.KS.PlainClashLaterK
 import Proofs.Flock.Claims.KS.PlainClash0K
 import Proofs.Flock.Claims.KS.PlainLeafClashK
-import Proofs.Flock.Claims.KS.PlainDrawRCols
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
