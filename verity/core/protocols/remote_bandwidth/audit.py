@@ -1173,12 +1173,13 @@ class Session:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-        """Window t's verdict on the prover's openings of its draws, in the order drawn."""
+        """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
+        no draws, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
             raise SessionError(f"window {t} has no draws awaiting openings")
-        if len(openings) != len(w.draws):
+        if not w.draws or len(openings) != len(w.draws):
             return self._fail(t, "malformed")
         key, receipters = self.registration.key, {}
         for (i, p), o in zip(w.draws, openings):

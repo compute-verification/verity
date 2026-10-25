@@ -109,6 +109,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.remote_bandwidth import wire as rwire  # noqa: E402
 from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
 import wire  # noqa: E402
@@ -666,7 +667,7 @@ class ProverSide:
         del out
         c3, sent = time.perf_counter_ns(), 0
         for k in range(len(parts)):
-            body = wire.encode_openings(parts[k])
+            body = rwire.encode_openings(parts[k])
             self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
             parts[k] = None
             sent += len(body)

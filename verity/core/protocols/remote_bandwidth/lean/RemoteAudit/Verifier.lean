@@ -25,10 +25,12 @@ difftest's `session` reads one, `Difftest.eventOf`):
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
-  flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters'; `coins` `null`
-  takes its W + ⌈W/g⌉ live, each with the event that releases it (`event`'s `coin`);
-* `{"op": "event", "node", "session", "event", "coin"}`: one event through session k (`Registry.step`), its result as
-  the difftest writes it (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
+  flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
+  at one window in flight with g above 1, which no property covers (`Flight`); `coins` `null` takes its W + ⌈W/g⌉
+  live, each with the event that releases it (`event`'s `coin`);
+* `{"op": "event", "node", "session", "event", "coin"}`: one event through session k at its windows in flight and its
+  g (`eventOn`, refused as `Registry.step` refuses a session it isn't running), its result as the difftest writes it
+  (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
   draw's openings coin, `W + t / g`, which only the draw's last window's close releases, an append's pushed onto the
   session's append coins. A coin set is never replaced by another, and an event that releases a challenge or draws a
@@ -36,7 +38,7 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
 * `{"op": "verify", "node", "session", "t", "id"}`: window t's openings, every frame in the order it came, checked on
-  threads of their own (`checkWindowChunked`), answered `{"spawned": true}` at once, or refused as `Session.verify`
+  threads of their own (`windowCheck`), answered `{"spawned": true}` at once, or refused as `Session.verify`
   refuses; when the check is done the process writes `{"done": id, "accepted": bool}` on a line of its own;
 * `{"op": "settle", "id"}`: that verdict applied to the session as it stands (`Session.verifyBy`), its result with
   the openings it read (`openings`) and the nanoseconds the check took (`ns`);
@@ -54,8 +56,13 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
 
-A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s on the window's openings: any frame that doesn't
-decode leaves it none, as the driver's Python does. Openings are checked in the clear.
+A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the window's openings as `Wire.openingsOf`
+reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
+with no draws is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
+is refused on every window, as the driver's Python refuses it. `Properties.RemoteAudit.LiveIsRun` states that what
+this loop accepts at two windows in flight and one window a draw's openings coin, its coins arriving one an event and
+each verdict applied at its settle, is what `Session.run` accepts on the events it records; none yet covers one in
+flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are checked in the clear.
 -/
 
 namespace RemoteAudit.Verifier
@@ -94,17 +101,22 @@ structure Server where
 private def doneLine (id : Nat) (v : Verdict) : String :=
   "{\"accepted\":" ++ (if v == .accept then "true" else "false") ++ ",\"done\":" ++ toString id ++ "}"
 
+/-- Window `w`'s verdict on its frames `bodies` in session `s`, with the number of openings it read. -/
+def windowCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Array (Nat × Nat))
+    (bodies : Array ByteArray) : Verdict × Nat :=
+  let openings := Wire.openingsOf bodies
+  (checkWindowChunked chunk s.reg s.digest s.appends w drawn openings, openings.size)
+
 /-- Window t's openings checked on a thread of its own, `emit`ting the done line once its verdict is known. -/
 def spawnCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (bodies : Array ByteArray) (id : Nat) (emit : String → IO Unit) :
     BaseIO (Task (Except IO.Error (Verdict × Nat × Nat))) :=
   IO.asTask (prio := .dedicated) do
     let t0 ← IO.monoNanosNow
-    let openings := ((bodies.mapM Wire.decodeOpenings).map (·.flatten)).getD #[]
-    let v := checkWindowChunked chunk s.reg s.digest s.appends w drawn openings
+    let (v, n) := windowCheck chunk s w drawn bodies
     emit (doneLine id v)
     let t1 ← IO.monoNanosNow
-    return (v, openings.size, t1 - t0)
+    return (v, n, t1 - t0)
 
 private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.Run :=
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
@@ -143,6 +155,18 @@ def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Sessio
       some s!"window {t}'s openings were drawn without the challenger's coin"
     else none
   | _, _ => none
+
+/-- Event `e` through running session `s` at its `f` windows in flight and `g` windows a draw's openings coin
+(`Flight.step f g`, as `Registry.step` steps it), the challenger's coin for it set first (`withCoin`), refused as
+`unset` refuses an event that read a coin never sent. -/
+def eventOn (f g : Nat) (s : Session.State) (e : Session.Event) (coin : Option ByteArray) :
+    Except String (Session.Result × Session.State) := do
+  let s ← match coin with
+    | some c => withCoin g s e c
+    | none => pure s
+  let (res, s) ← Flight.step f g s e
+  if let some why := unset g s e (some res) then throw why
+  pure (res, s)
 
 private def merge (a : Json) (extra : List (String × Json)) : Json :=
   match a with
@@ -206,28 +230,33 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
         pure (req.setObjVal! "coins" (.arr (Array.replicate (w + (w + g - 1) / g) zero)))
       else pure req
     let (params, coins, appendCoins, notBeforeNs) ← ofV (Difftest.sessionOf req)
+    let f ← ofV (Difftest.flightOf req)
+    if f == 1 && g != 1 then
+      throwThe String ("at one window in flight the verifier draws a window an openings coin: groups_per_coin is 1 "
+        ++ "(no property covers one in flight at more)")
     let coins := if live then Array.replicate coins.size ByteArray.empty else coins
     let index ← match ← ofV (J.get req "index" "request") with
       | .null => pure none
       | v => some <$> ofV (J.asInt v "index")
     let some reg := (srv.registry.live.find? (·.node == node)).bind (·.drawn) | pure (refusedJ, srv)
-    match srv.registry.session reg params coins appendCoins notBeforeNs index (← ofV (Difftest.flightOf req)) g with
+    match srv.registry.session reg params coins appendCoins notBeforeNs index f g with
     | some (k, r) => pure (Json.mkObj [("session", toJson k)], { srv with registry := r })
     | none => pure (refusedJ, srv)
   | "event" =>
     let node ← ofV (bytesOf req "node")
     let k ← ofV (nat req "session")
     let e ← ofV (Difftest.eventOf (← ofV (J.get req "event" "request")))
-    let r ← match ← ofV (J.get req "coin" "request"), runOf srv.registry node k with
-      | .null, _ => pure srv.registry
-      | c, some (.running s _ g) => do
-        let c ← ofV (unhex (← ofV (J.asStr c "coin")))
-        pure (srv.registry.update node k (← ofV (withCoin g s e c)))
-      | _, _ => pure srv.registry
-    let (res, r) ← ofV (r.step node k e)
-    if let some (.running s _ g) := runOf r node k then
-      if let some why := unset g s e res then throwThe String why
-    pure ((res.map Difftest.resultJ).getD refusedJ, { srv with registry := r })
+    let coin ← ofV (J.get req "coin" "request")
+    match runOf srv.registry node k with
+    | some (.running s f g) =>
+      let coin ← match coin with
+        | .null => pure none
+        | c => some <$> ofV (unhex (← ofV (J.asStr c "coin")))
+      let (res, s) ← ofV (eventOn f g s e coin)
+      pure (Difftest.resultJ res, { srv with registry := srv.registry.update node k s })
+    | _ =>
+      let (res, r) ← ofV (srv.registry.step node k e)
+      pure ((res.map Difftest.resultJ).getD refusedJ, { srv with registry := r })
   | "openings" =>
     let node ← ofV (bytesOf req "node")
     let k ← ofV (nat req "session")
