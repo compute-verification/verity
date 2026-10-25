@@ -27,7 +27,7 @@ blocks, committed under its own salt like an input row (an output is a value: no
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
 Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
-served-domain rule (``registration.served_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
+served-domain rule (``registration.window_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
@@ -80,7 +80,7 @@ ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW
 BIT_ROW_SCHEMAS = (SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
 UNITS_SCHEMA = "verity-vllm/serving-rows/units/v0"
 WORD_SCHEMA = "u16"
-DOMAIN_TAG = R.SERVED_DOMAIN
+DOMAIN_TAG = R.WINDOW_DOMAIN
 OWNER = -1
 ORDER = "verity-vllm/serving-rows/order/v0"
 LEAF_LAYER = "SHA-512 of canon({template: SHA-512 of m<k>-public.bin}) over the window's members"
@@ -656,11 +656,11 @@ def port_leaves(m: Member) -> dict[str, int]:
 
 def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
-    domain}}``, each domain ``registration.served_domain`` over the window's program, partition and run."""
+    domain}}``, each domain ``registration.window_domain`` over the window's program, partition and run."""
     prog, part, steps = window.partition["program"], window.partition_digest, len(window.steps)
-    return {m.port(p): {"leaves": n, "domain": R.served_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
+    return {m.port(p): {"leaves": n, "domain": R.window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
             for m in window.members for p, n in port_leaves(m).items()} | \
-        ({TABLE_PORT: {"leaves": steps, "domain": R.served_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
+        ({TABLE_PORT: {"leaves": steps, "domain": R.window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
          if steps else {})
 
 

@@ -447,11 +447,11 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
         HC.expand(HC.gate(*wide.head_key(1)), HC.unit(*wide.head_key(1)))
 
 
-def test_the_domain_is_one_stages_served_domain(tmp_path):
+def test_the_domain_is_one_stages_window_domain(tmp_path):
     lw = Run(tmp_path).lw
     part = P.partition(P.population_program(lw.unit, 1), lw.spec.check.query)
     for w in range(3):
-        want = R.served_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
+        want = R.window_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
         assert lw.ports(w)[VALUE]["domain"] == want
     assert lw.ports(0) != lw.ports(1)
 

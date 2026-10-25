@@ -195,7 +195,7 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
     assert Wd.window_problem([e.row() for e in entries], work, params["entries"], root_h3) is None
     _, _, part = SC.population(K, work.n)
     (wroot,) = [r for r in public["roots"] if r["port"] == SC.PORT]
-    assert wroot["domain"] == R.served_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
+    assert wroot["domain"] == R.window_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
                                               params["context"])
     for e in (0, 2):
         for side in "ab":
