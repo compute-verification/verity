@@ -55,7 +55,7 @@ expect submissions/reference.lean Pous.Params.ρ 1 'is not a pinned statement'
 # equality would keep the kernel unfolding; the grader compares syntactically. The timeout turns a regression into a
 # failure instead of a hang.
 cat > "$tmp/near_miss.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Definitions.Pous.Guarantees
 theorem solution : Pous.Guarantees.BandChainMeets64D12 := sorry
 EOF
 POUS_GRADE_TIMEOUT=120 expect "$tmp/near_miss.lean" Pous.Guarantees.BandChainMeets64D5 1 'does not have the pinned type'

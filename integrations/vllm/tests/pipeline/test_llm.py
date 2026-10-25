@@ -20,7 +20,7 @@ import pytest
 import verity_vllm
 from verity_vllm import config
 from verity_vllm.config import EnginePin
-from verity_vllm.pipeline import llm as L
+from verity_vllm import llm as L
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 
@@ -196,7 +196,7 @@ def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(
 
 
 def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, monkeypatch):
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import vllm_adapter as va
     model, seen = SimpleNamespace(name="model"), []
 
@@ -207,7 +207,7 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
         return PO.Option(name=f"pous:{scheme}", hooks=h, commits={"storage_root": "c"})
 
     fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (), install=install)
-    monkeypatch.setitem(sys.modules, "verity_vllm.protocol_options.fake_pous", fake)
+    monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
     monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
     real = va.build_engine
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=model))
