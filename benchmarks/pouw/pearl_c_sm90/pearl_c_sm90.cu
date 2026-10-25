@@ -17,9 +17,11 @@
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
-// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit lets the call's forming launch behind it (pdl_entry)
+// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit waits at its entry for the launch before it and lets the
+// call's forming launch behind it (pdl_entry); PD_SM90: hash_decode.cuh's PD_SM90_FORMS
 #define PD_VARIANT_LIST(X) X(851) X(979) X(883) X(1011)
 #define PD_PDL
+#define PD_SM90
 #include "../pearl_c_sm120/hash_decode.cuh"
 // A's commitment past decode's rows (run.py's chain "pl", PL_VARIANT)
 #include "hash_prefill.cuh"

@@ -94,22 +94,24 @@ class Host:
         assert isinstance(grid, int) and self.lib.pd_run(name.encode(), grid, block, ctypes.byref(a)) == 0, name
 
 
-def build(directory: Path) -> ctypes.CDLL:
-    """hash_decode_host.cpp built into `directory` for the served variants, with its `pd_run`."""
+def build(directory: Path, *defines: str) -> ctypes.CDLL:
+    """hash_decode_host.cpp built into `directory` for the served variants, with its `pd_run`, `defines` defined."""
     gxx = shutil.which("g++")
     if not gxx:
         pytest.skip("no g++ for the host build of hash_decode.cuh")
     lib = directory / "hash_decode_host.so"
     subprocess.run([gxx, "-O2", "-std=c++20", "-pthread", "-shared", "-fPIC", "-Wno-unknown-pragmas",
-                    f"-DPD_VARIANT_LIST(X)={SERVED_LIST}", "-o", str(lib), str(KERNEL / "hash_decode_host.cpp")], check=True)
+                    f"-DPD_VARIANT_LIST(X)={SERVED_LIST}", *(f"-D{d}" for d in defines), "-o", str(lib),
+                    str(KERNEL / "hash_decode_host.cpp")], check=True)
     cdll = ctypes.CDLL(str(lib))
     cdll.pd_run.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
     return cdll
 
 
-@pytest.fixture(scope="module")
-def host(tmp_path_factory) -> Host:
-    return Host(build(tmp_path_factory.mktemp("hash-decode-host")))
+@pytest.fixture(scope="module", params=["sm120", "sm90"])
+def host(request, tmp_path_factory) -> Host:
+    """The sm_120 build, and the build with pearl_c_sm90.cu's PD_SM90 (hash_decode.cuh's PD_SM90_FORMS), the same bytes."""
+    return Host(build(tmp_path_factory.mktemp(f"hash-decode-host-{request.param}"), *(["PD_SM90"] * (request.param == "sm90"))))
 
 
 def test_run_py_launches_the_cubins_variants_with_hash_decode_cuhs_constants():

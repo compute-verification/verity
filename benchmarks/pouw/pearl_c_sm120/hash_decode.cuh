@@ -33,8 +33,8 @@
 // cold on the CTA's SM, and the last CTA's tail runs each of its sites once; PD_LATE (with PD_PAIR), pd_commit's salt,
 // templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
 // pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; in mode 1, which builds no
-// templates, warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead (`pd_fold_sched`; with
-// PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
+// templates, with PD_SM90_FORMS (below) warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead
+// (`pd_fold_sched`; with PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
@@ -72,6 +72,16 @@ constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAI
               PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512;
 #ifndef PD_VARIANT_LIST
 #define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979)
+#endif
+// A build that defines PD_SM90 (pearl_c_sm90.cu; the host tests build both) takes the forms cut for the H200's pd_commit,
+// which on sm_120 made pd_commit about 2.5% slower (kernels-pcsrv, r20261025-131827-fe67): rs_round's sums off e's chain;
+// in mode 1 with PD_LATE and PD_ROUNDS, the fold's round inputs on warp 2 (pd_fold_sched); and the row's seed chain from
+// shared copies of the labels and the unit block, with PD_LOOP its line hash at pd_seed's paired site, and on a whole warp
+// its line codes a lane a byte (pd_line_codes_warp).  The bytes are the same either way
+#ifdef PD_SM90
+constexpr bool PD_SM90_FORMS = true;
+#else
+constexpr bool PD_SM90_FORMS = false;
 #endif
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
@@ -156,13 +166,19 @@ DEV void pd_prefetch(const void* p) {   // the 128-byte line at p into L1
 // inputs K_i + W_i (rs_sched / rl_sched).
 DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
                   uint64_t kwi) {
-  // h and d are the e and a of three rounds back, so h + K_i W_i + d is summed off e's chain.  a is e - d + T2, which is
-  // T1 + T2 without also holding h + K_i W_i (holding it spills in pd_commit_g_851)
-  const uint64_t hkd = h + kwi + d;
-  const uint64_t s1 = rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), ch = (e & f) ^ (~e & g);
-  const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
-  const uint64_t e1 = hkd + ch + s1, a1 = e1 - d + t2;
-  h = g; g = f; f = e; e = e1; d = c; c = b; b = a; a = a1;
+  if constexpr (PD_SM90_FORMS) {
+    // h and d are the e and a of three rounds back, so h + K_i W_i + d is summed off e's chain.  a is e - d + T2, which is
+    // T1 + T2 without also holding h + K_i W_i (holding it spills in pd_commit_g_851)
+    const uint64_t hkd = h + kwi + d;
+    const uint64_t s1 = rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), ch = (e & f) ^ (~e & g);
+    const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+    const uint64_t e1 = hkd + ch + s1, a1 = e1 - d + t2;
+    h = g; g = f; f = e; e = e1; d = c; c = b; b = a; a = a1;
+  } else {
+    const uint64_t t1 = h + (rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + kwi;
+    const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
 }
 DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
 #pragma unroll
@@ -853,9 +869,9 @@ DEV void pd_row_leaf(uint64_t hm, const uint64_t* xr, const uint64_t* mk, const 
     pd_cmp<V, P>(lt, w);
   }
 }
-// row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr, the unit block and the
-// label states lab (all shared); stored if on.  With PD_LOOP the line's hash is pd_seed's fourth block.  P (the whole warp,
-// converged): the line's codes a lane a byte (pd_line_codes_warp), each lane storing its own
+// row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr (shared), the unit block
+// and the label states lab; stored if on.  PD_SM90_FORMS: with PD_LOOP the line's hash is pd_seed's fourth block, and with
+// P (the whole warp, converged) the line's codes are a lane a byte (pd_line_codes_warp), each lane storing its own
 template <int V, int P = 0>
 DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, uint64_t index, int r, const uint64_t* xr,
                      bool on) {
@@ -865,7 +881,7 @@ DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, u
 #pragma unroll
   for (int q = 0; q < 8; q++) x[q] = xr[q];
   if (on) pd_stamp<V>(a.p[13], r, PS_SEED0);
-  if constexpr ((V & PD_LOOP) != 0) {
+  if constexpr (PD_SM90_FORMS && (V & PD_LOOP) != 0) {
     pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab, h, line);
   } else {
     pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab);
@@ -876,7 +892,7 @@ DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, u
     store_cv(a.p[3] + 32ull * r, seed);
     store_cv(a.p[4] + 32ull * r, key);
   }
-  if constexpr (P != 0) {
+  if constexpr (PD_SM90_FORMS && P != 0) {
     if (line) pd_line_codes_warp(h, a.p[12] + 32ull * r);
   } else if (line) {
     pd_line_codes(h, a.p[12] + 32ull * r, on);
@@ -960,7 +976,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
-  __shared__ uint64_t lab[3 * 8];   // PD_LABELS and the unit block, for the row's seed chain
+  __shared__ uint64_t lab[3 * 8];   // PD_SM90_FORMS: PD_LABELS and the unit block, for the row's seed chain
   __shared__ uint32_t ys[48], lk[8], un[26];
   __shared__ int last;
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
@@ -982,6 +998,8 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
   const uint32_t* unit = reinterpret_cast<const uint32_t*>(a.p[5]);
   const uint64_t index = (uint64_t)unit[24] | (uint64_t)unit[25] << 32;
+  const uint32_t* const seed_unit = PD_SM90_FORMS ? un : unit;   // the row's seed chain's sources
+  const uint64_t* const seed_lab = PD_SM90_FORMS ? lab : &PD_LABELS[0][0];
   auto salt = [&] {                                 // the row's hm96 salt, by a whole warp
     pd_hm_salt<V>(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, mk, cc);
     if (lane == 0) pd_stamp<V>(sb, r, PS_SALT);
@@ -1010,7 +1028,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
     pd_stamp<V>(sb, r, PS_FRAME);
   };
   if (tid == 0) pd_stamp<V>(sb, r, PS_START);
-  if (warp == (int)blockDim.x / 32 - 1) {           // the last warp, which no segment's chain is on
+  if (PD_SM90_FORMS && warp == (int)blockDim.x / 32 - 1) {   // the last warp, which no segment's chain is on
     if (lane < 24) lab[lane] = (&PD_LABELS[0][0])[lane];
     if (lane < 26) un[lane] = unit[lane];
   }
@@ -1083,7 +1101,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   __syncthreads();
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
   // in mode 1 no templates are built, so with PD_LATE warp 2 computes the fold's round inputs while warp 0 runs its rounds
-  const bool split = !zero && LATE && (V & PD_ROUNDS) && a.i[2] == 1 && s / 2 + 1 <= 32;
+  const bool split = PD_SM90_FORMS && !zero && LATE && (V & PD_ROUNDS) && a.i[2] == 1 && s / 2 + 1 <= 32;
   if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
     if (zero) {
@@ -1134,7 +1152,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
       }
     } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
       if (warp == c1) {
-        pd_row_seed<V, 1>(a, un, lab, index, r, xr, lane == 0);
+        pd_row_seed<V, 1>(a, seed_unit, seed_lab, index, r, xr, lane == 0);
         if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
       } else {
@@ -1157,7 +1175,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
     s512_store(tree + 64ull * r, lt, 8);
     pd_stamp<V>(sb, r, PS_LEAF);
   } else if (tid == 32 * cw) {
-    pd_row_seed<V>(a, un, lab, index, r, xr, true);
+    pd_row_seed<V>(a, seed_unit, seed_lab, index, r, xr, true);
     pd_stamp<V>(sb, r, PS_SEED);
   }
   if (a.i[2] == 1) return;
