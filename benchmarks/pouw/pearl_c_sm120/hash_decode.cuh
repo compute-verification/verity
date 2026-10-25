@@ -630,13 +630,13 @@ DEV void pd_line_codes(const uint32_t* h, uint64_t out, bool on) {
   o[1] = make_uint4(c[4], c[5], c[6], c[7]);
 }
 // pd_line_codes by a whole warp whose lanes hold the same h: lane j makes byte j's code and stores it, the square sum
-// added over the lanes (integers, so in any order).  A lane's word of h by selects, which keep h in registers
+// added over the lanes (integers, so in any order).  A lane's word of h as an OR of masked words: selects compile to h[j / 4],
+// which puts h in local memory
 DEV void pd_line_codes_warp(const uint32_t* h, uint64_t out) {
   const int j = threadIdx.x & 31;
-  uint32_t hw = h[0];
+  uint32_t hw = 0;
 #pragma unroll
-  for (int q = 1; q < 8; q++)
-    if (j / 4 == q) hw = h[q];
+  for (int q = 0; q < 8; q++) hw |= h[q] & (0u - (uint32_t)(j / 4 == q));
   const uint32_t b = hw >> (8 * (j % 4)) & 0xFF;
   const int x = (b >> 7 ? -1 : 1) * (int)((b & 0x7F) + 1);
   uint32_t sumsq = (uint32_t)(x * x);
