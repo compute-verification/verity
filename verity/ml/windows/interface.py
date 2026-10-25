@@ -30,10 +30,12 @@ bit concatenation of its leaves, then one output row ``o<j>`` per return field, 
 port's leaves (one bit each) are read as their `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-a5's wiring check holds before the draw (`wiring`). A wire reads a row whole. A port read from several writers is cut
-(``cuts``, WIRES' row form, `SampledProofs.Wires`): cut ``k`` ways, parameter ``p`` is ``k`` rows ``p#j``, row ``j`` its
-outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows (`Wire.cut`). A unit that reads one row
-gathered from several writers' outputs reads it through a gather unit (``AllGather_v1``) whose ``parts`` are cut.
+a5's wiring check holds before the draw (`wiring`). A wire reads a row whole: a row gathered from several writers' words
+(RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused until circuits and proofs
+choose its row form, except in the form they chose, WIRES' cut (``cuts``, `SampledProofs.Wires`): a port read from
+several writers is cut ``k`` ways, parameter ``p`` is ``k`` rows ``p#j``, row ``j`` its outer elements
+``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows (`Wire.cut`). A unit that reads one row gathered from
+several writers' outputs reads it through a gather unit (``AllGather_v1``) whose ``parts`` are cut.
 
 The circuit also declares what fills its other inputs (`Registered`, `Ingress`): rows of a registered parameter read at
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
