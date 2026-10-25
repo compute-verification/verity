@@ -4,6 +4,7 @@ as network-accounting's varied traffic.
     python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
     python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
         [--max-tokens 64] [--exact-tokens] [--timeout 600] [--release RUN] [--jitter-ms 0] [--seed 0] --out FILE
+    python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --plan PLAN.json [--timeout 600] [--release RUN] --out FILE
 
 Each burst is ``--per-burst`` concurrent ``/v1/completions`` requests, each with its own ``user`` (``b<burst>-<i>``), a prompt of
 distinct token ids (BOS, then 16 to 200 ids, so no two share a cached block), top_p 1, a temperature of 0, 0.7 or 1.0 (half of
@@ -101,9 +102,21 @@ def varied(port: int, model: str, n: int, *, rate: float, prompt_tokens: tuple[i
     return out
 
 
+def planned(path: str, model: str) -> list[dict]:
+    """A certifier rehearsal's requests (its ``out/plan.json``), each {user, at_s, body}: the body it sent, at its ``send_ms``
+    after the first, streamed with its token ids; ``user`` ``plan.<j>`` in send order."""
+    with open(path) as fh:
+        reqs = sorted(json.load(fh)["requests"], key=lambda r: float(r["send_ms"]))
+    t0 = float(reqs[0]["send_ms"])
+    return [{"user": f"plan.{j:05d}", "at_s": (float(r["send_ms"]) - t0) / 1000,
+             "body": {**r["id_request"], "model": model, "user": f"plan.{j:05d}", "stream": True, "return_token_ids": True}}
+            for j, r in enumerate(reqs)]
+
+
 def run_varied(a: argparse.Namespace) -> int:
     lo, _, hi = a.prompt_range.partition(":")
-    reqs = varied(a.port, a.model, a.varied, rate=a.rate, prompt_tokens=(int(lo), int(hi)), max_tokens=a.max_tokens, seed=a.seed)
+    reqs = planned(a.plan, a.model) if a.plan else \
+        varied(a.port, a.model, a.varied, rate=a.rate, prompt_tokens=(int(lo), int(hi)), max_tokens=a.max_tokens, seed=a.seed)
     if a.exact_tokens:
         for q in reqs:
             q["body"].update(max_tokens=a.max_tokens, min_tokens=a.max_tokens, ignore_eos=True)
@@ -159,10 +172,12 @@ def main() -> int:
     ap.add_argument("--exact-tokens", action="store_true",
                     help="varied: every request asks for exactly --max-tokens (min_tokens, ignore_eos), as certifier-rehearse's do; "
                          "a response with fewer is cut")
+    ap.add_argument("--plan", default=None, help="instead of drawing them, a certifier rehearsal's requests (its out/plan.json), "
+                                                 "each sent at its send_ms, numbered with --release as --varied's are")
     ap.add_argument("--timeout", type=float, default=600, help="the client's socket timeout, seconds")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
-    if a.varied:
+    if a.varied or a.plan:
         return run_varied(a)
     rng = random.Random(a.seed)
     with open(a.out, "a") as fh:

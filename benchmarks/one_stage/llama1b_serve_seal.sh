@@ -21,7 +21,9 @@
 # window and at any stop. GATE=N (GATE_S=600, GATE_TIMEOUT=60): before the bursts, certifier-rehearse's load, N varied requests
 # of exactly 64 tokens over GATE_S seconds with a GATE_TIMEOUT client timeout, summarized in $OUT/gate.json once sealed: each
 # request's latency, time to its first token and longest wait between two tokens (against the warden's cell delay,
-# GATE_DEADLINE_S=3), and the engine's step gaps, collections and pauses (pauses.jsonl) meanwhile.
+# GATE_DEADLINE_S=3), and the engine's step gaps, collections and pauses (pauses.jsonl) meanwhile. GATE_PLAN=PATH (in the tree)
+# sends a certifier rehearsal's own requests instead, each at its send_ms (its out/plan.json). SEAL_HOLD_GB (64), SEAL_WARM_GB (0)
+# and MAX_NUM_SEQS (8) are serve-openai's --seal-hold-gb, --seal-warm-gb and --max-num-seqs.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -69,6 +71,9 @@ keep_records() {
   done
 }
 under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free on $ROOT; not serving"; exit 15; }
+# NEED_GB: what the run will write, so it doesn't start a load the floor would stop halfway
+[ "$(df --output=avail -k "$ROOT" | tail -1)" -lt $((floor + ${NEED_GB:-0} * 1048576)) ] && {
+  df -h "$ROOT"; echo "DISK: under $DISK_FLOOR_GB + $NEED_GB GB free on $ROOT; not serving"; exit 15; }
 
 # the server's own pid (not a function's subshell), so a stop's SIGTERM reaches its handler: it writes summary.json and
 # finishes the pending seals
@@ -76,6 +81,7 @@ under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free o
   --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" --window-gb "${WINDOW_GB:-32}" \
+  --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
   --disk-floor-gb "$DISK_FLOOR_GB" --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
@@ -195,10 +201,12 @@ EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
 fi
 
-if [ "${GATE:-0}" -gt 0 ]; then   # certifier-rehearse's load: GATE varied requests of exactly 64 tokens over GATE_S (600) s, 60 s timeout
+if [ "${GATE:-0}" -gt 0 ] || [ -n "${GATE_PLAN:-}" ]; then   # certifier-rehearse's load: GATE varied requests of exactly 64 tokens over GATE_S (600) s, or GATE_PLAN's, 60 s timeout
   run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)"); rel=(); [ "$ADMIT" = release-order ] && rel=(--release "$run")
-  "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --varied "$GATE" --rate "$("$PY" -c "print($GATE / ${GATE_S:-600})")" \
-    --prompt-range "${GATE_PROMPTS:-16:1024}" --max-tokens 64 --exact-tokens --timeout "${GATE_TIMEOUT:-60}" "${rel[@]}" \
+  if [ -n "${GATE_PLAN:-}" ]; then load=(--plan "$TREE/$GATE_PLAN"); else
+    load=(--varied "$GATE" --rate "$("$PY" -c "print($GATE / ${GATE_S:-600})")" --prompt-range "${GATE_PROMPTS:-16:1024}" --max-tokens 64 --exact-tokens)
+  fi
+  "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" "${load[@]}" --timeout "${GATE_TIMEOUT:-60}" "${rel[@]}" \
     --seed "${GATE_SEED:-7}" --out "$D/gate.jsonl" > "$OUT/gate.log" 2>&1
   echo "$(date -u +%H:%M:%SZ) gate load ($run) rc=$?" | tee -a "$OUT/steps.txt"
   cp "$D/gate.jsonl" "$OUT/"
@@ -338,7 +346,8 @@ if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each 
 fi
 echo "READY $D" | tee -a "$OUT/steps.txt"
 
-end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((end + 86400))   # UNTIL past midnight
+if [ "$UNTIL" = ready ]; then end=0      # UNTIL=ready: stop once ready (the gate, its seals and the compiles done)
+else end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((end + 86400)); fi   # UNTIL past midnight
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
 trap - TERM INT
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
