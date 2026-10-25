@@ -103,7 +103,7 @@ open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
 /-- **At flock-verify's acceptance at `dr` through `keep`, each table's level-0 openings at the plain leaf are its
-reps' deployed entries** (`accepts_opens₀LDU`). -/
+reps' deployed entries** (`accepts_opens₀LDU`): `accepts_opens₀LDLfK` at `leafPlain`. -/
 theorem accepts_opens₀LDUK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
@@ -144,51 +144,8 @@ theorem accepts_opens₀LDUK (keep : Bool → Bool)
                   (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ++
               Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
                 (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_req0DK keep h
-  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
-  obtain ⟨sch, hf, hk⟩ := hall j hj
-  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout hacc => ?_⟩
-  subst hout
-  obtain ⟨⟨R₀, rest₀, hR₀, hl₀, hpos₀, hrw₀⟩, hsh₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
-  obtain ⟨⟨R₁, rest₁, hR₁, hl₁, hpos₁, hrw₁⟩, hsh₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
-  have h2 := (fast100_dims _ sch hf).1.2.1
-  have hseam : LevelSeam (sch.levels.getD 0 default) :=
-    fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left (by omega)]; exact Array.getElem_mem _)
-  have hlv0 := lvOf_schedOf (s := sch) (i := 0) (by omega)
-  have hQ : (lvOf (schedOf sch) 0).queries = (sch.levels.getD 0 default).q := by rw [hlv0]; rfl
-  have hq : ∀ (R : Req) (coins : Array F128),
-      R.positions = (Flock.positions (sch.levels.getD 0 default) coins).toList →
-      R.positions.length = (sch.levels.getD 0 default).q := fun R coins h => by
-    rw [h, Array.length_toList, positions_size _ hseam]
-  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 leafPlain cap (pend₀, pend₁)
-      (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
-        sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]))).map
-        (fun x => (x.1, x.2.1)) =
-      Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
-          (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-            (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ++
-        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
-          (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-            (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-    unfold opens₀L
-    rw [List.map_append, hQ, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁,
-      opnOf_pair hp₀ hp₁]
-    congr 1
-    · exact Claims.Flock.slotOpensL_entries _ 0 _ _ _ R₀ rest₀ hR₀ hl₀ hpos₀ (hq _ _ hpos₀) hrw₀ fun _ => rfl
-    · exact Claims.Flock.slotOpensL_entries _ 1 _ _ _ R₁ rest₁ hR₁ hl₁ hpos₁ (hq _ _ hpos₁) hrw₁ fun _ => rfl
-  refine ⟨fun x hx => ⟨?_, ?_⟩, hent⟩
-  · refine Claims.Flock.verified_opens₀L H512 enc512 leafPlain (schedOf sch) _ (pend₀, pend₁) _ hacc
-      (fun r hr R hR hlR => ?_) x hx
-    rcases r with _ | _ | r
-    · exact hlR ▸ hsh₀ R hR
-    · exact hlR ▸ hsh₁ R hR
-    · omega
-  · have hm := List.mem_map_of_mem (f := fun x => (x.1, x.2.1)) hx
-    rw [hent, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁] at hm
-    rcases List.mem_append.1 hm with hm | hm
-    · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
-    · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
+                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! :=
+  accepts_opens₀LDLfK keep leafPlain h
 
 end Req0
 
@@ -199,7 +156,7 @@ open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
 /-- **flock-verify's acceptance at `dr` through `keep` of a one-table session under hidden outputs and plain SHA-512
-leaves, rep by rep** (`accepts_repsOneDU`). -/
+leaves, rep by rep** (`accepts_repsOneDU`): `accepts_repsOneDLfK` at `leafPlain`. -/
 theorem accepts_repsOneDUK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
@@ -227,39 +184,8 @@ theorem accepts_repsOneDUK (keep : Bool → Bool)
               st.mPts (ptsOf st.mPts sess.points)).length) p Tv)).1.getD k []))) ∧
         (tableOutL H512 enc512 leafPlain (capOfRoot sess.rootB[0]!) (pend 0, pend 1)
           (opnOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
-            (ptsOf st.mPts sess.points)).length #[t.proofs[0]!, t.proofs[1]!])).accepted = true := by
-  obtain ⟨spec, sts, sess, hsu, hdec, -, hall⟩ := accepts_verdict_plainAnyDK keep hh hl h
-  obtain ⟨spec', sts', sess', hsu', hdec', -, hallR⟩ := accepts_rep_roundsAnyDK keep hrr h
-  rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
-  obtain ⟨rfl, rfl⟩ := hsu'
-  rw [hdec, Except.ok.injEq] at hdec'
-  subst hdec'
-  obtain ⟨hp2, hmp⟩ := setupTables_pointsAny hsu
-  have hpts := decodeWithK_points keep With.std hdec
-  rcases setupTables_okAny hsu with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc', -⟩
-  swap
-  · omega
-  have h0 : 0 < (#[st] : Array Flock.Stmt).size := by simp
-  obtain ⟨sch, hf, hk⟩ := hall 0 h0
-  obtain ⟨sch', hf', hR0, hR1⟩ := hallR 0 h0
-  obtain rfl : sch = sch' := Option.some.inj (hf.symm.trans hf')
-  refine ⟨st, st.spec, sess, sch, hst, hsu, hdec, hf, fun hwf hr hm => ?_⟩
-  obtain ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hv⟩ := hk hwf hr hm
-  have hext := ofCircuit_extra st hwf hr sess.points (by rw [hpts.1, hp2])
-    (fun q hq => (hpts.2 q hq).trans (hmp 0 h0).symm)
-  obtain ⟨e₀, f₀, xs₀, T₀, hf₀, hx₀, hq₀, hl₀, hr₀⟩ := hR0
-  obtain ⟨e₁, f₁, xs₁, T₁, hf₁, hx₁, hq₁, hl₁, hr₁⟩ := hR1
-  rw [(hext xs₀ hx₀).1] at hq₀ hl₀ hr₀
-  rw [(hext xs₁ hx₁).1] at hq₁ hl₁ hr₁
-  obtain rfl : f₀ = p₀ := Except.ok.inj (hq₀.symm.trans hp₀)
-  obtain rfl : f₁ = p₁ := Except.ok.inj (hq₁.symm.trans hp₁)
-  obtain rfl : e₀ = s₀ := Option.some.inj (hf₀.symm.trans hs₀)
-  obtain rfl : e₁ = s₁ := Option.some.inj (hf₁.symm.trans hs₁)
-  refine ⟨![pend₀, pend₁], fun r => ?_, hv⟩
-  rcases r with ⟨_ | _ | k, hk2⟩
-  · exact ⟨e₀, f₀, T₀, hf₀, hq₀, hpl₀, hl₀, hr₀⟩
-  · exact ⟨e₁, f₁, T₁, hf₁, hq₁, hpl₁, hl₁, hr₁⟩
-  · omega
+            (ptsOf st.mPts sess.points)).length #[t.proofs[0]!, t.proofs[1]!])).accepted = true :=
+  accepts_repsOneDLfK keep leafPlain hrr hc1 (accepts_verdict_plainAnyDK keep hh hl h) h
 
 end Reps
 
