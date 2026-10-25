@@ -140,8 +140,9 @@ def test_a_found_piece_the_driver_cant_name_is_leaked(tmp_path):
 
 def test_reads_are_the_formats_fields_and_its_nonces():
     """`reads` on a ``--zk`` stream of the format's shape, every vector empty but one zerocheck nonce, the icap hash, the
-    lig.qn u64s and the zk words: its reads, in order, are the stream's every field (the root's and the tau
-    commitments' empty), its nonce the zerocheck one, and a stream the format doesn't read whole has none."""
+    lig.qn grinding nonces and the zk words: its reads, in order, are the stream's every field (the root's and the tau
+    commitments' empty), its nonces the zerocheck one and the two grinding nonces, and a stream the format doesn't read
+    whole has none."""
     u = lambda v: struct.pack("<Q", v)  # noqa: E731
     f, h, w = b"\xaa" * 16, b"\xbb" * 32, b"\xcc" * 32
     parts = [u(0), u(29), u(0), u(25), struct.pack("<I", 0), b"\x00", struct.pack("<I", 0)]
@@ -149,8 +150,8 @@ def test_reads_are_the_formats_fields_and_its_nonces():
     parts += [b"\x01", w, w, w, u(0), u(0), b"", f, f, u(0), b"", u(0), b"", f] + [u(0)] * 4
     stream = b"".join(parts)
     at = [sum(len(p) for p in parts[:i]) for i in range(len(parts))]
-    assert LS.reads(stream) == (tuple(zip(at, map(len, parts))), frozenset({at[14]}))
-    assert parts[14] == u(7)
+    assert LS.reads(stream) == (tuple(zip(at, map(len, parts))), frozenset({at[14], at[33], at[34]}))
+    assert parts[14] == u(7) and (parts[33], parts[34]) == (u(5), u(9))  # the zerocheck nonce, then lig.qn's two
     assert LS.reads(stream[:-8]) is None
 
 
@@ -205,3 +206,39 @@ def test_the_transcripts_round_messages_are_read_as_their_records(tmp_path):
     vdir = _transcript(tmp_path, (el[1] + POS, m))
     assert LS.placements(_found(vdir), BLOBS, vdir) == {"pos @0": [("s-session.json#rep0.r1", 16, "file")]}
     assert LS.classify(_found(vdir), BLOBS, vdir) == (["pos @0"], {})
+
+
+def _zk_stream(qn: int = 2, cbn: int = 2, consn: int = 2) -> bytes:
+    """A minimal valid ``--zk`` proof stream (Sha256 Merkle kind, unsalted) in `redigest.layout`'s read order, with the
+    Ligerito grinding-nonce vectors ``lig.qn``, ``lig.cbn`` and ``lig.consn`` populated."""
+    u, u32 = lambda v: struct.pack("<Q", v), lambda v: struct.pack("<I", v)  # noqa: E731
+    f = b"\xa0" * 16
+    p = [u(0), u(0), u(0), u(0), u32(0), b"\x00", u32(0)]          # cap vec 0; four ints; t=0; k=0 (Sha256)
+    p += [u(0), u(0), u(0), f, f, f, u(0)]                         # zc: ab/c/rounds empty; fa/fb/fc; nonce vec 0
+    p += [u(0), u(0), u(0), u(0)]                                  # lc: rounds/zp/me empty; nonce vec 0
+    p += [u(0), u(0), u(0)]                                        # rs count 0; batching.nonce vec 0; lig.icap vec 0
+    p += [u(0), u(0), u(0), u(0), u(0), u(0), u(0), u(0), u(0)]    # l0 (2); rcaps; l{i}; yr; final (2); sc; msg
+    p += [u(qn)] + [u(0)] * qn + [u(0)] + [u(0)] + [u(cbn)] + [u(0)] * cbn + [u(consn)] + [u(0)] * consn  # qn/ood/fold/cbn/consn
+    p += [b"\x01", b"\xe0" * 32, b"\xe0" * 32, b"\xe0" * 32, u(0)]  # zk.tag; e0/e1/tp; ybar vec 0
+    p += [u(0), f, f, u(0), u(0), f, u(0), u(0), u(0), u(0)]        # in.root 0; rho; sigma; tauc 0; taus 0; tau; y/open/salt/path 0
+    return b"".join(p)
+
+
+def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
+    """``lig.qn``, ``lig.cbn`` and ``lig.consn`` are grinding nonces (`transcript_check`'s ``t.pow``; `redigest`'s
+    ``lig-query-nonce`` and ``lig-claim-nonce`` flip them and the verifier accepts), so the prover controls them and
+    `public_bytes` must not take them for the reader-fixed integers. The switch row leaked in one field, with its bytes
+    also written across two grinding nonces as a ``public`` alibi, is still leaked (REDTEAM phase 16's rule, which a
+    nonce-blind scan lets through)."""
+    stream = _zk_stream()
+    off = LS.RD.layout(stream, zk=True)
+    _fields, nonces = LS.reads(stream)
+    for k in ("lig.qn", "lig.cbn", "lig.consn"):
+        assert set(off[k]) <= nonces, f"{k} is not counted as a nonce"
+    b = bytearray(stream)
+    b[off["zk.e0"][0]:off["zk.e0"][0] + 16] = SW   # a genuine in-one-field leak (a hiding mask the prover controls)
+    b[off["lig.qn"][0]:off["lig.qn"][0] + 16] = SW  # the same bytes across two grinding nonces (the alibi)
+    (tmp_path / REPS[0]).write_bytes(bytes(b))
+    (tmp_path / "s-session.json").write_text("{}")
+    pieces = {"sw_route 0 @0": SW}
+    assert LS.classify(_found(tmp_path, pieces), pieces, tmp_path) == (["sw_route 0 @0"], {})
