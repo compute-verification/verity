@@ -73,6 +73,7 @@ the seal's thread runs Python, each take waits out the interpreter's switch inte
 from __future__ import annotations
 
 import asyncio
+import collections
 import json
 import queue
 import shutil
@@ -129,6 +130,10 @@ class Options:
     window_steps: int = option("--window-steps", type=int, default=64, help="engine steps a Commit window holds at most")
     idle_close_steps: int = option("--idle-close-steps", type=int, default=1,
                                    help="close a Commit window when the engine idles once it holds this many steps (default 1: at every idle)")
+    window_requests: int = option("--window-requests", type=int, default=0,
+                                  help="at most this many distinct requests in a Commit window, the class's slots (0: no bound): the "
+                                       "engine holds at most this many unfinished requests, the rest wait in admission order, and a "
+                                       "window closes before a step that would bring in one more (the running ones carry on)")
     chunk: int = option("--chunk", type=int, default=65536, help="the committer's leaf, in bytes of the packed step stream (as `commit`'s)")
     hash_threads: int = option("--hash-threads", type=int, default=2, help="the committer's hashlib threads")
     gpu_tree: bool = option("--gpu-tree", action="boolean_optional", default=True,
@@ -191,14 +196,16 @@ class Options:
 class EngineLoop:
     """The one thread that steps the engine: admissions come through `submit`, outputs go back through each admission's
     ``deliver``. ``engine`` is vLLM's ``LLMEngine`` (``add_request``, ``abort_request``, ``step``,
-    ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None."""
+    ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None. With ``cap`` (``--window-requests``), at most ``cap``
+    requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish."""
 
     _STOP = object()
 
-    def __init__(self, engine: Any, commit: CommitWindows | None = None) -> None:
-        self.engine, self.commit = engine, commit
+    def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0) -> None:
+        self.engine, self.commit, self.cap = engine, commit, int(cap)
         self.q: queue.Queue = queue.Queue()
         self.live: dict[str, Admission] = {}
+        self.held: collections.deque[Admission] = collections.deque()
         self.error: str | None = None
         self.draining: str | None = None
         self.steps = 0
@@ -229,19 +236,34 @@ class EngineLoop:
                 self.engine.abort_request([eid])
                 if self.commit is not None:
                     self.commit.aborted(eid)
+                self._release()
+            else:
+                self.held = collections.deque(a for a in self.held if a.engine_id != eid)
             return True
         if self.draining is not None:
             item.deliver(Delta([], "", error=f"the endpoint is stopping: {self.draining}"))
             return True
+        if self.cap and (self.held or len(self.live) >= self.cap):
+            self.held.append(item)
+        else:
+            self._add(item)
+        return True
+
+    def _add(self, item: Admission) -> None:
         try:
             self.engine.add_request(request_id=item.engine_id, prompt={"prompt_token_ids": list(item.prompt_ids)}, params=item.params)
         except Exception as e:  # noqa: BLE001  (the engine's refusal of one request goes back to it)
             item.deliver(Delta([], "", error=f"{type(e).__name__}: {e}"))
-            return True
+            return
         self.live[item.engine_id] = item
         if self.commit is not None:
             self.commit.admitted(item)
-        return True
+
+    def _release(self) -> None:
+        """Held requests into the engine, in admission order, while it has room under ``cap``; those held before a drain
+        are still served."""
+        while self.held and len(self.live) < self.cap:
+            self._add(self.held.popleft())
 
     def _deliver(self, out: Any) -> None:
         adm = self.live.get(out.request_id)
@@ -274,12 +296,13 @@ class EngineLoop:
                 if not running or not self.engine.has_unfinished_requests():
                     continue
                 if self.commit is not None:
-                    self.commit.before_step()
+                    self.commit.before_step(self.live)
                 for out in self.engine.step():
                     self._deliver(out)
                 if self.commit is not None:
                     self.commit.stepped()
                 self.steps += 1
+                self._release()
         except BaseException as e:
             self.error = f"{type(e).__name__}: {e}"
             raise
@@ -289,6 +312,9 @@ class EngineLoop:
                 if self.commit is not None:
                     self.commit.aborted(adm.engine_id)
             self.live.clear()
+            for adm in self.held:
+                adm.deliver(Delta([], "", error=self.error or "the server stopped"))
+            self.held.clear()
             if self.commit is not None and self.commit.is_open:
                 self.commit.close()
 
@@ -557,6 +583,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1 or opts.admit_hold_ms < 1:
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
+    if opts.window_requests < 0:
+        raise UsageError("--window-requests is at least 0 (0: no bound)")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
@@ -621,8 +649,9 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror)
-    loop = EngineLoop(engine, windows)
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
+                                request_cap=opts.window_requests)
+    loop = EngineLoop(engine, windows, cap=opts.window_requests)
     if windows is not None:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
@@ -659,6 +688,7 @@ def main(opts: Options) -> int:
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
+              "window_requests": opts.window_requests or None,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),

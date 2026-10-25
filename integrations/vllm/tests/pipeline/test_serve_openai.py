@@ -3,6 +3,7 @@ engine and committer, the HTTP stream, the HTTP id -> engine id -> runner id map
 streamed ones."""
 from __future__ import annotations
 
+import collections
 import json
 import threading
 import urllib.error
@@ -22,6 +23,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline.serve_admit import Admission
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -445,6 +447,71 @@ def test_a_window_closes_at_idle_once_it_holds_idle_close_steps(tmp_path, idle_c
     wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
     assert len(wins) == windows and all(w["passed"] and w["seconds"] == {"open": 0.0, "close": 0.0} for w in wins)
     assert s.windows.summary()["passed"] and s.windows.summary()["requests_checked"] == 3
+
+
+class LoopSpy:
+    """`CommitWindows` as the engine loop drives it, recording the order requests reach the engine and each step's live ones."""
+
+    is_open = False
+
+    def __init__(self) -> None:
+        self.admitted_order: list[str] = []
+        self.live_at_steps: list[list[str]] = []
+
+    def admitted(self, adm: Any) -> None:
+        self.admitted_order.append(adm.engine_id)
+
+    def before_step(self, live: Any = ()) -> None:
+        self.live_at_steps.append(sorted(live))
+
+    def streamed(self, *_a: Any) -> None:
+        pass
+
+    def aborted(self, *_a: Any) -> None:
+        pass
+
+    def idle(self) -> None:
+        pass
+
+    def stepped(self) -> None:
+        pass
+
+
+def test_window_requests_holds_the_engine_to_its_cap_and_serves_the_rest_in_admission_order():
+    spy, got = LoopSpy(), {}
+    loop = so.EngineLoop(Engine(Runner()), spy, cap=2)
+    eids, lengths = [f"cmpl-{i}-0" for i in range(5)], [3, 1, 4, 2, 2]
+    for i, (eid, n) in enumerate(zip(eids, lengths)):
+        loop.submit(Admission(f"cmpl-{i}", eid, [1, 2 + i], {"max_tokens": n, "seed": 0},
+                              lambda d, e=eid: got.setdefault(e, []).append(d), {}))
+    loop.abort(eids[4])                                  # held, so it never reaches the engine
+    loop.drain("done")
+    loop.run()
+    assert spy.admitted_order == eids[:4], "held requests go in in admission order, the aborted one never"
+    assert max(len(live) for live in spy.live_at_steps) == 2 and loop.held == collections.deque()
+    assert {e: sum(len(d.token_ids) for d in ds) for e, ds in got.items()} == dict(zip(eids[:4], lengths[:4]))
+    assert all(ds[-1].finished and ds[-1].error is None for ds in got.values())
+
+
+def test_a_window_closes_before_a_step_that_would_bring_in_more_than_window_requests(tmp_path):
+    com = SimpleNamespace(_step_index=0, reset=lambda: None, install=lambda: None)
+    w = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=64, request_cap=2)
+    closed: list[list[str]] = []
+
+    def close() -> None:
+        closed.append(sorted(w.in_window))
+        w.is_open = False
+
+    w.close = close
+    for live in (["a"], ["a", "b"], ["b"], ["b", "c"], ["c"], ["c", "d"], ["d", "e"]):
+        w.before_step(live)
+        com._step_index += 1
+    close()
+    assert closed == [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"]], "each window at most 2, a running request carried on"
+    unbounded = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=64)
+    for live in (["a"], ["a", "b"], ["b", "c"]):
+        unbounded.before_step(live)
+    assert sorted(unbounded.in_window) == ["a", "b", "c"], "without the cap nothing closes on a third request"
 
 
 def test_check_fails_on_a_committed_id_that_was_not_served(tmp_path):
