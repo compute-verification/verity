@@ -5,18 +5,22 @@
 # dir (a row dir already there moved aside to <row>.prior-<run id>, as match_rank.sh does), it folds the rank as tp.fold_match
 # does: the profile derived_<ROLE>_tp<W>, under the construction the rank's Build Programs declare (match.fold_construction_args).
 # Its match/fold_match/rank<RANK> is put as the set fold-<RANK>, labelled on this run; a failed step labels that set failed
-# instead.  match_rank.sh with MATCH_REUSE=fold keeps that fold (--reuse-fold: only one folded under the same flags).  Two jobs on
-# one node take two sweeps (SW); CLEAN=1 removes this job's row dir once the set is put.
-#   research run --on NODE --mem-gb 48 --mem-wait 28800 --timeout 8h --custody-ttl 24h --source . --cwd source --project verity -- env ROW=... RANK=0 SW=/workspace/cp/circuits/glm-v2/rows-fold0 BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small bash integrations/vllm/manifests/glm_v2_tree/jobs/fold_rank.sh
-# env: ROW, RANK, BUILD_PARTS, LEGS_PARTS, [SW], [REF], [FOLD_TIMEOUT=86400], [CLEAN], store_tar.sh's [WAIT_MIN], [EVICT_FREE_GB],
+# instead.  match_rank.sh with MATCH_REUSE=fold keeps that fold (--reuse-fold: only one folded under the same flags).  Each job
+# takes a sweep of its own (SW), recorded as @circuits's (`research keep`) before anything lands in it; CLEAN=1 frees it with
+# `research retention rm` once the set is put (its GM-01 gets the fold from the store, not from here).
+#   research run --on NODE --mem-gb 48 --mem-wait 28800 --timeout 8h --custody-ttl 24h --source . --cwd source --project verity -- env ROW=... RANK=0 SW=/workspace/cp/circuits/glm-v2/rows-fold0 BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small CLEAN=1 bash integrations/vllm/manifests/glm_v2_tree/jobs/fold_rank.sh
+# env: ROW, RANK, BUILD_PARTS, LEGS_PARTS, SW, [REF], [FOLD_TIMEOUT=86400], [CLEAN], store_tar.sh's [WAIT_MIN], [EVICT_FREE_GB],
 # [FETCH_MIN_MBPS], [FETCH_TRIES] and [LABEL_ALSO].
 set -uo pipefail
-: "${ROW:?ROW}" "${RANK:?RANK}" "${BUILD_PARTS:?BUILD_PARTS}" "${LEGS_PARTS:?LEGS_PARTS}"
+: "${ROW:?ROW}" "${RANK:?RANK}" "${BUILD_PARTS:?BUILD_PARTS}" "${LEGS_PARTS:?LEGS_PARTS}" "${SW:?SW: a sweep of this job alone}"
 [[ $RANK =~ ^[0-9]$ ]] || { echo "RANK=$RANK: one single-digit rank"; exit 3; }
 TREE=$PWD J=$PWD/integrations/vllm/manifests/glm_v2_tree/jobs W0=/workspace/cp/circuits
 source "$J/model.sh"
 D=$SW/$ROW SET=fold-$RANK O=$OUT
 fail() { echo "$1"; OUT=$O NAME=$SET MSG="$1" bash "$J/store_tar.sh" fail; exit "$2"; }
+rsch() { PYTHONPATH=$TREE/tools/research/src python3 -m research "$@"; }
+mkdir -p "$SW" && rsch keep "$SW" --owner @circuits --expires 2d --priority normal \
+  --why "B8 rank $RANK's fold ($RESEARCH_RUN_ID): freed once fold-$RANK is in the store" || fail "research keep of $SW failed" 3
 [ ! -e "$D" ] || { mv "$D" "$D.prior-$RESEARCH_RUN_ID" && echo "$D moved aside to $D.prior-$RESEARCH_RUN_ID"; } || exit 3
 [ ! -e "$D.tree" ] || mv "$D.tree" "$D.prior-$RESEARCH_RUN_ID.tree" || exit 3
 OUT=$O PARTS=$BUILD_PARTS bash "$J/store_tar.sh" get || fail "the Build's get ($BUILD_PARTS) failed (rc $?)" 5
@@ -63,4 +67,5 @@ EOF
 (cd "$SW" && find "$ROW/match/fold_match/rank$RANK" -type f -print0 | xargs -0 -r sha256sum) | sort -k2 >"$O/fold.sha256"
 echo "fold.sha256: $(wc -l <"$O/fold.sha256") files"
 OUT=$O LIST=$O/fold.sha256 NAME=$SET bash "$J/store_tar.sh" put || fail "the put of $SET failed (rc $?)" 5
-[ "${CLEAN:-0}" != 1 ] || { rm -rf "$D" "$D.tree" && echo "CLEAN=1: $D removed (the set holds its fold)"; }
+[ "${CLEAN:-0}" != 1 ] || rsch retention rm "$SW" --approved-by @circuits --ref "$RESEARCH_RUN_ID: fold-$RANK put" \
+  --by "${RESEARCH_AGENT_URL:-research run $RESEARCH_RUN_ID}" --apply || echo "CLEAN=1: retention rm of $SW failed; it stays recorded as @circuits's"
