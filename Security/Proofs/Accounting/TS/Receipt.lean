@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS.Receipt
+import Definitions.Accounting.Guarantees.TS.Receipt
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.ReceiptLi
 import Proofs.Accounting.TS.ReceiptDuoCP
