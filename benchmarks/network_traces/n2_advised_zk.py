@@ -18,18 +18,22 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   service doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
   link's tie source is the tests' stand-in (`advised_traffic.StandInTie`) on the link's certified prompts, the
   verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's. Its clock
-  source is the verifier of record's: the certifier signs each window's sync (`Issuer.clock`), and the link takes
-  those clock certificates (`service.LinkWindows.clock_certificates`, `advised.SignedClocks`).
+  source is the verifier of record's: the certifier signs each window's sync salted (`Issuer.salted_clock`), and the
+  link opens those clock certificates (`service.LinkWindows.certified_clocks`, `advised.SignedClocks`).
 * **A served run's link** (`e2e`, ``--e2e RUN``): network-e2e's output directory of a run on the advice profile
   (``report.json``, the honest rehearsal's records under ``rehearsal/honest``, the endpoint's advice under
   ``endpoint/advice``), N2's link of its honest rehearsal (``served``: T = 60 on both ends, the egress allocation the
   calibration chose, R_in = 1, the certifier's salt heading every window) under the run's own certifier key, syncs and
-  id-request framing (`active.id_request_frames`). Its advice is the Commit windows' I1 advice that the report bound to
-  the run and rebuilt from its certified I/O, joined into one (`joined`), its requests in the certified arrival order,
+  id-request framing (`active.id_request_frames`). Its advice is the Commit windows' window advice that the report
+  bound to the run and rebuilt from its certified I/O, joined into one I1 v0 advice (`joined`: a request a window
+  carries in is the earlier window's, charged once), its requests in the certified arrival order,
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
   ingress heads' request frames; the tie the same stand-in, on the certified prompts. Its clock source
-  (`served_clocks`) is the run's certifier's clock certificates (``clocks.jsonl``), the verifier of record's: any
-  entry of that name, a regular file or not, is them, and one that can't be read is refused. A run without one is
+  (`served_clocks`) is the run's certifier's salted clock certificates with their openings (the certifier's
+  ``clocks.jsonl``, witness, not the client's public copy), the verifier of record's: any entry of that name, a
+  regular file or not, is them, and one that can't be read, or holds an unsalted clock certificate, is refused. The
+  summary's ``clocks`` names the source and says whether its syncs are the declared ones, never the syncs. A run
+  without one is
   refused unless ``--clock-stand-in`` takes `CertifierClocks` in their place, the syncs its certifier's proxy logged
   (``proxy.json.gz``), unsigned and labelled a stand-in. It is never the plan the prover declared. A run whose clock
   source gives fewer windows' syncs than are proved is refused too. The link's first ``--windows`` windows are
@@ -71,7 +75,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -82,6 +86,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import n2_zk as Z  # noqa: E402
+import window_chain as WC  # noqa: E402
 from n2_zk import ENDS  # noqa: E402
 from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
@@ -91,6 +96,7 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
 
 def _traffic():
@@ -161,15 +167,20 @@ class CertifierClocks:
 
 
 def served_clocks(run: Path, link: str, stand_in: bool = False) -> dict:
-    """A served run's clock source, as `LinkWindows` takes it: the certifier's clock certificates (``clocks.jsonl``,
-    `certifier_serve.read_clocks`), the verifier of record's. Any entry of that name is them, so one that isn't a file
-    to read (a dangling symlink, a directory) refuses the run rather than passing for a run without them. A run without
-    one is refused, unless `stand_in` (``--clock-stand-in``) takes `CertifierClocks`, the certifier's unsigned log."""
+    """A served run's clock source, as `LinkWindows` takes it: the certifier's salted clock certificates with their
+    openings (its ``clocks.jsonl``, witness, `certifier_serve.read_clocks`), the verifier of record's own read, never
+    the client's public copy. Any entry of that name is them, so one that isn't a file to read (a dangling symlink, a
+    directory) or holds a line that isn't a salted clock certificate's (an unsalted one, from before the salted form)
+    refuses the run rather than passing for a run without them. A run without one is refused, unless `stand_in` (``--clock-stand-in``) takes
+    `CertifierClocks`, the certifier's unsigned log."""
     f = run / "clocks.jsonl"
     if os.path.lexists(f):
         if not f.is_file():
             raise SystemExit(f"{f}: there, but not a file of clock certificates to read, so the run is refused")
-        return {"clock_certificates": tuple(cs.read_clocks(f))}
+        try:
+            return {"certified_clocks": tuple(cs.read_clocks(f))}
+        except (KeyError, TypeError, ValueError) as e:
+            raise SystemExit(f"{f}: {e}, so the run is refused") from None
     if not stand_in:
         raise SystemExit(f"{run}: no clocks.jsonl, the certifier's clock certificates, so the run is refused; "
                          "--clock-stand-in takes its proxy log's syncs (CertifierClocks, unsigned) in their place")
@@ -177,18 +188,20 @@ def served_clocks(run: Path, link: str, stand_in: bool = False) -> dict:
 
 
 def clocks_label(lw: LinkWindows, declared) -> dict:
-    """The summary's ``clocks``: where the link's syncs come from, the syncs its clock source gives, window by window,
-    and whether they are the ones declared."""
-    if lw.clock_certificates is not None:
-        by = {"source": "signed", "by": "the certifier's clock certificates (clocks.jsonl), advised.SignedClocks "
-                                        "under the link's certifier key and session"}
+    """The summary's ``clocks``: where the link's syncs come from, how many windows its clock source gives a sync, and
+    whether those are the ones declared, but never the syncs, which the certifier signed and are witness; for the
+    signed source, why each opening it took no sync from was refused."""
+    if lw.certified_clocks is not None:
+        by = {"source": "signed", "by": "the certifier's salted clock certificates (its clocks.jsonl), each opened by "
+                                        "advised.SignedClocks under the link's certifier key and session",
+              "refused": list(lw.clock_source.refused)}
     elif isinstance(lw.clocks, CertifierClocks):
         by = {"source": "stand-in", "by": "CertifierClocks: the certifier's proxy log (proxy.json.gz's syncs, its "
                                           "shaper's), unsigned, by --clock-stand-in for a run without clocks.jsonl"}
     else:
         by = {"source": "stand-in", "by": type(lw.clocks).__name__}
     got = list(lw.clock_source.syncs(lw.link)) if lw.clock_source is not None else []
-    return {**by, "syncs": [[s.delta, str(s.rho)] for s in got], "as_declared": got == list(declared)}
+    return {**by, "windows": len(got), "as_declared": got == list(declared)}
 
 
 def standin_tie(ingress: GridParams, own: int) -> dict:
@@ -274,13 +287,13 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
         certifier = cs.signer(keys / "certifier", height)
         try:
             issuer = Issuer(certifier, session)
-            clocks = [issuer.clock(AT.LINK, w, sync) for w, sync in enumerate(AT.SYNCS[:shape.windows])]
+            clocks = [issuer.salted_clock(AT.LINK, w, sync) for w, sync in enumerate(AT.SYNCS[:shape.windows])]
             if None in clocks:
                 raise SystemExit(f"the certifier refused to sign a window's sync: {issuer.refused}")
             lw = LinkWindows(AT.LINK, shape.egress, AT.SYNC_SET, certifier.public_key(), "n2-advised-zk", session,
                              ingress=shape.ingress, proof_deadline=cs.PROOF_DEADLINE_S,
                              advised=AD.AdvisedProfile(shape.windows, AT.FRAMING, own),
-                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows), clock_certificates=tuple(clocks))
+                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows), certified_clocks=tuple(clocks))
             ingress = [issuer.certify(r, Direction.INGRESS, shape.ingress, parameters_digest(shape.ingress))
                        for r in s.ingress]
 
@@ -304,20 +317,12 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
                            clocks=clocks_label(lw, AT.SYNCS[:shape.windows]))
 
 
-def joined(advices: list[ADV.Advice], frames: dict[str, list[int]]) -> ADV.Advice:
-    """One advice of the link from its Commit windows' (`advices`, in order): their requests and steps in turn, each
-    window's request indices after the windows' before it, and kept output λ of the request with id i released in
-    bucket ``frames[i][λ]``."""
-    requests, steps = [], []
-    for a in advices:
-        off = len(requests)
-        requests += a.requests
-        steps += [ADV.StepAdvice(tuple(replace(r, request=r.request + off,
-                                               sources=tuple(replace(s, request=s.request + off) for s in r.sources))
-                                       for r in st.rows)) for st in a.steps]
-    probe = ADV.Advice(tuple(requests), tuple(steps), (0,) * sum(q.output_len for q in requests))
-    release = tuple(frames[requests[o.request].id][o.index] for o in ADV.outputs(probe))
-    return ADV.Advice(tuple(requests), tuple(steps), release)
+def joined(advices: list[tuple[int, WA.Advice]], frames: dict[str, list[int]]) -> ADV.Advice:
+    """One advice of the link from its Commit windows' (`advices`, each its number and window advice, in order):
+    `window_chain.join`'s, their requests and steps in turn, each window's admitted requests after the windows' before
+    it and a request it carries in the earlier window's, and kept output λ of the request with id i released in bucket
+    ``frames[i][λ]``."""
+    return WC.join(advices, lambda k, rid, index, bucket: frames[rid][index])
 
 
 def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False) -> SimpleNamespace:
@@ -330,15 +335,18 @@ def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False) -> SimpleName
     if (plan.get("occupancy") or {}).get("kind") != "advice":
         raise SystemExit(f"{honest}: not a run on the advice profile")
     bits = json.loads((run / "report.json").read_text())["chain"]["bits"]
-    bound = [c["window"] for c in bits["commit_windows"] if c["bound"] and c["rebuilt"]]
+    bound = [c["window"] for c in bits["commit_windows"] if c.get("bound") and c.get("rebuilt")]
     if not bound or not bits["bound"] or not bits["rebuilt"]:
         raise SystemExit(f"{run}: the report binds no advice to the run and rebuilds none from its certified I/O")
     io = json.loads((honest / "io.json").read_text())["requests"]
     if any(len(r["frames"]) != len(r["output"]) for r in io):
         raise SystemExit("io.json's frames aren't one per kept output")
     frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
-    advice = joined([ADV.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" / "advice.json")
-                                              .read_text())) for w in bound], frames)
+    try:
+        advice = joined([(w, WA.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" /
+                                                       "advice.json").read_text()))) for w in bound], frames)
+    except ADV.MalformedAdvice as err:
+        raise SystemExit(f"{run}: the bound Commit windows' advice doesn't join into one: {err}") from None
     if [q.id for q in advice.requests] != [r["user"] for r in io] or \
             any(q.output_len != len(frames[q.id]) for q in advice.requests):
         raise SystemExit("the bound advice's requests aren't the certified ones in arrival order, each its outputs")

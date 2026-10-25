@@ -145,8 +145,8 @@ def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
             shutil.copy(window / "pouw-audit" / "pouw.json", out / "pouw-audit" / "pouw.json")
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
-        "period": index, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law, "cap": a.cap,
-        "tools": a.tools, "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
+        "period": index, "periods": a.periods, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law,
+        "cap": a.cap, "tools": a.tools, "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
     for f in [*PUBLIC, *(p.name for p in window.glob("m*-public.bin"))]:
