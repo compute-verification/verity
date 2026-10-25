@@ -1,6 +1,6 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
-commits under the served-domain rule, an integration's outputs are checked against the Definitions before it commits, and
+commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, and
 the verifier's window is rebuilt from the circuit record alone. Core's acceptance of the written registration, and
 `of_records` against it, are the torch loop's tests (`integrations/torch_loop/tests`), since these may not import core."""
 from __future__ import annotations
@@ -80,7 +80,7 @@ def test_the_window_tiles_the_partition_in_chunks():
     assert CS.template_partition(program, query).population == win.window.population == 10
 
 
-def test_close_commits_every_unit_under_the_served_domain_rule():
+def test_close_commits_every_unit_under_the_window_domain_rule():
     win, ins, outs = window()
     with pytest.raises(ValueError, match="past"):
         win.record(COORD, [a[:1] for a in ins], [a[:1] for a in outs])
@@ -93,7 +93,7 @@ def test_close_commits_every_unit_under_the_served_domain_rule():
     again = win.close(salt_key=bytes(32))
     assert again.roots == c.roots
     changed, _, _ = window()
-    changed._batches[TID][1].words[0][0, 0] ^= 1
+    changed._recorded[TID][1].words[0][0, 0] ^= 1
     assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
