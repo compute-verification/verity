@@ -61,7 +61,7 @@ def test_every_row_scalar_replays_at_every_step(weights, honest):
     for step in range(STEPS):
         for f in rp.families(step):
             if f.per_slot <= 8:
-                bad += [(step, f.name, b, i) for b in range(BATCH) for i in range(f.per_slot)
+                bad += [(step, f.name, b, i) for b in range(BATCH) for i in range(f.count(b))
                         if (lambda r: r[1] != r[2])(f.replay(b, i))]
     assert bad == []
 

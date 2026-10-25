@@ -35,11 +35,23 @@ def row_bytes(t: Any) -> Any:
 
 @dataclass
 class StepTables:
-    """One step's tables: ``tables[op_path] = (codes (B, n) s8, word (B,) f32)``, in the order the step wrote them."""
+    """One step's tables: ``tables[op_path] = (codes (B, n) s8, word (B,) f32)``, in the order the step wrote them. Row b is
+    sequence slot ``slots[b]`` (ascending) at its position ``positions[b]``."""
     step: int
-    position: int
-    batch: int
+    slots: np.ndarray
+    positions: np.ndarray
     tables: dict[str, tuple[Any, Any]] = field(default_factory=dict)
+
+    @property
+    def batch(self) -> int:
+        return len(self.slots)
+
+    def row_of(self, slot: int) -> int:
+        """The row of sequence slot ``slot`` in this step's tables."""
+        b = int(np.searchsorted(self.slots, slot))
+        if b == len(self.slots) or self.slots[b] != slot:
+            raise KeyError(f"slot {slot} has no row at step {self.step}")
+        return b
 
     def put(self, op: str, value: Any, word: Any = None) -> None:
         if op in self.tables:
@@ -53,7 +65,7 @@ class StepTables:
         self.tables[op] = (codes, word)
 
     def ids(self) -> list[tuple[str, int]]:
-        return [(f"s{b:06d}", self.position) for b in range(self.batch)]
+        return [(f"s{int(j):06d}", int(p)) for j, p in zip(self.slots, self.positions)]
 
     def host(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         out = {}

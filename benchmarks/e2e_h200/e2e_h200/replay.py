@@ -13,6 +13,11 @@ output word is recomputed:
 
 The draw is per family (one template at one place in the step): ``k`` units uniformly with replacement from a FIXTURE coin
 (SHA-512 of the run's seed), until PRF-170's plan and live coins draw them.
+
+Each row of a step is one sequence slot at its own position p (`commit.StepTables.slots`, ``positions``). Its attention reads
+the slot's keys and values at positions 0 .. p, which are words of QKV's committed rows at steps ``step - p .. step``, at the
+same slot's row of each (`Replayer.kv`); its scores and probabilities are ``heads * (p + 1)`` units of rows laid out
+(heads, ctx).
 """
 from __future__ import annotations
 
@@ -84,27 +89,50 @@ class Family:
     name: str
     template: str
     per_slot: int
-    replay: Callable[[int, int], tuple[list[np.ndarray], int, int]]   # (slot, index) -> (inputs, got word, replayed word)
+    replay: Callable[[int, int], tuple[list[np.ndarray], int, int]]   # (row, index) -> (inputs, got word, replayed word)
+    sizes: tuple[int, ...] | None = None    # units of each row, where they differ by the row's position
+
+    def count(self, b: int) -> int:
+        return self.per_slot if self.sizes is None else self.sizes[b]
 
 
 class Replayer:
     def __init__(self, shape: Shape, weights: Weights, steps: list[StepTables], tokens: list[np.ndarray]) -> None:
-        """``steps[s]`` the committed tables of step s (position s), ``tokens[s]`` the bytes it embedded."""
+        """``steps[s]`` the committed tables of step s, ``tokens[s]`` the bytes it embedded (one a row)."""
         self.shape, self.weights, self.steps, self.tokens = shape, weights, steps, tokens
         self._codes = lru_cache(maxsize=4)(weights.codes)
         self._scales = lru_cache(maxsize=None)(weights.scales)
 
-    def row(self, step: int, op: str, slot: int) -> np.ndarray:
-        return self.steps[step].tables[op][0][slot]
+    def row(self, step: int, op: str, b: int) -> np.ndarray:
+        return self.steps[step].tables[op][0][b]
 
-    def word(self, step: int, op: str, slot: int) -> np.ndarray:
-        return self.steps[step].tables[op][1][slot:slot + 1]
+    def word(self, step: int, op: str, b: int) -> np.ndarray:
+        return self.steps[step].tables[op][1][b:b + 1]
+
+    def history(self, step: int, b: int) -> list[tuple[int, int]]:
+        """The (step, row) at which row ``b`` of ``step``'s slot ran each of its positions 0 .. p."""
+        st = self.steps[step]
+        slot, p = int(st.slots[b]), int(st.positions[b])
+        out = []
+        for j in range(p + 1):
+            s = step - p + j
+            r = self.steps[s].row_of(slot)
+            if int(self.steps[s].positions[r]) != j:
+                raise ValueError(f"slot {slot} is at position {p} at step {step} but at {self.steps[s].positions[r]}, "
+                                 f"not {j}, at step {s}")
+            out.append((s, r))
+        return out
+
+    def kv(self, step: int, layer: int, b: int) -> tuple[np.ndarray, np.ndarray]:
+        """Row ``b``'s keys and values at ``layer``, (p + 1, head_dim) u16 each: QKV's committed words at its positions."""
+        d, hd = self.shape.d, self.shape.head_dim
+        qkv = [u16(self.row(s, f"model.layers.{layer}.self_attn.qkv_proj", r)) for s, r in self.history(step, b)]
+        return np.stack([w[d:d + hd] for w in qkv]), np.stack([w[d + hd:] for w in qkv])
 
     # -- families ---------------------------------------------------------------------------------------------------
 
     def families(self, step: int) -> list[Family]:
-        sh, st = self.shape, self.steps[step]
-        t = st.position
+        sh = self.shape
         out = [self._add(step, "embed", None, None)]
         prev = "embed"
         for layer in range(sh.layers):
@@ -112,7 +140,7 @@ class Replayer:
             out += self._rms(step, f"{p}.input_layernorm", prev, self.weights.gain(layer, "attn"))
             out += self._quant(step, f"{p}.self_attn.qkv_quant", f"{p}.input_layernorm", False)
             out.append(self._linear(step, f"{p}.self_attn.qkv_proj", f"{p}.self_attn.qkv_quant", f"l{layer}.qkv"))
-            out += self._attention(step, p, t)
+            out += self._attention(step, layer)
             out += self._quant(step, f"{p}.self_attn.o_quant", f"{p}.self_attn.pv", False)
             out.append(self._linear(step, f"{p}.self_attn.o_proj", f"{p}.self_attn.o_quant", f"l{layer}.o"))
             out.append(self._add(step, f"{p}.resid_attn", prev, f"{p}.self_attn.o_proj"))
@@ -140,22 +168,23 @@ class Replayer:
             return [x, sx, wrow, sw], int(u16(self.row(step, op, b))[i]), want
         return Family(op, descriptor_id(tpl), n, replay)
 
-    def _attention(self, step: int, p: str, t: int) -> list[Family]:
-        sh = self.shape
-        qkv, d, hd = f"{p}.self_attn.qkv_proj", sh.d, sh.head_dim
-        n = t + 1
+    def _attention(self, step: int, layer: int) -> list[Family]:
+        sh, st = self.shape, self.steps[step]
+        p = f"model.layers.{layer}"
+        qkv, hd = f"{p}.self_attn.qkv_proj", sh.head_dim
+        ns = tuple(int(x) + 1 for x in st.positions)
 
         def keys(b: int) -> np.ndarray:
-            return np.stack([u16(self.row(s, qkv, b))[d:d + hd] for s in range(step - t, step + 1)])
+            return self.kv(step, layer, b)[0]
 
         def values(b: int) -> np.ndarray:
-            return np.stack([u16(self.row(s, qkv, b))[d + hd:] for s in range(step - t, step + 1)])
+            return self.kv(step, layer, b)[1]
 
         def scores(b: int) -> np.ndarray:
-            return u16(self.row(step, f"{p}.self_attn.scores", b)).reshape(sh.heads, n)
+            return u16(self.row(step, f"{p}.self_attn.scores", b)).reshape(sh.heads, sh.ctx)[:, :ns[b]]
 
         def qk(b: int, i: int):
-            h, s = divmod(i, n)
+            h, s = divmod(i, ns[b])
             q, k = u16(self.row(step, qkv, b))[h * hd:(h + 1) * hd], keys(b)[s]
             want = int(np.asarray(evaluate_batch(A.qk_template(), q[None], k[None]))[0])
             return [q, k], int(scores(b)[h, s]), want
@@ -174,23 +203,25 @@ class Replayer:
             got = int(np.ascontiguousarray(self.row(step, f"{p}.self_attn.softmax_recip", b)).view(np.uint32)[h])
             return [scores(b)[h]], got, int(soft(b, h).r[0, 0])
 
+        def probs(b: int) -> np.ndarray:
+            return u16(self.row(step, f"{p}.self_attn.probs", b)).reshape(sh.heads, sh.ctx)[:, :ns[b]]
+
         def sout(b: int, i: int):
-            h, j = divmod(i, n)
-            got = int(u16(self.row(step, f"{p}.self_attn.probs", b)).reshape(sh.heads, n)[h, j])
-            return [scores(b)[h]], got, int(soft(b, h).probs[0, 0, j])
+            h, j = divmod(i, ns[b])
+            return [scores(b)[h]], int(probs(b)[h, j]), int(soft(b, h).probs[0, 0, j])
 
         def pv(b: int, i: int):
             h, c = divmod(i, hd)
-            pr = u16(self.row(step, f"{p}.self_attn.probs", b)).reshape(sh.heads, n)[h]
-            x, w = A.pad(pr), A.pad(values(b)[:, c])
+            x, w = A.pad(probs(b)[h]), A.pad(values(b)[:, c])
             want = int(np.asarray(evaluate_batch(A.pv_template(), x[None], w[None]))[0])
             return [x, w], int(u16(self.row(step, f"{p}.self_attn.pv", b))[i]), want
 
-        return [Family(f"{p}.self_attn.scores", descriptor_id(A.qk_template()), sh.heads * n, qk),
+        per_row = tuple(sh.heads * n for n in ns)
+        return [Family(f"{p}.self_attn.scores", descriptor_id(A.qk_template()), max(per_row), qk, per_row),
                 Family(f"{p}.self_attn.softmax_max", "twin:SoftmaxMax_v1", sh.heads, smax),
                 Family(f"{p}.self_attn.softmax_sum", "twin:SoftmaxRecip_v1(sum)", sh.heads, ssum),
                 Family(f"{p}.self_attn.softmax_recip", "twin:SoftmaxRecip_v1", sh.heads, srecip),
-                Family(f"{p}.self_attn.probs", "twin:SoftmaxOut_v1", sh.heads * n, sout),
+                Family(f"{p}.self_attn.probs", "twin:SoftmaxOut_v1", max(per_row), sout, per_row),
                 Family(f"{p}.self_attn.pv", descriptor_id(A.pv_template()), sh.heads * hd, pv)]
 
     def _rms(self, step: int, op: str, src: str, gain: np.ndarray) -> list[Family]:
@@ -288,9 +319,8 @@ class Replayer:
 
         def replay(b: int, i: int):
             if a is None:
-                st = self.steps[step]
                 byte = int(self._token(step, b))
-                x, y = tok[byte, i], pos[st.position, i]
+                x, y = tok[byte, i], pos[int(self.steps[step].positions[b]), i]
             else:
                 x, y = u16(self.row(step, a, b))[i], u16(self.row(step, b_op, b))[i]
             want = int(rbf(np.float32(bf(x) + bf(y))))
@@ -315,11 +345,12 @@ class Replayer:
         for fam in self.families(step):
             if not only(fam):
                 continue
-            total = fam.per_slot * st.batch
+            ends = np.cumsum([fam.count(b) for b in range(st.batch)])
             h = hashlib.sha512(b"e2e-h200/draw-fixture\0" + seed + fam.name.encode() + step.to_bytes(4, "big")).digest()
             rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
-            for u in rng.integers(0, total, size=k):
-                slot, idx = divmod(int(u), fam.per_slot)
-                inputs, got, want = fam.replay(slot, idx)
-                units.append(Unit(fam.name, fam.template, step, st.position, slot, idx, inputs, got, want))
+            for u in rng.integers(0, int(ends[-1]), size=k):
+                b = int(np.searchsorted(ends, u, side="right"))
+                idx = int(u) - (int(ends[b - 1]) if b else 0)
+                inputs, got, want = fam.replay(b, idx)
+                units.append(Unit(fam.name, fam.template, step, int(st.positions[b]), int(st.slots[b]), idx, inputs, got, want))
         return units

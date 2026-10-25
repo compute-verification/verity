@@ -1,5 +1,5 @@
-"""Check :mod:`e2e_h200.slots` on a device at the frozen KV shape against a per-request reference, with an exact integer stand-in for
-the decoder (CMP-105).
+"""Check :mod:`e2e_h200.slots` on a device at the frozen KV shape against a per-request reference, with an exact integer
+stand-in for the decoder (CMP-105).
 
 The stand-in model computes in int64 only, so its result is independent of batch, order and device: a step's state for a
 slot starts from its input byte and position, and each layer writes K and V rows (a mix of the state, as raw bf16 bits, NaN

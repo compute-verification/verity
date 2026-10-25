@@ -1,5 +1,5 @@
-"""MQA attention at one position, on the CPU through the Definitions' own numpy kernels: the stand-in for kernels' KP2-ATTN
-until it is handed over (a BF16 tensor-core product computed by torch is another function).
+"""MQA attention, each slot at its own position (`attend`), on the CPU through the Definitions' own numpy kernels: the stand-in
+for kernels' KP2-ATTN until it is handed over (a BF16 tensor-core product computed by torch is another function).
 
     scores   GemmCoordinate_v2{K=64, GEMM_HOPPER} (`HopperBF16WgmmaDot16`'s 16-wide steps in ascending k from +0, then
              `F2fpBf16`): query head h of slot b against the KV head's key at each position s <= t
@@ -89,3 +89,21 @@ def pv(p: np.ndarray, values: np.ndarray) -> np.ndarray:
     x = np.broadcast_to(pad(p)[:, :, None, :], (b, h, d, PAD_K)).reshape(-1, PAD_K)
     w = np.broadcast_to(pad(np.swapaxes(values, 1, 2))[:, None, :, :], (b, h, d, PAD_K)).reshape(-1, PAD_K)
     return np.asarray(evaluate_batch(pv_template(), x, w), dtype=np.uint16).reshape(b, h, d)
+
+
+def attend(q: np.ndarray, keys: np.ndarray, values: np.ndarray, positions: np.ndarray) -> tuple[np.ndarray, Softmax, np.ndarray]:
+    """Each slot at its own position: q (B, H, 64), keys and values (B, ctx, 64) u16 (the slot's cache rows), positions (B,).
+    Row b attends over its positions 0 .. positions[b], run per group of equal positions; its scores and probabilities come
+    back laid out (H, ctx) with +0 past its position, so a row's layout depends only on the shape."""
+    b, h, _ = q.shape
+    ctx = keys.shape[1]
+    sc, probs = np.zeros((b, h, ctx), np.uint16), np.zeros((b, h, ctx), np.uint16)
+    m, s, r = np.zeros((b, h), np.uint16), np.zeros((b, h), np.uint32), np.zeros((b, h), np.uint32)
+    out = np.zeros((b, h, values.shape[-1]), np.uint16)
+    for p in np.unique(positions):
+        rows, t = np.flatnonzero(positions == p), int(p) + 1
+        g = scores(q[rows], keys[rows, :t])
+        sm = softmax(g)
+        sc[rows, :, :t], probs[rows, :, :t], m[rows], s[rows], r[rows] = g, sm.probs, sm.m, sm.s, sm.r
+        out[rows] = pv(sm.probs, values[rows, :t])
+    return sc, Softmax(probs, m, s, r), out
