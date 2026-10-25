@@ -644,7 +644,8 @@ def update_pins(rep: dict) -> dict:
 
 #: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
 #: isolated `--all` run (`run`'s scheduling; it counts that task list, 26.7 GiB on 17 Oct).  The commit that writes a peak
-#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here
+#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
+#: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
 HEAVY = CC.HEAVY
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
