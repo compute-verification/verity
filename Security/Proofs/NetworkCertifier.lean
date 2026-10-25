@@ -142,6 +142,8 @@ theorem EncardDecodableWithinLeCompiledPerWindowV1Whole :
     NetTiming.encard_decodableWithin_le_compiled_perWindow_v1Whole I T ss bk N H O b compilerOf env hpre hdet D
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
+theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
+  fun hSA => NetTiming.sampledLeak_free hSA
 
 theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := @NetTiming.wardenView_eq_clientView
 theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le
