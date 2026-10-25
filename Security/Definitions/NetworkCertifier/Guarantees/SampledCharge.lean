@@ -15,7 +15,10 @@ faulty units' committed bits and `log2` of the number of possible faulty sets.
 every status complete, is then `Accepted` with advice held only at that set's committed gates. So, with its inputs other
 than the ingress among `As`, the run's observations are among the sequences this guarantee counts. The leak is then at most
 `c + log2 #faultySets + β + n·log2 D` bits, except with that probability. That the transfer gates carry the run's
-observations is the certifier's trust (`trusted-host`), and the statuses are its published record.
+observations is the certifier's trust (`trusted-host`), and the statuses are its published record. The theorem is
+`NetTiming.sampledLeak` (`Proofs.NetworkCertifier.SampledLeak`), with `SampledAuditAccepted` a hypothesis. `RAcc` bounds
+no input besides the ingress, so it takes that inputs among `As` suffice (`AdviceIn`); `sampledLeak_free` proves that for
+every circuit at the inputs `false` off the free inputs, with `c` the number of free inputs.
 
 **What `As` and `c` are.** `As` is what the circuit's inputs other than the ingress may be. Its count is a premise of the
 run, not an assumption. Under the decided composition the registered inputs are fixed by the registration, and the
