@@ -508,7 +508,6 @@ theorem ligeritoPZk_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h h' : ByteA
           exact fwL_pure ⟨_, _, rfl, rfl, rfl⟩
         · refine fwL_bind (fwL_quiet (quiet_forIn_array (fun _ _ => ?_) _ _)
             (quiet_forIn_array (fun _ _ => ?_) _ _)) fun _ _ _ => ?_
-          rotate_left 2
           · try dsimp only
             exact quiet_bind (quiet_liftTM fun _ => ⟨_, rfl⟩) fun _ => quiet_pure _
           · try dsimp only
