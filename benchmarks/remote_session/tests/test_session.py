@@ -1341,6 +1341,52 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
 
 
+def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_makes_of_it(tmp_path):
+    """`line_record` with the session's transcript (`session`) runs `Session.run` on it and reads the line off the
+    record that run makes (`Line.lineOfRun`, `LineHeld`'s `lineOf`): the line of the session's kept record, given
+    beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
+    a transcript cut short of its verdict, `samples` other than its parameters' and times seen off the record's are
+    refused; on the challenger's clock the times aren't held to the record."""
+    import copy
+    import json
+
+    import lean_verifier as lv
+
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    inputs = verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    want = verifier.line.record_run_json(inputs)
+    assert "refused" not in want and inputs["clock"] == "record"
+    assert verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates, transcript=case)["session"] is case
+    moved = copy.deepcopy(inputs)
+    moved["record"]["windows"][0]["stale"][0] += 1
+    late = copy.deepcopy(inputs)
+    late["seen"][1]["released_ns"] += 1
+    lean = lv.Lean(lv.build(), lambda _: None)
+    try:
+        def call(x: dict) -> dict:
+            return lean.call({"op": "line_record", **x})
+
+        bare = {k: x for k, x in inputs.items() if k != "record"}
+        assert call(inputs) == call({**inputs, "session": case}) == call({**bare, "session": case}) == want
+        assert call({**moved, "session": case}) == {
+            "refused": "the record is not the one Session.run makes of the session's transcript"}
+        assert call({**bare, "session": {**case, "events": case["events"][:-1]}}) == {
+            "refused": "the Lean verifier gave the session no record"}
+        with pytest.raises(lv.LeanError, match="samples: the session's"):
+            call({**bare, "session": case, "samples": inputs["samples"] + 1})
+        with pytest.raises(lv.LeanError, match="its own openings coin"):
+            call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}})
+        why = verifier.line.record_run_json(late)["refused"]
+        assert why.startswith("window 1 was seen released at") and call({**late, "session": case}) == {"refused": why}
+        assert "refused" not in call({**late, "session": case, "clock": "challenger"})
+    finally:
+        lean.close()
+
+
 def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):
     """An accepted session's record is held to the Lean's whole, each pass's arrival, head and stale bound among what
     the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""

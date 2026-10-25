@@ -979,11 +979,14 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
   takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
   computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is conditional on it (`auditor_line.json`'s
-  `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
-  node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
-  credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
-  of the boundary links over its span show other ingress.
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
+  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
+  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
+  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
+  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
+  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
+  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
+  conditional on `ProviderLockdown` (`trusted-nebius-host`), which names what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
