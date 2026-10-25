@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
@@ -86,6 +86,39 @@ def test_two_windows_and_an_idle_tail(x):
     assert rec["count"] == 2 and served.registration.rows[1] == SR._row(CS.srv_row(x.S, session[1]))[0]
     for w in (0, 1):
         assert SR.leaf_ok(rec, RUN_ROOT, w, served.bc(w), served.registration.open(w).path)
+
+
+def test_the_slices_block_rows_are_the_registered_leaves(x):
+    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: unit w's
+    row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the registered
+    rows in ``srv0`` … are refused at ``rows``, as at G = P."""
+    G = 1
+    st = CS.with_block(x.st, G)
+    S = SimpleNamespace(**st)
+    served = SR.register(x.S, x.session, RUN_ROOT, G=G)
+    rec, reg = served.record(), served.registration
+    honest = CS.case(S, x.sl, BOOK, served=x.session[0])
+    names = CS.srv_names(S)
+    assert rec["G"] == G and rec["count"] == len(names) == x.S.P
+    for j, r in enumerate(names):
+        i = SR.leaf(x.S, rec, 0, j)
+        assert i == j and reg.rows[i] == SR._row(honest.rows[r])[0]
+        assert SR.leaf_ok(rec, RUN_ROOT, i, served.bc(i), reg.open(i).path)
+        assert not SR.leaf_ok(rec, RUN_ROOT, (i + 1) % len(names), served.bc(i), reg.open(i).path)
+    held = CS.case(S, CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps, x.sl.tokens), BOOK, served=x.session[0])
+    assert honest.verdict == CS.ACCEPT and held.verdict == CS.ACCEPT & ~ROWS
+
+
+@pytest.mark.parametrize("G", [0, 2, 3, 8])
+def test_a_records_g_that_doesnt_divide_p_is_refused(x, G):
+    """REDTEAM phase 19 #3: the verifier indexes a unit's rows by the public record's G, which `register` holds to divide
+    P; a record whose G doesn't (2 or 3 on P = 7 floors to 3 or 2 blocks a window, 8 to none, 0 divides by zero) is
+    refused there too, rather than read as another G's leaves. The tie's statics, which don't hold P, refuse that G
+    too, so no unit is built for a block the registration never has."""
+    with pytest.raises(ValueError, match="dividing P"):
+        SR.leaf(x.S, {**x.record, "G": G}, 1, 0)
+    with pytest.raises(ValueError, match="dividing P"):
+        SS.statics(x.S, G=G)
 
 
 def test_the_record_is_public_only(x):

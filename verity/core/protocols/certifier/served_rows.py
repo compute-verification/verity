@@ -19,8 +19,8 @@ is the slice's P steps in turn, each packed as `rows_bits` packs it (an idle ste
 the draw: each block of G steps of window w (j = 0 … P / G − 1, `block_bits`) as row w·(P / G) + j of one
 hm96-sha512/row/v2 registration in a frame-v3-sha512 tree (`verity.ml.commitments.advice`'s construction), its row the
 block's bits as u16 words, as a proof commits a row, under `binding` of the run root. G is P unless given, so a window is
-one row, the slice's ``srv``. `Served.record` is the public part: the root, the count, the row width and G. The rows and
-their salts stay the prover's.
+one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
+the public part: the root, the count, the row width and G. The rows and their salts stay the prover's.
 
 **The verifier's side.** `leaf_ok` holds a unit's row by its b‖c to its registered leaf (`leaf`: window w's block j), as
 the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads take it
@@ -102,7 +102,7 @@ def block_bits(S, window: Sequence[tuple[Row, ...] | None], G: int, j: int) -> l
 
 def leaf(S, record: Mapping, w: int, j: int) -> int:
     """Window w's block j's leaf: w·(P / G) + j."""
-    U = S.P // record.get("G", S.P)
+    U = S.P // _blocks(S, record.get("G", S.P))
     if not 0 <= j < U:
         raise ValueError(f"block {j} of a window of {U}")
     return w * U + j

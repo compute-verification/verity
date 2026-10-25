@@ -104,9 +104,13 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
     is evidence for a manual analysis only.
   - The rule misses a leak written at a byte shift across fields.
-- The driver scans for every piece but those the staged circuit holds (`n2_zk.public_pieces`), and for each carry row
-  whole. `compile_slice_zk.py rescan` takes a finished run's scan again under the rule, its pieces recomputed; a salt
-  the run drew isn't, so a salt it found reads leaked.
+- The driver scans for every piece but those the staged circuit holds, and for each carry row whole.
+  `compile_slice_zk.py rescan` takes a finished run's scan again under the rule, its pieces recomputed; a salt the run
+  drew isn't, so a salt it found reads leaked.
+  - Each witness row is cut whole (`leak_scan.public_pieces`). A row shorter than the 16-byte piece is found whole, as
+    the carry rows are: at G < P, the ``srv`` rows of a few steps (10 bytes at the demo's G = 2).
+  - Earlier runs cut with `n2_zk.public_pieces`, which skipped a row's bytes past its last 16-byte boundary and every
+    row shorter than 16 bytes. The demo's ``srv`` rows at G = 2 were first scanned in run r20261025-011520-c02c.
 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
 6e29d34e7c, with #3972's record; the w212 slice at the class).

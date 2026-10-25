@@ -1,6 +1,7 @@
 """compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
 received judges every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count
-exemption. Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
+exemption, each row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves
+(`compile_slice_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -74,3 +75,33 @@ def test_the_carry_rows_are_each_scanned_whole_under_the_rule(tmp_path):
 
     (vdir / "pub-2.bin").write_bytes(bytes(range(1, 22)))
     assert Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))["leaked"] == ["cin 0", "cout 1"]
+
+
+def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
+    """`scan_pieces` cuts each row of at least 16 bytes whole (`leak_scan.public_pieces`) and keeps each shorter row
+    whole: the ``srv`` rows of a few steps (10 bytes at the demo's G = 2, 6 at G = 1), which `leak_scan.cut` refuses
+    and the aligned cutter before it never scanned. Such a row is found raw or as hex, a raw one under 8 bytes too
+    (`a8.find` keys each needle on its first 8 bytes, so `_find` searches those itself), and judged by the rule: leaked
+    off the statement's bytes, structured once a ``pub`` row holds them."""
+    Z = _load()
+    a8 = SimpleNamespace(PIECE=16,
+                         needles=lambda pieces: {nd: k for k, x in pieces.items() for nd in (x, x.hex().encode())},
+                         find=lambda data, table: {k: 1 for nd, k in table.items() if len(nd) >= 8 and nd in data})
+    wit, srv0, srv1 = list(range(1, 19)), [7, 9, 11, 13, 15], [21, 23, 25]
+    units = [SimpleNamespace(words={"wit": wit, "srv0": srv0, "srv1": srv1}, chained=False)]
+    with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece"):
+        Z.LS.public_pieces(a8, {"srv0 0": Z._u16(srv0)}, set(), b"")
+    pieces, held, public = Z.scan_pieces(a8, units, {}, SimpleNamespace(public=False), ("srv0", "srv1"), b"")
+    assert pieces == {"wit 0 @0": Z._u16(wit)[:16], "wit 0 @16": Z._u16(wit)[16:32], "wit 0 @20": Z._u16(wit)[20:],
+                      "srv0 0": Z._u16(srv0), "srv1 0": Z._u16(srv1)}
+    assert held == set(pieces) and public == []
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "openings.json").write_bytes(Z._u16(srv0).hex().encode() + b"," + Z._u16(srv1) + b"\x01\x02")
+    (tmp_path / "inst.bin").write_bytes(Z._u16(wit) + Z._u16(srv0) + Z._u16(srv1))
+    got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
+    assert got["verifier_found"] == ["srv0 0", "srv1 0"] and got["leaked"] == ["srv0 0", "srv1 0"]
+    assert got["control"]["holds_all"] and got["control"]["pieces_found"] == 5
+    (vdir / "pub-2.bin").write_bytes(Z._u16(srv1) + bytes(4))
+    got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
+    assert got["leaked"] == ["srv0 0"] and got["structured"] == {"srv1 0": "public"}

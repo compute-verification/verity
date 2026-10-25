@@ -11,7 +11,11 @@ through the Lean verifier's registered reads, so its unit hashes only those rows
 
 **The rows registered.** `served_rows.register(..., G=G)` commits each block of G steps of window w (j = 0 … P / G − 1)
 as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha512 tree, under the run root's binding. G
-is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``.
+is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``. At G < P the
+slice is `compile_slice.CompileSliceBlocks_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: unit w's
+row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and step u is checked against row u // G. Its ANDs are the
+G = P unit's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P (run
+r20261025-004442-ebac, each built in about 21 s at 3.0 GB).
 
 **The unit** reads two rows:
 - ``pub``, opened: the block's G steps' statics. For each step, R slots of (valid, start, n), in the Programs' batch
@@ -51,8 +55,6 @@ flags cost 2·(G − 1) more. Every committed row a unit reads is hashed in-circ
 So a served-class unit fits 2^27 up to G = 64, four units a window.
 
 **Open.**
-- The compile slice reads a window's ``srv`` as one row (G = P). At G < P it is to read the window's P / G block rows,
-  the slice's change.
 - vllm's serve call (`commit_served`) registers at G = P. It is to pass the tie's G.
 - `benchmarks/prove_path/served_statics_zk.py` takes the Programs' statics from the honest rows, as compile(advice) lays
   out a step whose advice's rows they are, and checks them natively against each step's committed positions

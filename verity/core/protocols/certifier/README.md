@@ -88,7 +88,8 @@ A spec-level reference for network accounting's timing channel:
   evaluator from `verity`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
-  the slice's ``srv`` row). `leaf_ok` holds a unit's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
+  the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
+  holds a unit's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
   and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
   hm96 rows from `verity`;
 - the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a

@@ -228,6 +228,55 @@ def test_the_circuit_is_its_reference_on_the_map(asynth):
     assert CS.evaluate(asynth.st, list(cases.values())) == [c.verdict for c in cases.values()]
 
 
+def _later_row_off(c: CS.Case) -> list:
+    """`c`'s steps with the last step that has rows served one token longer in its first row: a row of the window's last
+    ``srv`` block at any G."""
+    steps = list(c.steps)
+    u = max(k for k, s in enumerate(steps) if s)
+    first = steps[u][0]
+    return steps[:u] + [((*first[:4], first[4] + 1),) + steps[u][1:]] + steps[u + 1:]
+
+
+@pytest.mark.parametrize("which, G", [("synth", 2), ("asynth", 2)])
+def test_the_served_rows_in_blocks(request, which, G):
+    """At G < P the unit is CompileSliceBlocks_v1{…, G}: ``srv`` is P / G rows, each the block `served_rows.block_bits`
+    registers, and step u is checked against row u // G. The circuit is its reference on the honest run, a row of the
+    last block served otherwise and (AS = 1) the batch in another order than the slots, and its ANDs are the G = P
+    unit's."""
+    from verity.core.protocols.certifier import served_rows as SR
+
+    x = request.getfixturevalue(which)
+    st = CS.with_block(x.st, G)
+    S = SimpleNamespace(**st)
+    names = CS.srv_names(S)
+    assert CS.unit(**st).id.startswith("CompileSliceBlocks_v1{") and CS.unit(**st).id.endswith(f",G={G}}}")
+    assert CS.row_names(S) == ("pub", "adv", "cert", *names, "cin", "cout", "wit") and len(names) == x.S.P // G
+    honest = CS.case(S, x.sl, BOOK)
+    assert honest.verdict == CS.ACCEPT and honest.steps == CS.case(x.S, x.sl, BOOK).steps
+    assert [honest.rows[r] for r in names] == [SR.block_bits(x.S, list(honest.steps), G, j) for j in range(len(names))]
+    cases = {"honest": honest, "later": CS.case(S, x.sl, BOOK, served=_later_row_off(honest))}
+    if x.S.AS:
+        cases["batch"] = CS.case(S, x.sl, BOOK, served=[_reversed(s) if u in (0, 2) else s
+                                                        for u, s in enumerate(honest.steps)])
+    assert {k: _refused(c) for k, c in cases.items()} == {"honest": set(), "later": {"rows"}, **(
+        {"batch": set()} if x.S.AS else {})}
+    assert CS.evaluate(st, list(cases.values())) == [c.verdict for c in cases.values()]
+    assert CS.size(**st)["ands"] == CS.size(**x.st)["ands"]
+
+
+def test_g_is_out_of_the_id_at_p(synth):
+    """G is P unless given and is kept out of the statics at P, so the unit there is CompileSlice_v1 as pinned; the
+    blocked Definition refuses G = P, and a G that doesn't divide P is refused."""
+    st, P = synth.st, synth.S.P
+    assert CS.with_block(st, P) == CS.with_block(st, None) == st and "G" not in st
+    assert CS.unit(**st).id.startswith("CompileSlice_v1{") and ",G=" not in CS.unit(**st).id
+    assert CS.srv_names(synth.S) == ("srv",) and CS.row_names(synth.S) == CS.ROWS
+    with pytest.raises(ValueError, match="CompileSlice_v1"):
+        CS.unit(**st, G=P)
+    with pytest.raises(ValueError, match="dividing P"):
+        CS.with_block(st, 3)
+
+
 def test_size(synth, asynth, slice_):
     s = CS.size(**synth.st)
     assert s == {"ands": 59341, "pub_bits": 256, "adv_bits": 16, "cert_bits": 256, "srv_bits": 144, "cin_bits": 96,
