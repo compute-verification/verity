@@ -159,10 +159,11 @@ RDEAD_ENV = "DITHER_SO_RDEAD"
 # to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
-# R (with $DITHER_SO_UNITS=j10r, $DITHER_SO_FUSED=1 and no $DITHER_SO_UNITS_SMQ): a step whose units compute at least R
-# rows (the layout's M, its live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside
-# its rows, and its units read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace
-# kh_j10r_ws_bytes at T rows); the same receipts.  Unset, never: J10-R's units hash a column block once in each row tile
+# R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
+# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside its rows, and its units
+# read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
+# rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
+# units hash a column block once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
 # --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
@@ -1224,9 +1225,8 @@ class SoSide(DA.Side):
         self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
-        if self.j10rc_min_t and (not self.j10r or self.units_smq):
-            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r and no ${UNITS_SMQ_ENV} (kh_units_multi_j10rc "
-                             "has every SM)")
+        if self.j10rc_min_t and not self.j10r:
+            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r")
         self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
                         self.units_cap)
         self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
@@ -1266,7 +1266,7 @@ class SoSide(DA.Side):
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
             vp, u32 = C.c_void_p, C.c_uint
-            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm"):
+            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm", "kh_units_multi_j10rc_sm"):
                 if hasattr(self.h, f):
                     getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
             for f in ("kh_units_multi_smc", "kh_units_multi_j10r_smc"):
@@ -1300,6 +1300,9 @@ class SoSide(DA.Side):
         if q and not (self.fused and 1 <= q <= den <= SMQ_DEN_MAX and 0 <= cap <= 64 and hasattr(self.h, f)):
             raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= {SMQ_DEN_MAX}, cap <= 64 and an h1u build "
                              f"with {f}")
+        if q and self.j10rc_min_t and (cap or not hasattr(self.h, "kh_units_multi_j10rc_sm")):
+            raise ValueError(f"{what} with ${J10RC_MIN_T_ENV}: needs no cap (kh_units_multi_j10rc has no capped form) "
+                             "and an h1u build with kh_units_multi_j10rc_sm")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
@@ -1434,7 +1437,12 @@ class SoSide(DA.Side):
         if self.j10r:
             import j10r_so as JS
             M = JS.rows(self.j10r_m, win.t, m)
-            if self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t:
+            j10rc = self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t
+            if j10rc and self.units_smq:
+                rc = rc or self.h.kh_units_multi_j10rc_sm(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                          self.units_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                          self.unit_next.data_ptr(), st.cuda_stream)
+            elif j10rc:
                 rc = rc or self.h.kh_units_multi_j10rc(self.mtab[p].data_ptr(), L, self.m_units, M,
                                                        self.units_live[p].data_ptr(), 0, st.cuda_stream)
             elif self.units_cap:

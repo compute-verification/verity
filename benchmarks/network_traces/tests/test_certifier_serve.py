@@ -38,6 +38,7 @@ from types import SimpleNamespace
 import pytest
 from verity.core.protocols.certifier import active
 from verity.core.protocols.certifier.certificate import Issuer
+from verity.core.protocols.certifier.release import release_of
 
 HERE = Path(__file__).resolve().parents[1]
 TOKENS, REQUESTS = 4, 8
@@ -54,6 +55,8 @@ def _load():
 
 cs = _load()
 ar = cs.ar
+#: the release order (`release.release_of`) of every request `_endpoint` received, in arrival order
+RELEASES: list = []
 
 
 async def _endpoint(reader, writer):
@@ -61,6 +64,7 @@ async def _endpoint(reader, writer):
     head = await reader.readuntil(b"\r\n\r\n")
     body = json.loads(await reader.readexactly(int(re.search(rb"content-length: (\d+)", head, re.I).group(1))))
     assert head.startswith(b"POST /v1/completions ") and "user" not in body and body["ignore_eos"]
+    RELEASES.append(release_of(head))
     events = [b'data: {"choices":[{"text":" t%d"}]}\n\n' % k for k in range(body["max_tokens"])] + [b"data: [DONE]\n\n"]
     writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n"
                  + b"".join(b"%x\r\n%s\r\n" % (len(p), p) for p in events) + b"0\r\n\r\n")
@@ -76,11 +80,12 @@ class _SideBySide:
     v1's output collector merges a request's deltas the API server hasn't read yet. Token k's bytes are `token(k)`,
     detokenized as vLLM's detokenizer does: bytes that end inside a UTF-8 character are held back, so their chunk has
     no text and the next carries them, and an incomplete character at the end is never sent; the text goes in the
-    chunk as UTF-8, not escaped, as vLLM's JSON writes it."""
+    chunk as UTF-8, not escaped, as vLLM's JSON writes it. `releases` is each completion's release order
+    (`release.release_of`) as it arrived."""
 
     def __init__(self, group: int, merges=lambda request: False, token=lambda k: b" t%d" % k) -> None:
         self.group, self.arrived, self.writes, self.bodies, self.merges = group, 0, [], [], merges
-        self.token = token
+        self.token, self.releases = token, []
         self.turns: dict = defaultdict(asyncio.Event)
 
     async def __call__(self, reader, writer):
@@ -97,6 +102,7 @@ class _SideBySide:
             writer.close()
             return
         self.bodies.append(body)
+        self.releases.append(release_of(head))
         me, self.arrived = self.arrived, self.arrived + 1
         g, i = divmod(me, self.group)
         if i == self.group - 1:
@@ -149,8 +155,25 @@ def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifi
     ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
                    proxy_args={"challenger_key": challenger.public_key(), "signer": certifier,
                                "served": cs.served_profile(plan)})
-    out["events"] = json.loads((run / "server.json").read_text())["events"]
+    server = json.loads((run / "server.json").read_text())
+    out["events"], out["released"], out["run"] = server["events"], dict(server["released"]), run
     return out
+
+
+def _released_as_signed(out: dict) -> list[int]:
+    """The release order of a run of `_run`'s, as the endpoint got it: the shim gave each session N, the stream the
+    signed ingress records released it as less one (`ar.released_sessions`), and the endpoint got each N once,
+    0 … n − 1, under the run id `deployment.json` names; no ingress frame holds a release header. Each N in arrival
+    order."""
+    run = out["run"]
+    records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(run / "requests.records")]
+    signed = {name: stream - 1 for name, stream in ar.released_sessions(records).items()}
+    run_id = bytes.fromhex(json.loads((run / "deployment.json").read_text())["run_id"])
+    assert out["released"] == signed and sorted(signed.values()) == list(range(len(signed)))
+    assert sorted(out["releases"]) == [(n, run_id) for n in range(len(signed))]
+    frames = b"".join(f for r in records for row in r.grid for f in row[:active.row_count(row)])
+    assert b"x-verity-release" not in frames.lower()
+    return [n for n, _ in out["releases"]]
 
 
 @pytest.fixture(scope="module")
@@ -167,11 +190,13 @@ def served(tmp_path_factory):
         runs = {}
         for strategy in cs.STRATEGIES:
             certifier = cs.signer(tmp / "keys" / strategy, 6)
+            RELEASES.clear()
             try:
                 runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream, certifier,
                                                          challenger, strategy)
             finally:
                 certifier.close()
+            runs[strategy]["releases"] = list(RELEASES)
         endpoint.close()
         return probed, report, plan, runs
 
@@ -213,20 +238,24 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     """The proxy stopped for 110 ms as it releases window 0's first request forwards it late, which faults window 0
     (`delivery-refused`) and drops its second request, so the proxy releases window 1's two as streams 2 and 3, not the
     plan's 3 and 4: the audit maps each served session to the stream the ingress records released it as, and refuses
-    window 0 alone."""
+    window 0 alone. The release order skips the dropped request: the endpoint gets N = 0, 1, 2."""
     async def go():
         endpoint = await asyncio.start_server(_endpoint, "127.0.0.1", 0)
         upstream = endpoint.sockets[0].getsockname()[:2]
         probed = await asyncio.to_thread(cs.probe, "http://%s:%d" % upstream, cs.request_body("stub", TOKENS), 1,
                                          clock=lambda: 0.0)
         report, plan = cs.served_plan(probed, 4, delta_buckets=20)
+        RELEASES.clear()
         await asyncio.to_thread(ar.run_virtual, plan, report, tmp_path, upstream, stalls=[(1, 0.11)])
         endpoint.close()
-        return report, plan
+        return report, plan, list(RELEASES)
 
-    report, plan = asyncio.run(go())
+    report, plan, releases = asyncio.run(go())
     records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp_path / "requests.records")]
     assert ar.released_sessions(records) == {"served.0": 1, "served.2": 2, "served.3": 3}
+    released = dict(json.loads((tmp_path / "server.json").read_text())["released"])
+    assert released == {"served.0": 0, "served.2": 1, "served.3": 2}
+    assert [n for n, _ in releases] == [0, 1, 2] and len({run for _, run in releases}) == 1
     audit = ar.audit_configuration(plan, report, tmp_path)
     faulted = [r for r in audit["rows"] if r["raw"]]
     assert {(r["direction"], r["window"]) for r in faulted} == {("egress", 0), ("ingress", 0)}
@@ -350,6 +379,16 @@ def test_honest_served_traffic_is_accepted_on_every_link_window(served):
     assert check["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1],
                              "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
     assert check["issuer_refused"] == [] and check["comparisons"]["wire_is_the_records"]
+
+
+def test_the_endpoint_gets_each_request_with_the_release_order_the_certifier_signed(served):
+    """Every request reaches the endpoint with `x-verity-release: N` and the proxy's run id (VLLM-89), N its place in
+    the release order the signed ingress records hold, while the records hold the client's request without them, and
+    honest traffic is accepted with them present (`test_honest_served_traffic_is_accepted_on_every_link_window`). One
+    request in flight, the endpoint gets them in that order."""
+    *_, runs = served
+    assert runs["honest"]["check"]["verdict"] == "accepted"
+    assert _released_as_signed(runs["honest"]) == list(range(REQUESTS))
 
 
 def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(served, tmp_path):
@@ -582,11 +621,13 @@ def served_profile(tmp_path_factory):
         runs = {}
         for strategy in cs.STRATEGIES:
             certifier = cs.signer(tmp / "keys" / strategy, 6)
+            endpoint.releases.clear()
             try:
                 runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream, certifier,
                                                          challenger, strategy)
             finally:
                 certifier.close()
+            runs[strategy]["releases"] = list(endpoint.releases)
         server.close()
         return report, plan, runs
 
@@ -631,6 +672,14 @@ def test_honest_is_accepted_on_every_link_window_under_the_served_profile(served
     assert all(r["audit"] == {d: {"raw": None, "committed": None} for d in ("egress", "ingress")} for r in check["rows"])
     assert check["salt"]["accepted"] and check["salt"]["ingress_salt_frames"] == [1, 1, 1]
     assert check["comparisons"]["wire_is_the_records"] and check["timing"]["server_padded"]["responses"] == 4
+
+
+def test_four_in_flight_each_request_still_carries_the_release_order_the_certifier_signed(served_profile):
+    """Four in flight under the served profile, the endpoint gets every request with N its place in the signed release
+    order, in whatever order the shim's connections reach it, and honest traffic is accepted with the headers."""
+    *_, runs = served_profile
+    assert runs["honest"]["check"]["verdict"] == "accepted"
+    assert sorted(_released_as_signed(runs["honest"])) == list(range(REQUESTS))
 
 
 def test_a_request_in_a_windows_first_bucket_is_released_behind_the_salt_frame_and_its_window_derives(served_profile):
@@ -822,11 +871,13 @@ class _Varied:
     the shim reads them interleaved (`writes`: (request, chunk) in write order). For the requests `merges` picks, the
     last two tokens share one chunk and the finish reason comes in a chunk of no tokens, as vLLM v1 merges a
     request's deltas the API server hasn't read yet. Each completion it serves is a row of `served` as serve-openai's
-    `requests.jsonl` keeps it: its HTTP id, the body's `user` (None without one), its prompt and its streamed ids."""
+    `requests.jsonl` keeps it: its HTTP id, the body's `user` (None without one), its prompt and its streamed ids; and
+    of `releases`, its `user` and release order (`release.release_of`)."""
 
     def __init__(self, group: int = 1, merges=lambda request: False) -> None:
         self.group, self.merges, self.arrived, self.bodies, self.writes = group, merges, 0, [], []
         self.served: list[dict] = []
+        self.releases: list[tuple] = []
         self.turns: dict = defaultdict(asyncio.Event)
         self.done: dict = defaultdict(set)
 
@@ -853,6 +904,7 @@ class _Varied:
         assert isinstance(body.get("user", ""), str)
         assert body["temperature"] == 0 and body["top_p"] == 1 and body["stop"] == [] and type(body["seed"]) is int
         self.bodies.append(body)
+        self.releases.append((body.get("user"), release_of(head)))
         me, self.arrived = self.arrived, self.arrived + 1
         g, i = divmod(me, self.group)
         if i == self.group - 1:
@@ -957,6 +1009,19 @@ def _io(run: Path) -> dict:
     return {r["user"]: r for r in json.loads((run / "io.json").read_text())["requests"]}
 
 
+def test_varied_traffic_reaches_the_endpoint_with_n_its_ingress_ordinal_less_one(varied):
+    """On varied traffic, whose proxy opens each server connection with the request's ingress ordinal (`ordinals`),
+    each request reaches the endpoint with N its ordinal in the certified I/O (`io.json`) less one, under the honest
+    run's run id, and the I/O tie accepts with the headers present: they never reach a request frame."""
+    tmp, *_, runs, endpoint = varied
+    run_id = bytes.fromhex(json.loads((tmp / "honest" / "deployment.json").read_text())["run_id"])
+    got = [(user, r[0]) for user, r in endpoint.releases if r is not None and r[1] == run_id]
+    io = _io(tmp / "honest")
+    assert dict(got) == {name: r["stream"] - 1 for name, r in io.items()} and len(got) == len(io) == 16
+    check = runs["honest"]["check"]
+    assert check["verdict"] == "accepted" and check["io"]["accepted"] and check["io"]["requests_are_the_plans"]
+
+
 @pytest.fixture(scope="module", params=[8, 16])
 def compact(request, tmp_path_factory):
     """`plan --traffic varied --compact B` against `_Varied`, B = 8 and 16, as `varied` but for the egress framing:
@@ -974,7 +1039,7 @@ def compact(request, tmp_path_factory):
 def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
     """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
     salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
-    request for request (the same fields, ordinals, releases and token ids, a stop as `COMPACT_EOS`, and the same
+    request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
     finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
     egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
     run's."""
@@ -992,8 +1057,7 @@ def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress
     assert ours.keys() == theirs.keys()
     for name, r in ours.items():
         v = theirs[name]
-        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"} | {
-            "output": [active.COMPACT_EOS if t == EOS else t for t in v["output"]]}
+        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"}
     egress = check["egress_bytes"]
     assert egress["frame_bytes"] == B and egress["frames_per_window"] == \
         vruns["honest"]["check"]["egress_bytes"]["frames_per_window"]
@@ -1355,21 +1419,23 @@ def gate_compact(tmp_path_factory):
         runs_dir, _, _, plan, runs = _varied_runs(
             tmp / f"{run}.runs", endpoint, lambda url, a=args: cs.plan_of(a, url, lambda: 0.0, _no_sleep),
             args.strategies.split(","))
-        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy)}
+        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy),
+                         "dir": runs_dir / strategy}
     return got, endpoint
 
 
 def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them_as_on_id_events(gate_compact):
     """`certifier-rehearse --traffic varied --compact 8`'s command is a compact varied `rehearse` this parser takes,
     named for its run, and the gate's bounds on B are a compact record's bytes and an id event's frame. Its runs are
-    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (a stop as `COMPACT_EOS`), and the
-    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses."""
+    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (each stop's EOS id too), and the
+    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses. The
+    tie's compact rule (`active.compact_finish_violations`), with the endpoint's ids as the Commit's, finds nothing
+    in the honest run's cells and refuses exactly window 0's responses in the token run's."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
     got, endpoint = gate_compact
-    recorded = {r["user"]: [active.COMPACT_EOS if t == EOS else t for t in r["streamed_ids"]]
-                for r in endpoint.served if r["user"] is not None}
+    recorded = {r["user"]: r["streamed_ids"] for r in endpoint.served if r["user"] is not None}
     for strategy, (run, tamper) in GATE_RUNS.items():
         g = got[strategy]
         assert (g["args"].compact, g["args"].name, g["args"].strategies) == (8, run, tamper or "honest")
@@ -1379,6 +1445,13 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
         window0 = {q["session"] for q in g["plan"]["requests"] if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
         differs = {u for u, r in g["io"].items() if r["output"] != recorded[u]}
         assert differs == (set() if tamper is None else window0) and (tamper is None or differs)
+        e = ar.Setup(json.loads((g["dir"] / "calibration.json").read_text())).egress_params
+        outs = sorted((ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
+                      key=lambda r: r.window)
+        cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
+        sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}
+        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells)
+        assert {o for o, _ in bad} == {g["io"][u]["stream"] for u in differs}, bad
     plain = cs.parser().parse_args(A.certifier_command(
         {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
     assert plain.compact is None

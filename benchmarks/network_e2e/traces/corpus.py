@@ -126,6 +126,9 @@ WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 10
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
 #: seconds the warden runs past the last arrival's D, for the last responses' egress cells
 WARDEN_TAIL_S = 60.0
+#: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
+#: windows' records (`warden_probe`'s `publisher`)
+WARDEN_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
                                    f"({WARDEN_WHERE})")
            for name, (base, d) in WARDEN.items()}
@@ -490,7 +493,7 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
 
 def cpu_plan(cpus: list[int]) -> dict | None:
     """The job's cores split for a warden trace, so that nothing else runs on the warden's or the client's: the warden the
-    last one (the last two from 8 cores, its publisher's signing thread beside its ticker), the client the one before, and
+    last one (the last two from 8 cores, its publisher beside its ticker), the client the one before, and
     the server, its engine core and the host sampler the rest. None under 4 cores (nothing is pinned)."""
     cpus = sorted(cpus)
     if len(cpus) < 4:
@@ -597,17 +600,20 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                               "listen": dep["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
+            pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
-                                        f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}"])
+                                        f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}",
+                                        *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
             print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
             meta |= asyncio.run(drive_warden(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
-                meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + 120)
+                meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + WARDEN_END_S)
             except subprocess.TimeoutExpired:
-                meta["warden"]["rc"] = "still running 2 minutes past its last window"
+                meta["warden"]["rc"] = f"still running {WARDEN_END_S:g} s past its last window"
+            meta["warden"]["ended_past_last_window_s"] = round(time.time() - end, 3)
     finally:
         if warden is not None and warden.poll() is None:
             warden.terminate()

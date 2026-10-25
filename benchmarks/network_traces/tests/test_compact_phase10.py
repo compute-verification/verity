@@ -6,8 +6,8 @@ the fixture's real Llama-3.2 vocab. Its two findings are kept as regressions of 
 
 - finding 3 (live at 12109611a2): the finish rule lost "ending at its first EOS" under compact, so an unmarked record
   carrying an EOS id read as a token that more follow and was accepted, where the id-event rule refuses "a token after
-  EOS"; `certified_io` now refuses any EOS id in a compact response, since an honest server writes a stop only as
-  `COMPACT_EOS`;
+  EOS"; `certified_io` now refuses an EOS id in any record but its response's stop, which since REDTEAM phase 12
+  carries the EOS id the model sampled (`test_compact_eos_phase12`);
 - the proxy holds no finish state, so that rule is all there is: it certifies a record after a finish and an unmarked
   EOS id, and faults only a record of another request or one that isn't a record;
 - two token streams render byte-identically (lone UTF-8 continuation bytes before the same token), so the text can't
@@ -34,7 +34,7 @@ from verity.core.protocols.certifier import active
 from verity.core.protocols.certifier.grid import Reason
 
 B = 8
-EOS_ID = "an EOS id in a compact response"
+EOS_ID = "an EOS id outside a stop record"
 
 
 @pytest.fixture(scope="module")
@@ -72,23 +72,24 @@ def _rewrite(outs, stream: int, index: int, record: bytes):
     return out
 
 
-def _as_id_events(outs, eos_id: int):
-    """The same records as id events (`active.id_event`, 256-byte frames), a stop as the EOS id."""
+def _as_id_events(outs):
+    """The same records as id events (`active.id_event`, 256-byte frames), each record's id as it is."""
     def event(slot):
         if slot is None:
             return None
-        request, token, finish = active.compact_record_data(slot)
-        return active.encode_frame(active.DATA, active.CANONICAL_STREAM,
-                                   active.id_event(request, eos_id if finish == "stop" else token), cs.FRAME_BYTES)
+        request, token, _ = active.compact_record_data(slot)
+        return active.encode_frame(active.DATA, active.CANONICAL_STREAM, active.id_event(request, token),
+                                   cs.FRAME_BYTES)
     return [SimpleNamespace(window=r.window, grid=[[event(s) for s in row] for row in r.grid]) for r in outs]
 
 
 def test_an_eos_id_in_a_compact_response_is_refused_as_id_events_refuse_a_token_after_it(run):
     """Finding 3. The honest shim (`active_replay.compact_records`) makes every EOS id the stop record, so a cell that
-    carries one is never honest. A response whose first output is the model's EOS id, sent unmarked, then continues to
-    its marked stop (or to its `COMPACT_LAST` at `max_tokens`), was accepted with finish `eos` (or `length`): it is
-    refused, as the same records as id events are ("a token after EOS"). So is a response whose last output at
-    `max_tokens` is the EOS id marked `COMPACT_LAST`, which as id events is an honest `eos`."""
+    carries one and isn't marked a stop is never honest. A response whose first output is the model's EOS id, sent
+    unmarked, then continues to its marked stop (or to its `COMPACT_LAST` at `max_tokens`), was accepted with finish
+    `eos` (or `length`): it is refused, as the same records as id events are ("a token after EOS"). So is a response
+    whose last output at `max_tokens` is the EOS id marked `COMPACT_LAST` alone, which as id events is an honest
+    `eos`."""
     plan = run.plan
     eos_id = plan["varied"]["eos_token_ids"][0]
     honest = cs.certified_io(plan, run.setup, run.ins, run.outs)
@@ -102,28 +103,29 @@ def test_an_eos_id_in_a_compact_response_is_refused_as_id_events_refuse_a_token_
         assert mine["output"][0] == eos_id and len(mine["output"]) == len(r["output"])
 
         ids = {**plan, "compact": None}
-        events = cs.certified_io(ids, run.setup, run.ins, _as_id_events(forged, eos_id))
+        events = cs.certified_io(ids, run.setup, run.ins, _as_id_events(forged))
         assert not events["accepted"] and events["violations"] == [[r["stream"], "a token after EOS"]]
-        assert cs.certified_io(ids, run.setup, run.ins, _as_id_events(run.outs, eos_id))["accepted"]
+        assert cs.certified_io(ids, run.setup, run.ins, _as_id_events(run.outs))["accepted"]
     r = next(r for r in honest["records"] if r["finish"] == "length")
     last = _rewrite(run.outs, r["stream"], len(r["output"]) - 1, active.compact_record(r["stream"], eos_id, "length"))
     got = cs.certified_io(plan, run.setup, run.ins, last)
     assert not got["accepted"] and got["violations"] == [[r["stream"], EOS_ID]]
-    assert cs.certified_io({**plan, "compact": None}, run.setup, run.ins, _as_id_events(last, eos_id))["accepted"]
+    assert cs.certified_io({**plan, "compact": None}, run.setup, run.ins, _as_id_events(last))["accepted"]
 
 
 def test_the_proxy_holds_no_finish_so_the_finish_rule_is_all_there_is():
     """The ordinal is the connection's and the field is canonical, or the window is `malformed` (the PR's own case).
-    Past that the proxy takes any record of its request: one after a `COMPACT_LAST` or a stop, and an unmarked EOS id,
-    are each certified with no fault, so they rest on `certified_io` alone, which refuses each ("a token after its
-    finish", and the test above)."""
+    Past that the proxy takes any record of its request: one after a `COMPACT_LAST` or a stop, an unmarked EOS id, and
+    a stop on an id that isn't EOS, are each certified with no fault, so they rest on `certified_io` alone, which
+    refuses each ("a token after its finish", the test above, and `test_compact_eos_phase12`)."""
     sys.path.insert(0, str(Path(active.__file__).parent / "tests"))
     from test_network_certifier_active import EGRESS, INGRESS, SYNC_SET, SYNCS
 
     egress = dataclasses.replace(EGRESS, frame_bytes=B)
     eos_id = FIXTURE["eos_token_ids"][0]
     for records in ([active.compact_record(1, 5, "length"), active.compact_record(1, 6)],
-                    [active.compact_record(1, None, "stop"), active.compact_record(1, 6)],
+                    [active.compact_record(1, eos_id, "stop"), active.compact_record(1, 6)],
+                    [active.compact_record(1, 5, "stop"), active.compact_record(1, 6)],
                     [active.compact_record(1, eos_id), active.compact_record(1, 6)]):
         proxy = active.Proxy(("127.0.0.1", 1), egress, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
                              ordinals=True, compact=True)
@@ -162,14 +164,14 @@ def test_two_token_streams_render_byte_identically():
 
 
 def test_the_renderer_refuses_an_unknown_id_an_unfinished_end_and_another_requests_record():
-    """Finding 8. An id outside the vocab raised KeyError: it is ValueError, unmarked or marked `COMPACT_LAST`, with
+    """Finding 8. An id outside the vocab raised KeyError: it is ValueError, whatever the record's finish, with
     nothing rendered, so the stream's next record renders as on a fresh renderer. `done` closed a stream that had no
     finish: it refuses one, and gives `[DONE]` after the stop. The default `request=None` let a record of another
     request render into this one: `request` is required, and another's record is refused."""
     stream = FIXTURE["streams"][0]
     then = stream["chunks"][0][1][0]
     r = cr.Renderer(VOCAB, stream["prompt"], FIXTURE["model"], request=1)
-    for finish in (None, "length"):
+    for finish in (None, "length", "stop"):
         with pytest.raises(ValueError):
             r.text(active.compact_record(1, 999_999, finish))
         assert r.finished is None
@@ -179,7 +181,7 @@ def test_the_renderer_refuses_an_unknown_id_an_unfinished_end_and_another_reques
     assert r.text(active.compact_record(1, then)) == fresh.text(active.compact_record(1, then))
     with pytest.raises(ValueError):
         r.done()
-    assert r.text(active.compact_record(1, None, "stop")) == ("", "stop") and r.done() == cr.DONE
+    assert r.text(active.compact_record(1, FIXTURE["eos_token_ids"][0], "stop")) == ("", "stop") and r.done() == cr.DONE
     with pytest.raises(TypeError):
         cr.Renderer(VOCAB, stream["prompt"], FIXTURE["model"])
     with pytest.raises(ValueError):

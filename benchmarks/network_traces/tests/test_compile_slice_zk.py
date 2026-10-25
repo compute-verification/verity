@@ -1,6 +1,7 @@
-"""compile_slice_zk's scans of what the verifier received, of the witness rows and salts and of the carry rows, are
-`zk_scan`'s (tests/test_zk_scan.py), and each found witness piece's classes are the witness fields it sets (`classes`,
-`scanned`). Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
+"""compile_slice_zk proves w212 at its run's engine class, scheduler included; its scans of what the verifier received,
+of the witness rows and salts and of the carry rows, are `zk_scan`'s (tests/test_zk_scan.py), and each found witness
+piece's classes are the witness fields it sets (`classes`, `scanned`). Nothing here lowers or proves
+(`compile_slice_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,8 @@ import itertools
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -22,6 +25,17 @@ def _load():
 
 
 Z = _load()
+
+
+def test_w212_is_proved_at_its_runs_engine_class(monkeypatch):
+    """8eb1's engine class is its trace header's, AsyncScheduler (AS = 1) included, and w212 is loaded at it. A fixture
+    at another scheduler, the sync class's (AS = 0), is refused, so every window of the run is proved at its one AS."""
+    x = Z.load("w212")
+    assert Z.engine_class()["async_scheduling"] is True
+    assert x.fx["engine"] == Z.engine_class() and x.st["AS"] == 1 and x.sl.steps == 21
+    monkeypatch.setattr(Z, "W212", Z.FIXTURES / "compile_slice_w212_class.json")
+    with pytest.raises(SystemExit, match="isn't the run's engine class"):
+        Z.load("w212")
 
 
 def test_classes_are_the_witness_fields_a_piece_sets():

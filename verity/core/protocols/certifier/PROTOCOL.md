@@ -862,7 +862,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
-| The advice string, with a precommitted, deterministic compiler | `Σ_w b_w + min(W, m)·log2 #Σ_sync + n·log2 D` bits, where `b_w` is the public cap on the advice charged to window w (I1's `bits(advice, w)`), fixed before the run. Over all W windows (n = W·T), `b_w + log2 #Σ_sync + T·log2 D` bits per window, cumulative as above | `SecurityProofs.EncardAccSeqsWithinLeConstantRate`; for a decoder of the wire, under W2, J and the compiler's two assumptions, `SecurityProofs.EncardDecodableWithinLeCompiled` and `SecurityProofs.EncardDecodableWithinLeCompiledPerWindow` |
+| The advice string, with a precommitted, deterministic compiler | `Σ_w b_w + min(W, m)·log2 #Σ_sync + n·log2 D` bits, where `b_w` is the public cap on the advice charged to window w (I1's `bits(advice, w)`), fixed before the run. Over all W windows (n = W·T), `b_w + log2 #Σ_sync + T·log2 D` bits per window, cumulative as above | `SecurityProofs.EncardAccSeqsWithinLeConstantRate`; for a decoder of the wire, under W2, J and the compiler's two assumptions, `SecurityProofs.EncardDecodableWithinLeCompiled` and `SecurityProofs.EncardDecodableWithinLeCompiledPerWindow`; with advice v1's charge, no assumption on the charge: `SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`, `SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and a faulty set is one `RAcc δ` allows (in `M_δ`, no unit drawn `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`). At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`) |
 | The warden (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. With the data from an advice string within the caps and `k` bits of content no proved unit fixes, `log2 #schedules + Σ_c log2(cells_c + 1) + Σ_w b_w + k` bits for the run | `SecurityProofs.WardenViewEqClientView`, `SecurityProofs.EncardWardenViewsLe`; for a decoder of the client's view, under `trusted-nebius-host` and `BitsCount`, `SecurityProofs.EncardWardenDecodableLe` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
@@ -878,6 +878,21 @@ meet it: the charges sum to at least the length of a prefix-free encoding of the
 or to at least one more than the length of any injective encoding, one with `decode(encode(a)) == a`
 (`bitsCount_of_lengthSucc`). The per-window charges need not be self-delimiting on their own; only their sum is
 counted.
+
+Advice v1's charge meets `BitsCount` with no assumption, under any registered book. Lean mirrors `ChargeCount_v1{N}`'s
+reference (`arith_encode.py`'s `reference_charge`) one for one (`Security/Definitions/NetworkCertifier/AdviceV1.lean`)
+and proves that at most `2^c` decision streams are charged `c` bits or fewer over all windows
+(`SecurityProofs.EncardChargedLe`). The proof needs no codewords: weigh a coder state by its interval's width over
+`2^bits`; a scaling keeps the weight, a decision's two outcomes split it, and the finish charges no more than the weight
+pays for, so the weights `2^(−charge)` sum to at most 1. So with advice v1 the advice string's bounds hold with no
+assumption on the charge (`SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`,
+`SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). The windows covered are decision-only: their four counts
+are sent as 0, which is `ChargeCount_v1`'s scope. Which slots ask (`en`) is not charged because it is not advice: the
+compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned by that
+slice's scan, and the carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`). The
+one hypothesis left is that `ChargeCount_v1`'s circuit computes Lean's `window`. circuit-check holds the circuit to the
+Python reference, and the Lean is held to that reference by a comparison on random cases (1,200 windows and 400
+sessions, with no mismatch); it is not proved in Lean.
 
 The bound charges the caps `b_w`, not the realized lengths, since a run counts if any advice within the caps explains
 it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice
@@ -1588,7 +1603,8 @@ rows are held to the committed ``srv`` row, which the verifier holds by b‖c to
 registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused. Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
 chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
-advised window is proved, the proof of record at vLLM 8eb1's engine class (w212, 857,866 ANDs), `--zk` through
+advised window is proved, the proof of record at vLLM 8eb1's engine class (w212 under its AsyncScheduler, 1,021,302
+ANDs) and at the sync class (857,866), `--zk` through
 `benchmarks/network_traces/compile_slice_zk.py`, and the slice's earlier ZK runs with its coder.
 
 ## The replay at the served shape
@@ -1618,11 +1634,12 @@ them.
 
     | token field | the output | finish |
     |---|---|---|
-    | id, below 2^31 − 1 | a token, more follow | none |
+    | id, below 2^30 | a token, more follow | none |
     | 2^31 + id (`COMPACT_LAST`) | the response's last, at `max_tokens` | `length` |
-    | 2^32 − 1 (`COMPACT_EOS`) | a sampled stop token, whichever of the model's EOS ids | `stop` |
+    | 2^31 + 2^30 + id (`COMPACT_LAST`, `COMPACT_STOP`) | a sampled stop token, its id the EOS id sampled | `stop` |
 
-    The frame is the record zero-filled to B, with no header (`compact_cell`), so B can be 8. Its template
+    A field from 2^30 to 2^31 − 1 is no record's. The frame is the record zero-filled to B, with no header
+    (`compact_cell`), so B can be 8. Its template
     (`compact_placement`) is the record at bytes 0 … 8 and zero after it, and no record is padding, since the ordinal
     is at least 1. The proxy faults the window `malformed` on a unit whose record isn't one (`compact_record_data`) or
     names another request than its connection's, and on bytes left uncut at the stream's end. A cell's ordinal is
@@ -1633,17 +1650,20 @@ them.
     vLLM's stream text).
     - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
       q + 1.
-    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_EOS` are well-formed records, and the certifier commits
-      whatever finish the server writes: one of three states (none, `length`, `stop`) at each response's end, where an
-      id event marks the end out of band. The check that refuses a wrong finish is the I/O tie's, against the advice:
-      request q's cells are its `output_len` outputs, none marked but the last, which is `stop` where the advice's
-      `finish` is `eos` and `length` where it is `length` (`compact_finish_violations`). A stop record stands for the
-      advice's EOS output, whose id it doesn't carry. IO-TIE's egress tie holds each compact cell's token field to
-      this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
-      checks the marks against `max_tokens` alone, so it can't tell a stop on the last token at `max_tokens` from a
-      `length` finish. It refuses any cell that carries one of the model's EOS ids, marked or not, since an honest
-      server writes a stop only as `COMPACT_EOS`; read as a token with more to follow, such a cell would let the server
-      decide where the client's text ends.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, and the
+      certifier commits whatever ids and finish the server writes: one of three states (none, `length`, `stop`) at
+      each response's end, where an id event marks the end out of band. A stop carries the EOS id the model sampled,
+      so where a response stops can be checked as an id event's can. The rehearsal's certified I/O
+      (`certifier_serve.certified_io`) refuses a mark before a response's last record, a stop on an id that isn't
+      one of the model's EOS ids, an EOS id in any record but the stop, and `COMPACT_LAST` alone short of
+      `max_tokens`. Like an EOS id event, a stop on an EOS id that the model didn't sample there passes it, so the
+      check that refuses a wrong length or finish is the I/O tie's, required of compact framing, against the Commit's
+      sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each carries its
+      sampled id, the response is as long as the Commit's, and it stops only where the Commit sampled EOS
+      (`compact_finish_violations`). IO-TIE's egress tie holds each compact cell's token field to this rule as well
+      as to its id. Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io`
+      accepted it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the
+      model never sampled; that field is now a stop on id 2^30 − 1, which isn't EOS.
     - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
@@ -2004,6 +2024,12 @@ and seven lemmas, and three more proved lemmas:
     the server's timing, chunking or content at the same n;
   - past the lanes, connections queue FIFO, then get one `REFUSED` cell;
   - every cell is B bytes, and `read_cell` refuses anything the warden wouldn't make, a `FAIL` with a payload too;
+  - the server gets each request whole at its `END`'s release with N its index among the signed `END` cells, in
+    release order rather than admission order, a client's own release header dropped and its cells unchanged; a
+    connection that fails before its `END` is unnumbered and its server gets nothing;
+- **`test_network_certifier_release.py`:** the release headers (`release`) go right after the request line, a client's
+  own are dropped whatever their case, bytes that aren't an HTTP/1 request with its whole head pass unchanged, and a
+  shim reads back the first of each;
 - **`test_network_certifier_warden_adversarial.py`:** REDTEAM's cases against the warden, each stating the bits it
   bounds: the server's connect delay doesn't move the egress base from s + D, and two accept delays give
   byte-identical client cells and records (regressions for 316f3292b6's open base); at one fail cell the reason isn't
@@ -2225,6 +2251,14 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.
+- The server's copy of each request carries its release order (`release`, VLLM-89), so that `serve-openai --admit
+  release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
+  index among the ingress records' `END` cells, and `x-verity-release-run:` the warden's `run_id` (in
+  `deployment.json`). The server gets a request whole at its `END`'s release, and nothing of a connection that fails
+  before it. The headers are on the server's leg only. No cell or record holds them, so the cell counts, the prompt
+  lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak bound
+  is unchanged. The active certifier's served proxy adds the same headers (`active_replay.ReleaseProxy`), with
+  N = s − 1 for request stream s.
 
 **Named gaps:**
 - TLS isn't terminated: both legs are plain TCP.
@@ -2235,7 +2269,11 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - **The cells' wiring is open to the verifier (owner: network-accounting).** A unit's read is (q, k), connection q's
   cell k of the link-window. The verifier places it at its bucket's row and slot with the warden's wiring
   (`Wiring.place`), which the signed head names by a salted digest, so the reads are the warden's and never the
-  prover's (REDTEAM's phase 8 finding, closed). But the wiring is opened to the verifier, and it and the rows the units
+  prover's (REDTEAM's phase 8 finding, closed). Which cell each unit reads is the Program's: the units' wiring
+  (`Units`, a (q, k) a unit) is fixed with the Program from the schedule, the ordinals and the signed wiring alone,
+  never the cells' bytes, and the port's value names its digest, which Lean's registered reads hold the statement's
+  header to, so a statement made for another units' wiring is refused even at the same rows (REDTEAM's phase 11 pad
+  for a data cell, closed; no gate). But the wiring is opened to the verifier, and it and the rows the units
   read give away each connection's first row and cell count, both the prover's. A permutation argument closes it, with
   no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the link-window's
   N = T·S cells as pairs (k, cell k of V, the warden's value), reordered into unit order, a fixed number of positions
@@ -2305,8 +2343,9 @@ connection to reach the warden, from 0, is ordinal k + 1, the wire's ingress ord
 connection's: a `REFUSED` cell carries it.
 
 **How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
-`<link>/<direction>/<window>`, the root, T leaves of S·B/2 words of 16 bits, the domain, the row format and `reads`,
-the row each unit of the population opens. A unit's read is (q, k), and the verifier places it with the wiring: the
+`<link>/<direction>/<window>/units/<digest>`, the digest of the Program's units' wiring (`Units`), the root, T leaves of
+S·B/2 words of 16 bits, the domain, the row format and `reads`, the row each unit of the population opens. A unit's
+read is its (q, k) in the units' wiring, and the verifier places it with the wiring: the
 row is the cell's bucket, and the cell is at its slot's words. The verifier takes a wiring only when it is the one the
 head names and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections
 a row), and refuses a read of a connection the wiring doesn't hold, of a cell past the connection's, or of a cell
@@ -2314,9 +2353,9 @@ another read opens. So no read opens an empty slot, a foreign connection's cell 
 shared-row file whose port's table rows are those rows under the warden's salts, its header's `registered` entry their
 positions and paths (`Cells.statement`). An output port reads them as the sender's unit's output (its table is the
 instances' output rows), an input port as the receiver's input. A port reads one row a unit, so a unit that reads
-cells of k buckets has k registered ports, and reading one cell costs its whole row. Tonight the wiring is opened to
-the verifier, as the units' wiring is: the warden's named gap "The cells' wiring is open to the verifier", which has
-the plan that closes it.
+cells of k buckets has k registered ports, and reading one cell costs its whole row. The statement's header names
+the port's value, so it is made for the Program's units' wiring and no other. Tonight the cells' wiring is opened to
+the verifier: the warden's named gap "The cells' wiring is open to the verifier", which has the plan that closes it.
 
 **How the other readers of the certifier's rows differ:**
 - N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,

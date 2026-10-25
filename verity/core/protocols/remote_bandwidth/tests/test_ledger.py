@@ -230,6 +230,29 @@ def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
         dataclasses.replace(n, link_burst_bytes=-1.0)
 
 
+def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
+    """`ledger.sketch` charges Q = F·C, C the node's compressions over the span (`ledger.compressions`) and F its
+    `sketch_outside`, `timing.SKETCH_OUTSIDE` (2^20) unless stated, which `to_json` records; F is a positive
+    integer."""
+    s, prover, passes, clock = drive(store, params(), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r, n = s.record(), node(squarings=1e9)
+    assert n.sketch_outside == ledger.Node.stated().sketch_outside == timing.SKETCH_OUTSIDE == 2 ** 20
+    assert n.to_json()["sketch_outside"] == 2 ** 20
+    c = ledger.compressions(r, n)
+    assert c == math.ceil(n.sha512_per_s * r.span_ns / 1e9)
+    assert ledger.sketch(r, n) == float(timing.sketch_failure(2 ** 20 * c, r.passes, r.rows, blocks=r.blocks,
+                                                              outside=1))
+    assert ledger.Node.stated(sketch_outside=1).to_json()["sketch_outside"] == 1
+    near = dataclasses.replace(n, sketch_outside=1)
+    assert ledger.sketch(r, near) == float(timing.sketch_failure(c, r.passes, r.rows, blocks=r.blocks, outside=1))
+    assert ledger.memory(r, n)[0].delta - ledger.memory(r, near)[0].delta == pytest.approx(
+        ledger.sketch(r, n) - ledger.sketch(r, near))
+    for bad in (0, -1, 2.0):
+        with pytest.raises(ValueError, match="sketch_outside"):
+            dataclasses.replace(n, sketch_outside=bad)
+
+
 def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, `timing`'s in `Node.stated`
     and by default, each a positive finite rate, and no DPU's (MEM-45)."""
