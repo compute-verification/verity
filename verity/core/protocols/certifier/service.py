@@ -666,8 +666,8 @@ class LinkWindows:
         return S.Stream(self.spec, self.unit, **kwargs)
 
     def domain(self, window: int) -> CommitmentDomain:
-        """One-stage's served domain (`registration.served_domain`) for the link-window: run `<run>/<link>/<window>`."""
-        binding = identity_digest_sha512(R.SERVED_DOMAIN, {
+        """One-stage's window domain (`registration.window_domain`) for the link-window: run `<run>/<link>/<window>`."""
+        binding = identity_digest_sha512(R.WINDOW_DOMAIN, {
             "program": self._partition["program"], "partition": P.digest(self._partition), "port": VALUE,
             "schema": SCHEMA, "leaves": LEAVES, "run": f"{self.run}/{self.link}/{window}"})
         return CommitmentDomain(binding, -1, RangeIndexedDomain(0, LEAVES), hash="sha512")

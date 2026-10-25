@@ -71,8 +71,8 @@ ROW = "hm96-sha512/row/v1"
 STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
-#: `registration.SERVED_DOMAIN`, today's and before it
-SERVED_TAGS = (R.SERVED_DOMAIN, "verity/one-stage/served-domain/v0")
+#: `registration.WINDOW_DOMAIN`, today's and before it
+SERVED_TAGS = (R.WINDOW_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
@@ -414,7 +414,7 @@ def stand_in_ports(name: str, content_digest: str, n: int, layout: dict[str, tup
 
 
 def served_domain(form: tuple[str, str], program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
-    """`registration.served_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
+    """`registration.window_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
     tag, binding = form
     doc = {"program": program, "partition": partition, "port": port, "schema": schema, "leaves": int(leaves), "run": run}
     return _domain(SERVED_BINDINGS[binding](tag, doc), leaves)

@@ -1,6 +1,6 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.ml.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``).
@@ -105,6 +105,7 @@ a layer's q rows for every token before its k rows, so RoPE's heads are q heads 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -117,11 +118,13 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P
+from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import serving_rows as CS
+from verity_vllm.commit import index as IX, row_tables as RTB
+from verity.ml.windows import interface as IF
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
@@ -138,6 +141,8 @@ READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split"
 #: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
 BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
+#: the circuit record's ``name`` (`circuit_record`), opaque to Verity
+CIRCUIT_NAME = "verity-vllm"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
@@ -331,7 +336,7 @@ def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
-    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``RowTable.key``; each table's token rows by request,
+    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
     then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
     ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
     table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
@@ -352,7 +357,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             specs[k][4].append((str(rid), int(d["row"]), int(r["i"])))
             segs.setdefault(t, []).append((lo, lo + n, k, len(specs[k][4]) - 1))
             lo += n
-    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *CS.table_key(specs[k][1])))
+    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *RTB.table_key(specs[k][1])))
     ranks = [sorted(range(len(s[4])), key=lambda j, rs=s[4]: rs[j][:2]) for s in specs]
     new_k = {k: i for i, k in enumerate(order)}
     new_rank = [{j: i for i, j in enumerate(r)} for r in ranks]
@@ -362,8 +367,10 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             out.append(m)
         elif m.base == next(x.base for x in ms if x.template == m.template):
             out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
-    return out, tuple(CS.RowTable(specs[k][0], specs[k][1], specs[k][2], specs[k][3], tuple(specs[k][4][j] for j in ranks[k]))
-                      for k in order)
+    made = tuple(RTB.row_table(specs[k][0], specs[k][1], specs[k][2], specs[k][3], [specs[k][4][j] for j in ranks[k]])
+                 for k in order)
+    RTB.check_order(made)
+    return out, made
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
@@ -438,6 +445,17 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
             **({"row_tables": [t.port for t in window.row_tables]} if window.row_tables else {}),
             **({"work_table": window.work_table} if window.work_table is not None else {}), "partition": window.partition,
             "partition_digest": window.partition_digest, "population": window.population}
+
+
+def circuit_record(window: CS.Window) -> dict[str, Any]:
+    """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
+    and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it; a template of word rows has none (the verifier's
+    input set lowers it)."""
+    sts = {}
+    for t in dict.fromkeys(m.template for m in window.members if m.schemas):
+        in_rows, out_rows = CR.unit_rows(template(t))
+        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, "reads": CR.reads(template(t))}
+    return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts)
 
 
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
@@ -737,7 +755,8 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     gates, which the window's law proves whole (`population`).  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
-    and writes only ``out_dir``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
+    and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
+    the provenance carries as ``circuit``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
     compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
@@ -749,7 +768,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)
     t_read = time.perf_counter()
-    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), step_roots=rt.get("step_roots"),
+    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
@@ -758,7 +777,11 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
-    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served")
+    body = IF.circuit_bytes(circuit_record(window))
+    (Path(out_dir) / "circuit.json").write_bytes(body)
+    prov["circuit"] = hashlib.sha512(body).hexdigest()
+    res = CS.write(c, out_dir, prov, IX.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
+                   registrar=R)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

@@ -118,13 +118,13 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
   (`service.ROOTS`, ``over``). Each chunk's public file is a shared-row file, its header's ``shared_rows`` held to the
   verifier's own layout, and before the draw the tables are held to the chunks' public ``x`` strings, the registered root
-  and the step roots serving recorded before each step's coin (`row_tables.check_row_tables`). Lean's verifier of record
+  and the step roots serving recorded before each step's coin (`tables.check_row_tables`). Lean's verifier of record
   covers a shared-row public file only where it holds its own registered reads (``--registered``, `Flock.ProvedScope.
   sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
-  (`row_tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
+  (`tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
   registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
   root. The audit record's ``registered_reads`` carries each drawn chunk's table and root from that file beside the
-  ``registered`` finding Lean's verdict reports opening its rows against (`row_tables.reported_reads`), and a5 accepts only
+  ``registered`` finding Lean's verdict reports opening its rows against (`tables.reported_reads`), and a5 accepts only
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
@@ -163,13 +163,9 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity_vllm.commit import flock_inputs as FI, row_tables as RTB, serving_rows as CS  # noqa: E402
-from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
-from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
-from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
-from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
-from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
-from verity_vllm.commit import wiring as WI  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
+from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 
@@ -181,6 +177,14 @@ def template_sets(root: Path) -> dict[str, tuple[Path, object]]:
         defn = InputSet.open(str(d)).subcircuit.definition()
         out.setdefault(P.template_id(defn), (d, defn))
     return out
+
+
+def vllm_template(t: str):
+    """A chunked member's template the caller gave no composer for: vLLM's serving-rows template ``t``
+    (`verity_vllm.pipeline.serving_templates.template`), whose circuit `compose_circuit.py --template` composes."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    return SRW.template(t).fn
 
 
 def body(path: Path) -> bytes:
@@ -430,14 +434,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
-    ``step_roots``, what serving recorded before each step's coin, `row_tables.check_row_tables`), one Lean draw by its law
+    ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean draw by its law
     (on a stream, `streamed`: TP rank ``rank``'s draw of record by its `service.Stream`, on the challenger's coins
     ``a.coins`` or the verifier's own, `coins_draw`), a `--zk` session per member with drawn units on ports from ``port``,
     Lean's verdicts, the audit record (on a stream, its outcome: on the coins' evidence, `coins_outcome`, or on the
     verifier's own coins, `verifier_outcome`) and the negatives (``more_negatives`` beside them), all under ``out``; -> its
     summary and whether it was accepted with every negative refused. ``sets``: each template's input set and Definition, or
     a callable composing its circuit (``(out, partition digest, program digest) -> {"pin", "class_sha512", ...}``) and its
-    Definition. ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
+    Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -462,19 +466,20 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
     t_stage = time.time()
     for k, m in enumerate(mine.members):
-        chunked = bool(m.schemas)
+        own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
+        chunked = bool(m.schemas) and not own
         if m.template not in sets and not chunked:
             summary["refused"] = {"no-template-set": m.template}
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
             print("A5 " + json.dumps(summary["refused"]))
             return summary, False
-        defn = SRW.template(m.template).fn if chunked else sets[m.template][1]
+        defn = vllm_template(m.template) if chunked else sets[m.template][1]
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
         if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
             circuit, made, circ = composed[m.template]
-        elif not chunked and callable(sets[m.template][0]):
+        elif own:
             circuit = st_dir / "circuit.txt"
             made = sets[m.template][0](circuit, pd, part["program"])
             circ = FI.flock_circuit(circuit.read_bytes())
@@ -522,7 +527,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()
     if mine.row_tables:
-        bad = RTB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
+        bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     if any(m.wired for m in mine.members):
         bad = WI.check(mine.members, publics)
@@ -543,7 +548,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
     # a member reading an outside registered value, against the root its owner signed
-    reads = {**(RTB.registered_reads(mine, publics) if mine.row_tables else {}), **(registered or {})}
+    reads = {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
@@ -634,7 +639,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                            "outcome": summary["coins"]["outcome"]}
     result["draw_counts"] = counts
     if row_verdicts:
-        result["registered_reads"] = RTB.reported_reads(reads, row_verdicts)
+        result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
@@ -669,7 +674,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         key = next(iter(row_verdicts))
         other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
         neg["verdict-reports-another-registered-root"] = {
-            "refused": not RTB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
+            "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
@@ -728,6 +733,8 @@ def resized_program(defs: list[tuple]) -> Program:
 
 
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
+    from verity_vllm.pipeline import deferred_rows as DRW, replay_bundle as RB
+
     t0 = time.time()
     r = DRW.of_record(a.bundle, a.row_dir)
     mine = DRW.window_of(r, a.partition)
@@ -749,6 +756,9 @@ def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: C
     advice (``--other-advice-opening``), whose window from it the registration fails (`source` and R2); and a unit committed under
     other advice (``--other-windows``: member 0's public file from that window in place of serving's), which the registration's
     leaf layer refuses (R4) and whose roots are not the registered ones."""
+    from verity_vllm.pipeline import advice_windows as AW
+    from verity_vllm.pipeline.tp import serving_rows as SRT
+
     rec = json.loads((served / "registration.json").read_text())
     w = rec.get("window") or {}
     neg: dict[str, dict] = {}
@@ -791,6 +801,9 @@ def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) ->
     the advice it opens, ``advice_windows.window_of_advice``, and `advice_negatives`) audited under ``out/rank<r>``, on its own ports; -> its
     row of the summary. With ``a.coins``, a rank that ends without its draw (refused before it, or failed) says so, so the
     step's session closes once every other rank has drawn."""
+    from verity_vllm.pipeline import advice_windows as AW
+    from verity_vllm.pipeline.tp import serving_rows as SRT
+
     t0 = time.time()
     try:
         windows = Path(a.windows)
@@ -839,6 +852,8 @@ def tp_ranks(a: argparse.Namespace, sets: dict, out: Path, world: int, ranks: li
 def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     """Every rank's window of the TP Commit ``--tp-commit`` (or the ranks ``--ranks``), each audited on its own under ``out/rank<r>``,
     and ``out/summary.json`` over them; a rank's audit also refuses another rank's registration as its own."""
+    from verity_vllm.pipeline.tp import serving_rows as SRT
+
     rec = SRT.record(a.tp_commit)
     world = int(rec["world"])
     ranks = [int(x) for x in a.ranks.split(",")] if a.ranks else list(range(world))

@@ -385,10 +385,10 @@ def test_the_opening_reads_what_served_zk_writes():
     A and B rows' schemas."""
     from verity.core.protocols.pouw.circuit import leaves as L
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
-    assert CC.SERVED_DOMAIN == R.SERVED_DOMAIN
+    assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
     case = openings.honest(random.Random(1))
-    assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
+    assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.window_domain(
         case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
         case["params"]["check"]["entries"], case["params"]["context"])
 

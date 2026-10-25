@@ -50,7 +50,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme, step_rows
+from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
@@ -737,7 +737,7 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
+class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
@@ -745,7 +745,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
                  geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None,
                  commit_scheme: str | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`leaf_rule.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
         `commit_scheme` rows-sha512: the offline core's GPU-tree steps (`commit_block_offline`) under `step_rows`, as the windowed collector
         commits a served run's (`NativeCollectCommitter(commit_scheme=)`, which sets its own)."""
         self.engine = engine

@@ -34,7 +34,7 @@ verity-exact-kit = { workspace = true }
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
 # CUDA sources. test_served_h1_producer's H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose
-# ChaCha20 is verity_vllm.commit.serving_rows' (the commit files named below: serving_rows and what it imports).
+# ChaCha20 is verity.ml.windows.rows' (the commit files named below: serving_rows and what it imports).
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
@@ -42,8 +42,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
-          "integrations/vllm/verity_vllm/commit/__init__.py", "integrations/vllm/verity_vllm/commit/hiding.py",
-          "integrations/vllm/verity_vllm/commit/serving_rows.py",
+          "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
+          "verity/ml/windows/rows.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/linear",
           "integrations/vllm/verity_vllm/protocol_options/__init__.py",
           "integrations/vllm/verity_vllm/protocol_options/credit_gate.py",
