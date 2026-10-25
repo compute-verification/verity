@@ -15,8 +15,9 @@ registered tables at the rows the verifier reads them.
   rebuilt from the kept values (`pouw_h1_kept.kept_row`), and every row is held to the tree's ``b || c`` at its
   position. The openings (rows and salts, private) go to ``--out``, never under the run's ``out/``; ``--public`` gets
   the unit, the entries and the checks.
-* **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (run.py's STAND-IN
-  one-call template: each statement is unit 0 of it, as in run.py), the lanes' partials committed after the draw
+* **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (`h1window.leaf_program`
+  of the window Program rebuilt from ``--descriptor`` and held to its bytes, run.py's `derived`; without one, run.py's
+  one-call window: each statement is unit 0 of it), the lanes' partials committed after the draw
   (`produced`, under a registration record of the lane Program that names the window's three entries), and each lane
   staged with its ports read through ``--registered`` at the window's rows: ``a<s>`` row M·j + 32 rb + i of
   ``h1/a/<K>@<s>`` (j the call's place among its step's calls of K), ``b<t>`` row b0 + 32 cb + j of ``h1/b/<K>``,
@@ -78,6 +79,30 @@ TAMPER_WORD = 4
 def _descriptor(path: str) -> bytes:
     raw = Path(path).read_bytes()
     return gzip.decompress(raw) if path.endswith(".gz") else raw
+
+
+def _window(path: str):
+    """The served window's Program rebuilt from its descriptor (`credit.layout_of`'s layout, `credit.shape_of`'s prefix),
+    each K's template held to the descriptor's by its descriptor id (which names every binding, so the 870 MB descriptor
+    is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
+    the template at K, as a served window's verifier derives it."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.circuits.codec import descriptor_id
+
+    raw = _descriptor(path)
+    layout, why = CR.layout_of(raw)
+    if why is not None:
+        raise SystemExit(f"REFUSED: {why}")
+    shape = CR.shape_of(raw)
+    win = HW.program([tuple(x) for x in layout["linears"]], [tuple(x) for x in layout["calls"]], layout["m"],
+                     tuple(layout["tile"]), shape["prefix"])
+    got = {int(k): descriptor_id(t) for k, t in win.fn.bindings["TILES"]}
+    want = {int(k): t["fn"] for k, t in shape["tiles"].items()}
+    if got != want:
+        raise SystemExit(f"the window Program rebuilt from the descriptor's layout has other templates: K "
+                         f"{sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))}")
+    return win, hashlib.sha512(raw).hexdigest()
 
 
 def _k_calls(layout: dict, k: int) -> list[int]:
@@ -374,7 +399,8 @@ def prepare(a) -> None:
     ctx = L.Ctx(work, a.name, k, 0)
     t = L.tile(k)
     ctx.wp = 2 * LL.words(k)
-    ctx.lane = ctx.reg = L.bound("H1LanesLaneStatement", L.lane_word(Z.lane(t)))
+    win, circuit = _window(a.descriptor) if a.descriptor else (L.window(t, k), None)
+    ctx.lane = ctx.reg = L.derived(win, k, LL.LANE)
     ctx.prog = P.program_digest(ctx.lane.program)
     (work / "verifier" / "lane.program.json").write_bytes(canonical_json(encode_program(ctx.lane.program)))
     (work / "verifier" / "lane.partition.json").write_text(json.dumps(ctx.lane.part))
@@ -391,6 +417,8 @@ def prepare(a) -> None:
     op = json.loads(Path(a.opened).read_text())
     if int(op["k"]) != k:
         raise SystemExit(f"the openings are at K={op['k']}, the lane circuit at K={k}")
+    if circuit is not None and op["program"] != circuit:
+        raise SystemExit(f"the openings are window Program {op['program'][:16]}'s, the lane statement {circuit[:16]}'s")
     unit = op["unit"]
     u = ctx.position = int(unit["unit"])
     print(f"openings of {op['window'][:16]} unit {u}, {time.time() - t0:.0f} s", flush=True)

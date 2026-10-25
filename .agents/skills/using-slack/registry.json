@@ -517,7 +517,7 @@
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
         "tools/research/tests/test_linear.py",
-        "integrations/slack-events/"
+        "infra/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
@@ -546,7 +546,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
