@@ -15,6 +15,7 @@ import gzip
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 from functools import cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -114,14 +115,14 @@ def test_a_served_run_without_clocks_jsonl_is_refused_unless_the_stand_in_is_ask
     _proxy_log(tmp_path)
     with pytest.raises(SystemExit, match="no clocks.jsonl.*--clock-stand-in"):
         n2.served_clocks(tmp_path, lw.link)
-    logged = n2.replace(lw, clock_certificates=None, **n2.served_clocks(tmp_path, lw.link, stand_in=True))
+    logged = replace(lw, clock_certificates=None, **n2.served_clocks(tmp_path, lw.link, stand_in=True))
     assert isinstance(logged.clocks, n2.CertifierClocks) and logged.clocks.syncs("another") == ()
     label = n2.clocks_label(logged, AT.SYNCS)
     assert label["source"] == "stand-in" and "--clock-stand-in" in label["by"] and label["as_declared"]
     assert not n2.clocks_label(logged, AT.SYNCS[::-1])["as_declared"]
     assert None not in n2.advised_refs(logged, link, egress, ingress)
-    off = n2.CertifierClocks(lw.link, (n2.replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
-    refs = n2.advised_refs(n2.replace(lw, clock_certificates=None, clocks=off), link, egress, ingress)
+    off = n2.CertifierClocks(lw.link, (replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
+    refs = n2.advised_refs(replace(lw, clock_certificates=None, clocks=off), link, egress, ingress)
     assert refs[0] is None and None not in refs[1:]
 
 
@@ -140,11 +141,11 @@ def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_even_beside_a
     for stand_in in (False, True):
         read = n2.served_clocks(tmp_path, lw.link, stand_in)
         assert list(read) == ["clock_certificates"] and read["clock_certificates"] == signed
-    again = n2.replace(lw, clock_certificates=read["clock_certificates"])
+    again = replace(lw, clock_certificates=read["clock_certificates"])
     assert n2.clocks_label(again, AT.SYNCS)["source"] == "signed"
     assert None not in n2.advised_refs(again, link, egress, ingress)
-    forged = (n2.replace(signed[0], sync=AT.SYNCS[1]), *signed[1:])
-    assert n2.advised_refs(n2.replace(lw, clock_certificates=forged), link, egress, ingress) == [None] * len(pairs)
+    forged = (replace(signed[0], sync=AT.SYNCS[1]), *signed[1:])
+    assert n2.advised_refs(replace(lw, clock_certificates=forged), link, egress, ingress) == [None] * len(pairs)
 
 
 def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_without_one(tmp_path):
@@ -152,7 +153,7 @@ def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_
     certifier's clock certificates, which can't be read, so the run is refused, the stand-in asked for or not; it is
     never taken for a run without them, whose unsigned proxy log beside it could hold phase 11's δ = 0 (REDTEAM
     phase 18)."""
-    _proxy_log(tmp_path, [n2.replace(s, delta=0) for s in AT.SYNCS])
+    _proxy_log(tmp_path, [replace(s, delta=0) for s in AT.SYNCS])
     (tmp_path / "clocks.jsonl").symlink_to(tmp_path / "gone" / "clocks.jsonl")
     for stand_in in (False, True):
         with pytest.raises(SystemExit, match="not a file of clock certificates"):
@@ -168,10 +169,11 @@ def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_an
     """`joined` (the --e2e link's advice from its Commit windows'): the second window's rows and hit sources name its
     requests after the first's, and each kept output is released where the certified frames of its request say."""
     a = _link(n2.T)[0].session.link.advice
-    b = ADV.Advice(tuple(n2.replace(q, id=f"b{q.id}") for q in a.requests), a.steps, a.release)
+    b = ADV.Advice(tuple(replace(q, id=f"b{q.id}") for q in a.requests), a.steps, a.release)
     frames = {q.id: [1000 * k + 10 * j + i for i in range(q.output_len)]
               for k, x in enumerate((a, b)) for j, q in enumerate(x.requests)}
-    got, n = n2.joined([a, b], frames), len(a.requests)
+    got, n = n2.joined([(w, n2.WA.Advice(x.requests, x.steps, x.release)) for w, x in enumerate((a, b))], frames), \
+        len(a.requests)
     assert got.requests == a.requests + b.requests and got.steps[:len(a.steps)] == a.steps
     rows = [r for st in got.steps[len(a.steps):] for r in st.rows]
     assert [(r.request, [s.request for s in r.sources]) for r in rows] == \

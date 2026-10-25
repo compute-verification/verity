@@ -39,10 +39,14 @@ command (`CR_N2_CMD`), IO-TIE's `--warden-run DIR --draw K` points the scan at t
 reads when it is there (`CR_CLIENT`). A step on a stand-in (the scan on its own synthetic run, or N2 on
 `CR_N2_STANDIN=simulated`) never makes the report accepted, and a step that fails or doesn't run says why.
 
-One gap is in the binding, not a command: `chain.served_advice` reads each Commit window's advice as I1 v0, so a window
-that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
-`verity-vllm/window-advice/v1`) is refused, and with it the whole run's advice. On the :18097 endpoint, 8 of the 56
-Commit windows of c20261025T062158Z-9ff3 are such windows (4 carry requests in), so the advised N2 can't take that run.
+A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
+`verity-vllm/window-advice/v1`) is bound with the window before it: `chain.served_advice` joins them into one I1 v0
+advice (`window_chain.join`), and `n2_advised_zk --e2e` joins the run's windows the same way. A carried request's
+record and state are the earlier window's, as its registered advice closed them (`window_advice.follows`), never the
+later window's own string's, so the advice's bits, and N2's K, charge the carry once. A window that carries a request
+in from a window the run doesn't hold, or that leaves a request with outputs still to keep and no next window, is
+refused. On the :18097 endpoint, 8 of the 56 Commit windows of c20261025T062158Z-9ff3 carry a request (114–115,
+143–144, 147–148 and 152–153), and all 56 bind and rebuild from the certified I/O.
 
 **The dry runs.** Two runs on vy-nebius-cpu-2's network slot, on the honest gate run c20261025T062158Z-9ff3
 (art:140f0e61b266a8f22b5153323d37b32e2645a2e7d5c564749745e87568feaecb: :18097, 100 varied requests at 0.6/s, 26
@@ -59,7 +63,7 @@ windows, the advice profile, a certifier key of H = 10). Neither is of record.
 - r20261025-183805-7c27, at bbf4a5e6e1, adds the endpoint's records (the four files of :18097's serve directory), and
   its scan step reuses 1dca's summary:
   - I/O tie, in the clear: accepted the honest run (100 requests, 3,172 outputs placed).
-  - Advice: didn't bind (the gap above).
+  - Advice: didn't bind: the binding read each Commit window's advice as I1 v0, and refused window advice v1.
   - N2: ran its stand-in, the advised unit (NetworkAdvisedLinkWindow_v2 at T = 512, 8,063,826 ANDs, k_log 24) on
     `n2_advised_zk`'s simulated link, under the certifier's signed clocks.
     - Verdicts: every window was proved, held by Lean and as expected. Honest was accepted in all 4 windows, and extra
@@ -97,4 +101,3 @@ What it doesn't cover:
 - B_reg: the trace's values at reg are the registration's (proofs' #4253). No probability covers it yet.
 - #(freeInputs \ reg) is not bounded by the advice bits until V3's padding, so b_w is vacuous (NET-68).
 - No carry across windows: each window's terms stand alone, and a request that spans two windows is charged in each.
-  The endpoint's Commit windows that carry a request don't bind to the run yet (above).
