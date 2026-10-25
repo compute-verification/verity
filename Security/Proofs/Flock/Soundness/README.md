@@ -34,7 +34,7 @@ at most `tableError(fast100 m, shape)`:
   `Arith.Correct` from `execArith_correct`, so they have no named assumption.
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (`value_batch_le`, `Audit/README.md`).
-- **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Model/LigeritoPad.lean`). M1 (#123,
+- **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Definitions/Flock/LigeritoPad.lean`). M1 (#123,
   `verity/ml/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,

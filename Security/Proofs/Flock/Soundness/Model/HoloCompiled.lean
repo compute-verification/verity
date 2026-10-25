@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Holo
+import Definitions.Flock.Holo
 import Proofs.Flock.Soundness.Model.Compiled
 
 /-!
