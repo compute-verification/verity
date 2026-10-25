@@ -126,8 +126,9 @@ and the embedding shard layout (`embedding_shard.py`).
 **`records/`** holds the typed stage records, one frozen dataclass per record kind one stage writes and another reads, whose `load`
 refuses a missing required field by file and field name (`fields.py`): `required_manifest.py` (the required-value manifest, as the
 replay's coverage reads it), `query_checks.py` (the sampled replay's reconciliation against Q(P), as the C2 rules read it),
-`served_tokens.py` (the driver's served tokens, `capture/tokens.json`, as GM-01's chronology check reads them) and
-`declared_stop.py` (the workload Program's declared stop rule and LAG, as the same check reads them).
+`served_tokens.py` (the driver's served tokens, `capture/tokens.json`, as GM-01's chronology check and the padded conversion,
+`commit/padding_steps.py`, read them) and `declared_stop.py` (the workload Program's declared stop rule and LAG, as the same two read
+them).
 Never: an import of anything else in `verity_vllm`.
 
 **`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
