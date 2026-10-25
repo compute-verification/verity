@@ -132,6 +132,10 @@
    "owner": "@lean",
    "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
+  "NetTiming.DeviceIntact": {
+   "owner": "@network-accounting",
+   "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
+  },
   "Pous.P2.Assumptions.CoinCommitHides": {
    "owner": "@memory-accounting",
    "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
@@ -139,6 +143,22 @@
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+  },
+  "Properties.RemoteAudit.Line.DrawFits": {
+   "owner": "@memory-accounting",
+   "digest": "b3df7200c96c282901664960d96af55080ae0ff96123cd4436dff28ad6fa9dd4"
+  },
+  "Properties.RemoteAudit.Line.Registered": {
+   "owner": "@memory-accounting",
+   "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
+  },
+  "Properties.RemoteAudit.Line.SizesOfRecord": {
+   "owner": "@memory-accounting",
+   "digest": "4d25e1fae521c6611ec822848d016e43e3fc908c195a8dadbf7bc48aa97dcc2a"
+  },
+  "Properties.RemoteAudit.ScheduleLayoutGap": {
+   "owner": "@memory-accounting",
+   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -1670,6 +1690,28 @@
    "assumptions": [],
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e"
   },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
+    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
+    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
+    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
+    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  (checked :",
+    "    ∀ (c : Pfx) (y : Y),",
+    "      Exists fun sc =>",
+    "        Exists fun passes =>",
+    "          Exists fun b =>",
+    "            And (Eq (RemoteAudit.Schedule.check sc blocks passes (appended c y)) (Except.ok b))",
+    "              (And (instLENat.le b a)",
+    "                (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
+    "                  (Option.some (sent c y))))) :",
+    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+   ],
+   "assumptions": [],
+   "type_hash": "4e358457f3de756afd27e88d100c8d705b63a32bcc50f94c95384171a013debf"
+  },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.credited : Properties.Requirement.Credited"],
@@ -1879,7 +1921,8 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Models.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises"
+   "Properties.RemoteAudit.Line.Premises",
+   "Properties.RemoteAudit.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -2859,6 +2902,10 @@
    },
    "Properties.RemoteAudit.receiptsBelowLimit": {
     "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.steered_of_checked": {
+    "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    }
   },
@@ -4330,7 +4377,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
-    "Properties.RemoteAudit.pooledCoversSession"
+    "Properties.RemoteAudit.pooledCoversSession",
+    "Properties.RemoteAudit.steered_of_checked"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -6065,6 +6113,13 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
+  },
+  "Models.Accounting.Assumptions.Stacking": {
+   "digest": "71fa7fa9649ff2d2a9f6bfd4bee2a65fbd7e17992301591760ca451abbde9525",
+   "definitions": {
+    "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
+   },
+   "guarantees": ["Properties.RemoteAudit.steered_of_checked"]
   },
   "Models.Nci.Assumptions.Baseline": {
    "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
@@ -8513,12 +8568,17 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "08c006d62d8bbc476c2f473fbdde4605039b5d92e5d0e8e5ef9b60170467d97d",
+   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
    "definitions": {
     "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
-    "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd"
+    "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
+    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
    },
-   "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+   "guarantees": [
+    "Properties.RemoteAudit.scheduleChecked",
+    "Properties.RemoteAudit.scheduleFixesLayout",
+    "Properties.RemoteAudit.steered_of_checked"
+   ]
   },
   "Properties.SampledProofs": {
    "digest": "cfeb4eaf8159e0067d3dc319139c7c5fb9fa0293d7ad95a719684584a1a6247d",
@@ -8969,7 +9029,11 @@
     "RemoteAudit.Schedule.spans": "3e888bfd47428be7c9ef0fb32baf300c6990f04a2b5c367b5a0f17b175cac271",
     "RemoteAudit.Schedule.varint": "0d20f517bea3fac822dd927ccc639844dad1637da8e4b124268c5317d94faf43"
    },
-   "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+   "guarantees": [
+    "Properties.RemoteAudit.scheduleChecked",
+    "Properties.RemoteAudit.scheduleFixesLayout",
+    "Properties.RemoteAudit.steered_of_checked"
+   ]
   },
   "RemoteAudit.Session": {
    "digest": "533385e84d8860d8961fd4483864439e2aca1418de34aec4a40794c414e17538",
