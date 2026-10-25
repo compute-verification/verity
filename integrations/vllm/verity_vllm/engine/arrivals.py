@@ -56,7 +56,7 @@ def scheduler_of(llm: Any) -> Any | None:
         inner = getattr(core, "engine_core", None) or core
         sched = getattr(inner, "scheduler", None)
         return sched if isinstance(getattr(sched, "requests", None), dict) else None
-    except Exception:  # noqa: BLE001
+    except AttributeError:
         return None
 
 
@@ -78,7 +78,7 @@ def _snapshot_computed(sched: Any) -> dict[str, int] | None:
             if nc is not None:
                 out[str(rid)] = int(nc)
         return out
-    except Exception:  # noqa: BLE001
+    except (AttributeError, TypeError, ValueError):
         return None
 
 
