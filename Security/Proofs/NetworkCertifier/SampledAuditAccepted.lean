@@ -320,7 +320,6 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
   obtain ⟨b, hb, hrun⟩ := (hι v r hr hv u hu g hg).2 (boundary_of_out hout)
   rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v r u hr hv hu hg, hrun, traceVal, read_of_not_const hconst,
     ← ref_of_boundary (r := r) (ref := ref) (ι := ι v) (boundary_of_out hout), hb]
-  rfl
 
 end Run
 
