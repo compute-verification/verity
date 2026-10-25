@@ -105,9 +105,9 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
 
 /-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root a composite. -/
 theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
-    ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false :=
-  let ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h
-  ⟨st, h1, h2, h3⟩
+    ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false := by
+  obtain ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h
+  exact ⟨st, h1, h2, h3⟩
 
 /-- **The root of a decoded Program** is one of its Definitions, a composite whose body has no parameters. -/
 theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
