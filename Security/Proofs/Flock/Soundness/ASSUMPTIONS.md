@@ -28,8 +28,7 @@ Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypot
 collision resistance in two forms, and the Lean verifier's randomness for the unit draw (Daniel, Sep 30). The fourth, A6,
 is the coin server's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
 the record's custody (`PROTOCOL.md` §17.2): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
-`Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`, and `flock_verify_sound` without `--zk` as
-`Assumptions.RecordCustodyExec` (`RecordCustodyExecH` at hidden outputs), in `Assumptions/Custody.lean`. The table's last row is zero
+`Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
 `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -40,7 +39,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit draw (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
-| `Assumptions.RecordCustodyExec`; at hidden outputs `RecordCustodyExecH` | `live-verifier` | none: the record `verify` reads without `--zk` is the one the verifier's coin server wrote for the live session (`RecordsLive`), and at every draw of the live law its draw file proves the drawn units and the statement sets up at it with the outcome's link points (`DrawOk`, `DrawOkH`) | `flock_verify_sound`'s claims without `--zk` (`SoundExec`, `SoundExecH`, and their `205` and per-test forms, `hCust`), which pass its parts to the headlines' `hwr` and `hdraw` |
+| `Assumptions.RecordCustodyExec` (`…ExecH`) | `live-verifier` | none: as `RecordCustodyZK`, without `--zk` (`RecordsLive`, `DrawOk`) | `SoundExec`'s and `SoundExecH`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
@@ -258,8 +257,7 @@ only for runs on per-round OS coins: a session whose identity names `live-os`, o
 The identity and a bench point's `coins` say which mode ran. flock-verify replays the recorded coins, so that they were
 the verifier's own OS draws, each drawn after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
 A6, which no check of the record establishes. At `--zk` the custody is a named `Prop`, `Assumptions.Zk.RecordCustodyZK`
-(`live-verifier`), which `zk_session_sound_custody` takes as `hCust`; without `--zk`, `Assumptions.RecordCustodyExec`
-(`RecordCustodyExecH` at hidden outputs), which `flock_verify_sound`'s `SoundExec` and `SoundExecH` take as `hCust`.
+(`live-verifier`), which `zk_session_sound_custody` takes as `hCust`.
 
 ## Premises the lock lists by name
 
