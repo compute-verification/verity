@@ -150,6 +150,7 @@
     {"file": "verity_vllm/check/match/instance_sequence.py", "kind": "doc-board-id", "symbol": "Prog._bind_splits", "detail": "M-nnnn"},
     {"file": "verity_vllm/check/match/instance_sequence.py", "kind": "doc-round", "symbol": "Prog._bind_splits", "detail": "R1N"},
     {"file": "verity_vllm/check/match/instance_sequence.py", "kind": "doc-round", "symbol": "Prog._srcP", "detail": "R1N"},
+    {"file": "verity_vllm/check/replay/replay.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 2},
     {"file": "verity_vllm/check/replay/opening.py", "kind": "doc-board-id", "symbol": "CommittedStore", "detail": "F-rN"},
