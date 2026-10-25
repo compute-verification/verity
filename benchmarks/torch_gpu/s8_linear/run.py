@@ -1,12 +1,15 @@
-"""The exact W8A8 linear at the large model's linears on sm_120, and its gate against `ScaledMmS8Coordinate_v1{K,
-BlackwellS8ImmaDot32_v1}` over W's rows.
+"""The exact W8A8 linear at the large model's linears, and its gate against `ScaledMmS8Coordinate_v1{K, DOT}` over W's rows.
 
-The kernel is `verity_vllm.engine.int8_fused.scaled_mm`, as vLLM's int8 profile serves it: one Triton GEMM, s8 x s8 -> s32 on
-the tensor cores (`tl.dot`, mma.sync m16n8k32 on sm_120), whose epilogue is the Definition's, in its order: cvt.rn.f32.s32,
-mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16.f32, no FTZ, no FMA. Its configs here are `configs.CONFIGS` (tune.py's gated
-winners at these shapes), else `int8_fused.pick`.
+Two exact kernels (`--kernel`, default wgmma on sm_90, triton elsewhere), each with the Definition's epilogue in its order:
+cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16.f32, no FTZ, no FMA:
+    wgmma   s8_wgmma.cu through wgmma.py on sm_90a (the H100 and H200): warpgroup MMAs (wgmma m64nNk32 .s32.s8.s8) into one
+            s32 accumulator; its SASS gate is build.sh's, held to the cubin by the MANIFEST.sha256 beside it
+    triton  `verity_vllm.engine.int8_fused.scaled_mm`, as vLLM's int8 profile serves it (mma.sync m16n8k32 on sm_120), its PTX
+            (`int8_fused.ptx_check`) and SASS (the s8 MMA present; no FFMA; no .FTZ) checked per compiled kernel
+Their configs are `configs.CONFIGS` (tune.py's gated winners, or --configs a tune.py best.json), else the kernel's default.
 
-    python run.py --out OUT [--models mqa16k,mha8k] [--ms 1,7,16,...] [--extra-cfgs CFG,...] [--no-edge] [--no-swap]
+    python run.py --out OUT [--kernel wgmma|triton] [--models mqa16k52] [--ms 1,7,16,...] [--extra-cfgs CFG,...]
+                  [--configs BEST_JSON] [--no-edge] [--no-swap] [--no-head]
 
 Per linear (N, K) of `fixture.shapes(models)` and M, on `fixture`'s inputs (all of s8, structured rows and columns, special
 scales):
@@ -16,8 +19,7 @@ scales):
                Definition's evaluator)
     reference  torch's epilogue on the GPU with every NaN 0x7FFF (what tune.py compares against), counted against the twin
     kernel     the picked config and each --extra-cfgs: y written into 0xA5 equal to the twin on every cell; again on a second
-               call (a split's workspace zeroes itself); again from a CUDA graph's replay into 0xA5; the split workspace zero
-               after; the PTX (`int8_fused.ptx_check`) and the SASS (IMMA present; no FFMA; no .FTZ)
+               call; again from a CUDA graph's replay into 0xA5; triton's split workspace zero after; the kernel's checks
     control    the same 0xA5 y with no launch: must differ from the twin
     swap       vLLM's CUTLASS int8 GEMM on the transposed product, y^T = W X^T with scale_b = s_a (applied first, the
                Definition's order) and scale_a = s_w (`kgate.cutlass_swapped`), M a multiple of 16; a finding, not a gate
@@ -43,25 +45,100 @@ import torch
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import fixture as FX  # noqa: E402
+import wgmma as W  # noqa: E402
 from configs import CONFIGS  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 POISON = 0xA5
-EXTRA_CFGS = ("16x32x256:w4:s4:k1", "32x64x128:w4:s4:k1", "64x64x128:w4:s3:k2", "128x64x128:w4:s4:k1",
-              "128x128x64:w4:s3:k1:t1", "128x128x64:w4:s3:k1:t2")
+TRITON_EXTRA = ("16x32x256:w4:s4:k1", "32x64x128:w4:s4:k1", "64x64x128:w4:s3:k2", "128x64x128:w4:s4:k1",
+                "128x128x64:w4:s3:k1:t1", "128x128x64:w4:s3:k1:t2")
 EDGE_N, EDGE_MS = 64, (16, 64)
 SAMPLE_ROWS, SAMPLE_COLS = 8, 64
 
 
-def cfg_for(m: int, n: int, k: int) -> X.Cfg:
-    rows = CONFIGS.get((n, k))
+def table_cfg(kern, m: int, n: int, k: int):
+    rows = CONFIGS.get(f"{kern.name}:{X.arch()}", {}).get((n, k))
     if not rows:
-        return X.pick(m, n, k)
+        return None
     for m_max, text in rows:
         if m <= m_max:
-            return X.Cfg.parse(text)
-    return X.Cfg.parse(rows[-1][1])
+            return kern.Cfg.parse(text)
+    return kern.Cfg.parse(rows[-1][1])
+
+
+def load_configs(path: str, kern) -> None:
+    """A tune.py best.json's winners into CONFIGS for `kern` on this arch, each M its m_max."""
+    table = json.loads(Path(path).read_text())["table"]
+    CONFIGS[f"{kern.name}:{X.arch()}"] = {tuple(map(int, nk.split(","))): [(r[0], r[1]) for r in rows if r[1]]
+                                          for nk, rows in table.items()}
+
+
+class Wgmma:
+    """s8_wgmma.cubin through wgmma.py (sm_90a)."""
+    name, Cfg, extra = "wgmma", W.Cfg, W.EXTRA_CFGS
+
+    def __init__(self):
+        self.lib = W.lib()
+        self.ident = self.lib.identity()
+
+    def pick(self, m: int, n: int, k: int) -> W.Cfg:
+        return table_cfg(self, m, n, k) or W.default_cfg(m, n, k, self.lib.sms)
+
+    def baseline(self, m: int, n: int, k: int) -> W.Cfg:
+        return W.default_cfg(m, n, k, self.lib.sms)
+
+    def skip(self, cfg, m: int, n: int) -> str | None:
+        return None
+
+    def call(self, x, sa, w, sw, y, cfg):
+        return W.scaled_mm(x, sa, w, sw, y, cfg)
+
+    def checks(self, handle) -> dict:
+        return {"launch": handle, "cubin_sha256": self.ident["sha256"][:16], "ok": self.ident["ok"]}
+
+    def residue(self) -> int:
+        return 0
+
+    def meta(self) -> dict:
+        return {"kernel": self.name, "identity": self.ident}
+
+
+class Triton:
+    """verity_vllm's int8_fused: sm_120's exact kernel, and on sm_90 a second one beside wgmma."""
+    name, Cfg, extra = "triton", X.Cfg, TRITON_EXTRA
+
+    def __init__(self):
+        self.work = X.Workspace("cuda")
+
+    def pick(self, m: int, n: int, k: int) -> X.Cfg:
+        return table_cfg(self, m, n, k) or X.pick(m, n, k)
+
+    def baseline(self, m: int, n: int, k: int) -> X.Cfg:
+        return X.default_cfg(m, n, k)
+
+    def skip(self, cfg, m: int, n: int) -> str | None:
+        return "split-K workspace too small for M x N" if cfg[5] > 1 and m * n > self.work.ws.numel() else None
+
+    def call(self, x, sa, w, sw, y, cfg):
+        return X.scaled_mm(x, sa, w, sw, y, cfg, self.work)
+
+    def checks(self, km) -> dict:
+        ptx, sass = X.ptx_check(km), sass_counts(km)
+        return {"ptx": ptx, "sass": sass, "ok": ptx["ok"] and sass["ok"]}
+
+    def residue(self) -> int:
+        return int((self.work.ws != 0).sum()) + int((self.work.cnt != 0).sum())
+
+    def meta(self) -> dict:
+        return {"kernel": self.name, "triton": __import__("triton").__version__}
+
+
+KERNELS = {"wgmma": Wgmma, "triton": Triton}
+
+
+def kernel(name: str | None = None):
+    return KERNELS[name or ("wgmma" if X.arch() == "sm_90" else "triton")]()
 
 
 def codes(rows: int, k: int, seed: int, structured: dict[int, str]) -> torch.Tensor:
@@ -97,7 +174,8 @@ _SASS: dict[str, dict] = {}
 
 
 def sass_counts(km) -> dict:
-    """The compiled kernel's SASS: IMMA (the s8 tensor-core step), FFMA (a fused multiply-add would round once), .FTZ."""
+    """A Triton kernel's SASS: the s8 tensor-core step (IMMA, or IGMMA on sm_90), FFMA (a fused multiply-add would round
+    once), .FTZ."""
     cubin = km.asm["cubin"]
     key = hashlib.sha256(cubin).hexdigest()
     if key not in _SASS:
@@ -109,11 +187,11 @@ def sass_counts(km) -> dict:
             f.flush()
             sass = subprocess.run([tool, "-sass", f.name], capture_output=True, text=True, check=True).stdout
         doc = {name: len(re.findall(pat, sass)) for name, pat in (
-            ("imma", r"\bIMMA\.\S*"), ("ffma", r"\bFFMA\b"), ("ftz", r"\.FTZ\b"), ("fmul", r"\bFMUL\b"),
-            ("i2f", r"\bI2F\S*"), ("f2fp_bf16", r"\bF2FP\.BF16\S*"), ("local", r"\b(?:LDL|STL)\b"))}
-        doc["imma_forms"] = sorted(set(re.findall(r"\bIMMA\.\S+", sass)))
+            ("imma", r"\bI(?:G)?MMA\.\S*"), ("ffma", r"\bFFMA\b"), ("ftz", r"\.FTZ\b"), ("int_div", r"\bF2I\.FTZ\.U32\.TRUNC\.NTZ\b"),
+            ("fmul", r"\bFMUL\b"), ("i2f", r"\bI2F\S*"), ("f2fp_bf16", r"\bF2FP\.BF16\S*"), ("local", r"\b(?:LDL|STL)\b"))}
+        doc["imma_forms"] = sorted(set(re.findall(r"\bI(?:G)?MMA\.\S+", sass)))
         doc["cubin_sha256"] = key
-        doc["ok"] = doc["imma"] > 0 and doc["ffma"] == 0 and doc["ftz"] == 0 and doc["local"] == 0
+        doc["ok"] = doc["imma"] > 0 and doc["ffma"] == 0 and doc["ftz"] == doc["int_div"] and doc["local"] == 0
         _SASS[key] = doc
     return _SASS[key]
 
@@ -161,34 +239,34 @@ class Case:
                 "max_abs": int(np.abs(want.astype(np.int64)).max(initial=0))}
 
 
-def run_cfg(case: Case, cfg: X.Cfg, work: X.Workspace) -> dict:
+def run_cfg(case: Case, cfg, kern) -> dict:
     wt, y = case.wt, case.y
     rec: dict = {"cfg": str(cfg)}
-    if cfg[5] > 1 and case.m * wt.n > work.ws.numel():
-        return {**rec, "skipped": "split-K workspace too small for M x N"}
+    why = kern.skip(cfg, case.m, wt.n)
+    if why:
+        return {**rec, "skipped": why}
     try:
-        km = None
+        h = None
         for i in range(2):
             poison(y)
-            km = X.scaled_mm(case.x, case.sa, wt.w, wt.sw, y, cfg, work)
+            h = kern.call(case.x, case.sa, wt.w, wt.sw, y, cfg)
             torch.cuda.synchronize()
             rec[f"mismatch_call{i}"] = diff(y, case.twin16)
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g):
-            X.scaled_mm(case.x, case.sa, wt.w, wt.sw, y, cfg, work)
+            kern.call(case.x, case.sa, wt.w, wt.sw, y, cfg)
         poison(y)
         g.replay()
         torch.cuda.synchronize()
         rec["mismatch_graph"] = diff(y, case.twin16)
         del g
-        rec["workspace_nonzero"] = int((work.ws != 0).sum()) + int((work.cnt != 0).sum())
-        rec["ptx"] = X.ptx_check(km)
-        rec["sass"] = sass_counts(km)
+        rec["residue"] = kern.residue()
+        rec["checks"] = kern.checks(h)
     except Exception as ex:  # noqa: BLE001 - a config that doesn't compile or launch is a failed case, recorded
         torch.cuda.synchronize()
         return {**rec, "ok": False, "error": f"{type(ex).__name__}: {str(ex)[:300]}"}
     rec["ok"] = (rec["mismatch_call0"] == 0 and rec["mismatch_call1"] == 0 and rec["mismatch_graph"] == 0
-                 and rec["workspace_nonzero"] == 0 and rec["ptx"]["ok"] and rec["sass"]["ok"])
+                 and rec["residue"] == 0 and rec["checks"]["ok"])
     return rec
 
 
@@ -215,8 +293,7 @@ def swap(case: Case) -> dict:
         return {"error": f"{type(ex).__name__}: {str(ex)[:300]}"}
 
 
-def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple[X.Cfg, ...], work: X.Workspace, do_swap: bool,
-               log) -> list[dict]:
+def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple, kern, do_swap: bool, log) -> list[dict]:
     out = []
     wt = Weights(n, k, seed=(n * 131 + k) & 0xFFFFFF)
     for m in ms:
@@ -224,9 +301,9 @@ def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple[X.Cf
         case = Case(wt, m, seed=(n * 31 + k * 7 + m) & 0xFFFFFF)
         rec = {"name": name, "n": n, "k": k, "m": m, "sums": case.sums_check(m),
                "reference_vs_twin": diff(case.ref16.view(torch.bfloat16), case.twin16), "control": control(case)}
-        picked = cfg_for(m, n, k)
-        rec["picked"] = run_cfg(case, picked, work)
-        rec["extra"] = [run_cfg(case, c, work) for c in extra if c != picked]
+        picked = kern.pick(m, n, k)
+        rec["picked"] = run_cfg(case, picked, kern)
+        rec["extra"] = [run_cfg(case, c, kern) for c in extra if c != picked]
         if do_swap:
             rec["swap"] = swap(case)
         rec["ok"] = (rec["picked"]["ok"] and all(r.get("ok", True) for r in rec["extra"]) and rec["control"]["rejected"]
@@ -244,9 +321,11 @@ def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple[X.Cf
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
+    ap.add_argument("--kernel", choices=sorted(KERNELS), default=None)
     ap.add_argument("--models", default=",".join(FX.DEFAULT_MODELS))
     ap.add_argument("--ms", default=None, help="default: fixture.GATE_MS and every configs.CONFIGS m_max")
-    ap.add_argument("--extra-cfgs", default=",".join(EXTRA_CFGS))
+    ap.add_argument("--extra-cfgs", default=None, help="default: the kernel's (wgmma.EXTRA_CFGS, TRITON_EXTRA)")
+    ap.add_argument("--configs", default=None, help="a tune.py best.json for this kernel")
     ap.add_argument("--no-edge", action="store_true")
     ap.add_argument("--no-swap", action="store_true")
     ap.add_argument("--no-head", action="store_true")
@@ -255,11 +334,14 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     if not FX.fp_env_ok():
         raise SystemExit("this process flushes float32 subnormals; the twin would be wrong")
+    kern = kernel(a.kernel)
+    if a.configs:
+        load_configs(a.configs, kern)
+    table = CONFIGS.get(f"{kern.name}:{X.arch()}", {})
     models = tuple(a.models.split(","))
-    tuned = {m for rows in CONFIGS.values() for m, _ in rows}
+    tuned = {m for rows in table.values() for m, _ in rows}
     ms = tuple(int(v) for v in a.ms.split(",")) if a.ms else tuple(sorted(set(FX.GATE_MS) | tuned))
-    extra = tuple(X.Cfg.parse(c) for c in a.extra_cfgs.split(",") if c)
-    work = X.Workspace("cuda")
+    extra = tuple(kern.Cfg.parse(c) for c in (a.extra_cfgs.split(",") if a.extra_cfgs is not None else kern.extra) if c)
     log_path = out / "gate.jsonl"
 
     def log(rec):
@@ -267,16 +349,17 @@ def main() -> int:
             f.write(json.dumps(rec) + "\n")
         print(json.dumps({key: rec[key] for key in ("name", "m", "ok", "s")} | {
             "picked": rec["picked"].get("cfg"), "mismatch": rec["picked"].get("mismatch_call0"),
-            "ref_vs_twin": rec["reference_vs_twin"]}), flush=True)
+            "extra_mismatch": sum(e.get("mismatch_call0", 0) for e in rec["extra"]),
+            "ref_vs_twin": rec["reference_vs_twin"], "error": rec["picked"].get("error")}), flush=True)
 
     recs = []
     for name, n, k in FX.shapes(models, with_head=not a.no_head):
-        recs += gate_shape(name, n, k, ms, extra, work, not a.no_swap, log)
+        recs += gate_shape(name, n, k, ms, extra, kern, not a.no_swap, log)
     if not a.no_edge:
-        recs += gate_shape("s32-edge", EDGE_N, FX.EDGE_K, EDGE_MS, extra, work, not a.no_swap, log)
+        recs += gate_shape("s32-edge", EDGE_N, FX.EDGE_K, EDGE_MS, extra, kern, not a.no_swap, log)
     cases = [r["picked"] for r in recs] + [e for r in recs for e in r["extra"] if "skipped" not in e]
-    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__,
-           "triton": __import__("triton").__version__, "models": models, "ms": ms, "configs": {f"{n},{k}": v for (n, k), v in CONFIGS.items()},
+    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__, **kern.meta(),
+           "models": models, "ms": ms, "configs": {f"{n},{k}": v for (n, k), v in table.items()},
            "cases": len(cases), "kernel_mismatches": sum(c.get("mismatch_call0", 0) + c.get("mismatch_call1", 0)
                                                          + c.get("mismatch_graph", 0) for c in cases),
            "failed": [(r["name"], r["m"]) for r in recs if not r["ok"]],

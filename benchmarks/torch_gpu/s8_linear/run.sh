@@ -1,35 +1,50 @@
 #!/usr/bin/env bash
-# One of this directory's scripts on one leased GPU of node 2 (or 3) for at most S8_MAX_MIN (30) minutes, from the shipped tree:
-# S8_SCRIPT=run.py (the gate, default), tune.py, bench.py or commit.py; extra arguments go to it. What needs no GPU (the
-# commitment kernels' nvcc build) runs before the lease.
-#   research run --on vy-nebius-2 --project verity --campaign e2e-demo --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-kp2s8 -- bash benchmarks/torch_gpu/s8_linear/run.sh [ARGS...]
+# This directory's scripts on one leased GPU of vy-dc-h200 (or another sm_90 node), each STEP under its own lease of at most
+# S8_MAX_MIN (30) minutes, from build.sh's ship sent with the run (nothing is compiled here):
+#   tar -C BUILD_RUN/out/ship -cf /tmp/s8-ship.tar .
+#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
+#     --env GPU_LEASE_WHO=kernels-kp2s8 --send /tmp/s8-ship.tar -- bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
+# A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
+# gate); each writes into $OUT/<i>-<script>. A step that fails ends the run (S8_KEEP_GOING=1: the rest still run).
+# Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
+# ~/.cache/verity/row_table), the card and Python recorded. VERITY_BENCH_VENV names the Python with torch and vLLM.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
-TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
-S=$(mktemp -d "$TMP/tmp-s8-linear.XXXXXX"); trap 'rm -rf "$S"' EXIT
+SHIP=${S8_SHIP:-$D/inputs/s8-ship.tar}
+S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
-for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
+PY=${VERITY_BENCH_VENV:+$VERITY_BENCH_VENV/bin/python3}
+for v in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
+[ -x "${PY:-}" ] || { echo "s8_linear: no Python with torch (VERITY_BENCH_VENV)" >&2; exit 2; }
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
 export PYTHONPATH=$ROOT/integrations/vllm:$ROOT
 export TRITON_CACHE_DIR=$S/triton
-SCRIPT=${S8_SCRIPT:-run.py}
-if [ "$SCRIPT" = commit.py ]; then
-  "$PY" -c "from verity_vllm.commit import row_tables_device as D; D.device_lib('120'); D.host_lib()" || exit 3
-fi
-nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 1 \
-  > "$OUT/smi.csv" 2>/dev/null &
-SMI=$!
+mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$SHIP" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256) \
+  || { echo "s8_linear: the ship $SHIP is missing or fails its MANIFEST" >&2; exit 2; }
+cp "$S/ship/source.txt" "$S/ship/toolchain.txt" "$S/ship/sass.json" "$S/ship/MANIFEST.sha256" "$OUT/"
+export S8_WGMMA_CUBIN=$S/ship/s8_wgmma.cubin
+if [ -d "$S/ship/row_table" ]; then mkdir -p "$HOME/.cache/verity/row_table" && cp -rn "$S/ship/row_table/." "$HOME/.cache/verity/row_table/"; fi
+nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$OUT/gpus.txt" 2>&1
+"$PY" -c 'import torch, triton; print(torch.__version__, torch.version.cuda, triton.__version__)' > "$OUT/python.txt" 2>&1
 MAX_MIN=${S8_MAX_MIN:-30}
-# a timed script pauses the fill queue and isn't preempted (kernel-engineering skill); the gate times nothing
-LEASE=(--preemptible); [ "$SCRIPT" != run.py ] && LEASE=(--timed)
-echo "s8_linear: $SCRIPT asking for one GPU (${LEASE[*]}) at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait "${LEASE[@]}" --max-min "$MAX_MIN" -- bash -c '
-  [ -n "${GPU_LEASE_UUID:-}" ] && nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$0/clocks.txt" 2>&1
-  exec timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"' "$OUT" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$SCRIPT" "$@"
-rc=$?
-kill "$SMI" 2>/dev/null
-echo "s8_linear: $SCRIPT exited $rc at $(date -u +%H:%M:%SZ)"
-exit "$rc"
+rc_all=0; i=0
+for step in "$@"; do
+  i=$((i + 1)); read -r -a argv <<< "$step"; script=${argv[0]}; dir=$OUT/$i-${script%.py}; mkdir -p "$dir"
+  echo "s8_linear: step $i ($step) asking for one GPU at $(date -u +%H:%M:%SZ)"
+  nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 1 \
+    > "$dir/smi.csv" 2>/dev/null &
+  smi=$!
+  # shellcheck disable=SC2016
+  gpu-lease 1 --wait --max-min "$MAX_MIN" -- bash -c '
+    [ -n "${GPU_LEASE_UUID:-}" ] && nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$0/clocks.txt" 2>&1
+    exec timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"' "$dir" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" \
+    "${argv[@]:1}" 2>&1 | tee "$dir/log.txt"
+  rc=${PIPESTATUS[0]}
+  kill "$smi" 2>/dev/null
+  echo "s8_linear: step $i ($step) exited $rc at $(date -u +%H:%M:%SZ)" | tee -a "$OUT/rc.txt"
+  [ "$rc" = 0 ] || { rc_all=$rc; [ "${S8_KEEP_GOING:-0}" = 1 ] || break; }
+done
+echo "s8_linear: last GPU step ended at $(date -u +%H:%M:%SZ)"
+exit "$rc_all"
