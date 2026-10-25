@@ -103,10 +103,10 @@ theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : Str
             obtain ⟨j, hj, j1, j2, hj'⟩ := hex
             by_cases hji : j = i
             · subst hji
-              have hik : j ≠ k := fun e => by subst e; omega
+              have hik : j ≠ k := fun e => by subst e; exact String.not_lt.2 hj' hc'
               refine ⟨k, by omega, by omega, hk, ?_⟩
               rw [Vector.getElem_swap_right]; exact hj'
-            · have hjk : j ≠ k := fun e => by subst e; omega
+            · have hjk : j ≠ k := fun e => by subst e; exact String.not_lt.2 hj' hc'
               refine ⟨j, hj, by omega, j2, ?_⟩
               rw [Vector.getElem_swap_of_ne hji hjk]; exact hj')
         exact ⟨hm, within_trans (within_swap as _ _ ilo (by omega) (by omega) (by omega)) hw, h1, h2, h3⟩
