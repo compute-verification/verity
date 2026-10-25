@@ -5,11 +5,12 @@ delegation to the vLLM coordinator, 25 Oct 09:40Z).  Dedicated cleanup lanes pay
 
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
-them (a branch's own commits against its merge base).  A ratchet is a shrink-only allowlist under ``integrations/vllm/tests``
-(``**/allowlists/*.json`` or ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a
-rule number (``p10_size.json`` and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the
-change adds starts at its own count and is not compared.  A change is judged when it touches a ratchet or a ``*.py`` file
-under ``integrations/vllm/tests/lint/`` (the lints' code), and passes when:
+them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
+ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
+holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json`` and ``size.json`` are
+both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own count and is not
+compared.  A change is judged when it touches a ratchet or a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
+code), and passes when:
 
 * no ratchet its base has holds more entries after it than before;
 * no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
@@ -59,6 +60,8 @@ QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
 #: a comment ruff reads as a ``noqa``: the hash, then ``noqa`` or ``noqa: CODE, ...``, or a file's ``ruff: noqa`` (or ``flake8:``)
 NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
+#: a unified diff's hunk header: the new side's first line and its count (1 when left out)
+HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
 
@@ -205,9 +208,24 @@ class Change:
                 "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed}
 
 
+def merge_base(base: str, top: str) -> str:
+    """``base``'s and ``top``'s merge base.  When they have several (a branch that took ``base``'s commits by two routes: it
+    merged ``main``, and a branch ``main`` has landed since), no one of them holds all they share, and against it what ``base``
+    brought by the other route would count as the branch's; so the base is their merge, as git's own merge takes it."""
+    first, *rest = git("merge-base", "--all", base, top).split()
+    for other in rest:
+        r = subprocess.run(["git", "merge-tree", "--write-tree", "--no-messages", first, other], capture_output=True, text=True)
+        if r.returncode:
+            raise GitError(f"{top[:12]}'s merge bases with {base[:12]} don't merge cleanly, so it has no one base to be judged "
+                           f"against: merge {base[:12]} into the branch, which leaves it one")
+        first = git("-c", "user.name=ratchet gate", "-c", "user.email=ratchet-gate@invalid", "commit-tree", r.stdout.split()[0],
+                    "-p", first, "-p", other, "-m", "ratchet gate: the merge of the merge bases").strip()
+    return first
+
+
 def changes(base: str, top: str) -> list[Change]:
     """The changes on ``top``'s first-parent chain above its merge base with ``base``, oldest first."""
-    mb = git("merge-base", base, top).strip()
+    mb = merge_base(base, top)
     out: list[Change] = []
     lo, group = mb, []
     for line in reversed(git("log", "--first-parent", "--format=%H %P%x00%s", f"{mb}..{top}").splitlines()):
@@ -275,19 +293,31 @@ def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
     return [(n, lines[n - 1].strip()) for n in sorted(rows)]
 
 
+def added_rows(lo: str, hi: str, path: str) -> set[int]:
+    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds."""
+    rows: set[int] = set()
+    for m in HUNK.finditer(git("diff", "--no-renames", "-U0", lo, hi, "--", path)):
+        rows.update(range(int(m[1]), int(m[1]) + int(m[2] or 1)))
+    return rows
+
+
 def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]:
     """(each ``noqa`` line the change adds, as ``file:line: text``; how many it adds; how many it removes) over the
     ``*.py`` files it changes under ``integrations/vllm``.  Lines are matched by their stripped text across those files, so
-    one that moves, within a file or to another, is neither."""
+    one that moves, within a file or to another, is neither.  Of lines with the same text, those the diff adds are named
+    first, so a new copy of a common line (a bare ``noqa: BLE001``) is named where it was added."""
     files = [f for f in diff if f.startswith(f"{INTEGRATION}/") and f.endswith((".py", ".pyi"))]
     was = Counter(text for f in files for _, text in noqa_lines(lo, f))
     now = [(f, n, text) for f in files for n, text in noqa_lines(hi, f)]
     added, removed = Counter(t for *_, t in now) - was, was - Counter(t for *_, t in now)
-    named, left = [], Counter(added)
-    for f, n, text in now:
-        if left[text]:
-            left[text] -= 1
-            named.append(f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}")
+    fresh = {f: added_rows(lo, hi, f) for f in {f for f, _, text in now if added[text]}}
+    left, picked = Counter(added), set()
+    for new_first in (True, False):
+        for f, n, text in now:
+            if left[text] and (f, n) not in picked and (n in fresh[f]) == new_first:
+                left[text] -= 1
+                picked.add((f, n))
+    named = [f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}" for f, n, text in now if (f, n) in picked]
     return named, sum(added.values()), sum(removed.values())
 
 
