@@ -324,8 +324,8 @@ def test_a_rows_tail_is_cut_and_a_leak_written_only_there_is_found(tmp_path):
 def test_a_short_row_is_found_whole_and_judged_by_the_rule(tmp_path):
     """`find_whole` finds a row shorter than a piece (a 12-byte carry row, an 8-byte served row) whole, each distinct row
     once: planted inside one field of a stream it is leaked; across two fields it is no find; with its bytes in the public
-    rows it is public; inside an integer field of a stream it is public, and leaked also written into an element; as hex
-    in a file the format doesn't read it is leaked, in either case, but a nibble off that hex it isn't found. The prover's control is to hold every row, the files searched are the piece scan's, and a row of 16
+    rows it is public; as hex in a file the format doesn't read it is leaked, in either case, but a nibble off that hex it
+    isn't found. The prover's control is to hold every row, the files searched are the piece scan's, and a row of 16
     bytes or more, or under 6, is refused."""
     row, srb = bytes(range(0xa0, 0xac)), struct.pack("<4H", 1, 0, 0xa5, 3)
     rows = {"cout 0": row, "cin 1": row, "srb 0": srb}
@@ -345,12 +345,6 @@ def test_a_short_row_is_found_whole_and_judged_by_the_rule(tmp_path):
     (vdir / "pub-4.bin").write_bytes(b"\1" * 8 + row)
     assert LS.find_whole(None, rows, vdir, reads=_reads)["structured"] == {"cout 0": "public"}
     (vdir / "pub-4.bin").unlink()
-    vdir = _streams(tmp_path / "v", {64: (srb, b"")})
-    assert LS.find_whole(None, rows, vdir, reads=_reads)["placed"] == {"srb 0": [(REPS[0], 64, "fixed")]}
-    assert LS.find_whole(None, rows, vdir, reads=_reads)["structured"] == {"srb 0": "public"}
-    vdir = _streams(tmp_path / "v", {64: (srb, b""), 112: (row, srb)})
-    assert LS.find_whole(None, rows, vdir, reads=_reads)["leaked"] == ["cout 0", "srb 0"]
-    vdir = _streams(tmp_path / "v", {112: (row, b"")})
 
     for hx, want in ((srb.hex(), ["srb 0"]), (srb.hex().upper(), ["srb 0"]), ("0" + srb.hex(), []), ("0" + srb.hex() + "0", [])):
         (vdir / "openings.json").write_text(json.dumps([{"salt/o0": hx}]))

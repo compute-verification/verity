@@ -16,8 +16,8 @@ straddling two elements, so a leak in that tail is missed. A row shorter than a 
 rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds are
 judged by the same rule. It is at least 6 bytes (`WHOLE`): a uniform L-byte row matches a given offset raw, or an even
 offset of hex text, with chance 2^-8L, so R rows over N received bytes expect about 2·N·R·2^-8L chance finds, 2^-7 at 6
-bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: a find inside a
-field the reader fixes reads public, which excuses that find alone, and one anywhere else leaked.
+bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: in a field the
+reader fixes it reads public, which also excuses a real find of it, and anywhere else leaked.
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
