@@ -10910,6 +10910,34 @@ theorem locW_child (P : Prog) {d k m j w : Nat}
         (P.defs[d]!).body.offsets[k]! - m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates = j by omega]
     exact h
 
+/-- **A gate of a width is in a node**: one of the body's nodes holds it. -/
+theorem locW_node {P : Prog} {d j w : Nat} (h : LocW P d j w) :
+    ∃ k < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k]! ≤ j ∧ j < (P.defs[d]!).body.offsets[k + 1]! := by
+  cases h with
+  | prim hf _ _ =>
+    obtain ⟨hk, hp⟩ := DescAgree.find?_range_some hf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    exact ⟨_, hk, hp⟩
+  | comp _ hf _ _ _ =>
+    obtain ⟨hk, hp⟩ := DescAgree.find?_range_some hf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    exact ⟨_, hk, hp⟩
+
+/-- A gate of a width is one of the Definition's, its body laid out. -/
+theorem locW_lt {P : Prog} {d j w : Nat} (h : LocW P d j w)
+    (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
+      (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
+        (P.defs[((P.defs[d]!).body.nodes[k']!).fn]!).gates)
+    (hlast : (P.defs[d]!).body.offsets[(P.defs[d]!).body.nodes.size]! = (P.defs[d]!).gates) :
+    j < (P.defs[d]!).gates := by
+  obtain ⟨k, hk, -, h2⟩ := locW_node h
+  have hmono : ∀ k' < (P.defs[d]!).body.nodes.size,
+      (P.defs[d]!).body.offsets[k']! ≤ (P.defs[d]!).body.offsets[k' + 1]! := fun k' hk' => by
+    have := hoff k' hk'
+    exact this ▸ Nat.le_add_right _ _
+  have := DescAgree.offs_mono _ _ hmono (k + 1) (P.defs[d]!).body.nodes.size (by omega) le_rfl
+  omega
+
 /-- A segment of Definition `d`'s body naming its gates with their widths (`LocW`). -/
 def GateW (P : Prog) (d : Nat) (s : Seg) : Prop := ∀ w p, (Tgt.gate w, p) ∈ segPos s → LocW P d p.toNat w
 
