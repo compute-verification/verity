@@ -1594,3 +1594,25 @@ def test_interleaved_responses_are_recovered_by_their_requests_ordinals(tmp_path
         assert records[q["session"]]["output"] == ids and records[q["session"]]["stream"] == q["stream"]
     run = [w for w in endpoint.writes if w[0] >= 4]
     assert any(a[0] != b[0] for a, b in itertools.pairwise(run) if a[0] // 2 == b[0] // 2)
+
+
+@pytest.mark.parametrize("extra_s", [0.5, 150.0])
+def test_late_holds_a_window_0_session_at_any_allowance_and_refuses_a_plan_without_one(extra_s):
+    """`--extra-s` adds its seconds to every token's latency in the plan, and a session that starts in window 0 is still
+    one `late` can hold at 150 s. A plan whose first request arrives after window 0, as Poisson arrivals at 0.25 a
+    second can draw (7.6 s, bucket 76 of 60), has no session there, and `late` refuses it by name rather than at a bare
+    StopIteration."""
+    probed = {"model": "stub-model", "upstream_fields": cs.UPSTREAM_FIELDS, "responses": [
+        {"tokens": 4, "token_s": [0.1, 0.2, 0.3, 0.4], "finish": "length", "last": EOS + 1}]}
+
+    def plan_from(first_ms):
+        reqs = [{"session": f"varied.{j:05d}", "at_ms": first_ms + 400 * j, "prompt": [1, 2, 3], "max_tokens": 4,
+                 "seed": j} for j in range(4)]
+        return cs.varied_plan(probed, reqs, extra_s=extra_s, eos=[EOS])
+
+    report, plan = plan_from(cs.START_MS + 100)
+    assert plan["varied"]["delta0_buckets"] == plan["sessions"][0][2][0] >= 10 * extra_s
+    assert ar.adversary_plan(plan, ar.Setup(report), "late")["writes"]
+    report, plan = plan_from(7592.4)
+    with pytest.raises(ValueError, match="no session starts in window 0 .* at bucket 76,"):
+        ar.adversary_plan(plan, ar.Setup(report), "late")

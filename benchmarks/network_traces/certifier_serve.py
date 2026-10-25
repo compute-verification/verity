@@ -1336,6 +1336,11 @@ def rehearse(args) -> int:
         (out / "probe.json").write_text(json.dumps(probed, indent=1))
         (out / "plan.json").write_text(json.dumps(plan))
         (out / "calibration.json").write_text(json.dumps(report))
+        if "late" in args.strategies.split(","):
+            try:
+                ar.adversary_plan(plan, ar.Setup(report), "late")
+            except ValueError as err:
+                raise SystemExit(f"{err} (refused before any run)") from None
         results = {s: rehearse_one(out, s, url=url, certifier_dir=certifier_dir, challenger_dir=challenger_dir,
                                    api_key_env=args.api_key_env, start_in=args.start_in)
                    for s in args.strategies.split(",")}

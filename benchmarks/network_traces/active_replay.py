@@ -522,7 +522,8 @@ def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str,
     but holds one session in window 0, from its first frame on, until the hand time of the most lenient sync. On a live
     plan that isn't request-major the canonical order is the order the shim writes, so a session written behind frames
     due later than it is ready is on time: `late` holds it on, to the first bucket by which every other frame written
-    is due. A stream's writes keep their order, and nothing is written in the last bucket or after."""
+    is due. A stream's writes keep their order, and nothing is written in the last bucket or after. `late` refuses
+    (ValueError) a plan with no session in window 0, or none that sync hands inside the horizon."""
     windows = plan["windows"]
     horizon = windows * buckets
     release = {int(k): v for k, v in plan["model_release"].items()}
@@ -535,7 +536,20 @@ def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str,
     held = None
     if strategy == "late":
         lenient = handing_buckets(frames, [ClockSync(max(sync_set.deltas), min(sync_set.rhos))] * windows, buckets)
-        p = next(p for p, (_, a, _, k) in enumerate(keys) if k == 0 and a < buckets and lenient[p] < horizon - 2)
+        starts = [p for p, (_, a, _, k) in enumerate(keys) if k == 0 and a < buckets]
+        if not starts:
+            raise ValueError(
+                f"late: no session starts in window 0 (buckets 0 … {buckets - 1}): the plan's first request reaches "
+                f"the model at bucket {min(a for _, a, _, k in keys if k == 0)}, so there is no session to hold; run "
+                f"late on a plan whose first request comes sooner (a higher --rate or another --seed), or drop late "
+                f"from --strategies")
+        p = next((p for p in starts if lenient[p] < horizon - 2), None)
+        if p is None:
+            raise ValueError(
+                f"late: no position is late inside the horizon at this allowance: under the most lenient sync (delta "
+                f"{max(sync_set.deltas)} buckets, rho {min(sync_set.rhos)}) every session of window 0 is handed at "
+                f"bucket {horizon - 2} of the plan's {horizon} or later; run late on a plan whose allowance leaves "
+                f"room (a smaller --extra-s), or drop late from --strategies")
         b = lenient[p]
         if "live_model" in plan and not plan.get("request_major"):
             others = [(ready - 1, h) for (ready, _, rank, _), h in zip(keys, hands) if rank != keys[p][2]]
