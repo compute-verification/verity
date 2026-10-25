@@ -190,7 +190,7 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array �
 /-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
 theorem Ins.setup_drawLaw {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
-    ProvedScope.drawLaw (s.read.zk || s.read.tags.hiddenOutputs) s.read.draw = .ok () := by
+    ProvedScope.drawLaw s.read.zk s.read.tags s.read.draw = .ok () := by
   unfold Ins.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -523,8 +523,8 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
     · exact ⟨_, arr_ok ‹J.arr _ "units" _ = _›, good_of_asNat_mapM ‹Array.mapM _ _ = Except.ok _›⟩
     · exact ⟨_, nat_ok ‹J.nat _ "k" _ = _›, .num _⟩
 
-/-- A draw a soundness claim draws by is stratified or a subset (a subset only where `subsetOk`). -/
-theorem law_of_lawWhy {b : Bool} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy b D = none) :
+/-- A draw a soundness claim draws by is stratified or a subset (a subset only where `lawWhy`'s form covers it). -/
+theorem law_of_lawWhy {zk : Bool} {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy zk tags D = none) :
     (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
   revert h
   cases hl : D.law with
@@ -595,10 +595,10 @@ theorem stmtOk (S : Claims.JsonSpec printJ Flock.canon) : StmtOk H rel := by
     dsimp only
     obtain ⟨D, hD, hn⟩ := hinst d hu
     have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.1
-    rw [hdd, hz, Bool.false_or] at hdl
+    rw [hdd, hz] at hdl
     simp only [ProvedScope.drawLaw, hD] at hdl
-    have hlw : ProvedScope.lawWhy c.s.read.tags.hiddenOutputs D = none := by
-      cases e : ProvedScope.lawWhy c.s.read.tags.hiddenOutputs D with
+    have hlw : ProvedScope.lawWhy false c.s.read.tags D = none := by
+      cases e : ProvedScope.lawWhy false c.s.read.tags D with
       | none => rfl
       | some _ => rw [e] at hdl; cases hdl
     obtain ⟨t, ht⟩ := draw_parse hdraw hdd

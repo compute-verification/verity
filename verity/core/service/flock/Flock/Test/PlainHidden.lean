@@ -1,7 +1,7 @@
 /-
-A plain session draws by the subset law at hidden outputs (`ProvedScope.drawLaw`, which `verify` passes
-`zk || tags.hiddenOutputs`), at one table, the form `flock_verify_sound`'s plain hidden-output branch covers
-(`SoundExecHS`): a plain subset draw passes at hidden outputs and under `--zk`, and is still refused at public outputs; a
+A plain session draws by the subset law at hidden outputs (`ProvedScope.lawWhy`, the one rule for which law each form
+draws by), at one table, the form `flock_verify_sound`'s plain hidden-output branch covers (`SoundExecH` at its subset
+draw design): a plain subset draw passes at hidden outputs and under `--zk`, and is still refused at public outputs; a
 plain session at hidden outputs is still refused at two tables, the form just past the proof.
 -/
 import Flock.ProvedScope
@@ -11,7 +11,7 @@ namespace Flock.Test.PlainHidden
 def subsetDraw : Draw.UnitDraw := { law := .subset 2, population := 8, units := #[1, 6] }
 
 def lawWhy (zk : Bool) (tags : Tags) : String :=
-  match ProvedScope.drawLaw (zk || tags.hiddenOutputs) (some subsetDraw.toJson) with
+  match ProvedScope.drawLaw zk tags (some subsetDraw.toJson) with
   | .error e => e
   | .ok () => ""
 

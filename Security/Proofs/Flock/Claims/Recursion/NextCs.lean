@@ -99,7 +99,7 @@ def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : 
     "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j) link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw zk none
+  if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags none
 
 theorem checks_of_parse (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}

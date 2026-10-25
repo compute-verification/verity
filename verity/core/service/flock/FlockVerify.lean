@@ -865,7 +865,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw (zk || tags.hiddenOutputs) draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind programDigest
@@ -913,7 +913,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
-      if draw.isNone then ProvedScope.drawLaw zk draw
+      if draw.isNone then ProvedScope.drawLaw zk tags draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program

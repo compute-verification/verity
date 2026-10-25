@@ -1708,10 +1708,11 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
-design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
-design, with or without `--zk`, and by the subset one under `--zk` (`FailClosed.SoundZJ`, `SoundZHJ`) and, at one table,
-at a statement with hidden outputs without it (`FailClosed.SoundExecHS`, the plain hidden-output claim at the subset
-law; rule 4 keeps a plain session to one table). The verdict is `refused: <why>: no soundness claim draws by this law`,
+design (`Flock.ProvedScope.drawLaw`, by the one rule `Flock.ProvedScope.lawWhy`), whatever flags the verifier holds:
+the claims draw by the stratified sampling design, with or without `--zk`, and by the subset one under `--zk`
+(`FailClosed.SoundZJ`, `SoundZHJ`) and, at one table, at a statement with hidden outputs without it
+(`FailClosed.SoundExecH`, the plain hidden-output claim, which takes its sampling design as a parameter,
+`DrawDesign`: the stratified design or the subset one; rule 4 keeps a plain session to one table). The verdict is `refused: <why>: no soundness claim draws by this law`,
 `<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and `a subset draw without --zk` (at a
 statement with public outputs only). A session without a draw is refused too, since every
 claim is about a drawn session (each claim's record hypothesis reads the record's draw): it is verified against the

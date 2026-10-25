@@ -5,7 +5,7 @@ The program (`program`) is `N` RoPE d64 template instances, instance `i` reading
 `Q_template_instance` v0. `stage` writes, under `out`, the hidden-output circuit bound to that program and its partition
 (`circuit.txt`, `program.json`, `partition.json`), the MUFU tables if the lowering cuts any (`tables/`), and the prover's
 `inst-N.bin` and the verifier's `pub-N.bin`, one row per instance and port with no shared rows and no registered value: the
-form the plain verifier covers at hidden outputs (`FailClosed.SoundExecHS` at the subset law, one table).
+form the plain verifier covers at hidden outputs (`FailClosed.SoundExecH` at its subset draw design, one table).
 
     python verity/ml/flock/tests/plain_hidden.py --out DIR [--seed S]
 """
