@@ -6,8 +6,9 @@ import Proofs.Flock.Bridge.Canon
 `Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC`. At `kd = 0` the miss term `C(n − K₀, 0)/C(n, 0)` is `1`.
 Otherwise `EndToEndHiddenC` at `K₁ = min K₀ (n − kd + 1)` bounds the event: outside `RelS` at least `K₁` slots are
 faulty (`CountTarget`), and each faulty slot is a unit wrong on the registration with canonical openings, since a unit
-right in that sense is not faulty (`FaultyRightTargetC`, its transport from `TransportsLiveC`; the slot is a unit by
-`PartRusTarget`). `K₁`'s miss term is `K₀`'s (`choose_min_count`): where they differ both are `0`.
+right in that sense is not faulty (`FaultyRightTargetC` at `Val := vb.Opening`, `val := id`, its transport from
+`TransportsLiveC`; the slot is a unit by `PartRusTarget`). `K₁`'s miss term is `K₀`'s (`choose_min_count`): where
+they differ both are `0`.
 -/
 
 namespace Flock.Bridge
@@ -41,8 +42,8 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
   have hTu := hT n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags hCust τ
   have hsub : Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P kd desc q roots) (Bridge.partOf P)
       (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) ⊆
-      (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun g v => Bridge.canonRow rows g v) (reg σ)
-        Xr).map Fin.valEmbedding := by
+      (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+        (fun g o => Bridge.canonOpen rows g (vb.val o) o.2.2) (reg σ) Xr).map Fin.valEmbedding := by
     classical
     intro v hv
     have hlt : v < n := by
@@ -53,12 +54,13 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     refine Finset.mem_map.2 ⟨⟨v, hlt⟩, ?_, rfl⟩
     by_contra hu
     obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_wrongRegZc _ _ _ _ _ _).2 hu)
-    exact hF P vb.pos vb.bit vb.val vb.com (vb.cs (reg σ)) (fun g v => Bridge.canonRow rows g v)
+    exact hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
+      (fun g o => Bridge.canonOpen rows g (vb.val o) o.2.2)
       Claims.Sampling.sha512Msg Cd roots Xr ⟨v, hlt⟩ ⟨op, hop⟩ (hTu ⟨v, hlt⟩) kd desc q hv
   have hcard : ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P kd desc q roots)
       (Bridge.partOf P) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
       min K₀ (n - kd + 1) ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
-        (fun g v => Bridge.canonRow rows g v) (reg σ) Xr).card := fun hrel =>
+        (fun g o => Bridge.canonOpen rows g (vb.val o) o.2.2) (reg σ) Xr).card := fun hrel =>
     (hC P kd K₀ hkd1 hkd _ _ desc q roots _ hrel).trans
       ((Finset.card_le_card hsub).trans (Finset.card_map _).le)
   have hE' := hE n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust
