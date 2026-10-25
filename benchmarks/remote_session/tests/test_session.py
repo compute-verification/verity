@@ -326,6 +326,26 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
         assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_paced_session_at_one_window_in_flight_sends_each_coin_after_the_root_before_it(monkeypatch, k):
+    """At F = 1 (`pace_of`'s fifth field, `audit.Pace.in_flight`) each boundary leaves once its window has its k roots,
+    so every coin leaves after the root before it; the honest prover still runs k passes a coin, none discarded, the
+    Lean verifier agrees at every event, and the record names one window in flight."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    T = 10**9
+    pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2:1", 500 / k)
+    assert pace == verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k) | {"in_flight": 1}
+    with pytest.raises(ValueError, match="1 or 2"):
+        verifier.pace_of(f"{k}:{T // 10**6}:12:2:3", 500 / k)
+    (r,), (pr,) = run("honest", paces=[pace])
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 6
+    assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T, "in_flight": 1}
+    assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
+    seen = r["windows_seen"]
+    assert all(len(w["arrivals_ns"]) == k and w["boundary_ns"] >= w["arrivals_ns"][-1] for w in seen)
+    assert all(b["released_ns"] == a["boundary_ns"] for a, b in zip(seen, seen[1:]))
+
+
 def test_a_paced_prover_that_dropped_blocks_is_rejected():
     (r,), (pr,) = run("skip:0.5", paces=[verifier.pace_of("2:1000:12:2", 250.0)])
     assert not r["accepted"] and not pr["accepted"] and "declared" not in r.get("ledger", {})
