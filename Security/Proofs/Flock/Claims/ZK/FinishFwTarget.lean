@@ -393,15 +393,14 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
         rfl
       unfold Composed.swAt
       interval_cases hkv : k.val
-      · rw [hsw.1, hsh, if_pos rfl]
-      · rw [hsw.2, hsh, if_neg (by norm_num), if_pos rfl]
+      · rw [hsw.1, hsh, ite_eq_left rfl]
+      · rw [hsw.2, hsh, ite_eq_right (by norm_num), ite_eq_left rfl]
     · have hkr : k.val - 2 < 2 * (stAt x j).regions.size := by
         have := k.isLt
-        rw [hN] at this
         omega
       rw [hregk k.val hk2 hkr]
       unfold Composed.swAt
-      rw [if_neg (by omega), if_neg (by omega)]
+      rw [ite_eq_right (by omega), ite_eq_right (by omega)]
       funext v'
       rw [dif_pos hkr]
 
