@@ -25,8 +25,8 @@ protocol's audit:
 * sampled proofs: the sampled audit's live knowledge soundness, at `δ + ε_ks + δ_link`, read as a bound on the
   committed transcript's wrong units.
 
-None of those bridges is stated yet, and neither statement here is proved: `JointPeriodStated` holds their text for the
-lock.
+None of those bridges is stated yet. Given the five per-period guarantees, both statements are proved
+(`Accounting.SecurityProofs.JointPeriod` and `JointHorizon`), by a union bound over the product of the audits' coins.
 -/
 
 namespace Accounting.Guarantees
@@ -61,11 +61,5 @@ def JointHorizon : Prop :=
     (c : Fin m → Certificates) (p : Price) (δ : Fin m → Audit → ℝ),
     (∀ j a, (r j).Sound (c j) p a (δ j a)) →
     Pouw.pr (fun ξ => ∃ j a, (r j).accepts a ξ ∧ ¬ (r j).Holds (c j) p a ξ) ≤ ∑ j, ∑ a, δ j a
-
-/-- **The joint period and horizon guarantees are stated**: the pair of `JointPeriod` and `JointHorizon`, equal to
-itself, so the lock records their text and every definition they read until each is proved. -/
-def JointPeriodStated : Prop :=
-  let s := (JointPeriod, JointHorizon)
-  s = s
 
 end Accounting.Guarantees
