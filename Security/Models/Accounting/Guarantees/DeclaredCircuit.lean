@@ -143,10 +143,12 @@ At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B
 residency, as the vLLM serving store does (note:memory-accounting/20261024T1630Z-report-carrier-life; the earlier
 60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
 2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
-its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1` (#3924,
-`Accounting.SecurityProofs.DeclaredCircuitWitness`). That witness's schedule is decode's, one token a step a sequence
-with each page's coin back two steps after it completes; a prefill witness is in progress (DCR-WITNESS, branch
-`cursor/ca-dcr-witness-prefill-ea24`).
+its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1`, at a decode schedule and
+at a prefill. The decode witness (#3924, `Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
+sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness (#3994,
+`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
+group a page, so a chunk may complete several pages while their coins are out; its credit is exactly its tiles' bits,
+and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 
 Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
 most `8·R_L` and its encodes at most `L·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds at
