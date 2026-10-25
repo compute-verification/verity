@@ -33,9 +33,11 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   LIB=$(ls "$S"/tc_probe/lib*.so | head -1)
   timeout 5m "$PY" benchmarks/tc_probe/tc_probe.py --instruction "$CANARY" --library "$LIB" --canary --out "$O/canary" > "$O/canary.log" 2>&1
   echo "canary rc $?" >> "$O/rc.txt"
-  timeout 8m "$PY" benchmarks/tc_probe/tc_probe.py --instruction "$CANARY" --library "$LIB" --procs 8 \
-    --replay-capture "$S/tc_probe/special.reduced.json.gz" --out "$O/capture" > "$O/capture.log" 2>&1
-  echo "capture rc $?" >> "$O/rc.txt"
+  if [ -f "$S/tc_probe/special.reduced.json.gz" ]; then
+    timeout 8m "$PY" benchmarks/tc_probe/tc_probe.py --instruction "$CANARY" --library "$LIB" --procs 8 \
+      --replay-capture "$S/tc_probe/special.reduced.json.gz" --out "$O/capture" > "$O/capture.log" 2>&1
+    echo "capture rc $?" >> "$O/rc.txt"
+  fi
   timeout 15m "$PY" "$S/run.py" "$S/check" > "$O/run.jsonl" 2> "$O/run.err"
   echo "run.py rc $?" >> "$O/rc.txt"'
 echo "lease rc $?" >> "$O/rc.txt"

@@ -36,8 +36,11 @@ done
 cd "$ROOT"
 PATH="$CUDA/bin:$PATH" env -u RESEARCH_RUN_ID uv run python benchmarks/tc_probe/tc_probe.py --instruction "$CANARY" --compile-only \
   --sass-check --out "$OUT/tc_probe"
-uv run research data fetch-fixtures verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07
-cp verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz "$OUT/tc_probe/"
+if uv run research data fetch-fixtures verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07; then
+  cp verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz "$OUT/tc_probe/"
+else
+  echo "no tc-hopper-2026-09-07 capture: the session runs the canary alone" >&2
+fi
 uv run python benchmarks/torch_gpu/attn_bf16/fixture.py "$OUT/check" "$@"
 cp "$HERE/run.py" "$HERE/gen.py" "$HERE/session.sh" "$OUT/"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/attn_bf16 benchmarks/tc_probe verity; } > "$OUT/source.txt"
