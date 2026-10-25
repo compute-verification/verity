@@ -29,6 +29,7 @@ from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import Registered, compile_steps
 
@@ -44,10 +45,12 @@ REG = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TI
 class SchedEngine:
     """vLLM's ``LLMEngine`` as the loop drives it, its decisions the stand-in scheduler's: each ``step`` schedules (whole prompts at
     a request's first step, else one decode), runs the scheduled rows through the runner in Model Runner V2's order under vLLM's
-    internal ids ``<engine id>-<8 hex>``, and returns each emitted token as a DELTA output under the engine id."""
+    internal ids ``<engine id>-<8 hex>``, and returns each emitted token as a DELTA output under the engine id. The client of a prompt
+    in ``abort_after`` goes away once it has that many outputs (``client_goes``, called in the step that emitted the last)."""
 
-    def __init__(self, runner: Runner) -> None:
+    def __init__(self, runner: Runner, abort_after: dict[tuple[int, ...], int] | None = None) -> None:
         self.runner, self.sched, self.n, self.slot, self.engine_id = runner, FakeScheduler(budget=256, max_seqs=4), 0, {}, {}
+        self.abort_after, self.client_goes = dict(abort_after or {}), lambda engine_id: None
 
     def add_request(self, request_id: str, prompt: dict, params: dict) -> None:
         self.n += 1
@@ -89,6 +92,8 @@ class SchedEngine:
                                         prompt_token_ids=q.prompt_token_ids,
                                         outputs=[SimpleNamespace(token_ids=list(o.new_token_ids), text=f" w{o.new_token_ids[0]}",
                                                                  finish_reason=FINISH.get(o.finish_reason), stop_reason=None)]))
+            if o.finish_reason is None and self.abort_after.get(tuple(q.prompt_token_ids)) == len(q.emitted):
+                self.client_goes(self.engine_id[o.request_id])
         return outs
 
 
@@ -96,9 +101,10 @@ class Server:
     """`serve_openai.main`'s wiring over the stand-ins: the advice trace on the scheduler for the server's lifetime, the Commit's
     windows marking it."""
 
-    def __init__(self, out: Path, window_steps: int = 64) -> None:
+    def __init__(self, out: Path, window_steps: int = 64, abort_after: dict[tuple[int, ...], int] | None = None) -> None:
         self.runner = Runner()
-        self.engine = SchedEngine(self.runner)
+        self.engine = SchedEngine(self.runner, abort_after)
+        self.engine.client_goes = self.client_goes
         self.trace = sc.advice_trace(out, self.engine.sched)
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
@@ -121,6 +127,12 @@ class Server:
         self.engine_thread.join()
         self.http.shutdown()
         self.trace.uninstall()
+
+    def client_goes(self, engine_id: str) -> None:
+        """The request's client goes away: its abort is queued, so the loop takes it before the next step, as it takes a
+        disconnect's, and its stream ends."""
+        self.loop.abort(engine_id)
+        self.loop.live[engine_id].deliver(Delta([], "", error="the client went away"))
 
     def post(self, path: str, body: dict) -> tuple[int, bytes]:
         req = urllib.request.Request(self.url + path, json.dumps(body).encode(), {"content-type": "application/json"})
@@ -273,3 +285,37 @@ def test_a_request_the_last_window_didnt_carry_is_refused_where_it_starts_past_i
                      rf"is refused, so it opens on nothing carried\)", rep["refused"][str(k2)])
     spanning = {r["engine_id"] for r in records(out, "requests.jsonl") if {k1, k2} <= set(r["windows"])}
     assert m and m[1] in spanning and int(m[2]) == _rows_in(recs, m[1], k2)[0][1] > 0   # na-4, or na-5 if it runs first in k2
+
+
+def test_a_request_its_client_aborts_is_freed_after_its_step_and_every_window_it_ran_in_says_so_and_compiles(tmp_path):
+    """The client of na-ab goes away after 5 of its 12 outputs: the loop aborts it before the next step, the trace records the
+    abort after the step that emitted the 5th, and no row of it follows. Its prompt and 4 decodes take 5 steps, so 3-step windows
+    split it: the window that leaves it carries it on with its record's finish, the abort the trace records later, and each window
+    that holds it is version 2, follows the last, and compiles, its Program the one of a request that kept 5 outputs."""
+    gone, other, k = _body(6, 9, 12, "na-ab"), _body(7, 5, 9, "na-7"), 5
+    with Server(tmp_path, window_steps=3, abort_after={tuple(gone["prompt"]): k}) as s:
+        serve_concurrently(s, [gone, other])
+    q = next(r for r in records(tmp_path, "requests.jsonl") if r["user"] == "na-ab")
+    recs = ST.load(tmp_path / ST.SERVED)
+    (fin,) = [r for r in recs if r["kind"] == "finish" and r["request"] == q["engine_id"]]
+    rows = [st["step"] for st in recs if st["kind"] == "step" for row in st["rows"] if row[0] == q["engine_id"]]
+    assert len(q["streamed_ids"]) == k and len(q["windows"]) > 1 and not q["check"]["passed"]
+    assert (fin["reason"], fin["outside"], fin["after_step"]) == ("abort", True, max(rows)) and len(rows) == k
+    rep = ADV.write(tmp_path, compiler=C)
+    assert rep["refused"] == {} and rep["open"] == []
+    bodies, last, placed, held = {"na-ab": gone, "na-7": other}, None, [], []
+    for w in sorted(map(int, rep["windows"])):
+        data = (tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()
+        a = WA.decode(data)
+        if last is not None:
+            WA.follows(last, a)
+        last = a
+        if "na-ab" in (ids := [x.id for x in a.requests]):
+            held.append(w)
+            assert a.version == WA.ABORTS and a.requests[ids.index("na-ab")] == WA.RequestAdvice("na-ab", 9, k, "abort")
+        c = compile_steps(REG, data, {x.id: bodies[x.id] for x in a.requests})
+        assert all((u.LP, u.T) == (9, k - 1) for u in c.requests if u.id == "na-ab")
+        placed += [(r.start, r.n, r.samples) for rows_ in c.steps for r in rows_ if a.requests[r.request].id == "na-ab"]
+    assert held == q["windows"]
+    assert [p for start, n, _ in sorted(placed) for p in range(start, start + n)] == list(range(9 + k - 1))
+    assert sum(x for *_, x in placed) == k
