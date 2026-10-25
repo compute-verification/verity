@@ -35,7 +35,7 @@ class RequestFacts:
 def perm_match(A: SEQ.Prog, P: SEQ.Prog, s: int, ha: dict, hb: dict) -> list:
     """G8's Merkle (order-insensitive) matching of one request step: fold instance -> component index with the same DAG hash, chosen
     in emission order inside a hash class; None where no component instance is left with that hash.  `ha` / `hb` must be
-    dag_hashes(A) / dag_hashes(P) of ONE process (the fast path's ids are per process, F-r17-07)."""
+    dag_hashes(A) / dag_hashes(P) of ONE process (the fast path's ids are per process)."""
     ma = collections.defaultdict(list)
     for j, i in enumerate(A.steps[s]):
         ma[ha[i]].append(j)

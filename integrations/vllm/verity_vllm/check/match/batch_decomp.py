@@ -1,4 +1,4 @@
-"""Batch decomposition (M-BATCH-DECOMP, R13 X-09): Match at B>1 by projecting the batched eager fold onto its requests.
+"""Batch decomposition (M-BATCH-DECOMP, X-09): Match at B>1 by projecting the batched eager fold onto its requests.
 
 Under batch invariance a batched kernel launch (one GEMM with M = Σ tokens of the co-scheduled requests, one fused norm over
 the step's token rows, ...) is the token-row-wise union of the per-request Calls the padded per-request Programs describe. The
@@ -245,7 +245,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         return PP.shape(LP, n_ts - chunks, PX.cached_rows(header, steps, rid))
 
     def leg(item) -> tuple:
-        """[R17 mfast] X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
+        """X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
         its cross-request reads.  Reads the shared fold / components / attribution, writes nothing shared: the record's loop body,
         returning (entry, missing shape | None) instead of appending.  Runs in this process, or on a forked worker (fast path)."""
         rid, idxs = item
