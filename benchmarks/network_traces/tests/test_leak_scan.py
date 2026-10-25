@@ -177,6 +177,16 @@ def test_reads_are_the_formats_fields_and_its_nonces():
     assert LS.reads(stream[:-8]) is None
 
 
+def test_reads_swaps_the_reader_under_its_lock_and_restores_it(monkeypatch):
+    """`reads` reads through its own recorder in place of `transcript_check.R` only while it holds ``_SWAP`` (n2_zk scans
+    its members in threads), and puts the reader back even when the format refuses the stream."""
+    seen, layout, R = [], LS.RD.layout, LS.RD.tc.R
+    monkeypatch.setattr(LS.RD, "layout", lambda b, zk: seen.append((LS._SWAP.locked(), LS.RD.tc.R)) or layout(b, zk=zk))
+    assert LS.reads.__wrapped__(b"\x01") is None
+    assert len(seen) == 1 and seen[0][0] and issubclass(seen[0][1], R) and seen[0][1] is not R
+    assert LS.RD.tc.R is R and not LS._SWAP.locked()
+
+
 def _framed(*records: tuple[int, int, int, bytes]) -> bytes:
     """A round message as `transcript_check.T` frames it: each record's header (op, kind, n), then its payload."""
     return b"".join(bytes([op, kind]) + bytes(6) + struct.pack("<Q", n) + body for op, kind, n, body in records)
