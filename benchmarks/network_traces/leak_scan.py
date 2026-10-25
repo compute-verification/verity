@@ -39,6 +39,11 @@ import redigest as RD  # noqa: E402
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.
 STATEMENT = ("program.json", "partition.json", "circuit.txt")
 
+#: Ligerito's grinding nonces, which `redigest.layout` keys without a "nonce" suffix (consumed by
+#: `transcript_check`'s ``t.pow``, and prover-controlled: `redigest`'s ``lig-query-nonce``/``lig-claim-nonce``
+#: mutants flip them and the verifier accepts), so `reads` counts them among the nonces, not the reader-fixed integers.
+GRIND = ("lig.qn", "lig.cbn", "lig.consn")
+
 
 def is_stream(name: str) -> bool:
     """Whether `name` is a repetition's proof stream, ``S.repK.bin``."""
@@ -48,8 +53,8 @@ def is_stream(name: str) -> bool:
 @functools.lru_cache(maxsize=8)
 def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
     """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read C-Flock's proof format makes of it
-    (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets;
-    None when the format doesn't read the whole stream."""
+    (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets
+    (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`); None when the format doesn't read the whole stream."""
     readers = []
 
     class Reads(RD.tc.R):
@@ -70,7 +75,7 @@ def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] |
     finally:
         RD.tc.R = R
     got = next((r.reads for r in reversed(readers) if r.i == len(stream)), None)
-    nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") for o in os)
+    nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") or k in GRIND for o in os)
     return None if got is None else (tuple(got), nonces)
 
 
