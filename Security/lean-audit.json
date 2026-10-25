@@ -20818,9 +20818,9 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.HorizonLeak": {
-   "digest": "94c69266c346900794fca3758bc2d449fb7fa7fc19c2dcaf75c6b301627c839e",
+   "digest": "9a338f3d040dc8379277f200566b269460639baf514f074ac01f42b58b324017",
    "definitions": {
-    "NetTiming.Guarantees.HorizonLeakAccepted": "a5c07c2f7a131884153c6ccd3997402c4e7012630e9ba975ee224fc272c45cb6"
+    "NetTiming.Guarantees.HorizonLeakAccepted": "a7859ef6b4ad98f4bdd1cd0c41e3da7d1faf1b6d996904f26db85eb7389dd9e6"
    },
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
