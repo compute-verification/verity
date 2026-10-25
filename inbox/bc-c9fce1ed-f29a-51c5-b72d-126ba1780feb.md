@@ -21,3 +21,7 @@ PRF-170 (https://linear.app/verity-research/issue/PRF-170) supersedes part 2's d
    - the certified W at δ = 1% and 1e-6 (per block, and pooled per week, month and year);
    - the expected proving cost of one block's draw.
 The block's proving (M3) uses this plan. If any shape parameter is missing, ask in a PRF-170 comment and use a named stand-in meanwhile. Don't wait.
+
+## 23:20Z: PRF-170 was marked a duplicate of PRF-166
+
+Same work, same deadline (Mon 26 Oct 03:00Z). Post the H200 plan as a comment on BOTH PRF-166 and PRF-170.
