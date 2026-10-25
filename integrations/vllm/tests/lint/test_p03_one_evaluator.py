@@ -9,7 +9,8 @@ Checked today, against ``allowlists/p03_one_evaluator.json``:
 * ``rng``: constructing a random generator (``random.Random``, ``random.SystemRandom``, numpy's ``default_rng``,
   ``RandomState``, ``Generator``, ``torch.Generator``): challenge randomness comes from the one challenge module.
 
-``program/kernels/`` is exempt from ``if-ladder``.  The one challenge module, ``commit/challenge.py``, is the
+The numerics (``verity/ml/definitions/numerics/``) and the ``program/`` modules that stayed when they moved (``LADDER_HOMES``)
+are exempt from ``if-ladder``.  The one challenge module, ``commit/challenge.py``, is the
 ``RNG_OWNERS`` entry: its legacy derivations keep ``random.Random`` and numpy generators until the re-baseline epoch.
 The rule's parametrized self-check (every registered (kernel, Definition) pair against the core reference on seeded
 random inputs) is ``tests/program/test_kernel_self_check.py``, not a lint.
