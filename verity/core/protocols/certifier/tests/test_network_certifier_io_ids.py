@@ -151,12 +151,13 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
     salts = [IT.fake_salt(b"commit", s) for s in range(count)]
-    assert ADV.register(rows, 32 * P, seed, salts).root == insts[0].port_root
+    root = ADV.register(rows, 32 * P, seed, salts).root
+    assert root == insts[0].port_root
     dom = IT.domain(seed, count)
+    ports = I.port_reads([i.map for i in insts], root, dom.domain_id, count, P)
+    assert [p["reads"] for p in ports.values()] == [[i.map.steps[s] for i in insts] for s in range(SHAPE.S)]
 
     def refusals(insts_):
-        ports = I.port_reads(insts_, count, P)
-        assert [p["reads"] for p in ports.values()] == [[i.map.steps[s] for i in insts_] for s in range(SHAPE.S)]
         return [WR.refusal(ports[f"{IT.PORT}[{s}]"], dom, {
             "value": I.INPUT_IDS, "positions": [i.map.steps[s] for i in insts_],
             "paths": [b"".join(i.paths[s]).hex() for i in insts_]}, [WR.bc(i.port[s], i.port_salts[s]) for i in insts_])
@@ -173,6 +174,28 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
                       "a step": b._replace(map=b.map._replace(steps=tuple(steps)))}.items():
         assert not I.reads_open(SHAPE, bad) and not I.reference(SHAPE, bad), name
         assert any(refusals([*insts[:u], bad, *insts[u + 1:]])), name
+
+
+def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registration():
+    """REDTEAM phase 19 #1: the forward computes request 2's position 5 on another id, and the Commit registers that
+    tree. The prover hands the verifier instances opened from a second tree of the user's ids under the same public
+    domain, so every unit is 1. The verifier's own ports name the registration's root and its own maps' steps, never
+    an instance's, so the second tree's rows open none of them."""
+    tokens = _tokens(_prompts(ACROSS))
+    tokens[2][5] ^= 1
+    rows = I.commit_rows(_steps(ACROSS), tokens, P)
+    salts, levels, dom_id = I.commit(rows)
+    registered = ADV.register(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
+    forged = _link(ACROSS)
+    assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
+    assert [I.unit_reference(SHAPE, i) for i in forged] == [1] * BUCKETS
+    ports = I.port_reads([i.map for i in forged], registered.root, dom_id, len(rows), P)
+    assert {p["root"] for p in ports.values()} == {registered.root.hex()}
+    dom = IT.domain(hashlib.sha512(b"commit").digest(), len(rows))
+    assert all(WR.refusal(ports[f"{IT.PORT}[{s}]"], dom, {
+        "value": I.INPUT_IDS, "positions": [i.map.steps[s] for i in forged],
+        "paths": [b"".join(i.paths[s]).hex() for i in forged]}, [WR.bc(i.port[s], i.port_salts[s]) for i in forged])
+        for s in range(SHAPE.S))
 
 
 def test_the_map_refuses_an_advice_it_cant_tie():

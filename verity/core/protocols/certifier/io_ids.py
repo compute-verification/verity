@@ -303,13 +303,12 @@ def reference(shape: Shape, inst: Instance) -> int:
     return int(reads_open(shape, inst) and unit_reference(shape, inst) == 1)
 
 
-def port_reads(insts: Sequence[Instance], count: int, P: int, reads_from: int = 0) -> dict[str, dict[str, Any]]:
+def port_reads(maps: Sequence[Map], root: bytes, domain_id: bytes, count: int, P: int,
+               reads_from: int = 0) -> dict[str, dict[str, Any]]:
     """The verifier's own `--registered` ports of the buckets' units over the Commit's `count` rows of P input ids
-    (`io_tie.port_reads`): unit `reads_from + u` reads bucket u's map's steps."""
-    if len({(i.port_root, i.port_domain) for i in insts}) != 1:
-        raise ValueError("the buckets read one Commit's root and domain")
-    return IT.port_reads([i.map.steps for i in insts], insts[0].port_root, insts[0].port_domain, count, P, INPUT_IDS,
-                         reads_from)
+    under its registration's `root` and `domain_id`, never an instance's (`io_tie.port_reads`): unit `reads_from + u`
+    reads the verifier's map u's steps."""
+    return IT.port_reads([m.steps for m in maps], root, domain_id, count, P, INPUT_IDS, reads_from)
 
 
 def instance(shape: Shape, request: Q.Instance, mp: Map, rows: Sequence[bytes], salts: Sequence[bytes],

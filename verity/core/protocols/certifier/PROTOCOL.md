@@ -624,8 +624,10 @@ unit outputs 1 exactly when, in each lane of ordinal q:
 - **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, L, R, P, S}`: the reference on a fake upstream Commit
   and the warden's own ingress, and the Boolean Definition, with its sidecar), one unit a bucket row like
   IoTieRequest. It is the ingress analog of the egress port's reads: IoTieRequest's scan plus the Commit's
-  `c00.input/ids` rows at the map's steps, read as registered rows (`io_ids.port_reads`), and every computation of a
-  prompt position, and every prefix-cache read in place of one, held to the id the user sent there. It is meant to replace IoTieRequest as the ingress unit once the Commit side exists.
+  `c00.input/ids` rows at the map's steps, read as registered rows under the root and domain of the Commit's
+  registration, which the verifier holds and no instance names (`io_ids.port_reads`), and every computation of a
+  prompt position, and every prefix-cache read in place of one, held to the id the user sent there. It is meant to
+  replace IoTieRequest as the ingress unit once the Commit side exists.
   - **What PROVE-PATH must expose** (the Commit side; the fake upstream's layout, `io_ids.commit_rows`):
     `c00.input/ids` of every executed step as one `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the
     step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
