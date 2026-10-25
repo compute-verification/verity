@@ -121,11 +121,11 @@ theorem EncardDecodableWithinLeCompiledPerWindowV1 : NetTiming.Guarantees.Encard
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
   fun hSA => NetTiming.sampledLeak_reg hSA
-theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered :=
-  fun hSA H D hks hb L K S lay k δ decode hδ hdec reg ops β Dj hβ =>
-    ⟨fun x hx hreg Ω _ _ P =>
+theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
+  intro hSA _ _ _ _ _ _ _ _ H D hks hb L K S lay k δ decode hδ hdec reg ops β Dj hβ
+  exact ⟨fun x hx hreg Ω _ _ P =>
       NetTiming.sampledLeak_registered hSA H D hks hb L K S lay k δ decode hδ hdec reg ops Dj x hx hreg Ω P,
-     fun x hx s P hs hP op =>
+    fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := @NetTiming.wardenView_eq_clientView
