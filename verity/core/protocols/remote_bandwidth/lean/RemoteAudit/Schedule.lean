@@ -5,10 +5,11 @@
 what it is for). The prover publishes the session's schedule: when each block it holds beside the registered store is
 written and freed, which registered blocks it frees and when, and the step of each pass. The check holds each pass's
 plan to the schedule's plan at the pass's step (`Schedule.plan`, the blocks resident then, in store order) and the
-session's appends to the schedule's (`Schedule.appendRuns`), and returns the schedule's size in bits (`Schedule.bits`).
-So a credited pass reads the layout the verifier's own code computes from the schedule: the prover steers it only
-through the schedule, whose bits the verifier counts, and a plan that follows anything else (a coin, an encoding) is
-refused. `Properties.RemoteAudit.ScheduleChecked` states it.
+session's appends to the schedule's (`Schedule.appendRuns`), refuses a schedule over the cap on its bits the prover
+committed before the session's first coin (`audit.Params.schedule_cap`), and returns the schedule's size in bits
+(`Schedule.bits`). So a credited pass reads the layout the verifier's own code computes from the schedule: the prover
+steers it only through the schedule, whose bits are at most the cap whatever the coins, and a plan that follows
+anything else (a coin, an encoding) is refused. `Properties.RemoteAudit.ScheduleChecked` states it.
 
 * A block of an append is `none`, never resident (withdrawn, or its encode never landed), or `(w, f)`: written at step
   `w`, resident from step `w + 1` through step `f` (`f > w`), or to the session's end if `f` is `none`
@@ -19,8 +20,9 @@ refused. `Properties.RemoteAudit.ScheduleChecked` states it.
 
 The schedule's encoding (`encode`) is LEB128 integers, prefix-free: the registered runs, each append's blocks (a block a
 tag, 0 never resident, 1 never freed, else `f − w + 1`, then `w`) and the steps (the first, then each one's rise), each
-list after its length. Fewer than 2^b schedules encode in at most b bits, so `bits` is the `a` of the layouts the
-schedule can give. Code: Lean core only.
+list after its length. Fewer than 2^(a+1) schedules encode in at most a bits, so the cap `a`, fixed before the coins,
+bounds the layouts a prover can steer to over every coin, where the bits of the one schedule it publishes after them
+would not: its schedule's length can follow the coins. Code: Lean core only.
 -/
 
 namespace RemoteAudit.Schedule
@@ -151,12 +153,14 @@ def passesDiffer (sc : Schedule) (blocks : Nat) (passes : Array (Nat × Array (N
       some s!"pass {k}'s plan is not the schedule's at step {passes[k]!.1}"
     else none
 
-/-- The schedule check of a session over `blocks` registered blocks: its passes `(step, runs)` in order, each plan's
-runs as the verifier received them, and its appends `(first, count)` in order. The schedule's bits when every pass's
-plan is the schedule's at its step and the appends are the schedule's; otherwise why not. -/
-def check (sc : Schedule) (blocks : Nat) (passes : Array (Nat × Array (Nat × Nat))) (appends : Array (Nat × Nat)) :
+/-- The schedule check of a session over `blocks` registered blocks, at the cap `cap` on its schedule's bits that the
+prover committed with the session's parameters before its first coin: its passes `(step, runs)` in order, each plan's
+runs as the verifier received them, and its appends `(first, count)` in order. The schedule's bits, at most `cap`,
+when every pass's plan is the schedule's at its step and the appends are the schedule's; otherwise why not. -/
+def check (sc : Schedule) (blocks cap : Nat) (passes : Array (Nat × Array (Nat × Nat))) (appends : Array (Nat × Nat)) :
     Except String Nat := do
   if let some why := malformed sc blocks then throw why
+  if cap < bits sc then throw s!"the schedule is {bits sc} bits, over the cap of {cap} committed before the coins"
   if let some why := appendsDiffer sc blocks appends then throw why
   if let some why := passesDiffer sc blocks passes then throw why
   pure (bits sc)

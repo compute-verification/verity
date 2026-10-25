@@ -789,6 +789,21 @@ def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
     return None
 
 
+#: a Pearl-C pass's live layout: its salt coin alone, so a session reserved with it is complete exactly when it released
+#: that coin
+SALT_FAMILIES = ((SALT, 1),)
+
+
+def salt_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+    """Why `commitment` is not a Pearl-C salt session's coin commitment (`LIVE_SCHEME`, `SALT_FAMILIES`); None when it
+    is."""
+    if commitment.scheme != LIVE_SCHEME:
+        return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
+    if commitment.families != SALT_FAMILIES:
+        return "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
+    return None
+
+
 def rounds_reason(commitment: Ch.LiveCommitment, roots: Sequence[bytes], openings: Sequence[Ch.LiveOpening]) -> str | None:
     """Why `openings` are not a live window's round coins over the round roots the verifier recorded, `roots` in order:
     round r's coin opened once, after round r's root, and every recorded round's coin opened; None when they are."""
@@ -802,9 +817,10 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
 
 __all__ = ["COINS", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED",
            "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
-           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "STOP_FIXED", "T_BITS", "Work", "bucket", "entry_bc",
-           "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem",
+           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES", "STOP_FIXED", "T_BITS", "Work", "bucket",
+           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem",
            "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families",
            "mode", "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
-           "round_key", "rounds_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index",
-           "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
+           "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain",
+           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles",
+           "window_problem"]
