@@ -7,6 +7,8 @@ the suite runs over, every registered Definition and template at small bindings.
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
     row         a Build's request Program: its directory or its ``instances.json.gz``
+    sidecar     ``path/to/<module>.circuit-check.py``: the module's own Definitions its bindings reach, and its templates
+                (`sidecar_targets`)
 
 The catalog (`catalog`) is roots at small statics: every primitive, every static-free composite, core's GEMM Definitions and
 silicon references, every vLLM kernel's self-check specialisations, each template, and tiny whole-model configurations; the
@@ -266,7 +268,7 @@ def kind_of(spec: str) -> str:
 
     try:
         if Path(spec).exists():
-            return "row"
+            return "sidecar" if spec.endswith(f"{CC.SUFFIX}.py") else "row"
     except OSError:            # an id longer than a file name may be (AllReduceMultimem_v1's TREES), so no path
         pass
     head = spec.partition(":")[0].partition("/")[0]
@@ -840,8 +842,57 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
+_SIDECARS: dict[Path, tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]] = {}
+
+
+def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]:
+    """``circuit-check path/to/<module>.circuit-check.py``'s targets, without the catalog: the Definitions the sidecar's root
+    functions (and ``_model_roots``) reach that its module defines (`sidecars.owner`), selected among themselves as `suite`
+    selects (`select`), with its ``_pouw_roots``' whatever their size, each with its `BINDINGS`; and (label, subcircuit, instance
+    statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose members here are all
+    over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a smaller one."""
+    from verity_numerical.bench import templates as TM
+
+    from . import sidecars as SC
+
+    p = Path(path).resolve()
+    if p in _SIDECARS:
+        return _SIDECARS[p]
+    load_registries()
+    mod = next((m for m, files in SC.discover().items() if files.get("py") == p), None)
+    if mod is None:
+        raise ValueError(f"{path}: no sidecar of a module under `sidecars.PACKAGES` (`sidecars.discover`)")
+    ns = vars(dict(SC.binding_modules())[mod])
+    prefix = f"{ns['__name__']}#"
+    names = sorted(_root_names(ns), key=lambda n: (n not in ROOT_FUNCTIONS, ROOT_FUNCTIONS.index(n) if n in ROOT_FUNCTIONS else 0, n))
+    by_unit: list = []
+    for name in names:
+        _produce(tuple(prefix + n for n in (name, name.replace("_roots", "_bindings")) if n in ns), ns[name], by_unit)
+    for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+        _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [(lambda fn: (fn.body, fn)[1])(make())], by_unit)
+    reached = reachable(r for _units, roots in by_unit for r in roots)
+    out = select({fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod})
+    for units, roots in by_unit:
+        if units[0] == f"{prefix}_pouw_roots":
+            out.update({fn.id: fn for fn in roots})
+    for units, roots in by_unit:
+        for fid in reachable(roots):
+            if fid in out:
+                BINDINGS.setdefault(fid, set()).update(units)
+    tpls = []
+    for tid, params_list in sorted(ns.get("TEMPLATE_PARAMS", {}).items()):
+        unit = (f"{prefix}TEMPLATE_PARAMS:{tid}",)
+        for params in params_list:
+            sub, sts = _produce(unit, lambda t=TM.TEMPLATES[tid], params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
+            BINDINGS.setdefault(sub.id, set()).update(unit)
+            tpls.append((sub.id, sub, sts))
+    hit = _SIDECARS[p] = (dict(sorted(out.items())), tpls)
+    return hit
+
+
 __all__ = ["CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
            "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families", "boolean_family",
            "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls", "definition", "family",
            "instance_statics", "is_call", "kind_of", "load_registries", "pouw_bindings", "reachable", "root_functions",
-           "select", "subcircuit", "suite", "table_probe", "template_params", "templates", "word_call_families"]
+           "select", "sidecar_targets", "subcircuit", "suite", "table_probe", "template_params", "templates",
+           "word_call_families"]

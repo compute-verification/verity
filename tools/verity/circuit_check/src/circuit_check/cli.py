@@ -3,6 +3,8 @@
     circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
     circuit-check path/to/build_request_LP3_T2                      a served row's request Program
+    circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
+                                                                    the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
@@ -11,6 +13,10 @@
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
 warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
+
+Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
+from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
+its time went (``seconds_by_check``, `checks.spent`).
 """
 from __future__ import annotations
 
@@ -49,13 +55,26 @@ def _info(task: tuple) -> dict:
 
 
 def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
+    """``fn()``'s result with the target's ``seconds`` and its ``seconds_by_check`` (`checks.spent`), heaviest first."""
+    CK.SPENT.clear()
     t0 = time.time()
     try:
         r = fn()
     except Exception as e:  # noqa: BLE001  (a target the checks cannot run on is a failure by name, not a crash)
         r = {"failures": [{"check": "circuit-check", "code": "error", "definition": label,
                            "name": f"circuit-check/error {label}: {type(e).__name__}: {str(e)[:200]}"}], "warnings": []}
-    return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3)}
+    by = {k: round(v, 3) for k, v in CK.SPENT.most_common()}
+    return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3), "seconds_by_check": by}
+
+
+#: the checks a target's log line names, heaviest first, each that took at least `SHOWN_SECONDS`
+SHOWN_CHECKS = 4
+SHOWN_SECONDS = 0.1
+
+
+def _where_time_went(r: dict) -> str:
+    by = [(k, v) for k, v in (r.get("seconds_by_check") or {}).items() if v >= SHOWN_SECONDS][:SHOWN_CHECKS]
+    return f"{r['seconds']:.1f}s" + (": " + ", ".join(f"{k} {v:.1f}" for k, v in by) if by else "")
 
 
 def _errored(r: dict) -> bool:
@@ -121,6 +140,14 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
         kind = TG.kind_of(s)
         if kind == "row":
             tasks.append(("row", s, lambda s=s: CK.check_row(s, opts, memo=memo(), pins=pins)))
+        elif kind == "sidecar":
+            found, tpls = TG.sidecar_targets(s)
+            for fid, fn in found.items():
+                tasks.append(("definition", fid, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                              {"units": sorted(TG.BINDINGS.get(fid, ())), "roots": [fn]}))
+            for label, sub, sts in tpls:
+                tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
+                              {"units": sorted(TG.BINDINGS.get(label, ()))}))
         elif kind == "template":
             def tpl(s=s):
                 sub, sts = TG.subcircuit(s)
@@ -198,9 +225,11 @@ def _calls(specs: list[str]) -> None:
     from verity.ml.circuits.evaluation.reference import resolve
 
     for s in specs:
-        if TG.kind_of(s) == "definition":
+        kind = TG.kind_of(s)
+        for make in ([lambda s=s: TG.definition(s)] if kind == "definition" else
+                     [lambda fn=fn: fn for fn in TG.sidecar_targets(s)[0].values()] if kind == "sidecar" else []):
             try:
-                TG.is_call(TG.family(resolve(TG.definition(s))))
+                TG.is_call(TG.family(resolve(make())))
             except Exception:  # noqa: BLE001  (its check raises it again, by name)
                 continue
 
@@ -532,7 +561,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         if progress is not None:
             with progress.open("a") as f:
                 f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
-                                    "failures": len(r["failures"]), **({"killed": True} if r.get("killed") else {})}) + "\n")
+                                    "seconds_by_check": r.get("seconds_by_check"), "failures": len(r["failures"]),
+                                    **({"killed": True} if r.get("killed") else {})}) + "\n")
         if tracing and got is not None:
             if _errored(r):
                 stats["errors"].append(r["target"])
@@ -548,7 +578,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
                     f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
-                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({r['seconds']:.1f}s)")
+                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
 
     todo = list(range(len(tasks)))
     if tracing:
@@ -557,6 +587,9 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             if (hit := hits.get(i) if hits is not None else CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
+                if log and not everything:
+                    log(f"{'FAIL' if hit[0]['failures'] else 'ok  '} {tasks[i][0]:10s} {tasks[i][1][:90]}  reused: every input "
+                        f"its check read is unchanged (it took {hit[0].get('seconds', 0):.1f}s)")
             else:
                 todo.append(i)
     if isolated and todo:
@@ -690,6 +723,42 @@ def auto_jobs(root: Path = Path("/")) -> int:
     return max(1, min(len(os.sched_getaffinity(0)), gb // GB_PER_JOB))
 
 
+def cores(root: Path = Path("/")) -> int:
+    """The CPUs this process may use: its affinity, bounded by its cgroup's cpu.max quota (a pod's `nproc` can exceed it)."""
+    n = len(os.sched_getaffinity(0))
+    try:
+        q, p = (root / "sys/fs/cgroup/cpu.max").read_text().split()
+        return n if q == "max" else min(n, max(1, int(q) // int(p)))
+    except (OSError, ValueError):
+        return n
+
+
+def default_jobs(everything: bool) -> int:
+    """``--jobs`` when not given: 1 with ``--all`` (check.py gives its slot's), else one worker per core (`cores`), each target
+    still admitted only while the measured peaks fit the memory (`run`)."""
+    return 1 if everything else cores()
+
+
+def default_cache() -> Path:
+    """The cache named targets use unless ``--cache`` or ``--no-cache`` says otherwise: check's own (tools/verity/check's
+    ``cache_dir() / "circuit-check"``), so a target `check` or an earlier run checked is reused while its inputs are unchanged."""
+    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / "circuit-check"
+
+
+def time_summary(rep: dict, wall: float, jobs: int) -> str:
+    """One line: the run's wall time, the targets checked now and reused, and where the checked ones' time went
+    (their ``seconds_by_check`` summed, heaviest first)."""
+    ran = [t for t in rep["targets"] if "cache" not in t]
+    by: dict[str, float] = {}
+    for t in ran:
+        for k, v in (t.get("seconds_by_check") or {}).items():
+            by[k] = by.get(k, 0.0) + v
+    top = sorted(by.items(), key=lambda kv: -kv[1])[:SHOWN_CHECKS]
+    return (f"circuit-check: {wall:.1f}s wall at -j {jobs}: {len(ran)} target(s) checked in {sum(t.get('seconds', 0) for t in ran):.1f}s"
+            + (" (" + ", ".join(f"{k} {v:.1f}" for k, v in top) + ")" if top else "")
+            + f", {len(rep['targets']) - len(ran)} reused")
+
+
 def structural(target: str, path: Path, *, exhaustive_bits: int = ST.EXHAUSTIVE_BITS, vectors: int = ST.VECTORS,
                seed: int = CK.Options.seed) -> dict:
     """``--structural PATH TARGET``'s report: the template at ``path`` held to the Definition ``target`` names
@@ -780,7 +849,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
     ap.add_argument("--all", action="store_true", help="every registered Definition and template at the catalog's bindings")
     ap.add_argument("--out", type=Path, help="write the JSON report here")
-    ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
+    ap.add_argument("-j", "--jobs", type=int, default=None,
+                    help="targets checked in parallel by this many workers, each starting only while the targets' measured peaks "
+                         "fit the memory (see `run`); default: one per core for named targets, 1 with --all; 0: one per core, at "
+                         "most one per GB_PER_JOB of memory")
     ap.add_argument("--mem-gb", type=int, default=None, help="the memory circuit-check may take, in GiB, this process included "
                     "(default: the enclosing check slot's CHECK_SLOT_MEM_GB, else what this process may use, `memory_gb`); see `run`")
     ap.add_argument("--mem-gb-file", type=Path, default=None, metavar="FILE",
@@ -802,7 +874,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
-                    help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one")
+                    help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one; named "
+                         "targets use check's own by default (`default_cache`)")
+    ap.add_argument("--no-cache", action="store_true", help="check every target now, and record nothing")
     ap.add_argument("--catalog-units", action="store_true",
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
     ap.add_argument("-q", "--quiet", action="store_true")
@@ -828,21 +902,25 @@ def main(argv: list[str] | None = None) -> int:
         return _ambient_main(a, ap)
     if a.batch:
         return _batch_main(a, ap)
-    if a.cache and not a.update_pins:
+    if not a.targets and not a.all:
+        ap.error("give a target or --all")
+    cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
+    if cache:
         # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
         prebuild = ("from circuit_check import targets; targets.load_registries()\n"
                     "try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
                     "if twins:\n    twins.preload()        # the three C++ models, which checks otherwise compile on first use\n")
         subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
         CC.trace(REPO)
-    if not a.targets and not a.all:
-        ap.error("give a target or --all")
-    jobs = a.jobs or auto_jobs()
+    jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     opts = _options(a)
+    t0 = time.time()
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
-              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None,
+              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
               mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None,
               units=a.catalog_units)
+    if not a.quiet:
+        print(time_summary(rep, time.time() - t0, jobs))
     if u := (rep.get("cache") or {}).get("units"):
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
               f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")
