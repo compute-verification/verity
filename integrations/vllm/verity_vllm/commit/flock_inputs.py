@@ -1,4 +1,4 @@
-"""M0's input files for a serving-rows window's member (``serving_rows.write``'s window): the public file
+"""C-Flock's input files for a window's member (``serving_rows.write``'s window): the public file
 ``m<k>-pub-<n>.bin`` (``rows: false``) and the prover's ``m<k>-inst-<n>.bin``, each the window's bodies under the header
 ``verity_flock.circuit.write`` gives the circuit the verifier composed for the member's template.  A chunked template's chunks
 are all staged under one circuit, whose META, pin and class (`FlockCircuit`) are read off it once."""

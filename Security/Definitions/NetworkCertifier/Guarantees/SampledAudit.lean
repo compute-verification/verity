@@ -1,15 +1,15 @@
 import Definitions.NetworkCertifier.SampledAudit
 
 /-!
-# The sampled audit's guarantee: it implies `Accepted`, at `ε` at `δ` over the selection (stated)
+# The sampled audit's guarantee: it implies `Accepted`, at `ε` at `δ` over the selection
 
-`SampledAuditAccepted` is the statement, not yet proved. Wherever sampling's knowledge soundness holds
-(`Claims.Sampling.KS`), the sampled audit of a program with a public boundary layout implies `Accepted` by the circuit's
-Program (`KSAccepted`, `Definitions.NetworkCertifier.SampledAudit`). The free advice is held at the faulty units'
-committed gates only, and the faulty set is in `M_δ` and meets no class drawn `all`. Its one hypothesis is `KS` at the
-same deployment, the sampling claim it rests on; every condition on the run is either a verifier refusal (the scope,
-`ScopeAcc`) or a condition, inside the conclusion, that picks out which observations the conclusion is about
-(`Carries`, `Covered`).
+`SampledAuditAccepted` is the statement, proved in `Proofs.NetworkCertifier.SampledAuditAccepted`. Wherever sampling's
+knowledge soundness holds (`Claims.Sampling.KS`), the sampled audit of a program with a public boundary layout implies
+`Accepted` by the circuit's Program (`KSAccepted`, `Definitions.NetworkCertifier.SampledAudit`). The free advice is held
+at the faulty units' committed gates only, and the faulty set is in `M_δ` and meets no class drawn `all`. Its one
+hypothesis is `KS` at the same deployment, the sampling claim it rests on; every condition on the run is either a
+verifier refusal (the scope, `ScopeAcc`) or a condition, inside the conclusion, that picks out which observations the
+conclusion is about (`Carries`, `Covered`).
 
 `SampledAuditAcceptedStated` reads it, so the lock records its text (and every definition it reads) under `reads`: a
 changed statement is a changed record. It leaves when a theorem proves `SampledAuditAccepted`, whose own record then holds
