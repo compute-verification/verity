@@ -474,7 +474,7 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
         stop, served = DeclaredStop.of(wp, str(wp_path)), _served_tokens_of_record(rd, wp)
     except RecordError as e:
         return {"ok": False, "why": f"executed prefix of record not placeable: {e}", "executed_prefix": None}
-    lag = stop.lag.value if stop.lag is not None else None
+    lag = stop.declared_lag
     caps = {str(r.get("request_id", f"r{i}")): int(r.get("cap") or r.get("max_tokens") or 0) for i, r in enumerate(reqs)}
     arrivals = {str(r.get("request_id", f"r{i}")): int(r.get("arrive_step", 0) or 0) for i, r in enumerate(reqs)}
     eos = stop.stop_rule.eos_token_ids if stop.stop_rule is not None else None
