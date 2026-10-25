@@ -1,5 +1,6 @@
 """What `nci-desc-fuzz`'s output says, per statement: how many Programs passed the preconditions and were checked, the
-shapes they covered, and every failure (the first few of each kind in full).
+shapes they covered, how many fail each statement in each family (`by_family_fails`), and every failure (the first few of
+each kind in full).
 
     python gen/summarize.py OUT.jsonl[.gz] [OUT.jsonl[.gz] ...] [--json FILE]
 """
@@ -26,6 +27,7 @@ def summarize(paths: list[str]) -> dict:
     anyc = collections.Counter()
     s = {k: collections.Counter() for k in ("s1", "s1prim", "s2", "s3", "s3_unwalkable", "agree")}
     fails = collections.defaultdict(list)
+    family_fails = collections.defaultdict(collections.Counter)
     most_vs_bound = 0.0
     for p in paths:
         for line in (gzip.open(p, "rt") if p.endswith(".gz") else open(p)):
@@ -43,6 +45,8 @@ def summarize(paths: list[str]) -> dict:
                     fails["s3_unwalkable"].append({"id": r["id"], "fail": s3["fail"]})
             if r["pre"] != "ok":
                 continue
+            for k in ("s1", "s2", "s3", "agree"):
+                family_fails[r["family"]][k] += r[k].get("fail") is not None
             sh = r["shape"]
             for k in SHAPE_MAX:
                 mx[k] = max(mx[k], sh[k])
@@ -101,10 +105,12 @@ def summarize(paths: list[str]) -> dict:
             elif "verdicts" in ag:
                 s["agree"]["programs"] += 1
                 s["agree"]["verdicts"] += ag["verdicts"]
+                s["agree"]["given"] += ag.get("given", 0)
             else:
                 s["agree"]["skipped"] += 1
     return {"programs": sum(pre.values()), "preconditions": dict(pre),
             "by_family": {f: dict(c) for f, c in sorted(by_family.items())},
+            "by_family_fails": {f: dict(c) for f, c in sorted(family_fails.items())},
             "statements": {k: dict(v) for k, v in s.items()}, "max": dict(mx),
             "programs_with": dict(anyc), "most_steps_over_walkBound": most_vs_bound,
             "refusals": dict(refusals.most_common(25)), "failures": {k: v[:50] for k, v in fails.items()},
