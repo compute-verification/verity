@@ -474,9 +474,10 @@ theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
   · exact h'
 
 /-- **`flock-verify verify --plain-tables`'s statement check** (no `--zk`, without the verifier's own registered reads,
-which change nothing without `--zk`): `ProvedScope.checkP`, which refuses hidden outputs with leaves other than
-`hm96-sha512/v1` (`ScopeP.merkleLeaf`) and more than `Tags.MAX_TABLES` tables, is otherwise the check at one table, and
-holds the verifier's own program (`--program`) to the one the circuit's META binds (`ScopeP.program`). -/
+which `verifyCmd` passes as `false` under the flag, so a shared-row public file is refused): `ProvedScope.checkP`, which
+refuses hidden outputs with leaves other than `hm96-sha512/v1` (`ScopeP.merkleLeaf`) and more than `Tags.MAX_TABLES`
+tables, is otherwise the check at one table, and holds the verifier's own program (`--program`) to the one the circuit's
+META binds (`ScopeP.program`). -/
 def ScopeP (I : Inputs) : Prop :=
   ProvedScope.checkP I.tags I.circuitFile I.publicFile I.tables I.count I.program false false = .ok ()
 
