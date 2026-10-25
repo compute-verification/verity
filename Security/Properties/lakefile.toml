@@ -67,7 +67,7 @@ path = "../../verity/core/primitives/requirement"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Proofs.Pouw",
+roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt", "Properties.Proofs.Pouw",
   "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Pouw.Strata",
   "Properties.Proofs.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads", "Properties.Proofs.Nci",
   "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
