@@ -15,7 +15,7 @@ the session's record of computation off the node (`Accounting.Remote.Held.Outsid
   memory line (`Properties.RemoteAudit.Line.LineHeld`), and the line says it is conditional on it until certifiers
   cover the gate node's boundary and certify that nothing but the verifier's messages entered the node over the
   credited span. What grounds it for a session run inside the provider's lockdown of the node is
-  `ProviderLockdown`, under `trusted-nebius-host`, which says what the lockdown covers and what it doesn't.
+  `ProviderLockdown`, under `trusted-host`, which says what the lockdown covers and what it doesn't.
 * `SketchBoundAt O δ`: except with probability `δ`, a correct receipt of a registered block was computed while the block
   was in node memory or on a chip, or while a device outside the node computed on it, during its pass. The relay meets
   it: its helper computed on every block it receipted.
@@ -47,7 +47,7 @@ def NoOutsideCompute (T : Trace Ω) (O : Outside T) : Prop :=
   ∀ ω, T.accepts ω → ∀ p < T.passes, ∀ t, T.tick ω p ≤ t → t < T.tick ω (p + 1) →
     O.blocks ω t = ∅ ∧ O.receipts ω t = ∅
 
-/-- **`trusted-nebius-host`** (the provider's lockdown): on every accepting outcome, at every tick of `[applied,
+/-- **`trusted-host`** (the provider's lockdown): on every accepting outcome, at every tick of `[applied,
 lifted)`, an interval over which the host provider (Nebius) applied a lockdown to the node, no device outside the node
 computes on a registered block or on a receipt of one. A lockdown is the provider's security group on the node's
 network interfaces admitting packets only from and to its allow list, the auditor's devices (the verifier's and the
@@ -61,7 +61,7 @@ a security group evaluates. What it doesn't, and so what this assumes besides th
 * stateful flows: a connection opened before the lockdown was applied, which a stateful rule may keep admitting;
 * the provider's own paths into the node: its metadata service, its management plane, a GPU cluster's fabric between
   hosts, and any shared filesystem the node mounts (for vy-nebius-2: infra's answer is pending);
-* the allow list's hosts themselves, which are the auditor's devices (the rest of `trusted-nebius-host`).
+* the allow list's hosts themselves, which are the auditor's devices (the rest of `trusted-host`).
 
 So it states the part of `NoOutsideCompute` a lockdown grounds: `[applied, lifted)` are on the verifier's clock, and
 the line grounds `NoOutsideCompute` by it only for a session whose every credited pass lies inside one applied

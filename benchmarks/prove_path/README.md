@@ -198,9 +198,9 @@ none: their bounds carry the collision events.
   (#4067). `PlainLiveAcc` isn't listed, since no locked statement reads it.
 - The rest of what locked statements take from `trees.except`: CHAINMAP's status below.
 
-No link above reads the rest. `TrustedNebiusHost` is why `Carries` holds of the real run, and the wire and advice
+No link above reads the rest. `TrustedHost` is why `Carries` holds of the real run, and the wire and advice
 assumptions enter through the wire bounds, which have no sampled form yet.
-- `Verity.Assumptions.TrustedNebiusHost` (`Security/Definitions/Core/Assumptions.lean`).
+- `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`).
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. W3 (`Padded`), W5 (`UntimedStatus`) and W6
   (`FailClosed`) are stated there, but no listed guarantee reads them, so the lock doesn't list them.

@@ -229,7 +229,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardDecodableWithinLeCompiledPerWindowV1Whole`. That `ChargeCount_v2`'s circuit computes the Lean charge is
   circuit-check's (the circuit against `window_charge.py`'s `reference_window`), not proved here.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
-  `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
+  `EncardWardenDecodableLe`, under `trusted-host` (`Verity.Assumptions.TrustedHost`).
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
   `RAcc δ` on the statements whose layout fits the program: no faulty unit is drawn `all`, and the advice holding the
   faulty units' committed gates at the trace's values makes `Accepted` every run the trace carries.
