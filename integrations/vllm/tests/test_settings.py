@@ -26,6 +26,14 @@ def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
         assert s.name == name and callable(s.type) and s.role in S.ROLES and s.doc.strip(), s
 
 
+def test_settings_imports_nothing_from_the_package() -> None:
+    """Every layer reads it, so it closes no import cycle (as ``engine.env`` and ``engine.hooks``, P09's leaf modules)."""
+    nodes = list(ast.walk(ast.parse((PKG / "settings.py").read_text(encoding="utf-8"))))
+    mods = {a.name for n in nodes if isinstance(n, ast.Import) for a in n.names}
+    mods |= {"." * n.level + (n.module or "") for n in nodes if isinstance(n, ast.ImportFrom)}
+    assert not {m for m in mods if m.startswith((".", "verity_vllm"))}, sorted(mods)
+
+
 def test_flag_reads_both_spellings_and_refuses_the_rest() -> None:
     assert [S.flag(v) for v in ("1", "TRUE", " yes", "on", "0", "False", "no", "OFF")] == [True] * 4 + [False] * 4
     with pytest.raises(ValueError):
