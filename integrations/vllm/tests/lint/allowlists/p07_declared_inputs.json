@@ -85,7 +85,7 @@
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "environ", "symbol": "enabled", "detail": "os.environ.get"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "environ", "symbol": "ops", "detail": "os.environ.get", "count": 3},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "environ", "symbol": "workers", "detail": "os.environ.get"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_ProjectionFast.__init__", "detail": "seed_node"},
+    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "autotune_configs", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "collect", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "inductor_cache_dir", "detail": "except Exception"},
