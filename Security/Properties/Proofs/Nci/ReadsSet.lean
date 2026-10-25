@@ -20,6 +20,9 @@ At a root node calling a primitive, `RootSet` holds outright (`rootSet_prim`): i
 (`nodeReads_prim_ok`), `down` keeping each reference's gate (`readPos_agree`), each reference is read by a member's gate
 (`operands_ok`, a mapped argument's by the member its index falls in, `tile`), and each operand is one of those
 references, resolving before the node.
+
+At a composite node, what its gates read outside it is what its members' parameter leaves that the callee's `used`
+names resolve to (`compReads`), each member's activation located as its caller's is (`located_child`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -639,5 +642,93 @@ theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hc : 
     have := den_root_gate P hxa
     subst this
     exact ⟨w, hxr⟩
+
+/-! ## A composite node's reads, member by member -/
+
+/-- **A member's activation has its gates located** where its caller's has: a member's gate is located from its
+caller's activation as from its own (`locR_child`). -/
+theorem located_child (P : Prog) {sc : Flock.Program.Scope} {k m : Nat} (hL : Laid P sc.d)
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
+    (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
+    (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc) :
+    Located P (P.child sc k m) := by
+  intro g h1 h2
+  change sc.off + (P.defs[sc.d]!).body.offsets[k]! + m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g at h1
+  change g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+    m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates + (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates at h2
+  have hle := Nat.mul_le_mul_right (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates hm
+  rw [Nat.succ_mul] at hle
+  have hK := hL k hk
+  obtain ⟨ops, h⟩ := hloc g (by omega) (by omega)
+  have e : g = sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+      (g - (sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+        m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates))) := by omega
+  rw [e] at h ⊢
+  exact ⟨ops, (locR_child P hL hk hp hm (by omega)).1 h⟩
+
+/-- **A composite node reads outside itself exactly what its members' summarized parameter reads resolve to there**:
+member `m`'s gates read outside the member the leaves of its parameters its callee's `used` names (`UsedExact`). -/
+theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
+    (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
+    (hU : UsedExact P memo ((P.defs[sc.d]!).body.nodes[k]!).fn) (a : Nat) :
+    (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a) ↔
+      ((∃ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∃ i j,
+        Width.inIvs (((memo[((P.defs[sc.d]!).body.nodes[k]!).fn]!).used[i]?.getD #[]).toList) j ∧
+        Flock.Program.resolve P (P.child sc k m) ⟨true, i, j⟩ = .ok a) ∧ ¬ InNodeAt P sc k a) := by
+  have hK := hL k hk
+  constructor
+  · rintro ⟨⟨g, ⟨hg1, hg2⟩, ops, hgl, ha⟩, hout⟩
+    refine ⟨?_, hout⟩
+    have hG : 0 < (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
+      rcases Nat.eq_zero_or_pos (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates with h0 | h0
+      · rw [h0, Nat.mul_zero] at hK; omega
+      · exact h0
+    have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
+        ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by omega
+    have hdm := Nat.div_add_mod (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!)
+      (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates
+    have hm : (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) / (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates <
+        ((P.defs[sc.d]!).body.nodes[k]!).members := (Nat.div_lt_iff_lt_mul hG).2 hx
+    have hj := Nat.mod_lt (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) hG
+    set m := (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) / (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates
+    set jj := (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) % (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates
+    rw [Nat.mul_comm] at hdm
+    have e : g = sc.off + ((P.defs[sc.d]!).body.offsets[k]! +
+        m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates + jj) := by omega
+    rw [e] at hgl
+    have hc := (locR_child P hL hk hp hm hj).1 hgl
+    rw [← e] at hc
+    have hle := Nat.mul_le_mul_right (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates hm
+    rw [Nat.succ_mul] at hle
+    obtain ⟨i, j, hij, hr⟩ := (hU (P.child sc k m) rfl (located_child P hL hk hp hm hend hloc)).1 g ops a
+      (by show _ + _ + _ ≤ g; omega) (by show g < _ + _ + _ + _; omega) hc ha (fun ⟨h1, h2⟩ => by
+        change sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+          m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ a at h1
+        change a < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+          m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+            (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates at h2
+        exact hout ⟨by omega, by omega⟩)
+    exact ⟨m, hm, i, j, hij, hr⟩
+  · rintro ⟨⟨m, hm, i, j, hij, hr⟩, hout⟩
+    refine ⟨?_, hout⟩
+    obtain ⟨g, hg1, hg2, ops, hgl, a', ha', hr'⟩ :=
+      (hU (P.child sc k m) rfl (located_child P hL hk hp hm hend hloc)).2 i j hij
+    rw [hr] at hr'
+    obtain rfl := Except.ok.inj hr'
+    change sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g at hg1
+    change g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+        (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates at hg2
+    have hle := Nat.mul_le_mul_right (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates hm
+    rw [Nat.succ_mul] at hle
+    have e : g = sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+        (g - (sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+          m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates))) := by omega
+    rw [e] at hgl
+    have hc := (locR_child P hL hk hp hm (by omega)).2 hgl
+    rw [← e] at hc
+    exact ⟨g, ⟨by omega, by omega⟩, ops, hc, ha'⟩
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
