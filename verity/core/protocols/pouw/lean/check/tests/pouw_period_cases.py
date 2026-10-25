@@ -7,8 +7,9 @@ R = `salt.epoch_open_root(W, k)` and ended complete, over one or two weights' ro
 the lane's earlier credited ones (``earlier``); one to three passes of each epoch, their call indices running across the
 epoch (each pass's a block right after the one before), presented with their session's files, their context and the
 descriptor whose SHA-512 the period's open committed. Then one mutation (`NAMES`, each aimed at one clause's refusal,
-but ``stale-pin``, a window pinned behind its period's open, which the rule credits). The leaves: the period's open at
-0, epoch j's reserve, open, session record, session close and end at 5j + 1 … 5j + 5, the close after.
+but ``retained``, a pass in vllm #3985's retained form, which the rule credits, and ``pin-floor``, which it credits at a
+floor of two or more). The leaves: the period's open at 0, epoch j's reserve, open, session record, session close and
+end at 5j + 1 … 5j + 5, the close after.
 
 `tests/test_difftest.py` draws them for the harness.
 """
@@ -32,13 +33,13 @@ from verity.ml.randomness import derive
 #: `pearl_c_period_credit`'s arguments, in order (then the signature check)
 KEYS = ("key", "ledger", "pins", "main", "name", "passes", "earlier")
 
-#: the mutations, by the clause each is aimed at: the inputs' form; exact match; salt-only sessions; credited sessions;
-#: accepted passes; consecutive epochs; distinct calls
+#: the mutations, by the clause each is aimed at: the inputs' form; exact match; salt-only sessions; credited sessions
+#: and fresh pins; accepted passes; consecutive epochs; distinct calls
 NAMES = ["passes-form", "manifest-hex", "manifest-json", "no-root", "earlier-form",
          "missing", "abandoned", "order", "foreign-root", "incomplete", "unclosed", "other-name", "forged",
          "reserve-layout", "h1-session", "unreserved",
-         "descriptor-hex", "other-circuit", "stale-pin", *RC.PIN_NAMES,
-         "resalted", "context", "files", "call-range", "seeded", "named-epoch", "misnamed",
+         "descriptor-hex", "other-circuit", *RC.PIN_NAMES, "stale-pin", "pin-floor", "period-pin-off-main",
+         "resalted", "context", "context-type", "retained", "files", "call-range", "seeded", "named-epoch", "misnamed",
          "spent", "repeat", "inner-gap",
          "repeated-call", "twice"]
 #: the mutations that need two epochs, and those that need two epochs on one W
@@ -163,7 +164,7 @@ def instance(rng: random.Random, name: str = "honest", epochs: int | None = None
     ledgered = eps + ([extra] if extra else [])
     pub = eps[0]["s"].pub
     pins = list(RC.PINS)
-    stale = rng.randrange(len(eps)) if name == "stale-pin" else None
+    stale = rng.randrange(len(eps)) if name in ("stale-pin", "pin-floor") else None
     opened: dict[int, dict] = {}
     j = rng.randrange(len(eps))
     match name:
@@ -177,6 +178,13 @@ def instance(rng: random.Random, name: str = "honest", epochs: int | None = None
     open_body = {"period": pname, "lane": RC.LANE, "by": RC.LANE, "cap": len(ledgered) + rng.randint(0, 2),
                  "circuit": hashlib.sha512(desc).hexdigest(), Cr.PERIOD_PIN_FIELD: RC.MAIN[2 if stale is not None else -1],
                  "key_sha512": hashlib.sha512(pub).hexdigest()}
+    if name == "pin-floor":
+        # the stale session is two first-parent commits behind the open's pin: credited at a floor of two or more
+        floor = rng.choice([0, 1, 2, 3, 5, -1, "2", True, None])
+        if floor is not None:
+            open_body[Cr.STALE_FIELD] = floor
+    if name == "period-pin-off-main":
+        open_body[Cr.PERIOD_PIN_FIELD] = rng.choice([RC.BRANCH, rng.randbytes(20).hex()])
     events, leaves = [("period-open", None, open_body)], [0]
     for j, e in enumerate(ledgered):
         s, c = e["s"], e["s"].ch.commitment
@@ -284,6 +292,8 @@ def _mutate(rng: random.Random, name: str, d: dict, out: list[dict], eps: list[d
             man["salt"] = rng.choice([PC._flip(man["salt"]), None, man["salt"].upper()])
         case "context":
             p["digest"] = PC._flip(hashlib.sha512(PC._raw(man, rng)).hexdigest())
+        case "retained":
+            p["raw"] = _retained(rng, man)
         case "files":
             other = next(e for e in eps if e["s"] is not p["s"])
             p["files"] = other["s"].files()
@@ -303,8 +313,38 @@ def _mutate(rng: random.Random, name: str, d: dict, out: list[dict], eps: list[d
                 **g, k: {"session": RC.session_id(rng), "seq": g["seq"] + 1, "commitment": PC._flip(g["commitment"])}[k]}
 
 
+def _retained(rng: random.Random, man: dict) -> bytes:
+    """Pass `man` retained in vllm #3985's form (`PearlCDeviceRun._write_retained`, `write_manifest`: the head, then
+    ``weights`` and ``matmuls``, at indent 1 with a newline), its ``session`` the gate's open answer's {session, seq,
+    root, commitment} alone, beside ``pass_index``."""
+    s = man["session"]
+
+    def file(path: str, digest: bool = True) -> dict:
+        n = rng.randrange(1, 1 << 20)
+        return {"path": path, "bytes": n, **({"sha256": rng.randbytes(32).hex()} if digest else {})}
+
+    head = {"schema": man["schema"], "run": man["run"], "entry": "verity_vllm.LLM", "scheme": "pearl-c-sm120-v1-h3",
+            "scheme_args": {"forming": "v1", "device": "sm120", "hashing": "h3"}, "coins": man["coins"],
+            "salt_opening": man["salt_opening"], "salt": man["salt"],
+            "session": {k: s[k] for k in ("session", "seq", "root", "commitment")}, "pass_index": man["pass_index"],
+            "cubin_sha256": rng.randbytes(32).hex(), "kernel_source_sha256": rng.randbytes(32).hex(),
+            "schedule": "deferred", "records_root": rng.randbytes(64).hex(),
+            "commitment": {"root": rng.randbytes(64).hex(), "count": len(man["matmuls"])},
+            "hm96_salt_key": rng.randbytes(32).hex(), "leaves": file("leaves"), "tree_t": file("tree_t")}
+    weights = {w: {**v, "excluded_b": [], "rows": file(f"weights/{w}.rows.bf16", False),
+                   "tree": file(f"weights/{w}.tree")} for w, v in man["weights"].items()}
+    matmuls = [{**u, "k_kept": u["k"], "excluded_a": [], "root_a": rng.randbytes(64).hex(),
+                "rows": file(f"calls/{u['index']}.rows.bf16", False), "tree": file(f"calls/{u['index']}.tree")}
+               for u in man["matmuls"]]
+    return (json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n").encode()
+
+
 def _mutate_after(rng: random.Random, name: str, d: dict) -> None:
     """Mutation `name` of the serialized case `d`."""
+    if name == "context-type":
+        i = rng.randrange(len(d["passes"]))
+        c = d["passes"][i]["context"]
+        d["passes"][i] = {**d["passes"][i], "context": rng.choice([None, 7, [c], {"context": c}])}
     if name == "passes-form":
         p = rng.choice(d["passes"])
         d["passes"] = rng.choice([None, {}, "x", [], [*d["passes"], 5], [{k: v for k, v in p.items() if k != "session"}],

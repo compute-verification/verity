@@ -673,9 +673,10 @@ PEARL_C_PERIOD = D.Port("pouw-check-difftest", "pearl-c-period", pearl_c_period,
 def test_pearl_c_period(pass_server):
     """Generated Pearl-C periods, then each mutation over a few seeds (`replay`): passes or earlier epochs out of form, a
     session the close lists that no pass presents (an abandoned one among them), a session reserved for another layout
-    or H1's, a pass whose session doesn't count toward the period, a refused pass, an epoch numbered out of turn on its
-    weights' root, and two passes of one epoch sharing a call index (a pass presented twice among them), so every clause
-    of the rule refuses whatever the draw."""
+    or H1's, a pass whose session doesn't count toward the period or is pinned past its period's floor, a refused pass (a
+    context that isn't a string among them), an epoch numbered out of turn on its weights' root, and two passes of one
+    epoch sharing a call index (a pass presented twice among them), so every clause of the rule refuses whatever the
+    draw, and a pass retained in vllm #3985's form is credited."""
     PERIOD_CREDITED.clear()
     stats = D.run(PEARL_C_PERIOD, examples=60, server=pass_server)
     swept = Counter(D.replay(PEARL_C_PERIOD, period_cases.instance(random.Random(f"{name}/{seed}"), name),
@@ -684,10 +685,12 @@ def test_pearl_c_period(pass_server):
     print(f"pouw-check-difftest pearl-c-period: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(PERIOD_CREDITED.items()))}")
     assert "accept" in PERIOD_CREDITED
-    for code in ("period", "missing", "order", Cr.SALT_ONLY, "circuit", Cr.PASS_REFUSED, Cr.INDEX, Cr.REPEATED_CALL):
+    for code in ("period", "missing", "order", Cr.SALT_ONLY, "circuit", "pin", Cr.PASS_REFUSED, Cr.INDEX,
+                 Cr.REPEATED_CALL):
         assert any(k.startswith(f"{code}: ") for k in PERIOD_CREDITED), code
     for part in (Cr.PEARL_C_FORM, Cr.EARLIER_FORM, "has no close in the auditor's ledger", "closed incomplete",
                  "names no salt epoch", "is not of a Pearl-C salt session", "the descriptor is not the bytes",
-                 "doesn't count toward it", "is refused, so the period earns nothing", "is not epoch",
-                 "both hold call index"):
+                 "doesn't count toward it", "first-parent commit(s) before the commit its period opened under",
+                 "which is not on main's first-parent line", "is refused, so the period earns nothing",
+                 "context is not a string", "is not epoch", "both hold call index"):
         assert any(_template(part) in k for k in PERIOD_CREDITED), part
