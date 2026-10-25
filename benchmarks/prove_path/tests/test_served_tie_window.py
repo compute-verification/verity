@@ -33,7 +33,7 @@ def _steps(St, window, seqs):
 def test_real_window_cases_on_a_small_window():
     fx = json.loads(FIXTURE.read_text())
     S = SimpleNamespace(**CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"],
-                                     K=fx["K"], SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
+                                     K=fx["K"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
     st = ST.statics(S)
     run = STW.run_cases(S, st, list(WINDOW), _steps(SimpleNamespace(**st), WINDOW, SEQS), SEQS)
     assert run.verdicts == {"honest": "accepted", "start": "refused by tie and ids", "short": "refused by tie and ids",

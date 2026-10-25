@@ -8,7 +8,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   one the draw's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the draw passing), so only the proof can refuse it.
+  changed, every check before the draw passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
+  only inside plain's interim scope, one table under a stratified draw (`a5.plain_refusal`).
+* An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
@@ -31,7 +33,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
@@ -388,6 +391,57 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
     honest, forged = _rows(tp["honest"] / "rank0"), _rows(d)
     assert len(honest) == len(forged) and sum(bin(x ^ y).count("1") for x, y in zip(honest, forged, strict=True)) == 1
     assert json.loads((tp["forged"] / "commit.json").read_text())["ranks"]["0"]["forged"] == {"member": 0, "unit": 1}
+
+
+@pytest.mark.slow
+def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
+    """`--plain` covers one table under a stratified draw (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
+    unit, is inside it under stratified:8, and refused before the draw under its own subset:8, drawn outside a stream, with a
+    second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
+    _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
+    plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
+    stratified = replace(mine, law={"law": "stratified", "k": 8})
+    assert A5.plain_refusal(plain, stratified, None) is None
+    m = mine.members[0]
+
+    def window(*members):
+        return SimpleNamespace(members=members, law=stratified.law, population=sum(x.n for x in members), row_tables=())
+
+    cases = [("a plain session's draw is stratified", plain, mine, None),
+             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None, verifier_coins=False), stratified, None),
+             ("the window has 2 members", plain, window(m, replace(m, base=m.n)), None),
+             ("registered reads, shared rows", plain, stratified, {m.key: {"ports": {}}}),
+             ("registered reads, shared rows", plain, window(replace(m, tables=(("x", 1),))), None)]
+    for why, a, w, registered in cases:
+        got = A5.plain_refusal(a, w, registered)
+        assert got is not None and why in got and A5.PLAIN_SCOPE in got, (why, got)
+        assert A5.plain_refusal(argparse.Namespace(**{**vars(a), "plain": False}), w, registered) is None
+    assert A5.plain_refusal(zk, mine, None) is None
+
+
+def _accepted(law: dict, delta: float = 0.5) -> dict:
+    reg = {"population": 8, "partition": "ab" * 64, "program": "cd" * 64}
+    draw = {**law, "population": 8, "units": [0, 2, 5, 7]}
+    return {"accepted": True, "registration": reg, "draw": draw,
+            "wrong_units": AU.wrong_units(reg, draw, delta)}
+
+
+def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_bounds():
+    """An accepted audit's charge terms (README, "What an accepted plain audit means"): λ_δ is `consumers.location_bits` of the
+    audit's profile, β_δ its `harm_bound` with each template's units weighing their committed bits (one weight, the most, where
+    the law's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
+    stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
+    for law, bits in ((stratified, {"T": 40}), ({"law": "subset", "k": 4}, {"T": 40, "U": 24})):
+        rec = _accepted(law)
+        p = AU.profile(rec["registration"], rec["draw"], 0.5)
+        got = PP.charge_terms(rec, bits, 169, 0.5)
+        weight = {"T": 40.0} if law is stratified else 40
+        assert got == {"advice_bits": 169, "delta": 0.5, "wrong_units": rec["wrong_units"], "template_bits": bits,
+                       "location_bits": location_bits(p), "harm_bound": p.harm_bound(weight),
+                       "exfiltration_bound": exfiltration_bound(p, weight)}, law
+        assert got["exfiltration_bound"] == got["harm_bound"] + got["location_bits"] and got["location_bits"] > 0
+    assert PP.charge_terms({**_accepted(stratified), "accepted": False}, {"T": 40}, 169, 0.5) is None
+    assert PP.charge_terms({}, {"T": 40}, 169, 0.5) is None
 
 
 def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):

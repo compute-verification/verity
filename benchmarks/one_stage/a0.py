@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
@@ -208,11 +209,13 @@ def firewall_env(st: dict) -> dict:
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify") -> dict:
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
+                flags: Sequence[str] = ()) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's)."""
+    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
+    --stratified K``)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -229,7 +232,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), "--session", str(sessions[-1].parent)],
+             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
             out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
