@@ -13,6 +13,7 @@ draw is its own `Law.subset |B| j` and its escape is the hypergeometric one, not
 * `share_card`: the share size is hypergeometric, `Pr[|S ∩ B| = j] = C(|B|, j) · C(N - |B|, kd - j) / C(N, kd)`.
 * `share_escape`: a set `W ⊆ B` escapes the draw at share size `j` with that size's probability times
   `C(|B| - |W|, j) / C(|B|, j)`, the member's own `subset_escape` at `|B|` units and `j` draws.
+* `share_escape_total`: so `W` escapes the window's draw with the average of that escape over the share size.
 -/
 
 namespace FlockSoundness.Audit
@@ -189,6 +190,29 @@ theorem share_escape (hk : kd ≤ N) {B W : Finset (Fin N)} (hW : W ⊆ B) {j : 
         ((N.choose kd : ℝ≥0∞))⁻¹ * (((B.card - W.card).choose j : ℝ≥0∞) * ((N - B.card).choose (kd - j) : ℝ≥0∞)) *
           ((B.card.choose j : ℝ≥0∞) * (B.card.choose j : ℝ≥0∞)⁻¹) by ring,
       ENNReal.mul_inv_cancel hb0 hbt, mul_one]
+
+/-- **The window's escape of a block's set is hypergeometric**: `W ⊆ B` escapes the uniform `kd`-subset with the
+average, over the share size `j` (`share_card`), of the member's own escape at `j` draws, `C(|B| - |W|, j) / C(|B|, j)`
+(`share_escape`). -/
+theorem share_escape_total (hk : kd ≤ N) {B W : Finset (Fin N)} (hW : W ⊆ B) :
+    prCoin (fun S : (subset N kd hk).Ω => Disjoint S.1 W) =
+      ∑ j ∈ Finset.range (kd + 1), prCoin (fun S : (subset N kd hk).Ω => (S.1 ∩ B).card = j) *
+        (((B.card - W.card).choose j : ℝ≥0∞) / (B.card.choose j : ℝ≥0∞)) := by
+  classical
+  rw [show (∑ j ∈ Finset.range (kd + 1), prCoin (fun S : (subset N kd hk).Ω => (S.1 ∩ B).card = j) *
+      (((B.card - W.card).choose j : ℝ≥0∞) / (B.card.choose j : ℝ≥0∞))) =
+      ∑ j ∈ Finset.range (kd + 1), prCoin (fun S : (subset N kd hk).Ω => (S.1 ∩ B).card = j ∧ Disjoint S.1 W) from
+    Finset.sum_congr rfl fun j hj => (share_escape hk hW (Nat.lt_succ_iff.1 (Finset.mem_range.1 hj))).symm]
+  simp only [prCoin_eq_card, ENNReal.div_eq_inv_mul, ← Finset.mul_sum]
+  congr 1
+  rw [← Nat.cast_sum]
+  congr 1
+  rw [Finset.card_eq_sum_card_fiberwise (f := fun S : (subset N kd hk).Ω => (S.1 ∩ B).card)
+    (t := Finset.range (kd + 1)) fun S _ => Finset.mem_coe.2 (Finset.mem_range.2 (Nat.lt_succ_of_le
+      ((Finset.card_le_card Finset.inter_subset_left).trans_eq S.2)))]
+  refine Finset.sum_congr rfl fun j _ => ?_
+  rw [Finset.filter_filter]
+  exact congrArg Finset.card (Finset.filter_congr fun S _ => And.comm)
 
 end Law
 
