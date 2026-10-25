@@ -1,4 +1,4 @@
-import Proofs.Properties.CertifierNetwork.Runs
+import Proofs.Properties.NetworkCertifier.DeviceOutput.Runs
 import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Schedule
 

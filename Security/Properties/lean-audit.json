@@ -8,15 +8,15 @@
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
-  "Properties.NciDesc",
-  "Properties.CertifierDevice",
+  "Properties.Nci.Desc",
+  "Properties.NetworkCertifier.Device",
   "Properties.Pous",
-  "Properties.NetworkCertifier",
-  "Properties.CertifierNetwork",
-  "Properties.CertifierNetwork.Runs",
-  "Properties.Identity",
-  "Properties.Evaluate",
-  "Properties.NetworkRecords",
+  "Properties.NetworkCertifier.Check",
+  "Properties.NetworkCertifier.DeviceOutput",
+  "Properties.NetworkCertifier.DeviceOutput.Runs",
+  "Properties.Hash.Identity",
+  "Properties.Core.Evaluate",
+  "Properties.NetworkCertifier.Records",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
@@ -24,7 +24,7 @@
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
   "Properties.Accounting.Requirement",
-  "Properties.RemoteAudit",
+  "Properties.Accounting.Remote",
   "Properties.RemoteAudit.Coins",
   "Properties.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
@@ -144,19 +144,19 @@
   "NciCheck.Baseline",
   "NciCheck.Desc",
   "Flock",
-  "Properties.CertifierDevice",
+  "Properties.NetworkCertifier.Device",
   "CertifierDevice",
   "NetworkCertifier",
   "NetworkCheck",
   "Lms",
-  "Properties.Identity",
-  "Properties.NetworkCertifier",
+  "Properties.Hash.Identity",
+  "Properties.NetworkCertifier.Check",
   "Definitions.NetworkCertifier",
-  "Properties.CertifierNetwork",
+  "Properties.NetworkCertifier.DeviceOutput",
   "Properties.Pous",
   "PousCheck.P2",
   "PousCheck.Params",
-  "Properties.Evaluate",
+  "Properties.Core.Evaluate",
   "Evaluate.Scalar",
   "Evaluate.Fp32",
   "Evaluate.Casts",
@@ -168,7 +168,7 @@
   "Definitions.Core.Prims",
   "Definitions.Core.TC.Pipeline",
   "Definitions.Core.TC.Spec",
-  "Properties.NetworkRecords",
+  "Properties.NetworkCertifier.Records",
   "Properties.SampledProofs",
   "SampledProofs",
   "Properties.Pous.TimedAudit",
@@ -177,7 +177,7 @@
   "MemoryChallenger",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
-  "Properties.RemoteAudit",
+  "Properties.Accounting.Remote",
   "RemoteAudit",
   "Properties.Accounting",
   "CircuitRequirement",
@@ -211,7 +211,7 @@
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
-  "Properties.NciDesc": {
+  "Properties.Nci.Desc": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
@@ -219,13 +219,13 @@
     "NciCheck.Check",
     "NciCheck.Desc",
     "Properties.Nci",
-    "Properties.NciDesc"
+    "Properties.Nci.Desc"
    ],
    "except": [],
    "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof",
    "sealed": true
   },
-  "Properties.CertifierDevice": {
+  "Properties.NetworkCertifier.Device": {
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
    "except": [],
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
@@ -238,28 +238,28 @@
     "Properties.Pous",
     "MemoryChallenger",
     "Definitions.Pous.Assumptions",
-    "Properties.Identity"
+    "Properties.Hash.Identity"
    ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
-  "Properties.Identity": {
+  "Properties.Hash.Identity": {
    "imports": ["Identity.Tagged"],
    "except": [],
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Properties.Identity"],
+  "Properties.NetworkCertifier.Check": {
+   "imports": ["NetworkCheck.Check", "Properties.Hash.Identity"],
    "except": [],
    "why": "the properties are stated against the check's own functions, never a proof"
   },
-  "Properties.Evaluate": {
+  "Properties.Core.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
    "except": [],
    "why": "the evaluator's equalities are stated against its functions and the `Definitions.Core` modules they copy, which import nothing of Mathlib"
   },
-  "Properties.NetworkRecords": {
-   "imports": ["NetworkCheck.RecordsGrid", "Properties.NetworkCertifier"],
+  "Properties.NetworkCertifier.Records": {
+   "imports": ["NetworkCheck.RecordsGrid", "Properties.NetworkCertifier.Check"],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
   },
@@ -268,19 +268,19 @@
    "except": ["Properties.SampledProofs.Draw"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.CertifierNetwork": {
+  "Properties.NetworkCertifier.DeviceOutput": {
    "imports": [
-    "Properties.CertifierDevice",
-    "Properties.NetworkCertifier",
-    "Properties.CertifierNetwork",
+    "Properties.NetworkCertifier.Device",
+    "Properties.NetworkCertifier.Check",
+    "Properties.NetworkCertifier.DeviceOutput",
     "Definitions.NetworkCertifier",
     "Mathlib.Data.Set.Card"
    ],
    "except": [],
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
-  "Properties.RemoteAudit": {
-   "imports": ["RemoteAudit", "Properties.RemoteAudit"],
+  "Properties.Accounting.Remote": {
+   "imports": ["RemoteAudit", "Properties.Accounting.Remote"],
    "except": [
     "Properties.RemoteAudit.Pooled",
     "Properties.RemoteAudit.Line",
