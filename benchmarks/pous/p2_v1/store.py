@@ -31,7 +31,9 @@ The public outputs (`store.json`):
 `verify` rereads a store: every file's SHA-512, its row digests, the segments' roots, the top roots and the tie, and with
 `--decode` decodes every segment (`--p2-lib` on the GPU, else the scheme's codec) into the commitment: the public encoder's
 setup check (`setup.verifier_key_from_encoding`). `spot` decodes random blocks by `reference.decode` and compares them with
-W's bytes regenerated from the seed. `tie` recomputes `store.json`'s tie with a registration digest.
+W's bytes regenerated from the seed. `tie` recomputes `store.json`'s tie with a registration digest. `encode --segments
+LO:HI [--order down]` encodes a part of the store (two nodes from either end), and `finish` writes the public outputs once
+every part's `seg/` and `rows/` files are in one store.
 """
 from __future__ import annotations
 
@@ -395,7 +397,10 @@ def encode_cmd(a: argparse.Namespace) -> int:
     for d in ("seg", "rows"):
         (store / d).mkdir(exist_ok=True)
     have = done_segments(store, params)
-    todo_list = [s for s in range(params.segments) if s not in have]
+    lo, hi = a.segments if a.segments else (0, params.segments)
+    todo_list = [s for s in range(max(0, lo), min(hi, params.segments)) if s not in have]
+    if a.order == "down":
+        todo_list.reverse()
     workers = a.gpus if a.p2_lib else a.cpu_encoders
     print(f"encode: {len(todo_list)} of {params.segments} segments on {workers} {'GPUs' if a.p2_lib else 'CPU encoders'}",
           file=sys.stderr, flush=True)
@@ -436,11 +441,27 @@ def encode_cmd(a: argparse.Namespace) -> int:
                      "blocks_per_s": encoded * params.blocks_per_segment / wall if encoded else None,
                      "segment_encode_s": _quantiles([m["encode_s"] for s, m in metas.items() if s not in have and "encode_s" in m]),
                      "errors": [e["error"] for e in errors]}
+    dump(store / "setup.json", doc)
     if errors or len(metas) != params.segments:
         dump(out / "store-partial.json", doc)
-        print(f"encode: {len(metas)} of {params.segments} segments done; rerun with the same --store to resume", file=sys.stderr)
-        return 1
+        print(f"encode: {len(metas)} of {params.segments} segments done; rerun with the same --store to resume, or "
+              "copy the other segments' seg/ and rows/ files in and run `finish`", file=sys.stderr)
+        return 1 if errors or not a.segments else 0
     finish_store(store, out, doc, metas, params, a.registration)
+    return 0
+
+
+def finish_cmd(a: argparse.Namespace) -> int:
+    """The public outputs of a store whose segments were encoded in parts (each part's seg/ and rows/ copied in)."""
+    store = Path(a.store)
+    doc = json.loads((store / "setup.json").read_text())
+    params = params_of(doc["manifest"])
+    metas = done_segments(store, params)
+    missing = [s for s in range(params.segments) if s not in metas]
+    if missing:
+        print(f"finish: {len(missing)} segments missing, the first {missing[:8]}", file=sys.stderr)
+        return 1
+    finish_store(store, Path(a.out), doc, metas, params, a.registration)
     return 0
 
 
@@ -633,7 +654,7 @@ def _visible_gpus() -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("commit", "encode", "verify", "spot", "tie"):
+    for name in ("commit", "encode", "finish", "verify", "spot", "tie"):
         p = sub.add_parser(name)
         p.add_argument("--store", required=True, help="the store's directory (scratch, outside the run directory)")
         p.add_argument("--out", default=os.environ.get("OUT", "."), help="the public outputs' directory ($OUT)")
@@ -651,6 +672,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--gpus", type=int, default=None)
     e.add_argument("--cpu-encoders", type=int, default=1)
     e.add_argument("--registration", default=None, help="the weights' registration digest, hex")
+    e.add_argument("--order", choices=("up", "down"), default="up", help="segments in ascending or descending order")
+    e.add_argument("--segments", type=lambda t: tuple(int(x) for x in t.split(":")), default=None,
+                   help="LO:HI, only segments LO .. HI-1 (a part of the store; `finish` joins the parts)")
+    sub.choices["finish"].add_argument("--registration", default=None)
     sub.choices["verify"].add_argument("--decode", action="store_true")
     sub.choices["spot"].add_argument("--count", type=int, default=64)
     sub.choices["tie"].add_argument("--registration", required=True)
@@ -662,7 +687,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.p2_lib and a.gpus is None:
             a.gpus = _visible_gpus()
         return encode_cmd(a)
-    return {"verify": verify_cmd, "spot": spot_cmd, "tie": tie_cmd}[a.cmd](a)
+    return {"finish": finish_cmd, "verify": verify_cmd, "spot": spot_cmd, "tie": tie_cmd}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -123,6 +123,22 @@ def test_rerun_resumes_to_the_same_store(gen: str, tmp_path: Path) -> None:
                  "--shape", "t", "--point", POINT, "--source", f"hex:{'22' * 32}", "--workers", "1"])
 
 
+def test_parts_join_to_the_whole_store(gen: str, tmp_path: Path) -> None:
+    assert _encode(gen, tmp_path / "whole", tmp_path / "out") == 0
+    whole = json.loads((tmp_path / "out" / "store.json").read_text())
+    for name, part, order in (("a", "0:7", "up"), ("b", "7:18", "down")):
+        assert ST.main(["encode", "--store", str(tmp_path / name), "--out", str(tmp_path / f"out-{name}"), "--generator", gen,
+                        "--seed", "text:seed", "--shape", "t", "--point", POINT, "--source", f"hex:{SOURCE}",
+                        "--workers", "1", "--segments", part, "--order", order]) == 0
+    assert ST.main(["finish", "--store", str(tmp_path / "a"), "--out", str(tmp_path / "out-a")]) == 1
+    for d in ("seg", "rows"):
+        for f in (tmp_path / "b" / d).iterdir():
+            (tmp_path / "a" / d / f.name).write_bytes(f.read_bytes())
+    assert ST.main(["finish", "--store", str(tmp_path / "a"), "--out", str(tmp_path / "out-a")]) == 0
+    joined = json.loads((tmp_path / "out-a" / "store.json").read_text())
+    assert (joined["root"], joined["w_root"], joined["tie"]) == (whole["root"], whole["w_root"], whole["tie"])
+
+
 def test_rows_below_p() -> None:
     torch = pytest.importorskip("torch")
     p = (1 << 128) - 173
