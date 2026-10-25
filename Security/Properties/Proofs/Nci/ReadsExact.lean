@@ -10733,4 +10733,122 @@ theorem w_root_prim (P : Prog) {c : Circuit} (hc : circuitOf P = .ok c) (hl : De
   obtain ⟨rfl, -⟩ := gate_root_prim P hl hp hk hg hprim
   exact hw
 
+/-! ## Gate widths -/
+
+/-- Gate `j` of an activation of Definition `d` has width `w`, located as `Prog.gate` locates it: the node holding it
+calls a primitive returning `.value w`, or a composite whose member's activation holding it has it of width `w`. -/
+inductive LocW (P : Prog) : Nat → Nat → Nat → Prop
+  | prim {d j k w : Nat} :
+      (Array.range (P.defs[d]!).body.nodes.size).find? (fun k =>
+        (P.defs[d]!).body.offsets[k]! ≤ j && j < (P.defs[d]!).body.offsets[k + 1]!) = some k →
+      (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = true →
+      (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).ret = .value w → LocW P d j w
+  | comp {d j k w : Nat} (m : Nat) :
+      (Array.range (P.defs[d]!).body.nodes.size).find? (fun k =>
+        (P.defs[d]!).body.offsets[k]! ≤ j && j < (P.defs[d]!).body.offsets[k + 1]!) = some k →
+      (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false →
+      m = (if ((P.defs[d]!).body.nodes[k]!).form == .prim || ((P.defs[d]!).body.nodes[k]!).form == .call then 0
+        else (j - (P.defs[d]!).body.offsets[k]!) / (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates) →
+      LocW P ((P.defs[d]!).body.nodes[k]!).fn
+        (j - (P.defs[d]!).body.offsets[k]! - m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates) w →
+      LocW P d j w
+
+/-- A gate has one width. -/
+theorem locW_unique {P : Prog} {d j w w' : Nat} (h : LocW P d j w) (h' : LocW P d j w') : w = w' := by
+  induction h generalizing w' with
+  | prim hf hp hr =>
+    cases h' with
+    | prim hf' _ hr' =>
+      rw [hf] at hf'
+      cases hf'
+      rw [hr] at hr'
+      cases hr'
+      rfl
+    | comp _ hf' hp' _ _ =>
+      rw [hf] at hf'
+      cases hf'
+      rw [hp] at hp'
+      cases hp'
+  | comp m hf hp hm _ ih =>
+    cases h' with
+    | prim hf' hp' _ =>
+      rw [hf] at hf'
+      cases hf'
+      rw [hp] at hp'
+      cases hp'
+    | comp m' hf' _ hm' hrec' =>
+      rw [hf] at hf'
+      cases hf'
+      have e : m = m' := by rw [hm, hm']
+      subst e
+      exact ih hrec'
+
+/-- `gateStep`'s step into a composite node's member's activation. -/
+theorem gateStep_inr (P : Prog) (g : Nat) (sc sc' : Flock.Program.Scope)
+    (h : Flock.Program.gateStep P g sc = .ok (.inr sc')) :
+    ∃ k, (Array.range (P.defs[sc.d]!).body.nodes.size).find? (fun k =>
+        (P.defs[sc.d]!).body.offsets[k]! ≤ g - sc.off && g - sc.off < (P.defs[sc.d]!).body.offsets[k + 1]!) = some k ∧
+      (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false ∧
+      sc' = P.child sc k (if ((P.defs[sc.d]!).body.nodes[k]!).form == .prim ||
+          ((P.defs[sc.d]!).body.nodes[k]!).form == .call then 0
+        else (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) / (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates) := by
+  unfold Flock.Program.gateStep at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · rename_i k hk
+    refine ⟨k, hk, ?_⟩
+    by_cases hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true
+    · simp only [hp, ite_true] at h
+      split at h
+      · cases h
+      · simp [pure, Except.pure] at h
+    · simp only [hp, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq, Sum.inr.injEq] at h
+      exact ⟨by simpa using hp, h.symm⟩
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+/-- **`Prog.gate`'s walk locates a gate of its width**: from an activation, the primitive it ends at returns the width
+`LocW` gives the gate there. -/
+theorem run_locW (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope) {p : Nat} {ops : Array Nat}
+    {sc' : Flock.Program.Scope}, Flock.Steps.run "gate location" (Flock.Program.gateStep P g) n sc = .ok (p, ops, sc') →
+    ∀ w, (P.defs[p]!).ret = .value w → LocW P sc.d (g - sc.off) w
+  | 0, _, _, _, _, h => by simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h
+  | n + 1, sc, p, ops, sc', h => by
+    intro w hw
+    rw [Flock.Steps.run.eq_2] at h
+    rcases hs : Flock.Program.gateStep P g sc with e | (b | a')
+    · simp [hs, bind, Except.bind] at h
+    · simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      obtain ⟨k, hk, hx⟩ := DescAgree.gateStep_eq P g sc _ hs
+      rcases hx with ⟨hp, ops', he⟩ | ⟨-, sc'', he, -⟩
+      · simp only [Sum.inl.injEq, Prod.mk.injEq] at he
+        obtain ⟨rfl, -, -⟩ := he
+        exact LocW.prim hk hp hw
+      · cases he
+    · simp only [hs, bind, Except.bind] at h
+      obtain ⟨k, hk, hp, rfl⟩ := gateStep_inr P g sc a' hs
+      have ih := run_locW P g n _ h w hw
+      refine LocW.comp _ hk hp rfl ?_
+      have e : ∀ a b c d : Nat, a - (b + c + d) = a - b - c - d := by intros; omega
+      rw [← e]
+      exact ih
+
+/-- **A root gate's width in `circuitOf`'s circuit is the one `LocW` gives it.** -/
+theorem locW_root {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
+    LocW P P.root g c.w[g]! := by
+  obtain ⟨p, sc, hp, hw, -⟩ := circuitOf_gate hc hg
+  unfold Flock.Program.Prog.gate at hp
+  by_cases hge : g ≥ (P.defs[P.root]!).gates
+  · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hp
+  simp only [hge, ite_false, bind, Except.bind] at hp
+  have h := run_locW P g _ _ hp _ hw
+  have h0 : g - P.rootScope.off = g := Nat.sub_zero g
+  rw [h0] at h
+  exact h
+
+/-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
+theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
+    (h : LocW P P.root g w) : w = c.w[g]! :=
+  locW_unique h (locW_root hc hg)
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
