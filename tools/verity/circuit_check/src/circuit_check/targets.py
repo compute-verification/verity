@@ -5,7 +5,7 @@ the suite runs over, every registered Definition and template at small bindings.
                 registered Definition bound to the statics its id writes (a function-valued static by its id, a record by the
                 digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
-                (``gemm-coordinate/k2048/sm80-mma-bf16``); ``attention-head`` is checked at the ends of its key-count range
+                (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
     row         a Build's request Program: its directory or its ``instances.json.gz``
 
 The catalog (`catalog`) is roots at small statics: every primitive, every static-free composite, core's GEMM Definitions and
@@ -251,9 +251,9 @@ def subcircuit(spec: str) -> tuple[Any, list[dict]]:
 
 
 def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
-    """``attention-head``: the key counts at the ends of its range (``T = lo:hi`` of ``params``, else the template's example);
-    every other template: none."""
-    if sub.template.id != "attention-head":
+    """An attention head (``attention-head``, ``attention-head-v18``): the key counts at the ends of its range (``T = lo:hi`` of
+    ``params``, else the template's example); every other template: none."""
+    if sub.template.id not in ("attention-head", "attention-head-v18"):
         return [{}]
     lo, _, hi = str((params or {}).get("T") or sub.template.example["T"]).partition(":")
     return [{"T": t} for t in sorted({int(lo), int(hi or lo)})]

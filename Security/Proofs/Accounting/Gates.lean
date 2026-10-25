@@ -10,7 +10,7 @@ import Mathlib.NumberTheory.LegendreSymbol.Basic
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.NormNum.Basic
 import Mathlib.Tactic.Ring
-import Models.Accounting.Guarantees.Gates
+import Definitions.Accounting.Guarantees.Gates
 
 /-!
 # The circuit model's window and lower bounds, proved
