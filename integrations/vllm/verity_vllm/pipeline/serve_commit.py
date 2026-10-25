@@ -9,7 +9,8 @@ the step's rows, and at each close `served_record.Record.absorb` reads the windo
 `RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
 ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
-those are the committed ids' prefix. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
+those are the committed ids' prefix. The finish says who ended it: ``by`` ``client``, or ``server`` for a request still
+running when the server stopped or failed. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
 sent none). Each committed step gets a line of ``step_trace.jsonl`` at its window's close: its root, when its engine step ended,
 its rows and the committer's trace. ``marks`` hears each window's open and close (the scheduler step trace's window records,
 `engine.step_trace.StepTrace.window`).
@@ -117,11 +118,14 @@ class CommitWindows:
             led.finished = True
             led.finish = {"reason": finish_reason, "stop_reason": stop_reason}
 
-    def aborted(self, engine_id: str) -> None:
+    def aborted(self, engine_id: str, by: str) -> None:
+        """The request ended unfinished, ``by`` its client (it went away) or the server (it stopped or failed)."""
+        if by not in ("client", "server"):
+            raise ValueError(f"an abort is by the client or the server, not {by!r}")
         led = self.ledgers.get(engine_id)
         if led is not None:
             led.finished = True
-            led.finish = {"reason": "abort", "stop_reason": None, "k": len(led.streamed)}
+            led.finish = {"reason": "abort", "stop_reason": None, "k": len(led.streamed), "by": by}
 
     def idle(self) -> None:
         """The engine has nothing to run: close the open window once it holds ``idle_close_steps`` steps."""
