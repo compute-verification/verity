@@ -4,7 +4,7 @@
     python benchmarks/network_traces/chain_record.py custody --gates DIR --out FILE
     python benchmarks/network_traces/chain_record.py certs --run DIR [--client DIR] [--deployed] --out FILE
     python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
-      [--n2 SUMMARY ...] [--scan SUMMARY] [--job FILE] --out DIR
+      [--n2 SUMMARY ...] [--scan SUMMARY] [--job FILE] [--audit WINDOW ...] --out DIR
 
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as `vy-challenger-gate
   fetch` writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
@@ -25,7 +25,11 @@
   All: every link-window's one unit proved) or, once it lands, N2-ZK's sampled draw's, read by the same fields. Scan's
   is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until IO-TIE's ``--warden-run`` takes the gate's
   warden rows. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes the report
-  accepted.
+  accepted. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
+  isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
+  negatives are N2's members, the I/O tie's verdict on each tampered run, and the rehearsal's own on each run its check
+  refuses. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each window's draw and free
+  inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ.
 """
 from __future__ import annotations
 
@@ -60,6 +64,21 @@ CLEAR = {
             "(IoTieRequest) stays in the clear tonight, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
 }
+#: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
+CERTIFIER_ONLY = "certifier-only"
+#: what a report on the certifier-only path stands on that isn't the chain's own
+STUBBED = (
+    "the records come from the certifier-only path (certifier_serve.py's proxy in front of the endpoint), not the "
+    "network certifier's own cells as one device (NET-71b), so there are no warden rows and the scan isn't run",
+    "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs (NET-68)",
+    "the weights' load isn't certified: nothing here shows the endpoint served the registered weights (NET-72a)")
+#: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
+REHEARSAL_ACCEPTS = ("honest", "token")
+#: a proof unit's outputs, at most 16 bits: a faulty unit's leak
+OUT_BITS = 16
+#: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
+HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
+                     "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 
 
 def _json(path) -> dict | None:
@@ -101,7 +120,8 @@ def custody(gates: Path) -> dict:
         runs.append({"gate_run": root.name, "dir": str(root.relative_to(gates)), "ended": doc.get("ended"),
                      "ended_utc": doc.get("ended_utc"), "files": len(files), "mismatches": bad,
                      "request": request, "lms_height": summary.get("lms_height"), "windows": summary.get("windows"),
-                     "profile": summary.get("profile")})
+                     "profile": summary.get("profile"),
+                     "strategies": {s: (r or {}).get("verdict") for s, r in (doc.get("runs") or {}).items()}})
     ok = bool(runs) and all(r["files"] and not r["mismatches"] for r in runs)
     return {"verdict": "accepted" if ok else "refused", "gate_runs": runs, "in_the_clear": CLEAR["custody"]}
 
@@ -131,7 +151,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
                  "key": {"params": list(dep["certifier_key"]["params"]), "key_id": dep["certifier_key"].get("key_id"),
                          "deployed": tuple(dep["certifier_key"]["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W,
                                                                                lms.DEPLOYED.H)},
-                 "link": lw.link, "in_the_clear": CLEAR["certificates"]}
+                 "link": lw.link, "sync_bits": lw.charge, "in_the_clear": CLEAR["certificates"]}
     if records is None or out["clocks_file"] is None or not kept.is_file() or not kept_clocks.is_file():
         return out | {"verdict": "refused", "why": f"{client}: the client kept no certificates.jsonl or clocks.jsonl, "
                                                    f"or {run} holds no certified.jsonl or clocks.jsonl"}
@@ -212,8 +232,21 @@ def endpoint_step(e: dict | None) -> dict:
                                                                    for c in windows)}
     tie = {k: honest.get(k) for k in ("verdict", "ok", "codes", "requests", "outputs", "placed", "unplaced", "why")}
     ok = bool(advice["bound"] and advice["rebuilt"]) and honest.get("verdict") == "accepted"
+    negatives = {name: r.get("verdict") == "refused" and r.get("ok") is True
+                 for name, r in (t.get("runs") or {}).items() if name != "honest" and r.get("verdict") in
+                 ("accepted", "refused")}
     return {"verdict": "accepted" if ok else "refused", "advice": advice, "tie": tie | {"ran": t.get("ran"),
-            "stand_ins": t.get("stand_ins")}, "in_the_clear": CLEAR["endpoint"]}
+            "stand_ins": t.get("stand_ins")}, "negatives": negatives, "advice_bits": advice_bits(b),
+            "in_the_clear": CLEAR["endpoint"]}
+
+
+def advice_bits(b: dict) -> dict:
+    """The advice's bits over the run's windows (`chain.bits`): v0's encoding, and the residual's (what the advice says
+    beyond what the walk derives from the certified I/O), None unless the advice was rebuilt from it."""
+    runs = [w for w in b.get("windows") or [] if w.get("in_run")]
+    derived = [w.get("derived_bits") for w in runs]
+    return {"v0_total": b.get("v0_total"), "T": b.get("T"),
+            "derived": sum(derived) if runs and None not in derived and b.get("rebuilt") else None}
 
 
 def escaped(name: str, m: dict, s: dict) -> dict | None:
@@ -311,11 +344,91 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "in_the_clear": CLEAR["scan"]}
 
 
-def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict) -> dict:
+def free_inputs(circuit: dict) -> int:
+    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by the rule of #4404's
+    ``legs/certifier.free_inputs``: every unit's input-row bits (each template's units times its statement's
+    ``in_rows`` widths), less each unit's rows whose every port a wire feeds from another unit's output (``wires``) or
+    ``external`` names as the system's I/O. A row the registration's anchors register still counts, an overcount."""
+    from verity.ml.windows.interface import Wire
+
+    units = {t: n for t, n in circuit["templates"]}
+    covered: dict[tuple[str, str], set[int] | None] = {}
+    for e in circuit["external"]:
+        t, port = e.rsplit("/", 1)
+        if t not in units:
+            raise ValueError(f"external port {e!r} is no template's")
+        covered[t, port] = None
+    for w in map(Wire.of, circuit["wires"]):
+        if w.reader not in units:
+            raise ValueError(f"a wire's reader {w.reader!r} is no template")
+        fed = covered.setdefault((w.reader, w.port), set())
+        if fed is not None:
+            fed.update(range(w.at, w.at + w.units))
+    bits = 0
+    for t, n in units.items():
+        for _, _, width, ports in circuit["statements"][t]["in_rows"]:
+            fed = [covered.get((t, p), set()) for p in ports]
+            gone = 0 if not fed else n if all(f is None for f in fed) else len(set(range(n)).intersection(
+                *(set(range(n)) if f is None else f for f in fed)))
+            bits += (n - gone) * width
+    return bits
+
+
+def audit_of(d: Path) -> dict:
+    """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its units, the
+    units its subset law draws, and its free inputs (`free_inputs`); no jitter term, N2 holding the egress counts
+    exactly."""
+    reg = json.loads((d / "registration.json").read_text())
+    law = reg["law"]
+    if law.get("law") != "subset":
+        raise SystemExit(f"--audit {d}: K's q is a subset law's k/n, not {law}")
+    return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
+            "units": reg["population"], "drawn": law["k"],
+            "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
+
+
+def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
+    """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period, as #4404's `compose.horizon_leak`
+    counts it: the faulty units paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of
+    its compute audits, so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
+    + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability
+    ``δ + Σ_i (e_i + e'_i)``. #4367 is conditional on its per-window inputs, so this K is cited as conditional."""
+    q = min(Fraction(a["drawn"], a["units"]) for a in audits)
+    fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
+    n = sum(a["units"] for a in audits)
+    terms = {**network, "faulty_bits": OUT_BITS * fmax, "faulty_sets": ((n + 1) ** fmax - 1).bit_length(),
+             "free": sum(a["free"] for a in audits), "jitter": sum(a["jitter"] for a in audits)}
+    k = sum(terms.values())
+    return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
+            "share": k / (OUT_BITS * n), "eps": f"{delta} + Σ_i (e_i + e'_i) over {len(audits)} audits",
+            "conditional": HORIZON_CONDITION}
+
+
+def network_terms(cert: dict, endpoint: dict) -> dict:
+    """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
+    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`LinkWindows.charge`),
+    and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
+    bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
+    advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
+    return {"advice": advice, "syncs": None if syncs is None else math.ceil(len(cert.get("rows") or []) * syncs),
+            "cells": 0}
+
+
+def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
+             audits: list[dict] | None = None) -> dict:
     rows = cert.get("rows") or []
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
+    network = network_terms(cert, endpoint or {})
+    if None in network.values():
+        k = {"open": f"the network's terms aren't all computed: {network}"}
+    elif not audits:
+        k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
+                     "inputs and draw the K counts", "network": network}
+    else:
+        k = {f"{d:.3g}": horizon_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
     return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted (#4326), KS as hypothesis",
+            "K": k,
             "sum": "NetTiming.periodLeak_le_sum (#4324): Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
             "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
@@ -349,33 +462,60 @@ def merged_n2(paths: list[str] | None) -> dict | None:
             "runs": len(docs)}
 
 
+def stubbed(job: dict, custody_doc: dict) -> list[str]:
+    """What a certifier-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
+    what served them when their ``request.json`` says (demo_chain.sh's)."""
+    if job.get("path") != CERTIFIER_ONLY:
+        return []
+    out = list(STUBBED)
+    for g in custody_doc.get("gate_runs") or []:
+        r = g.get("request") or {}
+        if "off-host" in str(r.get("where") or ""):
+            out.append(f"{g['gate_run']} ran off-host ({r['where']}), so no gate session or gate custody stands behind it")
+        if r.get("engine"):
+            out.append(f"{g['gate_run']}'s endpoint is demo_endpoint.py's {r['engine']} engine, not the H200's own "
+                       "serving loop")
+    return out
+
+
 def report(a) -> dict:
     cust, cert = _json(a.custody) or {}, _json(a.certs) or {}
     job = _json(a.job) or {}
+    certifier_only = job.get("path") == CERTIFIER_ONLY
     endpoint = endpoint_step(_json(a.endpoint))
     n2 = n2_step(merged_n2(a.n2), cert, job)
-    scan = scan_step(_json(a.scan), a.warden_run, job)
+    scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
+            else scan_step(_json(a.scan), a.warden_run, job))
+    proved = n2.get("verdict") == "accepted" and (certifier_only or scan.get("verdict") == "accepted")
     steps = {"custody": cust, "certificates": {k: v for k, v in cert.items() if k != "rows"}, "endpoint": endpoint,
-             "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if n2.get("verdict") == "accepted"
-                                    and scan.get("verdict") == "accepted" else n2.get("verdict"),
+             "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if proved else n2.get("verdict"),
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
                                     "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
-    required = ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()), "n2", "scan")
+    required = ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()), "n2",
+                *(() if certifier_only else ("scan",)))
     accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
-    negatives = {**{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
+    rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
+                 for s, v in (g.get("strategies") or {}).items() if s not in REHEARSAL_ACCEPTS}
+    negatives = {**rehearsal, **{f"tie/{k}": v for k, v in endpoint.get("negatives", {}).items()},
+                 **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
-    return {"schema": SCHEMA, "job": job, "verdict": "accepted" if accepted else "refused",
-            "negatives_refused": negatives, "steps": steps, "d1": d1_terms(cert, n2, scan, cust)}
+    audits = [audit_of(Path(d)) for d in getattr(a, "audit", None) or []]
+    return {"schema": SCHEMA, "job": job, "verdict": "accepted" if accepted else "refused", "path": job.get("path"),
+            "stubbed": stubbed(job, cust), "negatives_refused": negatives, "steps": steps,
+            "d1": d1_terms(cert, n2, scan, cust, endpoint, audits)}
 
 
 def markdown(r: dict) -> str:
     j, s = r["job"], r["steps"]
     lines = [f"# Network chain run {j.get('run', '?')}", "",
-             f"Tree {j.get('tree', '?')}, gates {', '.join(j.get('gates', [])) or '?'}. Verdict: **{r['verdict']}**.",
-             "", "| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
+             f"Tree {j.get('tree', '?')}, gates {', '.join(j.get('gates', [])) or '?'}. Verdict: **{r['verdict']}**"
+             + (f" on the {r['path']} path." if r.get("path") else "."), ""]
+    if r.get("stubbed"):
+        lines += ["Stubbed:", *[f"- {x}" for x in r["stubbed"]], ""]
+    lines += ["| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
     for k in ("custody", "certificates", "endpoint", "n2", "scan", "lean"):
         e = s[k].get("eps_at_delta") or {}
         eps = (f"{e['law']}, {e['drawn']} of {e['units']}: wrong ≤ {e['wrong_units_at_delta']}" if e else "")
@@ -387,7 +527,15 @@ def markdown(r: dict) -> str:
     lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
-              f"- Σ ε_w = {d['sum_eps']}", "- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
+              f"- Σ ε_w = {d['sum_eps']}"]
+    k = d.get("K") or {}
+    if "open" in k:
+        lines.append(f"- K open: {k['open']}" + (f"; the network's terms {k['network']}" if k.get("network") else ""))
+    for delta, h in k.items():
+        if isinstance(h, dict) and "K" in h:
+            lines.append(f"- K at δ = {delta}: {h['K']} bits ({h['share']:.3g} of the {h['units']} units' output "
+                         f"bits), Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}; {h['conditional']}")
+    lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
     return "\n".join(lines) + "\n"
 
 
@@ -407,6 +555,8 @@ def main(argv=None) -> int:
         r.add_argument(f"--{f}")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2)")
     r.add_argument("--warden-run")
+    r.add_argument("--audit", nargs="*", help="the served units' compute audit windows (registration.json and "
+                                              "circuit.json each), whose draw and free inputs d1's K counts")
     r.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
     if a.command == "custody":
