@@ -59,7 +59,8 @@
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
-# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it.
+# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
+# windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,

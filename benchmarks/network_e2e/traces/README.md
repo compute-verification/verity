@@ -38,6 +38,11 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   event loop record (`corpus.drive_warden`); the summary lays each late tick against them (`summary.late_ticks`).
 - `run.sh`: the job on a leased GPU of a node (its header has the command). `join.sh`: its summaries, comparison and
   ENC-REPLAY's table on a CPU node, for a GPU job run with `JOIN=0`.
+- `admit_release.py`: what admitting requests to the engine in the warden's release order would cost (serve-openai adding
+  each at the bucket boundary after its release), estimated offline. ENC-REPLAY's scheduler model (its `replay.py`, in
+  network_e2e's encodings) runs on the trace's own step clock, once with the recorded adds and once with the release-order
+  adds; it reports the added TTFT, the throughput change and the order bits removed. It reads warden traces whose egress
+  counts from the release a (main's warden) and traces without a warden.
 
 For the 8B model, attention is vLLM's own, not the int8 attention: `verity_vllm.engine.int8_ops._requests` refuses a
 request whose query rows are neither its whole window nor one row. Every prefix-cache hit and every later prefill chunk is

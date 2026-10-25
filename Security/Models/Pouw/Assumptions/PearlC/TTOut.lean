@@ -123,8 +123,9 @@ def TTOutTilePearlC [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Co
   TTOutTile CM (pearlCProtocol sem c ρ) (pearlCTiles sem c ρ) (pearlCDomain Params.pi) (1 / 400) εPearlC
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record** `d`: `TTOut` at `pearlCProtocolDev d sem ρ`,
-`pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. At `devH100` it is `TTOutPearlC` at `Costs.adopted`
-(`ttOutPearlCDev_h100`). At another record it is another named assumption: the same game, charging rule, error and
+`pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. At `devH100` it is `TTOutPearlC` at `Costs.adopted` on that
+domain narrowed to `n ≥ 64` with `64 ∣ n` (`pearlCDomainDev_h100`), so `TTOutPearlC` gives it (`ttOutPearlCDev_h100`);
+the narrowing keeps out units whose output words are cheaper to guess than `εPearlC` (`pearlCDomainDev`). At another record it is another named assumption: the same game, charging rule, error and
 falsifiers, on that device's ticket chain, U, flags, salt-dead predicate and prices. `CM` is that device's W1 accounting
 (`w1-complete/<device>`), which charges a tensor-core instruction its whole fragment shape, never per output word. -/
 def TTOutPearlCDev [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
@@ -132,7 +133,8 @@ def TTOutPearlCDev [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Cos
   TTOut CM (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
 
 /-- **TT_OUT(1/400) per audit tile at a device record** `d`: `TTOutTile` at `pearlCProtocolDev d sem ρ` and
-`pearlCTilesDev d sem ρ`. At `devH100` it is `TTOutTilePearlC` at `Costs.adopted` (`ttOutTilePearlCDev_h100`). -/
+`pearlCTilesDev d sem ρ`. At `devH100` it is `TTOutTilePearlC` at `Costs.adopted` on the narrowed domain, which
+`TTOutTilePearlC` gives (`ttOutTilePearlCDev_h100`). -/
 def TTOutTilePearlCDev [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTile CM (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC

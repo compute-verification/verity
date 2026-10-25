@@ -51,6 +51,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from verity_vllm.program.sampling_event import circuit_token_id
+
 ACTIVE_REFERENCE_ONLY = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                          "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
                          "there is no not-required-because-not-executed category. (COORD R17-27)")
@@ -204,7 +206,12 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                 eq[rid] = None
                 problems.append(f"{rid}: not in the Match record's tokens.json (request ids {sorted(by_rid)[:8]}): the serving transcript does not cover it")
                 continue
-            m_served = [int(t) for t in (e.get("generated_token_ids") or [])]
+            try:
+                m_served = [circuit_token_id(t) for t in (e.get("generated_token_ids") or [])]
+            except ValueError as err:
+                eq[rid] = False
+                problems.append(f"{rid}: the Match record's tokens.json served an id that is no circuit's: {err}")
+                continue
             c_served = rec.get("served_output_len")
             c_toks = None if served_tokens is None else served_tokens.get(rid)
             if c_toks is not None:                                                  # rev S-r17-23 (c): the FULL list, not length + last
