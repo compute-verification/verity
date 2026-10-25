@@ -49,7 +49,9 @@ keyed by the component's id. On rejection or undecided nothing is public.
 Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
 replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
-checks). NCI and the trial's reconciling are not components yet.
+checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
+own Python (`Ported`), and its cases come from the port's own difftest. NCI and the trial's reconciling are not
+components yet.
 
 ## The difftest
 
