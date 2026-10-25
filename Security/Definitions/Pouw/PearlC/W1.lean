@@ -1,6 +1,7 @@
 import Definitions.Pouw.PearlC.DevicePrices
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DeviceFp4
+import Definitions.Pouw.PearlC.DeviceFp4Issue
 import Definitions.Pouw.PearlC.Sha512
 
 /-!
@@ -28,10 +29,11 @@ The regions are the scratch (0), the salt's bytes (1), the preprocessed state σ
 32-bit words), the program's constant bank (3), the activations (4) and the weights (5), both FP32 words at
 `Nat.pair`-coded positions, and the outputs: the ticket words (6) and the useful words (7). A program (`Prog`) is a
 constant bank and a code tree, both functions of the public layout, so the layout's control flow, unrolling and
-addressing are compiled in and free, as public control flow is on a GPU. What depends on data is an `ite` (a branch on a
-word) or an `ld`/`st` with a register address, and W1's taint rule prices both: an `ite` costs one INT32 instruction,
-and every instruction under it pays one INT32 instruction per word it writes (`Instr.price`). An instruction is one lane:
-its price is W1's per-lane price, except a tensor-core instruction, which is the warp's whole fragment.
+addressing are compiled in and free, as public control flow is on a GPU. Its text is bounded (`Prog.bounded`, below).
+What depends on data is an `ite` (a branch on a word) or an `ld`/`st` with a register address, and W1's taint rule
+prices both: an `ite` costs one INT32 instruction, and every instruction under it pays one INT32 instruction per word it
+writes (`Instr.price`). An instruction is one lane: its price is W1's per-lane price, except a tensor-core instruction,
+which is the warp's whole fragment.
 
 **The run.** `run` executes the program from the initial memory (`init`) and reads the transcript off the final memory
 (`readout`): every declared unit commits its activations (as the program left them; positions outside the unit's shape
@@ -72,7 +74,11 @@ the salt; online, `sha512` is the one place W1 charges a compression.
 `W1Prices.toPrices` is the coarse record `Device.Prices` that `creditDev` and `wrefDev` read: the FP32 add, the BF16 MAC,
 and the forming per element, `fs = 32·mac(E4M3) + cvt/2` (the k32 noise atom and half a cast) and `qa = ⌈fp32/8⌉` (one
 FFMA per 8 elements). At `h100`, `sm120` and `sm120Loop` it is `Prices.h100`, `Prices.sm120` and `Prices.sm120Loop`
-(`Proofs.Pouw.PearlC.W1Checks`).
+(`Proofs.Pouw.PearlC.W1Checks`). `W1Prices.toFp4Prices pr p` is the FP4 record's `Fp4Prices` at a block-scale path
+`p`: the BF16 MAC, `fs = 64·mac(E2M1) + p.fixed + p.fp32Ops·fp32/16 + fp32 + cvt/2` (the k64 noise atom, the block
+scale, and the cast's FMUL and half an `F2FP`) and `qa = fp32 + fp32/8` (the noisy amax and ρ's accumulate on every 8th
+element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm120` at `lut256`. The scale path's
+`fixed` part (an `LDS` and `PRMT`s per block) is the record's own, not a W1 price.
 
 **Where the model is narrower than W1**, each a named gap for the restatement:
 - the opcode set is the list above: an opcode outside it (MUFU, IMAD.WIDE, HADD2, warp shuffles and votes, atomics)
@@ -82,8 +88,16 @@ FFMA per 8 elements). At `h100`, `sm120` and `sm120Loop` it is `Prices.h100`, `P
   the program, which is free;
 - the BF16 fragment's step is the one-group pipeline `bf16Step` at the device's BF16 `Pipeline`; on sm_120 that is
   `PeelExact.hopperBf16K16`, the stand-in `PeelExactP` uses, not a capture of sm_120's HMMA;
-- program text other than the constant bank is free: the code tree is the program's control flow, and unrolled code
-  carries no data (every operand is an address).
+- program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
+  data (every operand is an address).
+
+**The text bound** (`Prog.bounded`; W1RT-1's fix F2, `note:compute-accounting/20261024T1730Z-report-w1-redteam`). At
+every layout a program has at most `2^64` code nodes (`Code.size`) and `2^64` constants. W1 charges only the path a run
+takes, so with unbounded text a tree of `ite`s on the salt's 256 bits holds one leaf per salt. That is a table of the
+reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions (W1RT-1). Under the bound
+that tree is not a program (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`). The bound narrows every statement over W1 to
+programs a machine can hold. A deployed program is far inside it: W1 has no loops, so an honest code tree has about one
+node per instruction a run executes, and `2^64` instructions is far more than a device runs in a window.
 -/
 
 namespace Pouw.PearlC.W1
@@ -162,6 +176,13 @@ def W1Prices.fp4Sm120 (sha fetch : ℚ) : W1Prices :=
 `fs = ⌈32·mac(E4M3) + cvt/2⌉` (the noise atom's 32 MACs and half a cast) and `qa = ⌈fp32/8⌉` (ρ's FFMA on every 8th). -/
 def W1Prices.toPrices (pr : W1Prices) : Prices :=
   ⟨pr.fp32, pr.mac .bf16, ⟨⌈32 * pr.mac .e4m3 + pr.cvt / 2⌉₊, ⌈pr.fp32 / 8⌉₊⟩⟩
+
+/-- **The FP4 coarse record** `creditFp4` and `wrefFp4` read, at the block-scale path `p`: the BF16 MAC, the forming
+per element `fs = 64·mac(E2M1) + p.fixed + p.fp32Ops·fp32/16 + fp32 + cvt/2` (the k64 noise atom, the block scale per
+16, and the cast's FMUL and half an `F2FP`), and `qa = fp32 + fp32/8` (the noisy amax's FMNMX and ρ's FFMA on every
+8th). -/
+def W1Prices.toFp4Prices (pr : W1Prices) (p : Fp4ScalePath) : Fp4Prices :=
+  ⟨pr.mac .bf16, 64 * pr.mac .e2m1 + p.fixed + p.fp32Ops * pr.fp32 / 16 + pr.fp32 + pr.cvt / 2, pr.fp32 + pr.fp32 / 8⟩
 
 /-- **A W1 device**: its prices, its captured tensor-core steps (E4M3 and BF16 as a `Pipeline`, E2M1 as an `Fp4Atom`),
 and the fragments it has. A fragment it lacks is a no-op that costs nothing. -/
@@ -456,10 +477,18 @@ inductive Code where
   | op (i : Instr) (k : Code)
   | ite (p : Addr) (t e k : Code)
 
-/-- A program: a constant bank and a code tree, each a function of the public layout. -/
+/-- A code tree's size: its nodes, each `done` among them. -/
+def Code.size : Code → ℕ
+  | .done => 1
+  | .op _ k => k.size + 1
+  | .ite _ t e k => t.size + e.size + k.size + 1
+
+/-- **A program**: a constant bank and a code tree, each a function of the public layout, of bounded text: at every
+layout at most `2^64` code nodes and `2^64` constants (W1RT-1's fix F2). -/
 structure Prog where
   consts : Layout → List ℕ
   code : Layout → Code
+  bounded : ∀ L : Layout, (code L).size ≤ 2 ^ 64 ∧ (consts L).length ≤ 2 ^ 64
 
 /-- A run's state: the memory, the pre-salt and supplied addresses read so far, and the instructions' cost. -/
 structure St where

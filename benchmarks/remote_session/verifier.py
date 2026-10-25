@@ -14,7 +14,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
 2. the round trip, measured by pings;
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
-   (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
+   (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
+   session so the prover re-keys in time); the coin commitment sent first, then
    σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
    `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
@@ -28,14 +29,16 @@ One connection serves one registration and then `--sessions` sessions over it, e
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
    (`node_line`).
 
-With `--paced K:T_MS:DRAWS:WINDOWS` each session is paced (`pace_of`, `audit.Pace(K, T)`): a coin every K passes,
-each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
+With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
+passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
 fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
 then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
-(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.
+(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
+boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
+prover waits a round trip on each coin.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -98,7 +101,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
-                       [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
+                       [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                         --challenger-period P --challenger-main FILE [--challenger-minutes M]]
@@ -110,6 +113,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import json
 import math
 import os
@@ -147,6 +151,9 @@ DISK_BYTES_PER_S = 4.4e9
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
+UNRECORDED_SLACK_LOG2 = 41
+"""The AuditRO slack a ledger whose `inputs` carry no `slack_log2` was charged at, bits a pass: every record written
+before they carried it, gate runs 8 and 9's among them."""
 
 
 def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
@@ -245,7 +252,7 @@ def average_line(windows: list[dict]) -> dict:
 
 
 def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: audit.Rebuild, chip_bytes: int = 0,
-           credit_post_seed: audit.PostSeedVerdict | None = None) -> dict:
+           credit_post_seed: audit.PostSeedVerdict | None = None, schedule: audit.Scheduled | None = None) -> dict:
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
@@ -261,14 +268,17 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
 
     A registered block counts as the layout labels it (`regions_of`; None, the drivers' stores: the whole store
     filler in HBM), HBM only toward the share; an appended block
-    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict, less the most
-    its carriers hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
+    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict and the session's
+    schedule check (`schedule`, `audit.Session.scheduled`, as `audit.ledger` requires them), less the most its carriers
+    hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
     own: the lost blocks come off each.  The session's line is its worst window's: `credited_bytes`, `share` of
     `hbm_bytes` and `residual` = 1 − share, the HBM it doesn't show used, with ε, the share of the window's held
     basis the losses took, at δ.  ε is this reading's (the floor and rebuilds against held blocks), not a composed
     guarantee's."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    if credit_post_seed is not None and (type(schedule) is not audit.Scheduled or not schedule.of(record)):
+        raise ValueError("KV is credited only on this session's schedule check (`audit.Session.scheduled`)")
     if len(plans) != len(record.windows) or any(len(p) != w.passes for p, w in zip(plans, record.windows)):
         raise ValueError("a plan for each pass of each window of the record")
     if rebuild.codec != record.codec:
@@ -362,12 +372,33 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
-    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`); `delta` alone
-    understates it by the passes' slack.  None when no reading has a ledger."""
+    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
+    commitment's hiding terms and the draw's rejection (`ledger.hiding`, `ledger.rejection`, the ledger's `delta`
+    parts); `delta` alone understates it by the passes' slack.  None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
-            return ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+            d = ledgers.get("delta", {})
+            return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+                    + d.get("hiding", 0.0) + d.get("rejection", 0.0))
     return None
+
+
+def sketch_at(session: dict, registration: dict, outside: int | None = None) -> dict | None:
+    """A session's SketchBound δs from its record (`Verifier.ledgers`' `sketch_failure`) against Q = F·C queries, C the
+    compressions the verifier charged the node over the span and F the outside-compute factor: the record's (1 for one
+    written before F was recorded, which charged the node's alone), or `outside` to read it at another; with the memory
+    line's error there, the horizon's plus δs (`memory_error` at F).  None for a session whose record has no sketch
+    term."""
+    lg = session.get("ledger") or {}
+    sf, inputs = lg.get("sketch_failure"), lg.get("inputs") or {}
+    if not sf or not inputs.get("rows"):
+        return None
+    f = sf.get("outside", 1) if outside is None else outside
+    c = sf["compressions"]
+    d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
+    horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
+    return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
+            "error": None if horizon is None else horizon + float(d)}
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -404,13 +435,20 @@ TIME_HELD = "held over time"
 
 
 def pace_of(spec: str, pass_ms: float) -> dict:
-    """`K:T_MS:DRAWS:WINDOWS` as a session's pacing: groups of K passes, each a `Session` window of its own whose coin
-    is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
-    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would."""
-    k, t_ms, draws_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(spec.split(":")))
+    """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `Session` window of its own whose
+    coin is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
+    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would;
+    F the windows in flight (`audit.Pace.in_flight`, 2 when absent, named only at 1)."""
+    parts = spec.split(":")
+    if len(parts) not in (4, 5):
+        raise ValueError(f"a pace is K:T_MS:DRAWS:WINDOWS[:F], not {spec!r}")
+    k, t_ms, draws_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(parts[:4]))
+    f = int(parts[4]) if len(parts) == 5 else 2
+    if f not in (1, 2):
+        raise ValueError(f"a pace's windows in flight are 1 or 2, not {f}")
     groups = max(1, round(t_ms / (k * pass_ms)))
     return {"k": k, "t_ms": t_ms, "draws_t": draws_t, "windows": windows, "groups": groups,
-            "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms}
+            "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms} | ({"in_flight": 1} if f == 1 else {})
 
 
 def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.Group]:
@@ -491,16 +529,23 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
+def recorded_chip_bytes(mem: dict) -> int:
+    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `timing.CHIP_BYTES` where that is
+    larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
+    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under `timing.HOST_CHIP_BYTES`."""
+    return max(mem["chip_bytes"], timing.CHIP_BYTES)
+
+
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
     """An accepted paced session's line (`paced_line`) from its record in `verifier.json`, against its HBM and
-    `host_bytes`, with `ingress_bytes_per_s` of other routes into node memory charged, and their bursts
-    (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
+    `host_bytes`, its S_chip at least the auditor's (`recorded_chip_bytes`), with `ingress_bytes_per_s` of other routes
+    into node memory charged, and their bursts (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
     lg, mem = session["ledger"], session["ledger"]["memory"]
     b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
     return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
                       blocks=registration["blocks"],
                       rebuild_per_ns=line.number(lg["inputs"]["squarings_per_s"]) / codec.encode_squarings / line.NS,
-                      chip_bytes=mem["chip_bytes"], block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
+                      chip_bytes=recorded_chip_bytes(mem), block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
                       burst_bytes=ingress_bursts(ingress_bytes_per_s),
                       ingress_per_ns=line.number(ingress_bytes_per_s) / b / line.NS)
 
@@ -512,29 +557,67 @@ def recorded_rates(session: dict, registration: dict, **node: float) -> line.Rat
                       wire.codec_named(registration["codec"]).encode_squarings, **node)
 
 
+def lean_record(session: dict) -> dict:
+    """The Lean verifier's record of an accepted session in `verifier.json` (its `outcome` request's `record`,
+    `lean_verifier.summary_json`'s form), as the session keeps it (`lean_record`), the Lean's where its verdict is
+    the Lean's (lean or both). A run from before sessions kept it wrote the same record read through
+    `lean_verifier.record_of` (`Pair.record`) as its `record`'s `public` and `profile`, which give back every field
+    but each pass's root's arrival, and its `windows_seen` those stamps: it is read back from them, refused where they
+    don't fit."""
+    if "lean_record" in session:
+        return session["lean_record"]
+    pub, ws, seen = session["record"]["public"], session["record"]["profile"]["windows"], session["windows_seen"]
+    if len(seen) != len(ws) or any(len(x["arrivals_ns"]) != len(w["lengths"]) for w, x in zip(ws, seen)):
+        raise ValueError(f"the session's windows seen are not its record's: {len(seen)} for {len(ws)} windows, or "
+                         "a window's arrivals not one a pass")
+    return {"appended": pub["appended"], "appends": pub["appends"], "blocks": pub["blocks"],
+            "lifetime": pub["lifetime"], "pace": pub["pace"], "registration": pub["registration"],
+            "released": pub["released"],
+            "windows": [{"arrived_ns": list(x["arrivals_ns"]), "deadline_ns": w["deadline_ns"],
+                         "drawn": w["profile"]["drawn"]["receipt"], "heads": w["heads"], "lengths": w["lengths"],
+                         "opened_ns": w["opened_ns"], "post_seed": w["post_seed"], "released_ns": w["released_ns"],
+                         "stale": w["stale"], "steps": w["steps"]} for w, x in zip(ws, seen)]}
+
+
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
     """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each window's
-    receipts and draws, and δ."""
+    receipts and draws, and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
     ws = session["record"]["profile"]["windows"]
     return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
 
 
+def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) -> list[line.Seen]:
+    """What the auditor saw of each window beside the Lean verifier's `record` of it (`line.Seen`): its group's times
+    and reads as `paced_groups` reads them, its passes the record's or refused."""
+    gs = paced_groups(mem, seen, block_bytes=block_bytes)
+    if [g.passes for g in gs] != [len(w["lengths"]) for w in record["windows"]]:
+        raise ValueError("the windows seen are not the record's: a group for each of its windows, a pass for each of "
+                         "its passes")
+    return [line.Seen(g.released_ns, g.last_ns, g.least, g.weights, g.hbm, g.host) for g in gs]
+
+
 def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
-    """An accepted paced session's line's inputs from its record in `verifier.json`, in the line's JSON form
-    (`line.inputs_json`, the Lean verifier's `line` request reads them): its groups, against its HBM and `host_bytes`,
-    at `rates` (`recorded_rates`), and its record's windows (`recorded_windows`), whose pooled bound is its wrong
-    receipts."""
-    mem = session["ledger"]["memory"]
-    windows, delta = recorded_windows(session)
-    return line.inputs_json(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
-                            per=session["pace"]["groups"], blocks=registration["blocks"],
-                            block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
-                            node_bytes=mem["hbm_bytes"] + host_bytes, windows=windows, delta=delta, rates=rates)
+    """An accepted paced session's line's inputs in the line's record form (`line.record_inputs_json`, the Lean
+    verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
+    passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
+    each window beside it (`record_seen`, on the clock its `windows_seen` read), against its HBM and `host_bytes`, at
+    `rates` (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`). Refused unless the
+    record is of `registration`."""
+    mem, record = session["ledger"]["memory"], lean_record(session)
+    if record["registration"] != registration["digest"]:
+        raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
+                         f"{registration['digest'][:16]}…")
+    return line.record_inputs_json(
+        record, samples=session["samples"],
+        seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
+        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=recorded_chip_bytes(mem),
+        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates)
 
 
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
-    """An accepted paced session's line in both forms (`line.line`, exact) of its `recorded_inputs`."""
-    return line.line(**line.of_json(recorded_inputs(session, registration, host_bytes=host_bytes, rates=rates)))
+    """An accepted paced session's line in both forms (`line.line_of_record`, exact) of its `recorded_inputs`."""
+    return line.line_of_record(**line.of_record_json(recorded_inputs(session, registration, host_bytes=host_bytes,
+                                                                     rates=rates)))
 
 
 class RealClock:
@@ -867,7 +950,7 @@ class Pair:
 
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
+                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
                  ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
@@ -1059,14 +1142,20 @@ class Verifier:
         `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
         the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
         the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
-        allowances of its coin."""
+        allowances of its coin.  The lifetime cap, unless `lifetime` states it, is the windows of T in 30 s, or paced,
+        the groups of their nominal length, the stretch over its groups (`audit.lifetime_windows`)."""
         reg, K = self.registration, None if pace is None else pace["k"]
         W = self.W if pace is None else pace["groups"] * (pace["windows"] + 1)
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
+        life = self.lifetime if self.lifetime is not None else audit.lifetime_windows(
+            self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
+                              receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
+        one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
+        if one:
+            params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends))
@@ -1074,7 +1163,7 @@ class Verifier:
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json(), "pace": K})
+                        "commitment": session.commitment.to_json(), "pace": K} | one)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1342,6 +1431,7 @@ class Verifier:
                 break
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
+               "lifetime": params.lifetime,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,
@@ -1364,6 +1454,8 @@ class Verifier:
         if accepted:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
+            if session.outcome_json is not None:
+                out["lean_record"] = session.outcome_json["record"]
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
@@ -1424,8 +1516,10 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        `delta` is the memory line's δ in its five parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
-        there are some (`checks.Checks.bounds`)."""
+        there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
+        (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
@@ -1445,7 +1539,7 @@ class Verifier:
                           "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes,
+                          "slack_log2": audit.SLACK_LOG2, "reads_bytes": record.receipts * record.block_bytes,
                           "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
                           "post_seed_credited": False}}
         tiers = cal.get("read_tiers")
@@ -1473,15 +1567,16 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+        out["delta"] = ledger.delta_parts(record, stated)
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
                                                                        if n not in readings)})
-        # SketchBound's δ: every compression the node's GPUs could make over the span a guess or a key.
-        compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
-        out["sketch_failure"] = {"compressions": compressions,
+        # SketchBound's δ: every compression the prover could make over the span a guess or a key, Q = F·C.
+        compressions, outside = ledger.compressions(record, stated), stated.sketch_outside
+        out["sketch_failure"] = {"compressions": compressions, "outside": outside,
                                  "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows,
-                                                                           blocks=record.blocks))}
+                                                                           blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=timing.CHIP_BYTES)
@@ -1518,8 +1613,10 @@ def main() -> int:
     ap.add_argument("--delta-log2", type=float, default=-40.0)
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
-    ap.add_argument("--lifetime", type=int, default=audit.LIFETIME,
-                    help="L: windows an appended block may stay in plans after the window it joined")
+    ap.add_argument("--lifetime", type=int,
+                    help="L: windows (a paced session's groups) an appended block may stay in plans after the window "
+                         "it joined (default: those of the window, or of the nominal group, in 30 s, "
+                         "`audit.lifetime_windows`)")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes checking openings (0: one thread of the verifier's own)")
@@ -1554,10 +1651,11 @@ def main() -> int:
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
                          "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
-    ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS",
+    ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS[:F]",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
-                         "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), and "
-                         "γ per fixed T_MS")
+                         "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), "
+                         "γ per fixed T_MS, and F windows in flight (2, the default, or 1: each coin after the root "
+                         "before it)")
     ap.add_argument("--pace-pass-ms", type=float, default=17.0,
                     help="the pass the paced sessions' groups a stretch are counted at (0: the calibration's median "
                          "pass interval)")
