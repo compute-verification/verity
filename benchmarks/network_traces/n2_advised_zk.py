@@ -566,7 +566,8 @@ def prove(a) -> int:
         (out / name / "verifier" / "advice.json").write_text(json.dumps(
             {"advice": ADV.to_json(rd.advice.advice), "received": list(rd.advice.received),
              "digest": AD.digest(rd.advice)}, sort_keys=True))
-        res["received"] = Z._member_scan(M, sg, rd, out / name)
+        res["received"] = Z._member_scan(M, sg, rd, out / name,
+                                         set(res["period"]["units"]) if "period" in res else None)
         return name, res
 
     with ThreadPoolExecutor(max_workers=a.jobs) as pool:

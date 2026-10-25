@@ -511,8 +511,12 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn})}
 
 
-def _member_scan(M, sg, rd, out: Path) -> dict:
-    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows if x.args is not None)
+def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
+    """The scan of what the verifier received for every window's witness pieces, leaving out the pieces the public
+    circuit or a received window's ``pub`` row holds; `received`, the windows the verifier got (a sampled period's
+    drawn ones), by default every one."""
+    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows
+                    if x.args is not None and (received is None or x.window in received))
     blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes() + rows)
     control = out / "prover-instances.bin"
     with open(control, "wb") as f:
