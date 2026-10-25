@@ -571,7 +571,7 @@ theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A
       ε + e.term (ω, g) + Pr fun r : Fin (V.k x) → Coin =>
         (run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).out = .acc ∧
           Q (run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).seen) :
-    accPrD (abortRun H P V x keep ω) ≤ ε + e.toAbortD.term ω +
+    accPrD (abortRun H P V x keep ω) ≤ ε + (Escapes.toAbortD e).term ω +
       Pr fun d : (Fin (V.k x) → Coin) × A => (abortRun H P V x keep ω d).out = .acc ∧
         Q (abortRun H P V x keep ω d).seen := by
   classical
@@ -598,7 +598,7 @@ theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A
       have ha' := (hrun ω g r).1.2 ha
       rw [← (hrun ω g r).2 ha'] at rest
       exact ⟨ha', rest⟩
-  have hT : (Ex fun g : (Fin (V.k x) → Coin) → Coin × A => e.term (ω, g)) ≤ e.toAbortD.term ω := by
+  have hT : (Ex fun g : (Fin (V.k x) → Coin) → Coin × A => e.term (ω, g)) ≤ (Escapes.toAbortD e).term ω := by
     unfold Escapes.term EscapesD.term
     rw [Ex_add, Ex_sum, Ex_sum]
     refine add_le_add (Finset.sum_le_sum fun i _ => ?_) (Finset.sum_le_sum fun l _ => ?_)
@@ -636,7 +636,7 @@ theorem tableBoundθAbort_of_onAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col 
   obtain ⟨m₀, hm₀⟩ := href x
   obtain ⟨e, ⟨hon, hon₁⟩, hfit, hb⟩ :=
     htab x (Ω × ((Fin (D.V.k x) → Coin) → Coin × A)) (refuser P x (D.V.k x) decC keep m₀)
-  refine ⟨e.toAbortD, hfit, fun ω C hC hg => ?_⟩
+  refine ⟨Escapes.toAbortD e, hfit, fun ω C hC hg => ?_⟩
   exact accPrD_le_of_refuser H P D.V x decC (hVk x) hpc hlast hfree keep m₀ hm₀ e
     (fun i ω r r' h => ⟨(hon i ω r r' h).1, Or.inl (hon i ω r r' h).2⟩) hon₁ (D.εtable x)
     (fun s => ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols s 0) p.val = some u ∧ u ≠ C p) ω
