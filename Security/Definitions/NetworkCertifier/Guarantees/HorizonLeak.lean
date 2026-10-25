@@ -12,7 +12,8 @@ registration, before the window's draw, has a faulty set `W i` (it reads only th
 statement takes two inputs per window:
 
 * the conditional escape (`hesc`): given the earlier windows' coins, the window's audit accepts with probability at most
-  `C(n_i - |W_i|, kd_i) / C(n_i, kd_i) + e_i`;
+  `(1 - q)^|W_i| + e_i`, `q` the deployed design's per-window detection probability (a uniform draw of `kd_i` of the
+  window's `n_i` units meets it at `q = kd_i / n_i`; the statement fixes no draw's form);
 * the leak relation at that same witness (`hleak`): the audit accepts while the window's observations in the network
   certifier's record are not accepted with the faulty set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
@@ -44,20 +45,20 @@ set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits** (conditional on its
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
-values `ρ i` at the registered inputs, operator `op i`), drawing `kd i` of its `n i` units, each unit committing at most
-`b` bits; with the network certifier running its code by `trusted-host` on schedules in `Ss`, each giving connection
+values `ρ i` at the registered inputs, operator `op i`), with `n i` units, each committing at most `b` bits; with the
+network certifier running its code by `trusted-host` on schedules in `Ss`, each giving connection
 `c` at most `cap c` cells, its one run giving the cells the client receives and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
 client's cells at the period's coins. For each secret, `acc z i ω x` is window `i`'s audit accepting at its coins `x`
 after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the faulty set of the witness computed from window
 `i`'s registration; both read only the windows before `i`. Given
 
-* `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ C(n i - |W z ω i|, kd i) / C(n i, kd i) + e i`
-  (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
+* `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ (1 - q)^|W z ω i| + e i`, `q` the design's per-window
+  detection probability (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
 * `hleak`, the leak relation at that witness: `Pr[acc_i ∧ ¬LeakAt (W z ω i)] ≤ e' i` on the record's observations
   (the live `SampledLeakAccepted`, P2, not yet discharged);
 
-for `0 ≤ q ≤ 1` with `q · n i ≤ kd i` in every window, and `Fmax ≥ ln(1/δ)/q`:
+for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
 
 * for every secret, every audit accepts and the monitoring period's good event fails (`HorizonGood`: the faulty sets
   hold under `Fmax` units and every window meets its leak relation at its own) with probability at most
@@ -67,7 +68,7 @@ for `0 ≤ q ≤ 1` with `q · n i ≤ kd i` in every window, and `Fmax ≥ ln(1
 def HorizonLeakAccepted : Prop :=
   ∀ {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ) (reg : Stmt → Finset ℕ) (Dj : ℕ) {m : ℕ}
     (sw : Fin m → Stmt) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
-    (n kd : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
+    (n : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : TapRecord Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
@@ -81,11 +82,10 @@ def HorizonLeakAccepted : Prop :=
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
     (hW : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i)
     (hWn : ∀ z ω i, W z ω i ⊆ range (n i)) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
-    (hesc : ∀ z ∈ Zs, ∀ i ω,
-      Pr (acc z i ω) ≤ ((n i - (W z ω i).card).choose (kd i) : ℝ) / (n i).choose (kd i) + e i)
+    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i)
     (hleak : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
       ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)
-    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hq : ∀ i, q * n i ≤ kd i)
     (δ : ℝ) (hδ : 0 < δ) (Fmax : ℕ) (hF : Real.log (1 / δ) ≤ q * Fmax),
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
         ¬HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2) ≤
