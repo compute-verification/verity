@@ -40,10 +40,10 @@ keyed by the component's id. On rejection or undecided nothing is public.
 
 | component | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
+| communication (the network certificate check) | yes | | `NetworkCheck.Check.protocol` (`network_check`, `../network/lean`) | `verity/network-certificate/v4` |
 | work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | integrity (sampled proofs' one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | bandwidth | yes | | stub | `verity/stub/bandwidth/v0` |
-| communication (the network certifier) | yes | | stub | `verity/stub/certifier/v0` |
 | space (PoUS) | yes | | stub | `verity/stub/pous/v0` |
 
 Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
@@ -60,7 +60,8 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), a
 mirror of the stub, and each ported component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage
-difftest's `answer`, `one_stage` behind the protocol's decoders), which that component's own difftest holds its Lean to.
+difftest's `answer`, `one_stage` behind the protocol's decoders; the network check's difftest's `reference`, the
+certifier's `Audit`), which that component's own difftest holds its Lean to.
 Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode (a
 ported component's from its own difftest's generator, every one aimed at acceptance a third of the time), and the
 composition's inputs or the case itself are often broken. The port follows top's rule where the
