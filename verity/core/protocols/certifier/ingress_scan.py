@@ -1,7 +1,8 @@
 """The scan's ingress side (NET-68's step-indexed scan router, note:network-accounting/20261025T0830Z-report-net68-scan-router):
-one unit a certifier bucket t, `IngressScanBucket`, which reads bucket t's ingress row and the carried state S_{t−1},
-computes S_t from them, holds it to the state it reads as S_t, and outputs one ok bit. Every switch is computed from the
-state and the row; none is witness. Nothing here is in a Spec.
+one unit a certifier bucket t, `IngressScanBucket`, which reads bucket t's ingress row, the carried state S_{t−1} and
+the Programs' row at t, computes S_t from them, holds it to the state it reads as S_t and S_t's egress view to the view
+it reads, and outputs one ok bit. Every switch is computed from the state and the rows; none is witness. Nothing here
+is in a Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
@@ -20,18 +21,28 @@ lengths and slot assignments stay private.
 (u32, the last ordinal admitted), then NR = lanes request slots, each `live`, `done` (its request's `END` is in), `q`,
 `left` (its request's bytes still to come, u32), `cells` (received, CB = bit length of C bits), `fields` (prompt ids
 received, u32), `max_tokens` and `seed` (u32), `temperature` and `top_p` (their seven digits' value, 24 bits),
-`admitted` (`now` at its admission, u32), `anchor` (A(admitted), u32) and `ids`, C·K prompt ids of IDB bits: cell c's
-field k at c·K + k, so prompt position p is at `position(p)`. Each field is least significant bit first, the fields in
+`admitted` (`now` at its admission, u32), `anchor` (A(admitted), u32), `n` and `out`, its Program's output count (u32)
+and KO output ids of IDB bits (both zero until its anchor), and `ids`, C·K prompt ids of IDB bits: cell c's field k at
+c·K + k, so prompt position p is at `position(p)`. Each field is least significant bit first, the fields in
 `layout`'s order, then `pad`, zeros to a whole 16-bit word (`sout`'s held to zero, `sin`'s not read). The empty state
-(`empty`) is all zeros. The egress side reads a slot's fields at their `layout` offsets.
+(`empty`) is all zeros.
+
+**The Programs' row** (`prog_encode`) at bucket t is NR entries, each n (u32) and KO output ids of IDB bits, then zeros
+to a whole word: entry j the outputs of the Program anchored at t that reads slot j, zero for a slot no Program
+anchored at t reads. Here a registered row the prover commits, standing in for the anchored Programs' outputs.
+
+**The egress view** (`view`) of S_t is `egress.EgressBucket`'s state at b = t: b, then each slot's live, q, admitted,
+n and its KO output ids at `egress`'s offsets (`egress.Shape(B, lanes·r, r, NR, KO, IDB, D)`): egress bucket t reads
+S_t's view, 302 words at w63's class, where reading S_t itself would hash its 9,345.
 
 **A unit** (`step`, its reference):
 1. each block's q is its first cell's ordinal; a block is empty (q = 0, every byte zero) or every cell is on q and is
    `DATA`, `END` or `PAD`; the nonempty blocks come first, q increasing;
 2. a block on a live slot's q continues that slot; a block on another q is new, its q above `last`; a slot is held
-   while it is live and `now` is below its anchor, so its ids stay in place until its Program has read them; a slot
+   while it is live and `now` is at most admitted + D + ⌊n / r⌋, its last egress bucket (`egress.bucket_map`'s),
+   so its ids stay in place until its Program has read them and its outputs until the warden has sent them; a slot
    is free when no block continues it and it isn't held, and the i-th new block takes the i-th free slot (the lowest
-   free slot), its `admitted` `now` and its anchor A(`now`);
+   free slot), its `admitted` `now`, its anchor A(`now`) and n and `out` zero;
 3. a block's cells in order: its data cells (`DATA` or `END`), none once its slot is `done`, then its `PAD`s (kind,
    length and payload zero); each data cell is the next frame of its slot's request (`io_request._reading`,
    a first frame from `left` = 0, whose head's fields go into the slot), `END` exactly when it holds the request's last
@@ -39,25 +50,31 @@ field k at c·K + k, so prompt position p is at `position(p)`. Each field is lea
    the slot's cell `cells` (a new slot's ids from the slot's last request are overwritten as its request comes in,
    and no Program reads past a slot's `fields`);
 4. `now` + 1, `phase` + 1 wrapping to 0 at EVERY (a `phase` of EVERY or more is refused), `last` the last new block's
-   q, and a slot live iff a block continued or took it or it is held.
-ok is 1 iff every check holds and the computed S_t is `sout`.
+   q, and a slot live iff a block continued or took it or it is held;
+5. a slot `due` (live in S_{t−1}, its anchor `now`) takes its n and `out` from its entry of the Programs' row; every
+   other entry is zero.
+ok is 1 iff every check holds, the computed S_t is `sout` and its egress view at t is `view`.
 
 **The warden it serves** (`Class.serves`): a class takes every run of a warden whose B, r and lanes are its own, whose
 `ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in S_{A−1}, or its ingress
-failed) and whose D is at least WITHIN + EVERY − 1 (a slot is free by the time the warden can admit a connection on
-the lane its request held, so NR = lanes slots always suffice).
+failed), whose delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most admitted + D, where its egress
+starts) and whose `egress_cells` is at most KO + 1 (a response's ids fit `out`). The warden frees a lane after its
+connection's `END` cell, at admitted + D + ⌊n / r⌋, the bucket the slot's hold ends, so NR = lanes slots suffice.
 
 **Structural Fits.** A unit reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path from
 one bucket's ingress to a later bucket's gates: each step reads the state the step before wrote, whatever the arrivals
 and the prompt lengths, which stay private.
 
-**Where it runs.** `row`, `sin` and `sout` are each a registered read, an input port `Registered.checkPort` accepts:
-`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` and `sout` the scan's state rows t − 1 and t, `sin`
-of the first bucket the empty state's. The unit's one output is ok.
+**Where it runs.** `row`, `sin`, `prog`, `sout` and `view` are each a registered read, an input port
+`Registered.checkPort` accepts: `row` the warden's signed row t (`warden_rows.bucket_port`), `sin` and `sout` the scan's
+state rows t − 1 and t, `sin` of the first bucket the empty state's, `prog` the Programs' row t and `view` the view
+row t, which egress bucket t reads as its `state`. The unit's one output is ok.
 
-    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
-                                                         sout: Array<NS>) -> Value<1>
-        NS = `state_bits`: 96 + lanes·(274 + CB + C·K·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
+    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
+        prog: Array<NP>, sout: Array<NS>, view: Array<NV>) -> Value<1>
+        NS = `state_bits`: 96 + lanes·(306 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
+        NP = `prog_bits`: lanes·(32 + KO·IDB) rounded up to a multiple of 16
+        NV = `view_bits`: 32 + lanes·(112 + KO·IDB rounded up to a multiple of 16)
 """
 from __future__ import annotations
 
@@ -68,6 +85,7 @@ from typing import Sequence
 from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
+from verity.core.protocols.certifier import egress as EG
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_ids as II
 from verity.core.protocols.certifier import io_request as Q
@@ -84,10 +102,11 @@ RATIO_BITS = (10 ** 7 - 1).bit_length()
 @dataclass(frozen=True)
 class Class:
     """The scan's public class: B-byte cells, r a connection a bucket, `lanes` connections at once (as many request
-    slots), C cells a request at most, IDB bits a prompt id, Programs started every EVERY buckets (the start cadence:
-    a boundary at each bucket t ≡ 0 mod EVERY of the scan) and WITHIN, the buckets a request's ingress may take (δ):
-    a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs read the state
-    before it."""
+    slots), C cells a request at most, IDB bits a prompt or output id, Programs started every EVERY buckets (the
+    start cadence: a boundary at each bucket t ≡ 0 mod EVERY of the scan) and WITHIN, the buckets a request's ingress
+    may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs
+    read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is at most
+    admitted + D, and KO outputs a request at most."""
 
     B: int
     r: int
@@ -96,20 +115,30 @@ class Class:
     IDB: int = 17
     EVERY: int = 10
     WITHIN: int = 12
+    D: int = 21
+    KO: int = 64
 
     def __post_init__(self) -> None:
-        for name in ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN"):
+        for name in ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO"):
             v = getattr(self, name)
             if type(v) is not int or v < 1:
                 raise ValueError(f"{name} is a positive integer, not {v!r}")
         if self.IDB > 32 or self.C >= 1 << 16 or self.EVERY >= 1 << 31 or self.WITHIN >= 1 << 31:
             raise ValueError(f"IDB <= 32, C < 2^16 and EVERY, WITHIN < 2^31, not IDB={self.IDB}, C={self.C}, "
                              f"EVERY={self.EVERY}, WITHIN={self.WITHIN}")
+        if not self.WITHIN + self.EVERY - 1 <= self.D < 1 << 31 or self.KO >= 1 << 16:
+            raise ValueError(f"WITHIN + EVERY - 1 <= D < 2^31 and KO < 2^16, not D={self.D}, KO={self.KO}")
         Q.layout(self.B)
+        self.egress
 
     @cached_property
     def lay(self) -> Q.Layout:
         return Q.layout(self.B)
+
+    @cached_property
+    def egress(self) -> EG.Shape:
+        """The egress bucket's shape (`egress.Shape`) whose state is this scan's egress view (`view`)."""
+        return EG.Shape(self.B, self.S, self.r, self.NR, self.KO, self.IDB, self.D)
 
     @property
     def S(self) -> int:
@@ -147,8 +176,8 @@ class Class:
                 "lanes": (params.lanes == self.lanes, f"= lanes = {self.lanes}"),
                 "ingress_cells": (params.ingress_cells <= self.C, f"<= C = {self.C}"),
                 "ingress_buckets": (params.ingress_buckets <= self.WITHIN, f"<= WITHIN = {self.WITHIN}"),
-                "delay": (params.delay >= self.WITHIN + self.EVERY - 1,
-                          f">= WITHIN + EVERY - 1 = {self.WITHIN + self.EVERY - 1}")}
+                "delay": (params.delay == self.D, f"= D = {self.D}"),
+                "egress_cells": (params.egress_cells <= self.KO + 1, f"<= KO + 1 = {self.KO + 1}")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
             raise ValueError(f"{self} doesn't serve the warden at these parameters: set " + "; ".join(bad))
@@ -157,7 +186,7 @@ class Class:
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
     return (("live", 1), ("done", 1), ("q", 32), ("left", 32), ("cells", cls.CB), ("fields", 32), ("max_tokens", 32),
             ("seed", 32), ("temperature", RATIO_BITS), ("top_p", RATIO_BITS), ("admitted", 32), ("anchor", 32),
-            ("ids", cls.C * cls.K * cls.IDB))
+            ("n", 32), ("out", cls.KO * cls.IDB), ("ids", cls.C * cls.K * cls.IDB))
 
 
 def _fields_bits(cls: Class) -> int:
@@ -181,6 +210,16 @@ def state_bits(cls: Class) -> int:
     return -(-_fields_bits(cls) // 16) * 16
 
 
+def prog_bits(cls: Class) -> int:
+    """The Programs' row: NR entries of (n u32, KO output ids of IDB bits), zero-padded to whole 16-bit words."""
+    return -(-cls.NR * (32 + cls.KO * cls.IDB) // 16) * 16
+
+
+def view_bits(cls: Class) -> int:
+    """The egress view's bits (`egress.Shape.state_bits`)."""
+    return cls.egress.state_bits
+
+
 def position(cls: Class, p: int) -> int:
     """Prompt position p's index in a slot's `ids`: frame 0's fields first, then each continuation's K."""
     return p if p < cls.K0 else cls.K + p - cls.K0
@@ -200,6 +239,8 @@ class Slot:
     top_p: int = 0
     admitted: int = 0
     anchor: int = 0
+    n: int = 0
+    out: list[int] = field(default_factory=list)
     ids: list[int] = field(default_factory=list)
 
 
@@ -212,47 +253,97 @@ class State:
 
 
 def empty(cls: Class) -> State:
-    return State(0, 0, 0, [Slot(ids=[0] * (cls.C * cls.K)) for _ in range(cls.NR)])
+    return State(0, 0, 0, [Slot(out=[0] * cls.KO, ids=[0] * (cls.C * cls.K)) for _ in range(cls.NR)])
+
+
+def _put(bits: list[int], v: int, w: int) -> None:
+    if not 0 <= v < 1 << w:
+        raise ValueError(f"{v} is no {w}-bit field")
+    bits.extend(v >> b & 1 for b in range(w))
+
+
+class _Reader:
+    def __init__(self, bits: Sequence[int]) -> None:
+        self.bits, self.at = bits, 0
+
+    def take(self, w: int) -> int:
+        v = sum(int(self.bits[self.at + b]) << b for b in range(w))
+        self.at += w
+        return v
 
 
 def encode(cls: Class, st: State) -> list[int]:
     bits: list[int] = []
-
-    def put(v: int, w: int) -> None:
-        if not 0 <= v < 1 << w:
-            raise ValueError(f"{v} is no {w}-bit field")
-        bits.extend(v >> b & 1 for b in range(w))
-
-    put(st.now, 32)
-    put(st.phase, 32)
-    put(st.last, 32)
+    for v in (st.now, st.phase, st.last):
+        _put(bits, v, 32)
     for s in st.slots:
-        for name, w in slot_layout(cls)[:-1]:
-            put(getattr(s, name), w)
-        if len(s.ids) != cls.C * cls.K:
-            raise ValueError(f"a slot holds {cls.C * cls.K} ids, not {len(s.ids)}")
-        for v in s.ids:
-            put(v, cls.IDB)
+        for name, w in slot_layout(cls)[:-2]:
+            _put(bits, getattr(s, name), w)
+        if len(s.out) != cls.KO or len(s.ids) != cls.C * cls.K:
+            raise ValueError(f"a slot holds {cls.KO} outputs and {cls.C * cls.K} ids, not {len(s.out)}, {len(s.ids)}")
+        for v in (*s.out, *s.ids):
+            _put(bits, v, cls.IDB)
     return bits + [0] * (state_bits(cls) - len(bits))
 
 
 def decode(cls: Class, bits: Sequence[int]) -> State:
     if len(bits) != state_bits(cls):
         raise ValueError(f"a state is {state_bits(cls)} bits, not {len(bits)}")
-    at = 0
-
-    def take(w: int) -> int:
-        nonlocal at
-        v = sum(int(bits[at + b]) << b for b in range(w))
-        at += w
-        return v
-
-    now, phase, last, slots = take(32), take(32), take(32), []
+    rd = _Reader(bits)
+    now, phase, last, slots = rd.take(32), rd.take(32), rd.take(32), []
     for _ in range(cls.NR):
-        s = Slot(**{name: take(w) for name, w in slot_layout(cls)[:-1]})
-        s.ids = [take(cls.IDB) for _ in range(cls.C * cls.K)]
+        s = Slot(**{name: rd.take(w) for name, w in slot_layout(cls)[:-2]})
+        s.out = [rd.take(cls.IDB) for _ in range(cls.KO)]
+        s.ids = [rd.take(cls.IDB) for _ in range(cls.C * cls.K)]
         slots.append(s)
     return State(now, phase, last, slots)
+
+
+#: an entry of the Programs' row: a request's n outputs and its KO output ids (zero past them)
+Out = tuple[int, tuple[int, ...]]
+NONE: Out = (0, ())
+
+
+def prog_encode(cls: Class, entries: Sequence[Out]) -> list[int]:
+    """The Programs' row at a bucket: entry j the outputs of the Program anchored there that reads slot j, `NONE` for a
+    slot no Program anchored there reads."""
+    if len(entries) != cls.NR:
+        raise ValueError(f"a Programs' row has NR = {cls.NR} entries, not {len(entries)}")
+    bits: list[int] = []
+    for n, ids in entries:
+        if len(ids) > cls.KO:
+            raise ValueError(f"an entry has at most KO = {cls.KO} ids, not {len(ids)}")
+        _put(bits, n, 32)
+        for v in (*ids, *[0] * (cls.KO - len(ids))):
+            _put(bits, v, cls.IDB)
+    return bits + [0] * (prog_bits(cls) - len(bits))
+
+
+def prog_decode(cls: Class, bits: Sequence[int]) -> list[Out]:
+    if len(bits) != prog_bits(cls):
+        raise ValueError(f"a Programs' row is {prog_bits(cls)} bits, not {len(bits)}")
+    rd = _Reader(bits)
+    return [(rd.take(32), tuple(rd.take(cls.IDB) for _ in range(cls.KO))) for _ in range(cls.NR)]
+
+
+def view(cls: Class, st: State, b: int) -> EG.State:
+    """S_t's egress view at bucket b = t (`egress.State`): each slot's live, q, admitted, n and output ids."""
+    return EG.State(b, tuple(EG.Slot(s.live, s.q, s.admitted, s.n, tuple(s.out)) for s in st.slots))
+
+
+def view_encode(cls: Class, st: State, b: int) -> list[int]:
+    return EG.state_bits(cls.egress, view(cls, st, b))
+
+
+def due(cls: Class, st: State) -> list[bool]:
+    """The slots the Programs anchored at the bucket after `st` read: live, their anchor its bucket."""
+    return [s.live == 1 and st.now == s.anchor for s in st.slots]
+
+
+def held(cls: Class, st: State) -> list[bool]:
+    """The slots held at the bucket after `st`: live, up to their last egress bucket admitted + D + ⌊n / r⌋ (the
+    egress map's), at or after their anchor since D ≥ WITHIN + EVERY − 1."""
+    return [s.live == 1 and st.now <= s.admitted + cls.D + s.n // cls.r for s in st.slots]
 
 
 def _head_values(lay: Q.Layout, payload: bytes) -> dict[str, int]:
@@ -263,12 +354,19 @@ def _head_values(lay: Q.Layout, payload: bytes) -> dict[str, int]:
             "top_p": ratio(payload[o2:o2 + w2]), "seed": int(payload[o3:o3 + w3])}
 
 
-def step(cls: Class, row: bytes, st: State) -> State | None:
-    """S_t from bucket t's ingress row and S_{t−1} (the module docstring's "A unit"), or None where a check fails."""
+def step(cls: Class, row: bytes, st: State, prog: Sequence[Out] | None = None) -> State | None:
+    """S_t from bucket t's ingress row, S_{t−1} and the Programs' row at t (none: every entry `NONE`), the module
+    docstring's "A unit", or None where a check fails."""
     B, r, lay = cls.B, cls.r, cls.lay
     if len(row) != cls.S * B:
         raise ValueError(f"a row is {cls.S * B} bytes, not {len(row)}")
+    prog = [(n, tuple(ids) + (0,) * (cls.KO - len(ids))) for n, ids in (prog or [NONE] * cls.NR)]
+    if len(prog) != cls.NR:
+        raise ValueError(f"a Programs' row has NR = {cls.NR} entries, not {len(prog)}")
     if st.phase >= cls.EVERY:
+        return None
+    dues = due(cls, st)
+    if any(not d and (n or any(ids)) for d, (n, ids) in zip(dues, prog)):
         return None
     blocks = [[row[(p * r + i) * B:(p * r + i + 1) * B] for i in range(r)] for p in range(cls.lanes)]
     qs = []
@@ -288,8 +386,8 @@ def step(cls: Class, row: bytes, st: State) -> State | None:
     new = [q != 0 and not any(m) for q, m in zip(qs, match)]
     if any(n and q <= st.last for n, q in zip(new, qs)):
         return None
-    held = [s.live == 1 and st.now < s.anchor for s in st.slots]
-    free = [j for j in range(cls.NR) if not any(m[j] for m in match) and not held[j]]
+    hold = held(cls, st)
+    free = [j for j in range(cls.NR) if not any(m[j] for m in match) and not hold[j]]
     sel: list[int | None] = []
     for p in range(cls.lanes):
         if any(match[p]):
@@ -303,7 +401,7 @@ def step(cls: Class, row: bytes, st: State) -> State | None:
             sel.append(None)
     phase = st.phase + 1 if st.phase + 1 < cls.EVERY else 0
     out = State((st.now + 1) % (1 << 32), phase, st.last,
-                [replace(s, live=int(h), ids=list(s.ids)) for s, h in zip(st.slots, held)])
+                [replace(s, live=int(h), out=list(s.out), ids=list(s.ids)) for s, h in zip(st.slots, hold)])
     for p, q in enumerate(qs):
         if new[p]:
             out.last = q
@@ -311,8 +409,8 @@ def step(cls: Class, row: bytes, st: State) -> State | None:
         if j is None:
             continue
         old = st.slots[j]
-        cur = replace(old, ids=list(old.ids)) if not new[p] else \
-            Slot(admitted=st.now, anchor=cls.anchor(st.now, st.phase), ids=list(old.ids))
+        cur = replace(old, out=list(old.out), ids=list(old.ids)) if not new[p] else \
+            Slot(admitted=st.now, anchor=cls.anchor(st.now, st.phase), out=[0] * cls.KO, ids=list(old.ids))
         padded = False
         for c in blocks[p]:
             kind, _, n = HEADER.unpack_from(c)
@@ -346,37 +444,53 @@ def step(cls: Class, row: bytes, st: State) -> State | None:
             cur.cells, cur.left, cur.done = cur.cells + 1, rest, int(rest == 0)
         cur.live, cur.q = 1, qs[p]
         out.slots[j] = cur
+    for j, (d, (n, ids)) in enumerate(zip(dues, prog)):
+        if d:
+            out.slots[j].n, out.slots[j].out = n, list(ids)
     return out
 
 
-def reference(cls: Class, row: bytes, sin: Sequence[int], sout: Sequence[int]) -> int:
+def reference(cls: Class, row: bytes, sin: Sequence[int], prog: Sequence[int], sout: Sequence[int],
+              view_: Sequence[int]) -> int:
     """`IngressScanBucket`'s output in the clear."""
-    st = step(cls, row, decode(cls, sin))
-    return int(st is not None and encode(cls, st) == list(sout))
+    before = decode(cls, sin)
+    st = step(cls, row, before, prog_decode(cls, prog))
+    return int(st is not None and encode(cls, st) == list(sout) and view_encode(cls, st, before.now) == list(view_))
 
 
-def scan(cls: Class, rows: Sequence[bytes], start: State | None = None) -> list[State] | None:
-    """The states S_0 … S_{T−1} of the scan of `rows` from `start` (the empty state), or None where a step refuses."""
-    st, out = start or empty(cls), []
+def programs(cls: Class, st: State, outputs: dict[int, Sequence[int]]) -> list[Out]:
+    """The Programs' row at the bucket after `st`, the honest one: each due slot's request's outputs (`outputs[q]`,
+    none for a q it lacks), `NONE` for the rest."""
+    return [(len(outputs.get(s.q, ())), tuple(outputs.get(s.q, ()))) if d else NONE
+            for s, d in zip(st.slots, due(cls, st))]
+
+
+def scan(cls: Class, rows: Sequence[bytes], outputs: dict[int, Sequence[int]] | None = None,
+         start: State | None = None) -> tuple[list[State], list[list[Out]]] | None:
+    """The states S_0 … S_{T−1} of the scan of `rows` from `start` (the empty state), each step's Programs' row
+    `programs` of `outputs` (each request's output ids, by its ordinal), and those rows; None where a step refuses."""
+    st, out, progs = start or empty(cls), [], []
     for row in rows:
-        st = step(cls, row, st)
+        progs.append(programs(cls, st, outputs or {}))
+        st = step(cls, row, st, progs[-1])
         if st is None:
             return None
         out.append(st)
-    return out
+    return out, progs
 
 
 # --- the circuit --------------------------------------------------------------------------------------------------
 
 
 def _cls(S) -> Class:
-    return Class(S.B, S.r, S.lanes, S.C, S.IDB, S.EVERY, S.WITHIN)
+    return Class(S.B, S.r, S.lanes, S.C, S.IDB, S.EVERY, S.WITHIN, S.D, S.KO)
 
 
 def _sig(S):
     cls = _cls(S)
     n = state_bits(cls)
-    return (("row", Array(cls.S * cls.B, BYTE)), ("sin", Array(n, BIT)), ("sout", Array(n, BIT))), BIT
+    return (("row", Array(cls.S * cls.B, BYTE)), ("sin", Array(n, BIT)), ("prog", Array(prog_bits(cls), BIT)),
+            ("sout", Array(n, BIT)), ("view", Array(view_bits(cls), BIT))), BIT
 
 
 def _eq(C, x: Sequence, y: Sequence):
@@ -452,7 +566,7 @@ def _cell(C, cls: Class, cell: Sequence, left: Sequence, q: Sequence):
 def _build(C, S, *e):
     cls = _cls(S)
     B, r, L, NR, K, IDB, CB = cls.B, cls.r, cls.lanes, cls.NR, cls.K, cls.IDB, cls.CB
-    row, sin, sout = e[:cls.S * B], list(e[cls.S * B]), list(e[cls.S * B + 1])
+    row, (sin, prog, sout, view_) = e[:cls.S * B], (list(x) for x in e[cls.S * B:])
     sf = slot_layout(cls)
     hw, sw = sum(w for _, w in HEAD), sum(w for _, w in sf)
     head = _split(HEAD, sin[:hw])
@@ -471,7 +585,19 @@ def _build(C, S, *e):
     x = mux(C, _lt(C, x, const_bits(cls.EVERY, 32)), x, sub(C, x, const_bits(cls.EVERY, 32), 32)[0])
     gap = [C.AND(or_reduce(C, x), b) for b in sub(C, const_bits(cls.EVERY, 32), x, 32)[0]]
     anchor = add(C, add(C, now, const_bits(cls.WITHIN, 32), width=32), gap, width=32)
-    held = [C.AND(slots[j]["live"][0], _lt(C, now, slots[j]["anchor"])) for j in range(NR)]
+    # held: now <= admitted + D + floor(n / r), which is (now − admitted − D)·r <= n once now >= admitted + D
+    W, now33 = 32 + r.bit_length(), now + [ZERO]
+    held, due = [], []
+    for j in range(NR):
+        aD = add(C, slots[j]["admitted"], const_bits(cls.D, 32), width=33)
+        pre = _lt(C, now33, aD)
+        xr = EG._times(C, EG._sub(C, now33, aD)[:32], r, W)
+        within = OR(C, pre, _lt(C, slots[j]["n"] + [ZERO] * (W - 32), xr).inv())
+        held.append(C.AND(slots[j]["live"][0], within))
+        due.append(C.AND(slots[j]["live"][0], _eq(C, now, slots[j]["anchor"])))
+    entries = _split([(f"{j}.{n}", w) for j in range(NR) for n, w in (("n", 32), ("out", cls.KO * IDB))], prog)
+    for j in range(NR):
+        oks.append(C.AND(due[j].inv(), or_reduce(C, entries[f"{j}.n"] + entries[f"{j}.out"])).inv())
     match = [[and_reduce(C, [empty_[p].inv(), slots[j]["live"][0], _eq(C, slots[j]["q"], qs[p])]) for j in range(NR)]
              for p in range(L)]
     for p in range(L):
@@ -537,13 +663,21 @@ def _build(C, S, *e):
             got = _pick(C, [sel[p][j] for p in range(L)], [f[n] for f in finals])
             o[n] = [a ^ C.AND(taken.inv(), b) for a, b in zip(got, s[n])]
         o["ids"] = _append(C, cls, [sel[p][j] for p in range(L)], writes, s["ids"])
+        kept = or_reduce(C, [assign[p][j] for p in range(L)]).inv()
+        for n in ("n", "out"):
+            o[n] = mux(C, due[j], entries[f"{j}.{n}"], [C.AND(kept, b) for b in s[n]])
         out_slots.append(o)
     up = add(C, phase, [ONE], width=32)
     wrap = _eqk(C, up, cls.EVERY)
     computed = add(C, now, [ONE], width=32) + [C.AND(wrap.inv(), b) for b in up] + last + \
         [b for o in out_slots for n, _ in sf for b in o[n]]
     computed += [ZERO] * (len(sout) - len(computed))
-    return [and_reduce(C, oks + [_eq(C, computed, sout)])]
+    sh = cls.egress
+    seen = list(now)
+    for o in out_slots:
+        slot = o["live"] + [ZERO] * 15 + o["q"] + o["admitted"] + o["n"] + o["out"]
+        seen += slot + [ZERO] * (sh.slot_bits - len(slot))
+    return [and_reduce(C, oks + [_eq(C, computed, sout), _eq(C, seen, view_)])]
 
 
 def _append(C, cls: Class, sels: Sequence, writes: Sequence, ids: Sequence) -> list:
@@ -570,20 +704,25 @@ def _append(C, cls: Class, sels: Sequence, writes: Sequence, ids: Sequence) -> l
 
 
 IngressScanBucket = _part(
-    "IngressScanBucket", ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN"), _sig, _build,
-    "1 iff the scan's state sout is `ingress_scan.step` of sin and bucket t's ingress row (lanes·r warden cells of "
-    "B bytes, a block of r a live connection in ordinal order): each block continues the live slot on its ordinal or "
-    "takes the lowest free slot as a new connection above `last`, its data cells are the next frames of the slot's "
-    "warden-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C; every switch "
-    "is computed from sin and the row")
+    "IngressScanBucket", ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO"), _sig, _build,
+    "1 iff the scan's state sout is `ingress_scan.step` of sin, bucket t's ingress row (lanes·r warden cells of "
+    "B bytes, a block of r a live connection in ordinal order) and the Programs' row prog, and view is sout's egress "
+    "view at t (`egress.EgressBucket`'s state): each block continues the live slot on its ordinal or takes the lowest "
+    "free slot (live and up to admitted + D + floor(n / r) is held) as a new connection above `last`, its data cells "
+    "are the next frames of the slot's warden-form id request and its ids (IDB bits each) are appended at the slot's "
+    "cell count, below C; a slot whose anchor is now takes its n and KO output ids from prog, every other entry of "
+    "prog zero; every switch is computed from sin, prog and the row")
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 
 
-def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]]]) -> list[list]:
-    """`IngressScanBucket`'s arguments for (row, sin, sout) cases: each row's bytes as bits, least significant first."""
-    rows = [[[b >> i & 1 for i in range(8)] for b in row] for row, _, _ in cases]
-    return [rows, [list(s) for _, s, _ in cases], [list(s) for _, _, s in cases]]
+def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int], Sequence[int], Sequence[int]]]
+              ) -> list[list]:
+    """`IngressScanBucket`'s arguments for (row, sin, prog, sout, view) cases: each row's bytes as bits, least
+    significant first, and the bit rows as they are."""
+    rows = [[[b >> i & 1 for i in range(8)] for b in c[0]] for c in cases]
+    return [rows, *([list(c[k]) for c in cases] for k in range(1, 5))]
 
 
-__all__ = ["Class", "IngressScanBucket", "Slot", "State", "arguments", "decode", "empty", "encode", "layout",
-           "position", "reference", "scan", "state_bits", "step"]
+__all__ = ["Class", "IngressScanBucket", "NONE", "Out", "Slot", "State", "arguments", "decode", "due", "empty",
+           "encode", "held", "layout", "position", "prog_bits", "prog_decode", "prog_encode", "programs", "reference",
+           "scan", "state_bits", "step", "view", "view_bits", "view_encode"]
