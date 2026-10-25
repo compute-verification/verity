@@ -12,7 +12,7 @@ arrived by its boundary, which is the next window's challenge's release.
 `step f g` and `run f g` are `Shared.step g` and `Shared.run g` with that boundary and receive at f = 1, and at f = 2
 they are `Shared.step g` and `Shared.run g` (`step_two`, `run_two`): every property of the code stated on
 `Session.run` is about the two-in-flight session, and none yet covers f = 1. The difftest's `session` runs `run f g`,
-and the registry runs `step f 1`.
+and the registry `step f g`.
 -/
 
 namespace RemoteAudit.Flight

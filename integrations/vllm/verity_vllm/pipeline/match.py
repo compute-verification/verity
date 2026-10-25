@@ -218,10 +218,7 @@ class Plan:
             if g:
                 c += ["--safetensors", g]
             return c
-        # [R17-42 route A (4)] the fold folds the MoE scope under the workload's DECLARED construction (manifest target.moe_construction) and the top-p
-        # select under the one the Build's Programs declare (--program-dir: a single-request select has no shared-greedy form); never off the trace
-        mc, sc, rv = _workload_moe_construction(a.workload), program_sampler_construction(a.program_dir or ()), program_registered_values(a.program_dir or ())
-        MC = (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
+        MC = fold_construction_args(a.workload, a.program_dir or ())
         if stage in ("fold", "fold_2"):   # D85: --persist-dir writes program.json / instances.jsonl / accesses.jsonl.gz
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + (["--persist-dir", str(run)] if stage == "fold" else [])
@@ -904,6 +901,15 @@ def _workload_moe_construction(path: str | None) -> str | None:
     if mc not in TargetProfile.MOE_CONSTRUCTIONS:
         raise SystemExit(f"workload engine.target.moe_construction {mc!r} is not one of {sorted(TargetProfile.MOE_CONSTRUCTIONS)}")
     return str(mc)
+
+
+def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
+    """The fold worker's construction flags: the MoE scope under the workload's DECLARED construction (manifest
+    target.moe_construction), the top-p select under the one the Build's Programs declare (a single-request select has no shared-greedy
+    form) and the values they register; never off the trace.  The single-rank driver passes them from --program-dir, the TP fold Match
+    (`tp.fold_match`) from each rank's Build dirs; a fold without them binds the profile's default select."""
+    mc, sc, rv = _workload_moe_construction(workload), program_sampler_construction(program_dirs), program_registered_values(program_dirs)
+    return (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
 
 
 def _workload_execution(path: str | None) -> str | None:

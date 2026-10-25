@@ -1,30 +1,34 @@
 """REDTEAM's phase 9, target 1 (`cursor/redteam-phase9-iotiereq-061a` @8d19db0a2b), IoTieRequest's cases as
-regressions: what a window's verdict holds alone, and what rests on the statements chaining from window 0.
+regressions, on the unit a bucket row of the warden's own ingress: what a bucket's verdict holds alone, and what rests
+on the verifier's lanes chaining each connection over its buckets.
 
-  a. The public inputs carry the carry-out (`left_out`, `fields_out`) beside the carry-in, and still no advice digest
-     or Commit: `advised.IoTieVerdict` (N2-ADVICE) keys the verdicts to the advice's digest, built only from proofs
-     verified on the verifier's own statements (`io_request.statements`). The carries' ordinals are no input.
-  b. Closed: a carried prompt-field count is no free addend. Checked alone, window 1 still accepts its carry-in's
-     fields + Δ with its first ended request's + Δ, but window 0's verdict holds its carry-out's fields, which window
-     1's carry-in must equal (`io_request.chained`), so a link's verdicts accept no Δ.
-  c. Open: the prompt id values are tied to nothing (PROTOCOL.md, "The ingress tie", the ingress-ids tie to the
-     Commit's `c00.input/ids`, not yet built).
-  d. A request frame is on `CANONICAL_STREAM`, and no per-request stream number is read: the ordinal is the
-     verifier's, carry_in.q + j.
+  a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
+     advice digest or Commit: `advised.IoTieVerdict` (N2-ADVICE) keys the verdicts to the advice's digest, built only
+     from proofs verified on the verifier's own lanes (`io_request.lanes`).
+  b. Closed: a carried prompt-field count is no free addend. Checked alone, a bucket still accepts a lane's carry-in's
+     fields + Δ with its carry-out's + Δ, but the bucket before holds its carry-out's fields, and the verifier's
+     lanes chain each connection from (0, 0) to (0, n), so a link's verdicts accept no Δ.
+  c. Open here: the prompt id values are tied to nothing (the ingress-ids tie, `io_ids`, holds them to the Commit's
+     `c00.input/ids`).
+  d. Changed: the ordinal is read. Each cell's header carries its connection's ordinal, and a lane's cells must be on
+     the lane's q, the warden's release order[i] + 1.
   e. The unit reads neither the response's length nor the user: `max_tokens` is parsed as a field and not compared.
 """
 from __future__ import annotations
 
-import hashlib
 import inspect
 
+import pytest
+
 from verity.core.protocols.certifier import io_request as Q
-from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, HEADER, id_request
+from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier.active import DATA, HEADER, id_request
 
 B = 512
-SHAPE = Q.Shape(B, 4, 2)
-#: a request that spans the boundary of windows 0 and 1: request 1 (40 tokens) takes 2 frames, one in each
-SPAN_PL, SPAN_COUNTS = (5, 40, 5), (1, 0, 0, 1, 1, 1, 0, 0)
+PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
+SHAPE = Q.Shape(B, PARAMS.lanes, PARAMS.slots)
+#: request 1 (40 tokens, 2 cells) released one cell a bucket, over buckets 1 and 2
+SPAN_PL, ARRIVALS, RATES = (5, 40, 5), (0, 0, 1), (10 ** 6, 520, 10 ** 6)
 
 
 def _ids(i, k):
@@ -33,98 +37,98 @@ def _ids(i, k):
 
 def _requests(prompt_lens, idfn=_ids):
     return [id_request(model="glm", user=f"u{i}", prompt=[idfn(i, k) for k in range(n)], max_tokens=16,
-                       temperature=0.7, top_p=0.95, seed=i, frame_bytes=B)
+                       temperature=0.7, top_p=0.95, seed=i, frame_bytes=B, offset=0)
             for i, n in enumerate(prompt_lens)]
 
 
-def _received(counts):
-    return tuple(sum(counts[w * SHAPE.T:(w + 1) * SHAPE.T]) for w in range(len(counts) // SHAPE.T))
+def _link(prompt_lens=SPAN_PL, idfn=_ids):
+    return Q.serve(PARAMS, _requests(prompt_lens, idfn), ARRIVALS, RATES, buckets=PARAMS.window)
 
 
-def _link(prompt_lens, counts, idfn=_ids):
-    return Q.windows_of(SHAPE, _requests(prompt_lens, idfn), counts), _received(counts)
+def _ref(link, t, lanes_):
+    return Q.reference(SHAPE, Q.Instance(tuple(link.rows[t]), tuple(lanes_)))
 
 
-def _ref(cells, view, window):
-    return Q.reference(SHAPE, Q.instance(SHAPE, cells, view, window))
-
-
-def _record(windows):
-    insts = [Q.instance(SHAPE, c, Q.RequestView(Q.Carry(0, 0, 0), (), 0, Q.Carry(0, 0, 0)), w)
-             for w, c in enumerate(windows)]
-    return [Q.Registration("ingress-0", hashlib.sha512(b"ingress-0/%d" % w + i.root).digest(), i.root, i.domain)
-            for w, i in enumerate(insts)]
+def _verdicts(link, prompt_lens):
+    try:
+        return [_ref(link, t, Q.lanes(SHAPE, prompt_lens, link.releases, t)) for t in range(len(link.rows))]
+    except ValueError:
+        return None
 
 
 def test_honest_link_accepts():
-    windows, received = _link(SPAN_PL, SPAN_COUNTS)
-    stmts = Q.statements(SHAPE, SPAN_PL, received, _record(windows))
-    assert Q.chained(stmts) and [_ref(windows[s.window], s.view, s.window) for s in stmts] == [1, 1]
+    link = _link()
+    assert link.releases[1].cells == (0, 1, 1)
+    assert _verdicts(link, SPAN_PL) == [1] * PARAMS.window
 
 
-def test_the_public_inputs_hold_the_carry_out_and_no_ordinal():
+def test_the_public_inputs_are_the_lanes():
     names = [n for n, _ in Q._sig_request(SHAPE)[0]]
-    assert names == ["root", "domain", "cells", "salts", "left", "fields", "ended", "count", "received", "left_out",
-                     "fields_out", "switches"]
+    assert names == ["row", "lanes"]
     assert not [n for n in names if any(s in n.lower() for s in ("advice", "digest", "commit", "ids", "port"))]
-    windows, received = _link(SPAN_PL, SPAN_COUNTS)
-    view = Q.request_view(SPAN_PL, received, 1, B)
-    inst = Q.instance(SHAPE, windows[1], view, 1)
-    bits = Q.switches(SHAPE, inst)
-    bumped = view._replace(carry_in=view.carry_in._replace(q=view.carry_in.q + 7),
-                           carry_out=view.carry_out._replace(q=view.carry_out.q + 7))
-    assert Q.arguments(SHAPE, inst, bits) == Q.arguments(SHAPE, inst._replace(view=bumped), bits)
 
 
-def test_a_carried_field_count_is_held_by_the_previous_windows_carry_out():
-    """REDTEAM's free addend: window 1 alone accepts carry_in.fields + Δ with ended[0] + Δ, but window 0 refuses a
-    carry-out of fields + Δ, and window 1's carry-in must be window 0's carry-out, so either way the link is
-    refused."""
-    windows, received = _link(SPAN_PL, SPAN_COUNTS)
-    stmts = Q.statements(SHAPE, SPAN_PL, received, _record(windows))
-    v0, v1 = stmts[0].view, stmts[1].view
-    assert v1.carry_in.left > 0 and v1.ended == (40, 5) and v0.carry_out == v1.carry_in
+def _spanning(link):
+    """The bucket in which request 1 (connection 2) is in progress at both ends of its lane: (t, lane index)."""
+    for t in range(len(link.rows)):
+        for k, ln in enumerate(Q.lanes(SHAPE, SPAN_PL, link.releases, t)):
+            if ln.q == 2 and ln.left:
+                return t, k
+    raise AssertionError("no bucket carries request 1 in")
+
+
+def test_a_carried_field_count_is_held_by_the_bucket_before():
+    """REDTEAM's free addend: bucket t alone accepts its lane's carry-in fields + Δ with its carry-out's + Δ, but
+    bucket t − 1 refuses a carry-out of fields + Δ, and the verifier's lanes from an advice of n + Δ aren't the
+    cells' either, so either way the link is refused."""
+    link = _link()
+    t, k = _spanning(link)
+    lanes_t, lanes_p = Q.lanes(SHAPE, SPAN_PL, link.releases, t), Q.lanes(SHAPE, SPAN_PL, link.releases, t - 1)
+    ln = lanes_t[k]
+    kp = next(j for j, p in enumerate(lanes_p) if p.q == ln.q)
+    assert (lanes_p[kp].left_out, lanes_p[kp].fields_out) == (ln.left, ln.fields) and ln.fields > 0
     for delta in (1, 5, 100, 1000):
-        in1 = v1._replace(carry_in=v1.carry_in._replace(fields=v1.carry_in.fields + delta),
-                          ended=(v1.ended[0] + delta, v1.ended[1]))
-        out0 = v0._replace(carry_out=in1.carry_in)
-        assert _ref(windows[1], in1, 1) == 1, delta
-        assert _ref(windows[0], out0, 0) == 0, delta
-        assert not Q.chained([stmts[0], stmts[1]._replace(view=in1)])
-        assert Q.chained([stmts[0]._replace(view=out0), stmts[1]._replace(view=in1)])
+        bumped = ln._replace(fields=ln.fields + delta, fields_out=ln.fields_out + delta)
+        assert _ref(link, t, lanes_t[:k] + (bumped,) + lanes_t[k + 1:]) == 1, delta
+        out = lanes_p[kp]._replace(fields_out=lanes_p[kp].fields_out + delta)
+        assert _ref(link, t - 1, lanes_p[:kp] + (out,) + lanes_p[kp + 1:]) == 0, delta
+        forged = (SPAN_PL[0], SPAN_PL[1] + delta, SPAN_PL[2])
+        v = _verdicts(link, forged)
+        assert v is None or not all(v), delta
 
 
-def test_a_forged_advice_is_refused_where_its_carry_first_moves():
-    """The inflation 40 → 45 through one forged advice keeps every request's frames, and now window 0 refuses it:
-    its carry-out's bytes left are the forged request's, not the cells'."""
-    windows, received = _link(SPAN_PL, SPAN_COUNTS)
-    forged = (5, 45, 5)
-    assert Q.ends(forged, B) == Q.ends(SPAN_PL, B)
-    stmts = Q.statements(SHAPE, forged, received, _record(windows))
-    assert Q.chained(stmts) and [_ref(windows[s.window], s.view, s.window) for s in stmts] == [0, 0]
-
-
-def test_prompt_id_values_are_open_until_the_ids_tie():
-    """Open: the same prompt lengths with any ids are each accepted against their own cells, since the unit reads no
-    Commit (PROTOCOL.md, "The ingress tie": the ingress-ids tie to `c00.input/ids`, not yet built). Once it is, this
-    test holds the ids to the Commit's."""
-    pl, counts = (5, 3, 4), (1, 1, 1, 0, 0, 0, 0, 0)
-    received = _received(counts)
+def test_prompt_id_values_are_open_here():
+    """Open in this unit: the same prompt lengths with any ids are each accepted against their own cells, since it
+    reads no Commit (the ingress-ids tie, `io_ids`, holds them to `c00.input/ids`)."""
     for idfn in (lambda i, k: 0, _ids, lambda i, k: (1 << 32) - 1):
-        windows = Q.windows_of(SHAPE, _requests(pl, idfn), counts)
-        assert _ref(windows[0], Q.request_view(pl, received, 0, B), 0) == 1
+        assert _verdicts(_link(SPAN_PL, idfn), SPAN_PL) == [1] * PARAMS.window
 
 
-def test_stream_is_canonical_only_no_per_request_ordinal():
-    pl, counts = (5, 3, 4), (1, 1, 1, 0, 0, 0, 0, 0)
-    cells = list(Q.windows_of(SHAPE, _requests(pl, lambda i, k: 0), counts)[0])
-    idx = next(i for i, c in enumerate(cells) if HEADER.unpack(c[:HEADER.size])[:2] == (DATA, CANONICAL_STREAM))
-    cells[idx] = HEADER.pack(DATA, 1, HEADER.unpack(cells[idx][:HEADER.size])[2]) + cells[idx][HEADER.size:]
-    assert Q.cut(SHAPE, cells, Q.Carry(0, 0, 0), 0) is None
-    assert not [n for n, _ in Q._sig_request(SHAPE)[0] if n in ("stream", "ordinal", "q")]
+def test_the_ordinal_is_read():
+    """Each request cell is on its connection's ordinal, which the lane names: a cell moved to another ordinal, or a
+    lane read on another, is refused."""
+    link = _link()
+    t = next(t for t, row in enumerate(link.rows) if any(HEADER.unpack_from(c)[0] == DATA for c in row))
+    lanes_ = Q.lanes(SHAPE, SPAN_PL, link.releases, t)
+    row = list(link.rows[t])
+    i = next(i for i, c in enumerate(row) if HEADER.unpack_from(c)[0] == DATA)
+    kind, q, n = HEADER.unpack_from(row[i])
+    assert _ref(link, t, lanes_) == 1 and q == lanes_[i // SHAPE.R].q
+    for other in (0, q + 1, q - 1):
+        moved = row[:i] + [HEADER.pack(kind, other, n) + row[i][HEADER.size:]] + row[i + 1:]
+        assert Q.reference(SHAPE, Q.Instance(tuple(moved), lanes_)) == 0, other
+    k = i // SHAPE.R
+    assert _ref(link, t, lanes_[:k] + (lanes_[k]._replace(q=q + 1),) + lanes_[k + 1:]) == 0
 
 
 def test_max_tokens_and_user_are_not_checked():
     assert "output_len" not in inspect.getsource(Q)
     names = [n for n, _ in Q._sig_request(SHAPE)[0]]
     assert "max_tokens" not in names and "user" not in names and "output" not in " ".join(names)
+
+
+@pytest.mark.parametrize("max_tokens", [0, 16, (1 << 32) - 1])
+def test_any_max_tokens_is_accepted(max_tokens):
+    reqs = [id_request(model="glm", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=B, offset=0)]
+    link = Q.serve(PARAMS, reqs, (0,), (10 ** 6,), buckets=PARAMS.window)
+    assert _verdicts(link, (3,)) == [1] * PARAMS.window
