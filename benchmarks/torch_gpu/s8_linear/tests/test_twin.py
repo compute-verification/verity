@@ -1,6 +1,6 @@
-"""The twin (`fixture.epilogue` over `fixture.sums`) word for word against `ScaledMmS8Coordinate_v1{K, BlackwellS8ImmaDot32_v1}`'s
-evaluator, on the inputs the GPU gate uses: random and structured code rows, every special scale against every other and
-against spread ones, and the s32 edge at K = 131040."""
+"""The twin (`fixture.epilogue` over `fixture.sums`) word for word against `ScaledMmS8Coordinate_v1{K, DOT}`'s evaluator, DOT
+the H200's step (`GEMM_SM90_S8`) and the RTX PRO 6000's (`GEMM_SM120_S8`), on the inputs the GPU gate uses: random and
+structured code rows, every special scale against every other and against spread ones, and the s32 edge at K = 131040."""
 from __future__ import annotations
 
 import sys
@@ -21,9 +21,12 @@ def _words(a: np.ndarray) -> list[int]:
     return [int(v) & 0xFF for v in np.asarray(a, dtype=np.int8).reshape(-1)]
 
 
-def _definition_rows(x: np.ndarray, sa: np.ndarray, w: np.ndarray, sw: np.ndarray) -> np.ndarray:
+STEPS = ("GEMM_SM90_S8", "GEMM_SM120_S8")
+
+
+def _definition_rows(x: np.ndarray, sa: np.ndarray, w: np.ndarray, sw: np.ndarray, step: str = "GEMM_SM90_S8") -> np.ndarray:
     k, n = x.shape[1], w.shape[0]
-    defn = bind(gemm.ScaledMmS8, K=k, N=n, **gemm.GEMM_SM120_S8)
+    defn = bind(gemm.ScaledMmS8, K=k, N=n, **getattr(gemm, step))
     wv, swv = _words(w), [int(v) for v in sw.view(np.uint32)]
     return np.array([evaluate(defn, _words(x[i]), int(sa.view(np.uint32)[i]), wv, swv) for i in range(x.shape[0])],
                     dtype=np.uint16)
@@ -37,8 +40,9 @@ def _codes(rng: np.random.Generator, rows: int, k: int, structured: dict[int, st
     return x
 
 
+@pytest.mark.parametrize("step", STEPS)
 @pytest.mark.parametrize("k", [32, 64, 256])
-def test_the_twin_is_the_definition_on_the_gates_inputs(k):
+def test_the_twin_is_the_definition_on_the_gates_inputs(k, step):
     rng = np.random.default_rng(k)
     m = FX.FIRST_SPECIAL + len(FX.SPECIAL_SA) + 4
     n = FX.FIRST_SPECIAL + len(FX.SPECIAL_SW) + 4
@@ -46,7 +50,7 @@ def test_the_twin_is_the_definition_on_the_gates_inputs(k):
     w = _codes(rng, n, k, FX.STRUCT_COLS)
     sa, sw = FX.scales(m, n, seed=k)
     got = FX.epilogue(FX.sums(x, w), sa, sw)
-    want = _definition_rows(x, sa, w, sw)
+    want = _definition_rows(x, sa, w, sw, step)
     assert np.array_equal(got, want), np.argwhere(got != want)[:8].tolist()
 
 
@@ -68,7 +72,8 @@ def test_every_special_scale_meets_every_other_at_every_structured_sum():
     assert np.array_equal(got, want), np.argwhere(got != want)[:8].tolist()
 
 
-def test_the_s32_edge():
+@pytest.mark.parametrize("step", STEPS)
+def test_the_s32_edge(step):
     """K = 131040 with every code -128: z = 2,146,959,360, the largest s8 sum the Definitions take, and its negative
     neighbour; S32ToF32Rn rounds it (0x4EFFF000) before the scales."""
     k = FX.EDGE_K
@@ -79,7 +84,7 @@ def test_the_s32_edge():
     sa = np.array([1.0, 3e-3], dtype=np.float32)
     sw = np.array([1.0, 2.0**-20, 1e30], dtype=np.float32)
     got = FX.epilogue(z, sa, sw)
-    defn = bind(gemm.ScaledMmS8Coordinate, K=k, **gemm.GEMM_SM120_S8)
+    defn = bind(gemm.ScaledMmS8Coordinate, K=k, **getattr(gemm, step))
     for i in range(2):
         for j in range(3):
             want = evaluate(defn, _words(x[i]), int(sa.view(np.uint32)[i]), _words(w[j]), int(sw.view(np.uint32)[j]))[0]
@@ -112,7 +117,14 @@ def test_a_flushing_epilogue_would_differ():
 
 
 def test_the_shapes():
-    got = {name: (n, k) for name, n, k in FX.shapes()}
+    """compute-accounting's: the H200's (the default; o is q's shape) and the RTX PRO 6000's two."""
+    h200 = {name: (n, k) for name, n, k in FX.shapes()}
+    assert h200 == {"mqa16k52:q": (16384, 16384), "mqa16k52:kv": (128, 16384), "mqa16k52:up": (65536, 16384),
+                    "mqa16k52:down": (16384, 65536), "mqa16k52:head": (256, 16384)}
+    md = FX.MODELS["mqa16k52"]
+    assert (md.layers, md.context, md.sequences) == (52, 32, 20480)
+    assert md.layers * sum(n * k for _, n, k, _ in md.linears) == 139_695_489_024  # the seeded weights' 52 layers of s8
+    got = {name: (n, k) for name, n, k in FX.shapes(("mqa16k", "mha8k"))}
     assert got["mqa16k:q"] == (16384, 16384) and got["mqa16k:kv"] == (128, 16384) and got["mqa16k:down"] == (16384, 65536)
     assert got["mha8k:qkv"] == (24576, 8192) and got["mha8k:down"] == (8192, 32768) and got["mha8k:head"] == (256, 8192)
     assert got["mha8k:o"] == (8192, 8192) and got["mqa16k:head"] == (256, 16384)

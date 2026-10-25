@@ -1,6 +1,7 @@
-# The exact W8A8 linear at the large model's shapes on sm_120. Not a package: run.py, tune.py, bench.py, commit.py and lt.py run
-# on a GPU node (run.sh), and the CPU twin of ScaledMmS8Coordinate_v1 they check against (fixture.py) runs here as a suite
-# (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/s8_linear`), held to the Definition's evaluator.
+# The exact W8A8 linear at the large model's shapes on the H200 (s8_wgmma.cu) and sm_120 (int8_fused). Not a package: the
+# scripts run on a GPU node (run.sh) and the kernel builds on a CPU node (build.sh); the CPU twin of ScaledMmS8Coordinate_v1
+# they check against (fixture.py), wgmma.py's host side and the SASS gate run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/s8_linear`), the twin held to the Definition's evaluator.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
