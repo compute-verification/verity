@@ -1,4 +1,4 @@
-"""Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Models/Pous/Assumptions/P2.lean`), the
+"""Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Definitions/Pous/Assumptions/P2.lean`), the
 test that `shape.conjectures` in `Security/lean-audit.json` and `Security/Properties/lean-audit.json` names for it and
 for `P2RingReducesToM1p`, which implies it: P2 in the ring model, with sequential reveal, accepts every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder with probability at
 most `δ + ε`. The same draws test the per-round form `P2RingRoundSecure`

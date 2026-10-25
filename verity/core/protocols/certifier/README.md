@@ -188,7 +188,7 @@ from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifie
 what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
-`Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:
+`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
