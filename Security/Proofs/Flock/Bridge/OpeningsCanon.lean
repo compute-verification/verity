@@ -82,7 +82,8 @@ theorem _root_.Flock.Bridge.openingsCanonH : Bridge.OpeningsCanonTargetH := by
     Bridge.bytesAt_length _ _
   rw [hpos, hb]
   refine Or.inr ⟨⟨⟨q.val, u'.val, Discharge.Layout.portRowW D.unroll q, k.val⟩, by simp [rows, hx], ?_⟩, hlen⟩
-  exact Bridge.rowShaped_rowOf rfl ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) b
+  exact Bridge.rowShaped_rowOf rfl
+    ((Finset.le_sup (f := Discharge.Layout.portRowW D.unroll) (Finset.mem_univ q)).trans (Nat.le_succ _)) b
 
 /-- **At a wire with a row, a drawn unit's opening is canonical** (`canonOpen`), at `OpeningsCanonTargetH`'s session. -/
 theorem _root_.Flock.Bridge.openingsCanon_row
