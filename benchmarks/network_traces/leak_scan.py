@@ -1,8 +1,10 @@
 """The received-pieces leak scan every zero-knowledge driver runs: which witness pieces found in what the verifier received
 (`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against C-Flock's proof format.
 
-    sys.path.insert(0, "verity/ml/flock/verifier"); import leak_scan as LS
+    sys.path.insert(0, "benchmarks/network_traces"); import leak_scan as LS
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
+
+It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
@@ -31,7 +33,7 @@ import struct
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier"))
 import redigest as RD  # noqa: E402
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.

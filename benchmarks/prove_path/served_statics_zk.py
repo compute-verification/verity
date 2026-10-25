@@ -30,7 +30,7 @@ the cost.
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
   proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
-  (``verity/ml/flock/verifier/leak_scan.py``), every zero-knowledge driver's.
+  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces"), str(REPO / "verity/ml/flock/verifier")]
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402

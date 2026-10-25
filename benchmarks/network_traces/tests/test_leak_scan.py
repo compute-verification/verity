@@ -10,7 +10,7 @@ import struct
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import leak_scan as LS  # noqa: E402
 
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")

@@ -26,9 +26,9 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   (``bindings``): the Commit's leaves are its position-leaf digests under its hiding rule, not row leaves, so their b‖c is
   not yet a proof row's.
   The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
-  row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`, beside
-  `redigest.layout` in ``verity/ml/flock/verifier``): a find counts only inside one field of C-Flock's proof format or
-  one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
+  row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`,
+  ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of C-Flock's proof format
+  (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
   out before the scan (`public_pieces`).
 * **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`) from its summary and the verifier's
   files, the pieces recomputed from the sealed run.
@@ -46,7 +46,7 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces"), str(REPO / "verity/ml/flock/verifier")]
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402

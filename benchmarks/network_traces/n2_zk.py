@@ -32,8 +32,9 @@ the opening (`link_windows`), and the proved template is the row adapter, not th
   fields, the registered root and the certificate's signed digest), and its verdict row ``o0``, under the salts the
   prover sends for those two rows; never ``wit``. A link-window's head checks pass when both ends' units open with
   verdict 1. What the verifier received is scanned for every piece of every head, head salt, sibling and certifier salt
-  (`a8.received`) but the pieces the public circuit holds (`public_pieces`); the prover's instance file, which holds the
-  heads, is the control.
+  (`a8.received`) but the pieces the public circuit holds (`public_pieces`), and a member fails on a ``leaked`` piece
+  under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`); the prover's instance file, which holds
+  the heads, is the control.
 * **Cost** (``--points``): sessions on the honest members whose verifier draws its first k units, behind the firewall
   (`a8.cost`), for the prover's time and proof bytes per unit.
 """
@@ -58,6 +59,7 @@ ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
+import leak_scan as LS  # noqa: E402
 from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.types import Array  # noqa: E402
@@ -582,15 +584,17 @@ def prove(a) -> int:
         blobs, held, public = public_pieces(M.a8, *blobs_of(mb.rd, mb.d), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / k / "verifier", m["dir"] / f"inst-{n}.bin", blobs, held),
                            "public_pieces": public}
+        res["received"].update(LS.scan(res["received"], blobs, out / k / "verifier"))
         summary["members"][k].update(res)
         verdicts = [u["verdict"] for u in res.get("units", [])]
         good = (res["accepted"] and all(res["verdicts"].values()) and verdicts == ["accept" if r else "reject" for r in mb.ref]
-                and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
+                and not res["received"]["leaked"] and res["received"]["control"]["holds_all"])
         ok &= good
         log(f"member {k}: proofs {res['verdicts']}, audit {res['audit']}, units {verdicts}, per unit {res['per_unit']}, "
             f"verifier received {res['received']['verifier_bytes']} bytes, witness pieces found there: "
             f"{res['received']['verifier_found'] or 'none'} (of {len(blobs)}; {len(public)} the public circuit holds, "
-            f"left out), control {res['received']['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            f"left out), leaked {res['received']['leaked'] or 'none'}, structured {res['received']['structured'] or 'none'}, "
+            f"control {res['received']['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     table = {}

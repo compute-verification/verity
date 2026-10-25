@@ -1,5 +1,5 @@
 """`served_tie_zk`'s scan: the witness pieces it cuts (`blobs_of`) read by every zero-knowledge driver's rule
-(`leak_scan`, whose own cases are ``verity/ml/flock/tests/test_leak_scan.py``). REDTEAM phase 16 finding 1's case (the
+(`leak_scan`, whose own cases are ``benchmarks/network_traces/tests/test_leak_scan.py``). REDTEAM phase 16 finding 1's case (the
 routed tie's switches, found in one repetition) is leaked."""
 from __future__ import annotations
 
