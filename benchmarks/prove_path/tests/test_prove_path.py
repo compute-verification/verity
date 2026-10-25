@@ -236,13 +236,18 @@ def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monke
     assert held["served_programs"] == {"r0": "cc" * 64}
 
 
-def test_the_challengers_coins_need_main():
+def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch):
     run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
            "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", "o"]
-    with pytest.raises(SystemExit):
-        PP.main(["audit", *run, "--challenger", "local"])
-    with pytest.raises(SystemExit):
-        PP.main(["audit", *run, "--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"])
+    gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
+    for refused in (["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
+        with pytest.raises(SystemExit):
+            PP.main(["audit", *run, *refused])
+    got = []
+    monkeypatch.setattr(PP, "audit", lambda a: got.append(a) or 0)
+    assert PP.main(["audit", *run, *gate, "--peer", "vy-nebius-2", "--challenger-key", "key.json", "--gate-key", "id"]) == 0
+    assert (got[0].challenger, got[0].peer, got[0].challenger_key, got[0].gate_key) == \
+        ("gate:research@vy-challenger-1", "vy-nebius-2", "key.json", "id")
 
 
 def test_an_audit_listens_on_ports_no_other_audit_holds():
