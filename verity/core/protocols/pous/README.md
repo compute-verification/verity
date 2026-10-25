@@ -114,7 +114,7 @@ A period's wipe is `wipe_period`: one streamed wipe of the node, the memory chal
 wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` and the foreign content it may leave,
 `⌈M/19⌉ + E` at `2^-128` with 2,152 reads, a fill of at least 32 MiB and the egress counted, and `M` (vacuous) otherwise;
-an unsigned session is undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`.
+an unsigned session is undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
 On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200.
