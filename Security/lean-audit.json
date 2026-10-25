@@ -34142,7 +34142,7 @@
    ]
   },
   "Flock.Zk": {
-   "digest": "7fc0e7c7aa64df6e40cacdb245d8048cdacb2d5f234f8bed51b09124a69887eb",
+   "digest": "02d9257ecdcee3b034471e7f07c82442729e93143a3ca81f20bc634298724920",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -34193,7 +34193,7 @@
     "Flock.Zk.TAU_TAG": "5abd313a9f4b013b2076057d03fbd5d1ce54e348a761f00079553a03eb858002",
     "Flock.Zk.claimCheck": "0229769c0f97aa8015f36299532fde1139c1bc49abfdeafe4680cfbc6724beec",
     "Flock.Zk.codeAt": "296adca86e164940ffccc2088464c8ac42d47005d49431bbfce42ad75fc8f921",
-    "Flock.Zk.coinSpec": "e7a5a238ef64cf48cdbdd64b4695fa468119a289ffb9237c59600e23adc2d7a1",
+    "Flock.Zk.coinSpec": "c537fdb8a04d5f0ae7e13d5bee1313a483bd27657185e36fab6b90e57a6daa42",
     "Flock.Zk.hooks": "2f743475278b721357f7811b94574723a33c5a47e46a742971a8879a1d005943",
     "Flock.Zk.instInhabitedLin": "0b883e786d300762ca2880a4349508ddea871df9923e17b6d95338c4babeb276",
     "Flock.Zk.instInhabitedLin.default": "1bb69bf2d2c39a6995627c42b5975600974c7be276b697f9694a2985251ac76e",
