@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -18,7 +19,7 @@ from verity_vllm.pipeline import research_result as RR
 PKG = Path(__file__).resolve().parents[1] / "verity_vllm"
 NAME = re.compile(r"^VERITY_[A-Z0-9_]*[A-Z0-9]$")
 TOKEN = re.compile(r"\bVERITY_[A-Z0-9_]*[A-Z0-9]\b")
-ACCESSORS = frozenset({"get", "raw", "is_set", "put", "unset", "setting"})
+ACCESSORS = frozenset({"get", "raw", "is_set", "put", "setdefault", "unset", "setting"})
 
 
 def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
@@ -66,6 +67,25 @@ def test_put_and_unset_write_only_declared_variables(monkeypatch: pytest.MonkeyP
     assert S.VERITY_INT8_PARTS == () and not S.is_set("VERITY_INT8_PARTS")
     with pytest.raises(AttributeError):
         S.put("VERITY_NOT_A_SETTING", "1")
+
+
+def test_setdefault_keeps_what_the_environment_holds_and_environ_is_a_copy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MAX_JOBS", raising=False)
+    assert S.setdefault("MAX_JOBS", "32") == "32" == S.raw("MAX_JOBS")
+    assert S.setdefault("MAX_JOBS", "8") == "32"
+    monkeypatch.setenv("MAX_JOBS", "")
+    assert S.setdefault("MAX_JOBS", "8") == "" and S.MAX_JOBS is None
+    env = S.environ()
+    env["MAX_JOBS"] = "4"
+    assert S.raw("MAX_JOBS") == "" and env == {**os.environ, "MAX_JOBS": "4"}
+    with pytest.raises(AttributeError):
+        S.setdefault("VERITY_NOT_A_SETTING", "1")
+
+
+def test_not_zero_and_a_kept_empty_read_as_their_readers_did() -> None:
+    assert [S.not_zero(v) for v in ("1", " 0 ", "false", "")] == [True, False, True, True]
+    assert S.get("MATCH_COMPACT", {}) is True and S.get("MATCH_COMPACT", {"MATCH_COMPACT": ""}) is True
+    assert S.get("VERITY_SPARSE_MLA_NUM_SPLITS", {"VERITY_SPARSE_MLA_NUM_SPLITS": ""}) == ""
 
 
 def test_the_record_carries_the_value_settings_and_families_in_force() -> None:

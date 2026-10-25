@@ -52,7 +52,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
@@ -62,6 +61,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import option
 from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
 from verity_vllm.properties.record import seal
@@ -693,7 +693,7 @@ def orchestrate(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     py = args.python or sys.executable
-    env = dict(os.environ)
+    env = settings.environ()
     common = ["--workload", args.workload, "--checkpoints", args.checkpoints, "--max-num-seqs", str(args.max_num_seqs)]
     if args.case:
         common += ["--case", args.case]

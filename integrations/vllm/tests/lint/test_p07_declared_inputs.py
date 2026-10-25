@@ -14,7 +14,7 @@ Checked today, against ``allowlists/p07_declared_inputs.json``:
 * ``seed-default``: a parameter named ``seed``/``*_seed``/``seed_*`` with a default value.
 
 ``SETTINGS_OWNER``, ``verity_vllm/settings.py``, is where the library reads and writes the environment: every variable is declared
-there, and every other ``environ`` use is a violation.  ``ENV_OWNERS`` are the two modules that did it before the registry, until
+there, with the machine path a ``where`` setting defaults to, and every other ``environ`` use is a violation.  ``ENV_OWNERS`` are the two modules that did it before the registry, until
 their uses move there: they may read the environment and name machine paths (``pipeline/cli.py`` turns both into declared inputs,
 option defaults and ``config.RunEnv``; ``engine/env.py`` writes vLLM's pins), and they may only leave the set.
 The rule's torch-stub test (the plan digest is the same with torch present and stubbed out) is not a lint.
@@ -103,7 +103,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             if origin in CWD_CALLS:
                 emit("cwd", node, symbol, origin)
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs \
-                and rel not in ENV_OWNERS:
+                and rel not in ENV_OWNERS and rel != SETTINGS_OWNER:
             m = MACHINE_PATH.match(node.value)
             if m:
                 emit("machine-path", node, symbol, m.group(1))
