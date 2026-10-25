@@ -1,10 +1,10 @@
-"""build.sh's gate on attn_bf16.cubin: ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the reasons on stderr) on a
-ptxas warning, a stack frame, a spill or local memory, and on any kernel whose floating-point instructions aren't the
-Definition's: every tensor-core instruction an HMMA.16816.F32.BF16 (D/16 of them in QK^T's unrolled k loop, at least one
-in PV's), the cvt an F2FP.BF16.F32.PACK_AB, and no other floating-point arithmetic (an HFMA2.MMA of -RZ and RZ, the
-compiler's way of loading a constant, adds nothing).
+"""build.sh's gate on one attn_bf16 cubin (sm_90a or sm_120a): ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the
+reasons on stderr) on a ptxas warning, a stack frame, a spill or local memory, and on any kernel whose floating-point
+instructions aren't the Definition's: every tensor-core instruction an HMMA.16816.F32.BF16 (D/16 of them in QK^T's unrolled
+k loop, at least one in PV's), the cvt an F2FP.BF16(.F32).PACK_AB, and no other floating-point arithmetic (an HFMA2.MMA of
+-RZ and RZ, the compiler's way of loading a constant, adds nothing).
 
-  python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
+  python3 sass_gate.py ARCH PTXAS_TXT SASS_TXT OUT_JSON
 """
 
 from __future__ import annotations
@@ -13,19 +13,22 @@ import json
 import re
 import sys
 
-HMMA, CVT = "HMMA.16816.F32.BF16", "F2FP.BF16.F32.PACK_AB"
+HMMA = "HMMA.16816.F32.BF16"
+CVT = re.compile(r"^F2FP\.BF16(\.F32)?\.PACK_AB$")
 MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FCHK|MUFU|FRND|F2F|F2I|I2F|DADD|DMUL|DFMA|DSETP|HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|F2FP)(\.[\w.]+)?\b")
 CONSTANT = re.compile(r"\bHFMA2\.MMA R\d+, -RZ, RZ\b")
 #: kernel: (exact HMMA count, or None for at least one)
-WANT = {"attn_qk_d64": 4, "attn_qk_d128": 8, "attn_pv_d64": None, "attn_pv_d128": None}
+WANT = {f"attn_{op}_d{d}{tile}": (d // 16 if op == "qk" else None) for tile in ("", "_h8") for op in ("qk", "pv") for d in (64, 128)}
 
 
-def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
+def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
     problems = [line for line in ptxas.splitlines() if re.search(r"warning|error|C7514|serializ", line, re.I)]
     funcs: dict[str, dict] = {}
-    for m in re.finditer(r"Compiling entry function '(\w+)' for 'sm_120a'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
-        body = m.group(2)
+    for m in re.finditer(r"Compiling entry function '(\w+)' for '(\w+)'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
+        if m.group(2) != arch:
+            problems.append(f"{m.group(1)}: compiled for {m.group(2)}, want {arch}")
+        body = m.group(3)
         frame = re.search(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads", body)
         funcs[m.group(1)] = {"regs": int(re.search(r"Used (\d+) registers", body).group(1)), "stack": int(frame.group(1)),
                              "spill_stores": int(frame.group(2)), "spill_loads": int(frame.group(3))}
@@ -47,7 +50,7 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
             else:
                 r["other_mma"].append(mm.group(0))
         for fl in FLOAT.finditer(line):
-            if fl.group(0) == CVT:
+            if CVT.match(fl.group(0)):
                 r["F2FP"] += 1
             elif not CONSTANT.search(line):
                 r["float"].append(fl.group(0))
@@ -57,12 +60,12 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
         if r.get("other_mma"):
             problems.append(f"{name}: MMA forms other than {HMMA}: {sorted(set(r['other_mma']))}")
         if r.get("float"):
-            problems.append(f"{name}: floating-point instructions other than {HMMA} and {CVT}: {sorted(set(r['float']))}")
+            problems.append(f"{name}: floating-point instructions other than {HMMA} and {CVT.pattern}: {sorted(set(r['float']))}")
         want = WANT.get(name, 0)
         if (r.get("HMMA", 0) != want) if want is not None else not r.get("HMMA"):
             problems.append(f"{name}: {r.get('HMMA')} {HMMA}, want {want if want is not None else 'at least one'}")
         if name in WANT and not r.get("F2FP"):
-            problems.append(f"{name}: no {CVT}")
+            problems.append(f"{name}: no {CVT.pattern}")
     missing = sorted(set(WANT) - set(funcs))
     if missing:
         problems.append(f"kernels missing from the cubin: {missing}")
@@ -70,13 +73,13 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
 
 
 def main(argv: list[str]) -> int:
-    ptxas, sass, out = argv[1:4]
-    funcs, problems = gate(open(ptxas).read(), open(sass).read())
-    json.dump({"want_hmma": WANT, "kernels": funcs, "problems": problems}, open(out, "w"), indent=1)
+    arch, ptxas, sass, out = argv[1:5]
+    funcs, problems = gate(arch, open(ptxas).read(), open(sass).read())
+    json.dump({"arch": arch, "want_hmma": WANT, "kernels": funcs, "problems": problems}, open(out, "w"), indent=1)
     if problems:
-        print("REFUSED: " + "; ".join(problems), file=sys.stderr)
+        print(f"REFUSED ({arch}): " + "; ".join(problems), file=sys.stderr)
         return 1
-    print("attn_bf16.cubin: " + ", ".join(f"{n} {funcs[n]['regs']} regs {funcs[n]['HMMA']} HMMA {funcs[n]['F2FP']} F2FP" for n in WANT)
+    print(f"attn_bf16.{arch}.cubin: " + ", ".join(f"{n} {funcs[n]['regs']} regs {funcs[n]['HMMA']} HMMA {funcs[n]['F2FP']} F2FP" for n in WANT)
           + "; no other floating-point instruction, no local memory")
     return 0
 
