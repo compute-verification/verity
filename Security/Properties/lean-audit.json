@@ -1509,7 +1509,10 @@
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680"
   },
   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.acceptDrawsOpenable : Properties.RemoteAudit.Shared.AcceptDrawsOpenable"],
+   "assumptions": [],
+   "type_hash": "0b743610595de5577ff9f84574ecfc2bbf1e882858d572dac4296642b8419bb8"
   },
   "Properties.RemoteAudit.Shared.drawIsSubset": {
    "owner": "@memory-accounting",
@@ -4755,6 +4758,7 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
     "Properties.RemoteAudit.acceptChecksOpenings",
@@ -5014,6 +5018,7 @@
     "Properties.Pouw.Commit.taggedSize",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
     "Properties.RemoteAudit.acceptChecksOpenings",
@@ -5087,6 +5092,7 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
     "Properties.RemoteAudit.acceptChecksOpenings",
@@ -8025,6 +8031,7 @@
     "Properties.RemoteAudit.receipterOf": "268ca32c61e77532e1168ef97dc2916273a6fc2e2b7bbddc0e2d18fdc5ecbe67"
    },
    "guarantees": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
     "Properties.RemoteAudit.acceptChecksOpenings",
@@ -8053,6 +8060,7 @@
     "Properties.RemoteAudit.drawnOf": "f18847a737ba256cc55c274972d2d59bd2ac9163bb6a3cdfc24a8ae2d4ade3e1"
    },
    "guarantees": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
@@ -8150,17 +8158,22 @@
    ]
   },
   "Properties.RemoteAudit.Shared": {
-   "digest": "09ada84b23c55482be0da13fd721e0eb8327c39ec3c23f2620e440a785f1f1cd",
+   "digest": "691bc299c37faf179a0ed805709419debab20a3dc2fcd1049651b8867abab76d",
    "definitions": {
+    "Properties.RemoteAudit.Shared.AcceptDrawsOpenable": "65753d764bfe2d2c6c3c7486bd8d9be8247eb6220f954081ce3c1450b17aede7",
     "Properties.RemoteAudit.Shared.DrawIsSubset": "5e1391418f19c4953e71bddf5ceffb7540df4c8c18484a4f0243361eec42f4ff",
     "Properties.RemoteAudit.Shared.OpeningsUnreadUntilDrawn": "a96403019f2e4d40479cb0376b77513e672e3e93372da4dab71018fc58f13a23",
     "Properties.RemoteAudit.Shared.RecordKeptAfterDraw": "28b329c724115229b6cdb4dd0dfa086a0c8f3b5ed9624eb000f9070bca774d7d",
     "Properties.RemoteAudit.Shared.drawLengths": "39d8453df51fe66de43380186e5c0a223d9e7d2a37155c3c9f2b0feb05ce917e",
     "Properties.RemoteAudit.Shared.drawWindows": "a886097f0567a1ce1a0ee77b30b2999ebbe6a91216848035fe8dadbbc4d55be9",
+    "Properties.RemoteAudit.Shared.lengthsOf": "a513bbe2b2c975d42200c7ed0592c3dd5fd34e9625589017b44b456d9e1c5752",
+    "Properties.RemoteAudit.Shared.passCount": "31cc2541472556de7eea915e3142f8c57ba7655e16d37005585ac0a761dc342a",
     "Properties.RemoteAudit.Shared.passesBefore": "cd9697ad26ab90b29c1b7e05a4035686e33897780d15ecea28e6ccaa8c6f5e69",
+    "Properties.RemoteAudit.Shared.receiptCount": "595b3d25d8ece52324f4e878b14201fc85cf1c09a4f10b91513d30207f23cb31",
     "Properties.RemoteAudit.Shared.shareOf": "f5d5f9ef7db5cfd499fcba46f25c6d697793c1da60b46721ea3ff34c74d65ea0"
    },
    "guarantees": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw"
@@ -8294,6 +8307,7 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
@@ -8356,6 +8370,7 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
@@ -8453,6 +8468,7 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
@@ -8547,6 +8563,7 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
@@ -8788,6 +8805,7 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
