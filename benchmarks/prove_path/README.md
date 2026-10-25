@@ -73,18 +73,89 @@ What doesn't change:
 - the per-member `--zk` sessions behind the firewall;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
 
-## What an accepted audit means
+## What an accepted plain audit means
 
-The sampled step units are the sampled class of proofs' `NetTiming.Guarantees.SampledAuditAccepted` (#3608, a statement
-with no proof yet). Its one hypothesis is `Claims.Sampling.KS` at the same deployment. On the statements in scope, at
-every δ ≥ 0 and every decoder within Flock's radius, it bounds Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, where `RAcc δ` holds
-when:
+One property covers both of tonight's chains. In 2b, plain sessions run on the CPU TP stand-in. In 2a, the served window
+runs under `--zk`, and that is the demo of record. The chains differ only in which links below are proved.
+
+**The property.** The sampled step units are the sampled class of `NetTiming.Guarantees.SampledAuditAccepted` (#3608,
+PRF-144). Wherever sampling's knowledge soundness `Claims.Sampling.KS` holds at the deployment, it gives `KSAccepted`. On
+the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every decoder within Flock's radius, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks +
+ε_bind, with ε_ks = κ − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. `RAcc δ` holds when:
 - the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no faulty unit is in a class drawn `all`: N2's head checks and the transfer-gate units, which are exact;
-- some advice (a, free) makes NetTiming's `Accepted` hold over the trace's transfer gates, with `free` holding values only at
-  the faulty units' committed gates. With no unit faulty, `free` is empty and `Accepted` is exact.
+- no faulty unit is in a class drawn `all`: the transfer-gate units and N2's head checks (`allSlots`);
+- some advice (a, free), with `free` holding values only at the faulty units' committed gates (`FaultyGate`), makes NetTiming's
+  `Accepted` hold over every observation sequence the trace's transfer gates carry (`Carries`), with every status complete
+  (`Covered`). With no unit faulty, `free` is empty and `Accepted` is exact.
 
-So beyond the advice, an accepted audit leaks the faulty units' committed bits, and the faulty set is in M_δ.
+**The leak bound that follows.** `EncardAccSeqsSampledLe` counts the accepted sequences: at most 2^c · #faultySets(δ) ·
+2^β · D^n. So, except with probability δ + ε_ks + ε_bind, an accepted audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
+- c, the advice;
+- λ_δ, which units are faulty;
+- β_δ, the faulty units' committed bits;
+- n·log2 D, the timing (J's D classes over n steps).
+
+At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. Composing the count with the property is prose until
+the property is proved.
+
+**The charge terms the run prints** (`summary.json` of `prove_path.py audit`):
+- c is `advice.bits`, the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as
+  `bits`. Over several windows, `BitsCount` charges their sum.
+- δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
+  `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
+  `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
+  `stratum_bounds`).
+- `consumers.exfiltration_bound` gives β_δ + λ_δ. β_δ is the profile's `harm_bound`, weighted by each template's committed
+  bits (`_template_bits` in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `consumers.location_bits`:
+  log2 of the at most Σ_{j ≤ bound} C(n, j) faulty sets. prove_path doesn't print either yet. TODO(PROVE-PATH): their
+  field names.
+- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
+
+**The links**, on main at 169118abc1. TODO(proofs): complete the table.
+
+| Link | Lean name | Status | Where |
+|---|---|---|---|
+| Each session's verdict | `FlockSoundness.Discharge.FailClosed.flock_verify_sound` | proved, under the assumptions below; plain at one table: `SoundExec` (public outputs), `SoundExecH` (hidden); `--zk`: `SoundZHJR` | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean` |
+| Flock KS, plain | `FlockDeploy.Assembled.flock_plain_assembled` (`_trim`), `FlockDeploy.KS.plain_KS_of_liveAcc` | proved from `PlainLiveAcc`, an open hypothesis (`plain_KS_of_w` gives it from `PlainLiveW`) | `Security/Proofs/Flock/Claims/Assembled.lean`, `Security/Proofs/Flock/Claims/KS/PlainAcc.lean`, `Security/Proofs/Flock/Claims/KS/PlainWrP.lean` |
+| Flock KS, `--zk` | `FlockDeploy.KS.zk_KS_untrim` | proved, no premise | `Security/Proofs/Flock/Claims/KS/ZkExtend.lean` |
+| Sampling KS | `Claims.Sampling.sampling_assembled`, `SamplingDeploy.sampling_deployed_sha512` | proved at `deployZk` only, under the hypotheses its docstring lists; none at `deployPlain` | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/DeployedSha512.lean` |
+| Accepted audit ⇒ `Accepted` | `NetTiming.Guarantees.SampledAuditAccepted` | stated only (the lock lists `SampledAuditAcceptedStated`) | `Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean` |
+| Leak count | `NetTiming.SecurityProofs.EncardAccSeqsSampledLe` | proved, no hypothesis; as a bound on an accepted audit it waits on the row above | `Security/Proofs/NetworkCertifier.lean` |
+| Plain registered reads | `sharedRowsOk` | refused (fails closed) without `--zk` | `verity/core/service/flock/Flock/ProvedScope.lean` |
+
+So the open links are the property itself for 2a. For 2b, they are the property, sampling KS at `deployPlain`, and
+`PlainLiveAcc`.
+
+**The named assumptions** the links rest on:
+- SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRExpected` and `SHA512CRStrict`
+  (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.ExpectedCR` (`Security/Definitions/Claims.lean`).
+- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
+- Record custody, under `--zk`: `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
+  (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`). Plain's custody is the hypothesis `RecordsLive`, which the lock
+  doesn't name. TODO(proofs).
+- `Verity.Assumptions.TrustedNebiusHost` (`Security/Models/Core/Assumptions.lean`).
+- The certifier's wire (`Security/Models/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+  `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. W3 (`Padded`), W5 (`UntimedStatus`) and W6
+  (`FailClosed`) are stated there, but no listed guarantee reads them, so the lock doesn't list them.
+- The advice (`Security/Models/NetworkCertifier/Assumptions/AdviceString.lean`): `NetTiming.BitsCount`,
+  `NetTiming.CompilerDeterministic` and `NetTiming.CompilerPrecommitted`.
+- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
+
+**Tonight's interim.**
+- **2b's plain sessions are inside what `flock_verify_sound` covers today.** Each session has one table: `statementRules`
+  refuses more without `--zk`. Each draws by the stratified law: `lawWhy` refuses a subset draw without `--zk`, and a
+  bernoulli or work draw in either mode. The outputs are public, and there are no registered reads.
+- **The drawn units' committed rows are not opened outside the session in plain mode** (proofs, thread
+  1792894842.280569). `keyRowsH_computes` (`Security/Proofs/Flock/Soundness/Discharge/HiddenExec/KeyH.lean`) already
+  binds each drawn row's b‖c to its input words, up to a SHA-512 collision, and the registered tree's leaves are built over
+  the same b‖c. A check outside `flock_verify_sound` would be a new form ahead of its proof. flock-verify refuses every
+  plain registered-read session (`sharedRowsOk`), so a plain served window fails closed.
+- **A plain served window waits for proofs' PRs.** A adds more tables and the subset draw, B hidden outputs, and C
+  registered reads. TODO(proofs): what B adds beyond `SoundExecH` at one table. Tonight, the served window runs under
+  `--zk` (2a).
+
+**Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
+match is refused. It is never a soundness gap.
 
 ## The compile unit (the target; not built)
 
