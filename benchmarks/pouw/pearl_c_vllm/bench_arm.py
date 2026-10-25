@@ -191,8 +191,7 @@ class PearlCWholeArm(PearlCArm):
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows). A retained pass's whole capture
-    keeps one stage a weight, sized at the first capture, so until vllm keys them by m₁₆ the arm starts at one size only
-    (the point's batch), and its whole check runs at the largest size."""
+    keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True}

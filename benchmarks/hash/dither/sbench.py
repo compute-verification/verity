@@ -177,9 +177,9 @@ timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps 
 the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
 --bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
-gated (`dbw.py`: an idle session, each rep an off block of every arm's ops and an on block inside a session's passes, and
-a tampered session beside each dither arm; summary.json's "bw", per_arm's TPOT the off blocks' alone).  Not with
---serial, whose arms are never up together.
+gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle session, each rep an off block of
+every arm's ops and an on block inside a session's passes, and a tampered session beside each dither arm; summary.json's
+"bw", per_arm's TPOT the off blocks' alone).  Not with --serial, whose arms are never up together.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate] [--bw-passes GIB]
     python sbench.py --out OUT --prefill --serial --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
@@ -896,7 +896,8 @@ def main() -> int:
                          "Dither's window does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
-                         "(`dbw.py`: an idle session, each rep an off block and an on block, a tampered session)")
+                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
+                         "an off block and an on block, a tampered session)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
@@ -948,8 +949,8 @@ def main() -> int:
     bw_tokens: dict = {}
 
     def block(r: int, phase: str | None = None, side: int | None = None, only: list[str] | None = None) -> dict:
-        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (off, on or
-        tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
+        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (cal, off, on
+        or tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
         these, lo = only or arms, time.monotonic_ns()
         for op in a.ops.split(","):
             for j in range(len(these)):
@@ -1083,10 +1084,12 @@ def main() -> int:
                                 prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
                                 verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
                                 side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+                dither = [x for x in arms if x.startswith("dither")] or arms
                 try:
-                    doc["ready"] = side.expect("ready")
-                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"}}),
-                          flush=True)
+                    doc["ready"], cal = dbw.registered(side, lambda: block(i * a.reps, "cal", i, only=dither))
+                    doc["calibrated_beside"] = {"arms": dither, "blocks": cal}
+                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"},
+                                      "calibrated_beside": f"{len(cal)} blocks of {','.join(dither)}"}), flush=True)
                     side.start(0, dbw.paced(a.bw_idle_s, 1.0))
                     doc["sessions"][0] = side.end(0)
                     stretch_s, longest = dbw.window_s(doc["sessions"][0]), 0.0
@@ -1103,7 +1106,7 @@ def main() -> int:
                         stretch_s = dbw.beside_s(doc["sessions"][1 + r], on["lo"], on["hi"]) or stretch_s
                         print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
                                           "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
-                    k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
+                    k = 1 + a.reps
                     est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
                               and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
                               and "spans_ns" in x)

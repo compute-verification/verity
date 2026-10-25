@@ -1,10 +1,12 @@
 {
  "definitions": {
   "UniversalUnit_v1{G=16,N_IN=16,N_OUT=8}": {
-   "and": 1066
+   "and": 1066,
+   "type": "9319e5e10a1829a4e602cc7dec5d1f9e1d9fc89070541bc12a30c1825603476eb72df99bc9f903bbeddb2c3b6ef9da2c138a761e535f5db17131ff1fa8d5b71b"
   },
   "UniversalUnit_v1{G=64,N_IN=64,N_OUT=32}": {
-   "and": 16674
+   "and": 16674,
+   "type": "b3856910dd8870033f13371dba0832d9b8353659e3478db77e1b28d0542b7516bdb5f78ca22c22b414d1311f848edd28196368c702757afddce7ff5a76b84a8e"
   }
  }
 }

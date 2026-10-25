@@ -138,29 +138,18 @@ def _cap_of(r: dict) -> int:
 
 
 def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
-    """[R15 stoch; R16 coord M-0169] The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported`
-    dict) when the policy has no Definition.  On success `sampling["splits"]` is "derived" (several requests) or the constant S (one
-    request, below) and `sampling["geometry"]` records the RELATION -- {num_sms, relation SplitsFor_v1, live workload-derived,
-    sampler_batch B, pipeline} -- and nothing per request, so every component of a workload declares the same sampler applicability
-    (GP-01 agreement by construction).
+    """The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported` dict) when the policy has no
+    Definition.  On success `sampling["splits"]` is the registered split count S and `sampling["geometry"]` records it with its rule:
+    nothing of the workload's batch, so every component of every workload on the target declares the same (GP-01 agreement by
+    construction).
 
-    vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split` with
-    S = splits_for(batch, num_sms) splits (the largest power of two S <= 32 with S * batch <= num_sms; vLLM's doubling loop); the masked
-    row's fp32 value can depend on S (the partials' summation order).  RULING M-0571 (3) / M-0169, amended for single-request workloads
-    (below): S is a WORKLOAD-level DERIVED value -- S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the requests with a sampled
-    logits row at engine step t (declared chronology and verified EOS stops) -- and the request Program takes it as a request-owned
-    INPUT `splits` (int32 [T+1], one entry per sampling event; `vllm_meta.StochasticRequest`), the 6th operand of
-    `GumbelTopPTokenSelect_v1{V}`.  The Program declares NO S and NO schedule: the Match binds each event's entry to the split kernels'
-    constexpr and checks the relation per engine step (GM-01 G6 'sampler geometry'; `bench.stoch_recompute --build`).  R15's static S /
-    declared-chronology schedule (`STOCH_DECLARED_CHRONOLOGY_S`) is gone: a Program that declared S could only be right by assumption
-    (every request runs to its cap).
-
-    The amendment for single-request workloads (the Project's decision record dates it): a workload of ONE request has |live(t)| = 1
-    at every sampling event it has (a request that stops has no later event), so S = SplitsFor_v1(1, num_SMs) exactly, with no
-    assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
-    select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
-    anchors S itself.  A workload of several requests keeps the derived input above."""
-    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for, splits_for_v1
+    vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split`, whose keep set depends
+    on its split count S.  vLLM picks S from the live sampler batch, so a request's batch-mates would pick its nucleus at top_p < 1
+    (CIR-87: `circuit-check --batch`).  The served engine runs every launch at the registered S instead
+    (`topp_geometry.registered_splits` = SplitsFor_v1(1, num_SMs), from the target's SM count, never hard-coded; `engine.topp_pin`),
+    so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
+    holds every launch's S to it."""
+    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -186,24 +175,15 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     if B > SPLIT_MAX_BATCH:
         return refuse(f"sampler batch {B} > _SPLIT_MAX_BATCH {SPLIT_MAX_BATCH}: vLLM runs `_topk_topp_kernel`, not the split pipeline", reason="sampler_geometry")
     if getattr(target, "num_sms", None) is None:
-        return refuse("the target profile declares no num_sms: S_t = SplitsFor_v1(|live(t)|, num_SMs) has no num_SMs to be derived with",
+        return refuse("the target profile declares no num_sms: the registered split count SplitsFor_v1(1, num_SMs) has no num_SMs",
                       reason="sampler_geometry")
     nsm = int(target.num_sms)
-    if wl and len(reqs) == 1:                      # the manifest's one request: the only live request at every event
-        S = int(splits_for_v1(1, nsm))
-        geom = {"sampler_batch": 1, "num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "SplitsFor_v1",
-                "rule": "S = SplitsFor_v1(1, num_SMs) at every sampling event: the workload's one request is the only live one",
-                "live": "single request", "splits": S, "ruling": "the derived-S ruling, amended for single-request workloads",
-                "constant": f"Const32[{S}]: the select's 6th operand at every sampling event (no `splits` input)"}
-        sampling["splits"] = S
-        sampling["geometry"] = geom
-        return None
-    geom = {"sampler_batch": B, "num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "SplitsFor_v1",
-            "rule": "S_t = SplitsFor_v1(|live(t)|, num_SMs); |live(t)| = requests with a sampled logits row at engine step t (workload-derived)",
-            "live": "workload-derived", "splits_range_1_to_B": [int(splits_for(B, nsm)), int(splits_for(1, nsm))],
-            "input": "splits: int32 [T+1] (request-owned Program Input; entry s = the split count of sampling event s), after the seed"}
-    sampling["splits"] = "derived"
-    sampling["geometry"] = geom
+    S = int(registered_splits(nsm))
+    sampling["splits"] = S
+    sampling["geometry"] = {"num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "registered", "splits": S,
+                            "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every sampling event, whatever the live "
+                                    "batch: the served engine pins vLLM's split count to it (engine.topp_pin)",
+                            "constant": f"Const32[{S}]: the select's 6th operand at every sampling event (no `splits` input)"}
     return None
 
 

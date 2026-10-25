@@ -561,6 +561,7 @@ def _is_const(prim) -> bool:
     return getattr(prim, "family", None) == "Const"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("ell", [0, 3])
 def test_lserve_bot_steps_are_bot_at_every_gate_they_own_by_enablement(ell):
     """R17-43 / LIFTING-SPEC v0.6 A9.3 + A13.1 (replaces the propagation reading of DP-pad-01 (a)): with the committed EOS at `out[ell]`,
@@ -693,6 +694,7 @@ def test_lserve_length_cap_all_active():
     assert len(bots) == 1 and p3.circuit.gate(bots[0]).prim.id == "LBot32_v1"
 
 
+@pytest.mark.slow
 def test_lserve_eos_set_semantics():
     """The declared EOS SET (P2): any member stops; the set's order is irrelevant; a set is a different Program (digest)."""
     _, _, a = _lserve((17, 63))

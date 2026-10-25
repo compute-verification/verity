@@ -3,10 +3,12 @@
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof service draws
 units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, and the Lean verifier accepts or refuses them.
-`prove_path.py` is that path on a committed TP run: the prover commits the advice under hiding rows and each rank's window over
-the compiler's Programs for it, and the verifier audits each rank through the one-stage audit's per-rank `service.Stream` on its
-own coins (`benchmarks/one_stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in or
-on a deferred TP Commit (`PP_TP`), with one forged run that must be refused. The docstrings say how.
+`prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`) or a single-GPU one (`--bundle`, TP1): the prover
+commits the advice under hiding rows and each rank's window over the compiler's Programs for it, and the verifier audits each
+rank through the one-stage audit's per-rank `service.Stream` on its own coins or a challenger's (`--challenger local`,
+`benchmarks/one_stage/a5.py`). `run.sh` builds
+the prover and the Lean verifier and runs it on the CPU TP stand-in, on a deferred TP Commit (`PP_TP`) or on a single-GPU
+Commit's row dir from the store (`PP_LLAMA`), with one forged run that must be refused. The docstrings say how.
 
 ## What changes when Programs come from advice
 
@@ -53,16 +55,35 @@ hiding hm96 rows and never published.
    - Advice that names a request the Commit didn't serve, or a served one at another arrival, commits no window, because the
      committed store holds no such value (`LookupError` at the prover).
    - A unit committed under other advice and spliced in fails R4.
-   - Each of these fails `source` before any coin is read (a5's `advice_negatives` and `more_negatives`): a registration naming
-     another compiler, another advice root, another cap, or none; the opening under another salt; another rank's registration.
+   - Each of these fails `source` before any coin is read (`more_negatives`, as a5's `advice_negatives`): a registration naming
+     another compiler, another advice root, another cap, or none; the opening under another salt; another rank's registration;
+     the registration under the compiler listing no transfer gates.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
+7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
+   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law draws every unit of theirs beside
+   K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+   of them, a draw trading one away, and a registration drawing them as the rest. Until COMPILER lists the I/O shell's units, a
+   stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
 - the draw: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
   outcome;
 - the per-member `--zk` sessions behind the firewall;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
+
+## What an accepted audit means
+
+The sampled step units are the sampled class of proofs' `NetTiming.Guarantees.SampledAuditAccepted` (#3608, a statement
+with no proof yet). Its one hypothesis is `Claims.Sampling.KS` at the same deployment. On the statements in scope, at
+every δ ≥ 0 and every decoder within Flock's radius, it bounds Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, where `RAcc δ` holds
+when:
+- the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
+- no faulty unit is in a class drawn `all`: N2's head checks and the transfer-gate units, which are exact;
+- some advice (a, free) makes NetTiming's `Accepted` hold over the trace's transfer gates, with `free` holding values only at
+  the faulty units' committed gates. With no unit faulty, `free` is empty and `Accepted` is exact.
+
+So beyond the advice, an accepted audit leaks the faulty units' committed bits, and the faulty set is in M_δ.
 
 ## The compile unit (the target; not built)
 
@@ -135,11 +156,19 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
 
 ## Status
 
-- **The compiler** is `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record,
-  with ℓ = `CAP_BITS` (1 MiB) unless `--cap-bits` gives another. On a declared run it emits exactly what a correct compiler emits.
-- I2's `predict.steps.compile_steps` (v0) compiles a request's Program from φ at its advised shape, but not yet a TP rank's
-  Programs, which a rank's window needs. Once it does, its adapter (`name`, `digest`, `load(rank, world, requests)`) goes under
-  `Capped` in place of `Traced`, with no change to the audit.
+- **The compiler**, with ℓ = `CAP_BITS` (1 MiB) unless `--cap-bits` gives another:
+  - on a TP Commit, `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record.
+    On a declared run it emits exactly what a correct compiler emits. I2 doesn't compile a TP rank's Programs yet.
+  - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
+    row's declared inputs (`score.phi_of`: the row id, the served workload file, refused unless its digest is the record's, and
+    the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
+    (`score.code_version`), φ, the seed and ℓ. A Program's body is read from the Build dir whose `result.json` names I2's
+    digest, refused where none does. On Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's
+    `build_request_LP*` digests (`commit.json`'s and the audit summary's `i2`).
+- **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
+  `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
+  Programs come from `--row-dir`, and the Build manifest falls back to `<row dir>/manifest.json`, checked against the record's
+  sha256.
 - **The advice** is I1's canonical encoding. A declared run's comes from its workload (`advice_windows.advice_of_workload`), a
   served run's from ADVICE-SRC's step trace.
 - **The opening** is the named gap above. `run.sh` keeps neither the advice nor its opening in `$OUT`.

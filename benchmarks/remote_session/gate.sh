@@ -6,7 +6,9 @@
 #   probe  read-only requests: vy-challenger-1's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and vy-auditor-1's `status` (pinned at COMMIT, no unit running);
 #          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
-#          `descriptor`). Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
+#          `descriptor`). COMMIT, and so vy-auditor-1's pin, must be on origin/main's first-parent line, fetched as
+#          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
+#          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
 #   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
 #   host   `vy-verifier-gate run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
@@ -19,7 +21,8 @@
 #          rerun in it and runs no auditor.
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
-# what doesn't need it runs (the circuit, the peers line to PROVER_NODE and its lease status, vy-auditor-1's host key).
+# what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
+# vy-auditor-1's host key).
 set -u
 : "${OUT:?}"
 VERB=${1:?probe, open, host, close, audit or fire}
@@ -54,12 +57,25 @@ circuit() {
   printf 'verity/remote-bandwidth/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
 }
 
+main_line() {
+  # origin/main's first-parent history into $OUT/main.probe.txt, fetched as auditor.sh fetches it
+  local unshallow=()
+  [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=(--unshallow)
+  { git fetch -q "${unshallow[@]}" origin +refs/heads/main:refs/remotes/origin/main \
+      || git fetch -q "${unshallow[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
+    >> "$OUT/fetch.probe.log" 2>&1 && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
+}
+
 probe() {
   local c
   c=$(circuit) || exit 3
   echo "circuit $c (COMMIT $COMMIT)"
   [ -z "${CIRCUIT:-}" ] || [ "$CIRCUIT" = "$c" ] || { echo "CIRCUIT $CIRCUIT is not COMMIT's $c"; exit 3; }
   CIRCUIT=$c
+  main_line || {
+    echo "can't read origin/main's first-parent history (fetch.probe.log), so COMMIT can't be checked on it"; exit 3; }
+  grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
+    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it"; exit 3; }
   if [ -n "${DRY:-}" ]; then
     [ -f "$GATE_KEY" ] && echo "DRY: the gate key $GATE_KEY is here" || echo "DRY: no gate key at $GATE_KEY"
     ssh-keygen -F "${AUDITOR#*@}" -l 2>&1 | grep -q -F "$AUDITOR_FP" \
@@ -96,15 +112,21 @@ for e in entries:
         opened = {k: v for k, v in opened.items() if v != e["body"]["period"]}
 if lane in opened:
     why.append(f"lane {lane} has period {opened[lane]} open: close it first (gate.sh close, PERIOD={opened[lane]})")
+main = {x.strip() for x in open(f"{out}/main.probe.txt") if x.strip()}
 host = json.load(open(f"{out}/host.status.json"))
-if host.get("pinned") != commit:
-    why.append(f"vy-auditor-1 is pinned at {host.get('pinned')}, not COMMIT {commit}: rerun with COMMIT={host.get('pinned')}")
+pinned = host.get("pinned")
+if pinned != commit and pinned in main:
+    why.append(f"vy-auditor-1 is pinned at {pinned}, not COMMIT {commit}: rerun with COMMIT={pinned}")
+elif pinned != commit:
+    why.append(f"vy-auditor-1 is pinned at {pinned}, off main's first-parent line, where no session credits: repin it at "
+               f"COMMIT {commit} (vy-verifier-pin) and rerun")
 if host.get("busy"):
     why.append(f"vy-auditor-1 runs {host['busy']}: one unit at a time")
-doc = {"commit": commit, "circuit": circuit, "pin": pin, "period": period, "challenger_pin": pins[-1] if pins else None,
+doc = {"commit": commit, "circuit": circuit, "pin": pin, "period": period, "main_commits": len(main),
+       "challenger_pin": pins[-1] if pins else None,
        "challenger_pinned_at_commit": bool(pins) and pins[-1].get("commit") == commit, "ledger_entries": len(entries),
-       "host_pinned": host.get("pinned"), "host_pin_log": host.get("pins", [])[-1:], "host_busy": host.get("busy"),
-       "refused": why}
+       "host_pinned": pinned, "host_pinned_on_main": pinned in main, "host_pin_log": host.get("pins", [])[-1:],
+       "host_busy": host.get("busy"), "refused": why}
 json.dump(doc, open(f"{out}/probe.json", "w"), indent=1)
 print(json.dumps(doc, indent=1))
 if not doc["challenger_pinned_at_commit"]:

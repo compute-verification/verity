@@ -56,7 +56,8 @@ model's rows are registered under that key before the salt, the window refused u
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
@@ -347,7 +348,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
         zs = []
         for index, xq, _sa, y in h1.retained:
-            call = h1.calls[index]
+            call = h1.call(index)
             w = PH.numpy_of(layers[call.layer].weight).astype(np.int64)
             exact = xq.astype(np.int64) @ w.T
             zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, exact))})
@@ -512,24 +513,42 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
             shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
-            print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
+            doc["b_registered"] = {"s": round(time.monotonic() - t0, 1), "path": SV.NR.path()}
+            print(f"[fill] B registered under a local key {doc['b_registered']}", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
                             window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
                   if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
+        hashed_s: dict[int, float] = {}
+        nr_commit = SV.NR.commit
+        prof = None
         if served is not None and not a.handoff:
-            served_commit = served.commit
+            served_commit, at = served.commit, [0]
+            if a.profile_register:
+                import cProfile
+
+                prof = cProfile.Profile()
+                served_commit = profiled(prof, served_commit)
+
+            def hashing(*args: Any, **kw: Any) -> Any:
+                t = time.monotonic()
+                try:
+                    return nr_commit(*args, **kw)
+                finally:
+                    hashed_s[at[0]] = hashed_s.get(at[0], 0.0) + time.monotonic() - t
 
             def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
-                t = time.monotonic()
+                t, at[0] = time.monotonic(), call.step
                 if call.layer == 0:
                     print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
-                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} hashed_s(prev)="
+                          f"{round(hashed_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
                 try:
                     return served_commit(run, call, *rest)
                 finally:
                     registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
             served.commit = timed
+            SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -575,9 +594,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["hashed_s"] = [round(hashed_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["register_path"] = SV.NR.path()
                 del served.commit
+                SV.NR.commit = nr_commit
+                if prof is not None:
+                    write_profile(prof, tdir / "register-profile.txt")
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
-                  f"rss_gib={rss_gib()}", flush=True)
+                  f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
                 rc = com.finalize()
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
@@ -601,6 +625,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
         finally:
+            SV.NR.commit = nr_commit
             lie.uninstall()
             comp.close()
             if com is not None:
@@ -663,6 +688,30 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     return fill_record(doc, outdir)
 
 
+def profiled(prof: Any, fn: Any) -> Any:
+    """``fn`` run under the profiler ``prof``."""
+    def run(*args: Any, **kw: Any) -> Any:
+        prof.enable()
+        try:
+            return fn(*args, **kw)
+        finally:
+            prof.disable()
+    return run
+
+
+def write_profile(prof: Any, path: Path) -> None:
+    """``prof``'s 60 functions of most cumulative time, then of most own time, as text at ``path``."""
+    import io
+    import pstats
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    stats = pstats.Stats(prof, stream=buf).strip_dirs()
+    stats.sort_stats("cumulative").print_stats(60)
+    stats.sort_stats("tottime").print_stats(60)
+    path.write_text(buf.getvalue())
+
+
 def rss_gib() -> float:
     """This process's resident set now, GiB."""
     for line in Path("/proc/self/status").read_text().splitlines():
@@ -692,7 +741,7 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
     decl_w = decl if want == decl.slots else PH.Static(decl.prompt_lens[:want], cap, decl.rows, decl.steps)
     zs = []
     for index, xq, _sa, y in h1.retained:
-        call = h1.calls[index]
+        call = h1.call(index)
         w = PH.numpy_of(weight_of(call.layer)).astype(np.int64)
         zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, xq.astype(np.int64) @ w.T))})
     credit = h1.credit()
@@ -1247,6 +1296,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--profile-register", action="store_true",
+                    help="fill with --served: profile each served window's registration (Served.commit) and write its "
+                         "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)

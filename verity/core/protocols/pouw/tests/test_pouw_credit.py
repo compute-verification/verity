@@ -60,6 +60,8 @@ CREDIT_EXPECT = {
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
 NOT_DRAWN = "has a proof outcome and was not drawn"
+NO_SERVED = "states no served rows m_s at most the window's A slot M = "
+OTHER_SERVED = "every dense call of a step serves the step's m_s rows"
 UNTIED = "whose rows each round's root committed"
 NOT_COMMITS = "is not the Commit's "
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
@@ -122,6 +124,7 @@ WINDOW_EXPECT = {
     "ids0-other-session": ("registration", "ids@0" + OTHER_REGISTRATION),
     "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
+    "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -297,6 +300,11 @@ def test_period_mutation(name):
     for seed in SEEDS:
         got, refused = _period(name, seed)
         assert got is None and refused[0] == code and part in refused[1], (seed, refused)
+
+
+def _served(d: dict) -> list[int]:
+    """The calls a window credits: its rows whose credit bit is set and whose step served rows."""
+    return [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT] and row[Cr.SERVED_ROWS] > 0]
 
 
 def _drawn(name: str, seed: int):
@@ -531,7 +539,7 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
     d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest")
     assert any(Cr.a_value(e["value"]) and Cr.a_value(e["value"])[1] is not None for e in d["entries"])
     got, refused = Cr._window_outcomes(*cases.window_args(d))
-    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    assert refused is None and got == _served(d)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -687,7 +695,7 @@ def test_a_refused_outcome_credits_nothing_though_credited_would():
 def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
     d = cases.window_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._window_outcomes(*cases.window_args(d))
-    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    assert refused is None and got == _served(d)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -697,7 +705,7 @@ def test_a_period_counts_only_closed_and_complete(seed):
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None
-    assert got["windows"] == [[i for i, row in enumerate(w["calls"]) if row[Cr.CREDIT]] for w in d["windows"]]
+    assert got["windows"] == [_served(w) for w in d["windows"]]
     for name in ("no-close", "incomplete", "missing", "order", "foreign"):
         assert _period(name, seed)[0] is None, name
 
@@ -763,7 +771,8 @@ def _work(layout: dict) -> int:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     """PoUW carries no ε target: the period's open commits K, and the credit reports the ε that K establishes at
-    `DELTA` over each window's credited work C, `window.k_prime` inverted at (C, W, 1), W the window's work: K′ at that
+    `DELTA` over each window's credited work C, each credited call's m_s·n·K at its m_s served rows (the window's
+    ``work``), `window.k_prime` inverted at (C, W, 1), W the window's work, every unit's: K′ at that
     ε is at most K, and at the next grid point down more than K, and a window whose draw establishes no ε <= 1 reports
     none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
@@ -771,13 +780,15 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     assert refused is None and got["k"] == big_k and got["delta"] == str(Cr.DELTA)
     grid = Fraction(1, 1 << Wd.EPS_BITS)
-    for w, calls, eps in zip(d["windows"], got["windows"], got["eps"], strict=True):
+    for w, calls, work, eps in zip(d["windows"], got["windows"], got["work"], got["eps"], strict=True):
         lay, _ = Cr.layout_of(bytes.fromhex(w["descriptor"]))
         (r, c), ks = lay["tile"], {name: (k, n) for name, k, n in lay["linears"]}
         units = [((lay["m"] // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in lay["calls"]]
         total = _work(lay)
         assert sum(s * u for s, u in units) == total
-        credited = sum(units[i][0] * units[i][1] for i in calls)
+        served = [row[Cr.SERVED_ROWS] for row in w["calls"]]
+        credited = sum(served[i] * ks[lay["calls"][i][0]][1] * ks[lay["calls"][i][0]][0] for i in calls)
+        assert work == credited
         if not credited or Wd.k_prime(Fraction(1), Cr.DELTA, credited, total, 1) > big_k:
             assert eps is None
             continue
@@ -786,7 +797,7 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
         assert Wd.k_prime(eps, Cr.DELTA, credited, total, 1) <= big_k
         assert eps == grid or Wd.k_prime(eps - grid, Cr.DELTA, credited, total, 1) > big_k
     at_record = Cr.established({"calls": [["w", 0]], "linears": [["w", 64, 1 << 20]], "m": 1, "tile": [1, 1]}, [0],
-                               plan.RECORD_K)
+                               [1], plan.RECORD_K)
     assert at_record <= Fraction(1, 1000)
     assert plan.record_k(at_record, Cr.DELTA) <= plan.RECORD_K < plan.record_k(at_record - grid, Cr.DELTA)
 
@@ -799,11 +810,69 @@ def test_the_reported_eps_is_of_the_credited_work():
     size, work = Cr.call_work(lay)[0]
     total = 9 * size * work
     k = Wd.k_prime(Fraction(1, 1000), Cr.DELTA, 8 * size * work, total, 1)
-    eps = Cr.established(lay, list(range(8)), k)
+    eps = Cr.established(lay, list(range(8)), [16] * 9, k)
     assert k == 31_178 and Fraction(9999, 10_000_000) < eps <= Fraction(1, 1000)
     assert eps == Wd.eps_at(k, Cr.DELTA, 8 * size * work, total, 1)
     assert Fraction(9, 8) * Wd.eps_at(k, Cr.DELTA, total, total, 1) == pytest.approx(eps, rel=1e-5)
-    assert Cr.established(lay, [], k) is None
+    assert Cr.established(lay, [], [16] * 9, k) is None
+
+
+def test_a_padded_step_is_credited_its_served_rows_not_its_slots():
+    """Every call has the window's M slot rows and its step's m_s served rows first; the empty rows' units prove
+    trivially. A credited call of a step serving m_s = 2 of M = 16 rows is credited m_s·n·K, not M·n·K, so the ε its
+    draw establishes is the one over that work, and the draw's population stays every slot's units."""
+    k, n = 4096, 1 << 20
+    lay = {"calls": [["w", 0]] * 2, "linears": [["w", k, n]], "m": 16, "tile": [16, 16]}
+    total = sum(size * work for size, work in Cr.call_work(lay))
+    assert total == 2 * 16 * n * k
+    assert Cr.served_work(lay, [2, 16]) == [(2 * n // 16, 16 * k), (16 * n // 16, 16 * k)]
+    assert Cr.credited_work(lay, [0], [2, 16]) == 2 * n * k
+    assert Cr.credited_work(lay, [0, 1], [16, 16]) == total
+    big_k = Wd.k_prime(Fraction(1, 1000), Cr.DELTA, 2 * n * k, total, 1)
+    padded = Cr.established(lay, [0], [2, 16], big_k)
+    assert padded == Wd.eps_at(big_k, Cr.DELTA, 2 * n * k, total, 1) <= Fraction(1, 1000)
+    assert Cr.established(lay, [0], [16, 16], big_k) == Wd.eps_at(big_k, Cr.DELTA, 16 * n * k, total, 1) < padded
+
+
+def test_an_empty_call_is_credited_nothing():
+    """A call whose step served no rows (m_s = 0, an engine step past the last served one) is credited no work, and a
+    window credited only such calls establishes no ε."""
+    lay = {"calls": [["w", 0]] * 2, "linears": [["w", 64, 1 << 10]], "m": 16, "tile": [16, 16]}
+    assert Cr.credited_work(lay, [0], [0, 16]) == 0
+    assert Cr.established(lay, [0], [0, 16], 1000) is None
+    assert Cr.credited_work(lay, [0, 1], [0, 16]) == Cr.credited_work(lay, [1], [0, 16])
+
+
+def test_an_empty_step_of_a_window_credits_none_of_its_calls():
+    """A served window whose step served no rows is accepted, and none of that step's calls is credited, though its
+    credit bits are set: they were fixed before the draw coin, beside each call's m_s."""
+    seen = 0
+    for seed in range(40):
+        d = cases.window_instance(random.Random(f"empty/{seed}"))
+        empty = [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT] and row[Cr.SERVED_ROWS] == 0]
+        if not empty:
+            continue
+        got, refused = Cr._window_outcomes(*cases.window_args(d))
+        assert refused is None and got == _served(d) and not set(empty) & set(got), seed
+        seen += 1
+    assert seen >= 3
+
+
+def test_served_rows_are_one_natural_at_most_m_a_step():
+    """Each call's m_s is its manifest row's ``served``, a natural at most the A slot M, and every dense call of a step
+    (call c at step c // (C/S)) states the same m_s; steps may differ. Else the window is refused (``manifest``)."""
+    lay = {"calls": [["w", 0], ["v", 0], ["w", 1], ["v", 1]], "m": 16}
+    rows = lambda *ms: [{Cr.SERVED_ROWS: m} for m in ms]  # noqa: E731
+    assert Cr.served_rows(rows(3, 3, 16, 16), lay, 2) == ([3, 3, 16, 16], None)
+    assert Cr.served_rows(rows(0, 0, 5, 5), lay, 2) == ([0, 0, 5, 5], None)
+    assert Cr.served_rows(rows(3, 4, 16, 16), lay, 2) == (None, ("manifest", Cr.other_served(1, 0, 0, 4, 3)))
+    assert Cr.served_rows(rows(3, 3, 16, 15), lay, 2) == (None, ("manifest", Cr.other_served(3, 2, 1, 15, 16)))
+    assert Cr.served_rows(rows(3, 3, 3, 4), lay, 1) == (None, ("manifest", Cr.other_served(3, 0, 0, 4, 3)))
+    assert Cr.served_rows(rows(17, 17, 3, 3), lay, 2) == (None, ("manifest", Cr.no_served(0, 16)))
+    for bad in (True, -1, "3", None, [3], 1.0):
+        assert Cr.served_rows(rows(3, bad, 3, 3), lay, 2) == (None, ("manifest", Cr.no_served(1, 16))), bad
+    assert Cr.served_rows([{}, *rows(3, 3, 3)], lay, 2) == (None, ("manifest", Cr.no_served(0, 16)))
+    assert OTHER_SERVED in Cr.other_served(1, 0, 0, 4, 3) and NO_SERVED in Cr.no_served(0, 16)
 
 
 def test_the_record_k_establishes_about_0_1125_percent_at_u_eight_ninths():
@@ -814,7 +883,7 @@ def test_the_record_k_establishes_about_0_1125_percent_at_u_eight_ninths():
     lay = {"calls": [["w", 0]] * 9, "linears": [["w", 4096, 1 << 20]], "m": 16, "tile": [16, 16]}
     size, work = Cr.call_work(lay)[0]
     total, credited = 9 * size * work, 8 * size * work
-    eps = Cr.established(lay, list(range(8)), plan.RECORD_K)
+    eps = Cr.established(lay, list(range(8)), [16] * 9, plan.RECORD_K)
     assert eps == Wd.eps_at(plan.RECORD_K, Cr.DELTA, credited, total, 1)
     assert Fraction(1_124, 1_000_000) < eps < Fraction(1_126, 1_000_000)
     assert Wd.k_prime(eps, Cr.DELTA, credited, total, 1) <= plan.RECORD_K
@@ -852,7 +921,7 @@ def test_the_eps_holds_at_the_work_laws_cap():
     total = sum(s["work"] * (s["units"][0][1] - s["units"][0][0]) for s in ss)
     drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
     assert total == 1_001_000 and drawn == [(1000, 1, 2), (1000, 1000, 1000)]
-    eps = Cr.established(lay, [0, 1], 2000)
+    eps = Cr.established(lay, [0, 1], [1, 1], 2000)
     assert eps == Wd.eps_at(2000, Cr.DELTA, total, total, 1) and Fraction(137, 10_000) < eps < Fraction(138, 10_000)
     assert _worst_miss(drawn, eps, total) <= Cr.DELTA
     by_units = Wd.eps_at(2000, Cr.DELTA, total, 2000, 1000)
@@ -877,7 +946,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     assert drawn[0][0] == n_a and drawn[0][2] < n_a and drawn[1][2] == n_b
     by_units = Wd.eps_at(n, Cr.DELTA, total, n, w_b)
     assert by_units == Fraction(1, 1 << Wd.EPS_BITS) and _worst_miss(drawn, by_units, total) > Fraction(9, 10)
-    eps = Cr.established(lay, [0, 1], n)
+    eps = Cr.established(lay, [0, 1], [1, 1], n)
     assert eps == Wd.eps_at(n, Cr.DELTA, total, total, 1) and _worst_miss(drawn, eps, total) <= Cr.DELTA
 
 

@@ -5,16 +5,18 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 * **The Commit** (`acquire.h1_commit.attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
   Commit of record) with the int8 source (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's
   Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), a routed expert's by
-  its H1 name (VLLM-80: under its call, an idle expert's zero rows too), and the
-  embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids. `CommitTap` wraps the
+  its H1 name (VLLM-80: under its call, an idle expert's zero rows too), and the embedding's input, which the committer
+  acquires as ``<embed>/in``, the step's input token ids (at the model's forward where vLLM gathers the embedding
+  fused, `acquire.h1_commit.fused_embed`). `CommitTap` wraps the
   committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q (``/0``)
   and s_a (``/1``), and the ids.
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s rows are the Commit's x_q and s_a of
   linear w's site at the engine step H1's step s maps to, in H1's table form (`pouw_h1_served.Served.a_words`), and its
-  AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`), registered
-  as `credit.commit_rows` of (s, K); round s's input ids are the Commit's ``<embed>/in`` at that engine step
-  (`pouw_h1_served.ids_words`), registered as `credit.commit_ids` of s. Layer 0's call maps s to the next engine step
-  the Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
+  AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`) whatever
+  order the forward ran them in, registered as `credit.commit_rows` of (s, K) once they are all in; round s's input ids
+  are the Commit's ``<embed>/in`` at that engine step (`pouw_h1_served.ids_words`), registered as `credit.commit_ids`
+  of s. Step s's first call to come, whichever linear its forward runs first, maps s to the next engine step the
+  Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
@@ -89,9 +91,9 @@ class CommitTap:
     _x: dict[str, list[Any]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
     _steps: dict[int, int | None] = field(default_factory=dict)
-    #: each open step A table's rows as the Commit acquired them so far (one block a call, in call order) and where
-    _rows: dict[str, list[np.ndarray]] = field(default_factory=dict)
-    _at: dict[str, list[tuple[int, int | None, str, int]]] = field(default_factory=dict)
+    #: each open step A table's rows as the Commit acquired them so far (one block a call, by call) and where
+    _rows: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
+    _at: dict[str, dict[int, tuple[int, int | None, str, int]]] = field(default_factory=dict)
     _last: int = -1
     _com: Any = None
 
@@ -127,7 +129,7 @@ class CommitTap:
             self.refused.append(f"{op}: an s_a at engine step {step} with no x_q")
 
     def _engine_step(self, call: Any) -> int | None:
-        if call.layer == 0 and call.step not in self._steps and call.m:
+        if call.step not in self._steps and call.m:
             got = self._x.get(site(call.module))
             j = got[0] if got is not None and got[0] > self._last else None
             self._steps[call.step] = j
@@ -142,10 +144,10 @@ class CommitTap:
         self.values[name], self.where[name] = {**reg.entry(), "value": name}, dict(where)
 
     def arow(self, run: Any, served: Any, call: Any, value: str, words: np.ndarray | None) -> None:
-        """Call ``call``'s rows of the Commit's AROW of its step and K: the Commit's rows of its site at its step. At the
-        step's last call of K (``words``, the window's step A table ``value`` whole, else None) its value
-        `credit.commit_rows` of (step, K) is the step's calls' rows call after call: the window's tree of ``value`` when
-        they are its ``words``, else the Commit's own."""
+        """Call ``call``'s rows of the Commit's AROW of its step and K: the Commit's rows of its site at its step. Once the
+        step's calls of K are all in, in whichever order they came (``words``, the window's step A table ``value``
+        whole, else None), its value `credit.commit_rows` of (step, K) is the step's calls' rows call after call in call
+        order: the window's tree of ``value`` when they are its ``words``, else the Commit's own."""
         j, s = self._engine_step(call), site(call.module)
         got = self._x.get(s)
         codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
@@ -159,11 +161,13 @@ class CommitTap:
         if len(codes) > served.m:
             self.refused.append(f"call {call.index}: the Commit's {len(codes)} rows are past its {served.m} slots")
             codes, scales = codes[:served.m], scales[:served.m]
-        self._rows.setdefault(value, []).append(served.a_words(call, codes, scales))
-        self._at.setdefault(value, []).append((call.index, j, s, len(codes)))
-        if call.index != served.step_calls(call.index)[-1]:
+        rows, cs = self._rows.setdefault(value, {}), served.step_calls(call.index)
+        rows[call.index] = served.a_words(call, codes, scales)
+        self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
+        if len(rows) < len(cs):
             return
-        mine, at = np.concatenate(self._rows.pop(value)), self._at.pop(value)
+        rows, got = self._rows.pop(value), self._at.pop(value)
+        mine, at = np.concatenate([rows[c] for c in cs]), [got[c] for c in cs]
         same = words is not None and np.array_equal(mine, words) and value in served.registered
         reg = served.registered[value] if same else served.a_tree(run, call, mine)
         self._put(CR.commit_rows(call.step, call.k), reg, same,

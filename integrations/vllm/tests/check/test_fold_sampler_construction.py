@@ -157,6 +157,7 @@ def _store():
     return store_io
 
 
+@pytest.mark.slow
 def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_compares(tmp_path):
     """#101's fourth Build: its request Program's selects are `GumbelTopPTokenSelect_v2{V=128256,S=32}`, which declare the plain
     construction, and the fold's select under it is exactly what the compare reads them as."""
@@ -169,6 +170,7 @@ def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_c
     assert {_as_compared(k) for k in selects} == {_fold_select(128256, pattern)} == {"GumbelTopPTokenSelect_v1{V=128256}"}
 
 
+@pytest.mark.slow
 def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_path):
     """#101's fourth Match, replayed on CPU from its records: the preserved capture folded under the construction its Build declares, then
     the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: every family's count equal

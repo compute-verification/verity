@@ -52,7 +52,8 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
 * **Every stop deferred to the last round** (live PROTOCOL.md §10.1: a failed check stops the session at its `Finish`,
   never before): `nextD` releases, below the last round, the frame at the worker's values with the server's own
   stand-in `fill` in once a round failed (`wkD`), and at the last round the frame if every round passed, else the stop.
-  Where that frame is `P`'s message wherever it releases one (`RefD`), the released run is `P`'s run, or it with its
+  Where that frame is `P`'s message wherever it releases one, on the histories it sent itself (`RefDOwn`, which `RefD`
+  gives on every history), the released run is `P`'s run, or it with its
   last message replaced by the stop (`split_deferred`, no probability), so zero knowledge carries over within a factor
   `2` of `leaky1`, the simulator that guesses whether the session stops (`zk_deferred`): one bit a session, and over a
   stream of `m` sessions with at most `b` stops, one stop form, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`).
@@ -794,6 +795,24 @@ def RefD {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
   ∀ ρ κ h, (h.length + 1 < n x ∨ S.live wk x w ρ κ h = true) →
     (((P w).next x h ρ).eval H).1 = S.frameD fill wk x w ρ κ h
 
+/-- **`h` is the deferred server's own run** at the tape `ρ` and the check coins `κ`: each of its messages is the
+deferred frame on the history before it. -/
+def OwnHist {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
+    (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk) (h : List (Msg × Msg)) : Prop :=
+  ∀ j (hj : j < h.length), (h[j]'hj).1 = S.frameD fill wk x w ρ κ (h.take j)
+
+/-- **`RefD` on the deferred server's own runs** (`OwnHist`): the only histories the deferred server meets. -/
+def RefDOwn {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
+    (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (wk : S.Worker) (x : Msg) (w : W) :
+    Prop :=
+  ∀ ρ κ h, S.OwnHist fill wk x w ρ κ h → (h.length + 1 < n x ∨ S.live wk x w ρ κ h = true) →
+    (((P w).next x h ρ).eval H).1 = S.frameD fill wk x w ρ κ h
+
+theorem RefD.own {W R : Type} {S : ZkServer W R} {H : Msg → Msg} {P : W → Prover R}
+    {fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val} {n : Msg → ℕ} {wk : S.Worker} {x : Msg} {w : W}
+    (hRef : S.RefD H P fill n wk x w) : S.RefDOwn H P fill n wk x w :=
+  fun ρ κ h _ hc => hRef ρ κ h hc
+
 /-- The deferred frame at `(x, w)` reads the stand-in only at `(x, w)`. -/
 theorem frameD_congr {W R : Type} (S : ZkServer W R) {fill fill' : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val}
     (wk : S.Worker) (x : Msg) (w : W) (hf : ∀ j s ρ h, fill x j s w ρ h = fill' x j s w ρ h) (ρ : R) (κ : S.Chk)
@@ -809,7 +828,7 @@ theorem frameD_congr {W R : Type} (S : ZkServer W R) {fill fill' : Msg → ℕ �
 run with its last message replaced by the stop (cut at `n x - c`, `c : Fin 2`). -/
 theorem split_deferred {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (x : Msg) (w : W) (wk : S.Worker)
-    (hRef : S.RefD H P fill n wk x w) (ask : List Msg → Out) (ρ : R) (κ : S.Chk) :
+    (hRef : S.RefDOwn H P fill n wk x w) (ask : List Msg → Out) (ρ : R) (κ : S.Chk) :
     ∃ c : Fin 2, interact ask (S.nextD fill n wk x w ρ κ) (n x) [] =
       cutT ask S.stop (n x - c) (n x) (interact ask (fun h => (((P w).next x h ρ).eval H).1) (n x) []) := by
   classical
@@ -833,12 +852,27 @@ theorem split_deferred {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W 
   have hst : σ.take t = τ.take t := stopAt_take ask pm S.stop t N
   have hgl : (histOf (σ.take i)).length = i := by rw [length_histOf_take]; omega
   have htN : N - 1 ≤ t := by simp only [ht]; split_ifs <;> omega
+  have hown : ∀ i, i + 1 ≤ N → S.OwnHist fill wk x w ρ κ (histOf (σ.take i)) := by
+    intro i
+    induction i using Nat.strong_induction_on with
+    | _ i ih =>
+      intro hiN j hj
+      have hjl : j < σ.length := by rw [length_histOf_take] at hj; omega
+      have hji : j < i := by rw [length_histOf_take] at hj; omega
+      have hg := interact_getElem_fst ask (stopAt pm t S.stop) N [] j hjl
+      rw [← hσ, List.nil_append, stopAt_of_lt (h := histOf (σ.take j)) (by rw [length_histOf_take]; omega),
+        List.getElem?_eq_getElem hjl] at hg
+      have hg' : (σ[j]'hjl).1 = pm (histOf (σ.take j)) := Option.some.inj hg
+      have hm : ((histOf (σ.take i))[j]'hj).1 = (σ[j]'hjl).1 := by simp [histOf]
+      rw [hm, histOf_take_take σ hji.le, hg']
+      exact hRef ρ κ _ (ih j hji (by omega)) (Or.inl (by rw [length_histOf_take]; omega))
+  have hoi : S.OwnHist fill wk x w ρ κ (histOf (σ.take i)) := hown i (by omega)
   by_cases hlast : i + 1 < N
   · have hit : i < t := by omega
     rw [stopAt_of_lt (by rw [hgl]; exact hit)]
     unfold nextD
     rw [ite_eq_left (Or.inl (by rw [hgl]; exact hlast))]
-    exact (hRef ρ κ _ (Or.inl (by rw [hgl]; exact hlast))).symm
+    exact (hRef ρ κ _ hoi (Or.inl (by rw [hgl]; exact hlast))).symm
   · have hiN : i = N - 1 := by omega
     have hσt : σ.take i = τ.take i := by
       have e1 : σ.take i = (σ.take t).take i := by rw [List.take_take, Nat.min_eq_left (by omega)]
@@ -865,7 +899,7 @@ theorem split_deferred {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W 
       have hcond : (histOf (σ.take i)).length + 1 < n x ∨ S.live wk x w ρ κ (histOf (σ.take i)) = true :=
         Or.inr (by rw [hσt, hiN]; exact hlv)
       rw [ite_eq_left hcond]
-      exact (hRef ρ κ _ hcond).symm
+      exact (hRef ρ κ _ hoi hcond).symm
 
 end ZkServer
 
@@ -892,7 +926,7 @@ factor `2` is the stop's leak: one bit a session, whether it stopped at its last
 theorem zk_deferred {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (fill : Msg → ℕ → ℕ → W → N × Ω → List (Msg × Msg) → S.Val) (H : Msg → Msg) (k : Msg → ℕ)
     (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ) (hZK : ZKmalR H k P Rl Sim εzk γ)
-    (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker) (hRef : S.RefD H P fill k wk x w) (Vs : VStar Θ) (θ : Θ)
+    (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker) (hRef : S.RefDOwn H P fill k wk x w) (Vs : VStar Θ) (θ : Θ)
     (hk : Vs.k x = k x) (Ev : List ((Msg × Out) × ℕ) → Prop) :
     Pr (fun ω : (N × Ω) × S.Chk => Ev (S.timed x (runStar H (S.proverD fill k wk w) Vs x ω θ).msgs)) ≤
       2 * (Pr (fun c : (leaky1 Sim k S.stop).C x => Ev (S.timed x ((leaky1 Sim k S.stop).out H Vs θ x c))) +

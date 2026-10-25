@@ -9,7 +9,8 @@
 #
 #   1. checkpoint  checkpoint.sh with CHECK_ONLY=1 on PROVER_NODE: the pinned checkpoint's files against core's pin.
 #   2. probe       gate.sh probe on GATE_ON (the machine with GATE_KEY): vy-challenger-1's key is PIN, PERIOD unused and
-#                  no period of the lane open, vy-auditor-1 pinned at COMMIT and idle. Nothing is written to a gate.
+#                  no period of the lane open, COMMIT on origin/main's first-parent line, vy-auditor-1 pinned at it
+#                  and idle. Nothing is written to a gate.
 #   3. prover      run.sh on PROVER_NODE inside `gpu-lease ENGINES --wait` (32 GB of host memory an engine; not
 #                  preemptible: a gate run stopped midway spends its period), ROLE=prover SERVE=node with PLAN at the
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to vy-auditor-1's
@@ -21,7 +22,8 @@
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
 #
 # COMMIT is the commit vy-auditor-1's verifier is pinned at (default PERIOD.env's, else origin/main's head; the probe
-# refuses another and names the host's, and a COMMIT given here replaces the recorded one); the steps run from a
+# refuses another, naming the host's pin when that is on main's first-parent line and asking for a repin when it isn't,
+# and refuses a COMMIT off that line; a COMMIT given here replaces the recorded one); the steps run from a
 # worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY is the key's path on GATE_ON (default
 # gate.sh's, under that machine's user's ~/.ssh). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1

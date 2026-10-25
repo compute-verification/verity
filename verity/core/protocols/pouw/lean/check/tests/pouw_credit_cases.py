@@ -64,6 +64,9 @@ binds (``commit-unbound``) and break the record's form (``credit-commit-form``).
 the window's session, not its open root, which contains it: round 0's ``requests`` is `credit.requests_root` of its
 ``request_table`` and ids@0's root. Its mutations (`IDS0_NAMES`, made before the window opens) open the window over the
 bare request table's root or over another ids@0 root, and bind ids@0's domain to another session.
+Each manifest row states its call's served rows m_s (`served_rows`: one a step, M, part of it or none, so an empty step's
+calls are no credit); its mutations (`ROWS_NAMES`, made before the draw) give a call m_s past M, one call of a step
+another m_s than its step's, or an m_s that is no natural or absent.
 Its mutations of the weights (`WINDOW_WEIGHTS_NAMES`) sign another weights' root in the period's open, none or a
 malformed one, name no model credit pins in it (``weights-model``), open the window in no period, change or break round 0's ``requests``, and give a ``b/<K>`` other rows
 under the domain of those rows (so `credit._registration` accepts it).
@@ -145,7 +148,7 @@ def _row(rng: random.Random, i: int) -> dict:
     bit = rng.random() < 0.7
     tables = {"a": _hex(rng), **({"z": _hex(rng)} if bit or rng.random() < 0.5 else {})}
     return {"index": i, "step": rng.randrange(4), "layer": rng.randrange(32), "module": rng.choice(MODULES),
-            "served": rng.random() < 0.8, "rows": rng.randint(1, 64), "k": rng.choice([64, 4096]), "n": 4096,
+            Cr.SERVED_ROWS: rng.randint(0, 64), "rows": rng.randint(1, 64), "k": rng.choice([64, 4096]), "n": 4096,
             "base": rng.randrange(1 << 20), "units": rng.randint(1, 8), "leaves": [rng.randrange(-3, 1 << 40), None],
             "tables": tables, "bound": {"m": rng.randint(1, 1 << 16), "ok": True}, Cr.CREDIT: bit}
 
@@ -292,12 +295,44 @@ def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: st
     return Cr._canonical(rec).encode().hex()
 
 
+#: a manifest row with no served rows m_s at all
+MISSING = object()
+#: each way a window's calls' served rows m_s are not one natural at most its A slot M a step, made before its draw: a
+#: call's past M (``rows-past``), one call of a step other than its step's (``rows-other``), or not a natural or absent
+#: (``rows-form``)
+ROWS_NAMES = ["rows-past", "rows-other", "rows-form"]
+
+
+def _once(lins: list[str]) -> list[int]:
+    """The round counts S whose C/S-call blocks of `lins` call each linear once."""
+    return [s for s in range(1, len(lins) + 1) if len(lins) % s == 0 and all(
+        len(set(lins[i:i + len(lins) // s])) == len(lins) // s for i in range(0, len(lins), len(lins) // s))]
+
+
+def served_rows(rng: random.Random, m: int, calls: int, steps: int, name: str = "honest") -> list:
+    """Each call's served rows m_s, one a step of `steps` over `calls` calls (call c at step ``c // (C/S)``): M, some
+    of it or none (an empty step, whose calls are no credit), then mutation `name` (`ROWS_NAMES`)."""
+    each = [rng.choice([m, m, rng.randint(1, m), rng.randint(0, max(1, m // 8)), 0]) for _ in range(steps)]
+    per = calls // steps
+    out: list = [each[c // per] for c in range(calls)]
+    match name:
+        case "rows-past":
+            out[rng.randrange(calls)] = m + rng.randint(1, 3)
+        case "rows-other":
+            i = rng.choice([c for c in range(calls) if c % per])
+            out[i] = rng.choice([v for v in range(m + 1) if v != out[i]])
+        case "rows-form":
+            out[rng.randrange(calls)] = rng.choice([True, False, -1, str(m), None, [m], MISSING])
+    return out
+
+
 def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = None, sid: str = "s-1",
                   leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
-                  weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1
-                  ) -> tuple[dict, rc.Session]:
-    """An honest served window of `rows` manifest rows (one to five when None) whose draw coin opened after its draw root
+                  weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
+                  served: list | None = None) -> tuple[dict, rc.Session]:
+    """An honest served window of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
+    (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose draw coin opened after its draw root
     (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
     the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
     None), `other`, `prefix`, `weights`, `off` and the A slot `m`, and its Commit record `commit_record`'s over their
@@ -331,6 +366,10 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
          "served": rng.choice([None, _hex(rng)]), "commit": commit_record(rng, true, rounds, off),
          "draw": {"receipts": _hex(rng)}, "entries": entries}
+    for row, ms in zip(d["calls"], served or []):
+        row[Cr.SERVED_ROWS] = ms
+        if ms is MISSING:
+            del row[Cr.SERVED_ROWS]
     received = [bytes.fromhex(x["root"]) for x in log]
     if name == "never-received":
         received = [rng.randbytes(64) for _ in log]
@@ -974,13 +1013,13 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     other = {"other-registration": rng.choice(["window", "program"]), "a-call-unbound": "unbound"}.get(name)
     k_of = {lin: k for lin, k, _n in lay["linears"]}
     lins = [lin for lin, _blk in lay["calls"]]
-    once = [s for s in range(1, len(lins) + 1) if len(lins) % s == 0 and all(
-        len(set(lins[i:i + len(lins) // s])) == len(lins) // s for i in range(0, len(lins), len(lins) // s))]
+    once = [s for s in _once(lins) if name != "rows-other" or len(lins) // s > 1]
+    steps = 1 if name in TWO_CALLS else rng.choice([s for s in once if s <= 3] or once[:1])
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
                          off=name if name in [*AROW_NAMES, *IDS0_NAMES] else None, m=lay["m"],
-                         rounds=1 if name in TWO_CALLS else rng.choice([s for s in once if s <= 3] or once[:1]))
+                         rounds=steps, served=served_rows(rng, lay["m"], len(lins), steps, name))
     d["layout"], d["k"], d["descriptor"], d["weights"] = lay, _k(rng, lay), desc, weights
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
     return d, s
@@ -1002,6 +1041,10 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
         lay = layout(rng)
         while len(set(call_ks(lay))) == len(lay["calls"]):
             lay = layout(rng)
+    elif name == "rows-other":
+        lay = layout(rng)
+        while not any(len(lay["calls"]) // s > 1 for s in _once([lin for lin, _blk in lay["calls"]])):
+            lay = layout(rng)
     elif name == "commit-missing-expert":
         lay = expert_layout(rng)
     d, s = honest_window(rng, credit, lay=lay)
@@ -1009,7 +1052,7 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
     match name:
         case "honest":
             pass
-        case _ if name in AROW_NAMES or name in IDS0_NAMES:
+        case _ if name in AROW_NAMES or name in IDS0_NAMES or name in ROWS_NAMES:
             pass
         case "commit-unbound":
             rec = json.loads(bytes.fromhex(d["commit"]))
@@ -1133,7 +1176,7 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
-                *AROW_NAMES, *IDS0_NAMES, "commit-unbound", "credit-commit-form"]
+                *AROW_NAMES, *IDS0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",

@@ -1,10 +1,11 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
-handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the
-streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on their handles (`_Driver`), and a retained
-pass's files (`_write`, `write_manifest`).
+handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
+kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
+their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
 """
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 from pathlib import Path
@@ -12,10 +13,12 @@ from typing import Any, ClassVar
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
-from verity.core.protocols.pouw.audit import HM96, activation_binding, rows_domain
+from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_kernel_constants, rows_domain
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
+#: the device key table's slots (`_KeyTable`, 176 bytes each): every (weight, index, m₁₆) of 512 m₁₆ sizes over 128 weights
+KEY_SLOTS = 1 << 16
 #: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
@@ -39,6 +42,22 @@ def _put(t: Any, data: bytes) -> None:
     import torch
     host = torch.frombuffer(bytearray(data), dtype=torch.uint8)
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
+
+
+def _constants(scheme: Any, device: Any, salt_key: bytes | None) -> Any:
+    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
+    `audit.hm96_kernel_constants`."""
+    if salt_key is None or len(salt_key) != 32:
+        raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
+    consts = hm96_kernel_constants()
+    t = _zeros(256 + len(consts), device)
+    _put(t, salt_key.ljust(256, b"\0") + consts)
+    return t
+
+
+def _constant_keys(t: Any) -> dict[str, int]:
+    p = t.data_ptr()
+    return {"salt_key": p, "hm": p + 256}
 
 
 class _TorchStream:
@@ -204,6 +223,40 @@ class _Uploads:
         if self.events[i] is None:
             self.events[i] = _event()
         driver.record(self.events[i], stream)
+
+
+class _KeyTable:
+    """Each call's keys (`_Keys`) kept on the device by (weight, index, m₁₆), which fix them within an install: a call whose
+    keys are in the table copies them device to device (`copy`: dst, src, bytes, raw stream) on the stream that uploaded
+    them, in place of hashing and uploading them again.  A call on another stream, or past the table's slots, uploads its
+    keys as before."""
+
+    def __init__(self, keys: _Keys, uploads: _Uploads, device: Any, copy: Any, slots: int = KEY_SLOTS, width: int = 176):
+        self.keys, self.uploads, self.copy, self.slots, self.width = keys, uploads, copy, slots, width
+        self.table = _zeros(slots * width, device)
+        self.at: dict[tuple[int, int, int], tuple[int, int, int]] = {}   # (weight, index, m₁₆) -> (slot address, bytes, raw stream)
+
+    def put(self, dst: Any, w: int, root_b: bytes, index: int, m16: int, raw: int, stream: Any) -> None:
+        """Call `index`'s keys (weight `w`, B's root `root_b`, m₁₆ rows) into `dst`, on raw stream `raw` (torch's `stream`)."""
+        key = (w, index, m16)
+        got = self.at.get(key)
+        if got is not None and got[2] == raw:
+            self.copy(dst.data_ptr(), got[0], got[1], raw)
+            return
+        data = self.keys(root_b, index, m16)
+        if got is None and len(self.at) < self.slots:
+            i = len(self.at)
+            slot = self.table[self.width * i:self.width * (i + 1)]
+            self.uploads.put(slot, data, stream)
+            self.at[key] = (slot.data_ptr(), len(data), raw)
+            self.copy(dst.data_ptr(), slot.data_ptr(), len(data), raw)
+            return
+        self.uploads.put(dst, data, stream)
+
+
+def memmove(dst: int, src: int, n: int, raw: int) -> None:
+    """`_KeyTable`'s copy off the GPU: host memory, no stream."""
+    ctypes.memmove(dst, src, n)
 
 
 def _write(path: Path, data: bytes, digest: bool = True) -> dict:
