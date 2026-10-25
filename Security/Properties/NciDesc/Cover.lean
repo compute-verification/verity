@@ -18,8 +18,7 @@ the check of record, on every expansion of the instance gate by gate (`OnExpansi
 
 `SecurityProofs.CheckedCoverTraining` (`Proofs.Nci.Cover.Checked`, package `security_proofs`, whose proof needs
 `Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees` (`SecurityProofs.DescAgrees`,
-`Proofs.Properties.Nci.Agrees`). It is not listed yet: `UpdateHardness` and `MulBlocks.Upstream`, which it reads, are not
-named assumptions of this package's lock (`shape.frozen`).
+`Proofs.Properties.Nci.Agrees`).
 -/
 
 namespace NciCheck.Properties

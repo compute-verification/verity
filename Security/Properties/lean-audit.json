@@ -103,6 +103,14 @@
    "owner": "@lean",
    "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
+  "Nci.Cover.Assumptions.UpdateHardness": {
+   "owner": "@training",
+   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
+  },
+  "Nci.Cover.MulBlocks.Upstream": {
+   "owner": "@training",
+   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
+  },
   "NetTiming.DeviceIntact": {
    "owner": "@network-accounting",
    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
@@ -1981,6 +1989,9 @@
    "signature": ["NciCheck.Properties.SecurityProofs.DescWitnesses : NciCheck.Properties.DescWitnesses"],
    "assumptions": [],
    "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b"
+  },
+  "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+   "owner": "@training"
   }
  },
  "shape": {
@@ -3026,6 +3037,10 @@
     "function": "NciCheck.Desc.evaluate",
     "outcome": "accept"
    },
+   "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+    "function": "NciCheck.Baseline.evaluate",
+    "outcome": "accept"
+   },
    "NciCheck.Properties.SecurityProofs.DescReports": {
     "function": "NciCheck.Desc.evaluate",
     "outcome": "accept"
@@ -3050,7 +3065,6 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "NciCheck.Properties.CheckedCoverTraining": "unstated: SecurityProofs.CheckedCoverTraining (Proofs.Nci.Cover.Checked) proves it from SecurityProofs.DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), but its statement takes the cover theorem's premises Nci.Cover.Assumptions.UpdateHardness and Nci.Cover.MulBlocks.Upstream as hypotheses, named assumptions of Security's lock that this lock doesn't list: listing it rests a guarantee of this lock on them, a claims change for Daniel",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)"

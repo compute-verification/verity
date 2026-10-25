@@ -13,9 +13,7 @@ of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's
 The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
 Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
 expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
-and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`. It is not listed: its statement reads the
-cover theorem's premises `UpdateHardness` and `MulBlocks.Upstream`, which `security_properties`' lock doesn't list
-(`shape.frozen`).
+and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
 -/
 
 namespace NciCheck.Properties.SecurityProofs
