@@ -37,7 +37,6 @@ noncomputable def ratio (n kd t : ℕ) : ℝ := ((n - t).choose kd : ℝ) / (n.c
 theorem ratio_anti (n kd : ℕ) {t t' : ℕ} (h : t ≤ t') : ratio n kd t' ≤ ratio n kd t := by
   unfold ratio
   gcongr
-  all_goals first | exact Nat.choose_le_choose kd (by omega) | omega
 
 theorem ratio_nonneg (n kd t : ℕ) : 0 ≤ ratio n kd t := by
   unfold ratio; positivity
@@ -99,7 +98,7 @@ theorem designMiss_subset {s : Stmt} {P : Partition} {n kd : ℕ} (h : SubsetDes
 
 section Deploy
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+variable {Coin Col T : Type}
 
 /-- **The claims' `missAt t`** at a statement whose parsed design is the subset design is EndToEnd's miss term
 `C(n − t, kd)/C(n, kd)`, at `t ≤ n`. -/
@@ -148,7 +147,7 @@ theorem notMem_M_iff {s : Stmt} {P : Partition} {n kd : ℕ} (h : SubsetDesign s
       rwa [Finset.card_range, h.card] at this
     have hPa : s.design.Pa P B = ratio n kd B.card := by
       rw [designPa_subset h, ← h.card, window_zero hB, h.card]
-    simp only [Design.M, Set.mem_setOf_eq, not_lt, hPa]
+    simp only [Design.M, Set.mem_ofPred_eq, not_lt, hPa]
     constructor
     · intro hle
       exact Nat.find_min' hex (Or.inr hle)
