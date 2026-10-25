@@ -2,7 +2,7 @@
 warning or serialized wgmma, a stack frame, a spill or local memory, and on any GEMM kernel whose tensor-core instructions
 aren't its s8 atom alone, IGMMA.64xBNx32 on s8 operands at the kernel's BN, in a multiple of 4 (a 128-deep stage), or whose
 epilogue isn't the Definition's instructions: an s32-to-f32 conversion, FMUL and an F2FP to BF16 present, and no FFMA (a
-fused multiply-add would round once) and no .FTZ anywhere.
+fused multiply-add would round once) and no .FTZ anywhere but integer division's (`INT_DIV`).
 
   python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
 """
@@ -15,7 +15,10 @@ import sys
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 KERNEL = re.compile(r"s8mm_(64|128)x(64|128|256)$")
-COUNTS = {"LDL": r"\bLDL\b", "STL": r"\bSTL\b", "FFMA": r"\bFFMA\b", "FTZ": r"\.FTZ\b", "FMUL": r"\bFMUL\b",
+#: the compiler's unsigned integer division (the raster's, by a runtime group and tile count) truncates a reciprocal it
+#: computed from the divisor with this F2I; it never sees a value, so it is counted apart from every other .FTZ
+INT_DIV = r"\bF2I\.FTZ\.U32\.TRUNC\.NTZ\b"
+COUNTS = {"LDL": r"\bLDL\b", "STL": r"\bSTL\b", "FFMA": r"\bFFMA\b", "INT_DIV": INT_DIV, "FMUL": r"\bFMUL\b",
           "I2F": r"\bI2FP?\.F32\.S32\b", "F2FP_BF16": r"\bF2FP\.BF16\S*", "UTMALDG": r"\bUTMALDG\b"}
 
 
@@ -37,12 +40,13 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
         fm = re.search(r"Function : (\w+)", line)
         if fm:
             cur = fm.group(1)
-            funcs.setdefault(cur, {}).update({k: 0 for k in COUNTS} | {"IGMMA": 0, "forms": [], "other_mma": []})
+            funcs.setdefault(cur, {}).update({k: 0 for k in COUNTS} | {"FTZ": 0, "IGMMA": 0, "forms": [], "other_mma": []})
             continue
         if not cur:
             continue
         for k, pat in COUNTS.items():
             funcs[cur][k] += len(re.findall(pat, line))
+        funcs[cur]["FTZ"] += len(re.findall(r"\.FTZ\b", line)) - len(re.findall(INT_DIV, line))
         km = KERNEL.match(cur)
         for mm in MMA.finditer(line):
             form = mm.group(0)

@@ -57,14 +57,17 @@ def _mha(d: int, layers: int, heads: int, head_dim: int, context: int, sequences
                                    ("down", d, 4 * d, "down")), heads, head_dim, context, sequences)
 
 
-#: compute-accounting's shapes (estimated, frozen with the circuits on 26 Oct): MQA at width 16384 (its recommended one, 22:40Z)
-#: and MHA at width 8192 (22:20Z), each a non-gated 4x MLP and int8 weights
+#: compute-accounting's shapes (estimated, frozen with the circuits on 26 Oct), each a non-gated 4x MLP and int8 weights:
+#: mqa16k52, its shape H for one H200 (MQA at width 16384, 52 layers, context 32, 20,480 sequences a step; 25 Oct 23:00Z), and
+#: for the RTX PRO 6000 MQA at width 16384 (22:40Z) and MHA at width 8192 (22:20Z)
+_MQA16K = (("q", 16384, 16384, "attn"), ("kv", 128, 16384, "attn"), ("o", 16384, 16384, "o"), ("up", 65536, 16384, "mlp"),
+           ("down", 16384, 65536, "down"))
 MODELS = {
-    "mqa16k": Model("mqa16k", 16384, 35, (("q", 16384, 16384, "attn"), ("kv", 128, 16384, "attn"), ("o", 16384, 16384, "o"),
-                                          ("up", 65536, 16384, "mlp"), ("down", 16384, 65536, "down")), 256, 64, 96, 4096),
+    "mqa16k52": Model("mqa16k52", 16384, 52, _MQA16K, 256, 64, 32, 20480),
+    "mqa16k": Model("mqa16k", 16384, 35, _MQA16K, 256, 64, 96, 4096),
     "mha8k": _mha(8192, 70, 128, 64, 32, 1023, "mha8k"),
 }
-DEFAULT_MODELS = ("mqa16k", "mha8k")
+DEFAULT_MODELS = ("mqa16k52",)
 
 
 def model(name: str) -> Model:
@@ -112,8 +115,8 @@ def units(md: Model, unit_set: str) -> list[tuple[str, int, bool]]:
 EDGE_K = 131040
 S32_MAX = 2**31 - 1
 
-#: Ms the gate runs: decode (a masked tile at 7, 33, 257 and 1023, the models' steps at 1023 and 4096) and prefill
-GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 1023, 2048, 4096, 8192)
+#: Ms the gate runs: decode (a masked tile at 7, 33, 257 and 1023, the models' steps at 1023, 4096 and 20480) and prefill
+GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 1023, 2048, 4096, 8192, 20480)
 STRUCTURED = ("min", "max", "zero", "alt")
 STRUCT_ROWS = {1: "min", 2: "max", 3: "zero"}
 STRUCT_COLS = {0: "min", 1: "max", 2: "zero", 3: "alt"}
