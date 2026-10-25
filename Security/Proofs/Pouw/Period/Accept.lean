@@ -118,6 +118,16 @@ theorem length_h1 : PouwWindow.lengthProblem (get h1Items "length") [2, 2, 2, 2]
   rw [hs]
   decide +kernel
 
+theorem cs_check_h1 : cs (get h1Items "check") = cs h1Check.toJson := by
+  first
+  | rw [show get h1Items "check" = h1Check.toJson from rfl]
+  | decide +kernel
+
+theorem cs_work_h1 : cs (get h1Items "work") = cs (h1Fixed.work.itemJson h1Check.tileWork) := by
+  first
+  | rw [show get h1Items "work" = h1Fixed.work.itemJson h1Check.tileWork from rfl]
+  | decide +kernel
+
 theorem level_h1 : levelOf h1Items = some 39 := by decide
 
 theorem grid_h1 : 39 + 1 ≤ PouwWindow.level PouwWindow.gridBits (PouwWindow.floorPoint PouwWindow.gridBits 65536) ∧
@@ -137,9 +147,11 @@ theorem kPrime_h1 (E D : Rat) (C N W : Int) (hE : E = 1 / 2) (hD : D = 1 / 10000
   have h := Properties.Pouw.Window.kPrime_least _ _ _ _ _ hd
   dsimp only at h
   obtain ⟨k, hk, h1, -, hlt, hmin⟩ := h
+  have hbig : ∀ j, j < 24 → 1 ≤ j →
+      ¬ (1 - PouwWindow.missShare (1 / 2) (128 * 2048) 144 2048) ^ j ≤ (1 / 1000000 : Rat) := by
+    decide +kernel
   rcases Nat.lt_trichotomy k 24 with h | rfl | h
-  · exfalso
-    interval_cases k <;> exact absurd (hlt (by decide)) (by decide +kernel)
+  · exact absurd (hlt (Nat.lt_of_lt_of_le h (by decide))) (hbig k h h1)
   · exact hk
   · exact absurd (hmin 24 (by decide) h) (by decide +kernel)
 
@@ -159,10 +171,10 @@ theorem keeps_h1 (context format program partition : String) (bytes : ByteArray)
   intro kv hkv
   simp only [expected, List.mem_cons] at hkv
   rcases hkv with rfl | rfl | rfl | rfl | h
+  · exact cs_check_h1
   · rfl
   · rfl
-  · rfl
-  · rfl
+  · exact cs_work_h1
   · cases h
 
 /-- **The deployed check accepts H1's honest window at the leg's parameters**: on the loop's honest registration and
