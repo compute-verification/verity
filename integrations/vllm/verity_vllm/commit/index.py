@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from .serving_rows import ORDER, Member
+from verity.ml.windows.rows import ORDER, Member
 
 INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 COLUMNS = ("lo", "hi", "request", "engine_step", "layer", "op_path", "member", "token_row", "program_row")

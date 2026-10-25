@@ -50,7 +50,7 @@ The facts PoUW's argument reads from an acceptance:
 * **The salt is fixed only after the epoch's root.** The open naming `R` is signed before the session's record, which
   holds the challenger's commitment to the coins (`leafOf o.sig < recordLeaf`). The coin is opened after `R`
   (`liveReason`), and `R` is the root the log shows the coin's release followed. That the gate and the challenger run as
-  written, in that order, is S5 (live coins on `trusted-nebius-host`); that the coin stays hidden from the hello to its
+  written, in that order, is S5 (live coins on `trusted-host`); that the coin stays hidden from the hello to its
   release is N1 (X-RO commitments, hm96's hiding leaves). Both are named assumptions of PoUW's model, not this check's
   properties.
 * **One epoch, one session, one salt.** The ledger opens `R` once and the session once (`LedgerShows`' last clause), so

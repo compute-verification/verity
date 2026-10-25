@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Refine.LiveCompiled
-import Proofs.Flock.Soundness.Model.HoloCompiled
+import Definitions.Flock.HoloCompiled
 
 /-!
 # a1l, step 6's pieces: every message of the holographic tables' sub-games has an inhabited type

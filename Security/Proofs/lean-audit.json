@@ -50,6 +50,9 @@
   "Proofs.Properties.RemoteAudit.Line",
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
+  "Proofs.Properties.Pouw.LiveSalt.Ledger",
+  "Proofs.Properties.Nci.ReadsExact",
+  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Pouw.LiveSalt.Period"
  ],
  "exempt": {
