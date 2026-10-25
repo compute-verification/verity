@@ -2289,14 +2289,15 @@ def _main_index(main: Any, commit: Any) -> int | None:
     return main.index(commit) if isinstance(main, list) and commit in main else None
 
 
-def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None
-                 ) -> tuple[str, str] | None:
+def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None,
+                 unit: str = "window") -> tuple[str, str] | None:
     """Why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line `main`, is too old
     for the period: its pin more than the period's freshness floor of first-parent commits behind the commit the period's
     open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
     floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
     None when it is recent enough or the open records no pin.  The per-window pin and circuit are
-    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW)."""
+    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW).  `unit` names what `i`
+    counts (``pass`` in a Pearl-C period, `pearl_c_period_credit`)."""
     if period_pin is None:
         return None
     pos = _main_index(main, pinned)
@@ -2309,7 +2310,7 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
                        "git rev-list --first-parent origin/main holds")
     f = floor if floor is not None else 0
     if pos > base + f:
-        return ("pin", f"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit "
+        return ("pin", f"{unit} {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit "
                        f"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned[:16]}... is "
                        f"that far behind {period_pin[:16]}... on main's first-parent line, so the period earns nothing; "
                        "open every window within the floor of its period's open pin")
@@ -2377,8 +2378,12 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
     3. **Credited sessions** (``circuit``). Each pass's session passes `challenger.credited_session`: run from a commit
        the host's pins log `pins` records on main's first-parent line `main`, and the pass's ``descriptor`` hashing to
        the circuit the period's open committed.
-    4. **Accepted passes** (``pass``). Each pass passes `core_check.pass_epoch` under the verifier's live inputs
-       (``{key, ledger, main, pins, session}``), salted by its live coin, its ``context`` naming its manifest.
+    3a. **Fresh pins** (``pin``). Each pass's session is pinned within the period's freshness floor of the commit its
+       open recorded, H1's period-level pin hygiene (`committed_pin`, `committed_floor`, `_pin_hygiene`): a session
+       pinned more than the floor of first-parent commits behind the period's open pin refuses it.
+    4. **Accepted passes** (``pass``). Each pass's ``context`` is a string, and the pass passes `core_check.pass_epoch`
+       under the verifier's live inputs (``{key, ledger, main, pins, session}``), salted by its live coin, its
+       ``context`` naming its manifest.
     5. **Consecutive epochs** (``index``). For each W, the period's epochs on W, in the close's order, are numbered
        n_W, n_W + 1, … with no gap or repeat, where n_W is one more than the largest k on W in `earlier` (the lane's
        epochs credited in earlier Pearl-C periods, ``[W, k]`` pairs) or 0 when it has none. A W whose numbering broke,
@@ -2409,7 +2414,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
     why = period(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
-    ck = Ch.ChallengerKey.from_json(key)
+    ck, audited = Ch.ChallengerKey.from_json(key), []
     for i, (p, m) in enumerate(zip(passes, manifests)):
         _, why = CC.live_salt(key, ledger, pins, main, p["session"], m, verify)
         if why is not None and why[0] == "salt":
@@ -2421,11 +2426,19 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
             return None, ("circuit", f"pass {i} of period {name}: the descriptor is not the bytes in lowercase hex of "
                                      "the circuit it proves")
         try:
-            Ch.credited_session(ledger, {"root": r}, ck, pins, main, d, verify)
+            audited.append(Ch.credited_session(ledger, {"root": r}, ck, pins, main, d, verify))
         except Ch.CoinError as e:
             return None, ("circuit", f"pass {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
+    period_pin, floor = committed_pin(ledger, name), committed_floor(ledger, name)
+    for i, a in enumerate(audited):
+        why = _pin_hygiene(name, i, main, a.pinned, period_pin, floor, "pass")
+        if why is not None:
+            return None, why
     for i, p in enumerate(passes):
+        if type(p["context"]) is not str:
+            return None, (PASS_REFUSED, f"pass {i} of period {name} is refused, so the period earns nothing: its "
+                                        "context is not a string, the window context naming its manifest by SHA-512")
         live = {"key": key, "ledger": ledger, "main": main, "pins": pins, "session": p["session"]}
         _, why = CC.pass_epoch(None, bytes.fromhex(p["manifest"]), p["context"], live=live, verify=verify)
         if why is not None:
