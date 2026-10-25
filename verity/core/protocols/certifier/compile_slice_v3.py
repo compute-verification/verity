@@ -466,13 +466,19 @@ def arguments(S, sl: CS.Slice) -> dict[str, list[int]]:
 
 def reference(S, sl: CS.Slice) -> SimpleNamespace | None:
     """The unit's outputs on `sl` by `compile_slice_v2.scan`'s run (verdict `ACCEPT`, ``srv`` and ``cout``'s bits), or
-    None where the load, a step or the pool refuses the slice."""
+    None where the load, a step, a step's heads (`replay_chain.advance`: it takes more arrivals than are queued, or
+    reads more than A decisions or past the window's) or the pool refuses the slice."""
     Sc = CS.chain(S)
     V = SimpleNamespace(**_v2(S.__dict__))
     try:
         sc = V2.scan(V, sl)
     except (ValueError, V2.Refused):
         return None
+    for u, (cur, nxt) in enumerate(zip(sc.states, sc.states[1:])):
+        if cur.steps:
+            arr, _bits = sc.fronts[u]
+            if nxt.qh - cur.qh > len(arr) or nxt.dh - cur.dh > S.A or nxt.dh > len(sc.window.decisions):
+                return None
     steps = list(sc.steps) + [None] * (S.P - len(sc.steps))
     srv = [b for rows in steps for b in CS.rows_bits(S, rows)]
     cout = list(RC.encode(sc.states[-1], Sc)) + list(RC.encode_window(sc.window, Sc)) + list(V2.encode_pool(S, sc.pools[-1]))
