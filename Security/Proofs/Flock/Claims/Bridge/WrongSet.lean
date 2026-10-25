@@ -24,7 +24,6 @@ circuit's evaluation. -/
 namespace FlockSoundness.Discharge.ZkLink.WrongSet
 
 open Game Model Accounting Audit ZkSession
-open Claims.Sampling (Prog Stmt Wit Commitment Faulty faulty)
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] {mPts : ℕ}
 variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
@@ -34,20 +33,21 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg 
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
 /-- The claims program's gates a replay unit reads or computes: its gates, and the gates they read. -/
-def need (Cp : Prog) (r : Claims.Sampling.RU) : List ℕ :=
+def need (Cp : Claims.Sampling.Prog) (r : Claims.Sampling.RU) : List ℕ :=
   Claims.Sampling.RU.gates r ++
     (Claims.Sampling.RU.gates r).flatMap fun g => (Cp.gates[g]?.map Claims.Sampling.BGate.reads).getD []
 
 /-- **The claims unit lowers to the game unit**: on values that are the circuit's evaluation on `Xv`'s inputs at the
 wires `φ` maps `need` to (constants aside), every proof unit of `r` is correct. -/
-def Lowers (Cp : Prog) (r : Claims.Sampling.RU) (φ : ℕ → Fin C.N) (Xv : Fin C.N → Bool) : Prop :=
+def Lowers (Cp : Claims.Sampling.Prog) (r : Claims.Sampling.RU) (φ : ℕ → Fin C.N) (Xv : Fin C.N → Bool) : Prop :=
   ∀ ref : ℕ → Option Bool, (∀ g ∈ need Cp r, (∀ b, Cp.gates[g]? ≠ some (.const b)) → ref g = some (C.eval Xv (φ g))) →
     ∀ pu ∈ r, Cp.Correct ref pu
 
 /-- **The witness's openings agree with the registration's** at game unit `u`: every opening family that opens `u`'s
 registered commit strings on its committed wires has, at each non-constant gate of `need` that `r` reads from outside or
 commits, a wire of `P.io u` whose opened bit is the witness's opened value. -/
-def Binds (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (s : Stmt) (w : Wit) (r : Claims.Sampling.RU)
+def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (s : Claims.Sampling.Stmt)
+    (w : Claims.Sampling.Wit) (r : Claims.Sampling.RU)
     (φ : ℕ → Fin C.N) (R : Reg) (u : Fin n) : Prop :=
   ∀ op : vb.Pos → vb.Opening, (∀ g ∈ P.io u, vb.com (op (vb.pos g)) = vb.cs R (vb.pos g)) →
     ∀ g ∈ need s.prog r, (∀ b, s.prog.gates[g]? ≠ some (.const b)) →
@@ -57,11 +57,12 @@ def Binds (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (s : Stmt) (w :
 variable {A P planZ tab vb}
 
 /-- **A unit right on the registration has its slot not faulty**, at the interior that is the circuit's evaluation. -/
-theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Stmt}
-    {Pc : Claims.Sampling.Partition} {w : Wit} {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} {v : ℕ}
+theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
+    {s : Claims.Sampling.Stmt}
+    {Pc : Claims.Sampling.Partition} {w : Claims.Sampling.Wit} {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} {v : ℕ}
     {r : Claims.Sampling.RU} {φ : ℕ → Fin C.N}
-    (hr : Pc.rus[v]? = some r) (hlow : Lowers s.prog r φ Xv) (hbind : Binds P planZ tab vb H Cm s w r φ R u)
-    (hu : RightRegZ A P planZ tab vb R Xv u) : ¬ Faulty H Cm s Pc w v := by
+    (hr : Pc.rus[v]? = some r) (hlow : Lowers s.prog r φ Xv) (hbind : Binds A P planZ tab vb H Cm s w r φ R u)
+    (hu : RightRegZ A P planZ tab vb R Xv u) : ¬ Claims.Sampling.Faulty H Cm s Pc w v := by
   obtain ⟨-, op, hop⟩ := hu
   intro hf
   refine hf ⟨r, hr, fun g => C.eval Xv (φ g), hlow _ fun g hg hc => ?_⟩
@@ -79,17 +80,18 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Commitment
 /-- **At most as many slots are faulty as game units are wrong on the registration**: every slot is some unit's
 (`slot`), and at each unit its slot's replay unit lowers to it (`Lowers`) and the witness's openings agree with the
 registration's (`Binds`). -/
-theorem faulty_card_le_wrongRegZ (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (s : Stmt)
-    (Pc : Claims.Sampling.Partition) (w : Wit) (R : Reg) (Xv : Fin C.N → Bool) (slot : Fin n → ℕ)
+theorem faulty_card_le_wrongRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
+    (s : Claims.Sampling.Stmt)
+    (Pc : Claims.Sampling.Partition) (w : Claims.Sampling.Wit) (R : Reg) (Xv : Fin C.N → Bool) (slot : Fin n → ℕ)
     (r : Fin n → Claims.Sampling.RU) (φ : ℕ → Fin C.N)
     (hcov : ∀ v < Pc.rus.length, ∃ u, slot u = v) (hr : ∀ u, Pc.rus[slot u]? = some (r u))
-    (hlow : ∀ u, Lowers s.prog (r u) φ Xv) (hbind : ∀ u, Binds P planZ tab vb H Cm s w (r u) φ R u) :
-    (faulty H Cm s Pc w).card ≤ (wrongRegZ A P planZ tab vb R Xv).card := by
+    (hlow : ∀ u, Lowers s.prog (r u) φ Xv) (hbind : ∀ u, Binds A P planZ tab vb H Cm s w (r u) φ R u) :
+    (Claims.Sampling.faulty H Cm s Pc w).card ≤ (wrongRegZ A P planZ tab vb R Xv).card := by
   classical
-  calc (faulty H Cm s Pc w).card ≤ ((wrongRegZ A P planZ tab vb R Xv).image slot).card := by
+  calc (Claims.Sampling.faulty H Cm s Pc w).card ≤ ((wrongRegZ A P planZ tab vb R Xv).image slot).card := by
         apply Finset.card_le_card
         intro v hv
-        simp only [faulty, Finset.mem_filter, Finset.mem_range] at hv
+        simp only [Claims.Sampling.faulty, Finset.mem_filter, Finset.mem_range] at hv
         obtain ⟨u, rfl⟩ := hcov v hv.1
         refine Finset.mem_image.2 ⟨u, (mem_wrongRegZ A P planZ tab vb).2 fun h => ?_, rfl⟩
         exact not_faulty_of_rightRegZ (hr u) (hlow u) (hbind u) h hv.2
