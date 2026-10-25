@@ -134,7 +134,7 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
     print(f"[nonint/a] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']})", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     if warmup:
-        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"]), wl["sampling"])
+        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED), wl["sampling"])
         print(f"[nonint/a] warm-up: {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
     try:
         revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
@@ -178,7 +178,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     print(f"[nonint/b] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']})", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     if warmup:
-        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"]), wl["sampling"])
+        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED), wl["sampling"])
         print(f"[nonint/b] warm-up: {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
         torch.cuda.synchronize()
 

@@ -232,9 +232,11 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
 #: tensors only under some of them (`runner.sampler/seed` only for an explicitly seeded batch), so a bounded warm-up that dropped them
 #: learned plans every seeded record step overran (SmolLM2-135M Gumbel sm_120: +8 B past a chunk boundary = +256 B, failed closed).
 THROWAWAY_SAMPLING_FIELDS = ("seed", "n", "variant", "temperature", "top_p", "top_k")
+#: The warm-up prompts' token seed for a single warm-up pass.
+WARMUP_SEED = 0x5EED_7A9B
 
 
-def throwaway_requests(engine: Engine, like: list[dict], seed: int = 0x5EED_7A9B) -> list[dict]:
+def throwaway_requests(engine: Engine, like: list[dict], seed: int) -> list[dict]:
     """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway), with the same per-request
     sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
     vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))

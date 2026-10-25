@@ -249,7 +249,6 @@
     {"file": "verity_vllm/engine/code_identity.py", "kind": "environ", "symbol": "generated_kernels_of_this_process", "detail": "TORCHINDUCTOR_CACHE_DIR"},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "environ", "symbol": "generated_kernels_of_this_process", "detail": "os.environ.get"},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "environ", "symbol": "loaded_code_objects", "detail": "TRITON_CACHE_DIR"},
-    {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "seed-default", "symbol": "throwaway_requests", "detail": "seed"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "seed-default", "symbol": "compare", "detail": "seed"},
     {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
