@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.Novel
+import Proofs.Properties.Nci.Novel
 
 /-!
 # Toward `Novel.ReadsExact`: what `Desc.analyze`'s pieces and segments name

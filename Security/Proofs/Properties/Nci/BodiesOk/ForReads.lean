@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.BodiesOk
+import Proofs.Properties.Nci.BodiesOk
 
 /-!
 # What `ReadsExact` reads of the decoder and of `BodiesOk`

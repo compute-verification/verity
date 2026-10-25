@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.ReadsExact
+import Proofs.Properties.Nci.ReadsExact
 
 /-!
 # `ReadsExact.RootOneNode`, proved: a root read's gates are one root node's

@@ -1,5 +1,5 @@
 import Properties.Pouw.LiveSalt
-import Properties.Proofs.Pouw.LiveSalt.Ledger
+import Proofs.Properties.Pouw.LiveSalt.Ledger
 import Proofs.Properties.Pouw.Commit
 import Proofs.Properties.NetworkRecords.Bytes
 

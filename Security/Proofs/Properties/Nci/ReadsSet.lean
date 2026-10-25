@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.ReadsOneNode
+import Proofs.Properties.Nci.ReadsOneNode
 
 /-!
 # Toward `ReadsExact.RootSet`: gates located with their operands, and the statements it is proved through

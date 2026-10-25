@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.BodiesOk.Basic
+import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # Parsed strided parts name no negative leaf

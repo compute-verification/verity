@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci.BodiesOk.Nonneg
+import Proofs.Properties.Nci.BodiesOk.Nonneg
 import Proofs.Properties.Nci.BodiesOk.Node
 
 /-!
