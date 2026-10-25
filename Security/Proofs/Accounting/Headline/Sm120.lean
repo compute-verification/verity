@@ -1,7 +1,7 @@
 import Proofs.Accounting.Headline.Encoding
 import Proofs.Accounting.Headline.Luck
 import Proofs.Accounting.Headline.Whole
-import Definitions.Accounting.Guarantees.Headline
+import Models.Accounting.Guarantees.Headline
 
 /-!
 # sm_120's headline at the data sheet

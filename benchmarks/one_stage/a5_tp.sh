@@ -13,14 +13,25 @@
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
+#     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's split parts
+#     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
+#     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
+#     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
+#     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
+#     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
+#     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier);
+#     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
+#     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
+#     audits that warden run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
+#     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
 #   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~2.5 min of the
 #   verifier's window, ~5 min staging its 768 chunks' public files and ~2.5 min to the draw (a drawn chunk's prover file is
 #   staged after it), then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
-#   stretched past an hour; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit).
+#   stretched past an hour; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit and each compose's).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, *-private.bin: the rows and their salts) nor a circuit (its pin is).
@@ -36,6 +47,9 @@
 # A5_COINS=verifier (instead of A5_CHALLENGER): each rank draws by its partition file's rule through its own service.Stream
 #   on the verifier's own live coins (a5.py --coins verifier: the Lean's IO.getRandomBytes, read once the stream received
 #   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.
+# A5_COMPOSE_CACHE=DIR: this machine's composed circuits (a5.py --compose-cache, compose_circuit.py --cache), so that the ranks
+#   audited here, in this run or another of the same tree, compose each chunked template once, and every later rank takes the
+#   kept circuit with its own partition and program (GLM-5.3's all-families draw composes ~95 min a rank without it).
 # A5_ADVICE=workload (with A5_WINDOWS=bundles, the stand-in or A5_TP): advice windows. The advice A (I1, the schedule of the
 #   fixed-length workload the Commit served, `advice_windows.advice_of_workload`) and A' (A less its last request) are written
 #   in scratch, each rank's window is committed from its bundle over the stand-in compiler's Programs for A, and for A', its
@@ -45,7 +59,14 @@
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload integrations/vllm/workloads/$A5_ROW.json), A5_NAME the
 #   audit's name (default glm), A5_SETS the SiluMul_v2 widths its partition reads (default "256 1536"), e.g. LLAMA32_1B TP2:
 #   A5_ROW=llama32-1b__bf16__rtxpro6000__tp2__b2__i256__o32__mixed__greedy__bi-eager A5_PARTITION=benchmarks/one_stage/
-#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.
+#   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.  A rank's proved population must keep C-Flock's m = k_log + log2(units) <= 35:
+#   a SiluMul_v2{I=4096} unit is 2^25 bits, so that partition's scope keeps layer 0's decode steps 1..7 (8 units a rank, not 4,736).
+#   An A5_SETS entry with a / is a subcircuit spec of its own (rope-head/d64/bf16), any other a SiluMul_v2 width.
+# A5_TRANSFER_GATES="T ..." (with A5_ADVICE): the templates the stand-in compiler lists as holding transfer gates, every unit of
+#   theirs proved (selection All) beside the rest drawn by the partition's work:K (advice_windows: `verity-vllm advice-windows
+#   --transfer-gate`, a5.py --transfer-gate and its transfer-gate negatives). The stand-in's partition holds them before its
+#   SiluMul_v2{I} (served_tp --template), e.g. STANDIN=256:work:2 A5_TRANSFER_GATES='RoPEHead_v1{D=64}'
+#   A5_SETS='256 rope-head/d64/bf16': the toy's 32 RoPE heads a rank proved whole beside 2 of its 8 SiluMul rows.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
@@ -70,8 +91,12 @@ sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
 for I in ${A5_SETS:-256 1536}; do
-  $PY -m verity_numerical.bench.generate --subcircuit silu-mul-v2/i$I/bf16 --n 4 --seed 1 --out $W/sets/i$I > $O/sets-i$I.log 2>&1 || exit 9
+  case $I in */*) SUB=$I D=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 D=i$I;; esac
+  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$D > $O/sets-$D.log 2>&1 || exit 9
 done
+TG=(); TPL=()
+for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
+[ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
@@ -86,8 +111,9 @@ if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
 fi
 
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
-keep() {  # NAME: $W/NAME's records into $O/NAME
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
+keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circuit with lookups reads: ir_lower.TABLES pins them)
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+    ! -path '*/tables/*.u32' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
@@ -95,7 +121,7 @@ audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKL
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$1 \
     ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_COINS:+--coins $A5_COINS} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
-    ${MAIN:+--main $MAIN} > $O/$1/a5.log 2> $O/$1/a5.err
+    ${MAIN:+--main $MAIN} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
   keep $1
@@ -136,9 +162,9 @@ advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under t
   [ "$A5_ADVICE" = workload ] && [ "${A5_WINDOWS:-served}" = bundles ] \
     || { echo "A5_ADVICE=workload commits each rank's window from its bundle: set A5_WINDOWS=bundles"; exit 3; }
   local d=$(dirname $5) last=$($PY -c "import json, sys; print('r%d' % (len(json.load(open(sys.argv[1]))['requests']) - 1))" $4)
-  advice_windows $1 $2 $3 $5 $d/advice.bin $6 --write-from-workload $4 || exit 8
-  advice_windows $1 $2 $3 $d/other-windows $d/other-advice.bin $6 --write-from-workload $4 --drop $last || exit 8
-  ADV=(--advice-opening $d/advice.opening.json --other-advice-opening $d/other-advice.opening.json --other-windows $d/other-windows)
+  advice_windows $1 $2 $3 $5 $d/advice.bin $6 --write-from-workload $4 "${TG[@]}" || exit 8
+  advice_windows $1 $2 $3 $d/other-windows $d/other-advice.bin $6 --write-from-workload $4 --drop $last "${TG[@]}" || exit 8
+  ADV=(--advice-opening $d/advice.opening.json --other-advice-opening $d/other-advice.opening.json --other-windows $d/other-windows "${TG[@]}")
   public $d/other-windows $6/other-window
 }
 
@@ -155,18 +181,44 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
-    if [ "$e" = row-tables ]; then
-      [ -n "$MAIN" ] || { echo "STANDIN row-tables draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
-      mkdir -p $O/row-tables
-      $TIME $PY benchmarks/one_stage/a5_row_tables.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN \
-        ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --out $W/row-tables > $O/row-tables/a5.log 2> $O/row-tables/a5.err || rc=1
-      grep '^A5' $O/row-tables/a5.log | cut -c1-4000; tail -25 $O/row-tables/a5.err
-      keep row-tables
+    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
+      [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
+      mkdir -p $O/$e
+      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN \
+        ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \
+        --out $W/$e > $O/$e/a5.log 2> $O/$e/a5.err || rc=1
+      grep '^A5' $O/$e/a5.log | cut -c1-4000; tail -25 $O/$e/a5.err
+      keep $e
+      continue
+    fi
+    if [ "${e%%:*}" = warden ]; then
+      case $e in warden) REFUSE=();; warden:altered) REFUSE=(--altered);; warden:pad|warden:pad-named|warden:swapped) REFUSE=(--made-for ${e#warden:});;
+        *) echo "STANDIN $e: warden, warden:altered, warden:pad, warden:pad-named or warden:swapped"; exit 3;; esac
+      if [ -n "${A5_COINS:-}" ]; then DRAW=(--coins $A5_COINS)
+      elif [ "${A5_CHALLENGER:-}" = local ]; then DRAW=(--challenger local --main $MAIN)
+      else echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local or A5_COINS=verifier"; exit 3; fi
+      N=${e/:/-}; mkdir -p $O/$N
+      if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/warden-run ]; then
+        mkdir -p $O/warden-run && cp $A5_WARDEN_RUN/{deployment.json,cells.jsonl,check.json} $O/warden-run/ || exit 8
+        ln -s $A5_WARDEN_RUN $W/warden-run
+      fi
+      if [ ! -d $W/warden-run ]; then
+        (cd benchmarks/network_traces && $PY warden_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
+          --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/warden-rehearse.log 2>&1; r=$?
+        mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
+        [ $r = 0 ] || { tail -20 $O/warden-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
+          $O/warden-run/check.json; exit 8; }
+      fi
+      $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
+        "${DRAW[@]}" "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
+        --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
+      grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
+      keep $N
       continue
     fi
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
-    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED) \
+    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED "${TPL[@]}") \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
     WL=$S/workload.json; ADV=()
     if [ -n "${A5_ADVICE:-}" ]; then

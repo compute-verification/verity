@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.Compose
+import Models.Accounting.Guarantees.Compose
 
 /-!
 # A whole-tile luck per query from its tiles' entropy: proof

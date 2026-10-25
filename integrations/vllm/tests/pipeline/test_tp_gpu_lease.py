@@ -426,6 +426,7 @@ def _run(tmp_path: Path, script: str) -> tuple[int, dict, str]:
     return rc, rec, log.read_text()
 
 
+@pytest.mark.slow
 def test_the_tp_commit_takes_every_gpu_at_once_and_gives_them_back_together_while_it_runs(tmp_path):
     seen = tmp_path / "seen"
     rc, rec, log = _run(tmp_path, f"from tests.pipeline.test_tp_gpu_lease import LAST, stand_ins\nev, llm = stand_ins({str(tmp_path)!r})\n"

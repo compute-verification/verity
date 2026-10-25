@@ -29,7 +29,9 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   agent's own `updatedAt` (which moves while it works; a run's doesn't) hasn't moved for as long: a hung tool call or a
   suspended VM, which the API doesn't show (Daniel, 19 Oct, after proofs sat 7 h). It is cancelled and continued as a held
   run is, under the same once-an-hour limit; a quiet stream alone, while the agent's `updatedAt` moves, is a broken stream,
-  not a stall;
+  not a stall. A followed background wait is stalled the same way after `STUCK` (2 h) with nothing streamed and the agent's
+  `updatedAt` still: cancelling a wait may take its local subagents, but a suspended VM has lost them already (compute-accounting's
+  research lane sat in one from 05:26 to 23:40Z on 23 Oct, INF-192);
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
@@ -38,7 +40,7 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   it errors again.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
-cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
+cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
 held one while every later one was cancelled on arrival, network-accounting's behind a goal run from 18:27Z, and the API refuses
 to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
 agent whose latest run the API won't read is recorded once as unreadable, and again, with `since`, once it has been for
@@ -182,6 +184,7 @@ RUNS_PAGES = 10             # (memory-accounting had 52 runs cancelled on arriva
 FOLLOW = {"RUNNING": HELD_S, "WAITING_FOR_BACKGROUND_WORK": HELD_BG_S}
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # recorded once, never cancelled: a run CREATING this long by its `updatedAt`, a followed background wait with nothing streamed
+# while its agent's `updatedAt` moves (with that still too, the wait is stalled: cancelled and continued)
 STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 GOAL = "run-goal-"              # a goal run's id: the runs endpoint and its stream take only run-<uuid> (400)
 SUBAGENT = {"tool-call-delta"}          # interaction_update types that report a subagent's progress, not the parent's
@@ -190,7 +193,7 @@ CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothi
 AFTER = {"tool_done": "a finished tool call", "turn_ended": "the end of your turn"}
 AFTER_ERROR = ("continue: your last run ended in ERROR (the agent watch restarted you). Read your inbox and carry on from where "
                "you stopped.")
-STALLED = ("continue: your run streamed nothing for {mins} min from {since} while it read RUNNING (a hung tool call or a "
+STALLED = ("continue: your run streamed nothing for {mins} min from {since} while it read {status} (a hung tool call or a "
            "suspended VM; the agent watch cancelled it). Check what that step was doing, read your inbox and carry on from where "
            "you stopped.")
 RESUME = ("resume: {runs} ended and nothing has run on you since (the agent watch started this run {mins} min after). Read the "
@@ -202,7 +205,7 @@ WORKER_RELAUNCH = (
     "handle, and @{handle}'s coordinator still owns the lane and your task. Read origin/main's AGENTS.md and the lane contract "
     "first. Report to your coordinator in its inbox thread, your checkpoints, your final report and any question: "
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
-    "the agent watch rings your coordinator's inbox (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
+    "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
     "results with `research inspect RUN --on NODE`. Your predecessor's newest note ({note}) follows; carry on from where it "
     "stopped, and name both {old} and your own id in your notes' origin.\n"
@@ -344,6 +347,14 @@ def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, di
             yield p, heard, front_matter(p)
 
 
+def lane_handle(lane: str, names: set[str]) -> str | None:
+    """The handle a lane belongs to: the lane itself when it is one, else the longest handle it extends with a `-`
+    (`kernels-hashproof` is @kernels'), else None."""
+    if lane in names:
+        return lane
+    return max((h for h in names if h and lane.startswith(h + "-")), key=len, default=None)
+
+
 def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
     """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't
     list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator writes for the workers it
@@ -364,14 +375,14 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
         d = read_json(p)
         if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
             lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
-            handle = (lineage(registry, coords, by[0]) if by else None) or (lane if lane in names else None)
+            handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
             add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
     for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
         launcher = next((i for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
-                add(agent, lane, lane if lane in names else coords.get(launcher or ""), heard, parent=launcher)
+                add(agent, lane, lane_handle(lane, names) or coords.get(launcher or ""), heard, parent=launcher)
     return out
 
 
@@ -1015,6 +1026,8 @@ class Watch:
             return "held"
         if r.status == "RUNNING" and t - max(r.last_t, r.bg_t) >= STALL_S and t - r.agent_t >= STALL_S:
             return "stalled"
+        if waiting and t - max(r.last_t, r.bg_t) >= STUCK[r.status] and t - r.agent_t >= STUCK[r.status]:
+            return "stalled"
         if r.calls and t - min(r.calls.values()) >= LONG_CALL_S:
             return "long_call"
         if waiting and t - max(r.last_t, r.bg_t) >= STUCK[r.status]:
@@ -1062,11 +1075,12 @@ class Watch:
         self.freed[r.agent] = t
         r.ended = "CANCELLED"
         text = (CONTINUE.format(since=since, mins=mins, after=AFTER.get(r.last_kind, "a finished tool call")) if kind == "held"
-                else STALLED.format(since=since, mins=mins))
+                else STALLED.format(since=since, mins=mins, status=r.status))
         new, err = self.cont(r.agent, text)
         if new is not None:
             self.save()
-            self.record(kind, r, since=since, minutes=mins, action="cancelled and continued", new_run=new, **owner)
+            self.record(kind, r, since=since, minutes=mins, status=r.status, action="cancelled and continued", new_run=new,
+                        **owner)
         else:
             self.pending[r.agent] = {"text": text, "run": r.run, "name": r.name, "since": t}
             self.save()

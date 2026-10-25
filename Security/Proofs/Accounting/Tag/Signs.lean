@@ -1,5 +1,5 @@
 import Proofs.Accounting.Tag.Basic
-import Definitions.Accounting.Guarantees.Sketch
+import Models.Accounting.Guarantees.Sketch
 
 /-!
 # ±1 rows: non-collision

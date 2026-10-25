@@ -1,5 +1,5 @@
 import Definitions.Pous
-import Definitions.Pous.Assumptions
+import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous
 

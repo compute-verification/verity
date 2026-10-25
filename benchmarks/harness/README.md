@@ -11,9 +11,11 @@ those like any other caller. This file is the harness's contract: how a point is
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
+                             # (--direct NODE: `research run --on NODE` through the node's GPU slots instead)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
+verity-bench served-table    # every protocol's served overhead from the store's newest passing results (--json)
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 ~~~
 
@@ -38,9 +40,9 @@ and so of every point's identity, and the arm's cubin digest is its `kernel_dige
 
 The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
 exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
-(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. Its settings
-take the built engine's model runner, which `verity_vllm.LLM` refuses to go without before it builds, so the harness
-installs it on the built engine itself (`protocol_options.install`), one window a run: its `steps` (S) the run's step
+(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. The harness
+builds it through `verity_vllm.LLM`'s `protocols` with only H1's public parameters, which fills the engine's model runner
+and in-process coins after the build, and gives each run its own window with `reinstall`: its `steps` (S) the run's step
 bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
 coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
 before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
@@ -63,6 +65,9 @@ arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compi
 unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
 experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
 Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
+`verity_bench.vllm.bandwidth_ablation` holds PoUS's bandwidth-audit arm with one part changed or removed (its KV receipts,
+codec rounds or filler), each token-controlled by `bandwidth-plain`, so `llama31-8b-fp8-1gpu-bandwidth-ablation` times
+where the audit's time goes.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
@@ -162,11 +167,21 @@ same way, allowing only `config.point_identity`.
 
 ## Dispatch and resume
 
+`verity-bench run` queues each missing point, as below. `verity-bench run SPEC --direct NODE` launches each missing point
+on NODE itself instead, for a node whose launcher takes a run only through a slot: vy-nebius-2 has refused every queued GPU
+point since about 11:50Z on 24 Oct (INF-217 tracks the queue-side fix). Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
+find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
+through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
+`max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
+GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3). A preempted direct point is a failed run, which the
+next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
+
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
 count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8gpu`). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
-benchmark's own launcher sources too): `$WORK/venv312` from the integration's `pod_bootstrap.sh`, or `VERITY_BENCH_VENV`,
-which the dispatcher forwards. `benchmarks` is on its path, so a spec names an experimental arm's module from there
+benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
+`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's) and
+`$WORK/pouw/mvp-e2e/venv312`. `benchmarks` is on its path, so a spec names an experimental arm's module from there
 (`served_commit.arm:SERVED_COMMIT`). A point's identity hashes the resolved spec,
 the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
 as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
@@ -176,6 +191,19 @@ the attempts this store lacks among those started since a day before the commit'
 can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
 other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
 catalog alone.
+
+## The served table
+
+`verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B on the
+RTX PRO 6000 from the store, never from numbers in code: the protocols, their specs and arms are `PROTOCOLS`, and the
+conversion factors (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `llama31-8b-fp8-1gpu-compiled-full`)
+are their own section. For every point of every spec it takes the newest passing `vllm_bench_point` attempt whose
+`spec` and `point` params name it (the resume lookup's rule, without its one-commit identity), so a newer passing run
+supersedes an older one. It first pulls the remote's attempts started since the oldest spec was added, the same pull
+as `check`'s. A result labelled `superseded_by`, invalid, or without the row's arms is passed over and listed. Ratios
+are paired by rep from the result's own reps, each metric over `stock-fp8@compiled` and, where the spec runs an eager
+stock, over that. The caveat column is the newest `label` and `note` on the result's artifact and its run, read through
+from the remote.
 
 ## Out of scope here
 

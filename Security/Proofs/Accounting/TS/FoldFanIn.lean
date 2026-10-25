@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.TS.FoldFanIn
+import Models.Accounting.Guarantees.TS.FoldFanIn
 import Proofs.Accounting.TS.FanIn
 import Proofs.Pouw.Receipt
 

@@ -2,7 +2,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Combinatorics.SimpleGraph.Clique
 import Mathlib.Combinatorics.SimpleGraph.Finite
 import Definitions.Pous
-import Definitions.Pous.Assumptions
+import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers

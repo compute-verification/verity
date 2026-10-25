@@ -1,5 +1,5 @@
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Definitions.Accounting.Guarantees.RequirementPouw
+import Models.Accounting.Guarantees.RequirementPouw
 
 /-!
 # PoUW's credits and help when a node runs a declared circuit as placed

@@ -78,6 +78,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
+            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
 LINE = "check-line"
 POLL_S = 20
 #: the exit of a waiter that gave up (`--wait-max`): CMD never ran
@@ -124,6 +127,22 @@ def parse(text: str) -> list[dict]:
                       "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None,
                       "scope": opts.get("scope") == "1"})
     return slots
+
+
+def lane_pools(slots_file: Path) -> list[Path]:
+    """The pools beside `slots_file` (`NAME/slots` in its directory, not a `*.bak-*` copy) with a slot a lane check may take: n2's
+    `gpu` and cpu-1's `research` beside their all-trains default pools (CI-164)."""
+    out = []
+    for p in sorted(slots_file.parent.glob("*/slots")):
+        if ".bak-" in p.parent.name:
+            continue
+        try:
+            listed = parse(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if any(not s["trains"] for s in listed):
+            out.append(p)
+    return out
 
 
 def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
@@ -720,7 +739,13 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not slots:
         sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores; {DIRECT_CPUS_FIX}")
     if not priority and all(s["trains"] for s in slots):
-        sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine")
+        pools = lane_pools(SLOTS)
+        where = ("a lane check takes a lane pool here: " + ", or ".join(
+            f"`CHECK_SLOTS={p} python3 tools/verity/check/slot.py --by LANE -- CMD...`" for p in pools)
+            + " (`research run --pool NAME` sends one by its directory's name, for the pools `research run --help` names)"
+            if pools else "a lane check runs on another machine")
+        sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
+                 f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None

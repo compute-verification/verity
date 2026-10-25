@@ -1,4 +1,4 @@
-import Definitions.NetworkCertifier.Assumptions
+import Models.NetworkCertifier.Assumptions
 import Mathlib.Data.Set.Card
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Algebra.BigOperators.Fin

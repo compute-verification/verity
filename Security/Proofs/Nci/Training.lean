@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees.Training
+import Models.Nci.Guarantees.Training
 import Proofs.Nci.Threads
 import Proofs.Nci.Contained
 import Proofs.Nci.Packed

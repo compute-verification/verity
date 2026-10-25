@@ -1,70 +1,92 @@
 {
  "pieces": {
   "Bf16AddF2fp_v1": {
-   "and": 754
+   "and": 754,
+   "type": "97e5fdc2f69fdaf46dbdba6ac021b88339dd83b75fe95a70ce1bd5e4889214f8f12e2aec11d48d8120b742db588a50fe3541f247415e9a9a4e504ed9e6c0b3e6"
   },
   "Bf16Add_v1": {
-   "and": 754
+   "and": 754,
+   "type": "ab0ebd051261bd4a50b37b919005b7f3376ca695e52036497e50f6e2a8657529b9a9060e427ff07ca5b65a2287830842c03477f325f5c0c2b8c7375af4b218ce"
   },
   "F32AddFtz_v1": {
-   "and": 944
+   "and": 944,
+   "type": "db72b61b0dd03b6a30c50db5324e0c8e741d5fb278ea0e975ec0b725ab252124df9753fb504596ecd9fb2c0eec6213272c501058dc11cbb9a09d34fea8ec63e6"
   },
   "F32AddFtz_v2": {
-   "and": 913
+   "and": 913,
+   "type": "d86d65741776b7e390c86173e91ef8433eb622ce14d5fc70c83eb9a6492ce056e5f799113c050f5b17169f2d769bddb003f393b4a7bb672196a00cea02c964b1"
   },
   "F32Add_v1": {
-   "and": 854
+   "and": 854,
+   "type": "880454ca983e66afcc806025fd69f7ec5226509d1e6cffa93e4ac1c75456f8f250f4239aeea98c7fb87fc9a55135c333bc3ce0c320f953ae6422039f3fc2f024"
   },
   "F32Add_v2": {
-   "and": 823
+   "and": 823,
+   "type": "e41f762e33fb609c9d227bb1be99a2983d35ee7a04902e7e9c1aaf74cf53c8f260f7d8732df93684aef78953b7226cb9ad987af08db1346efa9efba8081e8cc6"
   },
   "F32Div_v1": {
-   "and": 2525
+   "and": 2525,
+   "type": "d5553731a55691e2e396bd1585fece9613a188d1e2d7779a031c4dfab44d2e8d5eabaafde19b5e3803e25c5fac0d730d36d83037bad1b2d73d16a244d22892ee"
   },
   "F32Div_v2": {
-   "and": 2493
+   "and": 2493,
+   "type": "0400984b553c4225cfd793257b24fe4becf618e9ec91fb0baa229583fe005010d44a08aa25da65ec4292e5fb20189a01dea028d1a56228a0e8e43680219e12dd"
   },
   "F32FmaFtz_v1": {
-   "and": 4618
+   "and": 4618,
+   "type": "3084a654f7e2beeddf98d8830ba6dd30255442efb334eaf72b4b86dfc96be9346a6a905476f56e2c23fdf693f05cc91b119c98898ec818a5cc1c15818f89a1fa"
   },
   "F32FmaFtz_v2": {
-   "and": 4618
+   "and": 4618,
+   "type": "71f59eb50a3def73eba65497e0b7166202a751278dc06e7d91d869868c156e1dcb8cc47984e438a06d1a3d6bc9c6e30dce907b3e40a53af57708cb54b1420bf9"
   },
   "F32FmaSubFtz_v1": {
-   "and": 4618
+   "and": 4618,
+   "type": "afe204ac0e4c63d4b75d939f3484140dc571a705302bbe4c05f010d967e75b3e2de2d6a9293eefe4fc2f383ecfe32becab61c5cae1eeef33bc30cf8be7bf1bdb"
   },
   "F32FmaSubFtz_v2": {
-   "and": 4618
+   "and": 4618,
+   "type": "5a7f9732c715db518a2328ed5f7a9e7f03849a5db890af035920454b890ac3b60d8389a5f55513a7279f0e3cb6f6210f540d286ccaf9be4f2ddbbc522bcf2260"
   },
   "F32Fma_v1": {
-   "and": 4498
+   "and": 4498,
+   "type": "3ef29000e7c77c11bfc8a4b7dd531d3a6590565125f995cd04100c04b94b8bef5d90ecd5c541c2246425faccaf305fd95cdb0aaf56b27b8144ccaacf45a31edb"
   },
   "F32Fma_v2": {
-   "and": 4498
+   "and": 4498,
+   "type": "971be4b7a7dafeda173f6708749204859d2d9fc8db56a47deb2b33c51058151e9ecc330f1eaf8e78b709030cc86c555614a3ef14140e0107dc2337cd6fb9a018"
   },
   "F32Max_v1": {
-   "and": 283
+   "and": 283,
+   "type": "0b48d14a761aced2520a1db87cf8420e53316dc5c4508331566d461e2ad5aa955c65326f59b967090fa4e3a33d397fdc244d11af764b36996962e5192487253d"
   },
   "F32MulFtz_v1": {
-   "and": 2528
+   "and": 2528,
+   "type": "79157f717628692f4100845712f9d82f8eb79171ebd4b59edb8b5ae4bee0a2b3a0b7a3b58b55eada1212b89634624385161d26af11d306a13103602cdc457164"
   },
   "F32MulFtz_v2": {
-   "and": 2496
+   "and": 2496,
+   "type": "f406e4e80e2960dab6796ffddc78746b55b8ec8da9f195f755ca48f2953512ae6579b25fe0f9a6e90864bf2079d32a459c36b806709170a26090c7c6d2f6ba16"
   },
   "F32Mul_v1": {
-   "and": 2438
+   "and": 2438,
+   "type": "18dd5fcee57b583bc736b908d5421a09e57e66f3204cb358df8515add66a90c51deb9041913cf3f8015d611aa4c7dbcc2175dc2e7583ff7a1d2e0eb5b8c65090"
   },
   "F32Mul_v2": {
-   "and": 2406
+   "and": 2406,
+   "type": "8c782b40bfeaaa074538e1a66c5c90f0fe02ed0894ce6106799fd7008198a396825889b4d3dc3738a6e261d5d91913910fec6c79cb6bfdf2a84b41f3e24cc13c"
   },
   "F32SubFtz_v1": {
-   "and": 1071
+   "and": 1071,
+   "type": "6ade8483b5f397c1489c085cb593b2fd95acce897523b8dd9901b8354c65f8678d1c96eac803c96d4b3c45f82c552084fc64dce88f753fe304f8cfc58bed27b5"
   },
   "F32SubFtz_v2": {
-   "and": 913
+   "and": 913,
+   "type": "498c2268ae5561f8659690dca4d22dd8c43a56d03d8dced54ab1419921e0478cabf2422f391c6cb08f50b5414efa193c5d59aac673f035ed0565fcbb96cfe410"
   },
   "GuardNegInfZero_v1": {
-   "and": 63
+   "and": 63,
+   "type": "31ebfb2468cb04559f348de4903a51e438c4b9165253090b67fcc6048576de87f7d05bf374d78e8babe200e9f02e4bd5c5d917075efc480bfeaa43a0dbb5f283"
   }
  }
 }

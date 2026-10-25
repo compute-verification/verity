@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditSketch
+import Models.Accounting.Guarantees.RateAuditSketch
 
 /-!
 # The table: outside the verbatim class, a prover reads only the digest

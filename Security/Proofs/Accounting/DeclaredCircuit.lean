@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
+import Models.Accounting.Guarantees.DeclaredCircuit
 import Proofs.Accounting.Stacking
 
 /-! The pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem waits on the red team

@@ -54,12 +54,17 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 <tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
-The memory line held over time (`line.py`) is the line of record a gate run publishes (`auditor_line.py`, through
-`verifier.py`'s `recorded_line`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and
-`HeldOverTimeLinks`' conclusions read over each stretch of a paced session's groups, from their timings, the store, the
-on-chip storage, the node's rates and bursts and the wrong receipts, in exact rationals. Its Lean is
-`lean/RemoteAudit/Line.lean`, held to the Python by `lean/tests/test_line.py`'s difftest, every refusal compared word
-for word.
+The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
+`recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
+read over each stretch of a paced session's groups, from their timings, the store, the on-chip storage, the node's
+rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
+W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
+(`lineOfRecord`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
+window's draws refused unless `min(s, U_t)`), with the auditor's times and each group's reads by kind beside it; and
+`line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
+and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
+compared word for word. The Lean statement that the line is true of the trace that produced the record is
+`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
 
 ## Replay
 
@@ -91,7 +96,10 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
-  releases and plan changes.
+  releases and plan changes, and as the schedule the prover publishes (`schedule`).
+- `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
+  verifier's plan of the published schedule at its step, and the schedule's bits are the layout's steering
+  (`audit.Session.scheduled`). Of record in `lean/RemoteAudit/Schedule.lean`.
 - `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
   lays out the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler
   (`arena`, `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`).

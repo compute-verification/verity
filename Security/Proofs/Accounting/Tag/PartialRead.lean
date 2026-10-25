@@ -1,5 +1,5 @@
 import Proofs.Accounting.Tag.Basic
-import Definitions.Accounting.Guarantees.Tag
+import Models.Accounting.Guarantees.Tag
 
 /-!
 # A partially read block's words

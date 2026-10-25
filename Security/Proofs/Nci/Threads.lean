@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees.Threads
+import Models.Nci.Guarantees.Threads
 import Proofs.Core.Circuit
 import Proofs.Nci.Pull
 import Proofs.Nci.Fit

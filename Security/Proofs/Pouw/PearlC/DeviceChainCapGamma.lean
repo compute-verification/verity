@@ -1,6 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
-import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.Guarantees.PearlC
+import Models.Pouw.Assumptions.PearlC.DeviceChainCap
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # The cap on the chain's share: what it admits, that it asserts less, and γ (the TT_OUT restatements lane's file)

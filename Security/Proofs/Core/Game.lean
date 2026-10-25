@@ -1,4 +1,4 @@
-import Definitions.Core.Guarantees.Game
+import Models.Core.Guarantees.Game
 import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Interleave
 import Proofs.Core.Game.Union

@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.TS
+import Models.Accounting.Guarantees.TS
 
 /-!
 # The tensor–scalar model's price lemmas

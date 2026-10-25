@@ -74,8 +74,8 @@ def _halves(monkeypatch):
     return bind(fn), rows, S
 
 
-@pytest.mark.parametrize("V,S,n", [(16, 4, 10), (64, 32, 8), (300, 8, 8), (1025, 32, 6), (3000, 16, "halves")])
-@pytest.mark.slow
+@pytest.mark.parametrize("V,S,n", [(16, 4, 10)] + [pytest.param(*a, marks=pytest.mark.slow)
+                                       for a in [(64, 32, 8), (300, 8, 8), (1025, 32, 6), (3000, 16, "halves")]])
 def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
     if n == "halves":
         fn, rows, S = _halves(monkeypatch)
@@ -88,6 +88,7 @@ def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
         assert n != "halves" or (ref.any() and not ref.all())
 
 
+@pytest.mark.slow
 def test_the_select_at_a_constant_split_count_is_v1_there():
     V, rng = 64, np.random.default_rng(3)
     for i in range(3):
@@ -98,6 +99,7 @@ def test_the_select_at_a_constant_split_count_is_v1_there():
                 evaluate(bind(SM.GumbelTopPTokenSelect, V=V), *args, spl)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("fam,V,S", [("TopPKeepWord", 300, 8), ("TopPKeepWord", 1025, 32), ("GumbelTopPTokenSelectV2", 300, 8)])
 def test_the_codec_round_trips_it(fam, V, S):
     """The Definition as one Call of a Program, through `encode_program` and `decode_program` as a Build's workload compose reads it.
@@ -111,6 +113,7 @@ def test_the_codec_round_trips_it(fam, V, S):
     assert D.gates == P.gates and D.root.id == P.root.id
 
 
+@pytest.mark.slow
 def test_q_word_cuts_it_into_word_units():
     from verity_vllm.query import word as WQ
 

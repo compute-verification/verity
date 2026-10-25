@@ -10,7 +10,7 @@ of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place o
 whose drawn units are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
 
-They belong in `Security/Definitions/Accounting/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
+They belong in `Security/Models/Accounting/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
 (the `security` package can't import it), so they are here until C-Flock's spec is extracted, as C-Flock's own
 assumptions are (`Proofs/Flock/Soundness/Assumptions`).
 -/

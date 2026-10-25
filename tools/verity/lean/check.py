@@ -58,7 +58,12 @@ environment extension loaded, so none of the package's code runs), and replays t
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
-                 module outside `meaning`, which the record therefore does not hold
+                 module outside `meaning`, which the record therefore does not hold; a module of the proofs tree is
+                 the trees check's
+    trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
+                 the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
+                 tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
+                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails)
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
@@ -139,6 +144,8 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import atexit
+import bisect
 import contextlib
 import difflib
 import gzip
@@ -192,7 +199,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -541,11 +548,24 @@ def lean_modules(pkg: Path) -> dict[str, str]:
     return out
 
 
+_LEAN_SPECIAL, _TOML_SPECIAL = re.compile(r"/-|--|[\"']"), re.compile(r"[#\"]")
+_NESTING, _BLANK, _CHAR = re.compile(r"/-|-/"), re.compile(r"[^\n]"), re.compile(r"'(\\.[^']*|[^'\\])'")
+
+
 def strip_comments(src: str, toml: bool = False) -> str:
     """``src`` with its comments (Lean's `--` and nested `/- -/`, docstrings included; TOML's `#`) blanked out, string
     literals and line numbers kept."""
     out, i, n, depth = [], 0, len(src), 0
+    special = _TOML_SPECIAL if toml else _LEAN_SPECIAL
     while i < n:
+        # the characters up to the next one that can open or close a comment, a string or a character literal are kept
+        # (blanked, inside a comment) as they are
+        m = (_NESTING if depth else special).search(src, i)
+        j = n if m is None else m.start()
+        if j > i:
+            out.append(_BLANK.sub(" ", src[i:j]) if depth else src[i:j])
+            i = j
+            continue
         c = src[i]
         if depth:
             if src.startswith("/-", i):
@@ -572,7 +592,7 @@ def strip_comments(src: str, toml: bool = False) -> str:
             out.append(src[i:j + 1])
             i = j + 1
         elif not toml and c == "'" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'!?.")) and \
-                (m := re.match(r"'(\\.[^']*|[^'\\])'", src[i:])):
+                (m := _CHAR.match(src, i)):
             out.append(m.group(0))
             i += len(m.group(0))
         else:
@@ -928,6 +948,42 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
     return fails, read
 
 
+#: where `facts_program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
+PROGRAMS: Path | None = None
+#: {(directory, toolchain, `Facts.lean`'s SHA-256): (the compiled program, its SHA-256)}
+_programs: dict[tuple[str, str, str], tuple[Path, str]] = {}
+_programs_lock = threading.Lock()
+
+
+def facts_program(pkg: Path) -> str:
+    """`Facts.lean` compiled (`lean -c`, then `leanc`) with ``pkg``'s toolchain, once per toolchain and source in a process:
+    interpreted (`lean --run`), its own walks were most of a large package's facts run. It exports its symbols
+    (`-rdynamic`, Lake's `supportInterpreter`): elaborating a pin's statement runs the interpreter, which calls the library's
+    native code by symbol, as in `lean`. The program is checked against the digest it had when compiled before each use.
+    Raises RuntimeError when it does not compile or has changed."""
+    src = TOOL / "Facts.lean"
+    toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
+    key = (str(PROGRAMS), toolchain, sha256(src))
+    with _programs_lock:
+        if key not in _programs or not _programs[key][0].exists():
+            if PROGRAMS is None:
+                d = Path(tempfile.mkdtemp(prefix="lean-facts-"))
+                atexit.register(shutil.rmtree, d, True)
+            else:
+                d = PROGRAMS / hashlib.sha256("\0".join(key[1:]).encode()).hexdigest()[:16]
+                d.mkdir(parents=True, exist_ok=True)
+            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / "Facts.c"), str(src)],
+                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / "Facts.c"), "-o", str(d / "facts")]):
+                rc, text = run(argv, pkg, d / "compile.log")
+                if rc:
+                    raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+            _programs[key] = (d / "facts", sha256(d / "facts"))
+        program, digest = _programs[key]
+    if sha256(program) != digest:
+        raise RuntimeError(f"tamper: the compiled `Facts.lean` ({program}) changed after it was compiled")
+    return str(program)
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
     runs): the facts document it writes.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
@@ -945,7 +1001,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
+    rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
         raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
     facts = json.loads(out.read_text())
@@ -1104,8 +1160,15 @@ def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> l
     for m, rel in sorted(files.items()):
         if (held := spans.get(m)) is None or not (pkg / rel).is_file():
             continue
+        starts, ends = [], []                           # the union of the ranges, as disjoint sorted intervals
+        for s, e in sorted((s, e) for s, e in held if s <= e):
+            if ends and s <= ends[-1] + 1:
+                ends[-1] = max(ends[-1], e)
+            else:
+                starts.append(s)
+                ends.append(e)
         for i, line in enumerate(strip_comments((pkg / rel).read_text(errors="replace")).split("\n"), 1):
-            if (k := DECLARES.match(line)) and not any(s <= i <= e for s, e in held):
+            if (k := DECLARES.match(line)) and not ((x := bisect.bisect_right(starts, i) - 1) >= 0 and i <= ends[x]):
                 found.append(f"{rel}:{i} ({k.group(1)})")
     if not found:
         return []
@@ -1797,13 +1860,15 @@ def reads_home(pkg: Path, policy: dict) -> dict[str, list[str]]:
     return home
 
 
-def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[str]:
+def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]], roles: dict[str, str] | None = None) -> list[str]:
     """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
     walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
     holds it (its module is under `meaning`), or it is a pinned dependency's.  Theorems are not read: a statement means
     what it means whatever proves the propositions inside it.  A module outside the spec under a `reads_exempt` prefix
     ({prefix: the reason}) is exempt; an entry that exempts no such read fails, and an exemption never covers a spec module
-    outside `meaning` (the record would hold nothing of it)."""
+    outside `meaning` (the record would hold nothing of it).  A read outside the spec of a module of the proofs tree
+    (``roles``, `tree_roles`) is the trees check's (`tree_failures`), and `reads_exempt` covers none."""
+    roles = roles or {}
     exempt, meaning = policy.get("reads_exempt", {}), policy.get("meaning", policy["roots"])
     if not isinstance(exempt, dict):
         return [Failure("reads.exempt-form", None, f"reads: `reads_exempt` is {json.dumps(exempt)}; it is an object "
@@ -1813,14 +1878,22 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
                         f"without a module prefix and a reason")]
     bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
     used: set[str] = set()
+    verdicts: dict[str, tuple[str | None, set[str]]] = {}
     for g, f in sorted(facts["pins"].items()):
         if f.get("kind") != "theorem":
             continue
         for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
             if m not in home:
                 continue
-            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
-            if why == "spec" and (hit := {p for p in exempt if under([p], m)}):
+            if m not in verdicts:
+                why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+                if why == "spec" and tree_of(roles, m) == "proofs":
+                    why = "proofs"
+                verdicts[m] = why, {p for p in exempt if under([p], m)} if why == "spec" else set()
+            why, hit = verdicts[m]
+            if why == "proofs":
+                continue
+            if why == "spec" and hit:
                 used |= hit
                 continue
             if why:
@@ -1846,7 +1919,100 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
                                  f"`check.py --update`"))
     for p in sorted(set(exempt) - used):
         fails.append(Failure("reads.exempt-stale", p, f"reads: `reads_exempt` lists {p}, under which no guarantee reads "
-                             f"outside the spec; remove the entry"))
+                             f"outside the spec; remove the entry" if tree_of(roles, p) != "proofs" else
+                             f"reads: `reads_exempt` lists {p}, in the proofs tree, whose reads the trees check judges: "
+                             f"remove the entry (an exception to the trees rule is listed under `trees`' `except`)"))
+    return fails
+
+
+#: the trees a `trees` entry names, each a list of module prefixes; `except` lists the exceptions, each with its reason
+TREES = ("definitions", "properties", "proofs")
+
+
+def tree_roles(pkg: Path, policy: dict) -> dict[str, str]:
+    """{module prefix: its tree} that ``policy``'s `trees` and those of the packages ``pkg`` requires by path name, so a
+    package's trees reach those that require it (a dependency's `except` stays its own)."""
+    out: dict[str, str] = {}
+    rules = []
+    for d in path_deps(pkg):
+        try:
+            rules.append(load(d).get("trees") if (d / POLICY).is_file() else None)
+        except ValueError:
+            continue
+    for rule in [*rules, policy.get("trees")]:
+        for tree in TREES:
+            for p in (rule or {}).get(tree, []) if isinstance(rule, dict) else []:
+                if isinstance(p, str):
+                    out[p] = tree
+    return out
+
+
+def tree_of(roles: dict[str, str], module: str) -> str | None:
+    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Properties.Proofs` before
+    `Properties`), or None."""
+    hits = [p for p in roles if under([p], module)]
+    return roles[max(hits, key=len)] if hits else None
+
+
+def tree_failures(policy: dict, facts: dict, roles: dict[str, str]) -> list[str]:
+    """The trees check: the definitions tree is what a reader reads (vocabulary, named assumptions, guarantee statements),
+    the properties tree states what the code does, and the proofs tree is every proof, lemma and proof-only definition.  So
+    no guarantee's or property's statement reads a definition (`reads` and `outside`, as `spec_reads` walks them) of a
+    module of the proofs tree, and no audited module of the definitions or properties tree imports one.  The trees are
+    ``roles`` (`tree_roles`); a module under a prefix of `trees`' `except` ({prefix: the reason}) is excepted (the read
+    module, or the importing one), and an entry that excepts nothing fails."""
+    rule = policy.get("trees", {})
+    if not isinstance(rule, dict) or set(rule) - {*TREES, "except"} or not all(
+            isinstance(rule.get(t, []), list) and all(isinstance(p, str) and p for p in rule.get(t, [])) for t in TREES):
+        return [Failure("trees.form", None, f"trees: `trees` is {json.dumps(rule)}; it is an object whose "
+                        f"{', '.join(TREES)} are lists of module prefixes and whose `except` is {{module prefix: the reason}}")]
+    excepted = rule.get("except", {})
+    if not isinstance(excepted, dict) or any(not p or not isinstance(why, str) or not why.strip()
+                                             for p, why in excepted.items()):
+        return [Failure("trees.except-form", None, f"trees: `except` is {json.dumps(excepted)}; each entry is a module "
+                        f"prefix with the reason it is excepted")]
+    if not roles:
+        return [Failure("trees.stale-except", p, f"trees: `except` lists {p}, but no tree is named; remove the entry")
+                for p in sorted(excepted)]
+    named = {t: ", ".join(sorted(p for p, r in roles.items() if r == t)) or "none" for t in TREES}
+    used: set[str] = set()
+
+    def exception(m: str) -> bool:
+        hit = {p for p in excepted if under([p], m)}
+        used.update(hit)
+        return bool(hit)
+
+    def few(xs: set[str]) -> str:
+        xs = sorted(xs)
+        return ", ".join(xs[:4]) + (f" and {len(xs) - 4} more" if len(xs) > 4 else "")
+
+    bad: dict[str, tuple[set[str], set[str]]] = {}
+    for g, f in sorted(facts["pins"].items()):
+        if f.get("kind") != "theorem":
+            continue
+        for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
+            if tree_of(roles, m) == "proofs" and not exception(m):
+                defs, by = bad.setdefault(m, (set(), set()))
+                defs.add(parent(name))
+                by.add(g)
+    fails = [Failure("trees.reads", m, f"trees: {few(by)} read {few(defs)} in {m}, a module of the proofs tree "
+                     f"({named['proofs']}): a guarantee's or property's statement reads only the definitions tree "
+                     f"({named['definitions']}), the code it is about and pinned dependencies. Move the definitions into "
+                     f"the definitions tree (Definitions/<Area>/), or take the statement off the lock's guarantees: one "
+                     f"over proof-only definitions is a lemma of the proofs tree")
+             for m, (defs, by) in sorted(bad.items())]
+    for m in sorted(facts["modules"]):
+        if (tree := tree_of(roles, m)) not in ("definitions", "properties"):
+            continue
+        for i in facts["imports"].get(m, []):
+            if tree_of(roles, i) == "proofs" and not exception(m):
+                fails.append(Failure("trees.imports", m, f"trees: {m}, of the {tree} tree, imports {i}, of the proofs tree "
+                                     f"({named['proofs']}): what the definitions and the properties say never rests on a "
+                                     f"proof. Move what {m} uses from {i} into the definitions tree (Definitions/<Area>/), "
+                                     f"or move {m} into the proofs tree"))
+    for p in sorted(set(excepted) - used):
+        fails.append(Failure("trees.stale-except", p, f"trees: `except` lists {p}, under which no statement reads the "
+                             f"proofs tree and no module of the definitions or properties tree imports it; remove the entry"))
     return fails
 
 
@@ -1921,9 +2087,9 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
            ready=lambda q: None) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
-    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended. `Facts.lean` reads its
-    roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of guarantees proved in ``pkg``.
-    Raises RuntimeError when a package's facts cannot be read."""
+    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
+    pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
+    guarantees proved in ``pkg``. Raises RuntimeError when a package's build did not pass or its facts cannot be read."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
         fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
@@ -1955,14 +2121,17 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                                  f"first package on its path holding its root, so `lake env lean` cannot load both; put its "
                                  f"modules under a root of their own (declarations keep their names)"))
             continue
-        ready(q)
+        if ready(q) is False:
+            raise RuntimeError(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
+                               f"its .lake holds whatever an earlier or interrupted build left, and a module it lacks would "
+                               f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
-        loaded = {".".join(Path(o).resolve().relative_to(lib).with_suffix("").parts) for o in qf["oleans"]
-                  if Path(o).resolve().is_relative_to(lib)}
+        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
+                  if r.parts[:len(lib.parts)] == lib.parts}
         if unaudited := sorted(loaded - set(qf["modules"])):
             fails.append(Failure("proved_in.unaudited", entry, f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) "
                                  f"import its {', '.join(unaudited)}, which are not under them, so its replay does not check "
@@ -2509,7 +2678,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
+    ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
+    `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
+    tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
@@ -2575,10 +2746,18 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if r or renamed(n, moved) not in renames:
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
-    s = time.monotonic()
+    s, waited = time.monotonic(), []
+
+    def built_prover(q: Path):
+        w = time.monotonic()
+        passed = ready(q)
+        waited.append(time.monotonic() - w)
+        return passed
+
     replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
         if early:
             replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
                                          closure) if replay else None
@@ -2586,12 +2765,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
-            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
+            p = time.monotonic()
+            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover)
+            rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)
         return reported(rep)
-    rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
+    if waited:
+        rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
+    rep["seconds"]["audit"] = round(time.monotonic() - s - sum(waited), 1)
     if replay and not lifts and not early:
         replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure)
     if lifts:
@@ -2601,8 +2784,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["failures"].append(Failure("lift", None, f"lift: {e}"))
         return reported(rep)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
-        shape(current, facts)
+    roles = tree_roles(pkg, current)
+    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current), roles) + \
+        tree_failures(current, facts, roles) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
         scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
@@ -2730,8 +2914,9 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
+    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
+    toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -2798,6 +2983,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
                 fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
         elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
         f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails
@@ -2921,6 +3108,7 @@ def main(argv: list[str]) -> int:
     if a.build or a.all:
         sandboxed()                                     # probed once, before anything runs beside the probe
     built = {p: threading.Event() for p in pkgs}
+    passed: set[Path] = set()
     needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
     by_controls: list[str] = []
     reports: dict[Path, dict] = {}
@@ -2949,9 +3137,10 @@ def main(argv: list[str]) -> int:
             built[d].wait()
         try:
             mine = pkg in named
-            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
-                        runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
-                        ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
+            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
+                        built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
+                        moved=moved if mine else None,
+                        ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                         name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                         closure=a.closure)
         finally:

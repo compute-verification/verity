@@ -8,7 +8,7 @@ import Mathlib.Data.List.Chain
 import Mathlib.Tactic.GCongr
 import Mathlib.Tactic.Linarith
 import Definitions.Pous
-import Definitions.Pous.Assumptions
+import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers

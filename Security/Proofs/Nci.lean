@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees
+import Models.Nci.Guarantees
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Core
@@ -11,12 +11,14 @@ import Proofs.Nci.Threads
 import Proofs.Nci.Layered
 import Proofs.Nci.Contained
 import Proofs.Nci.Fit
+import Proofs.Nci.FitKeep
 import Proofs.Nci.FitSlotsWitness
 import Proofs.Nci.WeightsSlotsWitness
 import Proofs.Nci.FitRate
 import Proofs.Nci.FitWitness
 import Proofs.Nci.Dampener
 import Proofs.Nci.Info
+import Proofs.Nci.Transfers
 import Proofs.Nci.Fmt
 import Proofs.Nci.Fmt2
 import Proofs.Nci.Training
@@ -29,6 +31,9 @@ import Proofs.Nci.Covering
 import Proofs.Nci.CoveringWitness
 import Proofs.Nci.CoveringTwoCosts
 import Proofs.Nci.CoveringTwoCostsWitness
+import Proofs.Nci.CoveringPriced
+import Proofs.Nci.CoveringPricedWitness
+import Proofs.Nci.Cover
 
 /-!
 # Proofs of NCI's guarantees

@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.Actual.WipeBridge
+import Models.Accounting.Guarantees.Actual.WipeBridge
 import Proofs.Accounting.Actual.Transducer
 
 /-!

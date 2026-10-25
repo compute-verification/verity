@@ -1,5 +1,5 @@
-import Definitions.Accounting.Guarantees.PouwWork
-import Definitions.Pouw.Guarantees.Game
+import Models.Accounting.Guarantees.PouwWork
+import Models.Pouw.Guarantees.Game
 
 /-!
 # PoUW's work lower bound on an isolated node (proof)

@@ -138,6 +138,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[1].endswith("tools/verity/check/check.py") and lean_audit[2] == "--lean-slot"
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
+    assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -736,7 +737,7 @@ def _fake_run(monkeypatch, groups, pre=()):
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
     monkeypatch.setattr(CHECK.Reused, "plan", lambda self: {"parts": []})
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None, **kw: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
 
 
@@ -1282,10 +1283,19 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
     import subprocess
 
-    for flag in ("--no-cache", "--verdicts-in", "--cores"):
-        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
-                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+    def train(*flags: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", *flags],
+                              capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+
+    for flag in ("--no-cache", "--no-regenerate", "--verdicts-in", "--cores"):
+        p = train("--agreement", flag)
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+    # drive's after-landing run of a review landing: every job, the upstream build, no reuse, no regenerated lock records; past
+    # the flags, the store key
+    p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest", "--against", "main")
+    assert p.returncode == 2 and "--deferred takes no --against" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
