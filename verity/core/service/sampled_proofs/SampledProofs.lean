@@ -28,3 +28,4 @@ import SampledProofs.ChallengerCoins
 import SampledProofs.Wires
 import SampledProofs.WiresSpan
 import SampledProofs.WiresSound
+import SampledProofs.WiresComplete
