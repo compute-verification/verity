@@ -350,7 +350,7 @@ def main():
                  "changed": changed / nw, "beta_w": bits / nw, "decoded_exact": exact}
         dec_layers[i] = p
         print(f"layer {i}: l_w {lw[i]['bits']:.4g} bits ({bits / nw:.4f} per weight), decoded exact {exact}", flush=True)
-    del P1, Q0
+    del P1
     torch.cuda.empty_cache()
 
     a_dec = 8 * len(gzip.compress(b"".join(open(f, "rb").read() for f in (__file__, quant.__file__)), 9))
@@ -359,6 +359,83 @@ def main():
            "code_sha256": hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:16]}
     macs_lin = sum(P0[held[0]][k].numel() for k in LIN)
 
+    def h0_prefix(b, m, t):
+        """theta deployed at FMT up to boundary b on the first t tokens of rollout m alone, as the decoder computes it"""
+        with torch.no_grad():
+            hs = [emb0[seqs[m][:t]]]
+            for i in range(b + 1):
+                hs = layer(A, Q0[i], i, hs, [(css[m][0][:t], css[m][1][:t])],
+                           lambda i, n, xs: [encode(xs[0], FMT, refs[(i, n)])["deq"]])
+        return hs[0]
+
+    def run_block(b, bfmt, rb, lb, hl, wbits, scale_bits, m, t):
+        """the block over rollouts [0, m) and the first t tokens of rollout m"""
+        Ls = lens[:m] + ([t] if t else [])
+        T = sum(Ls)
+        mk = masks[:m] + ([masks[m][:t]] if t else [])
+        cs_ = css[:m] + ([(css[m][0][:t], css[m][1][:t])] if t else [])
+        h0 = hb0[b][:sum(lens[:m])]
+        if t:
+            h0 = torch.cat([h0, h0_prefix(b, m, t)])
+        n_u = int(sum(int(x.sum()) for x in mk))
+        rows_u = torch.cat(mk)
+        Eb = encode(hb1[b][:T], bfmt, rb)
+        bb, _, ((bc, bsc),) = code_many([(h0, Eb, rb)], bfmt)
+        hhat = deq_of(bc, bsc, bfmt, rb)
+        blk = {"bfmt": bfmt, "L_b": lb, "held": hl, "rollouts": m, "prefix": t, "tokens": T, "unique_rows": n_u,
+               "l_w": wbits, "l_tok": T * math.log2(A.vocab),
+               "l_tok_theta_nll": sum(nll_bits[:m]) + (nll_bits[m] * t / lens[m] if t else 0.0),
+               "l_scales": scale_bits, "l_bnd": bb, "F_per_token": bb / T,
+               "bnd_decoded_exact": bool(torch.equal(hhat, Eb["deq"])), "n_I": n_u * lb * (3 * A.d + A.ffn),
+               "layers": {}}
+        # the block, twice: as substituted (no repair), and exact (repairs coded and applied)
+        for mode in ("naive", "repaired"):
+            fix = {}
+
+            def fq_blk(i, name, xs, mode=mode, fix=fix):
+                X = torch.cat(xs)
+                ref = refs[(i, name)]
+                E = encode(X, FMT, ref)
+                rc, rs = ref_codes[(i, name)]
+                rc, rs = rc[: X.shape[0]].long(), None if rs is None else rs[: X.shape[0]].long()
+                mis = same(E, rc, rs)
+                st = {"mismatch": int(mis[rows_u].sum()), "values": int(rows_u.sum()) * X.shape[1]}
+                if mode == "repaired":
+                    st["l_fix"], st["after_repair_mismatch"] = 1, 0  # one flag bit: this input needs no repair
+                    if bool(mis.any()):
+                        Er = {"code": rc, "scode": rs}
+                        bits, _, ((c2, s2),) = code_many([(X, Er, ref)], FMT)
+                        st["l_fix"] = 1 + bits
+                        E = {"deq": deq_of(c2, s2, FMT, ref), "code": c2, "scode": s2}
+                        st["after_repair_mismatch"] = int(same(E, rc, rs)[rows_u].sum())
+                fix[(i, name)] = st
+                return split(E["deq"], Ls)
+            with torch.no_grad():
+                hs = split(hhat, Ls)
+                for i in hl:
+                    hs = layer(A, dec_layers[i], i, hs, cs_, fq_blk)
+            for (i, name), st in fix.items():
+                blk["layers"].setdefault(str(i), {}).setdefault(name, {})[mode] = st
+        l_fix = sum(v["repaired"]["l_fix"] for L_ in blk["layers"].values() for v in L_.values())
+        mism = sum(v["naive"]["mismatch"] for L_ in blk["layers"].values() for v in L_.values())
+        after = sum(v["repaired"]["after_repair_mismatch"] for L_ in blk["layers"].values() for v in L_.values())
+        base_bits = blk["l_w"] + blk["l_tok"] + blk["l_scales"] + blk["l_bnd"] + a_dec
+        attn1 = sum(A.nh * A.hd * L * (L + 1) for L in Ls)  # causal QK^T and PV, one layer
+        lin1 = macs_lin * T
+        # the decoder's work: theta deployed at FMT up to l, then the held layers, plus ~60 operations per decoded
+        # or dequantized symbol (weights, the entering residual, the counted activations)
+        syms = sum(lw[i]["n_weights"] for i in hl) + T * A.d + T * lb * (3 * A.d + A.ffn)
+        blk.update({"l_fix": l_fix, "mismatch_naive": mism, "mismatch_naive_frac": mism / (blk["n_I"] or 1),
+                    "mismatch_after_repair": after, "l_total_substituted": base_bits,
+                    "l_total_exact": base_bits + l_fix,
+                    "beta_x_bound_substituted": base_bits / blk["n_I"],
+                    "beta_x_bound_exact": (base_bits + l_fix) / blk["n_I"],
+                    "decode_flops": 2 * (lin1 + attn1) * (b + 1 + lb) + 60 * syms,
+                    "products_per_entering_coord_linear": lin1 * lb / (T * A.d),
+                    "products_per_entering_coord_with_attn": (lin1 + attn1) * lb / (T * A.d)})
+        blk["decode_flops_over_c"] = blk["decode_flops"] / 1.34e17
+        return blk
+
     for b in bnds:
         rb = hb0[b].abs().max()
         R = res["boundaries"][b] = {"held": [b + 1 + j for j in range(max(lbs))], "blocks": []}
@@ -366,9 +443,10 @@ def main():
             # the entering residual over every rollout, for the rate that sets Q
             bits_all, _, _ = code_many([(hb0[b], encode(hb1[b], bfmt, rb), rb)], bfmt)
             R[f"F_{bfmt}_all_per_token"] = bits_all / sum(lens)
-            # Q fills k twice: at the substituted rate (tokens and the entering residual), then at the exact block's rate
-            # (repairs included), measured on the first
-            for lb, fill in [(lb, f) for lb in lbs for f in ("substituted", "exact")]:
+            # Q fills k three times: whole rollouts at the substituted rate (tokens and the entering residual), whole
+            # rollouts at the exact block's rate (repairs included, measured on the block before), and whole rollouts
+            # then a prefix of the next one (causal, so its attention context is inside the block) at that rate
+            for lb, fill in [(lb, f) for lb in lbs for f in ("substituted", "exact", "prefix")]:
                 if fill == "substituted":
                     rate = math.log2(A.vocab) + bits_all / sum(lens)
                 hl = [b + 1 + j for j in range(lb)]
@@ -379,72 +457,25 @@ def main():
                 while m < len(seqs) and used + lens[m] * rate <= room:
                     used += lens[m] * rate
                     m += 1
-                m = max(m, 1)
-                T = sum(lens[:m])
-                n_u = int(sum(int(x.sum()) for x in masks[:m]))
-                rows_u = torch.cat(masks[:m])
-                Eb = encode(hb1[b][:T], bfmt, rb)
-                bb, _, ((bc, bsc),) = code_many([(hb0[b][:T], Eb, rb)], bfmt)
-                hhat = deq_of(bc, bsc, bfmt, rb)
-                tok_bits = T * math.log2(A.vocab)
-                blk = {"bfmt": bfmt, "L_b": lb, "held": hl, "rollouts": m, "tokens": T, "unique_rows": n_u,
-                       "l_w": wbits, "l_tok": tok_bits, "l_tok_theta_nll": sum(nll_bits[:m]), "l_scales": scale_bits,
-                       "l_bnd": bb, "F_per_token": bb / T, "bnd_decoded_exact": bool(torch.equal(hhat, Eb["deq"])),
-                       "n_I": n_u * lb * (3 * A.d + A.ffn), "layers": {}}
-                # the block, twice: as substituted (no repair), and exact (repairs coded and applied)
-                for mode in ("naive", "repaired"):
-                    fix = {}
-
-                    def fq_blk(i, name, xs, mode=mode, fix=fix):
-                        X = torch.cat(xs)
-                        ref = refs[(i, name)]
-                        E = encode(X, FMT, ref)
-                        rc, rs = ref_codes[(i, name)]
-                        rc, rs = rc[: X.shape[0]].long(), None if rs is None else rs[: X.shape[0]].long()
-                        mis = same(E, rc, rs)
-                        st = {"mismatch": int(mis[rows_u].sum()), "values": int(rows_u.sum()) * X.shape[1]}
-                        if mode == "repaired":
-                            st["l_fix"], st["after_repair_mismatch"] = 1, 0  # one flag bit: this input needs no repair
-                            if bool(mis.any()):
-                                Er = {"code": rc, "scode": rs}
-                                bits, _, ((c2, s2),) = code_many([(X, Er, ref)], FMT)
-                                st["l_fix"] = 1 + bits
-                                E = {"deq": deq_of(c2, s2, FMT, ref), "code": c2, "scode": s2}
-                                st["after_repair_mismatch"] = int(same(E, rc, rs)[rows_u].sum())
-                        fix[(i, name)] = st
-                        return split(E["deq"], lens[:m])
-                    with torch.no_grad():
-                        hs = split(hhat, lens[:m])
-                        for i in hl:
-                            hs = layer(A, dec_layers[i], i, hs, css[:m], fq_blk)
-                    for (i, name), st in fix.items():
-                        blk["layers"].setdefault(str(i), {}).setdefault(name, {})[mode] = st
-                l_fix = sum(v["repaired"]["l_fix"] for L_ in blk["layers"].values() for v in L_.values())
-                mism = sum(v["naive"]["mismatch"] for L_ in blk["layers"].values() for v in L_.values())
-                after = sum(v["repaired"]["after_repair_mismatch"] for L_ in blk["layers"].values() for v in L_.values())
-                base_bits = blk["l_w"] + blk["l_tok"] + blk["l_scales"] + blk["l_bnd"] + a_dec
-                attn1 = sum(A.nh * A.hd * L * (L + 1) for L in lens[:m])  # causal QK^T and PV, one layer
-                lin1 = macs_lin * T
-                # the decoder's work: theta deployed at FMT up to l, then the held layers, plus ~60 operations per decoded
-                # or dequantized symbol (weights, the entering residual, the counted activations)
-                syms = sum(lw[i]["n_weights"] for i in hl) + T * A.d + T * lb * (3 * A.d + A.ffn)
-                blk.update({"l_fix": l_fix, "mismatch_naive": mism, "mismatch_naive_frac": mism / (blk["n_I"] or 1),
-                            "mismatch_after_repair": after, "l_total_substituted": base_bits,
-                            "l_total_exact": base_bits + l_fix,
-                            "beta_x_bound_substituted": base_bits / blk["n_I"],
-                            "beta_x_bound_exact": (base_bits + l_fix) / blk["n_I"],
-                            "decode_flops": 2 * (lin1 + attn1) * (b + 1 + lb) + 60 * syms,
-                            "products_per_entering_coord_linear": lin1 * lb / (T * A.d),
-                            "products_per_entering_coord_with_attn": (lin1 + attn1) * lb / (T * A.d)})
-                blk["decode_flops_over_c"] = blk["decode_flops"] / 1.34e17
+                t = min(lens[m] - 1, int((room - used) / rate)) if fill == "prefix" and m < len(seqs) else 0
+                if fill == "prefix" and t < 1:
+                    continue
+                if fill != "prefix":
+                    m = max(m, 1)
+                for _ in range(4):
+                    blk = run_block(b, bfmt, rb, lb, hl, wbits, scale_bits, m, t)
+                    if fill != "prefix" or blk["l_total_exact"] <= K or t <= 1:
+                        break
+                    t = max(1, t - math.ceil((blk["l_total_exact"] - K) / rate) - 1)
                 blk["fill"] = fill
-                rate = (blk["l_tok"] + blk["l_bnd"] + l_fix) / T
+                rate = (blk["l_tok"] + blk["l_bnd"] + blk["l_fix"]) / blk["tokens"]
                 R["blocks"].append(blk)
-                print(f"l={b} L_b={lb} {bfmt} fill {fill}: Q={T} ({m} rollouts) l_w={blk['l_w']:.4g} l_tok={tok_bits:.4g} "
-                      f"l_bnd={bb:.4g} (F {bb / T:.0f}) l_fix={l_fix:.4g} n_I={blk['n_I']:.4g} "
+                print(f"l={b} L_b={lb} {bfmt} fill {fill}: Q={blk['tokens']} ({m} rollouts + {t}) l_w={blk['l_w']:.4g} "
+                      f"l_tok={blk['l_tok']:.4g} l_bnd={blk['l_bnd']:.4g} (F {blk['F_per_token']:.0f}) "
+                      f"l_fix={blk['l_fix']:.4g} n_I={blk['n_I']:.4g} total exact {blk['l_total_exact']:.4g} "
                       f"bound {blk['beta_x_bound_substituted']:.4f} / exact {blk['beta_x_bound_exact']:.4f}; mismatches "
-                      f"{mism} ({blk['mismatch_naive_frac']:.4f}), after repair {after} at {time.time() - t0:.0f}s",
-                      flush=True)
+                      f"{blk['mismatch_naive']} ({blk['mismatch_naive_frac']:.4f}), after repair "
+                      f"{blk['mismatch_after_repair']} at {time.time() - t0:.0f}s", flush=True)
                 json.dump(res, open(os.path.join(OUT, f"block_{FMT}.json"), "w"), indent=1, default=float)
     res["secs"] = time.time() - t0
     json.dump(res, open(os.path.join(OUT, f"block_{FMT}.json"), "w"), indent=1, default=float)
