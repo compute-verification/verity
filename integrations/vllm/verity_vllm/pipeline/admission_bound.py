@@ -150,7 +150,7 @@ HIDDEN_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
 def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: float, windowed: bool, bounded: bool,
                          retain_exclude: set[str] | frozenset[str] | None) -> tuple[int, str]:
     """The pinned host pool one Commit run allocates, by path, with the rule that produced it (named on the record):
-      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window; F-dA-15 correction, R19 admit)
+      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window)
       bounded, retain host (raw - excluded hidden) + raw x (levels_factor - 1): `--retain-exclude hidden_m1` keeps the C2 byte source
                            (the module outputs) and drops the M1 stream's chunk-aligned interior, which no C2 consumer reads (opens by
                            replay); the Merkle levels still span every leaf, the excluded ones too
