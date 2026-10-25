@@ -163,11 +163,11 @@ def _response(texts: list[str]) -> bytes:
 
 
 def slow_commit(*args, **kwargs):
-    """`Cells.commit`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
+    """`Cells.of`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
     holds its process's GIL, so a ticker in that process, on any thread, waits as long. A spawned process has none."""
     for clock in PROCESS_CLOCK:
         clock.advance(clock() + SLOW_COMMIT_S)
-    return WR.Cells.commit(*args, **kwargs)
+    return WR.Cells.of(*args, **kwargs)
 
 
 def refusing_commit(*args, **kwargs):
@@ -189,7 +189,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
     else:
         signer = ws.cs.signer(key, 4)
-        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.commit)
+        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.of)
         hooks, public = {"publish": publisher}, signer.public_key()
     answers = iter(responses)
 
@@ -260,8 +260,8 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
     assert "ACCEPTED: 3/3 ended" in ws.table(result)
-    rows = PARAMS.window * PARAMS.lanes * PARAMS.slots
-    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows")} == {"registered": 2, "of": 2, "rows": [rows]}
+    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows", "row_bytes")} == \
+        {"registered": 2, "of": 2, "rows": [PARAMS.window], "row_bytes": [PARAMS.lanes * PARAMS.slots * PARAMS.cell_bytes]}
     assert s["cell_rows"]["commit_ms"]["n"] == s["cell_rows"]["sign_ms"]["n"] == 2
 
     def refused(edit) -> list[str]:
@@ -302,7 +302,10 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     def other_salt(lines, salts) -> None:
         salts[1] = bytes([salts[1][0] ^ 1]) + salts[1][1:]
 
-    for change in (other_root, other_salt):
+    def other_wiring_salt(lines, salts) -> None:
+        salts[1] = salts[1][:-1] + bytes([salts[1][-1] ^ 1])
+
+    for change in (other_root, other_salt, other_wiring_salt):
         assert "responses window 0's cells aren't registered" in refused(lambda: edit_cells(change))
 
     def forge_reason() -> None:
@@ -322,9 +325,9 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         conn["arrivals_ms"][-1] += PARAMS.bucket_ms
 
     problems = refused(lambda: edit_client(late_cell))
-    assert any(p.startswith("connection 1:") and "'in_bucket'" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'in_bucket'" in p for p in problems)
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
-    assert any(p.startswith("connection 1:") and "'response_certified': False" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
     assert ws.check(out)["accepted"]
 
 

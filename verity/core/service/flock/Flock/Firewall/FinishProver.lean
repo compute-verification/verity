@@ -165,6 +165,23 @@ theorem getElem!_map_mul (g : F128) (xs : Array F128) (i : Nat) : (xs.map (g * �
   · rw [getElem!_neg _ i (by simpa using h), getElem!_neg xs i h]
     exact (F128.mul_zero g).symm
 
+/-- `sumF` in tasks of `b` terms, their sums added in order (`sumF_blocks`). -/
+@[specialize] def sumFPar (b n : Nat) (f : Nat → F128) : F128 :=
+  let a := n / b
+  ((Array.range a).map fun i => Task.spawn fun _ => sumF b fun j => f (b * i + j)).foldl (fun acc t => t.get + acc) 0 +
+    sumF (n - b * a) fun j => f (b * a + j)
+
+theorem sumFPar_eq (b n : Nat) (f : Nat → F128) : sumFPar b n f = sumF n f := by
+  have hp : ∀ a : Nat, ((Array.range a).map fun i => Task.spawn fun _ => sumF b fun j => f (b * i + j)).foldl
+      (fun acc t => t.get + acc) 0 = sumF a fun i => sumF b fun j => f (b * i + j) := by
+    intro a
+    rw [Array.foldl_map, ← Array.foldl_toList, Array.toList_range, sumF]
+    refine congrArg (fun g => List.foldl g (0 : F128) (List.range a)) (funext fun acc => funext fun i => ?_)
+    exact F128.add_comm _ _
+  unfold sumFPar
+  dsimp only
+  rw [hp, ← sumF_blocks, ← sumF_add, Nat.add_sub_cancel' (Nat.mul_div_le n b)]
+
 /-- **Byte `j`'s buckets**: entry `b < 256` is `Σ_{y < |e|, byte_j(g[y]) = b} e[y]` (`byteBuckets_go`). The term comes
 first for the reason `sumFFast`'s does: sixteen tasks read `e`. -/
 def byteBuckets (g e : Array F128) (j : Nat) : Array F128 :=
@@ -434,6 +451,15 @@ open Fast in
     simp only [consW, consWFast, parTab_eq]
     rw [range_map_get! (fun p => xhats (svTable (cols + 1)) p cols) pos]
 
+/-- `mleF` with its sum in tasks of `2^12` terms. -/
+def Fast.mleFFast (g : Array F128) (z : Array F128) : F128 :=
+  let e := eqTable z
+  Fast.sumFPar 4096 g.size fun x => g[x]! * e[x]!
+
+open Fast in
+@[csimp] theorem mleF_eq_mleFFast : @mleF = @mleFFast :=
+  funext fun g => funext fun z => by rw [mleF, mleFFast, sumFPar_eq]
+
 /-- What the prover keeps through the opening: the K-table being folded, the weight, and the proof's lists so far. -/
 structure LigState where
   tab : Array F256
@@ -561,6 +587,21 @@ def basisVals (sws : Array Switched) (l : Nat) : Array F128 :=
 
 /-- The sum `Σ_c a[c]·b[c]` of two K-tables. -/
 def dotK (a b : Array F256) : F256 := (List.range a.size).foldl (fun acc c => acc + a[c]! * b[c]!) 0
+
+/-- `dotK` with its sum in `2^12`-term blocks, a task to a block (`dotK_eq_dotKFast`). -/
+def Fast.dotKFast (a b : Array F256) : F256 :=
+  let n := a.size
+  let ps := Fast.parTab 1 (fun i => Fast.sumK 4096 fun j => a[i * 4096 + j]! * b[i * 4096 + j]!) (n / 4096)
+  Fast.sumK (n / 4096) (fun i => ps[i]!) +
+    Fast.sumK (n - n / 4096 * 4096) fun j => a[n / 4096 * 4096 + j]! * b[n / 4096 * 4096 + j]!
+
+open Fast in
+@[csimp] theorem dotK_eq_dotKFast : @dotK = @dotKFast :=
+  funext fun a => funext fun b => by
+    show sumK a.size (fun c => a[c]! * b[c]!) = _
+    simp only [dotKFast, parTab_eq]
+    rw [sumK_split a.size (fun c => a[c]! * b[c]!)]
+    exact addK_congr _ (sumK_congr fun i hi => by simp only [getElem!_range_map _ hi])
 
 /-- A sumcheck message masked by the lane round `j`'s pads (`lgMsg j 0` to `lgMsg j 3`, coordinate by coordinate). -/
 def maskMsg (lay : Zk.PadLayout) (h : Array F128) (j : Nat) (m : F256 × F256) : F256 × F256 :=

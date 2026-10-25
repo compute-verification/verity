@@ -123,9 +123,12 @@ import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.CapOpens
 import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.KSLin2E
 import Proofs.Flock.Claims.Recursion.PartAccepts
 import Proofs.Flock.Claims.Recursion.VStarPartsB
-import Proofs.Flock.Claims.Recursion.KSLin2E
+import Proofs.Flock.Claims.Recursion.PartsCompose
+import Proofs.Flock.Claims.Recursion.NextCs
+import Proofs.Flock.Claims.Recursion.NextJ
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy

@@ -33,7 +33,9 @@ import os
 from collections.abc import Callable
 
 from verity_vllm.check.match import dag_form as DAG
+from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.check.replay.fork import die_with_parent
@@ -149,7 +151,7 @@ class _CanonMemo:
 
 # ------------------------------------------------------------------------------------------------ compare_steps / hashes
 
-def _compare_steps_memo(A: C.Prog, B: C.Prog, unfold_a: bool = False) -> dict:
+def _compare_steps_memo(A: SEQ.Prog, B: SEQ.Prog, unfold_a: bool = False) -> dict:
     """compare.compare_steps once per (A, B, unfold_a) object pair; the result dict is returned as the same object (callers read it)."""
     key = (id(A), id(B), bool(unfold_a))
     hit = _cmp_memo.get(key)
@@ -162,7 +164,7 @@ def _compare_steps_memo(A: C.Prog, B: C.Prog, unfold_a: bool = False) -> dict:
     return res
 
 
-def _canonical_hash_memo(P: C.Prog, seqs: list[list[int]], unfold: bool) -> str:
+def _canonical_hash_memo(P: SEQ.Prog, seqs: list[list[int]], unfold: bool) -> str:
     """compare._canonical_hash once per (Prog, unfold) for Progs WITHOUT cross-request bookkeeping (components, folds): `seqs` is
     `compare_steps.seq(P, unfold)`, a pure function of the same Prog.  A Projection (has `_xreq`) is hashed by the original every
     time, so its `P.xreq` counting (read by X-09 right after compare_steps) is untouched -- its canon calls hit the canon memo."""
@@ -221,7 +223,7 @@ def _check_origin(h) -> None:
 _trie: dict[tuple, int] = {}         # (prefix node, run item) -> node; node 0 = the empty operand; per process, released on leave
 
 
-def _dag_hashes_intern(P: C.Prog, only: set[int] | None = None) -> dict[int, int]:
+def _dag_hashes_intern(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int]:
     ids = _merkle_ids
     trie = _trie
     pm: dict[tuple, int] = {}   # (prefix node, base, delta, count) -> node, for THIS Prog / cone only
@@ -303,7 +305,7 @@ def _dag_hashes_intern(P: C.Prog, only: set[int] | None = None) -> dict[int, int
     return hashes
 
 
-def _dag_hashes_memo(P: C.Prog, only: set[int] | None = None) -> dict[int, int]:
+def _dag_hashes_memo(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int]:
     """dag_hashes once per (Prog, `only` set object).  X-09 passes the live cone (memoised below, so the same set object per Prog);
     GM-01 passes None.  Returned dict is shared (callers read it)."""
     key = (id(P), None if only is None else id(only))
@@ -318,7 +320,7 @@ def _dag_hashes_memo(P: C.Prog, only: set[int] | None = None) -> dict[int, int]:
     return h
 
 
-def _canon_step_relative_fast(P: C.Prog, i: int, seqs: list[list[int]], unfold: bool):
+def _canon_step_relative_fast(P: SEQ.Prog, i: int, seqs: list[list[int]], unfold: bool):
     """compare._canon_step_relative: with unfold=False and `seqs` == P.steps (compare_steps' seq(P, False) is P.steps minus empty
     trailing segments, and _segment never emits an empty one) the position remap is the identity -- ('N', s, jj, lo, hi) already names
     the producer by (step, index within step) -- so the result is canon(i) with each operand as a tuple.  Any other case runs the
@@ -334,7 +336,7 @@ def _canon_step_relative_fast(P: C.Prog, i: int, seqs: list[list[int]], unfold: 
     return [tuple(arg) for arg in P.canon(i, False)]
 
 
-def dag_multiset(A: C.Prog, B: C.Prog) -> dict:
+def dag_multiset(A: SEQ.Prog, B: SEQ.Prog) -> dict:
     """The within-step criterion of record for two Programs loaded in this process: their live-cone DAG multisets (structural Merkle
     ids, one id space per process) are equal.  `program-dag` reads it when a step's order differs (GLM-5.3: the fold emits the
     prefill's indexer logits launch by launch, the Build per query row)."""
@@ -343,7 +345,7 @@ def dag_multiset(A: C.Prog, B: C.Prog) -> dict:
     return {"equal": ma == mb, "a_live": len(la), "b_live": len(lb), "only_a": sum((ma - mb).values()), "only_b": sum((mb - ma).values())}
 
 
-def _live_cone_memo(P: C.Prog) -> set[int]:
+def _live_cone_memo(P: SEQ.Prog) -> set[int]:
     hit = _live_memo.get(id(P))
     if hit is not None and hit[0] is P:
         stats["live_cone_hit"] += 1
@@ -359,7 +361,7 @@ def _live_cone_memo(P: C.Prog) -> set[int]:
 _proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, Projection): every _ProjectionFast built
 
 
-def _proj_key(oracle: C.Prog, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
+def _proj_key(oracle: SEQ.Prog, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
     w = frozenset(weights_node) if isinstance(weights_node, (set, frozenset, list, tuple)) else frozenset({weights_node})
     return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # [R17 D90] the request's peers node is part of the view
 
@@ -495,7 +497,7 @@ def _spec_id_memo(fn):
     return sid
 
 
-class MemoProg(_CanonMemo, C.Prog):
+class MemoProg(_CanonMemo, SEQ.Prog):
     """The fast path's compare.Prog (what `ops()` loads the fold and the components as): canon computed once per instance
     (`_CanonMemo`), and a run-form decode whose two per-node functions are `_spec_id_memo` and `_runs_fast` (unit 5 (a)) -- each
     returns what the record's `codec._spec_id` / `refs.runs` returns for the same node."""
@@ -520,8 +522,8 @@ def ops() -> Ops:
                    "match_compact": compact, "match_compact_env": os.environ.get(COMPACT_ENV) or None,
                    "operand_form": "progressions/v1" if compact else "runs",
                    "x09_legs": "forked" if workers(1 << 30) > 1 else "in-process", "candidate_stage": CANDIDATE_STAGE})
-    return Ops("fast", load_oracle=functools.partial(C.load_oracle, cls=MemoProg, compact=compact),
-                  load_derived=functools.partial(C.load_derived, cls=MemoProg, compact=compact), projection=_ProjectionFast,
+    return Ops("fast", load_oracle=functools.partial(PL.load_oracle, cls=MemoProg, compact=compact),
+                  load_derived=functools.partial(PL.load_derived, cls=MemoProg, compact=compact), projection=_ProjectionFast,
                   compare_steps=_compare_steps_memo, dag_hashes=_dag_hashes_memo, live_cone=_live_cone_memo, legs=_x09_legs)
 
 
@@ -531,7 +533,7 @@ def reset_projections() -> None:
 
 # ------------------------------------------------------------------------------------------------ check() hooks
 
-def projection(loaded: dict, rid: str, oracle: C.Prog, label: str, inst_idx: list[int], tok_node, weights_node, seed_node,
+def projection(loaded: dict, rid: str, oracle: SEQ.Prog, label: str, inst_idx: list[int], tok_node, weights_node, seed_node,
                peer_node=None) -> PJ.Projection:
     """The request's Projection of the fold for GM-01's G3, built at most once per process per construction key:
       1. the alternate-criterion run reuses the verdict-of-record run's (per `_loaded`);
@@ -603,7 +605,7 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
     return request_legs(items, leg, n, weight=weight)
 
 
-def seed_dag_hashes(P: C.Prog, hashes: dict) -> None:
+def seed_dag_hashes(P: SEQ.Prog, hashes: dict) -> None:
     """RETIRED (F-r17-07, rev M-0154): a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
     The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
     raise RuntimeError("seed_dag_hashes is retired (F-r17-07): legs return matching facts, never hash dicts across processes")

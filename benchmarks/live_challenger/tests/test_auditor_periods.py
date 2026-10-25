@@ -291,6 +291,21 @@ def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, si
     assert set(checked(host)) == {"p1", "k1", "v1"}
 
 
+def test_a_period_open_commits_its_table_rows_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit bounds every step's served rows m_s by the table rows T its period's open commits (`rows`, credit's
+    `committed_rows`), signed before window 0's first coin beside its draw K or alone."""
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --rows 12", "hash"))
+    assert (opened["body"]["draw_k"], opened["body"]["rows"]) == (27, 12)
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} --rows {2 ** 24}"))[
+        "body"]
+    assert body["rows"] == 2 ** 24 and "draw_k" not in body
+    assert "rows" not in ok(admin(host, signer, f"period-open --name v1 --lane vllm --cap 1 --circuit {CIRCUIT}"))["body"]
+    lines = [json.loads(e) for e in A.read_ledger(host.ledger)]
+    assert [e["body"].get("rows") for e in lines if e["kind"] == "period-open"] == [12, 2 ** 24, None]
+    assert set(checked(host)) == {"p1", "k1", "v1"}
+
+
 def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(host, signer):
     """PoUW's credit holds every window of a period to the served model's registered weights' root its open commits
     (`weights_root`, `credit.weights_root` of the B rows the auditor registered before the period's first salt, with
@@ -370,6 +385,9 @@ def test_a_period_open_with_a_field_twice_or_unknown_is_refused(host, signer, ar
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 07", "--draw-k '07'"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k {2 ** 24 + 1}", f"--draw-k '{2 ** 24 + 1}'"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k many", "--draw-k 'many'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --rows 0", "--rows '0'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --rows 012", "--rows '012'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --rows {2 ** 24 + 1}", f"--rows '{2 ** 24 + 1}'"),
     (f"--name p1 --circuit {CIRCUIT}", "required: --cap"),
     ("--name p1 --cap 2", "required: --circuit"),
     (f"--name p1 --cap 0 --circuit {CIRCUIT}", "--cap '0'"),

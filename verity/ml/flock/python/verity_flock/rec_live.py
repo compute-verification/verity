@@ -94,6 +94,7 @@ from pathlib import Path
 from verity.ml.commitments import hm96
 
 from .rec_algebra import fast100
+from .record_text import session_text
 
 KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
@@ -1039,7 +1040,7 @@ class Proxy:
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
-        (sess / "session.json").write_text(json.dumps(self.session_record(), indent=1))
+        (sess / "session.json").write_text(session_text(self.session_record()))
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
         (out / "public.json").write_text(record_bytes(self.coins.record()))

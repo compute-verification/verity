@@ -33,9 +33,10 @@ of it:
 * **StretchBound**, the arithmetic link: each stretch's credit is at most the guarantee's left-hand side at the stretch's
   own paced session (`stretchPace`) and span, term for term, the units and the clock included: the span `Σ`, its
   closing group's coin as `stop`, its start group 0's end (the first stretch) or the stretch's first coin (the rest),
-  `L` at most the line's `L` (`lMax`, which also reads group `lo − 1`), `X` and `B` the form's charge, `S` the chips'
-  whole blocks at most `chip / b`, and `fill(W)` at most the line's greedy fill at the `W` it read (the greedy over
-  groups highest rate first attains the fractional knapsack's optimum, and the line's rates are the model's or above).
+  `L` at most the line's `L` (`lMax`, which also reads group `lo − 1`), `X` and `B` the form's charge, `S` the blocks
+  the chips can hold any byte of, `chip / b` rounded up, and `fill(W)` at most the line's greedy fill at the `W` it
+  read (the greedy over groups highest rate first attains the fractional knapsack's optimum, and the line's rates are
+  the model's or above).
 
 A stretch after the first starts at its first group's coin `s_lo`, earlier than its paced session's `start = e_lo`, so
 the guarantee as stated (`[e_0, s_C)`) does not reach it: the model's argument bounds absence over `[s_0, s_C)` and
@@ -61,8 +62,8 @@ def LineChecked : Prop :=
 closing group is a group of the record, its span is `[spanStart, spanStop)` on the record's clock, nonempty, ending at
 its paced session's `stop` and starting at its `ended 0` (the first stretch) or its `released 0` (the rest), its form's
 charge is `charges`', its credit `span · (N − lost)` is at most the left-hand side of
-`Accounting.Guarantees.Remote.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' whole
-blocks `chip / b`, the form's charge and the wrong receipts' bound the line read (`Line.wrong`), and its weights bytes
+`Accounting.Guarantees.Remote.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' blocks
+`chip / b` rounded up, the form's charge and the wrong receipts' bound the line read (`Line.wrong`), and its weights bytes
 a tick are
 `max(0, w − lost) · b`. -/
 def StretchBound : Prop :=
@@ -78,7 +79,7 @@ def StretchBound : Prop :=
         spanStart gs per x.stretch = (stretchPace (fun _ : Unit => gs) per x.stretch).released () 0) ∧
       f.charge = (if i = 0 then (charges rates blockBytes).1 else (charges rates blockBytes).2) ∧
       (x.spanNs : ℝ) * ((blocks : ℝ) - x.time.lost) ≤
-        (x.spanNs : ℝ) * ((blocks : ℝ) - (chipBytes / blockBytes : ℕ))
+        (x.spanNs : ℝ) * ((blocks : ℝ) - ((chipBytes + blockBytes - 1) / blockBytes : ℕ))
           - 2 * (stretchPace (fun _ : Unit => gs) per x.stretch).longest () *
               ((f.charge.rate : ℝ) *
                   ((x.spanNs : ℝ) + 2 * (stretchPace (fun _ : Unit => gs) per x.stretch).longest ()) +
