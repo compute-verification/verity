@@ -1,120 +1,149 @@
 import Proofs.Flock.Claims.Bridge.BindsColl
 import Proofs.Flock.Claims.Sampling.Deployed
+import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 
 /-!
-# `Transports` at the deployed commitment: where it fails
+# The deployed check opens shaped rows only
 
-`Transports` asks, of every opening `q` of a registered commit string at a wire `φ g` of the unit, a claims opening at
-gate `g` of `q`'s bit that passes `Cm` under the statement's roots. Choosing `tr` by choice, it is exactly the existence
-of such a passing opening. At the deployed sampling commitment (`SamplingDeploy.commit c`, `deployOf_commit`: hm96
-leaves of `sha512/row/v2` rows under the registered frame-v3 path check), nothing the game's registration fixes makes one
-pass:
+The game's binding (`HmRowsZX`, at the hidden-output layout) opens a registered row with any value `v : BitVal W`, of
+any width, and hashes `encPortH p v`: at a `sha512/row/v2` port, `rowEncP (rowPre true) v`, a row's `P(ℓ) ‖ bytes` when
+`v` is `RowShaped` and `0^{128+W} ‖ bitCode v` otherwise. The deployed sampling commitment (`SamplingDeploy.commit c`)
+hashes only `RowV2.enc` of a row of its place's width. So the openings the deployed check passes are the shaped ones:
 
-* `not_transports`: if no opening at `g` passes, `Transports` fails at every `tr`, as soon as some registered opening
-  at `φ g` exists (an honest registrant's).
-* `deploy_opens_of_at_none`: no opening passes at a position the roots don't place (`c.at_ roots g = none`), and
-  `deploy_opens_of_root`: none passes at a placed root that is none of the verifier's own ports' roots. `Transports`
-  reads `s.roots`, which neither the registration nor `SampledKSLive` ties to the registration's leaves.
-* `deploy_opens_of_short`: none passes at a hash whose answers are never 64 bytes: the hm96 leaf refuses. `Transports`
-  is stated at every `H`, while the registration's leaves are SHA-512's (`H512`).
-
-So `Transports` at the deployed commitment needs `H = SHA-512` and a coupling of the statement's roots to the
-registration: each registered leaf `regLeaf R p` sits in the frame-v3 tree under `s.roots` at the leaf index
-`c.at_ s.roots g` gives, as a leaf of the same row bytes. The last holds only at `sha512/row/v2` ports: at a
-`sha512/row/v1` port (C-Flock's default) or a `row-seg/v1` one the registered leaf hashes `rowPrefix w ‖ bytes`, the
-deployed commitment's `rowPrefixV2 ℓ ‖ bits`, and one leaf of both is a SHA-512 collision.
+* `row_eq_rowEncP`: a deployed opening's row is `rowEncP (rowPre true)` of its value (`valOf`), which is `RowShaped`
+  of its place's width (`valOf_shaped`), at a place of `16 w` bits.
+* `row_ne_misshaped`: **a misshaped value's bytes are no deployed opening's row**: `rowEncP` is injective.
+* `opens_sha512`: at SHA-512 the deployed check passes exactly when the verifier's own port at the root `at_` names
+  opens the hm96 leaf of that row (`Flock.Registered.opensLeaf`), so `opens_shaped`: the leaf it opens is the game's
+  leaf of a shaped value.
+* `leaf_misshaped`: **a misshaped game opening's leaf is the leaf of a deployed opening only by a SHA-512 collision**
+  (`Binding.hm96Pair_spec`).
 -/
-
-namespace FlockSoundness.Discharge.ZkLink.WrongSet
-
-open Game Model Accounting Audit ZkSession
-
-variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] {mPts : ℕ}
-variable {A : Arith F K} {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type}
-  {planZ : Finset (Fin n) → Reg → List (TabZK F mPts)}
-  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
-  {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  {vb : ValueBindingZ A P planZ tab decode Hc}
-
-/-- **`Transports` fails where no opening passes**: a registered opening at a wire of the unit, and no claims opening at
-its gate that passes `Cm` under the roots, refute `Transports` at every `tr`. -/
-theorem not_transports {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
-    {s : Claims.Sampling.Stmt} {R : Reg} {u : Fin n} {φ : ℕ → Fin C.N}
-    (tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool) {g : ℕ} (hg : φ g ∈ P.io u) {q : vb.Opening}
-    (hq : vb.com q = vb.cs R (vb.pos (φ g)))
-    (hno : ∀ o : Claims.Sampling.Opening Bool, o.pos = g → Cm.Opens H s.roots o = false) :
-    ¬ Transports A P planZ tab vb H Cm s R u φ tr := by
-  intro h
-  obtain ⟨hp, -, hO⟩ := h g q hg hq
-  rw [hno _ hp] at hO
-  exact Bool.false_ne_true hO
-
-end FlockSoundness.Discharge.ZkLink.WrongSet
 
 namespace SamplingDeploy
 
 open Claims Claims.Sampling
+open FlockSoundness.Refine FlockSoundness.Binding
+open FlockSoundness.Discharge.Layout (BitVal RowShaped rowEncP rowBytes widthOf padBits)
 open Properties.NetworkCertifier.Bytes (bs)
 
-/-- **No opening passes at a position the roots don't place.** -/
-theorem deploy_opens_of_at_none (c : Code) (H : Msg → Msg) (roots : List Msg) (o : Opening Bool)
-    (h : c.at_ roots o.pos = none) : (commit c).Opens H roots o = false := by
-  unfold Commitment.Opens commit pathCommit
-  simp only [h]
-  rfl
+variable {W : ℕ} (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) (o : Opening Bool)
 
-/-- **No opening passes at a root that is none of the verifier's own ports' roots.** -/
-theorem deploy_opens_of_root (c : Code) (H : Msg → Msg) (roots : List Msg) (o : Opening Bool) {ri : Msg × ℕ}
-    (h : c.at_ roots o.pos = some ri) (hr : c.own.find? (fun p => decide (bs p.root = ri.1)) = none) :
-    (commit c).Opens H roots o = false := by
-  unfold Commitment.Opens commit pathCommit
-  simp only [h, ocBind_eval]
-  split
-  · simp only [regPath, hr]
-    rfl
-  · rfl
+/-- A deployed opening's row bits, by index: the opened value at its place, the data's bits elsewhere. -/
+def rowFn : Fin (place o.pos).1 → Bool := fun i => if i = (place o.pos).2 then o.val else bits o.data i
 
-/-- **No opening passes at a hash whose answers are never 64 bytes**: the hm96 leaf refuses. -/
-theorem deploy_opens_of_short (c : Code) (H : Msg → Msg) (hH : ∀ m, (H m).length ≠ 64) (roots : List Msg)
-    (o : Opening Bool) : (commit c).Opens H roots o = false := by
+theorem rowBits_eq : rowBits place bits o = List.ofFn (rowFn place bits o) := rfl
+
+/-- **The game value a deployed opening's row is**: its place's width and its bits. -/
+def valOf (W : ℕ) : BitVal W := (widthOf W (place o.pos).1, padBits (rowFn place bits o))
+
+variable {place bits o}
+
+theorem valOf_width (hW : (place o.pos).1 ≤ W) : (valOf place bits o W).1.val = (place o.pos).1 := by
+  simp only [valOf, widthOf]
+  omega
+
+/-- **A deployed opening's value is shaped**, of its place's width, at a place of `16 w` bits. -/
+theorem valOf_shaped (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) :
+    RowShaped (valOf place bits o W) ∧ (valOf place bits o W).1.val = (place o.pos).1 := by
+  have hw := valOf_width (bits := bits) hW
+  refine ⟨⟨by rw [hw]; exact h16, fun i hi => ?_⟩, hw⟩
+  rw [hw] at hi
+  simp only [valOf, padBits, show ¬ i.val < (place o.pos).1 by omega, dite_false]
+
+theorem bitsVal_eq_sum : ∀ m : List Bool,
+    Flock.HmRow.bitsVal m = ∑ t : Fin m.length, if m[t.val] then 2 ^ t.val else 0
+  | [] => by simp [Flock.HmRow.bitsVal]
+  | b :: m => by
+    rw [Fin.sum_univ_succ]
+    simp only [Flock.HmRow.bitsVal, bitsVal_eq_sum m, List.length_cons, Fin.val_zero, List.getElem_cons_zero,
+      pow_zero, Fin.val_succ, List.getElem_cons_succ, Finset.mul_sum]
+    congr 1
+    refine Finset.sum_congr rfl fun t _ => ?_
+    split_ifs <;> ring
+
+/-- `sha512/row/v2`'s bytes of a row of `16 k` bits are `rowBytes` of its value: bit `8 j + t` is bit `t` of byte `j`
+in both. -/
+theorem packBits_eq_rowBytes {ℓ : ℕ} (f : Fin ℓ → Bool) (h16 : ℓ % 16 = 0) (hW : ℓ ≤ W) :
+    Flock.HmRow.packBits (List.ofFn f) = rowBytes ((widthOf W ℓ, padBits f) : BitVal W) := by
+  have hw : (widthOf W ℓ).val = ℓ := by simp only [widthOf]; omega
+  apply List.ext_getElem
+  · simp only [Flock.HmRow.packBits, List.length_map, List.length_range, List.length_ofFn, rowBytes, hw]
+    omega
+  · intro j h1 h2
+    have hj : 8 * j + 8 ≤ ℓ := by
+      simp only [rowBytes, List.length_ofFn, hw] at h2
+      omega
+    simp only [Flock.HmRow.packBits, List.getElem_map, List.getElem_range, rowBytes, List.getElem_ofFn, byteOf]
+    rw [bitsVal_eq_sum]
+    have hl : ((List.drop (8 * j) (List.ofFn f)).take 8).length = 8 := by
+      simp only [List.length_take, List.length_drop, List.length_ofFn]
+      omega
+    show UInt8.ofNat _ = UInt8.ofNat _
+    congr 1
+    rw [← Fin.sum_congr' _ hl]
+    refine Finset.sum_congr rfl fun t _ => ?_
+    have ht : 8 * j + t.val < ℓ := by have := t.isLt; simp only [Fin.coe_cast] at *; omega
+    simp only [Fin.coe_cast, List.getElem_take, List.getElem_drop, List.getElem_ofFn,
+      FlockSoundness.Discharge.Layout.BitVal.get, show 8 * j + t.val < W by omega, dite_true, padBits, ht]
+
+/-- **A deployed opening's row is `rowEncP` of its value**, at a place of `16 w` bits. -/
+theorem row_eq_rowEncP (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) :
+    row place bits o = rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf place bits o W) := by
+  obtain ⟨hs, hw⟩ := valOf_shaped (bits := bits) h16 hW
+  unfold rowEncP
+  rw [if_pos hs, hw]
+  unfold row FlockLevel3.RowV2.enc
+  rw [rowBits_eq, List.length_ofFn]
+  congr 1
+  · unfold FlockSoundness.Discharge.Hidden.rowPre
+    rw [if_pos rfl, show 16 * ((place o.pos).1 / 16) = (place o.pos).1 by omega]
+  · exact packBits_eq_rowBytes _ h16 hW
+
+/-- **A misshaped value's bytes are no deployed opening's row**: a value that isn't `RowShaped` of the place's width. -/
+theorem row_ne_misshaped (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) {v : BitVal W}
+    (hv : ¬ (RowShaped v ∧ v.1.val = (place o.pos).1)) :
+    row place bits o ≠ rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v := by
+  rw [row_eq_rowEncP h16 hW]
+  intro h
+  have e := FlockSoundness.Discharge.Layout.rowEncP_inj (fun w => FlockSoundness.Discharge.Hidden.size_rowPre true w) h
+  rw [← e] at hv
+  exact hv (valOf_shaped h16 hW)
+
+/-- **At SHA-512 the deployed check is the verifier's**: it passes exactly when the verifier's own port whose root
+`at_` names opens the hm96 leaf of the opening's row at `at_`'s index through `π`. -/
+theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
+    (commit c).Opens sha512Msg roots o = true ↔
+      ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+        Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row c.place c.bits o) (c.salt o)))))
+          ri.2 (bytes (c.π o)) = true := by
   unfold Commitment.Opens commit pathCommit
   dsimp only
-  split
-  · rw [ocBind_eval, hm96Leaf_fst]
-    split_ifs with h
-    · exact absurd h.1 (hH _)
-    · rfl
-  · rfl
+  cases hat : c.at_ roots o.pos with
+  | none => simp [OC.eval]
+  | some ri =>
+    simp only [ocBind_eval, hm96Leaf_sha512]
+    rw [regPath_sha512]
+    simp
+
+/-- **The deployed check opens shaped values' leaves**: the leaf it opens is the game's hm96 leaf of the opening's value,
+`RowShaped` of its place's width. -/
+theorem opens_shaped (c : Code) (roots : List Msg) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0)
+    (hW : (c.place o.pos).1 ≤ W) :
+    (commit c).Opens sha512Msg roots o = true ↔
+      ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+        Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input
+          (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf c.place c.bits o W)) (c.salt o)))))
+          ri.2 (bytes (c.π o)) = true := by
+  rw [opens_sha512, row_eq_rowEncP h16 hW]
+
+/-- **The deployed check refuses misshaped openings**: a game opening of a value that isn't `RowShaped` of the place's
+width has the hm96 leaf of a deployed opening's row only by a SHA-512 collision. -/
+theorem leaf_misshaped (c : Code) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0) (hW : (c.place o.pos).1 ≤ W)
+    {v : BitVal W} (hv : ¬ (RowShaped v ∧ v.1.val = (c.place o.pos).1)) (y : List UInt8)
+    (h : H512 (hm96Input (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y) =
+      H512 (hm96Input (row c.place c.bits o) (c.salt o))) :
+    Collides (hm96Pair (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y (row c.place c.bits o) (c.salt o)) :=
+  hm96Pair_spec _ _ _ _ (Ne.symm (row_ne_misshaped h16 hW hv)) h
 
 end SamplingDeploy
-
-namespace FlockSoundness.Discharge.ZkLink.WrongSet
-
-open Game Model Accounting Audit ZkSession
-
-variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] {mPts : ℕ}
-variable {A : Arith F K} {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type}
-  {planZ : Finset (Fin n) → Reg → List (TabZK F mPts)}
-  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
-  {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  {vb : ValueBindingZ A P planZ tab decode Hc}
-
-/-- **`Transports` is false at the deployed commitment under roots that don't place the gate**, at every hash and
-`tr`, once the unit's wire `φ g` has a registered opening. -/
-theorem not_transports_deploy_of_at_none (c : SamplingDeploy.Code) (H : Claims.Msg → Claims.Msg)
-    {s : Claims.Sampling.Stmt} {R : Reg} {u : Fin n} {φ : ℕ → Fin C.N}
-    (tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool) {g : ℕ} (hg : φ g ∈ P.io u) {q : vb.Opening}
-    (hq : vb.com q = vb.cs R (vb.pos (φ g))) (h : c.at_ s.roots g = none) :
-    ¬ Transports A P planZ tab vb H (SamplingDeploy.commit c) s R u φ tr :=
-  not_transports tr hg hq fun o ho => SamplingDeploy.deploy_opens_of_at_none c H s.roots o (ho ▸ h)
-
-/-- **`Transports` is false at the deployed commitment at a hash whose answers are never 64 bytes**, at every
-statement and `tr`, once the unit's wire `φ g` has a registered opening. -/
-theorem not_transports_deploy_of_short (c : SamplingDeploy.Code) {H : Claims.Msg → Claims.Msg}
-    (hH : ∀ m, (H m).length ≠ 64) {s : Claims.Sampling.Stmt} {R : Reg} {u : Fin n} {φ : ℕ → Fin C.N}
-    (tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool) {g : ℕ} (hg : φ g ∈ P.io u) {q : vb.Opening}
-    (hq : vb.com q = vb.cs R (vb.pos (φ g))) :
-    ¬ Transports A P planZ tab vb H (SamplingDeploy.commit c) s R u φ tr :=
-  not_transports tr hg hq fun o _ => SamplingDeploy.deploy_opens_of_short c H hH s.roots o
-
-end FlockSoundness.Discharge.ZkLink.WrongSet
