@@ -12,6 +12,7 @@ import tomllib
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -1066,19 +1067,18 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
     assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
 
 
-def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
+def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_llm_accepts():
     """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
-    (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
-    so the harness gives each run its own window: the runner, S from the run's step bound, and fresh in-process coins,
-    which the adapter's refusals accept; a spec can't supply them, and T is the engine's step budget."""
+    (`stock-int8`). The harness hands `verity_vllm.LLM` only H1's public parameters, T the engine's step budget and S
+    from the run's step bound, and the LLM fills the model runner and in-process coins after the build; a spec can't
+    supply them, nor S."""
 
-    from verity.core.protocols.pouw import verifier
-    from verity_vllm.protocol_options import pouw
+    from verity_vllm import protocol_options as PO
+    from verity_vllm.pipeline.llm import protocol_context, resolve_options
     from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options.interface import Context
 
-    from verity_bench.vllm.arms import H1, h1_window, protocols_config, window_steps
-    from verity_bench.vllm.runner import engine_args
+    from verity_bench.vllm.arms import H1, h1_config, protocols_config, window_steps
+    from verity_bench.vllm.runner import H1_OPENING_STEPS, engine_args
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1096,19 +1096,63 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ad
 
     b8, b32 = expand_sweep("quick")
     assert (window_steps(b8, 64), window_steps(b32, 64)) == (130, 294)
-    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
-    runner = SimpleNamespace(execute_model=lambda *a, **k: None, decode_query_len=1)
     config = protocols_config(arm, {})
-    first, second = (h1_window(config, runner, 294, epoch) for epoch in (0, 1))
-    assert first["pouw"]["runner"] is runner and first["pouw"]["steps"] == 294
-    assert first["pouw"]["coins"] is not config["pouw"]["coins"] and first["pouw"]["coins"] is not second["pouw"]["coins"]
-    assert first["pouw"]["rounds"].challenger.commitment.family("pouw/round") == 294
-    ctx = Context(stage="serve", enabled=arm.protocols, settings=first)
-    assert pouw.refusals(PH.SCHEME, ctx) == ()
-    assert any("'runner'" in r for r in pouw.refusals(PH.SCHEME, Context(stage="serve", enabled=arm.protocols,
-                                                                         settings=config)))
-    with pytest.raises(ValueError, match="harness supplies"):
-        h1_window({"pouw": {"rows": 64, "steps": 10}}, runner, 294, 0)
+    assert config == {"pouw": {"rows": 64, "admission": "per-round"}}
+    assert h1_config(config, H1_OPENING_STEPS) == {"pouw": {"rows": 64, "admission": "per-round", "steps": 1}}
+    for steps in (H1_OPENING_STEPS, 294):
+        ctx = protocol_context(resolve_options({"protocols": H1, "protocols_config": h1_config(config, steps)}))
+        assert ctx.settings_of("pouw")["steps"] == steps and ctx.filled == {"pouw": ("runner", "coins", "rounds")}
+    with pytest.raises(PO.Refused, match=r"'rows' \(T"):
+        protocol_context(resolve_options({"protocols": H1, "protocols_config": config}))
+    for named in ({"steps": 10}, {"coins": object()}, {"runner": object()}):
+        with pytest.raises(ValueError, match="each window's"):
+            h1_config({"pouw": {"rows": 64, **named}}, 294)
+
+
+def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_serving(monkeypatch):
+    """Per run, the H1 engine calls `verity_vllm.LLM.reinstall` with the run's S before serving, reads that window
+    (`pouw.h1_run`) and closes it with `LLM.close` after serving, even when serving fails; each window's summary is the
+    arm's gate, and a timed rep's is its `extras.h1_window`."""
+
+    from verity_vllm.protocol_options import pouw
+
+    from verity_bench.vllm import runner
+    from verity_bench.vllm.arms import H1
+
+    calls: list[tuple[Any, ...]] = []
+    window = SimpleNamespace(verdicts={0: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64, calls=[0],
+                             requests=[0], refused_requests=[], coin_source="in-process",
+                             details={"steps_served": 106, "static": True, "u": "1/2"}, request_gaps=lambda: [])
+
+    class LLM:
+        def reinstall(self, config: dict[str, Any]) -> None:
+            calls.append(("reinstall", config))
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    def serve(point: SweepPoint, phase: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        calls.append(("serve", phase))
+        if phase == "warmup":
+            raise RuntimeError("serving failed")
+        return {}, {"extras": {}}
+
+    monkeypatch.setattr(pouw, "h1_run", lambda entry: calls.append(("h1_run", entry)) or window)
+    engine = object.__new__(runner._VllmEngine)
+    engine.llm, engine.h1 = LLM(), {"config": {"pouw": {"rows": 64, "admission": "per-round"}}, "rows": 64,
+                                    "windows": []}
+    monkeypatch.setattr(engine, "_serve", serve)
+    b8 = expand_sweep("quick")[0]
+    engine._run(b8, "gate")
+    with pytest.raises(RuntimeError, match="serving failed"):
+        engine._run(b8, "warmup")
+    out = engine._run(b8, "measure")[1]
+    opened = ("reinstall", {"pouw": {"rows": 64, "admission": "per-round", "steps": 130}})
+    assert calls == [opened, ("h1_run", H1), ("serve", "gate"), ("close",)] + [
+        opened, ("h1_run", H1), ("serve", "warmup"), ("close",), opened, ("h1_run", H1), ("serve", "measure"), ("close",)]
+    assert [w["phase"] for w in engine.h1["windows"]] == ["gate", "warmup", "measure"]
+    assert out["extras"]["h1_window"] is engine.h1["windows"][-1] and out["extras"]["h1_window"]["steps_served"] == 106
+    assert engine.custom_gate()["passed"]
 
 
 def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
@@ -1632,7 +1676,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
         assert f"`{kind}`" in readme, kind
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
-    assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))
+    assert public == set(re.findall(r"^verity-bench ([a-z-]+) ", readme, re.M))
 
 
 def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):

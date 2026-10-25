@@ -737,6 +737,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
         reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:
         if isinstance(x, dict):
@@ -879,6 +880,38 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
     with pytest.raises(ValueError, match="not one of each for each of"):
         al.auditor_seen(log(0, False)[:-4], seen)
+
+
+def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
+    """`verifier.recorded_inputs`: the line's groups' passes, windows and registered blocks are the Lean verifier's
+    record of the session (`lean_record`, which a run from before sessions kept it reads back from its `record` and
+    `windows_seen`, field for field), and its line is the line of the same groups and windows given. The pooled
+    bound's inputs its record's profile gives (`recorded_windows`) are the ones the line reads off the Lean's record
+    and the session. A record of another registration, or windows seen that aren't the record's, is refused."""
+    line = verifier.line
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    assert r["accepted"] and r["verdict"] == "lean" and r["lean_record"]["registration"] == got["reg"]["digest"]
+    old = {k: v for k, v in r.items() if k != "lean_record"}
+    assert verifier.lean_record(old) == r["lean_record"]
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    mem = r["ledger"]["memory"]
+    windows = [(sum(w["lengths"]), w["drawn"]) for w in r["lean_record"]["windows"]]
+    given = line.inputs_json(
+        verifier.paced_groups(mem, r["windows_seen"], block_bytes=mem["block_bytes"]), per=r["pace"]["groups"],
+        blocks=got["reg"]["blocks"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+        node_bytes=mem["hbm_bytes"], delta=r["delta"], rates=rates, windows=windows)
+    want = line.run_json(given)
+    assert "refused" not in want
+    for s in (r, old):
+        assert verifier.recorded_windows(s) == (windows, s["delta"])
+        assert line.record_run_json(verifier.recorded_inputs(s, got["reg"], host_bytes=0, rates=rates)) == want
+        assert verifier.recorded_line(s, got["reg"], host_bytes=0, rates=rates).to_json() == want
+    with pytest.raises(ValueError, match="of registration"):
+        verifier.recorded_inputs(r, {**got["reg"], "digest": "00" * 64}, host_bytes=0, rates=rates)
+    with pytest.raises(ValueError, match="not its record's"):
+        verifier.lean_record({**old, "windows_seen": old["windows_seen"][:-1]})
 
 
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():

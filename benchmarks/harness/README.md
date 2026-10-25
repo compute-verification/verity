@@ -14,6 +14,7 @@ verity-bench run SPEC        # one recorded `research run --queue` per point wit
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
+verity-bench served-table    # every protocol's served overhead from the store's newest passing results (--json)
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 ~~~
 
@@ -38,9 +39,9 @@ and so of every point's identity, and the arm's cubin digest is its `kernel_dige
 
 The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
 exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
-(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. Its settings
-take the built engine's model runner, which `verity_vllm.LLM` refuses to go without before it builds, so the harness
-installs it on the built engine itself (`protocol_options.install`), one window a run: its `steps` (S) the run's step
+(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. The harness
+builds it through `verity_vllm.LLM`'s `protocols` with only H1's public parameters, which fills the engine's model runner
+and in-process coins after the build, and gives each run its own window with `reinstall`: its `steps` (S) the run's step
 bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
 coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
 before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
@@ -177,6 +178,19 @@ the attempts this store lacks among those started since a day before the commit'
 can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
 other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
 catalog alone.
+
+## The served table
+
+`verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B on the
+RTX PRO 6000 from the store, never from numbers in code: the protocols, their specs and arms are `PROTOCOLS`, and the
+conversion factors (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `llama31-8b-fp8-1gpu-compiled-full`)
+are their own section. For every point of every spec it takes the newest passing `vllm_bench_point` attempt whose
+`spec` and `point` params name it (the resume lookup's rule, without its one-commit identity), so a newer passing run
+supersedes an older one. It first pulls the remote's attempts started since the oldest spec was added, the same pull
+as `check`'s. A result labelled `superseded_by`, invalid, or without the row's arms is passed over and listed. Ratios
+are paired by rep from the result's own reps, each metric over `stock-fp8@compiled` and, where the spec runs an eager
+stock, over that. The caveat column is the newest `label` and `note` on the result's artifact and its run, read through
+from the remote.
 
 ## Out of scope here
 

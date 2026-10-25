@@ -8,7 +8,8 @@ still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
-                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR] [--no-negatives]
+                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR ...
+                                         [--prove-path-registered FILE]] [--no-negatives]
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
@@ -22,19 +23,22 @@ then runs this. The README says what the report establishes and what it doesn't.
   late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
   reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
   prover's node, though not on the auditor host. NEG's drop, when the rehearsal ran it, is a negative (refused by N2's
-  counts, and on the advice profile by the rehearsal's own check), and its token a row pending the check that alone
-  refuses it (``PENDING``), the I/O tie: where the tie ran (the advice profile, `chain.tie`), token is a negative it
-  refuses at the link-windows its changed ids fall in. An honest run is required: the tampered head is its
-  window 0's egress head one count off (`n2_zk.one_count`).
+  counts, and on the advice profile by the rehearsal's own check), and its token is refused only by the I/O tie
+  (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative it
+  must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending it.
+  An honest run is required: the tampered head is its window 0's egress head one count off (`n2_zk.one_count`).
 * **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
-  decided by N2's verifier of record on the host, with the Lean audit (`n2_zk.link_windows`), then `network_verdict`.
-  Honest, tampered and extra are `n2_zk.prove`'s own rounds, so their verdicts are on the roots it proves under; any other
-  run's (late) are taken here the same way.
+  decided in the clear, with the Lean audit (`n2_zk.link_windows` with a clock: `LinkWindows.unproved_outcome`, as for
+  any run that proves nothing), then `network_verdict`. A summary `n2_zk.prove` wrote before N2's registered unit was
+  proved (adopted) carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's are
+  taken here.
 * **Proofs** (planned profile). `n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the
   extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, drawn by the
   verifier's Lean, proved ``--zk`` behind the firewall and held by Lean; the verifier opens each unit's ``pub`` row to its
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
-  certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. On the served profile
+  certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. Not yet on `n2_zk` as it
+  now proves: one member a round, each link-window decided by its proof of N2's registered unit; `prove` refuses and
+  `adopt` refuses such a summary, each saying so (``--no-prove`` takes N2's verdicts only). On the served profile
   nothing is proved: its count check is `NetworkServedCounts_v1`, which `n2_zk` doesn't prove (the claim says so).
 * **Cost.** A member proves all n of its link-windows in one session, one statement and one pair of proofs, so a
   link-window has no time or proof of its own. Per session: the prover's time (``prove_total_s``), Lean's ``verify --zk``
@@ -47,12 +51,14 @@ then runs this. The README says what the report establishes and what it doesn't.
   salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
 * **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, or ``--endpoint-run``, the
   endpoint's records, whose own advice for the honest run's Commit windows `verity-vllm advice` writes
-  (`endpoint_advice`, `chain.served_advice`), ``--prove-path``, NEG's registry on the runs, and on the advice profile
+  (`endpoint_advice`, `chain.served_advice`), ``--prove-path`` (beside the endpoint's records, ``prove_path.py audit
+  --serve-run``'s audits of its Commit windows, `chain.served_commit`), NEG's registry on the runs, and on the advice profile
   the I/O tie on each run (`chain.tie`, its sampled ids the endpoint's records' or ``--ids``'); each that ran must pass
-  for the report to be OK, and ``stubbed`` lists what is still a stand-in.
+  for the report to be OK, the tie on the advice profile whether it ran or not (`chain.tie_gate`), and ``stubbed``
+  lists what is still a stand-in.
 
-Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused and every chain stage that
-ran passed (`report["ok"]`).
+Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused, every chain stage that
+ran passed and, on the advice profile, the I/O tie accepted the honest run (`report["ok"]`).
 """
 from __future__ import annotations
 
@@ -87,8 +93,10 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 FORMAT = "verity-network-e2e/report/v3"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
-# NEG's live tampers that only a check that hasn't landed refuses: a negative where that check ran (`chain.tie`)
+# NEG's live tampers that only a check that hasn't landed refuses: a negative of the I/O tie on the advice profile, where
+# the tie is required (`chain.tie_gate`), and pending it on the others, where it doesn't run
 PENDING = {"token": "IO-TIE"}
+TIE_STAGE = "the I/O tie (IO-TIE's reference in the clear, on stand-ins)"
 #: each negative's own violation in the rehearsal's own check (`_check`'s codes), the verdict on the advice profile,
 #: where N2 gives none: late's held session faults its window (the audit's status, as NEG names it), extra's response
 #: runs past its max_tokens, and drop's cut response stops short of it without EOS (the certified I/O's finish rule)
@@ -102,7 +110,7 @@ GATE_HOST = "vy-challenger-1"
 CLAIM = {
     "statement": (
         "Counts only. A report marked OK establishes, for the rehearsal's one link: on every link-window of the honest "
-        "run N2's verdict of record accepted (LinkWindows.verify, through the proof service's stream with Selection "
+        "run N2's verdict of record accepted (LinkWindows.unproved_outcome, in the clear, on the stream with Selection "
         "All), and the link's network verdict, the AND over its link-windows with no epsilon and no share credit "
         "(LinkWindows.network_verdict), accepted, so each window's per-bucket frame counts are the planned occupancy "
         "profile's on egress (on a served link, the ones its ingress head's counts derive under the declared sync), "
@@ -129,15 +137,16 @@ CLAIM = {
         "response length, are the run's (the report's 'tokens').",
     ],
     "zero_knowledge_gaps": [
-        "N2's unit isn't proved as the verifier of record (README, 'Not yet zero-knowledge'): the verdict of record is "
-        "LinkWindows.verify on the host, which runs head_check.reference over the opening and so reads the heads and "
-        "the certifier's salts. The proofs here run beside it, on the roots it registered; they don't replace it.",
-        "The proofs here are of n2_zk's row adapter around the unchanged NetworkHeadCheck_v2, not of N2's registered "
-        "unit, so LinkWindows.proved, which refuses a proof of any Program but the unit's (NET-43), doesn't take them. "
-        "Lean holds each proof to the program and partition the driver wrote.",
-        "The certificate's link to its head (README, NET-42): until the unit is proved, the verifier of record checks "
-        "each signed digest against its head and the certifier's salt on the host, over the opening "
-        "(CertifiedRecord.verify).",
+        "N2's verdicts here are decided in the clear (README, 'A run that proves nothing'): "
+        "LinkWindows.unproved_outcome runs LinkWindows.clear over the opening, and so reads the heads and the "
+        "certifier's salts. n2_zk decides each link-window on a --zk proof of N2's registered unit instead; this "
+        "report doesn't take those verdicts yet.",
+        "The proofs an adopted summary carries are of n2_zk's earlier row adapter around the unchanged "
+        "NetworkHeadCheck_v2, not of N2's registered unit, so LinkWindows.proved, which refuses a proof of any Program "
+        "but the unit's (NET-43), doesn't take them. Lean holds each proof to the program and partition the driver "
+        "wrote.",
+        "The certificate's link to its head (README, NET-42): decided in the clear, each signed digest is checked "
+        "against its head and the certifier's salt on the host, over the opening (CertifiedRecord.verify).",
     ],
     "source": README,
 }
@@ -152,15 +161,15 @@ CLAIM_ADVICE = {
         "audit of both records and the salt audit accepted (the rehearsal's own check); and late and extra, and drop "
         "where it ran, each refused by that check for its own violation (late: its window's coverage fault; extra: a "
         "response longer than its max_tokens; drop: one short of it without EOS). Where an advice was given, it is these "
-        "runs' (every advice request a certified one) and rebuilt from their certified I/O. Where the I/O tie ran "
-        "(IO-TIE's reference in the clear, on NEG's stand-ins), it accepted the honest run, its certified ids the "
-        "endpoint's sampled ids, and refused token, whose certified ids aren't, by its content part at exactly the "
-        "link-windows token changed. The advice's sections say what was checked of the advice, and the prove path's what "
-        "it proved."),
+        "runs' (every advice request a certified one) and rebuilt from their certified I/O. The I/O tie (IO-TIE's "
+        "reference in the clear, on NEG's stand-ins), required here, accepted the honest run, its certified ids the "
+        "endpoint's sampled ids for every one of its certified requests, and refused token, whose certified ids aren't, "
+        "by its content part at exactly the link-windows token changed. The advice's sections say what was checked of "
+        "the advice, and the prove path's what it proved."),
     "not_covered": [
         "N2's counts: no link-window's head is held to a profile or to the advice (N2-ADVICE), and nothing is proved by "
         "n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
-        "The tie (IO-TIE): no proof holds the certified tokens to the committed values. Where the tie ran, it is IO-TIE's "
+        "The tie (IO-TIE): no proof holds the certified tokens to the committed values. The tie is IO-TIE's "
         "reference in the clear on stand-ins: the certified frames under fake salts in place of the warden's cells, and "
         "the endpoint's sampled ids from its records in place of the Commit's port. The advice's rebuild from the "
         "certified I/O here runs in the clear, on the rehearsal's published witness.",
@@ -375,7 +384,7 @@ def parts(rd: SimpleNamespace, x: SimpleNamespace) -> dict[str, list[str] | None
     """Each end's head-check parts that fail on link-window x, by the reference in the clear
     (`head_check.reference_parts`), and on a served link the served counts (`LinkWindows.served_check`)."""
     out = {end: None if c is None else [k for k, ok in HC.reference_parts(c).items() if not ok]
-           for end, c in zip(n2_zk.ENDS, x.checks)}
+           for end, c in zip(n2_zk.ENDS, x.insts)}
     if rd.lw.served is not None and not rd.lw.served_check(x.opening, [ClockSync(d, Fraction(r))
                                                                          for d, r in rd.plan["syncs"]]):
         out["egress"] = (out["egress"] or []) + ["served-counts"]
@@ -383,48 +392,20 @@ def parts(rd: SimpleNamespace, x: SimpleNamespace) -> dict[str, list[str] | None
 
 
 def host(rd: SimpleNamespace) -> dict:
-    """`n2_zk.link_windows`'s result as `n2_zk.prove` records N2's verdicts (its summary's ``host``), with each
-    link-window's failed parts (`parts`)."""
+    """`n2_zk.link_windows`'s result on its stream as an adopted `n2_zk.prove` summary records N2's verdicts (its
+    ``host``), with each link-window's failed parts (`parts`)."""
     return {"windows": [{"window": x.window, "registration": x.digest, **(x.host or {}), "parts": parts(rd, x)}
                         for x in rd.windows], "network": rd.network, "issuer_refused": rd.issuer_refused}
 
 
-def _ports(n: int) -> int:
-    """A base port with ``n`` free loopback ports after it (`n2_zk.prove` takes member j's session at base + j)."""
-    for _ in range(64):
-        with socket.socket() as s:
-            s.bind(("127.0.0.1", 0))
-            base = s.getsockname()[1]
-        if base + n > 65535:
-            continue
-        try:
-            for p in range(base, base + n):
-                with socket.socket() as s:
-                    s.bind(("127.0.0.1", p))
-        except OSError:
-            continue
-        return base
-    raise SystemExit(f"no {n} free loopback ports in a row")
+#: why `prove` and `adopt` take no proof of `n2_zk` as it now proves
+NOT_YET = ("n2_zk proves N2's registered unit, one member a round, each link-window decided by its proof; this report "
+           "reads the per-end members n2_zk proved before, and doesn't read these yet (--no-prove: N2's verdicts only)")
 
 
 def prove(runs: dict[str, dict], args, work: Path) -> dict:
-    """`n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the extra run; its summary."""
-    honest, extra = runs[HONEST]["dir"], runs.get("extra", {}).get("dir")
-    if extra is not None and (_read(extra / "plan.json") or {}).get("windows") != (_read(honest / "plan.json") or {}).get(
-            "windows"):
-        log("extra: its plan's windows aren't the honest run's, so n2_zk proves it in no member; N2's verdict only")
-        extra = None
-    out = work / "n2zk"
-    a = SimpleNamespace(run=honest, extra=extra, bin=args.bin, lean=args.lean, out=str(out), port=_ports(8),
-                        delta=args.delta, points=[], dry=False)
-    try:
-        rc = n2_zk.prove(a)
-    except SystemExit as e:
-        rc, why = 1, str(e)
-    else:
-        why = None
-    summary = _read(out / "summary.json") or {}
-    return {"rc": rc, "why": why, "dir": out, "summary": summary, "extra_proved": extra is not None}
+    """`n2_zk.prove`'s result as this report reads it: refused before anything is proved (`NOT_YET`)."""
+    return {"rc": 1, "why": NOT_YET, "dir": work / "n2zk", "summary": {}, "extra_proved": False}
 
 
 def adopt(d: Path, runs: dict[str, dict]) -> dict:
@@ -436,6 +417,8 @@ def adopt(d: Path, runs: dict[str, dict]) -> dict:
     members = summary.get("members") or {}
     if not members:
         raise SystemExit(f"{d}: no n2_zk members (n2_zk.prove's --out, or n2_zk.sh's $OUT/n2zk)")
+    if any(k in n2_zk.ROUNDS for k in members):
+        raise SystemExit(f"{d}: {NOT_YET}")
     for k, m in members.items():
         if not m.get("units"):
             continue
@@ -505,14 +488,15 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     the negatives' refusals, the chain's stages (``stages``: `chain`'s advice, bits, prove path and NEG's negatives, each
     when it ran) and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``. On the advice profile
     N2 gives no verdict (``n2`` has no windows), so the rehearsal's own check is the verdict, and late and extra its
-    negatives. Drop, where it ran, is a negative on every profile."""
+    negatives; the I/O tie (``stages``' ``tie``) is required there (`chain.tie_gate`), and token is its negative, refused
+    by the tie's own row whatever the tie gave the honest run. Drop, where it ran, is a negative on every profile."""
     advised = meta.get("profile") == chain.ADVICE
     s = stages or {}
     t = s.get("tie") or {}
-    ties = t["runs"] if t.get("ran") else {}
+    ties = t.get("runs") or {}
     expected = (NEGATIVES[:2] if advised else NEGATIVES) + tuple(s for s in ("drop",) if s in n2) \
-        + tuple(s for s in PENDING if s in n2 and s in ties)
-    pending = {s: w for s, w in PENDING.items() if s in n2 and s not in ties}
+        + tuple(s for s in PENDING if s in n2 and advised)
+    pending = {s: w for s, w in PENDING.items() if s in n2 and not advised}
     summary = proofs.get("summary") or {}
     members = summary.get("members") or {}
     names = [HONEST] + [s for s in NEGATIVES if s in n2] + sorted(set(n2) - {HONEST, *NEGATIVES})
@@ -544,7 +528,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
                         and all(r["n2"] == "accept" for r in honest_rows))
     check_ok = (honest["check"] or {}).get("verdict") == "accepted" if advised or honest["check"] is not None else True
     b, p, ng = s.get("bits"), s.get("prove_path"), s.get("negatives")
-    tie_ok = not ties or (ties.get(HONEST) or {}).get("ok") is True
+    # on the advice profile the I/O tie is the only check of the served content, so it is required there
+    tie_failed = chain.tie_gate(s.get("tie")) if advised else []
     # the derived bits and the residual's own check (`public_fields`) are under the serving config the job was given,
     # not one the endpoint registered, so they stay out of the OK; the advice's binding and its rebuild from the
     # certified I/O don't rest on that config's being the endpoint's
@@ -556,7 +541,7 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
         + ([] if b is None or b.get("rebuilt") is True else ["the advice wasn't rebuilt from the certified I/O"]) \
         + ([] if p is None or not p.get("bound") or p["ok"] else ["the prove path failed"]) \
         + ([] if ng is None or not ng.get("ran") or ng["ok"] else ["NEG's registry failed"]) \
-        + ([] if tie_ok else ["the I/O tie didn't accept the honest run"]) \
+        + tie_failed \
         + [f"no {s} run" for s in expected if s not in negatives] \
         + [f"{s} not refused" for s, n in negatives.items() if not n["refused"]]
     ok = not why_not
@@ -565,15 +550,16 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
            "the rehearsal's own check": honest["check"] is not None,
            "the advice, these runs' and rebuilt from their certified I/O": b is not None and advice_ok,
            "the prove path, of these runs": bool(p and p.get("bound")),
-           "NEG's registry": bool(ng and ng.get("ran")),
-           **({"the I/O tie (IO-TIE's reference in the clear, on stand-ins)": bool(ties)} if "tie" in s else {})}
+           "NEG's registry": bool(ng and ng.get("ran"))}
+    # the tie is never "not run": where it didn't run, `tie_failed` says why the report isn't OK
+    on = [k for k, v in ran.items() if v] + [TIE_STAGE] * bool(advised and t.get("ran"))
     waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
                       "n2": out_runs[name]["network"]["accepted"],
                       "ran": isinstance(out_runs[name]["shim_requests"], int) and out_runs[name]["shim_requests"] != 0,
                       "why": t.get("why")}
                for name, w in pending.items()}
     return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "why_not": why_not,
-            "ran": [k for k, v in ran.items() if v], "not_run": [k for k, v in ran.items() if not v],
+            "ran": on, "not_run": [k for k, v in ran.items() if not v],
             "runs": out_runs,
             "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
@@ -704,7 +690,12 @@ def markdown(r: dict) -> str:
                  f"its own violation {n['own_code']}" if not n["refused"] and n.get("own_code") and n.get("check_codes")
                  is not None and r["runs"][name]["check"]["verdict"] == "refused" else "")
         t = n.get("tie")
-        if t and not t["ok"] and name in PENDING:
+        if name in PENDING and t is None:
+            other += (f"; the I/O tie, which alone refuses it, didn't run "
+                      f"({((r.get('chain') or {}).get('tie') or {}).get('why') or 'no tie stage'})")
+        elif name in PENDING and t["verdict"] not in ("accepted", "refused"):
+            other += f"; the I/O tie, which alone refuses it, gave it no verdict ({t['why']})"
+        elif t and not t["ok"] and name in PENDING:
             other += (f"; the I/O tie {t['verdict']}" + (f" ({', '.join(t['codes'])} at link-windows {t['windows']})"
                                                           if t["codes"] else "")
                       + (f", its changed ids in link-windows {t['changed']}" if t.get("changed") is not None else
@@ -770,7 +761,7 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
     (`endpoint_advice`), the prove path when ``--prove-path`` does, and NEG's negatives on the runs unless
     ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), with the I/O tie's verdict when ``--ids``
     gives each request's sampled ids. On the advice profile, the I/O tie on each run (`chain.tie`), its sampled ids
-    ``--ids``' or the endpoint's records'."""
+    ``--ids``' or the endpoint's records', which the report requires there (`chain.tie_gate`)."""
     honest, out, adv = runs[HONEST]["dir"], {}, None
     if getattr(args, "endpoint_run", None):
         out["advice"], out["bits"] = endpoint_advice(getattr(args, "endpoint_dir", None),
@@ -785,17 +776,24 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
         out["bits"] = chain.bits(adv, chain.window_buckets(honest), plan.get("windows") or 0,
                                  config and config.get("config", config), (_read(honest / "io.json") or {}).get("requests"))
     if args.prove_path:
-        src = Path(args.prove_path)
-        out["prove_path"] = chain.prove_path(_unpack(src, work) if src.is_file() else src, out.get("advice"),
-                                             (out.get("bits") or {}).get("bound")) | {"dir": str(src)}
-        log(f"prove path: adopted from {src}, ok {out['prove_path']['ok']}")
+        srcs = [Path(s) for s in args.prove_path]
+        given = getattr(args, "prove_path_registered", None)
+        registered = _read(Path(given)) if given else None
+        if given and not isinstance(registered, dict):
+            raise SystemExit(f"--prove-path-registered {given}: not a JSON object")
+        b = out.get("bits") or {}
+        out["prove_path"] = chain.prove_path([_unpack(s, work) if s.is_file() else s for s in srcs], out.get("advice"),
+                                             b.get("bound"), b, getattr(args, "endpoint_dir", None), registered) \
+            | {"dir": ", ".join(map(str, srcs))}
+        log(f"prove path: adopted from {', '.join(map(str, srcs))}, ok {out['prove_path']['ok']}, bound "
+            f"{out['prove_path']['bound']}")
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
         out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
                                                  "until N2-ADVICE"}
         out["tie"] = chain.tie({s: r["dir"] for s, r in runs.items()}, getattr(args, "endpoint_dir", None),
                                Path(args.ids) if args.ids else None, getattr(args, "endpoint_why", None))
         log(f"I/O tie: {', '.join(f'{s} {x['verdict']} (ok {x['ok']})' for s, x in out['tie']['runs'].items())}"
-            if out["tie"]["ran"] else f"I/O tie: not run ({out['tie']['why']})")
+            if out["tie"]["ran"] else f"I/O tie: didn't run, which the advice profile requires ({out['tie']['why']})")
     elif not args.no_negatives:
         out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock,
                                            ids=Path(args.ids) if args.ids else None)
@@ -911,8 +909,12 @@ def main(argv=None) -> int:
                                                           "out/serve; on --endpoint-peer's node, copied after the "
                                                           "rehearsal): its own advice for the honest run's Commit "
                                                           "windows, by verity-vllm advice (endpoint_advice)")
-    ap.add_argument("--prove-path", metavar="DIR", help="adopt prove_path.py audit's output (its run.sh's $OUT, or a "
-                                                        "tarball of it)")
+    ap.add_argument("--prove-path", metavar="DIR", action="append",
+                    help="adopt prove_path.py audit's output (its run.sh's $OUT, or a tarball of it); again for another "
+                         "(each --serve-run audit one of the served run's Commit windows)")
+    ap.add_argument("--prove-path-registered", metavar="FILE",
+                    help="who registered each --serve-run audit's window advice and when, by window: {K: {by, "
+                         "at_serve_time, at, first_draw, ref}}, the times ISO 8601 UTC")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
                                                   "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "
                                                   "negatives it reads, and on the advice profile on every run in place "
