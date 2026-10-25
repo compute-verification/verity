@@ -121,6 +121,22 @@ theorem sampling_assembled_of {T : Type}
     Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
     ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hlist, hcount⟩, hComplete⟩
 
+/-- **The masked record's decoder lists within the radius**: it is the masked radius decoder
+(`FlockDeploy.decode_zk`, `FlockDeploy.listWithin_zk`). -/
+theorem listWithin_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    Claims.Flock.ListWithin (FlockDeploy.deployZk rel).len (FlockDeploy.deployZk rel).enc (FlockDeploy.deployZk rel).θ
+      (FlockDeploy.deployZk rel).decode := by
+  rw [show (FlockDeploy.deployZk rel).decode = Claims.GS.zkDecodeRD from FlockDeploy.decode_zk rel]
+  exact FlockDeploy.listWithin_zk rel
+
+/-- **The trimmed plain record's decoder lists within the radius**: it is the plain radius decoder
+(`FlockDeploy.decode_plain`, `FlockDeploy.listWithin_plainTrim`). -/
+theorem listWithin_deployPlainTrim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    Claims.Flock.ListWithin (FlockDeploy.deployPlainTrim rel).len (FlockDeploy.deployPlainTrim rel).enc
+      (FlockDeploy.deployPlainTrim rel).θ (FlockDeploy.deployPlainTrim rel).decode := by
+  rw [FlockDeploy.decode_plain rel]
+  exact FlockDeploy.listWithin_plainTrim rel
+
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are Flock's masked verifier**, at every hash:
 `sampling_assembled_of` at the untrimmed masked record `deployZk`, its decoder the masked radius decoder
@@ -142,13 +158,9 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (εzk γzk : Msg → ℝ) (hZK : ZK H (D.mask Nz Ωz tapeOf S) εzk γzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
       Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D ∧ ZK H (D.mask Nz Ωz tapeOf S) εzk γzk := by
-  have hlist : Claims.Flock.ListWithin (FlockDeploy.deployZk rel).len (FlockDeploy.deployZk rel).enc
-      (FlockDeploy.deployZk rel).θ (FlockDeploy.deployZk rel).decode := by
-    rw [show (FlockDeploy.deployZk rel).decode = Claims.GS.zkDecodeRD from FlockDeploy.decode_zk rel]
-    exact FlockDeploy.listWithin_zk rel
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := sampling_assembled_of D H (FlockDeploy.deployZk rel)
-    FlockDeploy.zkStepPoly hflock hKS hlist (FlockDeploy.efficient_zk H rel).2.2.1 hε own at_ row salt π layer hcommit
-    hrow hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hopen huniv hComplete
+    FlockDeploy.zkStepPoly hflock hKS (listWithin_deployZk rel) (FlockDeploy.efficient_zk H rel).2.2.1 hε own at_ row
+    salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hopen huniv hComplete
   exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, hZK⟩
 
 set_option synthInstance.maxSize 1024 in
@@ -169,13 +181,9 @@ theorem sampling_assembled_plain (rel : _root_.Flock.Readable.Parsed → _root_.
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
     (hComplete : Complete H D) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D FlockDeploy.plainStepPoly ∧ Complete H D := by
-  have hlist : Claims.Flock.ListWithin (FlockDeploy.deployPlainTrim rel).len (FlockDeploy.deployPlainTrim rel).enc
-      (FlockDeploy.deployPlainTrim rel).θ (FlockDeploy.deployPlainTrim rel).decode := by
-    rw [FlockDeploy.decode_plain rel]
-    exact FlockDeploy.listWithin_plainTrim rel
-  exact sampling_assembled_of D H (FlockDeploy.deployPlainTrim rel) FlockDeploy.plainStepPoly hflock hKS hlist
-    (FlockDeploy.efficient_plain H rel).2.2.1 hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots
-    iroots hopens hfix hprog hchecks hopen huniv hComplete
+      Efficient H D FlockDeploy.plainStepPoly ∧ Complete H D :=
+  sampling_assembled_of D H (FlockDeploy.deployPlainTrim rel) FlockDeploy.plainStepPoly hflock hKS
+    (listWithin_deployPlainTrim rel) (FlockDeploy.efficient_plain H rel).2.2.1 hε own at_ row salt π layer hcommit hrow
+    hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hopen huniv hComplete
 
 end Claims.Sampling
