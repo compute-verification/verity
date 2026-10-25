@@ -90,15 +90,15 @@ def component_case(draw, C, kind: str | None) -> dict:
     """`C`'s case aimed at `kind`, or at any verdict when `kind` is None."""
     if isinstance(C, R.Stub):
         return draw(stub_case(C.id, kind))
-    return draw(ported_case(C, kind or draw(st.sampled_from([R.ACCEPT, R.ACCEPT, R.REJECT, R.UNDECIDED]))))
+    return draw(ported_case(C, kind or draw(st.sampled_from([R.ACCEPT, R.REJECT, R.UNDECIDED]))))
 
 
-#: The binding breaks come thrice: with `commitment-size` they are the breaks that leave every component's case standing,
+#: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
-MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
+MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
-                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 3
+                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 5
 
 
 @st.composite
@@ -204,10 +204,12 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) 
         assert seen[kind] > examples // 50, (kind, dict(seen))
 
 
+@pytest.mark.slow
 def test_remote_agrees(remote_server):
     _agree(REMOTE, remote_server, SEEN["remote"], 1000)
 
 
+@pytest.mark.slow
 def test_onsite_agrees(onsite_server):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
 
@@ -224,6 +226,7 @@ class Trial(R.Product):
         return super().check(ps, c, ev)
 
 
+@pytest.mark.slow
 def test_a_reference_without_reject_dominance_is_caught(onsite_server):
     """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
