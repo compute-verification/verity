@@ -16,15 +16,18 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
 * **The carried state** at boundary `j` (`Blocks.carried`): the gates computed before block `j` that a gate computed from
   block `j` on reads, the values crossing a time boundary (the KV cache, say). It is derived from the circuit and the
   blocks, never declared, as a partition's committed wires are. Its value is the committed transcript's
-  (`Blocks.carriedValue`): the device commits it before the wipe and re-reads it after.
+  (`Blocks.carriedValue`): the device commits it before the wipe and re-reads it after. That the value it re-reads is
+  the committed one is the commitment's binding, which this module doesn't state.
 * **The device's state** (`Device.State`): its on-chip state, `chip` bits, and its store, `mem` bits.
-* **The state a block holds** (`Blocks.State`): the carried state's committed value, and the device's state, its store
+* **The state a block holds** (`Blocks.State`): the carried state's value it re-reads, and the device's state, its store
   among it.
 * **The wipe** at boundary `j` (`Wipe`): the memory challenger sends a fresh seed, the device fills `fill` bits of its
   store with labels derived from it, and the challenger runs timed spot reads. Its verdict, and the state block `j`
   starts from (`Wipe.start`), are functions of the device's state at the boundary and the wipe's coins alone.
 * **What block `j` may depend on** (`Wipe.Separates`): of the device's state at the boundary, only the state block `j`
-  starts from. Everything else the device held there is wiped.
+  starts from. Everything else the device held there is wiped. What the prover kept off the device (on NVMe, or over
+  the network) can come back after the wipe over the side channels: `Device.cap` limits that per tick, and no wipe
+  bounds it.
 * **The wipe's survivor bound** (`Wipe.SurvivorBound f ε`), in the form of PoUS's secure-erasure requirement
   (`Pous.EraseMeets`, which `Pous.Guarantees.SecureErasureMeetsFamily` proves at `f = 1/19`, `ε = 2^-128`): foreign
   content of at least `f · fill + 2λ` bits (`λ = 128`), plus the state the fill leaves out, is read back from what block
@@ -89,9 +92,11 @@ def carriedValue (X : C.Transcript) (j : Fin B) : s.Carried j := fun g => X g
 end Blocks
 
 /-- **The state block `j` holds** on the device `d`, from its start: the carried state's value, re-read after the wipe
-that opens the block and checked against the commitment made before it, and the device's state, its store among it. -/
+that opens the block, and the device's state, its store among it. The re-read value is the committed one
+(`s.carriedValue X j`) when the commitment made before the wipe binds it, which a joint guarantee states, not this
+type. -/
 structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : Device ι) (j : Fin B) where
-  /-- the carried state's committed value -/
+  /-- the carried state's value, re-read after the wipe -/
   carried : s.Carried j
   /-- the device's state: its on-chip state and its store -/
   device : d.State
@@ -101,7 +106,7 @@ indices, drawn once the device's state at the boundary is fixed): the device fil
 derived from the seed, and the memory challenger reads them back at random places under a deadline.
 
 * `carry σ`: the carried state's value as the device in state `σ` holds it at the boundary. The device commits it before
-  the wipe and re-reads it after, checked against that commitment.
+  the wipe and re-reads it after. The check of what it re-reads against that commitment isn't in `accepts`.
 * `accepts σ ω`: the memory challenger's verdict. `after σ ω`: the device's state when block `j` starts. Nothing enters
   the device during the wipe, so both are functions of its state at the boundary and the coins alone. -/
 structure Wipe (d : Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (j : Fin B) (Ω : Type) where
@@ -129,8 +134,8 @@ def unfilled : ℕ := d.chip + (d.mem - w.fill)
 /-- **Only the carried state crosses the boundary, besides what the wipe leaves**: what the device does from block `j`
 on, `next σ ω y`, from its state `σ` at the boundary, the wipe's coins `ω` (public) and everything that reaches it
 later `y` (its ingress over the side channels and the auditors' later coins), depends on `σ` only through the state
-block `j` starts from. This is the device's side: `y` is an argument, and what reaches the device after the wipe is
-not bounded here. -/
+block `j` starts from. This is the device's side: `y` is an argument, so what reaches the device after the wipe is not
+bounded here, including content the prover kept off the device before it and sends back over a side channel. -/
 def Separates {Y Z : Type} (next : d.State → Ω → Y → Z) : Prop :=
   ∃ g : s.State d j → Ω → Y → Z, ∀ σ ω y, next σ ω y = g (w.start σ ω) ω y
 
@@ -142,7 +147,7 @@ and the wipe's uniform coins that the memory challenger accepts and `keep` gives
 probability is the value of a draw of `(z, ω)` with no prover move (`Game.value` on `Game.draw`).
 
 So `z` is foreign content as in PoUS's secure-erasure game: uniform, and independent of the wipe's coins. `keep` doesn't
-read the carried value: bound to the committed transcript, it is fixed before `z` is drawn. Two things differ from
+read the carried value: once bound to the committed transcript, it is fixed before `z` is drawn. Two things differ from
 `EraseMeets`, and a bridge from `Pous.Guarantees.SecureErasureMeetsFamily` to this bound has to cover both. `keep` reads
 the state the next block starts from, after the last spot read, and the wipe's coins, which the device saw: what block
 `j` may read (`Separates`). `EraseMeets`' keep reads the memory alone, at every spot read's arrival. And the fill may
