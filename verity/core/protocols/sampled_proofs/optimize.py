@@ -36,9 +36,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from math import ceil, exp, expm1, fsum, inf, lgamma, log, log1p
 
-from verity.ml.circuits.cut import fits
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
 
 #: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
 SHA512_ANDS = 58_120
@@ -56,11 +56,12 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One template of one way (`cut`, default the template alone) to cut one op type into units, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates (the width rule, `cut.fits`), and `influence`, the credited work a wrong one can forfeit
-    downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits `commit_bits` in
-    `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units (m = k_log + nbl <= 35);
-    `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its block kind for the draw's
-    weights (served proof units of one template, PoUW's tiles), the template itself when empty."""
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
+    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider unit), and `influence`, the credited work a wrong
+    one can forfeit downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
+    `commit_bits` in `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units
+    (m = k_log + nbl <= 35); `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its block
+    kind for the draw's weights (served proof units of one template, PoUW's tiles), the template itself when empty."""
 
     op: str
     template: str
@@ -82,10 +83,10 @@ class Candidate:
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
                 or min(self.work, self.influence, self.ands, self.commit_bits, self.commit_rows, *self.rows, 0) < 0 \
-                or not fits(self.out_bits, self.out_gates) or (bool(self.replay) != (self.per_replay > 0)) \
+                or unit_class(self.out_bits) is None or (bool(self.replay) != (self.per_replay > 0)) \
                 or self.per_replay > self.units:
-            raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs within "
-                             f"the width rule (<= 16 bits, or one gate of <= 32), and per_replay in [1, units] with a replay")
+            raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs in a "
+                             f"size class (<= {UNIT_CLASS_MAX} bits), and per_replay in [1, units] with a replay")
 
     @property
     def alternative(self) -> str:

@@ -14,6 +14,7 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
                                                            TemplateCost, _hit, _miss, certify, density_bound, for_budget,
                                                            for_target, frontier, needs_benchmark, overlaps, perturb,
@@ -183,11 +184,11 @@ def test_row_ands_follows_hm96_table():
     assert [row_ands(n) for n in (4, 256, 4096)] == [174_360, 290_600, 2_034_200]
 
 
-def test_candidates_follow_the_width_rule():
-    Candidate("a", "A", 1, 1, 32)
-    Candidate("a", "A", 1, 1, 16, out_gates=4)
-    for bits, gates in ((32, 2), (17, 2), (33, 1)):
-        with pytest.raises(ValueError, match="width rule"):
+def test_candidates_fit_a_size_class():
+    for bits, gates in ((16, 1), (64, 2), (2048, 128), (UNIT_CLASS_MAX, UNIT_CLASS_MAX // 16)):
+        Candidate("a", "A", 1, 1, bits, out_gates=gates)
+    for bits, gates in ((UNIT_CLASS_MAX + 1, 1), (UNIT_CLASS_MAX + 32, 8193)):
+        with pytest.raises(ValueError, match="size class"):
             Candidate("a", "A", 1, 1, bits, out_gates=gates)
     with pytest.raises(ValueError, match="per_replay"):
         Candidate("a", "A", 4, 1, 16, replay="layer")
