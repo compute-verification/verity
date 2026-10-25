@@ -58,10 +58,11 @@ same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks,
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
-Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
-the output of a scan of no iterations), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says
-what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
+iterations with output leaves, read or not; or a body calling a Definition decoded after it, a Definition not as the
+decoder gives it, or a root with parameters, which the decoder never gives: `walkable`), `program` (a reference the
+layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says what and how
+many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
