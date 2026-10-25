@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditSketch
+import Definitions.Accounting.Guarantees.RateAuditSketch
 import Proofs.Accounting.RateAudit.Sketch
 
 /-!

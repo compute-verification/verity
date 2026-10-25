@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.H100Frag
+import Definitions.Pouw.Assumptions.Dimension.H100Frag
 import Proofs.Pouw.Dimension.H100DenseProofs
 
 /-!
