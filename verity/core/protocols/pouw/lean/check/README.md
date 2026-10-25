@@ -31,7 +31,9 @@ Python reference held to it.
 | `PouwCheck.LeafOwn` | not `credit.py`'s: a window unit's leaf statements' tile and the placement of the values they read in the window's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the window's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
 | `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
 | `PouwCheck.Verified` | `credit.py`'s `_asks` and `_verified`: a served window's statements verified, the verdict `credit.window` and `credit.period_credit` take each drawn unit's outcome from (`credit._lean_verified`). The verifier of record runs outside, so `verified` is asked twice: it names each run (the statement, its K's committed circuit file, the call's `--registered` file and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, a session that opened its call's public table or the ok rows elsewhere than the `--registered` file's value and root, or a unit of another call, refuses the window) |
-| `PouwCheck.VerifiedDifftest` | the difftest's `credit-verified` behind `pouw-check-difftest` (`VerifiedDifftest.all`, `CreditDifftest.all`'s then it, the functions `DifftestMain` serves) |
+| `PouwCheck.LiveVerified` | `credit.py`'s `_live_asks` and `_live_verified`: a served window's live@<s> statements verified, the verdict `credit.window` and `credit.period_credit` take each round's live outcome from (`credit._lean_live_verified`), asked twice as `verified` is: it names each run (the statement, the committed live circuit file, round s's `--registered` file, `live_reads.reads_file`'s, and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, or a session that proved another unit than its round's, refuses the window) |
+| `PouwCheck.CommittedFiles` | `credit.py`'s `committed_files`: the circuit files a period's open committed (`circuit_files`, each K's template's and the live Program's), which `credit.period_credit` reads from here (`credit._lean_committed_files`) |
+| `PouwCheck.VerifiedDifftest` | the difftest's `credit-verified`, `credit-live-verified` and `credit-committed-files` behind `pouw-check-difftest` (`VerifiedDifftest.all`, `CreditDifftest.all`'s then it, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
@@ -164,7 +166,12 @@ holds each mutation to its refusal.
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean
 of record, over `tests/pouw_verified_cases.py` (a window's statements, null or answered as the served path answers,
 and one mutation per refusal before the verifier runs and of its answers), and holds the served
-`credit._lean_verified` to `credit._verified`'s verdict and verifier runs.
+`credit._lean_verified` to `credit._verified`'s verdict and verifier runs. `tests/test_live_verified_difftest.py` does
+the same for `credit-live-verified` against `credit._live_asks` and `credit._live_verified`, over
+`tests/pouw_live_verified_cases.py` (a window's live statements, its live tables' entries and each step's m_s), and
+holds the served `credit._lean_live_verified` to `credit._live_verified`; and `credit-committed-files` against
+`credit.committed_files`, on the ledgers of `pouw_credit_cases.period_instance` whose open commits circuit files of each
+form.
 
 ~~~text
 lake build                                                         the library, pouw-check and pouw-check-difftest
