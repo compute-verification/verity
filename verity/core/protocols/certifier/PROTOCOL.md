@@ -677,8 +677,10 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     20,300,946. Of them, IoTieRequest's scan is 166,816 and 2,669,055, and the sort's `IoTieRoute{CB + 33, D2}`
     1,978,368 (D2 = 12) and 10,174,464 (D2 = 14). With the port opened in the unit they were 20,569,541 and
     38,169,048: `IoTiePort{512, 6, 10}` adds 17,868,101 ANDs and a join, as it does to `IoTieBucket{256, 16, 512, 6,
-    10}` (20,009,029, against 2,140,927). Building them takes 1.3 GB and 4.7 GB (29 s and 88 s,
-    r20261025-005959-9e62). `IoTieRoute`'s flat trace took 15.1 GB and 84.7 GB (204 s and 1,241 s). A bucket reads
+    10}` (20,009,029, against 2,140,927). Building them takes 1.2 GB and 1.6 GB (19 s and 34 s,
+    r20261025-025302-d60b). With `IoTieIdsChain`'s flat trace they took 1.3 GB and 4.7 GB (29 s and 88 s,
+    r20261025-005959-9e62; the chain alone at D2 = 14 is 4.1 GB and 46 s flat, 0.13 GB and 0.4 s batched), and with
+    `IoTieRoute`'s flat trace too 15.1 GB and 84.7 GB (204 s and 1,241 s). A bucket reads
     the steps that compute its own fields, so a step whose tokens' fields are in k buckets is read k times, and each
     bucket's sort is over its NK + E members.
     A cheaper split has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival
