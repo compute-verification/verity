@@ -268,7 +268,7 @@ def _mutate(rng: random.Random, name: str, d: dict, out: list[dict], eps: list[d
         case "earlier-form":
             w = eps[0]["g"]["w"].hex()
             d["earlier"] = rng.choice([None, {}, "x", [[w]], [[w, -1]], [[w, 1 << 64]], [[w, True]], [[w.upper(), 0]],
-                                       [[w[:-2], 0]], [[w, 0, 1]], [[w, "0"]], [[w, 1.5]], [w, 0], [[None, 0]]])
+                                       [[w[:-2], 0]], [[w, 0, 1]], [[w, "0"]], [[w, [0]]], [w, 0], [[None, 0]]])
         case "foreign-root":
             man["session"] = {**man["session"], "root": rng.choice([rng.randbytes(64).hex(), "zz",
                                                                      rng.randbytes(64).hex().upper()])}
