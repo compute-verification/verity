@@ -55,7 +55,7 @@ theorem exists_of_lt_flatMap {α β : Type} (f : α → List β) :
 
 /-! ## Where each wire's lowered gates sit -/
 
-variable {C : Circuit}
+variable {C : FlockSoundness.Audit.Circuit}
 
 theorem one_le_gateSize {N : ℕ} (o : Op N) : 1 ≤ gateSize o := by
   cases o <;> simp [gateSize]
@@ -254,10 +254,10 @@ theorem boundary_inner {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} (
         exact hg'u (mem_unitGates.2 ⟨g, hu, 2, hk, rfl⟩)
 
 /-- What a gate at `p` of the set of gates `U` reads at `i`, as `Prog.runIn` reads it. -/
-def feed (Cp : Prog) (ref : ℕ → Option Bool) (U : List ℕ) (p i : ℕ) : Option Bool :=
+def feed (Cp : Claims.Sampling.Prog) (ref : ℕ → Option Bool) (U : List ℕ) (p i : ℕ) : Option Bool :=
   if i ∈ U then (if i < p then Cp.runIn ref U i else none) else Cp.read ref i
 
-theorem runIn_feed (Cp : Prog) (ref : ℕ → Option Bool) (U : List ℕ) (p : ℕ) :
+theorem runIn_feed (Cp : Claims.Sampling.Prog) (ref : ℕ → Option Bool) (U : List ℕ) (p : ℕ) :
     Cp.runIn ref U p = Cp.gates[p]?.bind fun x => x.val (feed Cp ref U p) (ref p) :=
   Boundary.runIn_eq Cp ref U p
 
@@ -412,7 +412,7 @@ theorem posOf_injective : Function.Injective (posOf C) := by
   exact (block_inj (by omega) (by omega) h).1
 
 /-- **The wire at a position** of the lowered program: the wire it is the position of, `d` at any other. -/
-def wireAt (C : Circuit) (d : Fin C.N) (i : ℕ) : Fin C.N :=
+def wireAt (C : FlockSoundness.Audit.Circuit) (d : Fin C.N) (i : ℕ) : Fin C.N :=
   ((List.finRange C.N).find? fun g => posOf C g = i).getD d
 
 theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
