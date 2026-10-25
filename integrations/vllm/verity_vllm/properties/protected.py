@@ -42,8 +42,8 @@ PROTECTED: tuple[str, ...] = (
     "verity_vllm/observe/fold/fold.py", "verity_vllm/observe/fold/resolver.py", "verity_vllm/observe/fold/patterns.py", "verity_vllm/engine/vllm_adapter.py",
     # the two base profiles (a lane derives its own profile module from `build_profile`; it does not edit these)
     "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
-    # existing registered semantics and the IR
-    "verity_vllm/*",
+    # existing registered semantics and the IR, and the Definitions, which moved to verity.ml.definitions
+    "verity_vllm/*", "../../verity/ml/definitions/*",
     # frozen decisions / accepted results / the design notes the integrator owns
     "out/capture/decisions.md", "data/logs/*", "verity_vllm/observe/DESIGN.md", "out/gen/RULES.md",
 )
@@ -57,7 +57,7 @@ WRITABLE_EXCEPTIONS: tuple[str, ...] = (
     "verity_vllm/program/quarantine/*",
 )
 #: Existing registered primitive semantics (a change here is `EXISTING PRIMITIVES MODIFIED`).
-PRIMITIVE_PATHS: tuple[str, ...] = ("verity/ml/definitions/registry/*",)
+PRIMITIVE_PATHS: tuple[str, ...] = ("../../verity/ml/definitions/registry/*",)
 #: The checkpoint manifest: appending entries is lane work; changing an existing entry is not.
 MANIFEST = "manifests/checkpoints.json"
 

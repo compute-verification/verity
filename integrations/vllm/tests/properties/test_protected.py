@@ -56,6 +56,18 @@ def test_lane_writable_paths_and_paths_outside_the_package_seal_clean(tmp_path):
     assert rep["sealed"] and rep["protected_files_modified"] == [] and rep["n_changed"] == 3
 
 
+def test_a_changed_definition_outside_the_package_is_a_modified_primitive(tmp_path):
+    root, base = _repo(tmp_path)
+    _commit(root, {"verity/ml/definitions/registry/prims.py": "P = 1\n"}, "definitions")
+    base = _git(root, "rev-parse", "HEAD")
+    head = _commit(root, {"verity/ml/definitions/registry/prims.py": "P = 2\n"}, "lane")
+    rep = protected.provenance(base, head, cwd=root / PKG)
+    assert not rep["sealed"]
+    assert rep["protected_files_modified"] == [{"status": "M", "path": "../../verity/ml/definitions/registry/prims.py",
+                                                "rule": "protected"}]
+    assert rep["existing_primitives_modified"] == ["../../verity/ml/definitions/registry/prims.py"]
+
+
 def test_a_changed_frozen_manifest_entry_is_not_sealed(tmp_path):
     root, base = _repo(tmp_path)
     head = _commit(root, {f"{PKG}/manifests/checkpoints.json": json.dumps({"checkpoints": [{"repo": "b", "revision": "0" * 40}]})},
