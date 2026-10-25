@@ -67,17 +67,18 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   through `fromCallee` (`down_scan_head`, `scanOne`, `ys_agree`, `scanYs_agree`), any other stride position by
   position (`scanPts`); `scanSpec_of`;
 * a batch of a composite's piece in its one-run case, the node's leaf `m·L + t` being the run's gate for member `m`'s
-  return leaf `t` (`batchAffine`, `batchSpec_of`), with helpers toward the rest (`members_agree`, member by member
-  through `fromCallee`; `copies_seg_agree`, whole members as copies of one member's return); so `down`, `fromCallee`,
+  return leaf `t` (`batchAffine`, `batchSpec_of`), and past it as below; so `down`, `fromCallee`,
   `throughArg` and `carry` keep the gates they read at every fuel (`specs`, `specs_of`) wherever the callees' summaries
   hold `RetOk`, a composite's return has as many leaves as its type, a primitive returns one leaf, a scan's output is
   `ScanOut`'s, the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims), and so do the steps
-  open here (`OpenSteps`): a batch of a composite's piece of one row and stride 1 past its one-run case (`BatchRest`;
-  one of more rows is read row by row, `down_batch_rows`; one of a stride of whole members as copies of a member's
-  leaf of gates, `gateStride_agree`, else position by position, `batchStride_agree`, open only where that leaf names
-  leaves of shared arguments, `BatchShared`; one of any other stride position by position, `down_batch_pts`,
-  `batchPts_agree`) and `carry` one step up
-  (`CarrySpec`); in a Definition's body, wherever
+  open here (`OpenSteps`): a batch of a composite's whole members as copies of one member's return or leaf naming
+  leaves of arguments the members share (`BatchSharedMid`, `BatchShared`) or through `throughPS` (`BatchThroughMid`),
+  and `carry` one step up (`CarrySpec`). The rest of a batch past its one-run case is proved: more than one row row
+  by row (`down_batch_rows`); one row and stride 1 as copies of a member's return of gates (`copies_seg_agree`) or
+  member by member, the cut members at either end each through its return (`down_batch_one`, `ends_agree`,
+  `batchOne_agree`); a stride of whole members as copies of a member's leaf of gates (`gateStride_agree`,
+  `batchStride_agree`); any other stride position by position (`down_batch_pts`, `batchPts_agree`). In a
+  Definition's body, wherever
   its references (`Resolve.BodyOk`), its callees' summaries (`RetOk`), the decoder's facts its private `composite`
   sets (`Decoded`, `ScanOut`) and `OpenSteps` do (`specs_decoded`).
 
@@ -3148,6 +3149,117 @@ theorem down_batch_stride (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht 
         rfl
       · cases ha
 
+/-- A batch's output leaves `[a, b)` read as whole members `[m0, m1)` (`mid`) and the cut members at either end each
+through its return. -/
+def batchEnds (c : Desc.Ctx) (fuel k L a b : Nat) (mid : Array Seg) : Except String (Array Seg) := do
+  let (m0, m1) := ((a + L - 1) / L, b / L)
+  let mut out := #[]
+  if a < m0 * L then out := out ++ (← Desc.fromCallee c fuel k (a / L) (a % L) L)
+  out := out ++ mid
+  if m1 * L < b then out := out ++ (← Desc.fromCallee c fuel k m1 0 (b - m1 * L))
+  return out
+
+/-- A batch's output leaves `[a, b)` read member by member, each through its return. -/
+def batchMembers (c : Desc.Ctx) (fuel k L a b : Nat) : Except String (Array Seg) := do
+  Desc.walkAtMost "members of a batch read one by one" ((b - 1) / L + 1 - a / L)
+  let mut out := #[]
+  for m in [a / L:(b - 1) / L + 1] do
+    out := out ++ (← Desc.fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L))
+  return out
+
+/-- A batch's output leaves `[a, b)` whose members each return one run of a mapped argument's leaves within one row
+of its axis: the whole members' are that run in each member's row, one piece of rows through `throughPS`, else
+member by member. -/
+def batchThrough (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (a b : Nat) :
+    Except String (Array Seg) := do
+  let L := (c.P.defs[node.fn]!).outLeaves
+  let r := (c.memo[node.fn]!).ret
+  let (m0, m1) := ((a + L - 1) / L, b / L)
+  if m0 + 1 < m1 && r.segs.size == 1 && r.segs[0]!.reps ≤ 1 && r.segs[0]!.ps.size == 1 then
+    let g := r.segs[0]!.ps[0]!
+    if let .ref true i := g.tgt then
+      if let some (d, Li) := (node.args[i]?.bind (·.dims)) then
+        let lo := g.base.toNat
+        if Li > 0 && g.rows ≤ 1 && (g.stride == 1 || g.len ≤ 1) && g.len == L && lo / Li == (lo + L - 1) / Li then
+          let qb := lo / Li
+          let p : Piece := { tgt := .gate 0, base := (((qb * d + m0) * Li + (lo - qb * Li) : Nat) : Int),
+                             stride := 1, len := L, rows := m1 - m0, rowStride := (Li : Int) }
+          if let some bp := Desc.throughPS (c.arg k i) p then
+            return ← batchEnds c fuel k L a b (← Desc.down c fuel bp)
+  batchMembers c fuel k L a b
+
+/-- `down`'s batch of a composite's piece of one row and stride 1 past its one-run case. -/
+def batchOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piece) : Except String (Array Seg) := do
+  let L := (c.P.defs[node.fn]!).outLeaves
+  let G : Int := (c.P.defs[node.fn]!).gates
+  let o : Int := c.body.offsets[k]!
+  let r := (c.memo[node.fn]!).ret
+  let a := q.base.toNat
+  let b := a + q.len
+  let (m0, m1) := ((a + L - 1) / L, b / L)
+  let gatesOnly := r.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
+    | .gate _ => true
+    | _ => false
+  if gatesOnly && m0 + 1 < m1 then
+    return ← batchEnds c fuel k L a b
+      #[{ ps := Desc.shiftGates (o + m0 * G) (r.segs.flatMap (·.ps)), len := L, reps := m1 - m0, shift := G }]
+  let shared := r.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
+    | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
+    | _ => false
+  if shared && m0 + 1 < m1 then
+    let one ← Desc.fromCallee c fuel k m0 0 L
+    if one.all (·.reps ≤ 1) then
+      return ← batchEnds c fuel k L a b #[{ ps := one.flatMap (·.ps), len := L, reps := m1 - m0, shift := 0 }]
+  batchThrough c fuel k node a b
+
+theorem down_batch_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
+    (ha : affineOf c k node q = none) (hr : ¬ q.rows > 1) (hs : q.stride = 1) :
+    Desc.down c (fuel + 1) q = batchOne c fuel k node q := by
+  have hs' : (q.stride == 1) = true := by simpa using hs
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht, hff]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((c.P.defs[node.fn]!).prim = true) by simp [hp])]
+  rw [if_neg (show ¬ (((c.P.defs[node.fn]!).outLeaves == 0) = true) by simpa using hL)]
+  unfold affineOf at ha
+  dsimp only at ha
+  rcases hC : ((c.memo[node.fn]!).ret.segs.size == 1 && (c.memo[node.fn]!).ret.segs[0]!.reps ≤ 1 &&
+      (c.memo[node.fn]!).ret.segs[0]!.ps.size == 1) with _ | _ <;>
+    simp only [hC, Bool.false_eq_true, ite_false, ite_true] at ha
+  · rw [if_neg (by simp), if_neg hr, if_pos hs']
+    delta batchOne batchThrough batchEnds batchMembers Desc.down Desc.fromCallee
+    rfl
+  · rw [if_pos rfl]
+    cases hT : ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).tgt with
+    | ref b i =>
+      dsimp only
+      rw [if_neg hr, if_pos hs']
+      delta batchOne batchThrough batchEnds batchMembers Desc.down Desc.fromCallee
+      dsimp only
+      rw [hT]
+      rfl
+    | gate w =>
+      simp only [hT] at ha
+      dsimp only
+      rcases hC2 : (((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).rows ≤ 1 &&
+          ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).len == (c.P.defs[node.fn]!).outLeaves &&
+          ((c.P.defs[node.fn]!).outLeaves == 1 || ((c.P.defs[node.fn]!).gates : Int) ==
+            ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).stride)) with _ | _ <;>
+        simp only [hC2, Bool.false_eq_true, ite_false, ite_true] at ha
+      · rw [if_neg (by simp), if_neg hr, if_pos hs']
+        delta batchOne batchThrough batchEnds batchMembers Desc.down Desc.fromCallee
+        dsimp only
+        rw [hT]
+        rfl
+      · cases ha
+
 /-- `down` with no fuel left refuses. -/
 theorem down_zero (c : Desc.Ctx) (q : Piece) (x : Array Seg) : Desc.down c 0 q ≠ .ok x := by
   delta Desc.down
@@ -5714,24 +5826,288 @@ theorem batchStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d =
       · exact batchPts_agree c sc fuel hD q h1 hq hf h
   · exact batchPts_agree c sc fuel hD q h1 hq hf h
 
-/-- **Open: a batch of a composite's piece of one row and stride 1 past its one-run case**, one step up: whole members
-as copies of one member's return (of gates, or of leaves of arguments the members share, resolved once), one run of a
-mapped argument through `throughPS`, or member by member, the cut members at either end each through its return. -/
-def BatchRest (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
-  ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
-    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.flat = q →
-    affineOf c k node q = none → ¬ q.rows > 1 → q.stride = 1 →
-    (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
-    Desc.down c (fuel + 1) q = .ok segs → Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc))
+/-- A batch's output leaves `[a, b)` from what `mid` keeps of whole members `[m0, m1)` and `fromCallee` of the cut
+members at either end. -/
+theorem ends_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
+    {k L a b : Nat} (hL : L ≠ 0) (hab : (a + L - 1) / L ≤ b / L)
+    (hm : ∀ j, a ≤ j → j < b → j / L < (c.body.nodes[k]!).members ∧
+      j % L < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    {mid segs : Array Seg}
+    (hmid : Agree c.P sc (segsPos mid) ((List.range' ((a + L - 1) / L * L) ((b / L - (a + L - 1) / L) * L)).map
+      fun j => Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L))))
+    (h : batchEnds c fuel k L a b mid = .ok segs) :
+    Agree c.P sc (segsPos segs) ((List.range' a (b - a)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L))) := by
+  unfold batchEnds at h
+  dsimp only at h
+  generalize hm0 : (a + L - 1) / L = m0 at *
+  generalize hm1 : b / L = m1 at *
+  have hLp : 0 < L := Nat.pos_of_ne_zero hL
+  have ha0 : a ≤ m0 * L := by
+    rw [← hm0]
+    have := Nat.div_add_mod (a + L - 1) L
+    have := Nat.mod_lt (a + L - 1) hLp
+    have : L * ((a + L - 1) / L) = (a + L - 1) / L * L := Nat.mul_comm _ _
+    omega
+  have ha1 : m0 * L < a + L := by
+    rw [← hm0]
+    exact lt_of_le_of_lt (Nat.div_mul_le_self _ _) (by omega)
+  have hb0 : m1 * L ≤ b := by rw [← hm1]; exact Nat.div_mul_le_self _ _
+  have hb1 : b < m1 * L + L := by
+    rw [← hm1]
+    have := Nat.div_add_mod b L
+    have := Nat.mod_lt b hLp
+    have : L * (b / L) = b / L * L := Nat.mul_comm _ _
+    omega
+  have hmm : m0 * L ≤ m1 * L := Nat.mul_le_mul_right _ hab
+  let V : Nat → Nat → Except String Nat := fun m e =>
+    Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get e)
+  have hfirst : ∀ x, a < m0 * L → Desc.fromCallee c fuel k (a / L) (a % L) L = .ok x →
+      Agree c.P sc (segsPos x) ((List.range' a (m0 * L - a)).map fun j => V (j / L) (j % L)) := by
+    intro x hlt hx
+    have hdm : a / L * L + a % L = a := by
+      have := Nat.div_add_mod a L
+      have : L * (a / L) = a / L * L := Nat.mul_comm _ _
+      omega
+    have hmod : a % L ≠ 0 := by
+      intro h0
+      have : a / L * L = a := by omega
+      have : m0 * L = a := by
+        rw [← hm0]
+        rw [show a + L - 1 = (L - 1) + a / L * L by omega, Nat.add_mul_div_right _ _ hLp,
+          Nat.div_eq_of_lt (by omega), Nat.zero_add]
+        omega
+      omega
+    have hm0' : m0 * L - a = L - a % L := by
+      have : m0 = a / L + 1 := by
+        rw [← hm0, show a + L - 1 = (a % L - 1) + (a / L + 1) * L by
+          rw [Nat.add_mul, Nat.one_mul]; omega, Nat.add_mul_div_right _ _ hLp,
+          Nat.div_eq_of_lt (by have := Nat.mod_lt a hLp; omega), Nat.zero_add]
+      rw [this, Nat.add_mul, Nat.one_mul]
+      omega
+    obtain ⟨hmA, hjA⟩ := hm a le_rfl (by omega)
+    have hA := hC k (a / L) (a % L) L x hmA (fun _ => by
+      have := hm (a / L * L + (L - 1)) (by omega) (by omega)
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt (by omega)] at this
+      omega) hx
+    rw [block_at V hL (a / L) (a % L) (L - a % L) (by omega), hdm] at hA
+    rwa [hm0']
+  have hlast : ∀ y, m1 * L < b → Desc.fromCallee c fuel k m1 0 (b - m1 * L) = .ok y →
+      Agree c.P sc (segsPos y) ((List.range' (m1 * L) (b - m1 * L)).map fun j => V (j / L) (j % L)) := by
+    intro y hlt hy
+    obtain ⟨hmB, -⟩ := hm (m1 * L) (by omega) hlt
+    rw [Nat.mul_div_cancel _ hLp] at hmB
+    have hA := hC k m1 0 (b - m1 * L) y hmB (fun _ => by
+      have := hm (b - 1) (by omega) (by omega)
+      rw [show b - 1 = (b - 1 - m1 * L) + m1 * L by omega, Nat.add_mul_mod_self_right,
+        Nat.mod_eq_of_lt (by omega)] at this
+      omega) hy
+    rw [Nat.sub_zero, block_at V hL m1 0 (b - m1 * L) (by omega), Nat.add_zero] at hA
+    exact hA
+  have hsplit : List.range' a (b - a) =
+      List.range' a (m0 * L - a) ++ List.range' (m0 * L) ((m1 - m0) * L) ++ List.range' (m1 * L) (b - m1 * L) := by
+    have e1 := List.range'_append_1 (s := a) (m := m0 * L - a) (n := (m1 - m0) * L)
+    have e2 := List.range'_append_1 (s := a) (m := m0 * L - a + (m1 - m0) * L) (n := b - m1 * L)
+    rw [show a + (m0 * L - a) = m0 * L by omega] at e1
+    rw [show a + (m0 * L - a + (m1 - m0) * L) = m1 * L by rw [Nat.sub_mul]; omega] at e2
+    rw [e1, e2, show m0 * L - a + (m1 - m0) * L + (b - m1 * L) = b - a by rw [Nat.sub_mul]; omega]
+  obtain ⟨A, B, rfl, hA, hB⟩ : ∃ A B, segs = A ++ mid ++ B ∧
+      Agree c.P sc (segsPos A) ((List.range' a (m0 * L - a)).map fun j => V (j / L) (j % L)) ∧
+      Agree c.P sc (segsPos B) ((List.range' (m1 * L) (b - m1 * L)).map fun j => V (j / L) (j % L)) := by
+    split at h
+    · rename_i hlt
+      obtain ⟨x, hx, h⟩ := Walk.except_bind_ok h
+      split at h
+      · rename_i hlt'
+        obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        exact ⟨x, y, by rw [← h]; try simp, hfirst x hlt hx, hlast y hlt' hy⟩
+      · rename_i hnlt
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        refine ⟨x, #[], by rw [← h]; try simp, hfirst x hlt hx, ?_⟩
+        rw [show b - m1 * L = 0 by omega]
+        exact List.Forall₂.nil
+    · rename_i hnlt0
+      split at h
+      · rename_i hlt'
+        obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        refine ⟨#[], y, by rw [← h]; try simp, ?_, hlast y hlt' hy⟩
+        rw [show m0 * L - a = 0 by omega]
+        try exact List.Forall₂.nil
+      · rename_i hnlt
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        refine ⟨#[], #[], by rw [← h]; try simp, ?_, ?_⟩
+        · rw [show m0 * L - a = 0 by omega]
+          exact List.Forall₂.nil
+        · rw [show b - m1 * L = 0 by omega]
+          exact List.Forall₂.nil
+  rw [segsPos_append, segsPos_append, hsplit, List.map_append, List.map_append]
+  exact agree_append (agree_append hA hmid) hB
 
-/-- **A batch of a composite's piece**, in its one-run case, of more than one row (row by row), of one row and a
-stride of whole members (`batchStride_agree`), of one row and any other stride but 1 (position by position), or of
-one row and stride 1 (`BatchRest`). -/
-theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
-    (hD : DownSpec c sc fuel) (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+/-- A batch's output leaves `[a, b)` member by member, from what `fromCallee` keeps (`members_agree`). -/
+theorem batchMembers_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
+    {k L a b : Nat} (hL : L ≠ 0) (hab : a < b) (hm : (b - 1) / L < (c.body.nodes[k]!).members)
+    (hj : ∀ j, a ≤ j → j < b → j % L < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) {segs : Array Seg}
+    (h : batchMembers c fuel k L a b = .ok segs) :
+    Agree c.P sc (segsPos segs) ((List.range' a (b - a)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L))) := by
+  unfold batchMembers at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.add_sub_cancel, Nat.div_one] at h
+  exact members_agree c sc fuel hC hL hab hm hj (ok_bind_pure h)
+
+/-- **Open: whole members of a batch of a composite's piece of one row and stride 1 as copies of one member's return
+naming leaves of arguments the members share**, one step up: what `fromCallee` keeps of member `m0`'s return, once for
+each member of `[m0, m1)`, every member's return resolving as member `m0`'s. -/
+def BatchSharedMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
+  ∀ k node m0 m1 one,
+    let L := (c.P.defs[node.fn]!).outLeaves
+    c.node k = .ok node → node.form = .batch → (c.P.defs[node.fn]!).prim = false → L ≠ 0 →
+    m0 + 1 < m1 → m1 ≤ (c.body.nodes[k]!).members →
+    ((c.memo[node.fn]!).ret.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
+      | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
+      | _ => false) = true →
+    Desc.fromCallee c fuel k m0 0 L = .ok one → one.all (·.reps ≤ 1) = true →
+    Agree c.P sc (segPos (Desc.Seg.mk (one.flatMap (·.ps)) L (m1 - m0) 0))
+      ((List.range' (m0 * L) ((m1 - m0) * L)).map fun j =>
+        Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L)))
+
+/-- **Open: whole members of a batch of a composite's piece of one row and stride 1, each returning one run of a
+mapped argument's leaves within one row of its axis**, one step up: what `down` keeps of the piece of rows
+`throughPS` gives, the run in each member's row. -/
+def BatchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
+  ∀ k node m0 m1 i d Li bp segs,
+    let L := (c.P.defs[node.fn]!).outLeaves
+    let g := (c.memo[node.fn]!).ret.segs[0]!.ps[0]!
+    let lo := g.base.toNat
+    c.node k = .ok node → node.form = .batch → (c.P.defs[node.fn]!).prim = false → L ≠ 0 →
+    m0 + 1 < m1 → m1 ≤ (c.body.nodes[k]!).members → (c.memo[node.fn]!).ret.segs.size = 1 →
+    (c.memo[node.fn]!).ret.segs[0]!.reps ≤ 1 → (c.memo[node.fn]!).ret.segs[0]!.ps.size = 1 →
+    g.tgt = .ref true i → (node.args[i]?.bind (·.dims)) = some (d, Li) →
+    (Li > 0 && g.rows ≤ 1 && (g.stride == 1 || g.len ≤ 1) && g.len == L && lo / Li == (lo + L - 1) / Li) = true →
+    Desc.throughPS (c.arg k i) (Desc.Piece.mk (.gate 0) (((lo / Li * d + m0) * Li + (lo - lo / Li * Li) : Nat) : Int)
+      1 L (m1 - m0) (Li : Int)) = some bp →
+    Desc.down c fuel bp = .ok segs →
+    Agree c.P sc (segsPos segs) ((List.range' (m0 * L) ((m1 - m0) * L)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L)))
+
+/-- A batch's output leaves `[a, b)` through `throughPS` (`BatchThroughMid`), else member by member. -/
+theorem batchThrough_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
+    (hTM : BatchThroughMid c sc fuel) {k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .batch) (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
+    {a b : Nat} (hab : a < b)
+    (hm : ∀ j, a ≤ j → j < b → j / (c.P.defs[node.fn]!).outLeaves < (c.body.nodes[k]!).members ∧
+      j % (c.P.defs[node.fn]!).outLeaves < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    (hm1 : b / (c.P.defs[node.fn]!).outLeaves ≤ (c.body.nodes[k]!).members)
+    {segs : Array Seg} (h : batchThrough c fuel k node a b = .ok segs) :
+    Agree c.P sc (segsPos segs) ((List.range' a (b - a)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k (j / (c.P.defs[node.fn]!).outLeaves))
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % (c.P.defs[node.fn]!).outLeaves))) := by
+  have hmem := fun (hh : batchMembers c fuel k (c.P.defs[node.fn]!).outLeaves a b = .ok segs) =>
+    batchMembers_agree c sc fuel hC hL hab (hm (b - 1) (by omega) (by omega)).1 (fun j h1 h2 => (hm j h1 h2).2) hh
+  unfold batchThrough at h
+  dsimp only at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hc
+    split at h
+    · rename_i i hti
+      split at h
+      · rename_i d Li hdl
+        split at h
+        · rename_i hg
+          split at h
+          · rename_i bp hbp
+            obtain ⟨x, hx, h⟩ := Walk.except_bind_ok h
+            exact ends_agree c sc fuel hC hL (by omega) hm
+              (hTM k node _ _ i d Li bp x hn hform hp hL hc.1.1.1 hm1 hc.1.1.2 hc.1.2 hc.2 hti hdl hg hbp hx) h
+          · exact hmem h
+        · exact hmem h
+      · exact hmem h
+    · exact hmem h
+  · exact hmem h
+
+/-- **A batch of a composite's piece of one row and stride 1 past its one-run case**: whole members as copies of
+one member's return of gates (`copies_seg_agree`), of leaves of shared arguments (`BatchSharedMid`), through
+`throughPS` (`BatchThroughMid`), or member by member, the cut members at either end each through its return
+(`ends_agree`). -/
+theorem batchOne_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (fuel : Nat) (hC : CalleeSpec c sc fuel) (hSM : BatchSharedMid c sc fuel) (hTM : BatchThroughMid c sc fuel)
+    (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
+    (hR : RetOk c.P c.memo node.fn) (hOL : (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count)
+    (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride = 1)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x) {segs : Array Seg}
+    (h : batchOne c fuel k node q = .ok segs) : Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc)) := by
+  apply batch_den c sc hd q ht hn hform hp h0 hr hs hq
+  have h1 := rows_one h0 hr
+  have hlen : 0 < q.len := by rw [← count_one h1]; omega
+  have hdo := downOk_of hB hn
+  have hnode := node_get hn
+  have hbl : q.base.toNat + q.len ≤ node.out.leaves := by
+    have hm := at_mem_pos h1 (show q.len - 1 < q.len by omega)
+    have hb := hq _ (at_mem_pos h1 hlen)
+    have := hf _ hm k ht
+    simp only [hnode, Desc.Piece.at, hs] at this hb
+    omega
+  have hm : ∀ j, q.base.toNat ≤ j → j < q.base.toNat + q.len →
+      j / (c.P.defs[node.fn]!).outLeaves < (c.body.nodes[k]!).members ∧
+        j % (c.P.defs[node.fn]!).outLeaves < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count := by
+    intro j _ hj
+    have := hdo j (by omega)
+    simp only [hform] at this
+    rw [hnode, members_batch hform]
+    exact ⟨this.1, this.2.2 hp⟩
+  have hlen' : q.base.toNat < q.base.toNat + q.len := by omega
+  have hm1 : (q.base.toNat + q.len) / (c.P.defs[node.fn]!).outLeaves ≤ (c.body.nodes[k]!).members := by
+    have hLp := Nat.pos_of_ne_zero hL
+    have h1' := (hm (q.base.toNat + q.len - 1) (by omega) (by omega)).1
+    have e1 := Nat.div_mul_le_self (q.base.toNat + q.len) (c.P.defs[node.fn]!).outLeaves
+    have e5 := Nat.lt_div_mul_add (a := q.base.toNat + q.len - 1) hLp
+    have e6 : (q.base.toNat + q.len) / (c.P.defs[node.fn]!).outLeaves * (c.P.defs[node.fn]!).outLeaves ≤
+        ((q.base.toNat + q.len - 1) / (c.P.defs[node.fn]!).outLeaves + 1) * (c.P.defs[node.fn]!).outLeaves := by
+      rw [Nat.add_mul, Nat.one_mul]; omega
+    have := Nat.le_of_mul_le_mul_right e6 hLp
+    omega
+  rw [show q.len = q.base.toNat + q.len - q.base.toNat by omega]
+  unfold batchOne at h
+  dsimp only at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    have hgo : ∀ x ∈ (c.memo[node.fn]!).ret.segs.toList, x.reps ≤ 1 ∧ ∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w := by
+      intro x hx
+      have := (Array.all_eq_true_iff_forall_mem.1 hc.1) x (Array.mem_toList_iff.1 hx)
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+      exact ⟨this.1, gates_of_all this.2⟩
+    refine ends_agree c sc fuel hC hL (by omega) hm ?_ h
+    rw [segsPos_singleton]
+    exact copies_seg_agree c sc hd hn hR hL hOL hgo _ _
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    obtain ⟨one, hone, h⟩ := Walk.except_bind_ok h
+    split at h
+    · rename_i hone1
+      refine ends_agree c sc fuel hC hL (by omega) hm ?_ h
+      rw [segsPos_singleton]
+      exact hSM k node _ _ one hn hform hp hL hc.2 hm1 hc.1 hone hone1
+    · exact batchThrough_agree c sc fuel hC hTM hn hform hp hL hlen' hm hm1 h
+  · exact batchThrough_agree c sc fuel hC hTM hn hform hp hL hlen' hm hm1 h
+
+/-- **A batch of a composite's piece**, in its one-run case, of more than one row (row by row), or of one row: of
+stride 1 (`batchOne_agree`), of a stride of whole members (`batchStride_agree`), or of any other stride (position by
+position). -/
+theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (fuel : Nat) (hD : DownSpec c sc fuel) (hC : CalleeSpec c sc fuel)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count)
-    (hAff : BatchAffine c sc) (hRest : BatchRest c sc fuel) (hSh : BatchShared c sc fuel) : BatchSpec c sc fuel := by
+    (hAff : BatchAffine c sc) (hSM : BatchSharedMid c sc fuel) (hTM : BatchThroughMid c sc fuel)
+    (hSh : BatchShared c sc fuel) : BatchSpec c sc fuel := by
   intro q segs k node ht hn hform hp h0 hff hq hf h
   by_cases hL : (c.P.defs[node.fn]!).outLeaves = 0
   · exact absurd h (down_batch0 c fuel q ht hff hn hform hp hL h0 segs)
@@ -5740,7 +6116,9 @@ theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     · rw [down_batch_rows c fuel q ht hff hn hform hp hL h0 ha hr] at h
       exact byRows_agree c sc fuel hD q hq hf h
     by_cases hs : q.stride = 1
-    · exact hRest q segs k node ht hn hform hp hL h0 hff ha hr hs hq hf h
+    · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
+      exact batchOne_agree c sc hd hB fuel hC hSM hTM q ht hn hform hp hL (hR k node hn) (hOL k node hn hp) h0 hr hs
+        hq hf h
     by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
     · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
       exact batchStride_agree c sc hd fuel hD hSh q ht hn hform hp hL (hR k node hn) (hOL k node hn hp)
@@ -5753,11 +6131,13 @@ theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
 /-- **Open: `down`'s steps past what is proved here**, each one step up from the specs at its fuel: a batch of a
-composite's piece of one row and stride 1 past its one-run case (`BatchRest`), one of one row and a stride of whole
-members as copies of a member's leaf naming leaves of shared arguments (`BatchShared`), and `carry` (`CarrySpec`),
-which follows a scan's carry back through its iterations. -/
+composite's whole members, of a piece of one row past its one-run case, as copies of one member's return or leaf naming
+leaves of arguments the members share (`BatchSharedMid` at stride 1, `BatchShared` at a stride of whole members) or
+through `throughPS` (`BatchThroughMid`), and `carry` (`CarrySpec`), which follows a scan's carry back through its
+iterations. -/
 def OpenSteps (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
-  (∀ fuel, DownSpec c sc fuel → CalleeSpec c sc fuel → BatchRest c sc fuel ∧ BatchShared c sc fuel) ∧
+  (∀ fuel, DownSpec c sc fuel → CalleeSpec c sc fuel →
+    BatchSharedMid c sc fuel ∧ BatchThroughMid c sc fuel ∧ BatchShared c sc fuel) ∧
     (∀ fuel, CalleeSpec c sc fuel → ThroughSpec c sc fuel → CarrySpec c sc (fuel + 1))
 
 /-- **`down`, `fromCallee`, `throughArg` and `carry` keep the gates they read, at every fuel**, wherever the callees'
@@ -5775,8 +6155,8 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
     (hO : OpenSteps c sc) :
     ∀ fuel, DownSpec c sc fuel ∧ CalleeSpec c sc fuel ∧ ThroughSpec c sc fuel ∧ CarrySpec c sc fuel :=
   specs c sc hd hB hP1 hA hL0 hR
-    (fun fuel hD hC => batchSpec_of c sc hd fuel hD hR hOL (batchAffine c sc hd hR hOL) (hO.1 fuel hD hC).1
-      (hO.1 fuel hD hC).2)
+    (fun fuel hD hC => batchSpec_of c sc hd hB fuel hD hC hR hOL (batchAffine c sc hd hR hOL) (hO.1 fuel hD hC).1
+      (hO.1 fuel hD hC).2.1 (hO.1 fuel hD hC).2.2)
     (fun fuel hC hK => scanSpec_of c sc hd hB hSO fuel hC hK) hO.2
 
 
