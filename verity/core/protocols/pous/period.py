@@ -18,10 +18,12 @@ at `eps = δ + 2^eps_log2` when P2's one certificate covers the point, else 0 an
 certificate is at P2's deployed point only (`run.DEPLOYED`, a 1 GiB `C*`), so a small point's accepted run certifies no
 storage: its verdict is real and its quantity vacuous.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: `W` is the period's records, the coins are
-fresh from the OS, and the signer is a key at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes
-once beside the periods. Every party runs on the one node, so `trusted-nebius-host`'s premise that the memory challenger
-runs on a machine the prover doesn't control is not met by this run: it exercises the code, not the deployment.
+`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: `W` is the period's records and the coins
+are fresh from the OS. The memory challenger is a party of its own (`challenger_party`) on `period.json`'s
+`challenger_host`, with its own coins and a key at S1's deployed parameters (`memory_challenger.LMS`) that `challenger`
+makes once on that host; the prover and the verifier run on the node. `trusted-nebius-host`'s premise, that the memory
+challenger runs on a machine the prover doesn't control, holds only when the challenger host isn't the node, and the
+leg says which (`challenger_party.placement`). The setup's salt is still drawn on the node.
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
+from . import challenger_party
 from . import memory_challenger as mc
 from . import protocol as pous_protocol
 from . import run as R
@@ -213,14 +216,17 @@ class Period:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
-def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer, log: mc.SessionLog, point: R.Point | None = None,
-        trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
-        protocol: str = PROTOCOL, prover: Prover = honest,
-        clock: Callable[[], int] = time.perf_counter_ns) -> Period:
+def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
+        point: R.Point | None = None, trusted: Collection[bytes] | None = None,
+        schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
+        clock: Callable[[], int] = time.perf_counter_ns, party: challenger_party.Party | None = None) -> Period:
     """The period's PoUS on `node` (module docstring): `store` is what the node keeps, `coins` the verifier's and the
     memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its session log.
     `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the signature schemes
     it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and `pous_test_signer.SCHEMES`).
+    With `party`, the memory challenger is a party of its own (`challenger_party`): its side runs where `party` starts it,
+    with its own coins, key and session log, and the prover answers it over a socket; `signer`, `log` and `clock` are
+    unused, and the verifier's list is by default the key the side reports.
     A setup the verifier refuses raises `ValueError`, since no run of it exists."""
     point = point_for(len(store)) if point is None else point
     q = point.params
@@ -235,13 +241,18 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer, log: mc.Ses
     published = R.Setup(q.blocks, commitment, root, salt)
     blocks = [b for seg in encoded for b in seg]
     digests = b"".join(mc.block_digest(b) for b in blocks)
-    session_id = derive(coins, SESSION_DOMAIN, {"node": node, "setup": root}).stream("session", 32)
-    tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
-    challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
-                                     binding=root, clock=clock)
-    signed = challenger.run(prover(blocks))
-    session = R.Session(signed, challenger.commitment, challenger.openings())
-    trusted = (signer.public_key,) if trusted is None else tuple(trusted)
+    if party is None:
+        session_id = derive(coins, SESSION_DOMAIN, {"node": node, "setup": root}).stream("session", 32)
+        tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
+        challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
+                                         binding=root, clock=clock)
+        signed = challenger.run(prover(blocks))
+        session, key = R.Session(signed, challenger.commitment, challenger.openings()), signer.public_key
+    else:
+        got = challenger_party.session(party, challenger_party.request_of(node, point, root), prover(blocks))
+        session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
+        session = R.Session.from_json(got["session"])
+    trusted = (key,) if trusted is None else tuple(trusted)
     of = setup_case(q, commitment, salt, encoded)
     return Period(answer(point, schemes, trusted, published, digests, session, session_id, protocol,
                          setup_inputs=(commitment, salt, encoded)),
@@ -291,17 +302,19 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): `run` on the period's
-    records with fresh coins, the memory challenger's key and session log beside the periods. With `pous-run-protocol`
-    and `pous-setup` among the period's tools, the Lean answers (the verifier of record) and must agree with the Python;
-    it writes `out/pous.case.json` (onsite's PoUS case), `out/pous-setup.case.json` and `out/pous.json`."""
-    tools = json.loads((Path(period_dir) / "period.json").read_text()).get("tools") or {}
-    device = Path(period_dir).parent / "pous-challenger"
-    signer = challenger(device)
-    if not (device / "sessions").exists():
-        mc.SessionLog.create(device / "sessions")
+    records with fresh coins, the memory challenger a party of its own on `period.json`'s `challenger_host`
+    (`challenger_party.Party.of`; on this node by default, a process whose key and session log are beside the periods)
+    and the prover here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean answers (the
+    verifier of record) and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
+    `out/pous-setup.case.json` and `out/pous.json`. Which host ran each party, and whether `trusted-nebius-host`'s
+    premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted answer's profile (`placement`)."""
+    doc = json.loads((Path(period_dir) / "period.json").read_text())
+    tools = doc.get("tools") or {}
+    party = challenger_party.Party.of(doc, node, Path(period_dir).parent / "pous-challenger")
+    where = challenger_party.placement(node, party.host)
     store = records(period_dir)
     t = time.monotonic()
-    period = run(node, store, secrets.token_bytes(64), signer=signer, log=mc.SessionLog(device / "sessions"))
+    period = run(node, store, secrets.token_bytes(64), party=party)
     seconds = round(time.monotonic() - t, 2)
     answer, lean = period.answer, {}
     if "pous-run-protocol" in tools:
@@ -313,12 +326,14 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         lean["setup"] = serve(tools["pous-setup"], [period.setup_case])[0]
         if lean["setup"]["verdict"] != "accept":
             raise RuntimeError(f"pous-setup refused the setup the Python accepted: {lean['setup']}")
+    if answer["profile"] is not None:
+        answer = answer | {"profile": answer["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
     (out / "pous.case.json").write_text(json.dumps(period.case, sort_keys=True))
     (out / "pous-setup.case.json").write_text(json.dumps(period.setup_case, sort_keys=True))
     (out / "pous.json").write_text(json.dumps({"answer": answer, "eps": str(period.eps), "lean": lean,
-                                               "s_bits": period.s_bits, "seconds": seconds, "store_bytes": len(store)},
-                                              sort_keys=True, indent=1))
+                                               "placement": where, "s_bits": period.s_bits, "seconds": seconds,
+                                               "store_bytes": len(store)}, sort_keys=True, indent=1))
     return answer
 
 
