@@ -3,7 +3,8 @@ import Proofs.Flock.Bridge.Canon
 /-!
 # The assembly with canonical openings (`Bridge.AssemblyTargetC`, proved)
 
-`Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC`. At `kd = 0` the miss term `C(n − K₀, 0)/C(n, 0)` is `1`.
+`Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC`, which concludes `SampledKSLiveV2` (row/v2 circuit files,
+`Bridge.RowsV2`, which `TransportsLiveC` takes too). At `kd = 0` the miss term `C(n − K₀, 0)/C(n, 0)` is `1`.
 Otherwise `EndToEndHiddenC` at `K₁ = min K₀ (n − kd + 1)` bounds the event: outside `RelS` at least `K₁` slots are
 faulty (`CountTarget`), and each faulty slot is a unit wrong on the registration with canonical openings, since a unit
 right in that sense is not faulty (`FaultyRightTargetC` at `Val := vb.Opening`, `val := id`, its transport from
@@ -32,14 +33,14 @@ open scoped ENNReal
 
 /-- **The assembly, with canonical openings** (`Bridge.AssemblyTargetC`). -/
 theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
-  intro hT hF hPR hC hE n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
+  intro hT hF hPR hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS desc q L P vb σ Xr δ Cc rows roots Cd hTab hLink
   by_cases hk0 : kd = 0
   · refine (FlockSoundness.Game.prob_le_one _ _ τ).trans (le_trans (le_of_eq ?_) (le_self_add.trans le_self_add))
     rw [hk0]
     simp
   have hkd1 : 1 ≤ kd := Nat.pos_of_ne_zero hk0
-  have hTu := hT n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags hCust τ
+  have hTu := hT n Reg I ht D hD hU pub hpub hpt hscope hv2 kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags hCust τ
   have hsub : Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P kd desc q roots) (Bridge.partOf P)
       (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) ⊆
       (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
