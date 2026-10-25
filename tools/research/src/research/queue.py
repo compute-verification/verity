@@ -103,8 +103,9 @@ the queue's state.  A sync keeps the longest prefix of that chain which still ma
 order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
 merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
-PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
-change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+PR whose head contains another open PR's head, or commits of a lower-numbered one's branch at an older head (`Queue.entries`), goes
+in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
+mark (`Queue._carried`).  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`), with the gate's fix: each PR the sync merges is judged first, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
@@ -660,7 +661,8 @@ class Entry:
     pr: PR
     state: str = "ready"                  # ready | queued | waiting | refused
     why: str = ""
-    after: tuple[int, ...] = ()           # open PRs whose heads its head contains
+    after: tuple[int, ...] = ()           # open PRs whose heads, or some of whose own commits (`shares`), its head contains
+    shares: tuple[int, ...] = ()          # those of `after` whose current head it doesn't contain (`Queue.entries`)
     position: int | None = None           # 1-based, on `next`
     commit: str | None = None
 
@@ -789,9 +791,21 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict) -> dict[int, Entry]:
+        """Each open PR's standing.  A PR goes after, and waits while it isn't admitted, each other open PR whose current head
+        its head contains, and each lower-numbered one it shares an own commit with (`shares`; a PR's own commits are those in
+        `main..` its head less those below the heads of open PRs it contains), as when it branched from that PR's older head
+        and the PR moved on unmarked (25 Oct: #4412 from #4382's eadb6663, which would have landed #4382's unmarked commits under #4412's
+        mark).  One `rev-list` a PR and one index of commits by PR, not a merge base for each pair.
+
+        The queue keeps no PR's past heads (marks on them are a store pull per PR, too slow for every tick), so: an older head
+        that its PR no longer contains (rebased or force-pushed) isn't seen; and when two PRs share commits but neither
+        contains the other's head, which branched from which can't be told from the commits, so the higher-numbered one is
+        taken to carry the lower one's (a PR stacked on a branch whose PR was opened after its own lands that branch's commits
+        unseen, and waits for nothing)."""
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
+        below: dict[int, set[str]] = {}
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         for p in prs:
@@ -811,20 +825,31 @@ class Queue:
                                              f"before `marked_after`): re-mark it or close it")
             else:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
-            below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
-            e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
+            below[p.number] = set(_out(self.workdir, "rev-list", f"origin/main..{p.head}").split())
+            e.after = tuple(sorted(heads[h] for h in below[p.number] if h in heads and heads[h] != p.number))
+        own = {n: below[n].difference(*(below[a] for a in e.after)) for n, e in out.items()}
+        owners: dict[str, list[int]] = {}                   # commit: the PRs it is an own commit of
+        for n, cs in own.items():
+            for c in cs:
+                owners.setdefault(c, []).append(n)
+        for n, e in out.items():
+            e.shares = tuple(sorted({q for c in own[n] for q in owners[c] if q < n}))
+            e.after = tuple(sorted(e.after + e.shares))
         for e in out.values():
             e.after = tuple(a for a in e.after if not self._carried(e.pr, out[a], state))
+            e.shares = tuple(a for a in e.shares if a in e.after)
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
             for e in out.values():
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
-                    e.state, e.why, changed = "waiting", f"contains #{blocking[0]}, which isn't admitted", True
+                    what = f"#{blocking[0]}'s commits (at an older head)" if blocking[0] in e.shares else f"#{blocking[0]}"
+                    e.state, e.why, changed = "waiting", f"contains {what}, which isn't admitted", True
         return out
 
     def _carried(self, p: PR, a: Entry, state: dict) -> bool:
-        """Whether ``p`` carries the change of ``a``, a PR whose head it contains and that isn't marked ready: the same owner
+        """Whether ``p`` carries the change of ``a``, a PR whose head or own commits it contains (`entries`) and that isn't
+        marked ready: the same owner
         rebuilt it as ``p``, or ``a``'s owner withdrew its mark (`eject`, or a `ready = false` label).  Then ``p`` doesn't wait
         for ``a`` and goes on without it below (24 Oct: lanes rebuilt #3401, #3570 and #3554 by hand to drop a superseded PR
         that no one's tooling may close)."""
@@ -852,10 +877,12 @@ class Queue:
                 break
             held.append(m.pr)
         out: list[int] = []
+        placing: set[int] = set()
 
         def place(n: int) -> None:
-            if n in out:
+            if n in out or n in placing:
                 return
+            placing.add(n)
             for a in entries[n].after:
                 place(a)
             out.append(n)

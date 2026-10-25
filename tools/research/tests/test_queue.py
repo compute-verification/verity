@@ -346,6 +346,27 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
+def test_a_pr_holding_an_older_head_of_an_unmarked_pr_waits_for_it_and_shared_history_alone_holds_nothing(world):
+    """CI-178, 25 Oct: #4412 branched from #4382 at an older head; #4382 moved on unmarked, and drive, which looked only for
+    #4382's current head, admitted #4412 with #4382's unmarked commits in it."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # #5 moved on from `old`, unmarked
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`
+    base = world.change({"m.txt": "landed\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    world.gh.put(8, world.change({"y.txt": "y\n"}, base=base))                 # shares only `main`'s history with #5
+    world.gh.put(9, world.change({"z.txt": "z\n"}, base=world.gh.prs[5].head))  # on #5's current head: as before
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [8]
+    assert entries[7].state == "waiting" and entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+    assert entries[7].after == entries[7].shares == (5,) and entries[5].after == ()
+    assert entries[8].after == () and entries[9].why == "contains #5, which isn't admitted" and entries[9].shares == ()
+    assert q.status()[7].why == entries[7].why
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    assert [m.pr for m in q.sync()[0]] == [8, 5, 7, 9]
+
+
 def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owner_withdrew_it(world):
     """24 Oct: drive held a PR containing another open PR's head until that one closed, and no one's tooling may close a PR,
     so lanes rebuilt #3401, #3570 and #3554 by hand.  A rebuild by the same owner, or one whose owner withdrew the PR it
