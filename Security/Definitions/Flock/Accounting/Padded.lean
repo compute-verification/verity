@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Accounting.Bound
+import Definitions.Flock.Accounting.Bound
 
 /-!
 # The bound with a padded level 0 (M1)

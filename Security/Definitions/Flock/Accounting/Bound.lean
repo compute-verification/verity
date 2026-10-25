@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Accounting.Schedule
+import Definitions.Flock.Accounting.Schedule
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Analysis.SpecialFunctions.Sqrt
 

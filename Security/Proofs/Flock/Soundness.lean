@@ -8,12 +8,12 @@ import Proofs.Flock.Soundness.Model.Compiled
 import Proofs.Flock.Soundness.CompiledLock
 import Proofs.Flock.Soundness.CompiledSound
 import Proofs.Flock.Soundness.CompiledTable
-import Proofs.Flock.Soundness.Accounting.Schedule
-import Proofs.Flock.Soundness.Accounting.Bound
+import Definitions.Flock.Accounting.Schedule
+import Definitions.Flock.Accounting.Bound
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Model.Basic
+import Definitions.Flock.Arith
 import Proofs.Flock.Soundness.Model.Statement
 import Proofs.Flock.Soundness.Model.Piop
 import Proofs.Flock.Soundness.Model.Ligerito
@@ -46,7 +46,7 @@ import Proofs.Flock.Soundness.LigeritoPhase
 import Proofs.Flock.Soundness.Instance
 import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.PadCode
-import Proofs.Flock.Soundness.Accounting.Padded
+import Definitions.Flock.Accounting.Padded
 import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 import Proofs.Flock.Soundness.Model.LigeritoPad
 import Proofs.Flock.Soundness.LigeritoPadLevel0

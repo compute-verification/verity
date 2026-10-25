@@ -338,9 +338,10 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
-    until its spec is extracted.
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
+    `Definitions/Flock` holds what has been extracted so far (its arithmetic, its Ligerito schedule and bounds): its
+    guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
+    extracted.
   - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
     guarantee statements), properties (statements about the code, reading only the definitions and that code) and
     proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
