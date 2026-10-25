@@ -88,7 +88,7 @@ theorem sendsP_eq {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array 
   rw [hlen, hsz]
   simp only [repCtx] at hsch ⊢
   simp only [JsonRT.sendsP, hc, JsonRT.ptsOf_coin, hsch, Option.getD_some]
-  cases (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) <;> dsimp only <;> omega
+  cases (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) <;> dsimp only
 
 /-- **The honest files' `finalC` is the zerocheck's at the reader's `z`** (`FilesFinalC`): at a `sessionS` run whose
 tables are `TableOk` with at most 2,048 extra claims at `c₁`'s link points, where reply `i` is coin `i`'s bytes, for

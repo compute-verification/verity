@@ -12,15 +12,17 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 * **File `k` is table `k / 2`'s rep** (`sessionP_repRuns`): at any number of tables, the plain session's `k`th proof
   file encodes the proof `repP` returns on table `k / 2`'s setup, schedule, trace, packed table and level-0
   commitment, with its extra claims at the link's points and rep `k % 2`'s salts and nonces, from the empty transcript
-  at the rep's domain (`RepRunP`). A rep's proof carries its commitment's cap (`repP_cap`).
+  at the rep's domain, after the link's send and the earlier reps' (`sendsP`, `RepRunP`). A rep's proof carries its
+  commitment's cap (`repP_cap`).
 * **The files decode to honest reps** (`sessionS_reps`): at a `sessionS` run whose tables are `TableOk` with at most
   2,048 extra claims at the first coin's link points, file `k` decodes at `shapeAt` to that proof (`filePs`), whose
   cap, its table's, has the table's level-0 node count, and which is an honest rep of `repCtx` (`honestRep_of_repP`)
-  wherever its `finalC` is the zerocheck's at the reader's `z`. So the honest run's last message carries `filesAt` of
+  wherever its `finalC` is the zerocheck's at the reader's `z`; that `finalC` is the zerocheck's at the reply the
+  rep's `z` is read from (`zAtP`, `JsonRT.repP_finalC`). So the honest run's last message carries `filesAt` of
   those proofs (`honestRun_files`).
 * **The honest run decides at its own proofs** (`sessionRun_decides`): `ReadsBack` at `filePs` and each table's cap
   (`fileCaps`), wherever their rows fit a message (`RowsFit`), the last message reads as `filePs`, and the files'
-  `finalC` are at the reader's `z` (`FilesFinalC`, plain zerocheck completeness at the reader's coin, open here).
+  `finalC` are at the reader's `z` (`FilesFinalC`, which `NextRCoins` proves where the replies are the coins' bytes).
 
 The session's tables are taken to number the spec's (`sts.size = spec.tables.size`), as the masked scope proves
 (`ZkTables.tables_of_setup`).
@@ -297,7 +299,7 @@ theorem honestRun_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {
 
 /-- **The honest files' `finalC` is the zerocheck's at the reader's `z`**: each proof the files decode to
 (`filePs`) has `finalC` at its rep's `z` in the coins `cs` (`repCtx`). This is plain zerocheck completeness at the
-reader's coin, open here: `sessionRun_decides` takes it as a hypothesis. -/
+reader's coin: `sessionRun_decides` takes it, and `filesFinalC` proves it where the replies are the coins' bytes. -/
 def FilesFinalC (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List Coin) (pfs : Array ByteArray) :
     Prop :=
   ∀ k < pfs.size, (filePs spec sts c₁ pfs)[k]!.zerocheck.finalC =

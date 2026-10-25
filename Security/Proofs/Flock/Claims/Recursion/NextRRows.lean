@@ -6,7 +6,8 @@ import Proofs.Flock.Claims.DeployTables
 
 `sessionRun_decides` takes that the honest prover's rows fit a message (`RowsFit`): round 0's (`capRows`) and every
 rep's round's (`repRows`). They do, at every statement that sets up, so the honest session decides with no row premise
-(`sessionRun_decides_fit`, which still takes the files' `finalC` at the reader's `z`, `FilesFinalC`):
+(`sessionRun_decides_fit`, which still takes the files' `finalC` at the reader's `z`, `FilesFinalC`, which
+`NextRCoins` proves at coins the replies are):
 
 * **Tables** (`setupTables_le`, `setup_tables`): `Stmt.setupTables` refuses more than `Tags.MAX_TABLES = 64` tables, and
   its spec names one table per statement, so `sessionRun_decides`' `sts.size = spec.tables.size` is derived too.
@@ -379,7 +380,8 @@ theorem rowsFit₀ (T : F128) : (∀ rs ∈ repRows c₀ p₀ T, RowsFit rs) ∧
 open FlockComplete Rows in
 /-- **The honest run decides at its own proofs, with no row premise**: `sessionRun_decides`, whose rows fit a message
 at every statement that sets up (`setup_tables`, `capRows_fit`, `repRows_fit`), and whose spec names one table per
-statement. The files' `finalC` at the reader's `z` (`FilesFinalC`) stays a hypothesis. -/
+statement. The files' `finalC` at the reader's `z` (`FilesFinalC`) stays a hypothesis here; `sessionRun_decides_coins`
+discharges it. -/
 theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
