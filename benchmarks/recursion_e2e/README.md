@@ -27,9 +27,10 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   there. A GPU run (`--oprove-gpu 1`, or modes without the firewall) is a GPU host job on vy-nebius-1's queue, and
   `--preemptible` is for a guest on another lane's node (vy-nebius-2 admits guests only so).
 
-- **Firewall on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the firewall one at a time, and 85
-  proves V*'s statements one after another. `dev` and `host` are there to compare against, never the default. A run never
-  proves two of its V* statements at once.
+- **Firewall on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the firewall one at a time.
+  `dev` and `host` are there to compare against, never the default. A run never proves two of its V* statements at once:
+  85 proves 4 at once by default, so `job.sh` sets its `OPROVE_JOBS=1` and records it in `params.txt` (the table's header
+  says "V* statements 1 at a time"). r20261025-094601-4794 ran before that and timed its sessions 4 at once.
 - **The lease, per statement.** A firewalled V* session at K = 4096 takes minutes, and its time is the Lean session
   loop's, not the prover's. Each statement's lease (`stmt_lease_min` in `run.py`, printed by `plan`) is 1.5 times its
   measured firewalled session (r20261024-094937-6572, the CPU prover, one at a time, end to end): L0 3738 s, L1 894,
