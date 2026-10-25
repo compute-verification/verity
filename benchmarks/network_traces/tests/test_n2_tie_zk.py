@@ -43,6 +43,19 @@ def test_each_members_references_give_its_verdicts():
     assert all(x.own is not None and 0 in x.words for x in forged.windows)
 
 
+def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_honest_tied_and_forged_refused():
+    sv = _load()
+    sv.use("served")
+    tie = sv.TS.IngressTie(sv.LINK, sv.PARAMS, sv.SESSION)
+    assert tie.key == (4096, 1, 1) and sv.T == 60 and sv.HC.pinned(tie.gates()[0])
+    assert list(sv.members()) == list(sv.EXPECT) == ["honest", "forged"] and f"pub-{sv.T}.bin" in sv.RECEIVED
+    for name, (link, adv, edit, _) in sv.members().items():
+        rd = sv.link_windows(tie, link, adv, edit)
+        assert len(rd.windows) == 1 and len(rd.windows[0].words) == 60 and all(rd.windows[0].opens), name
+        assert tuple(bool(x.expect) for x in rd.windows) == sv.EXPECT[name], name
+    assert tz.T == 4 and tz.B == 512
+
+
 def test_the_scan_looks_for_held_cells_and_salts_alone():
     tie = _tie()
     link, adv, _, _ = tz.members()["honest"]
