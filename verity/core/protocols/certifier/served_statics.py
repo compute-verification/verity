@@ -51,7 +51,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
-from verity.core.protocols.certifier import head_check as HC, replay_chain as RC, served_tie as ST
+from verity.core.protocols.certifier import head_check as HC, replay_chain as RC, served_rows as SR, served_tie as ST
 from verity.core.protocols.certifier.head_check import BIT
 
 STATICS = ("R", "G", "IW", "L", "T")
@@ -122,8 +122,9 @@ ServedStaticsTie = CompositeDefinition(
 
 def statics(S, G: int | None = None) -> dict:
     """The tie's statics for a compile slice's statics `S` (its R, P, IW, and ReplayStep_v1's L and T) and a unit's G steps
-    (the whole window by default)."""
-    return {"R": S.R, "G": S.P if G is None else G, "IW": S.IW, "L": S.L, "T": S.T}
+    (the whole window by default), G dividing P as the served rows' blocks are (`served_rows.register`): the tie's
+    statics don't hold P, so this is where G is held to it."""
+    return {"R": S.R, "G": SR._blocks(S, G), "IW": S.IW, "L": S.L, "T": S.T}
 
 
 def unit(**st):

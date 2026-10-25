@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
@@ -113,9 +113,12 @@ def test_the_slices_block_rows_are_the_registered_leaves(x):
 def test_a_records_g_that_doesnt_divide_p_is_refused(x, G):
     """REDTEAM phase 19 #3: the verifier indexes a unit's rows by the public record's G, which `register` holds to divide
     P; a record whose G doesn't (2 or 3 on P = 7 floors to 3 or 2 blocks a window, 8 to none, 0 divides by zero) is
-    refused there too, rather than read as another G's leaves."""
+    refused there too, rather than read as another G's leaves. The tie's statics, which don't hold P, refuse that G
+    too, so no unit is built for a block the registration never has."""
     with pytest.raises(ValueError, match="dividing P"):
         SR.leaf(x.S, {**x.record, "G": G}, 1, 0)
+    with pytest.raises(ValueError, match="dividing P"):
+        SS.statics(x.S, G=G)
 
 
 def test_the_record_is_public_only(x):
