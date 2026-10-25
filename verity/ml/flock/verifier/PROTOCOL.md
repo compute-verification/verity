@@ -1920,6 +1920,13 @@ expectation):
 - **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
   (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
   exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
+- **D22:** the verifier's own program (`--program`) with a reference that names a leaf of another width than its type gives
+  that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4). Upstream reads no program; the spec's decoder
+  (`Flock.Program.Widths`, which `NciCheck` decodes with too) refuses it at setup as the Python codec does, with the codec's
+  message. Every writer builds its program through `defs.Builder`, which refuses it. No vector exercises it (the corpus's
+  programs, sets 12 and 14 to 16, read every leaf at its width); `qword_program_agree.py --widths` runs NCI's mistyped
+  descriptors and their well-typed neighbours on the Lean decoder against the codec, refusal for refusal and message for
+  message (`verity/ml/flock/tests/test_lean_verifier.py`).
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
