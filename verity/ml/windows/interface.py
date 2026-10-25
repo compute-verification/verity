@@ -4,8 +4,10 @@ at a time, in four records:
 1. **A circuit in proof units** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof units, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
-   names the ports that are the system's external I/O. The window's ``circuit.json`` (`circuit_record`) holds the whole
-   layout the verifier reads, and the registration binds its SHA-512.
+   names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
+   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as network-accounting's N1 states it. The
+   window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
+   rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
    public cap on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
    hiding commitment (`verity.ml.commitments.advice`): its root and its length in bits, which is charged. Verity never
@@ -27,6 +29,11 @@ bit concatenation of its leaves, then one output row ``o<j>`` per return field, 
 `UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone. A Boolean-profile
 port's leaves (one bit each) are read as their `boolean.word_type` words.
 
+A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
+a5's wiring check holds before the draw (`wiring`). A wire reads a row whole: a row gathered from several writers' words
+(RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused until circuits and proofs
+choose its row form.
+
 That the circuit computes what the integration ran is completeness, never proved: the verifier accepts a window exactly
 when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`Window.mismatches` is
 the integration's own check before it commits).
@@ -37,6 +44,7 @@ import functools
 import hashlib
 import importlib
 import json
+import math
 import pkgutil
 import re
 import subprocess
@@ -206,17 +214,110 @@ def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
     return w.astype(np.uint16)
 
 
+_WIRE_FIELDS = ("reader", "port", "writer", "out", "at", "radix", "base", "step")
+
+
+@dataclass(frozen=True)
+class Wire:
+    """A wiring pattern: template ``reader``'s units ``at`` to ``at + prod(radix)`` read their ``port`` row whole as the
+    ``out`` row of a unit of template ``writer``. Reader unit ``at + i`` is the digit vector d of i in mixed radix ``radix``
+    (the first digit the slowest), and its writer is ``writer``'s unit ``base + sum(d[k] * step[k])``; each index counts
+    its own template's units. A step of 0 is a fan-out: one writer row read by every unit along that digit."""
+    reader: str
+    port: str
+    writer: str
+    out: str
+    at: int
+    radix: tuple[int, ...]
+    base: int
+    step: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "radix", tuple(self.radix))
+        object.__setattr__(self, "step", tuple(self.step))
+        ints = [self.at, self.base, *self.radix, *self.step]
+        if (not all(isinstance(x, str) for x in (self.reader, self.port, self.writer, self.out))
+                or any(isinstance(x, bool) or not isinstance(x, int) for x in ints)
+                or not self.radix or len(self.step) != len(self.radix) or min(self.radix) < 1 or self.at < 0):
+            raise ValueError(f"{self.doc()}: a wire names its reader's port and its writer's output, and is a first reader unit, "
+                             "at least one digit of radix 1 or more, a writer base and one integer step a digit")
+
+    @property
+    def units(self) -> int:
+        return math.prod(self.radix)
+
+    def span(self) -> tuple[int, int]:
+        """The least and the greatest writer unit the wire reads."""
+        reach = [s * (r - 1) for r, s in zip(self.radix, self.step)]
+        return self.base + sum(min(0, x) for x in reach), self.base + sum(max(0, x) for x in reach)
+
+    def writers(self, lo: int, n: int) -> np.ndarray:
+        """The writer units (``writer``'s) of reader units ``lo`` to ``lo + n`` (``reader``'s), every one the wire's."""
+        i = np.arange(lo - self.at, lo - self.at + n, dtype=np.int64)
+        out = np.full(n, self.base, dtype=np.int64)
+        for r, s in zip(reversed(self.radix), reversed(self.step)):
+            out += (i % r) * s
+            i //= r
+        return out
+
+    def doc(self) -> dict[str, Any]:
+        return {"reader": self.reader, "port": self.port, "writer": self.writer, "out": self.out, "at": self.at,
+                "radix": list(self.radix), "base": self.base, "step": list(self.step)}
+
+    @classmethod
+    def of(cls, d: Any) -> Wire:
+        """A wire from its record (`doc`), refused unless it has exactly the wire's fields."""
+        if (not isinstance(d, Mapping) or set(d) != set(_WIRE_FIELDS)
+                or not all(isinstance(d[k], list) for k in ("radix", "step"))):
+            raise ValueError(f"a wire's record is {{{', '.join(_WIRE_FIELDS)}}}, radix and step lists, not {d!r}")
+        return cls(*(d[k] for k in _WIRE_FIELDS))
+
+
+def check_wires(templates: Mapping[str, tuple[Layout, int]], wires: Sequence[Wire]) -> None:
+    """Refuse a wire (ValueError) whose reader port or writer output is no port of its templates (``templates``: by descriptor
+    id, its layout and units), whose units aren't among theirs, which reads a row of other words than its writer's, or which
+    wires a reader unit's port twice. The work is per wire, never per unit."""
+    spans: dict[tuple[str, str], list[tuple[int, int, Wire]]] = {}
+    for w in wires:
+        if w.reader not in templates or w.writer not in templates:
+            raise ValueError(f"wire {w.doc()}: its reader and writer are templates of the circuit, {sorted(templates)}")
+        (rl, rn), (wl, wn) = templates[w.reader], templates[w.writer]
+        rows, outs = dict(rl.rows), dict(wl.outs)
+        if w.port not in rows or w.out not in outs:
+            raise ValueError(f"wire {w.doc()}: it reads one of {w.reader}'s parameters {sorted(rows)} as one of {w.writer}'s "
+                             f"outputs {sorted(outs)}")
+        if rows[w.port] != outs[w.out]:
+            raise ValueError(f"wire {w.doc()}: {w.port} is {rows[w.port]} words and {w.out} {outs[w.out]}; a wire reads a row "
+                             "whole, and a row gathered from several writers' words is no wire until circuits and proofs "
+                             "choose its row form")
+        lo, hi = w.span()
+        if w.at + w.units > rn or lo < 0 or hi >= wn:
+            raise ValueError(f"wire {w.doc()}: reader units [{w.at}, {w.at + w.units}) of {rn}, writer units [{lo}, {hi}] of "
+                             f"{wn}; each among its template's")
+        spans.setdefault((w.reader, w.port), []).append((w.at, w.at + w.units, w))
+    for (tid, p), got in spans.items():
+        got.sort(key=lambda s: s[0])
+        for (_a, b, x), (c, _d, y) in zip(got, got[1:]):
+            if c < b:
+                raise ValueError(f"{tid} {p}: wires {x.doc()} and {y.doc()} both wire units from {c}")
+
+
 @dataclass(frozen=True)
 class Circuit:
     """An integration's circuit in proof units: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
-    and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O."""
+    and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
+    ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
+    layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
+    wires: tuple[Wire, ...] = ()
+    boundary: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple((fn, int(n)) for fn, n in self.templates))
         object.__setattr__(self, "external", tuple(self.external))
+        object.__setattr__(self, "wires", tuple(self.wires))
         for fn, n in self.templates:
             catalog(fn)
             layout(fn)
@@ -228,6 +329,13 @@ class Circuit:
                  for p, _ in layout(fn).rows + layout(fn).outs}
         if bad := sorted(set(self.external) - ports):
             raise ValueError(f"{self.name}: external ports {bad} are no template's port")
+        if not all(isinstance(w, Wire) for w in self.wires):
+            raise ValueError(f"{self.name}: its wires are `Wire`s")
+        check_wires({tid: (layout(fn), n) for (fn, n), tid in zip(self.templates, self.ids)}, self.wires)
+        if self.boundary is not None:
+            if not isinstance(self.boundary, Mapping):
+                raise ValueError(f"{self.name}: its boundary is a JSON object, not {self.boundary!r}")
+            object.__setattr__(self, "boundary", json.loads(json.dumps(self.boundary)))
 
     @property
     def ids(self) -> list[str]:
@@ -247,15 +355,33 @@ class Circuit:
 
 def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     """The window's members: each template's units in the partition's order, in chunks ``<descriptor id>/c<j>`` of at most
-    ``cap`` (one statement each), on the template's bit rows."""
-    if cap < 1:
-        raise ValueError(f"a statement holds at least one unit, not {cap}")
+    ``cap`` (one statement each), on the template's bit rows, each wired by the circuit's wires that cover it."""
     program, query = circuit.program()
+    return _members(circuit.templates, program, query, cap, circuit.wires)
+
+
+def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
+             wires: Sequence[Wire]) -> tuple[CS.Member, ...]:
+    """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A wire covers
+    whole members: a member's port is wired on all its units or on none (`rows.Member.wired`)."""
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+        raise ValueError(f"a statement holds at least one unit, not {cap!r}")
+    lays = {descriptor_id(fn): (layout(fn), n) for fn, n in templates}
+    check_wires(lays, wires)
+    ranges = CS.template_partition(program, query).ranges
+    base = {tid: lo for _k, tid, lo, _n in ranges}
     out = []
-    for _k, tid, lo, n in CS.template_partition(program, query).ranges:
-        lay = layout(circuit.template(tid))
-        out += [CS.Member(tid, lay.rows, lay.outs, min(cap, n - at), lo + at, name=f"{tid}/c{j}", schemas=lay.schemas)
-                for j, at in enumerate(range(0, n, cap))]
+    for _k, tid, lo, n in ranges:
+        lay = lays[tid][0]
+        for j, at in enumerate(range(0, n, cap)):
+            m, wired = min(cap, n - at), []
+            for w in (w for w in wires if w.reader == tid and at < w.at + w.units and w.at < at + m):
+                if at < w.at or at + m > w.at + w.units:
+                    raise ValueError(f"wire {w.doc()} covers part of {tid}/c{j}'s units [{at}, {at + m}); a wire covers whole "
+                                     f"members, chunks of {cap} of their template's units")
+                wired.append((w.port, w.out, tuple((base[w.writer] + w.writers(at, m)).tolist())))
+            out.append(CS.Member(tid, lay.rows, lay.outs, m, lo + at, name=f"{tid}/c{j}", schemas=lay.schemas,
+                                 wired=tuple(wired)))
     return tuple(out)
 
 
@@ -342,23 +468,36 @@ def opened_advice(compiler: Mapping[str, str], doc: Any) -> tuple[bytes, str]:
 
 
 def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]],
-                   statements: Mapping[str, Mapping[str, Any]] | None = None, external: Sequence[str] = ()) -> dict[str, Any]:
+                   statements: Mapping[str, Mapping[str, Any]] | None = None, external: Sequence[str] = (), *,
+                   cap: int | None = None, wires: Sequence[Wire] = (),
+                   boundary: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``circuit.json``: everything the verifier's window is (`of_records`), none of its values. ``templates``: each
     ``(descriptor id, units)`` in the program's order; ``statements``: by template, how its unit's statement reads its rows
-    (``in_rows``, ``out_rows``, ``reads``, as C-Flock's `UnitStager` takes them), for a template whose members are bit rows."""
-    return {"format": CIRCUIT, "name": name, "templates": [[t, int(n)] for t, n in templates], "query": dict(w.query),
-            "program": w.partition["program"], "partition": w.partition_digest, "run": w.run, "context": w.context,
-            "work_table": w.work_table, "external": list(external),
-            "members": [{"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
-                         "outs": [list(o) for o in m.outs], "schemas": [list(s) for s in m.schemas],
-                         "tables": [list(t) for t in m.tables], "link_units": list(m.link_units),
-                         "links": [list(x) for x in m.links], "wired": [[p, o, list(ws)] for p, o, ws in m.wired]}
-                        for m in w.members],
-            "row_tables": [{"segment": t.segment, "name": t.name, "template": t.template, "words": t.words,
-                            "keys": [list(k) for k in t.keys], "label": [[k, v] for k, v in t.label]} for t in w.row_tables],
-            "statements": {t: {"in_rows": [[p, s, b, list(ps)] for p, s, b, ps in st["in_rows"]],
-                               "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]], "reads": st.get("reads", "inline")}
-                           for t, st in sorted((statements or {}).items())}}
+    (``in_rows``, ``out_rows``, ``reads``, as C-Flock's `UnitStager` takes them), for a template whose members are bit rows.
+    The members are listed, or with ``cap`` stated: the verifier derives them from the templates, ``cap`` and ``wires``
+    (`members`), so the record grows with its templates and wires, not its units. ``boundary``: the circuit's I/O layout
+    (`Circuit.boundary`), carried as given."""
+    doc = {"format": CIRCUIT, "name": name, "templates": [[t, int(n)] for t, n in templates], "query": dict(w.query),
+           "program": w.partition["program"], "partition": w.partition_digest, "run": w.run, "context": w.context,
+           "work_table": w.work_table, "external": list(external),
+           "row_tables": [{"segment": t.segment, "name": t.name, "template": t.template, "words": t.words,
+                           "keys": [list(k) for k in t.keys], "label": [[k, v] for k, v in t.label]} for t in w.row_tables],
+           "statements": {t: {"in_rows": [[p, s, b, list(ps)] for p, s, b, ps in st["in_rows"]],
+                              "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]], "reads": st.get("reads", "inline")}
+                          for t, st in sorted((statements or {}).items())}}
+    if cap is not None:
+        doc |= {"cap": int(cap), "wires": [x.doc() for x in wires]}
+    elif wires:
+        raise ValueError("a record that lists its members lists their wires with them; wires are stated with a cap")
+    else:
+        doc["members"] = [{"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
+                           "outs": [list(o) for o in m.outs], "schemas": [list(s) for s in m.schemas],
+                           "tables": [list(t) for t in m.tables], "link_units": list(m.link_units),
+                           "links": [list(x) for x in m.links], "wired": [[p, o, list(ws)] for p, o, ws in m.wired]}
+                          for m in w.members]
+    if boundary is not None:
+        doc["boundary"] = json.loads(json.dumps(boundary))
+    return doc
 
 
 def templates_of(w: CS.Window) -> list[tuple[str, int]]:
@@ -387,7 +526,8 @@ def _frozen(x: Any) -> Any:
 
 def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Callable[[str], Any]) -> CS.Window:
     """The verifier's window from ``circuit.json``'s document under its own ``law``, each template's Definition by
-    ``resolve`` (descriptor id -> Definition, the verifier's own catalog), refused unless the population program, query,
+    ``resolve`` (descriptor id -> Definition, the verifier's own catalog), its members the listed ones or, where the record
+    states them, the ones its templates, ``cap`` and wires make (`members`); refused unless the population program, query,
     program digest and partition digest it rebuilds are the record's."""
     if doc.get("format") != CIRCUIT:
         raise ValueError(f"a window's circuit record is {CIRCUIT}, not {doc.get('format')!r}")
@@ -396,10 +536,18 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         raise ValueError(f"the catalog resolves {[t for t, _ in doc['templates']]} to {[descriptor_id(fn) for fn, _ in defs]}")
     several = len(defs) > 1 or doc["query"] != PO.template_instance_query(defs[0][0])
     program, query = CS.population_program(defs, several=several)
-    ms = tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
-                         tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
-                         tuple(map(tuple, m["links"])), tuple((p, o, tuple(ws)) for p, o, ws in m["wired"]))
-               for m in doc["members"])
+    stated = "cap" in doc
+    if ("members" in doc) == stated or ("wires" in doc) != stated:
+        raise ValueError("a circuit record lists its members, or states them by its cap and wires, one or the other")
+    if stated:
+        if not isinstance(doc["wires"], list):
+            raise ValueError(f"a circuit record's wires are a list, not {doc['wires']!r}")
+        ms = _members(defs, program, query, doc["cap"], tuple(Wire.of(x) for x in doc["wires"]))
+    else:
+        ms = tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
+                             tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
+                             tuple(map(tuple, m["links"])), tuple((p, o, tuple(ws)) for p, o, ws in m["wired"]))
+                   for m in doc["members"])
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),
                                tuple((k, _frozen(v)) for k, v in t["label"])) for t in doc["row_tables"])
     w = CS.Window(program, query, dict(law), doc["run"], ms, tables, doc["context"], doc["work_table"])
@@ -526,13 +674,14 @@ class Window:
                             for m in self.window.members]}
 
     def circuit_record(self) -> dict[str, Any]:
-        """The window's ``circuit.json`` (`circuit_record`), each template's statement its bit rows (`unit_rows`)."""
+        """The window's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
+        template's statement its bit rows (`unit_rows`)."""
         sts = {}
         for fn, _ in self.circuit.templates:
             i, o = unit_rows(fn)
             sts[descriptor_id(fn)] = {"in_rows": i, "out_rows": o, "reads": "inline"}
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),
-                              sts, self.circuit.external)
+                              sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary)
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
               kind: str = "served") -> dict[str, Any]:
