@@ -54,7 +54,6 @@ With a `statement` enabled (and hashing), a whole capture also copies each call'
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -75,8 +74,9 @@ LANE_SLOT_BYTES = SLOT_BYTES + 24
 #: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
 #: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's
 #: ``tiles_group``) so that its CTAs leave pd_commit's and pd_tree's whole SMs free (beside the tree a CTA a tile, and
-#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  PEARLC_TILES_BESIDE_TREE=0 joins them first
-TILES_BESIDE_TREE = os.environ.get("PEARLC_TILES_BESIDE_TREE", "1") != "0"
+#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  False joins them first (e8ea036243's
+#: PEARLC_TILES_BESIDE_TREE=0 arm)
+TILES_BESIDE_TREE = True
 
 
 def _capturing() -> bool:
