@@ -6,8 +6,8 @@ libcuda.so.1; numpy for the buffers, torch only for the timing's baselines).
    Blackwell" name, and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.  A mismatch exits 3 before any launch.
 1. The check, on every case in CHECK (fixture.py's): S and O are filled with 0xA5 and QK^T and PV run on the case's
    inputs; each buffer must equal the fixture's byte for byte (every word the Definition defines, and 0xA5A5 everywhere
-   else).  They run at 4 warps a block, then at 1 and at 8, which give every tile to another warp of another block: the
-   same bytes.  A control arm fills the buffers and launches nothing, and must be rejected.  The inputs must come back
+   else).  They run at 4 warps a block (a block per 8 query rows, head and sequence), then at 1 and at 8, which give the
+   tiles to other warps: the same bytes.  A control arm fills the buffers and launches nothing, and must be rejected.  The inputs must come back
    unchanged.  Exit 4 if any check fails, before anything is timed.
 2. Diagnostic timing (information only, not a panel row), at the model's decode step (B sequences, H heads of head
    dim 64, every KV length 32): QK^T and PV here, each the median of REPS after a warm-up, interleaved rep by rep with
@@ -136,16 +136,15 @@ class Attn:
         s_shape, o_shape = (self.B, self.H, self.Mq, self.Lcap), (self.B, self.H, self.Mq, self.D)
         self.qk_args = self._args("Q", "K", self.S, z["Q"].shape, z["K"].shape, s_shape)
         self.pv_args = self._args("P", "V", self.O, z["P"].shape, z["V"].shape, o_shape)
-        self.qk_tiles = self.B * self.H * -(-self.Mq // 8) * -(-self.Lcap // 16)
-        self.pv_tiles = self.B * self.H * -(-self.Mq // 8) * (self.D // 16)
 
     def _args(self, x: str, kv: str, out: int, xs: tuple, kvs: tuple, os_: tuple) -> Args:
         return Args(self.dev[x], self.dev[kv], out, self.dev["lens"], self.dev["nq"], (C.c_int64 * 3)(*strides(xs)),
                     (C.c_int64 * 3)(*strides(kvs)), (C.c_int64 * 3)(*strides(os_)), self.B, self.H, self.Mq, self.Lcap)
 
-    def launch(self, f, args: Args, tiles: int, warps: int) -> None:
+    def launch(self, f, args: Args, warps: int) -> None:
+        """A block per (8 query rows, head, sequence), of ``warps`` warps."""
         params = (vp * 1)(C.cast(C.pointer(args), vp))
-        self.cu("cuLaunchKernel", f, -(-tiles // warps), 1, 1, 32 * warps, 1, 1, 0, None, params, None)
+        self.cu("cuLaunchKernel", f, -(-self.Mq // 8), self.H, self.B, 32 * warps, 1, 1, 0, None, params, None)
 
     def poison(self) -> None:
         self.cu("cuMemsetD8_v2", self.S, POISON, self.B * self.H * self.Mq * self.Lcap * 2)
@@ -153,8 +152,8 @@ class Attn:
         self.cu("cuCtxSynchronize")
 
     def run(self, warps: int) -> None:
-        self.launch(self.qk_f, self.qk_args, self.qk_tiles, warps)
-        self.launch(self.pv_f, self.pv_args, self.pv_tiles, warps)
+        self.launch(self.qk_f, self.qk_args, warps)
+        self.launch(self.pv_f, self.pv_args, warps)
         self.cu("cuCtxSynchronize")
 
     def outputs(self) -> tuple[np.ndarray, np.ndarray]:
@@ -216,15 +215,17 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
     e0, e1 = cu.event(), cu.event()
     ms = C.c_float()
 
-    def ours(f, args, tiles):
+    def ours(f, args, warps):
         cu("cuEventRecord", e0, None)
-        a.launch(f, args, tiles, WARPS[0])
+        a.launch(f, args, warps)
         cu("cuEventRecord", e1, None)
         cu("cuEventSynchronize", e1)
         cu("cuEventElapsedTime", C.byref(ms), e0, e1)
         return ms.value
 
-    arms = {"qk": lambda: ours(a.qk_f, a.qk_args, a.qk_tiles), "pv": lambda: ours(a.pv_f, a.pv_args, a.pv_tiles)}
+    # a warp per key tile of QK^T and per d tile of PV
+    qk_w, pv_w = min(8, -(-L // 16)), D // 16
+    arms = {"qk": lambda: ours(a.qk_f, a.qk_args, qk_w), "pv": lambda: ours(a.pv_f, a.pv_args, pv_w)}
     out = {"part": "timing", "shape": {"B": B, "H": H, "D": D, "L": L, "queries_per_sequence": 1}, "reps": reps,
            "note": "diagnostic only; SDPA includes the softmax qk and pv leave out"}
     try:
