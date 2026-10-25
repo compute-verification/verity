@@ -58,7 +58,7 @@ nothing outside `infra/` imports `infra/`.
 
 ### Circuits
 
-`verity.ml.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding the circuit and a SHA-512 digest that names it. `verity.ml.circuits.ops` holds the primitive circuits for NVIDIA accelerators, and `verity.ml.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, not a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total by default: they match the hardware on every input bit pattern, NaN and infinity included. `verity.ml.circuits` owns every primitive circuit and all silicon semantics; applications define only their own Definitions. Every new or changed circuit passes `circuit-check`. A circuit's match to the model is completeness: tested, never proved, and no guarantee rests on it.
+`verity.ml.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding the circuit and a SHA-512 digest that names it. `verity.ml.circuits.ops` holds the primitive circuits for NVIDIA accelerators, and `verity.ml.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, not a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total by default: they match the hardware on every input bit pattern, NaN and infinity included. `verity.ml.circuits` owns every primitive circuit and all silicon semantics; applications define only their own Definitions. Every new or changed circuit passes `circuit-check`. Whether a circuit computes what the served model computes on its hardware is completeness: it decides only whether honest serving passes. No guarantee rests on it, since each is stated about the registered circuit, so it is validated empirically (circuit-check, hardware captures, served outputs) and never proved.
 
 A partition divides a circuit's gates into proof units, each gate in exactly one. It is the result of a named, versioned query that the auditor evaluates itself (`verity/partition/v1`), and it fixes what the developer must commit: every value read across a unit boundary, plus the inputs and outputs.
 
@@ -95,86 +95,18 @@ The joint ledger charges each device's time once. Without attribution, it subtra
 
 C-Flock (`verity/ml/flock`) is the proof system: it proves statements over arbitrary Boolean circuits, and its verifier of record is written in Lean (`verity/core/service/flock/`), with upstream Flock's Rust verifier as a cross-check. It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an integration. The proof systems before it (A-GKR, B-Ligero, D-SP1 and the VOLE backend) are in `archive/`: kept, and still in the benchmark tables, but not developed.
 
-Every accounting protocol (PoUW, PoUS, network accounting) uses one proof service. A protocol states what is committed, which units need proofs, the public Program each must pass and what it does with the outcome; the service owns commitments, live coins and the record, the selection, proving, verifying and the integrity profile. On the developer's side it is the workers behind the firewall; on the auditor's, the challenger and the verifier, with network certifiers and memory challengers placed in the developer's site. Every protocol is zero-knowledge, beside a plain path (no `--zk`), and everything hashes with SHA-512.
+Every accounting protocol (PoUW, PoUS, network accounting) uses one proof service. A protocol states what is committed, which units need proofs, the public Program each must pass and what it does with the outcome; the service owns commitments, live coins and the record, the selection, proving, verifying and the integrity profile. On the developer's side it is the workers behind the firewall; on the auditor's, the challenger and the verifier, with network certifiers and memory challengers placed in the developer's site. Every protocol is zero-knowledge, and everything hashes with SHA-512. A plain path (C-Flock without `--zk`) stays beside the zero-knowledge ones, for a deployment whose values needn't be hidden: its guarantee is soundness alone, and both keep working.
 
 ### Integrations
 
-An integration makes Verity work end to end with a real system. A serving stack is one integration among many, meeting Verity at one stack-neutral interface: it builds its workload's circuit from Verity's Definitions and silicon semantics, commits values in a `verity.ml.commitments` scheme and registers its windows with the proof service. vLLM's is the only one so far. Nothing under `verity/` imports an integration.
+An integration makes Verity work end to end with a real system. A serving stack is one integration among many, and Verity meets each at one stack-neutral interface: the stack builds its workload's circuit from Verity's Definitions and silicon semantics, commits the values in a `verity.ml.commitments` scheme, and closes and registers its windows with the proof service, which does the rest. Another stack implements the same interface without changing `verity/`, and nothing under `verity/` imports an integration (`tests/test_integration_boundaries.py` lists the sites that still do).
 
-## Repository structure
-
-- [`verity/`](verity/README.md): the library, the distribution `verity`, in two parts:
-  - `verity/core/` (`verity.core`): the verifiers, trusted code: the protocols (`verity.core.protocols`, with the integrity profile) and claims, in Python and Lean, and `verity/core/service/flock/`, C-Flock's verifier of record. `Security/Models/` states their guarantees, each open until its proof lands
-  - `verity/ml/` (`verity.ml`): Python and CUDA: `verity.ml.circuits` and the [circuit format](verity/ml/circuits/PROTOCOL.md), with exact hardware semantics (`silicon`), the primitive circuits' Definitions (`ops`) and the targets; `verity.ml.kernels`, fast code checked against its Definition; `verity.ml.commitments` (commitments to the records), `crypto` and `randomness`; and [`verity/ml/flock/`](verity/ml/flock/README.md), C-Flock, the proof system, whose verifier's specification and scripts are [`verity/ml/flock/verifier/`](verity/ml/flock/verifier/README.md); what core's Python verifiers read of it is on the soundness path, only shrinking, and the rest (C-Flock's prover, the private circuits) can't affect soundness
-- [`verity/core/protocols/sampled_proofs/`](verity/core/protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit
-- [`verity/core/protocols/pous/`](verity/core/protocols/pous/README.md): proofs of useful space
-- [`verity/core/protocols/pouw/`](verity/core/protocols/pouw/PROTOCOL.md): proofs of useful work
-- [`verity/core/protocols/certifier/`](verity/core/protocols/certifier/README.md): the network certifier, network accounting's timing channel
-- `Security/`: the Lean every protocol states its guarantees in (`Definitions/`, `Models/`) and their proofs (`Proofs/`)
-- the proof systems before C-Flock are in [`archive/`](archive/README.md)
-- `integrations/`: one directory per outside system; [`integrations/vllm/`](integrations/vllm/README.md) is the vLLM integration, a hooked vLLM engine
-- `benchmarks/`: the measuring side: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md), and the benchmark tools
-- `benchmarks/harness/` (`verity-bench`, `verity_bench`): the shared top-level harness; `verity-bench vllm` measures integrations as a user and leaves the integration independent of benchmark policy
-- [`benchmarks/census/`](benchmarks/census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
-- `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
-- `tools/verity/`: the `verity` command (`tools/verity/cli/`) and the tools it runs:
-  - [`tools/verity/check/`](tools/verity/check/check.py): `check`, the one check, run on `main` after each landing, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
-  - `tools/verity/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
-  - [`tools/verity/lean/`](tools/verity/lean/README.md): the Lean check every Lean package passes
-- [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
-- `infra/`: our machines; [`infra/cluster/`](infra/cluster/README.md) is `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger, and `control/` holds the control pod's boot script and loops
-- `fixtures/` and `tests/`: repository-wide fixtures, and the repository's own suite of whole-tree invariants; replicated inputs are registered in `fixtures/artifacts.json`
-
-## Getting started
-
-Install the workspace with [uv](https://docs.astral.sh/uv/), then run the tests and checks:
-
-~~~sh
-uv sync --all-packages --extra torch-cpu   # the workspace, every package editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run tools/verity/check/suites.py        # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run circuit-check --all                 # the property checks on every registered circuit
-uv run --extra torch-cpu verity check      # the one check; its Lean steps need lake
-~~~
-
-Each package's tests live in its own `tests/` and run as their own suite; the [testing skill](.agents/skills/testing/SKILL.md) has the rules. Serving, proving and hardware probes run on GPU pods through the research harness (`research run --on ...`), never on a laptop.
-
-Build, evaluate and query a circuit from the primitive library:
-
-~~~python
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import Program, query
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
-
-gemm = bind(Gemm, K=64, N=8, **GEMM_AMPERE)   # x[64] @ W[8, 64]^T in BF16, as an A100's tensor cores compute it
-x, W = [0x3F80] * 64, [0x3F80] * (8 * 64)     # BF16 encodings of 1.0, with W flattened row by row
-evaluate(gemm, x, W)                          # eight BF16 words 0x4280, that is 64.0
-program = Program(gemm)
-program_digest(program)                       # the circuit's name: its SHA-512 digest
-query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each with its interval of gates
-~~~
-
-## Development
-
-Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, a verifier imports no `verity.ml` code (a Python one gains no edge into it), and `verity.ml` never imports `verity.core` (apart from a few tests and V*'s builders), nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
-
-~~~text
-ml.circuits  <-  ml.commitments  ->  ml.crypto
-ml.circuits  <-  ml.circuits.silicon, .targets, .ops, ml.kernels  (the primitive circuits and the kernels)
-ml.circuits  <-  core.protocols.profile  <-  the protocols
-ml.randomness, ml.crypto, core.claims: import no other module of verity
-~~~
-
-`tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.ml.circuits import Program`); `verity` itself re-exports nothing.
-
-There is no GitHub Actions CI. `check` is the one check, kept fast by reusing a part's verdict while its declared inputs are unchanged. PRs land on a reviewer's verdict (a Lean change once its Lean check passed), `check` runs on `main` after each landing, and a landing it fails is reverted at once. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
+The vLLM integration (`integrations/vllm/`), the only one so far, builds each served workload's circuit with an embedded Torch-to-circuit frontend, supplies its silicon-specific bindings, acquires and commits runtime values while serving, and runs proving. It composes the components above without owning their semantics: circuits belong to `verity.ml.circuits`, and commitment schemes to `verity.ml.commitments`.
 
 ## Documentation
 
 - Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline ([sampled proofs](verity/core/protocols/sampled_proofs/README.md), [proofs of useful space](verity/core/protocols/pous/README.md), [proofs of useful work](verity/core/protocols/pouw/PROTOCOL.md), [the network certifier](verity/core/protocols/certifier/README.md); a protocol's `PROTOCOL.md` remains only until its Lean covers it) and [C-Flock's verifier](verity/ml/flock/verifier/PROTOCOL.md)
-- Each component's README, linked under Repository structure
-- [AGENTS.md](AGENTS.md) for contributors and agents, and the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
+- Each component's README, and [AGENTS.md](AGENTS.md) for contributors and agents: the repository map, the commands, the dependency rules, and how a change is checked and lands; the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
 
 ## Glossary
 
@@ -238,7 +170,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Lock**: the records of a package's guarantees in its `lean-audit.json` (`guarantees` and `reads`): each guarantee's statement and every definition the statement reads, written by `tools/verity/lean/check.py --update`. A changed record means a guarantee now says something else, and Daniel gets a DM showing it when it lands on `main`; a guarantee that only moved keeps its records (`--moved`). The lock protects as little as possible, the guarantees and what their statements read, though today it still lists many lemmas as well.
 - **Trusted computing base (TCB)**: what a guarantee's conclusion about the running system depends on beyond its assumptions: each spec, and the code that implements it for every role, verifier and prover, reference and fast. The TCB is trusted, not certified trustworthy: if its code doesn't implement its spec, security degrades, whether soundness for the auditor or zero knowledge and completeness for the developer. Other code is untrusted or is the workload being verified. The *assurance TCB* is what makes "this guarantee is proved" and "this commit passed `check`" believable: Lean's kernel and toolchain, the pinned Mathlib and ArkLib, the Lean audit (`tools/verity/lean/`), `check`'s gates, and upstream's Rust verifier through lean-agreement.
 - **Frontend**: translates a source representation such as PyTorch, JAX or ONNX into a circuit (a Program). The vLLM integration's `verity_vllm.program.frontend` is an embedded Torch-to-circuit frontend; there is no standalone one.
-- **Integration**: makes Verity work end to end with a real system, composing its components around it (a serving stack is one). vLLM's (`integrations/vllm`) is an application of Verity, not a frontend.
+- **Integration**: makes Verity work end to end with a real system or runtime, composing Verity's components around it. A serving stack is one, through the stack-neutral interface (Architecture, "Integrations"). vLLM is an integration (`integrations/vllm`), an application of Verity, not a frontend.
 - **Serving** and **proving**: serving is the live inference path, and its cost is serving overhead, such as computing commitments while serving; proving is proof generation, and its cost is proving overhead. Neither is called "production".
 - **Approach**: a line of work (a scheme, a route or an attack) with a hypothesis, an owning lane and a status: live, parked, killed, superseded or merged. Each is a record in the evidence store (`research notes claim`, `research notes approach`, `research notes approaches`; the research notes' `kb/onboarding.md`), rendered into the notes as `campaigns/<campaign>/APPROACHES.md`, and every status but live gives its reason and evidence. A dead end is a killed or superseded approach, kept so nobody goes down it again unknowingly.
 

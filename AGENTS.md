@@ -1,7 +1,7 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `DESIGN.md` has the architecture and the Glossary, whose terms
+compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose terms
 code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
 work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
 be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
@@ -90,8 +90,9 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
   Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
-- Nothing under `verity/` imports a serving stack (`verity_vllm` or `vllm`), apart from the files `SERVING_IMPORTERS`
-  names, each with why, until the list is empty (Design rules, "A serving stack is one integration among many").
+- Nothing under `verity/` imports an integration, apart from the sites `KNOWN` lists in
+  `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "A serving stack is one integration among
+  many").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
 check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
@@ -338,7 +339,7 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (DESIGN.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
+- **The lock.** A guarantee (ARCHITECTURE.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
@@ -357,7 +358,7 @@ abstractions or procedures. Enforce deterministic requirements in code, with the
 in prose. Remove obsolete rules and machinery rather than accumulating them.
 
 **A decision rolls out in the change that records it.** When Daniel rules, or a PR retires a term, a path or a procedure,
-that PR rewrites every place that states the old way: `git grep` the old phrase across this file, DESIGN.md and its
+that PR rewrites every place that states the old way: `git grep` the old phrase across this file, ARCHITECTURE.md and its
 Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
@@ -394,7 +395,7 @@ Never print a secret's value.
   issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
   is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
 - **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
-  `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
+  `ARCHITECTURE.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
   - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
     whose README is an outline, signposts and its core API, and the PR whose Lean covers it deletes the file.
   - `tests/test_repository.py` enforces the file rules: report-genre names, generated output, the 256 KiB cap. Large

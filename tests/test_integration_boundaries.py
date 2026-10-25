@@ -1,7 +1,9 @@
-"""Backends never need an integration (DESIGN.md "Development": backends must be testable without installing a frontend or
-runtime integration).  Today one does: C-Flock takes the vLLM integration's registered Definitions and kernels where core has no
-equivalent yet (the numerical bench, which did too, is a benchmark now, and a benchmark may compose an integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
-fails, and so does a listed site that is gone, so the list stays exact.
+"""Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "A serving stack is one integration among
+many"; ARCHITECTURE.md "Integrations"): another serving stack implements the same interface without changing ``verity/``.
+Today some files do: C-Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
+equivalent yet, and core's difftests of the primitives and sigma hold the Lean to them (a benchmark may compose an
+integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site fails, and so does a
+listed site that is gone, so the list stays exact.
 
 An import is an import statement, a string handed to ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, or
 a ``"module:attr"`` string naming what to load at run time.
@@ -17,8 +19,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-#: The backends' tree: C-Flock, the backend in development.
-BACKENDS = ROOT / "verity" / "ml" / "flock"
+#: The tree that needs no integration: ``verity``, C-Flock and their tests.
+SCANNED = ROOT / "verity"
 #: The integrations' import packages, from each distribution's wheel configuration (a virtual member, such as the Slack
 #: events service, has none to import).
 INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
@@ -28,9 +30,21 @@ SKIP_DIRS = {"target", "node_modules", "__pycache__"}
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
-#: Every backend file that imports an integration, with each integration module it imports.  Repoint a backend at core (or
-#: drop the use) and delete its line; a new line needs a reason the dependency cannot go through core.
+#: Every file under ``verity/`` that imports an integration, with each integration module it imports.  Repoint it at
+#: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
+    ("verity/core/primitives/evaluate/tests/test_difftest.py", "verity_vllm.program.registry"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.predict.build"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.predict.phi"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.store.interface"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.store.registry"),
+    ("verity/core/primitives/requirement/tests/test_requirement_difftest.py", "verity_vllm.program.registry"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program.registry"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program.registry.catalog"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program.replay"),
     ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.pipeline.program_graph"),
     ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query"),
@@ -85,7 +99,7 @@ def _modules(path: Path, text: str) -> set[str]:
 @functools.cache
 def _sites() -> frozenset[tuple[str, str]]:
     sites = set()
-    for path in sorted(BACKENDS.rglob("*.py")):
+    for path in sorted(SCANNED.rglob("*.py")):
         rel = path.relative_to(ROOT)
         if any(part.startswith(".") or part in SKIP_DIRS for part in rel.parts):
             continue
@@ -99,19 +113,20 @@ def test_the_integrations_are_found():
     assert "verity_vllm" in INTEGRATIONS
 
 
-def test_the_scan_sees_the_backends():
-    """The scan walks C-Flock's tree: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
+def test_the_scan_sees_verity():
+    """The scan walks ``verity/``: a package that moved out of it would leave its imports unchecked, and `KNOWN` would pass
     as sites of files that don't exist yet."""
-    for name in ("verity_flock",):
+    for name in ("verity", "verity_flock"):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
-        assert origin.is_relative_to(BACKENDS), f"{name} is at {origin}, outside the scanned {BACKENDS.relative_to(ROOT)}/"
+        assert origin.is_relative_to(SCANNED), f"{name} is at {origin}, outside the scanned {SCANNED.relative_to(ROOT)}/"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
 
 
-def test_no_backend_imports_an_integration_outside_known():
+def test_nothing_in_verity_imports_an_integration_outside_known():
     new = sorted(_sites() - KNOWN)
-    assert not new, ("a backend imports an integration (DESIGN.md: backends are testable without one); import from core instead, "
-                     "or, if the dependency cannot go through core yet, add to KNOWN in tests/test_backend_boundaries.py:\n"
+    assert not new, ("a file under verity/ imports an integration (ARCHITECTURE.md \"Integrations\": verity meets a serving "
+                     "stack at one interface); import from verity instead, or, if the dependency cannot go through verity "
+                     "yet, add to KNOWN in tests/test_integration_boundaries.py:\n"
                      + "\n".join(f'    ("{f}", "{m}"),' for f, m in new))
 
 
@@ -119,5 +134,5 @@ def test_every_known_site_still_exists():
     # a listed file that does not exist yet is an open PR's site, listed ahead so both merge orders pass; once the file
     # exists, its entry must match what it imports
     gone = sorted((f, m) for f, m in KNOWN - _sites() if (ROOT / f).exists())
-    assert not gone, ("these backend -> integration imports are gone; delete them from KNOWN in tests/test_backend_boundaries.py:\n"
+    assert not gone, ("these verity -> integration imports are gone; delete them from KNOWN in tests/test_integration_boundaries.py:\n"
                       + "\n".join(f'    ("{f}", "{m}"),' for f, m in gone))
