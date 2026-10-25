@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.Bridge.DecodePlain
 import Proofs.Flock.Claims.Bridge.Dead
 import Proofs.Flock.Claims.Bridge.Returns
 import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Claims.Bridge.ErrorTerms
 
 /-! The run-to-live-game bridge: the coin law (`Coins`), the public-coin verifier of a game and its run path by path
 (`OfGame`), the transport of `Claims.run`'s probabilities to the live game's (`Transport`), and Flock's live session
@@ -21,4 +22,6 @@ coins drawn after each message, and `Hm96Tree` bounds it by `2 k δ₁` from `Hm
 custody checks make the last message's record a record of the run's live outcome (`RecordsLiveZKJ`), so its accepting
 runs are the old theorems' event at a writer that reads the record out of the last message; `CustodyPlain`, the same
 for `Deploy.V false` (`RecordsLiveJ`). `DecodePlain`: at one table, the old one-table decoder discharge makes the
-deployed plain decoders right at that writer. -/
+deployed plain decoders right at that writer. `ErrorTerms`: `EndToEnd`'s error `miss + ε_ks + δ_link` under `KS`'s
+`κ D δ x + √(γ·Pr[B]) + Pr[B_ext]` at a deployment whose `δ` covers the miss and whose `4·ε_table` the rest
+(`e2e_error_le_ks`). -/
