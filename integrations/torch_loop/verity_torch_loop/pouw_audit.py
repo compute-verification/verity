@@ -1,7 +1,7 @@
 """The audit of the loop's PoUW window (`pouw`) and PoUW's answer on it.
 
     python -m verity_torch_loop.pouw_audit --window DIR --circuit SHA512 --run HEX --m0-pythonpath PATH --bin flock-circuit \\
-        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN]
+        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN] [--params FILE]
 
 The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
@@ -18,10 +18,11 @@ window is PoUW's ``{context, kind, public}``, not one-stage's provenance:
 
 Then `answer` makes the proof service's answer for the registration in PoUW's evidence form (`core_check.evidence`:
 public ``{"draw": ...}``, the profile at the verifier's δ), written to ``DIR/answer.json``, and `core_check.answer` (and,
-given ``--pouw-check``, Lean's) decides the window at the verifier's parameters (`pouw`'s ε, δ, check item and range, the
-published run as the context; the requests' max_tokens as registered), written to ``--out``'s
-``pouw.json``: verdict, reason, W (the credited MACs), ε, δ, K′. ``--forged``: the window holds tampered tiles, and the
-audit passes when Lean refused them.
+given ``--pouw-check``, Lean's) decides the window at the verifier's parameters (``--params``, else `loop_params`:
+`pouw`'s ε, δ, check item and range, the requests' max_tokens as registered; either way the published run as the
+context), written to ``--out``'s ``pouw.json``: verdict, reason, W (the credited MACs), ε, δ, K′, and the ε that K′
+gives at δ = 1% and at the registered δ (``eps_at``). ``--forged``: the window holds tampered tiles, and the audit
+passes when Lean refused them.
 """
 from __future__ import annotations
 
@@ -155,11 +156,21 @@ def decide(params: Mapping[str, Any], rec: Mapping[str, Any], ans: Mapping[str, 
         out["lean"] = lean
         out["agree"] = lean == line
     items = rec["window"]["public"]
-    s = items["sampling"]
-    out |= {"verdict": got["verdict"], "reason": got["reason"], "W": items["work"]["credited"],
-            "tiles": {"credited": items["work"]["credited_tiles"], "n": items["work"]["n"]},
-            "eps": s["eps"], "delta": s["delta"], "k": s["law"]["k"]}
+    s, w = items["sampling"], items["work"]
+    tw = items["check"]["tile_work"]
+    at = {str(d): float(Wd.eps_at(s["law"]["k"], d, w["credited"], w["n"], tw))
+          for d in (Fraction(1, 100), Fraction(s["delta"]))}
+    out |= {"verdict": got["verdict"], "reason": got["reason"], "W": w["credited"],
+            "tiles": {"credited": w["credited_tiles"], "n": w["n"]},
+            "eps": s["eps"], "delta": s["delta"], "k": s["law"]["k"], "eps_at": at}
     return out
+
+
+def loop_params(run: str, max_tokens: list[int]) -> dict[str, Any]:
+    """The verifier's parameters of the loop's window: `pouw`'s ε, δ, check item and range, ``run`` as the context."""
+    return {"check": PW.check_item(), "context": run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
+            "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": max_tokens, "stop": Wd.STOP_FIXED},
+            "query": CC.TILES[PW.tile().id].query, "range": list(PW.RANGE)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -169,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--delta-audit", default="0.5", help="the one-stage audit's own δ (records_audit's --delta)")
     ap.add_argument("--forged", action="store_true")
     ap.add_argument("--pouw-check", help="a built Lean pouw-check, which must agree with core_check")
+    ap.add_argument("--params", help="the verifier's parameters as JSON (`core_check.params`; its context is --run); "
+                                     "default the loop's (`loop_params`)")
     a = ap.parse_args(argv)
     wdir, out = Path(a.window), Path(a.out)
     rec, prov = _provenance(wdir)
@@ -182,10 +195,11 @@ def main(argv: list[str] | None = None) -> int:
                   "--firewall", a.firewall, "--out", str(out / "audit"), "--delta", a.delta_audit,
                   *(["--forged"] if a.forged else [])])
     items = rec["window"]["public"]
-    params = {"check": PW.check_item(), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
-              "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": items["length"]["max_tokens"], "stop": Wd.STOP_FIXED},
-              "query": CC.TILES[PW.tile().id].query, "range": list(PW.RANGE)}
-    ans = answer(out / "audit", rec, PW.DELTA)
+    if a.params:
+        params = {**json.loads(Path(a.params).read_text()), "context": a.run}
+    else:
+        params = loop_params(a.run, items["length"]["max_tokens"])
+    ans = answer(out / "audit", rec, Fraction(params["delta"]))
     (wdir / "answer.json").write_text(CC.line(ans) + "\n")
     got = decide(params, rec, ans, a.pouw_check)
     got |= {"audit_rc": rc, "forged": a.forged, "params": params}
