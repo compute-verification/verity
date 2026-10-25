@@ -42,17 +42,17 @@ def test_flag_reads_both_spellings_and_refuses_the_rest() -> None:
 
 
 def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("VERITY_WINDOW_SLOTS", raising=False)
-    assert S.VERITY_WINDOW_SLOTS == 8
-    monkeypatch.setenv("VERITY_WINDOW_SLOTS", "4")
-    assert S.VERITY_WINDOW_SLOTS == 4 and S.get("VERITY_WINDOW_SLOTS", {"VERITY_WINDOW_SLOTS": "2"}) == 2
-    monkeypatch.setenv("VERITY_WINDOW_SLOTS", "")
-    assert S.VERITY_WINDOW_SLOTS == 8 and S.is_set("VERITY_WINDOW_SLOTS")
+    monkeypatch.delenv("VERITY_REPLAY_DUMP_MAX", raising=False)
+    assert S.VERITY_REPLAY_DUMP_MAX == 1024
+    monkeypatch.setenv("VERITY_REPLAY_DUMP_MAX", "4")
+    assert S.VERITY_REPLAY_DUMP_MAX == 4 and S.get("VERITY_REPLAY_DUMP_MAX", {"VERITY_REPLAY_DUMP_MAX": "2"}) == 2
+    monkeypatch.setenv("VERITY_REPLAY_DUMP_MAX", "")
+    assert S.VERITY_REPLAY_DUMP_MAX == 1024 and S.is_set("VERITY_REPLAY_DUMP_MAX")
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
     assert S.CUDA_VISIBLE_DEVICES == ""
-    monkeypatch.setenv("VERITY_WINDOW_SLOTS", "four")
-    with pytest.raises(ValueError, match="VERITY_WINDOW_SLOTS='four'"):
-        S.get("VERITY_WINDOW_SLOTS")
+    monkeypatch.setenv("VERITY_REPLAY_DUMP_MAX", "four")
+    with pytest.raises(ValueError, match="VERITY_REPLAY_DUMP_MAX='four'"):
+        S.get("VERITY_REPLAY_DUMP_MAX")
     with pytest.raises(AttributeError):
         S.VERITY_NOT_A_SETTING  # noqa: B018
     with pytest.raises(AttributeError, match="not a declared setting"):
@@ -82,10 +82,17 @@ def test_setdefault_keeps_what_the_environment_holds_and_environ_is_a_copy(monke
         S.setdefault("VERITY_NOT_A_SETTING", "1")
 
 
-def test_one_not_zero_and_a_kept_empty_read_as_their_readers_did() -> None:
+def test_the_narrow_parsers_and_a_kept_empty_read_as_their_readers_did() -> None:
     assert [S.one(v) for v in ("1", " 1", "true", "")] == [True, False, False, False]
     assert S.get("VERITY_ADMIT_OVER_BOUND", {"VERITY_ADMIT_OVER_BOUND": ""}) is False
+    assert [S.yes(v) for v in (" yes", "1", "true", "on", "TRUE", "0", "  ")] == [True, True, True, False, False, False, None]
     assert [S.not_zero(v) for v in ("1", " 0 ", "false", "")] == [True, False, True, True]
+    assert [S.not_off(v) for v in ("1", " no", "false", "0", "off", "")] == [True, False, False, False, True, True]
+    assert [S.number(v) for v in (" 16 ", "0", " ")] == [16.0, 0.0, None] and [S.int_or_zero(v) for v in ("5", " ")] == [5, 0]
+    assert S.get("VERITY_MEMTRACE", {"VERITY_MEMTRACE": "0"}) is True and S.get("VERITY_MEMTRACE", {"VERITY_MEMTRACE": ""}) is False
+    assert S.get("VERITY_HI_PRIO", {}) is True and S.get("VERITY_HI_PRIO", {"VERITY_HI_PRIO": ""}) is False
+    assert S.get("VERITY_FA3_ZERO", {"VERITY_FA3_ZERO": ""}) is True and S.get("VERITY_FA2_TAP_CAP_MB", {"VERITY_FA2_TAP_CAP_MB": ""}) == 0
+    assert S.get("VERITY_RETAIN", {"VERITY_RETAIN": ""}) == "" == S.get("VERITY_WEIGHTS_HASH", {"VERITY_WEIGHTS_HASH": ""})
     assert S.get("MATCH_COMPACT", {}) is True and S.get("MATCH_COMPACT", {"MATCH_COMPACT": ""}) is True
     assert S.get("VERITY_SPARSE_MLA_NUM_SPLITS", {"VERITY_SPARSE_MLA_NUM_SPLITS": ""}) == ""
 

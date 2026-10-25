@@ -65,9 +65,36 @@ def one(raw: str) -> bool:
     return raw == "1"
 
 
+def yes(raw: str) -> bool | None:
+    """On when the stripped string is ``1``, ``true`` or ``yes``, off for anything else (``on`` and ``TRUE`` included); blank,
+    None (the reader's own default)."""
+    v = raw.strip()
+    return v in ("1", "true", "yes") if v else None
+
+
 def not_zero(raw: str) -> bool:
     """On unless the stripped string is ``0`` (an A/B switch that reads ``false`` as on)."""
     return raw.strip() != "0"
+
+
+def not_off(raw: str) -> bool:
+    """On unless the stripped string is ``0``, ``false`` or ``no``."""
+    return raw.strip() not in ("0", "false", "no")
+
+
+def present(raw: str) -> bool:
+    """On when set to anything non-empty, ``0`` included."""
+    return True
+
+
+def number(raw: str) -> float | None:
+    """A float; blank, None (the reader's own default)."""
+    return float(raw) if raw.strip() else None
+
+
+def int_or_zero(raw: str) -> int:
+    """An integer; blank, 0."""
+    return int(raw.strip() or 0)
 
 
 @dataclass(frozen=True)
@@ -96,38 +123,46 @@ S = Setting
 SETTINGS: dict[str, Setting] = _declare(
     # ---- the Commit's committers (commit/committer/)
     S("VERITY_ABL", csv, (), VALUE, "parts of the host committer turned off, comma-separated (an A/B ablation)"),
-    S("VERITY_ARENA_GROW", flag, False, VALUE, "the host arena may grow when no block can ever fit a step (else it waits)"),
+    S("VERITY_ARENA_GROW", yes, False, VALUE, "the host arena may grow when no block can ever fit a step (else it waits)"),
     S("VERITY_ARENA_WAIT_S", float, 600.0, WHERE, "seconds the serving thread waits for a free host-arena block before failing"),
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
-    S("VERITY_FA2_COMPACT", flag, True, VALUE, "the attention tap writes its classes compacted"),
-    S("VERITY_FA2_TAP_CAP_MB", int, None, VALUE, "the attention tap's residency cap in MiB, 0 unbounded; unset, the source's own"),
-    S("VERITY_FA2_ZERO", flag, True, VALUE, "the FA2 tap zeroes its buffers after each read"),
-    S("VERITY_FA3_ZERO", flag, None, VALUE, "the FA3 tap zeroes its buffers after each read; unset, VERITY_FA2_ZERO's"),
+    S("VERITY_FA2_COMPACT", not_off, True, VALUE, "the attention tap writes its classes compacted"),
+    S("VERITY_FA2_TAP_CAP_MB", int_or_zero, None, VALUE, "the attention tap's residency cap in MiB, 0 (or empty) unbounded; unset, the "
+      "source's own", empty=True),
+    S("VERITY_FA2_ZERO", not_off, True, VALUE, "the FA2 tap zeroes its buffers after each read"),
+    S("VERITY_FA3_ZERO", not_off, None, VALUE, "the FA3 tap zeroes its buffers after each read (empty: on); unset, VERITY_FA2_ZERO's",
+      empty=True),
     S("VERITY_FAULT", stripped, "", VALUE, "a deliberate fault the committer injects (negative tests): the record names it"),
     S("VERITY_FOOTPRINT", str, None, DEBUG, "the file the host committer traces its memory footprint to"),
     S("VERITY_GATHER_DESC_DEV", flag, True, VALUE, "the gather kernel reads its descriptors from device memory (native_collect.cpp)"),
-    S("VERITY_HI_PRIO", flag, True, VALUE, "native hooks stage on a high-priority stream"),
-    S("VERITY_INLINE_D2H", flag, False, VALUE, "the host committer copies device to host inline, not on its worker"),
+    S("VERITY_HI_PRIO", one, True, VALUE, "1: native hooks stage on a high-priority stream (empty: off)", empty=True),
+    S("VERITY_INLINE_D2H", one, False, VALUE, "1: the host committer copies device to host inline, not on its worker"),
     S("VERITY_LEAFHASH_BUILD", str, None, WHERE, "the leaf-hash extension's build directory (default: torch's)"),
     S("VERITY_LEARN_HOST_BUDGET_MB", float, 4096.0, VALUE, "the host budget in MiB the windowed collector learns its ring in"),
-    S("VERITY_MEMTRACE", flag, False, DEBUG, "the host committer prints its memory trace"),
-    S("VERITY_PIN", flag, False, VALUE, "the host committer's worker pins its CPU affinity"),
+    S("VERITY_MEMTRACE", present, False, DEBUG, "the host committer prints its memory trace (any value, 0 included)"),
+    S("VERITY_PIN", one, False, VALUE, "1: the host committer's worker pins its CPU affinity"),
     S("VERITY_PINNED_EXACT", flag, True, VALUE, "the pinned pool allocates exactly what is asked, not rounded up"),
     S("VERITY_PINNED_POPULATE_THREADS", int, None, VALUE, "helper threads that fault a fresh pinned pool in (`commit --pinned-populate-threads`)"),
-    S("VERITY_RETAIN", lowered, None, VALUE, "where raw copies are retained: host, device, gpu, none or sample; unset, the committer's"),
+    S("VERITY_RETAIN", lowered, None, VALUE, "where raw copies are retained: host, device, gpu, none or sample; unset, the committer's; "
+      "empty is refused", empty=True),
     S("VERITY_RETAIN_EXCLUDE", str, "", VALUE, "families whose raw copies aren't retained (`native_collect.retain_exclude_families`)"),
-    S("VERITY_RETAIN_PINNED", flag, True, VALUE, "host retention goes to pinned memory (else pageable)"),
+    S("VERITY_RETAIN_PINNED", not_off, True, VALUE, "host retention goes to pinned memory (else pageable)"),
     S("VERITY_ROWS_FORM", str, None, VALUE, "the rows-sha512 leaf form, fused or split; unset, the device's (native_rows.cu)"),
     S("VERITY_ROWS_PHASES", int, None, VALUE, "the launches a row's blocks take in the split leaf form; unset, 4 (native_rows.cu)"),
     S("VERITY_SKIP", csv, (), VALUE, "module classes whose outputs a marginal-cost ablation doesn't acquire, comma-separated"),
-    S("VERITY_STAGING_BOUNDED", flag, None, VALUE, "bounded staging; unset, on exactly when the collector is windowed"),
-    S("VERITY_WEIGHTS_HASH", str, None, VALUE, "where the weights' leaves are hashed: host, device or device-checked; unset, host"),
-    S("VERITY_WINDOW_MB", float, None, VALUE, "the device staging window in MiB, 0 per-step blocks; unset, the committer's default"),
-    S("VERITY_WINDOW_SLOTS", int, 8, VALUE, "device windows in the staging ring"),
+    S("VERITY_STAGING_BOUNDED", yes, None, VALUE, "bounded staging; unset or blank, on exactly when the collector is windowed"),
+    S("VERITY_WEIGHTS_HASH", str, "host", VALUE, "where the weights' leaves are hashed: host, device or device-checked; empty is "
+      "refused", empty=True),
+    S("VERITY_WINDOW_MB", number, None, VALUE, "the device staging window in MiB, 0 per-step blocks; unset or blank, the committer's "
+      "default"),
+    S("VERITY_WINDOW_SLOTS", int, None, VALUE, "device windows in the staging ring; unset, `native_collect.WINDOW_SLOTS`"),
     S("VERITY_WIN_WAIT_TIMEOUT_S", float, None, WHERE, "seconds the serving thread waits for a free window slot; unset, the collector's"),
+    S("NATIVE_GATHER_BLOCKS", int, None, VALUE, "thread blocks per staged descriptor in the gather kernel; unset, 1024 size-adaptive, "
+      "32 with native hooks, else 4"),
+    S("NATIVE_GATHER_AUTO_BYTES", int, 32768, VALUE, "staged bytes per thread block of the size-adaptive gather"),
     # ---- the Commit (pipeline/commit.py and its helpers)
     S("VERITY_ADMIT_HIDDEN_FACTOR", float, 1.05, VALUE, "admission: the planned hidden-class bytes' safety factor"),
     S("VERITY_ADMIT_OTHER_FACTOR", float, 2.0, VALUE, "admission: the other planned bytes' safety factor"),
