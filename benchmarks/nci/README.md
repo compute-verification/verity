@@ -9,8 +9,8 @@ sides adopt it, how fast can a determined actor still advance frontier capabilit
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
 Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Models/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
-(`Security/Models/Nci/Guarantees/Contained.lean`).
+(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
+(`Security/Definitions/Nci/Guarantees/Contained.lean`).
 
 ## Files
 
@@ -28,6 +28,9 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
+| `covering_priced.py` | Kimi K2's dampener rho under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
+| `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
+| `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1 (art:6e9f8284…), theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
 | `tiers.py` | compute efficiency eta and the compute dampener D under the verification stack, per tier; `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what eta is most exposed to: ranges, tornados, elasticities, thresholds on 1/eta, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
@@ -84,9 +87,8 @@ R \;=\; \frac{1}{g}\,\min_A \frac{\rho_A}{m_A}, \qquad \text{pretraining efficie
 
 - \(\rho_A\) is the policy's slowdown for training strategy \(A\): the board and the library compute it from \(A\)'s traits.
 - \(m_A(C) = C_{\text{ref}}(L_A(C))/C\) is \(A\)'s compute multiplier: the compute the reference recipe needs to reach the
-  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`)
-  and the labs' effective compute (`anthropic-2023-rsp/1`, `deepmind-2024-fsf/1`), with the reference and the test set
-  made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
+  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`),
+  with the reference and the test set made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
   \(C_{\text{ref}}(L)\) from a Chinchilla-form law (`besiroglu-2024-chinchilla-replication/2`).
 - \(g\) is algorithmic progress in the base recipe (architecture, data, optimizer, allocation) since the last pretrain. It
   applies with or without the policy, so the talk shows it and then brackets it. Loss-based estimates put it near 2.5x

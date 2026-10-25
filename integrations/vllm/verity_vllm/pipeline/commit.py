@@ -60,7 +60,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
@@ -71,6 +71,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
+from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
@@ -465,8 +466,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
     raise ValueError(kind)
 
 
-from verity_vllm.check.commit_rules import (HIDDEN_CLASS_BY_FA, REQUIRED_CLASSES_DEFAULT, class_coverage, hidden_classes_required,  # noqa: E402
-                                            required_classes_default)
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
@@ -1080,13 +1080,13 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.store.remote.CommitSession); a rejected session fails the Commit")
+    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.remote_bandwidth.remote.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.store.binder.Binder.register_filler)")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.remote_bandwidth.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
+    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.protocols.remote_bandwidth.in_place)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
     memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
@@ -1277,7 +1277,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         required_classes, hidden_family = HS.with_hidden_class(required_classes_default(fa_version), None) + ("compiled_kernel_buffers",), None
         print(f"[delta] required classes (served): {required_classes}", flush=True)
     elif not required_classes_cli:
-        required_classes = HS.with_hidden_class(required_classes_default(fa_version), hidden_family := HS.attention_hidden(required_manifest, eng.model)["family"])
+        required_classes, hidden_family = classes_of_record(required_manifest, eng.model, fa_version)
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
             required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
@@ -1385,135 +1385,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
-        _hidden_required = hidden_classes_required(required_manifest)
-        if args.hidden_so and _hidden_required is False:
-            # a tap that never fires would fail the identity check and the required classes as an omitted producer
-            if not required_classes_cli:
-                required_classes = tuple(c for c in required_classes if c not in HIDDEN_CLASS_BY_FA.values())
-            print(f"[delta] hidden source NOT attached: the required-value manifest names no {' / '.join(HIDDEN_CLASS_BY_FA.values())} identity "
-                  f"(families {sorted((required_manifest.get('populations') or {}).get('by_family') or {})}); required classes "
-                  f"{list(required_classes)}", flush=True)
-        # MLA / DSA sparse MLA: no hidden class, no FA2 source
-        if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
-            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-            # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
-            # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
-            # the attention implementation the built engine executes (`observed_flash_attn_version`, the TargetProfile fact): a mismatch is
-            # refused here, before any run (F-hw-08: the FA2 tap under FA3 never fires).
-            src_cls = getattr(com, "hidden_source_cls", None)                # R11: native_collect_v2 supplies its C++ FA2 glue
-            if args.tap_cap_mb is not None:
-                os.environ["VERITY_FA2_TAP_CAP_MB"] = str(int(args.tap_cap_mb))   # [R18 tap] read by NativeHiddenM1Source at construction
-            com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                                 fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
-            print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)
-            _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
-            if _hsrc is not None and hasattr(_hsrc, "tap_cap_bytes"):
-                # [R18 tap, F-r17-23] the bounded tap's per-window telemetry + summary live in the attempt dir (fa2_tap_windows.jsonl / fa2_tap_bound.json)
-                if args.out:
-                    _hsrc.telemetry_path = str(Path(args.out) / "fa2_tap_windows.jsonl")
-                print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
-                      f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
-                      f"telemetry {_hsrc.telemetry_path}", flush=True)
-        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
-        if args.memory_map:
-            from verity_vllm.acquire.sources import kv_slots_source
-            kv_slots_source.attach(com)
-        # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
-        # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
-        # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
-        # Program has no MOE-01 rows -- the MoeFfnFixedL_v1 row's identity is the module output (leg (a)) -- and the manifest names no
-        # `moe_block_stream` identity: the source is then NOT attached (mode auto, the manifest decides; the reason is on the log), and
-        # `--moe-source on` is refused by name.  A manifest that names the planes (MOE-01 rows) attaches exactly as before.
-        _moe_planes_required = None
-        if required_manifest is not None:
-            _moe_planes_required = int(((required_manifest.get("populations") or {}).get("by_family") or {}).get("moe_block_stream", 0) or 0) > 0
-        if args.moe_source != "off" and _moe_planes_required is False:
-            if args.moe_source == "on":
-                print(f"[delta] REFUSE: --moe-source on but the required-value manifest {args.required_manifest} names no moe_block_stream identity "
-                      f"(the Program has no MOE-01 rows -- a padded construction's MoE identity is the module output): the source would stage "
-                      f"planes the arena has no slot for", flush=True)
-                sys.exit(3)
-            print(f"[delta] MoE block source NOT attached: the required-value manifest names no moe_block_stream identity (families "
-                  f"{list((required_manifest.get('populations') or {}).get('by_family') or {})}; the Program's MoE construction has no MOE-01 rows) -- "
-                  f"nothing is staged that the manifest does not name", flush=True)
-        if args.moe_source != "off" and _moe_planes_required is not False and hasattr(com, "attach_source") and getattr(com, "model", None) is not None:
-            from verity_vllm.acquire.sources.moe_source import MoeBlockSource
-            msrc = MoeBlockSource(com, com.model)
-            if msrc.layers:
-                com.attach_source(msrc)
-                moe_attached = True
-                if args.required_classes is None and "moe_block_stream" not in required_classes:
-                    required_classes = required_classes + ("moe_block_stream",)     # a bound MoE block is a required class of an MoE model (REL-02)
-                print(f"[delta] MoE block source attached: {len(msrc.layers)} MoE layers -> committer {com.name}; required classes {list(required_classes)}", flush=True)
-            elif args.moe_source == "on":
-                print("[delta] REFUSE: --moe-source on but the model has no MoE-runner modules", flush=True)
-                sys.exit(3)
-        # [R19 int-20, F-r19-int-20] MANIFEST-DRIVEN INPUT ACQUISITION: a promoted manifest row (an interior Program row whose output another
-        # module reads -- e.g. a value produced in a parent module's forward body and consumed by a child leaf, which no module OUTPUT
-        # carries) is observed at its first consumer's input: the committer acquires `<consumer>/in` (the embedding-ids mechanism, by the
-        # manifest instead of by class) and the binding map binds it to the producer's identity.  Armed BEFORE size_arena / install; a
-        # table the manifest cannot state unambiguously is refused by name (binding.PROMOTED_INPUT_RULE), never guessed.
-        if required_manifest is not None and hasattr(com, "acquire_inputs") and getattr(com, "model", None) is not None:
-            from verity_vllm.commit.binding import promoted_input_acquisition
-
-            _pia = promoted_input_acquisition(required_manifest)
-            if _pia["problems"]:
-                print(f"[delta] REFUSE: the required-value manifest's promoted members have no unambiguous observation point: {_pia['problems'][:4]}", flush=True)
-                sys.exit(3)
-            if _pia["names"]:
-                _mods = dict(com.model.named_modules())
-                _absent = sorted(c for c in _pia["consumers"] if c not in _mods)
-                com.acquire_inputs = dict(_pia["consumers"])
-                print(f"[delta] acquisition extended by the manifest (promoted members): {len(_pia['names'])} consumer input(s) "
-                      f"{sorted(_pia['names'])} bind {sorted(v[0] + '/' + v[1] for v in _pia['names'].values())} "
-                      f"({sum(p['rows_n'] for p in _pia['producers'].values())} promoted manifest rows; "
-                      f"{', '.join(f'{op}: {p['spec']} width {p['width']} {p['dtype']} at {p['consumer']}' for op, p in sorted(_pia['producers'].items()))})", flush=True)
-                if _absent:
-                    print(f"[delta] NOTE: {len(_absent)} promoted-member consumer(s) are not modules of the built model ({_absent[:3]}): their identities stay unbound (coverage names them)", flush=True)
-        # [X-03 F-r19-int-22] the per-layer attention plane class is DERIVED from the Program's attention Call statics (NH, KVH, D, window per
-        # layer -- the Build record's `attention_impls_observed`, the facts each Call's Definition and `inert_window` were selected from) x
-        # the step's active sequences (fa2_plane_classes): a windowed layer's decode launch stages 6 per-sequence planes while a global GQA
-        # layer's stages one swapped row, so "every layer the same count" is a consequence for one-class Programs, not a rule.  Without the
-        # record the committer keeps the R13 uniformity rule (fails closed on a two-class Program, as before) and says so here.
-        if required_manifest is not None and hasattr(com, "identity_check"):
-            from collections import Counter as _Cnt
-
-            from verity_vllm.acquire import fa2_plane_classes as FP
-
-            _impls, _impls_path = FP.attention_impls_of_record(program_dir=getattr(args, "program_dir", None), programs_root=getattr(args, "programs_root", None))
-            _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
-            if _decls:
-                com.attention_layer_decls = _decls
-                _cls = sorted(_Cnt(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls).items())
-                print(f"[delta] X-03 attention plane classes: {len(_decls)} layer declaration(s) from {_impls_path} -> classes {_cls}; "
-                      f"per-layer expectation derived per step (fa2_plane_classes), uniformity not assumed", flush=True)
-            else:
-                print(f"[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under "
-                      f"--program-dir/--programs-root ({getattr(args, 'program_dir', None)!r}, {getattr(args, 'programs_root', None)!r}); "
-                      f"the R13 uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
-        # [v2 acquire, Phase 4a] the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the built engine's
-        # runtime tree): the plan is written into the attempt dir first; an UNSUPPORTED Value refuses by name.  An external source (the
-        # served values) acquires every value itself: the committer wraps nothing.
-        if served is not None:
-            print(f"[delta] committer {com.name}: no acquisition plan (the served source acquires every value of the Build)", flush=True)
-        else:
-            if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
-                print(f"[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got {kind})", flush=True)
-                sys.exit(3)
-            from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
-            from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
-
-            try:
-                _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
-                for _ln in _docs.log_lines("delta"):
-                    print(_ln, flush=True)
-                _rec = _apply_plan(com, _docs.plan)
-            except _IncompletePlan as e:
-                print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
-                sys.exit(3)
-            (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
-            print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan, "
-                  f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
+        _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
+                                required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
+                                fa_version=fa_version, cb_plan=cb_plan, served=served)
+        required_classes, moe_attached, _hidden_required = _att.required_classes, _att.moe_attached or moe_attached, _att.hidden_required
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),

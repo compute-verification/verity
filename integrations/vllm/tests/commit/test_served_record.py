@@ -111,6 +111,65 @@ def test_prefix_cache_hit_needs_a_committed_source():
     assert not miss["passed"] and any(p.startswith("prefix cache") for p in miss["problems"])
 
 
+A_PROMPT, A_OUT = [1, 2, 3, 4], [9, 10]
+B_PROMPT, B_OUT = A_PROMPT + A_OUT + [7, 8], [11, 12]
+C_PROMPT, C_OUT = B_PROMPT + B_OUT + [6], [13]
+
+
+def three_turns(flip: int | None = None) -> Record:
+    """A conversation of three turns, each turn's prompt the last one's prompt, its streamed ids and the user's next ids: b reads
+    [0, 5) from a's cache, c reads [0, 9) from a's and b's (b computed [5, 9) itself). ``flip``: a's committed id at that
+    position is another than the one served."""
+    a_in = list(A_PROMPT)
+    if flip is not None:
+        a_in[flip] += 90
+    com = FakeCommitter()
+    com.step([("a", 0, 4, 0, 4)], a_in, [9])
+    com.step([("a", 0, 1, 4, 4)], [9], [10])
+    com.step([("b", 0, 3, 5, 8)], B_PROMPT[5:], [11])
+    com.step([("b", 0, 1, 8, 8)], [11], [12])
+    com.step([("c", 0, 2, 9, 11)], C_PROMPT[9:], [13])
+    return absorbed(com, {"a": None, "b": None, "c": None})
+
+
+def test_a_later_turns_prefix_is_covered_by_several_requests():
+    rec = three_turns()
+    assert rec.check("a", A_PROMPT, A_OUT, seed=SEED)["passed"]
+    b = rec.check("b", B_PROMPT, B_OUT, seed=SEED)
+    assert b["passed"] and b["cache_hit"] == 5 and b["prefix_spans"] == [["a", 0, 5]], b
+    c = rec.check("c", C_PROMPT, C_OUT, seed=SEED)
+    assert c["passed"] and c["cache_hit"] == 9 and c["prefix_spans"] == [["a", 0, 5], ["b", 5, 9]], c
+    assert c["prefix_source"] == "a"
+
+
+def test_a_flipped_committed_id_in_a_reused_prefix_fails_its_owner_and_every_reader():
+    rec = three_turns(flip=2)
+    a = rec.check("a", A_PROMPT, A_OUT, seed=SEED)
+    assert not a["passed"] and any(p.startswith("inputs: 1 position(s) differ, first 2") for p in a["problems"]), a
+    for rid, prompt, out in (("b", B_PROMPT, B_OUT), ("c", C_PROMPT, C_OUT)):
+        got = rec.check(rid, prompt, out, seed=SEED)
+        assert not got["passed"] and any(p.startswith("prefix cache: position 2 of") for p in got["problems"]), got
+
+
+def test_a_prefix_committed_after_the_reader_started_is_no_source():
+    com = FakeCommitter()
+    com.step([("b", 0, 2, 4, 6)], [7, 8], [10])
+    com.step([("a", 0, 4, 0, 4)], [1, 2, 3, 4], [9])
+    got = absorbed(com, {"a": None, "b": None}).check("b", [1, 2, 3, 4, 7, 8], [10], seed=SEED)
+    assert not got["passed"] and any(p.startswith("prefix cache: position 0 of") for p in got["problems"]), got
+
+
+def test_a_source_must_agree_with_the_served_ids_before_what_it_covers():
+    """y committed only position 0's id, x every id but position 0's: together they hold [0, 4), but x's KV at 1..3 is of
+    another prefix."""
+    com = FakeCommitter()
+    com.step([("y", 0, 1, 0, 1)], [1], [9])
+    com.step([("x", 0, 4, 0, 4)], [7, 2, 3, 4], [9])
+    com.step([("b", 0, 2, 4, 6)], [7, 8], [10])
+    got = absorbed(com, {"x": None, "y": None, "b": None}).check("b", [1, 2, 3, 4, 7, 8], [10], seed=SEED)
+    assert not got["passed"] and any(p.startswith("prefix cache: position 1 of") for p in got["problems"]), got
+
+
 @pytest.mark.parametrize("served_prompt, served_out, problem", [
     ([5, 6, 7, 0, 9], OUT, "inputs: 1 position(s) differ"),
     (PROMPT, [21, 22, 24, 2], "samples: 1 position(s) differ"),
@@ -138,7 +197,10 @@ def test_a_stream_cut_short_fails_on_its_finish_not_as_an_overrun():
     ({"reason": "length", "max_tokens": 5}, OUT, False),
     ({"reason": "stop", "stop_reason": 2}, OUT, True),
     ({"reason": "stop", "stop_reason": 23}, OUT, False),
-    ({"reason": "abort"}, OUT, False),
+    ({"reason": "abort", "k": 4, "max_tokens": 9}, OUT, True),
+    ({"reason": "abort", "k": 3, "max_tokens": 9}, OUT, False),            # aborted after 3, and 4 were streamed
+    ({"reason": "abort", "k": 4, "max_tokens": 4}, OUT, False),            # at its cap it finished on length
+    ({"reason": "cancelled"}, OUT, False),
     ({"reason": "stop", "stop_reason": "c"}, [1, 3], True),
     ({"reason": "stop", "stop_reason": "c"}, [3, 1], False),              # the string was already there a token earlier
     ({"reason": "stop", "stop_reason": "c"}, [1, 1], False),

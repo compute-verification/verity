@@ -3,11 +3,11 @@
 Certifies that a declared workload of integer or FP8 matmuls was computed with at least a stated fraction of the honest
 work, by sampled recomputation of committed checked values. The setting and the cost model (W1 on an RTX 4090) are the
 PoUW problem statement's; the guarantee is Lean's `Pouw.SecurityProofs.EndToEnd` instantiated with a scheme's
-conjecture. PoUW's Lean is under `Security/` (`Definitions/Pouw`, `Models/Pouw`, `Proofs/Pouw`), and every theorem this document
+conjecture. PoUW's Lean is under `Security/` (`Definitions/Pouw`, `Definitions/Pouw`, `Proofs/Pouw`), and every theorem this document
 cites is pinned in `Security/lean-audit.json`.
 
 This document describes the scheme while it is experimental; what is proved is the Lean. Each guarantee G is stated in
-`Models/Pouw` and proved in `Proofs/Pouw`, as `Pouw.SecurityProofs.G : Pouw.Guarantees.G`, and this document points at
+`Definitions/Pouw` and proved in `Proofs/Pouw`, as `Pouw.SecurityProofs.G : Pouw.Guarantees.G`, and this document points at
 those names rather than restating them.
 
 ## The interface
@@ -245,7 +245,7 @@ opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sig
 Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
 coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
-`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+`trusted-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
 (`received_at`) and then coin i's release after it (`released_at`).
 
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
@@ -348,7 +348,18 @@ serves at a public fixed length, ignore_eos at each slot's public max_tokens, wh
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
 a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
-`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`).
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
+credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
+signs before window 0's first coin (`--length`), commits each request's public max_tokens and stop `fixed`
+(`credit.committed_length`), and each step's served rows m_s, which its manifest rows fix under `calls_root` before the
+draw coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
+decode row for each request whose max_tokens is past s. A round serving more ran a request past its public max_tokens and
+one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a period with no fixed length
+credits nothing (`no-fixed-length`). Each round's live proof (`PouwLiveSlots_v2`, credit's `_live`) proves m_s, and its
+public port `cap` binds each request's hidden cap to its public max_tokens: credit opens it at the known `<prefix>caps`
+of the period's committed max_tokens, and the unit refuses a live request whose header's cap is another or whose round is
+not 0, and a leaf live without a public cap. So a request takes a decode row in round s only when s is below its own
+public max_tokens, and no prover can move a decode row from one request to another while keeping each round's count.
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
@@ -560,7 +571,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
-- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `Security/Models/Pouw/Guarantees/NCP.lean`
+- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `Security/Definitions/Pouw/Guarantees/NCP.lean`
   (the reduction `Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1`, from the named assumption `Pouw.NCP.Assumptions.TTNCP_U`),
   the barrier `Pouw.Guarantees.Barrier.Generic`, and the game's `Pouw.Guarantees.Theorem1`, `WorkWeightedSampling` and
   `EndToEnd`.
@@ -789,7 +800,9 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 The cheap-binding lane's H100 candidate. It takes Pearl's H100 product and output tickets, and adds #311's noisy clean-up
 pinned bit for bit, so that the useful output U is a checked value.
 γ rests on the named conjecture TT_OUT(1/400), not on counting, so the certificate names no γ_0. The module's docstring
-states every step.
+states every step. TT_OUT's device forms are stated at the W1 machine
+(`Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean`): a strategy's cost is `W1.w1Priced`'s on the record's
+device, so an attack on them is a W1 program, and the γ guarantees that read them conclude at that cost model.
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
@@ -981,7 +994,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384`, from TT_OUT at 1/1,000.
   - The per-unit γ doesn't need TT_OUT(1/1,000): the same γ for the cap-1/1,000 protocol follows from rev1 at 1/400 alone
     (`Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400` and
-    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1` at 1/400).
+    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1W1` at 1/400).
   - At the issue-bound FP32 add (8.00), the pinned guarantees are
     `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192` and
     `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384`, with the sampled
@@ -1096,7 +1109,10 @@ GPU 5's RTX PRO 6000 design. It is Pearl-C with the FP8 product replaced by `mma
   cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
   scales make honest zero codes reliable.
 The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane and proposed, not proved, so
-the certificate names no γ_0. The module's docstring states every step and rounding.
+the certificate names no γ_0. The module's docstring states every step and rounding. TT_OUT-FP4 is stated at the W1
+machine on `W1Device.fp4Sm120` (`Security/Definitions/Pouw/Assumptions/PearlC/TTOutFp4W1.lean`), and the headline γ
+guarantees conclude at that cost model. Its domain rule D-SK reads `B̃`'s lines from the oracle, which a W1 program
+can't call, so it says nothing about the deployment until D-SK is stated over SHA-512.
 
 ~~~text
 rows      k BF16 words per row of either operand
@@ -1604,7 +1620,7 @@ site that fills none (decode's few tokens); the vLLM integration serving the com
 
 ## Not here yet
 
-- The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
+- The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocols/pouw/__init__.py`)
   are gated by these vectors when they land. Pearl-C's sm_120 kernel is `benchmarks/pouw/pearl_c_sm120/`; its H100
   kernel (-h1, BLAKE3) is kept unmaintained in `archive/pouw-blake3/pearl_c/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.

@@ -8,8 +8,8 @@ from collections import Counter
 
 import numpy as np
 
-from verity_vllm.predict import build as PB
-from verity_vllm.predict.phi import Phi
+from verity_vllm.program.predict import build as PB
+from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program import prune as PR
 from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, kept_records, narrowed, swapped, without_dead_units
 from verity_vllm.program.registry import b1, gemm_bias, topp_words as TW
@@ -38,7 +38,7 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
     the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`)."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
-    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
     body = full.program.fn.body
     dead = dead_units(body)
@@ -58,19 +58,22 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
 def test_the_dead_free_form_binds_rmsnorm_and_token_select_to_their_versions_without_dead_gates():
     """`swapped` binds each RMSNormTriton_v1 and TokenSelect_v1 node to v5 and v4 at the same statics (`registry.dead_free`): the
     same arguments and outputs, none of their gates dead, the RMSNorm's fewer (TokenSelect_v4 has a negation more a lane than v1, and
-    lowers linearly in V where v1 lowers quadratically); every other node is the same object. The step wrapper, which isn't the
-    registered form, keeps the v1s."""
+    lowers linearly in V where v1 lowers quadratically); FA2's attention goes to v18, here (9 and 10 keys) with v5's gates; every
+    other node is the same object. The step wrapper, which isn't the registered form, keeps the v1s."""
     body = PB.build_program(PHI, "step", M=2, pos0=8).program.fn.body
     sw = swapped(body)
     assert Counter(n.fn.id for n in body.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect")) == {
         "RMSNormTriton_v1{N=64,EPS=1e-05}": 2, "TokenSelect_v1{V=256}": 1}
     assert Counter(n.fn.id for n in sw.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect")) == {
         "RMSNormTriton_v5{N=64,EPS=1e-05}": 2, "TokenSelect_v4{V=256}": 1}
+    assert Counter(n.fn.base_id for n in sw.nodes if n.fn.name == "Attention") == {"Attention_v18": 4}
     for a, b in zip(body.nodes, sw.nodes):
         if a.fn.name in ("RMSNormTriton", "TokenSelect"):
             assert (b.form, b.args, b.out, b.n, b.fn.bindings) == (a.form, a.args, a.out, a.n, a.fn.bindings)
             assert b.gates < a.gates or a.fn.name == "TokenSelect"
             assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
+        elif a.fn.name == "Attention":
+            assert (b.form, b.args, b.out, b.n, b.fn.bindings, b.gates) == (a.form, a.args, a.out, a.n, a.fn.bindings, a.gates)
         else:
             assert b is a
     assert sw.ret is body.ret and sw.offsets[-1] == sum(n.gates for n in sw.nodes)
@@ -87,6 +90,20 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
     assert (a.fn.id, b.fn.id) == ("GumbelTopPTokenSelect_v2{V=3,S=2}", "GumbelTopPTokenSelect_v3{V=3,S=2}")
     assert (b.form, b.args, b.out) == (a.form, a.args, a.out)
     assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
+
+
+def test_the_dead_free_form_binds_fa2_attention_to_v18():
+    """FA2's attention on compute capability 12.0 is `Attention_v5` (head dim 16: kBlockN 128); `swapped` binds it to v18 at the same
+    statics. On TINY's 16-row prefill the row with 16 keys is the one whose v5 has dead gates, its first block's unread zero padding,
+    2 a head; v18 has none of them and v5's gates on the other rows."""
+    body = PB.build_program(PHI, "step", M=16, pos0=0).program.fn.body
+    pairs = [(a, b) for a, b in zip(body.nodes, swapped(body).nodes) if a.fn.name == "Attention"]
+    assert len(pairs) == 2 * 16 and {(a.fn.base_id, b.fn.base_id) for a, b in pairs} == {("Attention_v5", "Attention_v18")}
+    for a, b in pairs:
+        dead = dead_gates(Program(a.fn), limit=0, transitive=True).computed
+        assert dead == (2 * TINY["num_attention_heads"] if a.fn.bindings["T"] == 16 else 0)
+        assert (b.form, b.args, b.out, b.n, b.fn.bindings, b.gates) == (a.form, a.args, a.out, a.n, a.fn.bindings, a.gates - dead)
+        assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0
 
 
 def test_each_reference_is_renumbered_in_its_own_form():

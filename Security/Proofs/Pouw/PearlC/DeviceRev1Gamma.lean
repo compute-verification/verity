@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.DeviceGamma
-import Models.Pouw.Assumptions.PearlC.TTOutRev1
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # rev1: it asserts less than the granted TT_OUT, and γ from it (the TT_OUT restatements lane's file)
@@ -307,10 +308,22 @@ theorem pearlCSampledH100Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384 : Pouw.Guarantees.PearlC.GammaH100Rev1_16384 := @Pouw.PearlC.pearlCGammaH100Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384 : Pouw.Guarantees.PearlC.GammaH100Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaH100Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCH100Rev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192 : Pouw.Guarantees.PearlC.GammaH100Rev1_8192 := @Pouw.PearlC.pearlCGammaH100Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192 : Pouw.Guarantees.PearlC.GammaH100Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaH100Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCH100Rev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384 := @Pouw.PearlC.pearlCSampledH100Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledH100Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCH100Rev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1_8192 := @Pouw.PearlC.pearlCSampledH100Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledH100Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCH100Rev1_of_w1 hTT)

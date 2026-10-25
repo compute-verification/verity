@@ -216,10 +216,13 @@ def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
   | some m => .error (refusal s!"m = {m}, below {mMin zk}{if zk then " under --zk" else " without --zk"}")
   | none => .ok ()
 
-/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a `--zk` session of a statement
-with hidden outputs whose verifier holds its own registered reads (`--registered F`), the setting of
-`EndToEndRegistered` (an untyped statement, which `statementRules` requires of every form). -/
-def sharedRowsOk (tags : Tags) (zk registered : Bool) : Bool := zk && tags.hiddenOutputs && registered
+/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a statement with hidden outputs and
+`hm96-sha512/v1` leaves whose verifier holds its own registered reads (`--registered F`), with or without `--zk`: under
+`--zk` the setting of `EndToEndRegistered` (`FailClosed.SoundZHJR`), without it `FailClosed.SoundExecHR`. A statement with
+plain SHA-512 leaves (a recursive session's inner statement, whose registered reads `Registered.checkDescription` reads)
+keeps its own rows. `zk` is unread: `--zk` needs `hm96-sha512/v1` leaves (`leafOk`), so the rule is the same in both. -/
+def sharedRowsOk (tags : Tags) (_zk registered : Bool) : Bool :=
+  tags.hiddenOutputs && registered && tags.merkleLeaf == "hm96-sha512/v1"
 
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
 file as the proof reads them, a shared-row public file only where `sharedRowsOk`, wherever the wires feed the unit or the
@@ -272,25 +275,44 @@ theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) 
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
 
-/-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
-`--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset
-draw without `--zk` are outside them. -/
-def lawWhy (zk : Bool) (d : Draw.UnitDraw) : Option String :=
+/-- What a draw's law is, when no soundness claim draws by it at the session's form (PROTOCOL.md §16.15): the one rule
+for which law each form draws by. The stratified law at every form `check` passes, each claim at one table
+(`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`). The subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`) and,
+without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
+(`SoundExecH` at its subset draw design). So a bernoulli draw, a work draw (with or without a closure) and a subset draw
+without `--zk` at public outputs are outside them. -/
+def lawWhy (zk : Bool) (tags : Tags) (d : Draw.UnitDraw) : Option String :=
   match d.law with
   | .stratified .. => none
-  | .subset _ => if zk then none else some "a subset draw without --zk"
+  | .subset _ => if zk || tags.hiddenOutputs then none else some "a subset draw without --zk"
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by** (PROTOCOL.md §16.15): `draw` is the record's
-(`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without a draw is
-refused (D12); so is a draw that does not parse. -/
-def drawLaw (zk : Bool) : Option Lean.Json → Except String Unit
+/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`, PROTOCOL.md §16.15): `draw` is
+the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
+a draw is refused (D12); so is a draw that does not parse. -/
+def drawLaw (zk : Bool) (tags : Tags) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
   | some j => match Draw.UnitDraw.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
-    | .ok d => match lawWhy zk d with
+    | .ok d => match lawWhy zk tags d with
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
+
+/-- The refusal of a session verified without the verifier's own program (`--program`), which `verify` reaches only when
+every check has passed. -/
+def NO_PROGRAM : String :=
+  "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
+
+/-- **The verifier holds its own program**: a session verified without it (`--program`) is refused (`NO_PROGRAM`),
+whatever else it passes. -/
+def programHeld (program : Option ByteArray) : Except String Unit :=
+  if program.isSome then .ok () else .error NO_PROGRAM
+
+theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .ok ()) : program.isSome = true := by
+  unfold programHeld at h
+  split at h
+  · assumption
+  · cases h
 
 end Flock.ProvedScope

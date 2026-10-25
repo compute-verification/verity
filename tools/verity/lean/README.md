@@ -64,7 +64,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
-- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes. A rule with `"sealed": true` is
+  a layer of its own: its modules answer only to the rules at or under it, and another rule reaches it only by listing
+  a prefix at or under it, never through a shorter one that holds it (an area's `Guarantees` under the area's
+  vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
@@ -197,7 +200,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
-  closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
+  closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
+  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner.
+  In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
+  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`, the one
+  its `reads` record holds, so
   a changed assumption fails under its own name; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
@@ -263,7 +270,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
   each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
   and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
-  (`Properties.Proofs` before `Properties`), and a package's trees reach the packages that require it by path
+  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
   (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
   statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
   off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`

@@ -1,12 +1,12 @@
 import Mathlib
-import Models.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Proofs.Accounting.Stacking
 
-/-! The pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem waits on the red team
-of the statement (until then the lock lists the statement as `unstated`): a carrier of a declared
-circuit's is within its census over its life, its inputs within the run-input bytes the stacking property's caps
-allow its windows (`Provenance.OfCircuit.budget`), a uniform function restricted along an
-injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is steered after the coins to
+/-! The first pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem is in
+`DeclaredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
+within the run-input bytes the stacking property's caps allow its windows (`Provenance.OfCircuit.budget`), a uniform
+function restricted along an injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is
+steered after the coins to
 uniform blocks at `2^a` times their likeliest summary's event, `δ` once, against an event that reads the summary as a
 device told it does (`KeyBinding.pr_steered_le`). -/
 

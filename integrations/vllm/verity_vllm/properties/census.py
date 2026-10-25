@@ -220,7 +220,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     engine = eng.llm.llm_engine
 
     def profiled_run(requests: list[dict], tag: str) -> tuple[list[dict], dict[str, list[int]]]:
-        """`driver.run_requests` with one profiler session per engine step (the bare engine: no wrappers at all).
+        """The bare engine's request loop with one profiler session per engine step (no wrappers at all).
 
         [coverage D87, adapter-level] the same step-indexed arrival rule as `verity_vllm.engine.arrivals.run_requests_arrivals`: request
         r is admitted right before forward r["arrive_step"] (all 0 = the historical loop); an idle engine admits the next arrival at

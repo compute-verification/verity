@@ -2559,7 +2559,7 @@ requires-dist = [
 [[package]]
 name = "verity-slack-events"
 version = "0.0.0"
-source = { virtual = "integrations/slack-events" }
+source = { virtual = "infra/slack-events" }
 dependencies = [
     { name = "fastapi" },
     { name = "tzdata" },

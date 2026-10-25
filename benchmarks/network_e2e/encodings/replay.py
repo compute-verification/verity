@@ -37,6 +37,7 @@ alone, and
 
 from __future__ import annotations
 
+import gzip
 import json
 import math
 import re
@@ -933,8 +934,15 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
                  release_t=[at(r, "release_t", release_lag_s) for r in steps_recs], header=recs[0])
 
 
+def records(path: str | Path) -> list[dict[str, Any]]:
+    """A step trace's records, from JSON lines or gzipped JSON lines (`.gz`)."""
+    p = Path(path)
+    text = gzip.decompress(p.read_bytes()).decode() if p.suffix == ".gz" else p.read_text()
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
 def read_step_trace(path: str | Path, **kw: Any) -> Trace:
-    return load_step_trace((json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()), **kw)
+    return load_step_trace(records(path), **kw)
 
 
 def _jsonl(path: Path) -> list[dict[str, Any]]:
@@ -952,9 +960,10 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     is what an egress certifier on the link sees.
 
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on today's link),
-    or with `ingress="warden"` the server's own arrival stamp (`arrival`), which stands for design v3's active warden:
-    it admits connections on its own public schedule, so the engine's arrival order is the warden's certified admission
-    order rather than a server-side stamp the certifier never sees."""
+    or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
+    That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
+    release order (a, ordinal) leaves order exceptions to charge (TRACE-CORPUS's `<trace>.released` traces carry it as
+    their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give."""
     d = Path(d)
     argv = json.loads((d / "meta.json").read_text())["server_argv"]
 
@@ -1526,7 +1535,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a TRACE-CORPUS output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
                     help="a TRACE-CORPUS request's certified ingress: the client's send time (client) or the engine's arrival "
-                         "stamp, as design v3's warden admits it (warden)")
+                         "stamp (warden: the floor a server admitting in the warden's release order would give; today's "
+                         "warden certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)

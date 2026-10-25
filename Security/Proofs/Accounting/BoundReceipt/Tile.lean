@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.BoundReceipt
+import Definitions.Accounting.Guarantees.BoundReceipt
 import Proofs.Pouw.Prob
 
 /-!
@@ -47,11 +47,12 @@ theorem TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono := b
   obtain ⟨hr, c, hc, hact, hck⟩ := hx
   exact ⟨hr, c, hc, hact, fun y hy => by rw [← hY]; exact hck y (hidx _ hy)⟩
 
-/-- **`TT_OUT`'s shape gives `TileUnpredictablePearlC`** (`Accounting.Guarantees.TileUnpredictablePearlCOfTTOut`). -/
+/-- **`TT_OUT`'s shape at W1 gives `TileUnpredictablePearlC` at W1**
+(`Accounting.Guarantees.TileUnpredictablePearlCOfTTOut`). -/
 theorem TileUnpredictablePearlCOfTTOut : Accounting.Guarantees.TileUnpredictablePearlCOfTTOut := by
   classical
-  intro Q R S _ _ _ _ CM P credit D γ₀ ε hc hTT U hU T hT q hq A hA u hu
-  refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT.2 U hU T hT q hq A hA)
+  intro Q R S _ _ _ _ dv salt P credit D γ₀ ε hc hTT U hU T hT q hq A hA u hu
+  refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT U hU T hT q hq A hA)
   have hcorrect : ∀ v ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2), ∃ c : Pouw.PearlC.Commit,
       Pouw.PearlC.actOf (A.transcript U x.1 x.2) v = c.act ∧ Pouw.PearlC.Correct P U x.1 x.2 v c := by
     intro v hv

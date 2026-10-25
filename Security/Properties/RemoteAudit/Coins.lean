@@ -22,10 +22,12 @@ A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`re
 
 So the code gives `Live` once the events up to window `t`'s draw are fixed by the coins below `W + t`, and that is
 what it cannot give: the order the deployment releases coins in, the challenger releasing `coins[W + t]` only to
-`close t`'s draw and the prover seeing nothing of it before. `ReleaseOrder` names it, a premise of the deployment's,
+`close t`'s draw and the prover seeing nothing of it before but the coin commitment's root, which the guarantees fix
+(`Live` at every fixed commitment, `Accounting.Remote.Draw.Committed`, what the root reveals charged as the hiding
+terms `Committed.hide`). `ReleaseOrder` names it, a premise of the deployment's,
 which no property here takes. `LiveUnder` is `Live` as the code states it, on the events a session sees on its
 coins: two sessions on coins that agree below `W + t`, wherever each has drawn window `t`, see the same record and
-the same openable receipts. `Properties.Proofs.RemoteAudit.Order` derives it from the three properties and
+the same openable receipts. `Proofs.Properties.RemoteAudit.Order` derives it from the three properties and
 `ReleaseOrder` (`liveUnder`), a lemma rather than a property since its premise is the deployment's. And `Counted`
 reads the trace's held blocks, which the code never sees: that a credited pass's wrong registered blocks are receipts
 no opening passes is the hash binding of the receipts and the store's commitments, not a property of the verifier's
@@ -84,9 +86,9 @@ def RecordKeptAfterDraw : Prop :=
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
 /-- **The release order** (the deployment's, which the code cannot give): `D` gives the events a session sees on its
-coins (the prover's and the world's choices fixed), and window `t`'s openings coin reaches none of them before the
-one that draws the window. While the first `k` events leave window `t` undrawn, the next is the same on coins that
-agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilDrawn`, up to the draw, and
+coins (the prover's and the world's choices fixed, the coin commitment among them), and window `t`'s openings coin
+reaches none of them before the one that draws the window. While the first `k` events leave window `t` undrawn, the
+next is the same on coins that agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilDrawn`, up to the draw, and
 `RecordKeptAfterDraw`, after it. -/
 def ReleaseOrder (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Session.Event) : Prop :=

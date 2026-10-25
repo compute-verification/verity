@@ -154,8 +154,11 @@ AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
 #: ticks a member must keep its head on `next` before the review landing's Lean check reaches it (`Driver._lean_check`): one
-#: of a prefix capped below recent churn isn't taken off `next` by the next re-mark (24 Oct: three checks lost to it in 3 h)
-LEAN_SETTLE_TICKS = 3
+#: of a prefix capped below recent churn isn't taken off `next` by the next re-mark (24 Oct: three checks lost to it in 3 h;
+#: three ticks capped a check below one new head for an hour)
+LEAN_SETTLE_TICKS = 1
+#: the review landing's Lean checks that may run at once: a lower one and one stacked at the reviewed top (`Driver._lean_check`)
+LEAN_RUNNING_MAX = 2
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
 #: the step a Lean change's Lean check before a review landing runs (`train.sh TOP MACHINES --deferred lean-audit`)
@@ -2662,11 +2665,18 @@ class Driver:
         head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
         check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
         that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`.  One
-        running below stays.  The launch is saved at once, so a tick that fails after it doesn't launch it again."""
+        running below stays, and while it runs one is stacked at that top when a machine has a free Lean check slot (`_spare`),
+        at most `LEAN_RUNNING_MAX` running.  The launch is saved at once, so a tick that fails after it doesn't launch it again."""
         q, m, lean = self.q, chain[i], drive["lean"]
         pos = {x.commit: j for j, x in enumerate(chain)}
         mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i}
-        if c := next((c for c, rec in mine.items() if rec.get("state") is None), None):
+        cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
+        running = [c for c, rec in mine.items() if rec.get("state") is None]
+        if running and (any(rec.get("state") == "failed" for rec in mine.values()) or chain[cap - 1].commit in lean
+                        or max(pos[c] for c in running) >= cap - 1
+                        or sum(rec.get("state") is None for rec in lean.values()) >= LEAN_RUNNING_MAX
+                        or not any(n > 0 for n in self._spare().values())):
+            c = running[0]
             q.log(f"research queue drive: #{m.pr}'s Lean change waits for the Lean check {' '.join(lean[c]['ids'])} of {c[:12]}")
             return
         if (rec := lean.get(m.commit)) and rec.get("state") == "failed":
@@ -2675,7 +2685,6 @@ class Driver:
                         f"Push a fix (a new head checks again), or hold it (`research queue review {m.pr} --hold REASON`)",
                         self._owner(m))
             return
-        cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
         top = m if any(rec.get("state") == "failed" for rec in mine.values()) else chain[cap - 1]
         if dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} for #{m.pr}'s Lean change")
