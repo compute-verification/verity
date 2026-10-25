@@ -1200,8 +1200,9 @@ requests, whose frames are a function of the prompt's length alone), for every p
   and on a refused one it reads the sync the certifier ran. Design: the unit takes each window's clock opening as
   witness, checks it against the certificate's signed digest (the clock digest and its salted digest, two SHA-512s
   of a few blocks, as the head check computes a head's signed digest), and computes the floor from the opened syncs
-  inside the unit, so the floor leaves the public row; the verifier then reads no sync. It changes N2's advised unit, its pinned digest and its public
-  row, so it lands with that unit's change.
+  inside the unit, so the floor leaves the public row; the verifier then reads no sync. It is a circuit change to N2's
+  advised unit (its Definition, pinned digest and public row, with its `circuit-check` report), not a Lean one: the
+  network certifier's Lean issuer already signs the salted form (`CertifierDevice.Issuer.clock`).
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
