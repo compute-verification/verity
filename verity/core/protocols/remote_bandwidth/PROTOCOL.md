@@ -410,7 +410,9 @@ step is public, an integer below \(2^{64}\), and the steps strictly increase ove
 windows, so no two passes cover one step. A root out of turn rejects with `order`: a window's roots come in index
 order, and a window's first root makes the window before it final. A root with no step, or with a step not above the
 previous pass's, rejects with `step`. A plan that breaks its format, or a change that removes a block its plan doesn't
-hold or adds one it does, rejects with `plan`.
+hold or adds one it does, rejects with `plan`, and so does one that would take its window's receipts
+\(U_t = \sum_i L_{t,i}\) to \(2^{64}\) (`RECEIPT_LIMIT`), so each of the window's draws reads its sampler word from its
+stream's first SHA-512 block.
 
 **Appends and releases.** Blocks written after the codec seed (KV pages) join the store mid-session. The prover commits
 their payloads in an append tree (`append_tree`: the payload tree's leaves, \(x_j = d_j\), in a frame-v3-sha512 domain
@@ -1289,7 +1291,8 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
-  word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, at δ plus
+  word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
+  \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
   \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
   at the coin commitment with leaf \(t\) committing zeros and reads at most \(s_t\) first blocks of the stream it
