@@ -32,6 +32,26 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`. `Session.lands t ω b` is window
   `t`'s test at its own `U_t`, `s'_t` and correct receipts, and `Session.bound t ω` the most it lands on uniform
   blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
+* `Committed`: **the session as the prover plays it holding the coin commitment.** The challenger commits every coin
+  before the first is released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree, and the prover holds
+  the root from the start (`coins.py`). A root is a function of every coin, so a deployed window's size can read
+  window `t`'s openings coin through it, and `Live` is false of the deployed session (red team RD-12). `view c` is the
+  session the prover plays holding commitment `c`; `play com` is the deployed one, the prover holding `com ω` at
+  coins `ω` (the salts among the other coins `x`). `junk com t` is the commitment with openings coin `t`'s leaf
+  committing zeros, the other coins and every salt as they are: it reads no bit of coin `t`.
+* `Session.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
+  coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
+* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`:
+  how much likelier the potential after `t + 1` windows is at the deployed commitment than at `junk com t`, plus how
+  much likelier the potential after `t` windows is at `junk com t` than at the deployed one. Each is an event of the
+  coins and the commitment the prover holds, read off the prover's sizes and correct receipts of windows `j ≤ t`,
+  which are fixed before coin `t` and its salt are released: a distinguisher of hm96 commitments at leaf `t` between
+  coin `t` and zeros (claim `statistical-hiding`). At the pinned key (`common-reference-string`, `hash-derived-key`)
+  hm96 puts each within the pair distance of leaf `t`'s commit strings, and over a session's `n` openings leaves those
+  sum to at most `n·2^-192` for all but a `2^-64` fraction of keys (`verity/ml/commitments/hm96/PROTOCOL.md` §3), so
+  the session's hiding terms total at most `n·2^-191` (`ledger.hiding`). That bound reads a prover whose view before
+  coin `t` holds no salt of a coin not yet released, as the deployed prover's doesn't: a `view` that reads leaf `t`'s
+  salt off the other coins gets no bound from hm96, rightly.
 * `Session.distinguisher prf δ t`: **window `t`'s distinguisher**, in `Pous.StreamedWipe.prfAdvantage`'s form, one a
   window and fixed by the session. On coins `(ω, u)` and blocks `b` it runs the session through window `t`: windows
   `j < t` on `prf j` at their own coins in `ω`, which it computes itself, window `t` on `b`. It outputs whether every
@@ -148,6 +168,12 @@ def distinguisher (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fi
   (∀ j, j < t → D.lands j y.1.1 (prf j (y.1.1.2 j))) ∧ D.lands t y.1.1 y.2 ∧
     below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1.1) y.1.2
 
+/-- **The hybrid's potential after `t` windows** at coins `z = (ω, u)`: windows `j < t` land on `prf j` at their coins,
+and the threshold coin `u` falls below the product of their bounds. -/
+def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (z : Coins n κ X × Pous.Bits 512) : Prop :=
+  (∀ j : Fin n, (j : ℕ) < t → D.lands j z.1 (prf j (z.1.2 j))) ∧
+    below δ (∏ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t), D.bound j z.1) z.2
+
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
 def wrong (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
 
@@ -156,5 +182,35 @@ noncomputable def pooled (δ : ℝ) (ω : Coins n κ X) : ℝ :=
   Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
 
 end Session
+
+/-- **A session that reads the coin commitment**: `view c` is the session the prover plays holding commitment `c`. -/
+structure Committed (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X Cm : Type) where
+  /-- The session the prover plays holding commitment `c`. -/
+  view : Cm → Session n m s κ X
+
+namespace Committed
+
+variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} (F : Committed n m s κ X Cm)
+
+/-- The session the prover plays holding commitment `com ω` at coins `ω`. -/
+def play (com : Coins n κ X → Cm) : Session n m s κ X where
+  size t ω := (F.view (com ω)).size t ω
+  correct t ω := (F.view (com ω)).correct t ω
+
+/-- The commitment with openings coin `t`'s leaf committing zeros: `com` at the coins with window `t`'s openings coin
+replaced by zeros, the other coins and every salt as they are. -/
+def junk (com : Coins n κ X → Cm) (t : Fin n) (ω : Coins n κ X) : Cm :=
+  com (ω.1, Function.update ω.2 t fun _ => false)
+
+/-- **Window `t`'s hiding term**: how much likelier the potential after `t + 1` windows is at the deployed commitment
+than with openings coin `t`'s leaf committing zeros, plus how much likelier the potential after `t` windows is with
+that leaf committing zeros than at the deployed commitment (each truncated at 0). -/
+noncomputable def hide [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ)
+    (t : Fin n) : ℝ≥0∞ :=
+  (Pous.pr ((F.play com).potential prf δ ((t : ℕ) + 1)) -
+      Pous.pr ((F.play (junk com t)).potential prf δ ((t : ℕ) + 1))) +
+    (Pous.pr ((F.play (junk com t)).potential prf δ t) - Pous.pr ((F.play com).potential prf δ t))
+
+end Committed
 
 end Accounting.Remote.Draw
