@@ -1,4 +1,4 @@
-"""[R16 stoch] GPU-truth fixture for `TopPMask_v1{V,S}` (`verity_vllm.program.registry.topp_split`) across EVERY split geometry the vLLM
+"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity_vllm.program.registry.topp_split`) across EVERY split geometry the vLLM
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses (F-stoch-01 follow-up: the model was fitted at S=32 only).
 
@@ -11,7 +11,7 @@ buffer, the per-slice scalar chain of the instrumented mask kernel (M, Z, pivot_
 one bit per lane saying WHICH of the two per-thread Z values that lane's thread held (`z_group`, the F-stoch-01 root cause).
 
 Kinds:
-  random     bf16-valued randn * 3 rows (the R15 validation shape) at V in {1024, 3000, 4096, 128256};
+  random     bf16-valued randn * 3 rows (the first validation's shape) at V in {1024, 3000, 4096, 128256};
   ties       a head of distinct large logits + a plateau of k IDENTICAL logits at lanes spread over the splits, both Z groups and
              (for S >= 2) straddling split boundaries (s*slice_len - 1, s*slice_len) + a small-mass tail; p chosen so the top-p
              boundary falls INSIDE the plateau (numkeep < numdup: the kernel's duplicate budget is exercised) at several offsets;

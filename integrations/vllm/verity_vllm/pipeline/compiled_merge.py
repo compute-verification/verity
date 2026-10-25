@@ -1,4 +1,4 @@
-"""[R15 compiled] Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
+"""Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
 (summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is

@@ -1,4 +1,4 @@
-"""Empirical admission planner (R18 `admit` lane, F-r18-admit-1 / increment C of the runner-telemetry brief).
+"""Empirical admission planner (increment C of the runner-telemetry brief).
 
 The reservation model for one row stage is
 
@@ -7,7 +7,7 @@ The reservation model for one row stage is
 where every term is a NAMED allocation object of the row procedure (see `INVENTORY` below and
 `out/gen/sweep/evidence/admit/INVENTORY.md`) with a lifetime (first/last substage where it is resident) and a size
 law in plan-time scale variables (tokens, requests, layers, instances, workers, ...).  Coefficients are measured
-constants (each carries the R17 attempt dir + numbers that pin it, in `CALIBRATION`); there is no global multiplier.
+constants (each carries the attempt dir + numbers that pin it, in `CALIBRATION`); there is no global multiplier.
 Simultaneity is computed by a sweep over the stage's substage timeline (`peak_overlap`): sequential reuse is not
 simultaneous residency (the FP8 3-pair result), and a term that outlives its substage (the pymalloc heap residual,
 the pinned pool under `--retain host`) is modelled as a term with a longer lifetime, not as slack.
@@ -19,7 +19,7 @@ Two data paths feed the planner:
       named-allocation marks (`kind="mark", name="alloc"|"free", obj=<term>, bytes=<n>, alloc_id=<id>`), plus
       `resources*.jsonl` `kind="cgroup"` (memory_current_bytes, memory_stat.anon/shmem/file) and `kind="process"` rows
       (per-pid rss_bytes / rss_anon_bytes) — `observe_increment_a`.
-  (b) the R17 fallback: `resources.jsonl` ({utc|t, max_python_rss_mib, cgroup_current_mib, cgroup_anon_shmem_mib,
+  (b) the pre-telemetry fallback: `resources.jsonl` ({utc|t, max_python_rss_mib, cgroup_current_mib, cgroup_anon_shmem_mib,
       gpu_used_mib}) + `timeline.jsonl` (`ev` start/end per `stage`/`proc`) + `stages.txt`, the F-dA-15 admission JSON
       under `commit/`, `match/fold_summary.json`, `commit.log` ledger lines and `cgroup_memory.events.txt` /
       `commit_oom_cgroup.txt` — `observe_r17` and `row_config_from_attempt`.
@@ -364,9 +364,9 @@ def _stage_plan(terms: list[Term], points: list[str], limit: int | None) -> dict
 def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_bytes: int, lower_bound: dict[str, str]) -> dict[str, Any]:
     """The refusal names what does not fit: the live terms at the peak, largest first, and the shortfall in bytes.
 
-    S-r18-3 C1 (rev M-0053): a stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
-    under-fits that object (R17 killed #57/#60 at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the terms and
-    the R17 observation, so the runner/coord decide by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
+    A stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
+    under-fits that object (rows #57 and #60 were killed at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the
+    terms and the observation, so the runner/coord decide by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
     """
     if limit is None:
         return {"admit": None, "verdict": "NO_LIMIT", "reason": "no host limit given"}
@@ -548,7 +548,7 @@ def _jsonl(path: str) -> Iterable[dict[str, Any]]:
 
 
 def r17_samples(attempt_dir: str) -> list[dict[str, Any]]:
-    """R17 `resources*.jsonl` -> [{t, rss, cgroup, anon_shmem, gpu, stage}] (MiB), time-sorted."""
+    """A pre-telemetry attempt's `resources*.jsonl` -> [{t, rss, cgroup, anon_shmem, gpu, stage}] (MiB), time-sorted."""
     out = []
     for f in sorted(glob.glob(os.path.join(attempt_dir, "resources*.jsonl"))):
         for r in _jsonl(f):
@@ -562,7 +562,7 @@ def r17_samples(attempt_dir: str) -> list[dict[str, Any]]:
 
 
 def r17_spans(attempt_dir: str) -> list[dict[str, Any]]:
-    """R17 `timeline.jsonl` -> [{stage, proc, t0, t1, closed}]; unclosed spans end at the last event (the kill)."""
+    """A pre-telemetry attempt's `timeline.jsonl` -> [{stage, proc, t0, t1, closed}]; unclosed spans end at the last event (the kill)."""
     p = os.path.join(attempt_dir, "timeline.jsonl")
     if not os.path.exists(p):
         return []
@@ -594,7 +594,7 @@ _R17_POINT = {
 
 
 def observe_r17(attempt_dir: str) -> dict[str, Any]:
-    """Observed host peaks per stage / plan point from the R17 sampler + timeline, with the cgroup kill record if any."""
+    """Observed host peaks per stage / plan point from the pre-telemetry sampler + timeline, with the cgroup kill record if any."""
     S = r17_samples(attempt_dir)
     spans = r17_spans(attempt_dir)
     obs: dict[str, Any] = {"source": "r17", "attempt_dir": attempt_dir, "samples": len(S), "stages": {}, "points": {}, "kill": None, "notes": []}
@@ -880,7 +880,7 @@ def observe_increment_a(attempt_dir: str) -> dict[str, Any]:
 # compare
 # ---------------------------------------------------------------------------------------------------------------------
 def _observed_stage_peak(obs: dict[str, Any], stage: str) -> tuple[int | None, str]:
-    """Observed host peak (MiB) for a stage: the row's largest process RSS (R17: pod-wide max python RSS) — see notes."""
+    """Observed host peak (MiB) for a stage: the row's largest process RSS (pre-telemetry records: pod-wide max python RSS) — see notes."""
     st = obs.get("stages", {}).get(stage)
     if not st:
         return None, "no samples"
@@ -1063,7 +1063,7 @@ def cgroup_memory_max() -> int | None:
 def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dict[str, Any]:
     """predict() for one sweep row -> admission.json beside the attempt + the one-line summary row_pod.sh logs.
 
-    ADVISORY (coord M-0061 (2)): the document records per stage reserved_bytes, the named terms, verdict (ADMIT / REFUSE / LOWER_BOUND /
+    ADVISORY: the document records per stage reserved_bytes, the named terms, verdict (ADMIT / REFUSE / LOWER_BOUND /
     NO_LIMIT) and short_by; `would_refuse` lists the stages a fail-closed runner would have stopped.  Nothing here stops a run.
     """
     pred = predict(cfg)
