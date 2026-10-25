@@ -9,17 +9,24 @@ public, reason, verdict}, and writes into the directory ``out``:
 * ``pouw.case.json``: the case, ``{"commitment": hex, "evidence": hex, "params": JSON}``, what ``pouw-check serve`` and a
   composition's component case read;
 * ``pouw.answer.json``: the answer's canonical line;
-* ``pouw.detail.json``: what the loop served (units, K, MACs, max_tokens), labelled not certified, and which verifiers
-  answered.
+* ``pouw.detail.json``: what the loop served (units, K, MACs, max_tokens), labelled not certified; the certified work W
+  (the accepted window's ``work.credited``, MACs); ε at each δ of `QUOTE_DELTAS`, what the window's draw establishes
+  over W (`window.eps_at`; null when nothing is drawn or no ε <= 1 is established); and which verifiers answered.
 
-The parameters are the verifier's for crediting this period's work: the loop's template with its work per unit (K MACs),
-the registration's query and run, ε = 1/1000 at δ = 2^-40, and the fixed length the records' labels give (each request's
-decode steps). The evidence is one-stage's answer for the registration, ``<period_dir>/answers/sampled-proofs.json``
-when the sampled-proofs leg wrote one, else none. PoUW's verifier of record pins its tile templates
-(`core_check.TILES`: FP8 Pc8 tiles and the salted H1 tile at K = 64), so it refuses the loop's
-``ScaledMmS8Coordinate_v1{K=128}`` at its parameters, before it reads the registration or the evidence: no W is
-certified. A per-period credit of the loop's s8 GEMMs is H1's (`credit.period_credit`), once the loop serves them as H1
-tiles under a period's live coins.
+**The H1 window** (the loop's ``--pouw h1`` mode): when ``<period_dir>/pouw/registration.json`` exists, the case is that
+window's. Its commitment is that one-stage registration, and its evidence the proof service's answer for it,
+``<period_dir>/pouw/answer.json`` (when absent the evidence is empty, which the check refuses). The parameters are the verifier's own, never
+the registration's: the check item `h1_check` (the H1 tile `core_check.TILES` pins, its tile work and query, the scheme
+and the entries bound `H1_ENTRIES`; no coin mode, so seeded, as nothing yet ties the tile salt to a live session), the
+period's run as the window's context (the integrity registration's ``window.run``), ε = `H1_EPS` at δ = `H1_DELTA`, the
+declared range `H1_RANGE` and the fixed length the period's labels give. A registration made at anything else is
+refused by the check.
+
+**Without one**, the case is the integrity window's under parameters naming the loop's own template with its work per
+unit (K MACs), ε = 1/1000 at δ = 2^-40, and the evidence ``<period_dir>/answers/sampled-proofs.json`` when the
+sampled-proofs leg wrote it. PoUW's verifier of record pins its tile templates (FP8 Pc8 tiles and the salted H1 tile at
+K = 64), so it refuses ``ScaledMmS8Coordinate_v1{K=128}`` at its parameters, before it reads the registration or the
+evidence: no W is certified.
 """
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ import re
 import subprocess
 import tempfile
 from collections import defaultdict
+from fractions import Fraction
 from pathlib import Path
 
 from verity.core.protocols.pouw import core_check as CC
@@ -39,6 +47,13 @@ EPS = "1/1000"
 DELTA = str(CR.DELTA)
 ANSWERS = "answers/sampled-proofs.json"
 LEAN_ENV = "VERITY_POUW_CHECK"
+H1_DIR = "pouw"
+[H1_TEMPLATE] = [n for n in CC.TILES if n.startswith("PouwH1Tile_v1{")]
+H1_ENTRIES = 1024
+H1_EPS = "1/2"
+H1_DELTA = "1/1000000"
+H1_RANGE = [1, 1 << 16]
+QUOTE_DELTAS = ("1/100", "1/1000000")
 
 
 def served(period_dir: Path) -> dict:
@@ -57,7 +72,7 @@ def served(period_dir: Path) -> dict:
 
 
 def params(period_dir: Path, work: dict) -> dict:
-    """The verifier's parameters for crediting the period's work under `verity/pouw/v1`."""
+    """The verifier's parameters for crediting the integrity window's work, at the loop's own template."""
     rec = json.loads((period_dir / "registration.json").read_text())
     check = {Wd.COINS: "live", "entries": 2, "scheme": CC.SCHEME, "template": work["template"], "tile_work": work["k"]}
     return {"check": check, "context": rec["window"]["run"], "delta": DELTA, "eps": EPS, "grid_bits": Wd.GRID_BITS,
@@ -65,14 +80,47 @@ def params(period_dir: Path, work: dict) -> dict:
             "range": [1, rec["population"]]}
 
 
+def h1_check() -> dict:
+    """The check item an H1 window of the loop registers: the pinned H1 tile's."""
+    tile = CC.TILES[H1_TEMPLATE]
+    return {"entries": H1_ENTRIES, "scheme": CC.SCHEME, "template": H1_TEMPLATE, "tile_work": tile.tile_work}
+
+
+def h1_params(period_dir: Path, work: dict) -> dict:
+    """The verifier's parameters for the period's H1 window (module docstring)."""
+    rec = json.loads((period_dir / "registration.json").read_text())
+    return {"check": h1_check(), "context": rec["window"]["run"], "delta": H1_DELTA, "eps": H1_EPS,
+            "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": work["max_tokens"], "stop": Wd.STOP_FIXED},
+            "query": CC.TILES[H1_TEMPLATE].query, "range": list(H1_RANGE)}
+
+
 def case(period_dir: Path) -> tuple[dict, dict]:
     """The period's case for `verity/pouw/v1` and what the loop served."""
     work = served(period_dir)
-    rec = json.loads((period_dir / "registration.json").read_text())
-    answers = period_dir / ANSWERS
+    h1 = period_dir / H1_DIR
+    if (h1 / "registration.json").exists():
+        rec, answers, p = json.loads((h1 / "registration.json").read_text()), h1 / "answer.json", h1_params(period_dir, work)
+    else:
+        rec, answers, p = json.loads((period_dir / "registration.json").read_text()), period_dir / ANSWERS, params(period_dir, work)
     evidence = CC.line(json.loads(answers.read_text())).encode() if answers.exists() else b""
-    return ({"commitment": CC.line(rec).encode().hex(), "evidence": evidence.hex(), "params": params(period_dir, work)},
-            work)
+    return {"commitment": CC.line(rec).encode().hex(), "evidence": evidence.hex(), "params": p}, work
+
+
+def quotes(c: dict, answer: dict) -> list[dict]:
+    """ε at each δ of `QUOTE_DELTAS` that the accepted window's draw establishes over its credited work W, as
+    `window.eps_at` computes it (``eps`` null when there is no accepted draw or it establishes no ε <= 1)."""
+    public = answer["public"] or {}
+    work, drawn, tw = public.get("work"), public.get("drawn"), c["params"]["check"]["tile_work"]
+    out = []
+    for d in QUOTE_DELTAS:
+        eps = None
+        if work and drawn:
+            try:
+                eps = str(Wd.eps_at(len(drawn), Fraction(d), work["credited"], work["n"], tw))
+            except ValueError:
+                eps = None
+        out.append({"delta": d, "eps": eps})
+    return out
 
 
 def lean_line(exe: str, c: dict) -> str:
@@ -103,8 +151,12 @@ def leg(period_dir: Path, node: str, out: Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     (out / "pouw.case.json").write_text(CC.line(c) + "\n")
     (out / "pouw.answer.json").write_text(line + "\n")
-    detail = {"node": node, "protocol": CC.ID, "served": work, "certified_work": (answer["public"] or {}).get("work"),
-              "evidence": ANSWERS if (period_dir / ANSWERS).exists() else None,
+    h1 = (period_dir / H1_DIR / "registration.json").exists()
+    evidence = (period_dir / H1_DIR / "answer.json") if h1 else (period_dir / ANSWERS)
+    w = (answer["public"] or {}).get("work")
+    detail = {"node": node, "protocol": CC.ID, "window": "h1" if h1 else "integrity", "served": work,
+              "certified_work": w, "W": w["credited"] if w else 0, "quotes": quotes(c, answer),
+              "evidence": str(evidence.relative_to(period_dir)) if evidence.exists() else None,
               "answered_by": ["core_check"] + (["pouw-check"] if lean is not None else [])}
     (out / "pouw.detail.json").write_text(json.dumps(detail, indent=1, sort_keys=True) + "\n")
     return answer
