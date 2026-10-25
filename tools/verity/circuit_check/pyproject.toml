@@ -71,6 +71,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/grid.py", "verity/core/protocols/certifier/schedule.py",
           "verity/core/protocols/certifier/io_tie.py", "verity/core/protocols/certifier/io_tie.circuit-check.py",
           "verity/core/protocols/certifier/io_tie.circuit-check.json", "verity/core/protocols/certifier/active.py",
+          "verity/core/protocols/certifier/egress.py", "verity/core/protocols/certifier/egress.circuit-check.py",
+          "verity/core/protocols/certifier/egress.circuit-check.json",
           "verity/core/protocols/certifier/audit.py", "verity/core/protocols/certifier/commitment.py",
           "verity/core/protocols/certifier/online.py", "verity/core/protocols/profile.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/coins.py",

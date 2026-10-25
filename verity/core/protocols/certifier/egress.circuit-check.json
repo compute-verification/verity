@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "EgressBucket_v1{B=148,R=4,NR=17,K=6}": {
+   "and": 4092
+  },
+  "EgressBucket_v1{B=256,R=8,NR=16,K=16}": {
+   "and": 8032
+  },
+  "EgressRoute_v1{NR=16,K=16,T=4,R=8}": {
+   "and": 43392
+  },
+  "EgressRoute_v1{NR=4,K=5,T=3,R=4}": {
+   "and": 3230
+  }
+ }
+}
