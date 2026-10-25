@@ -242,6 +242,39 @@ class Traced:
                         "requests": [dict(q) for q in requests]}, int(rank), int(world), definitions=False)
 
 
+CAPPED = "verity/prove-path/capped-compiler/v0"
+#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred requests (I1 spends tens of bits a
+#: row); `predict.steps.CAP_BITS`
+CAP_BITS = 1 << 23
+
+
+@dataclass(frozen=True)
+class Capped:
+    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
+    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
+
+    inner: Any
+    cap_bits: int = CAP_BITS
+    name: str = CAPPED
+
+    def __post_init__(self) -> None:
+        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
+            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
+
+    @property
+    def digest(self) -> str:
+        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
+                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
+
+    @property
+    def transfer_gates(self) -> tuple[str, ...]:
+        """The inner compiler's transfer-gate templates; the inner's digest, which this one names, names them."""
+        return tuple(getattr(self.inner, "transfer_gates", ()))
+
+    def load(self, rank: int, world: int, requests: Any) -> Any:
+        return self.inner.load(rank, world, requests)
+
+
 def binding(compiler: Any, advice_root: str, advice_bits: int) -> dict[str, Any]:
     """The window provenance's binding (`tp.serving_rows.BINDING`): the registered compiler's name and digest, and the root of the
     advice's hiding commitment (`commit_advice`) and its length in bits."""

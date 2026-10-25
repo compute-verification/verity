@@ -13,7 +13,7 @@ the two files are accepted as one rep on one session, and `rep_bind_proof` gives
 collide among the calls.
 
 Here first: what the element-level decoder reads of the record (`decodeWithK_ok`, `decode_ok`'s without the digests),
-and the plain verdict's round counts at any `keep` (`streams_ns_plainK`, `rounds_ns_plainK`).
+and the plain verdict's round counts at any `keep` (`rounds_ns_plainK`, from `streams_ns_plainK`).
 -/
 
 namespace FlockDeploy.KS
@@ -35,7 +35,7 @@ theorem decodeWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Sess
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
       List.Forall₂ DecStreamK recs.toList sess.streams.toList := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   split at h
   rotate_left
@@ -133,24 +133,6 @@ theorem decodeWithK_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Se
   exact Claims.Bridge.Custody.roundFields_unique h1 h3
 
 /-! ## The plain verdict's round counts, at any `keep` -/
-
-/-- `streams_ns_plain` at `verifyWithMK keep`. -/
-theorem streams_ns_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
-    {record : String} {proofs : Array ByteArray} {lv : Live}
-    (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
-    lv.streams.size = 2 * sts.size ∧
-      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = plainRepNs spec sts[k / 2]! := by
-  obtain ⟨hsz, hall⟩ := rep_plainK keep hs hv hl
-  refine ⟨hsz, fun k hk => ?_⟩
-  obtain ⟨sess, sch, stream, c, -, hpn, hf, hrep, hfind, hfa⟩ := hall k hk
-  obtain ⟨stream', extras, hfind', hex, hns⟩ := verifyRepWith_readsN hs rfl hf hrep
-  rw [hfind] at hfind'
-  cases hfind'
-  have hx : extras.size = sts[k / 2]!.regions.size * sess.points.size := extraClaims_size hex
-  have hsch : Claims.Flock.plainSched sts[k / 2]!.m = sch := by
-    simp only [Claims.Flock.plainSched, hf, Option.getD_some]
-  rw [map_n_of_forall₂ hfa, hns, hx, hpn, plainRepNs, hsch, Nat.mul_comm]
-  rfl
 
 /-- `rounds_ns_plain` at `verifyWithMK keep`. -/
 theorem rounds_ns_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}

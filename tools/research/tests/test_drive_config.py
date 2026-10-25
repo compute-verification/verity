@@ -22,6 +22,7 @@ first = [1858]
 per_pr_shadow = 2
 land = "review"
 after_landing_no_cache = true
+landing_gates = ["gates/g.py"]
 """
 
 
@@ -62,10 +63,11 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     f = DriveFlags.parse(FLAGS)
     assert f == DriveFlags(on="m1,m2", max_running=4, train_size=15, marked_after="2026-10-12T06:00:00Z",
                            defer=("circuit-check", "pytest"), regenerate_locks=True, first=(1858,), per_pr_shadow=2,
-                           land="review", after_landing_no_cache=True)
+                           land="review", after_landing_no_cache=True,
+                           landing_gates=("gates/g.py",))
     assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, 2, 4, None, (), False, (), 0, "check", False)
     assert f.line() == ("on=m1,m2 max_running=4 train_size=15 marked_after=2026-10-12T06:00:00Z defer=circuit-check,pytest "
-                        "regenerate_locks=True first=1858 per_pr_shadow=2 land=review after_landing_no_cache=True")
+                        "regenerate_locks=True first=1858 per_pr_shadow=2 land=review after_landing_no_cache=True landing_gates=gates/g.py")
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
                       ("on = []", "on = []: at least one machine"),
                       ("max_running = true", "max_running = True: a whole number, 1 or more"),
@@ -78,6 +80,10 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ("per_pr_shadow = false", "per_pr_shadow = False: a whole number"),
                       ('land = "fast"', "land = 'fast': one of check, review"),
                       ("after_landing_no_cache = 1", "after_landing_no_cache = 1: true or false"),
+                      ('landing_gates = "g.py"', "landing_gates = 'g.py': a list of Python scripts by their path"),
+                      ('landing_gates = ["../g.py"]', "landing_gates = ['../g.py']: a list of Python scripts"),
+                      ('landing_gates = ["/g.py"]', "landing_gates = ['/g.py']: a list of Python scripts"),
+                      ('landing_gates = ["g.sh"]', "landing_gates = ['g.sh']: a list of Python scripts"),
                       ("on = [", "not TOML")):
         with pytest.raises(QueueError, match="^drive.toml: ") as e:
             DriveFlags.parse(text)
@@ -88,7 +94,7 @@ def test_an_unknown_key_is_refused_naming_the_keys_drive_reads_and_the_one_it_li
     with pytest.raises(QueueError) as e:
         DriveFlags.parse("max_runing = 4\n", "d.toml")
     assert str(e.value) == ("d.toml: unknown key 'max_runing' (did you mean 'max_running'?): drive reads only on, max_running, "
-                            "train_size, marked_after, defer, regenerate_locks, first, per_pr_shadow, land, after_landing_no_cache; rename or "
+                            "train_size, marked_after, defer, regenerate_locks, first, per_pr_shadow, land, after_landing_no_cache, landing_gates; rename or "
                             "remove it")
     with pytest.raises(QueueError, match=r"unknown key 'shadow' \(did you mean 'per_pr_shadow'\?\): drive reads only on, "):
         DriveFlags.parse("shadow = true\n")
@@ -106,7 +112,7 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 max_running=4 train_size=15 "
                      "marked_after=2026-10-12T06:00:00Z defer=circuit-check,pytest regenerate_locks=True first=1858 per_pr_shadow=2 land=review "
-                     "after_landing_no_cache=True"]
+                     "after_landing_no_cache=True landing_gates=gates/g.py"]
 
     on_main(world, FLAGS.replace("train_size = 15", "train_size = 6"))
     assert drive(world, "--config", DRIVE_FLAGS) == 0

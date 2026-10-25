@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "PouwLiveSlots_v1{T=32}": {
+   "and": 10749
+  },
+  "PouwLiveSlots_v1{T=96}": {
+   "and": 45812
+  }
+ }
+}

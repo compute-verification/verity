@@ -43,6 +43,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts  # noqa: E402
+from verity.core.protocols.remote_bandwidth import wire as rwire  # noqa: E402
 from verity.ml.commitments import merkle_depth  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
 
@@ -319,14 +320,14 @@ def main(argv: list[str] | None = None) -> int:
         leaf, lsalt, rpath = leaves[i, p // receipts.PER_LEAF]
         openings.append(audit.Opening(i, p, blocks[p], leaf, lsalt, rpath, payload_salt, ppaths[p], b""))
     frames = [openings[k:k + OPENINGS_PART] for k in range(0, len(openings), OPENINGS_PART)]
-    bodies = [wire.encode_openings(fr) for fr in frames]
+    bodies = [rwire.encode_openings(fr) for fr in frames]
     bad = S // 2
     o = openings[bad]
     flipped = audit.Opening(o.pass_index, o.position, bytes([o.block[0] ^ 1]) + o.block[1:], o.leaf, o.leaf_salt,
                             o.receipt_path, o.payload_salt, o.payload_path, b"")
     bad_frame = bad // OPENINGS_PART
     bad_bodies = list(bodies)
-    bad_bodies[bad_frame] = wire.encode_openings([flipped if x is o else x for x in frames[bad_frame]])
+    bad_bodies[bad_frame] = rwire.encode_openings([flipped if x is o else x for x in frames[bad_frame]])
     out["setup_ns"]["openings"] = time.perf_counter_ns() - t0
     out["frames"], out["frame_bytes"] = len(bodies), sum(map(len, bodies))
     save("setup_ns")

@@ -546,7 +546,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",

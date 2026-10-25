@@ -142,6 +142,12 @@ The pipeline:
 The record is UTF-8 JSON. The verifier reads only the fields below; it ignores every other field, including `verdict`
 (the live server's own opinion) and timing fields. Hex strings are lowercase, even-length.
 
+Every writer emits the record in its canonical text: Lean's `Json.compress` of it (keys in code-point order, no
+whitespace, Lean's string escapes and number printing), which `live/src/record_text.rs` (`canonical_json`) and
+`verity_flock.record_text` (`session_text`) write, both held to Lean's output by `live/src/record_text_vectors.json`. The
+agreement job re-renders the stored vectors that predate it (`verifier/ci.py`). The verifier refuses a record in any
+other text (S0), so one session has exactly one record.
+
 | field | type | meaning |
 |---|---|---|
 | `kind` | string | must be `"flock-live-session/v1"` |
@@ -188,6 +194,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 
 | id | check | condition it enforces |
 |---|---|---|
+| S0 | the record's text is `Json.compress` of what it parses to (§5.1), checked after every other check (intended divergence D20, §17.1) | one record per session: two accepted texts that parse alike are the same text |
 | S1 | `kind = "flock-live-session/v1"` and `aborted = null` | the session completed |
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
@@ -1442,7 +1449,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   read positions `reads` from unit `reads_from` (default 0: unit `reads_from + i` reads `reads[i]`, every other unit
   nothing), `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows, and `row_schema`, the rows'
   format: `hm96-sha512/row/v1`, the default when absent, `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the last two
-  with `words`; a key beside the file's and a port's own refuses. `verity/registered-reads/v0` is still read: no
+  with `words`, and `param`, the template parameter the port reads when it is not named after it (below); a key beside
+  the file's and a port's own refuses. `verity/registered-reads/v0` is still read: no
   `reads_from`, and other keys ignored). Each port is checked in its own format: the port's row schema must be the one `F` names, a `row/v1`
   port's rows `sha512/row/v1` rows of their u16 words, padded to whole SHA-512 blocks, and a bit row (`row/v2`,
   `row-seg/v1`) exactly `words · word_bits` bits. A port is any row of the circuit: an input port's, or (§16.13) an
@@ -1453,7 +1461,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
   with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
   refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
-  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A port `F` names at
+  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. With the verifier's own
+  `--program`, `F` must also cover every registered input the program's root feeds the circuit's template: each
+  parameter of the template whose argument at a root instance reads a `RegisteredInput<w>_v1` node is read by a port of
+  `F`, under the parameter's name, as each row `name[i]` of an array of rows, or by a port whose `param` names it
+  (`reads_file`'s renamed ports); one that none reads, a registered-reading program under a partition that is no template
+  query, and a circuit whose META names no template refuse (`Registered.checkCover`, `checkCover_ok`). It reads the
+  descriptor's root nodes and their argument parts, never the unrolled circuit. A port `F` names at
   known content (`known`: each row's u16 words and its salt) refuses unless its root is the frame-v3-sha512 root of
   those rows (`Registered.checkKnownAll`), and, in the statement (`KnownRead.check`), unless the circuit names each of
   its ports once and has a port of each known name (`namesOk`), and its row is a `sha512/row/v2` row without segments of the known rows' words and each bit of its row is on a wire of the unit: at an
@@ -1852,6 +1866,9 @@ expectation):
   Lean verifier. So, too, a session without a draw (§16.15), which the Lean verifier alone refuses, and only once every
   check has passed: a set marked `lean_refuses_drawless` expects that refusal of each session without a draw that
   upstream accepts, and of every other session without a draw its own reason (`agree.py --lean-refuses-drawless`).
+  So, too, a session verified without the verifier's own program (`--program`, `ProvedScope.NO_PROGRAM`), which the
+  Lean verifier alone refuses, last: every session of a set with no program (upstream reads none) is compared as
+  accepted when refused for that alone (`agree.py`'s `NO_PROGRAM`).
   `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
@@ -1905,6 +1922,12 @@ expectation):
 - **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
   (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
   exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
+- **D20:** a record not in its canonical text (S0, §5.1). Upstream parses the record with serde and accepts any text of
+  it; the spec refuses (`S0: the record is not in its canonical text …`, `Flock.RecordText.check`), for D17's reason at
+  the record: the recursion binds a session's record, so a session has one accepted text
+  (`Flock.RecordText.check_inj`). No vector exercises it: S0 is the Lean verifier's last check, and every set the
+  agreement job mutates is refused ahead of it (D12's form refusal, and `NO_PROGRAM` without `--program`), so its
+  sessions are compared as accepted. `Flock.Test.RecordText` runs the non-canonical forms on `RecordText.check`.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
