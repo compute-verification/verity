@@ -32,6 +32,7 @@ import json
 import os
 from collections.abc import Callable
 
+from verity_vllm import settings
 from verity_vllm.check.match import dag_form as DAG
 from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import program_compare as C
@@ -59,7 +60,7 @@ stats: collections.Counter = collections.Counter()
 def enabled() -> bool:
     if _force is not None:
         return _force
-    return os.environ.get(FLAG, "").strip().lower() == "fast"
+    return (settings.get(FLAG) or "").strip().lower() == "fast"
 
 
 def reset() -> None:
@@ -512,14 +513,14 @@ def ops() -> Ops:
     (MATCH_WORKERS).  Also states the run's declared configuration (`config`)."""
     # [R17 mfast, BRIEF §5 step 2] every Prog loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
     # (the A/B switch for the representation alone); the record's Progs are runs
-    compact = os.environ.get(COMPACT_ENV, "1").strip() != "0"
+    compact = settings.get(COMPACT_ENV)
     stats["compact_args"] = int(compact)
     # [rev S-r17-17 condition / M-0276 (4)] the run's DECLARED configuration, stated on the document's impl block beside the counters:
     # the effective worker cap (MATCH_WORKERS or the default), the operand form, and the switches as read -- not inferred from hits
-    raw_w = os.environ.get(WORKERS_ENV, "").strip()
+    raw_w = settings.get(WORKERS_ENV)
     config.clear()
     config.update({"match_workers": workers(1 << 30), "match_workers_env": raw_w or None, "cpu_count": os.cpu_count(),
-                   "match_compact": compact, "match_compact_env": os.environ.get(COMPACT_ENV) or None,
+                   "match_compact": compact, "match_compact_env": settings.raw(COMPACT_ENV) or None,
                    "operand_form": "progressions/v1" if compact else "runs",
                    "x09_legs": "forked" if workers(1 << 30) > 1 else "in-process", "candidate_stage": CANDIDATE_STAGE})
     return Ops("fast", load_oracle=functools.partial(PL.load_oracle, cls=MemoProg, compact=compact),
@@ -591,7 +592,7 @@ COMPACT_ENV = "MATCH_COMPACT"
 def workers(n_items: int) -> int:
     """[R17 mfast, BRIEF §5 step 3] How many forked workers the per-request legs run on: `MATCH_WORKERS` (default min(cpu_count, 8)),
     never more than there are legs; 1 = every leg in the parent process (the memo-only path)."""
-    raw = os.environ.get(WORKERS_ENV, "").strip()
+    raw = settings.get(WORKERS_ENV)
     n = int(raw) if raw else min(os.cpu_count() or 1, 8)
     return max(1, min(n, max(1, n_items)))
 
