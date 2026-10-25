@@ -23,7 +23,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
-from verity_vllm.commit import flock_inputs as FI, serving_rows as SR
+from verity.ml.windows import flock_inputs as FI, rows as SR
 from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())

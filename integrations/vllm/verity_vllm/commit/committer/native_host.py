@@ -50,7 +50,8 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme, step_rows
+from verity.ml.windows import hiding
+from verity_vllm.commit import scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels

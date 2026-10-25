@@ -32,7 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit import hiding, scheme, step_rows
+from verity.ml.windows import hiding
+from verity_vllm.commit import scheme, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 

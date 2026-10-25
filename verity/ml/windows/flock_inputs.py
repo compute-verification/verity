@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .serving_rows import SCHEME
+from verity.ml.windows.rows import SCHEME
 
 #: M0's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")

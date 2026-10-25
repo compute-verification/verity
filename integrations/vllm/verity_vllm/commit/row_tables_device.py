@@ -35,8 +35,8 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
 
-from . import row_tables as RTB
-from . import serving_rows as CS
+from verity.ml.windows import row_tables as RTB
+from verity.ml.windows import rows as CS
 
 __all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
            "table_domain_id"]
