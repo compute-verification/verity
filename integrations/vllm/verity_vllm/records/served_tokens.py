@@ -1,10 +1,11 @@
-"""The driver's served tokens of one run (`capture/tokens.json`), as GM-01's chronology check (G6) reads them.
+"""The driver's served tokens of one run (`capture/tokens.json`), as GM-01's chronology check (G6) and the padded conversion
+(`commit.padding_steps`) read them.
 
 Three writers write it: the one-process capture (`pipeline.m1_capture`), the TP capture (`pipeline.tp.capture`) and the TP
 Match arms (`pipeline.tp.match`).  Each writes `requests`, and per request its `request_id` and `generated_token_ids`; those are
 required here.  Only the one-process capture writes the realized schedule, the served and executed lengths and the scheduler's
 `lag`, so on a TP record they are None and G6 has no driver claim to hold them to.  The prompt and the cap are the Program's,
-which G6 reads instead, so they are not typed here.
+which both read instead, so they are not typed here.
 
     t = ServedTokens.load(os.path.join(oracle_dir, "capture", "tokens.json"))
 """
