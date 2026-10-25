@@ -6,8 +6,8 @@ NaN 0x7FFF. The kernel is `verity_vllm.engine.int8_fused.scaled_mm`, adopted as 
 GEMM on the s8 tensor cores (mma.sync m16n8k32) with that epilogue fused in that order. Set aside: torch's `_int_mm` plus a
 torch epilogue (separate launches; kept as the gate's independent s32 sums), vLLM's CUTLASS int8 GEMM (its epilogue applies
 s_w first; on the transposed product it is the Definition's order but needs M a multiple of 16 and writes y^T, so it is a
-baseline here), and a new CUDA kernel (no measurement showed one beating int8_fused; `bench.py` measures how near each gets
-to the s8 peak).
+baseline here), and a new CUDA kernel (int8_fused's TMA sweep reached about 93% of the 807.5 TOPS s8 peak at M = 8192,
+run r20261019-183925-ef93; `bench.py` measures it and the plain GEMMs at these shapes).
 
 The shapes are `fixture.MODELS`, compute-accounting's: `mqa16k` (width 16384, 35 layers, MQA, MLP 65536, ~4096 sequences)
 and `mha8k` (width 8192, 70 layers, MLP 32768, 1023 sequences), plus `d<width>` for any fused-QKV 4x layer.
