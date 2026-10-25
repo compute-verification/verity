@@ -1,5 +1,5 @@
 import Definitions.Pouw.PearlC.W1Stop
-import Proofs.Pouw.PearlC.W1
+import Definitions.Pouw.PearlC.W1
 
 /-! The proof-only part of `Definitions.Pouw.PearlC.W1Stop`: the definitions and lemmas that no guarantee
 statement or assumption reads. -/

@@ -1,5 +1,5 @@
 import Definitions.Pouw.PearlC.Instance
-import Proofs.Pouw.PearlC.Sha512
+import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # Pearl-C's noise as SHA-512 gives it (trusted; definitions only)

@@ -1386,6 +1386,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 torch.cuda.current_stream().synchronize()
             self._footprint_absorbed(job, padded, levels, keep)
             self.arena.release(job.arena)
+            job.arena = None
             memtrace("worker: block released", job.step)
         mr = mr_t.numpy().astype("uint32").tobytes() if hasattr(mr_t, "numpy") else bytes(mr_t)
         self._gpu_t["leaf_ms"] += ev[0].elapsed_time(ev[1])
@@ -1401,7 +1402,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
         self._layouts[job.step] = job.metas
-        job.arena = None
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2, job.backlog,
                                               hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
 
@@ -1810,6 +1810,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 self._commit_step(job)
             except Exception as e:  # noqa: BLE001
                 self.errors.append(f"worker step {job.step}: {e!r}"[:300])
+                for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
+                    self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
                 self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
@@ -1822,10 +1824,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return self._commit_step_gpu(job)
         if "noworker" in self.ABL:
             job.event.synchronize()
-            if job.arena is not None:
-                self.arena.release(job.arena)
-                for blk, _ in job.overflow:
-                    self.arena.release(blk)
+            for blk in [job.arena, *(b for b, _u in job.overflow)] if job.arena is not None else []:
+                self.arena.release(blk)
             self._layouts[job.step] = job.metas
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in job.metas), len(job.metas), b"", job.t_step_end,
                                                   time.perf_counter(), job.backlog)

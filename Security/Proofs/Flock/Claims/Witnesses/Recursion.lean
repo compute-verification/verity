@@ -2,7 +2,6 @@ import Proofs.Flock.Claims.Witnesses.Flock
 import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.Indexed
 import Definitions.Claims.Recursion
-import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Refutation witnesses: the ZK-recursion compiler's claims

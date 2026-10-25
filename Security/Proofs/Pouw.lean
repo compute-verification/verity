@@ -56,6 +56,7 @@ import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
 import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
+import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
@@ -117,6 +118,7 @@ import Proofs.Pouw.PearlC.Rev1Witness
 import Proofs.Pouw.PearlC.RowCircuit
 import Proofs.Pouw.PearlC.Row4Words
 import Proofs.Pouw.PearlC.RowPrimChecks
+import Proofs.Pouw.PearlC.RowCapAtGamma
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.PearlC.RowSeedGamma
@@ -140,6 +142,7 @@ import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.W1Checks
 import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.PearlC.W1Stop
+import Proofs.Pouw.PearlC.W1Tabulate
 import Proofs.Pouw.PearlC.WholeCircuit
 import Proofs.Pouw.PearlC.TileCheck8
 import Proofs.Pouw.PearlC.TileCheck8Words
@@ -155,7 +158,6 @@ import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
-import Proofs.Pouw.RelativeSecurityCall
 import Proofs.Pouw.RelativeSecurityGuarantees
 import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.Sampling
@@ -182,7 +184,7 @@ import Proofs.Pouw.Fp8Atom.Vectors.Add
 import Proofs.Pouw.Fp8Atom.Vectors.C00
 import Proofs.Pouw.Fp8Atom.Vectors.C01
 import Proofs.Pouw.FpG1.Gemm
-import Proofs.Pouw.H1Zy.LaneChunkDefs
+import Definitions.Pouw.H1Zy.LaneChunk
 import Proofs.Pouw.NCP.ExtraIdentity
 import Proofs.Pouw.NCP.Pinned
 import Proofs.Pouw.PearlC.CompletenessDefs
@@ -193,9 +195,9 @@ import Proofs.Pouw.PearlC.NoiseSha512
 import Proofs.Pouw.PearlC.PeelExactVectors
 import Proofs.Pouw.PearlC.PeelFp4Vectors
 import Proofs.Pouw.PearlC.RowPrimVectors
-import Proofs.Pouw.PearlC.Sha512
+import Definitions.Pouw.PearlC.Sha512
 import Proofs.Pouw.PearlC.Sm120Vectors
-import Proofs.Pouw.PearlC.W1
+import Definitions.Pouw.PearlC.W1
 import Proofs.Pouw.TileBound.AlignedExactDefs
 import Proofs.Pouw.TileBound.Defs
 import Proofs.Pouw.TileBound.Fp8Defs
@@ -210,8 +212,8 @@ import Proofs.Pouw.Fp8Atom.H1TLemmas
 import Proofs.Pouw.FpG1.Encoding
 import Proofs.Pouw.FpG1.H1Defs
 import Proofs.Pouw.Game.Defs
-import Proofs.Pouw.H1Zy.CombineDefs
-import Proofs.Pouw.H1Zy.LaneDefs
+import Definitions.Pouw.H1Zy.Combine
+import Definitions.Pouw.H1Zy.Lane
 import Proofs.Pouw.NCP.Relation
 import Proofs.Pouw.NCP.RouteU
 import Proofs.Pouw.NCP.Word

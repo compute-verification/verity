@@ -54,6 +54,13 @@ def test_a_negative_is_refused_by_its_own_violation_not_by_any_refusing_verdict(
     assert e2e.negative(confounded, [])["refused"] is False
 
 
+#: the I/O tie, required on the advice profile (`chain.tie_gate`), accepting the honest run
+TIED = {"ran": True, "why": None, "from": "ids.jsonl", "stand_ins": {}, "runs": {"honest": {
+    "verdict": "accepted", "ok": True, "codes": [], "failing": {}, "windows": [], "unplaced": 0, "changed": None,
+    "requests": 40, "outputs": 40, "placed": 40, "held": {"egress": 8, "ingress": 8}, "missing": {}, "finish": True,
+    "why": None}}}
+
+
 def _advised(stages: dict, codes: str = "own") -> dict:
     found = {"late": "audit.status:coverage-never-established", "extra": "io:longer than max_tokens",
              "drop": "io:short of max_tokens without EOS"}
@@ -63,7 +70,7 @@ def _advised(stages: dict, codes: str = "own") -> dict:
     n2 = {s: {"windows": [], "network": None} for s in runs}
     meta = {"profile": chain.ADVICE, "from": ["x"], "commit": "c", "model": "m", "upstream": "u",
             "where": "off the prover's node", "windows": 8}
-    return e2e.report(runs, n2, {"ran": False, "why": "N2-ADVICE hasn't landed"}, meta, stages)
+    return e2e.report(runs, n2, {"ran": False, "why": "N2-ADVICE hasn't landed"}, meta, {"tie": TIED} | stages)
 
 
 UNBOUND = {
@@ -85,15 +92,18 @@ def test_the_advised_report_isnt_ok_on_an_unbound_advice_and_its_title_says_what
     assert r["negatives"]["late"]["refused"] is True
     md = e2e.markdown(r)
     assert md.splitlines()[0] == (
-        "# Network accounting end to end: NOT OK on the rehearsal's own check (not run: N2's verdicts of record, the "
-        "proofs (n2_zk, held by Lean), the advice, these runs' and rebuilt from their certified I/O, the prove path, "
-        "of these runs, NEG's registry)")
+        "# Network accounting end to end: NOT OK on the rehearsal's own check and the I/O tie (IO-TIE's reference in "
+        "the clear, on stand-ins) (not run: N2's verdicts of record, the proofs (n2_zk, held by Lean), the advice, "
+        "these runs' and rebuilt from their certified I/O, the prove path, of these runs, NEG's registry)")
     assert "**drop**: NOT refused by nothing (not proved); the rehearsal's own check refused it for " \
            "audit.status:coverage-never-established, not its own violation io:short of max_tokens without EOS" in md
     bound = UNBOUND | {"bits": UNBOUND["bits"] | {"bound": True, "rebuilt": True}}
     r = _advised(bound)
     assert r["ok"] is True and r["why_not"] == []
-    assert r["ran"] == ["the rehearsal's own check", "the advice, these runs' and rebuilt from their certified I/O"]
+    assert r["ran"] == ["the rehearsal's own check", "the advice, these runs' and rebuilt from their certified I/O",
+                        e2e.TIE_STAGE]
+    assert _advised(bound | {"tie": None})["why_not"] == [
+        "the I/O tie didn't run, and the advice profile requires it: no tie stage"]
     assert _advised(UNBOUND | {"bits": bound["bits"] | {"rebuilt": None}})["why_not"] == [
         "the advice wasn't rebuilt from the certified I/O"]
 

@@ -276,7 +276,8 @@
    "BitAnd_v1",
    {
     "pieces": {
-     "and": 1
+     "and": 1,
+     "type": "8e47d8cd9768498638703b36a64d7d91075d9e9df6c953535c6d430aeb1583d4e55fedc651d172339e138820d0124162e633ff547b39b7afa3f33fcbbf3ec376"
     }
    }
   ],
@@ -285,7 +286,8 @@
    "BitNot_v1",
    {
     "pieces": {
-     "and": 0
+     "and": 0,
+     "type": "214e21bea584bffb3e036758a28caa85da5a2a2aaba8960fec76fd1a1ffafa8bd2a4cd4e189d9a3c9f32ea87906a7f6e7a61f29bdcd39a208f63ddd051c4a5fd"
     }
    }
   ],
@@ -294,7 +296,8 @@
    "BitOr_v1",
    {
     "pieces": {
-     "and": 1
+     "and": 1,
+     "type": "d51dffa61a74c24be7f8b10c9c28934550204facbd9d50908bb92e1eedb3b0fd8ddb588edc630a91dd14505ab4b87e4eda1bd200e8fc27d692144e3e8d9539b5"
     }
    }
   ],
@@ -433,7 +436,8 @@
    "DotE4m3_v3{K=32}",
    {
     "definitions": {
-     "and": 6560
+     "and": 6560,
+     "type": "8d21fee4fd7483eadace438cd4922cea48c0954eb64184a363acadb4f6bf7f3b0a1cfc9d0f32a83fb72e43275be0fbbb1770a2290ce0666455a8a806300e7913"
     }
    }
   ],
@@ -442,7 +446,8 @@
    "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 17936
+     "and": 17936,
+     "type": "09a67aa142fe1b3e8025cbfdb27ecc7b0565ba7484594f2a69f6b8da846445771838414faa4e512b6cb899f84f8aeb408f48c669309b3b2c5546b677f0518ced"
     }
    }
   ],
@@ -456,7 +461,8 @@
    "E4m3ToF32_v1",
    {
     "pieces": {
-     "and": 15
+     "and": 15,
+     "type": "09605a1ca9afa6fbab1b4ed8fd823ead84d7a64329b3523292eca813967441c9397bd82e30fdc37bd12d39624cfd5fdde26bca52467aeada344d1172e49bbed0"
     }
    }
   ],
@@ -465,7 +471,8 @@
    "Embedding_v2{V=64,H=16}",
    {
     "definitions": {
-     "and": 22784
+     "and": 22784,
+     "type": "89b83f7b58b81847ca014c5acd12ce78eeda9d228f5cbf0d41d1ab0476cc4608e893fbff1d7d009ec6e123cf4e0c8a31e14f21cacb2c8dba4c822c80afd78401"
     }
    }
   ],
@@ -474,7 +481,8 @@
    "F32BitsShl23_v1",
    {
     "pieces": {
-     "and": 0
+     "and": 0,
+     "type": "b5b13d3b3357b6126bae3a5ea6d9a3ab23288ae2db7963315def1f67e9efe59b939fe179c0ff4085801a4041cf309e4a3c1b7ad7c33e1ae8aa4440f02f1e8685"
     }
    }
   ],
@@ -483,7 +491,8 @@
    "F32Eq_v1",
    {
     "pieces": {
-     "and": 155
+     "and": 155,
+     "type": "9ff16c5abeca08cb405ddda41aa8be5062447dcdca4c9aa840b377498564e1acae3fece3d1fce29e686453c891df30f72f4e66a6ab5be0f0da8ca61c41192182"
     }
    }
   ],
@@ -492,7 +501,8 @@
    "F32Fabs_v1",
    {
     "pieces": {
-     "and": 0
+     "and": 0,
+     "type": "5bf5bd7e3e3fca14ef6b452f6985fdaa4a45c0c9eb4372b1d7a25dd7b84b95dbeffa864ed54f5e4fd82e7880e69a2508535fbd295d4bba50cf0cbe7c9bb14792"
     }
    }
   ],
@@ -501,7 +511,8 @@
    "F32FmaRm_v1",
    {
     "pieces": {
-     "and": 4531
+     "and": 4531,
+     "type": "3e44c5e72c44965865cc473411820123743734036a19d1e18bccd5d1ce8119d47c2a53b3b60253cf31fee1a5324561dac32dc38f7c649df4077c964429792bef"
     }
    }
   ],
@@ -510,7 +521,8 @@
    "F32FmaRm_v2",
    {
     "pieces": {
-     "and": 4531
+     "and": 4531,
+     "type": "3c72a651cf500e8feb4baa3ea0803b6c2922b10a896fe157a0c418d3edcfff308e28bebb91f6872bd7d4b8149eaf125c6755dc9002e6f2bc2ab4b933ec634d59"
     }
    }
   ],
@@ -519,7 +531,8 @@
    "F32Fmaxf_v1",
    {
     "pieces": {
-     "and": 474
+     "and": 474,
+     "type": "8d1d19ad9d880d5e8d5248668989e27b926ba372936cf0d5d68b362a3bab16ebeb76138a242ddf5563a015090f5be2f62715bd2257a95b12c6d6e9344fc732df"
     }
    }
   ],
@@ -528,7 +541,8 @@
    "F32Fminf_v1",
    {
     "pieces": {
-     "and": 474
+     "and": 474,
+     "type": "6b7e185d98ebaea38c78e07c5c6fe2aff40db7b909f836682874d3c0abf41a4d061dcf2f5625bcfd14d163b279cd3b42ec00d557c22157fe91b1aed4a398fc36"
     }
    }
   ],
@@ -537,7 +551,8 @@
    "F32GtStrict_v1",
    {
     "pieces": {
-     "and": 191
+     "and": 191,
+     "type": "d6aa4eba3e002e9160c290d9557f4b744e3349584de716fafbd11c24f0dee2a285a362dc74a7ecd3ea4f5f61edf8a0d493443abb8af82d99eab43b99ca76a933"
     }
    }
   ],
@@ -546,7 +561,8 @@
    "F32IsFinite_v1",
    {
     "pieces": {
-     "and": 7
+     "and": 7,
+     "type": "b674e96f586fd72c9359145106c691ec52ca1489198d1a9f03e7249bf8ee19049765a308fe592cb31d1d292638aa7bb104f93f0032db41c89569c679c880f7cc"
     }
    }
   ],
@@ -555,7 +571,8 @@
    "F32Neg_v1",
    {
     "pieces": {
-     "and": 0
+     "and": 0,
+     "type": "1e4331a3af4476b97213a2da6f124fc95b2a22186d9b61f38a3c33b97ee51bec0829384f9eb032dc6de018fa77b9c9d4b87bfbd669208b302438a01d23b2ad01"
     }
    }
   ],
@@ -564,7 +581,8 @@
    "F32Sat_v1",
    {
     "pieces": {
-     "and": 100
+     "and": 100,
+     "type": "ffc3cdce6611b605a24b9a5c6089049efcaf287e98f19a625f57cd82054926b141d5ca129400f24979df5a1ed6b3cf21d5c5f1b7daef0f87d4864e1e3c89b7ec"
     }
    }
   ],
@@ -573,7 +591,8 @@
    "F32Sub_v1",
    {
     "pieces": {
-     "and": 823
+     "and": 823,
+     "type": "c765a3d490ab9bb2557a4372a22c6d103bac8fe65ef561b9e44a85915390749774cf21884f81d18c4261ad85269dc4004a1edb15bc0c0521393f90e9a6c8298f"
     }
    }
   ],
@@ -582,7 +601,8 @@
    "F32ToE2m1Sat_v1",
    {
     "pieces": {
-     "and": 60
+     "and": 60,
+     "type": "1d311d6ec263ac01be4cc0d5d83bfc683d6eb7f76b6f9ce5cc566f62056d995ed3e9b3008e43bc7ecff44dae95576be8625819de1e7e7530430183f4d4b6b7ea"
     }
    }
   ],
@@ -591,7 +611,8 @@
    "F32ToE4m3Sat_v1",
    {
     "pieces": {
-     "and": 238
+     "and": 238,
+     "type": "1cfba2f6b70300dcc67c10896767d220a85676038f74932a371c53fcf489f058e33aaefcdc46d5259f66813f65fdffa49c8a38046b06e34cf5a4e8830f3d379e"
     }
    }
   ],
@@ -635,7 +656,8 @@
    "Fp8GroupScale_v2{G=32}",
    {
     "definitions": {
-     "and": 5960
+     "and": 5960,
+     "type": "6a1fedee4cb64ba12eeea66bf5ce8256c824ca360c63927ba7eaa8518f884b1eaf9c6aa25b913bded7f8465848c64d36c2e52b9493e8c10b8db5aa0421911d33"
     }
    }
   ],
@@ -659,7 +681,8 @@
    "Fp8RowScale_v2",
    {
     "definitions": {
-     "and": 1210
+     "and": 1210,
+     "type": "3ab0c0bdaeba5cc342720455e2590a166684c1710ba4ab05e84c5242fadc1d70e9ce5fb7c160c42be93e51c48a281c9146ac64316c8a94d160b369e10311e502"
     }
    }
   ],
@@ -668,7 +691,8 @@
    "GatherBf16x1100_v2",
    {
     "definitions": {
-     "and": 18016
+     "and": 18016,
+     "type": "acc3d9d38836ab2b00e47c8796ef2fda0d549d5e1142672eee720fd8d08828a46ef6f5a150059b1aa420b68bdeb6e295c6ed557433094308adb9954d9287fbf5"
     }
    }
   ],
@@ -677,7 +701,8 @@
    "HopperE4m3QgmmaDot32_v1",
    {
     "pieces": {
-     "and": 7377
+     "and": 7377,
+     "type": "63ec29a2ff040c44176efb7b54cdd595c35b342ca7897f733a56d68c7a6869327d80313185b7a8a4f5dcaa1450734ca3fa341d837830d1831210e82411ec49a2"
     }
    }
   ],
@@ -796,7 +821,8 @@
    "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}",
    {
     "definitions": {
-     "and": 27929
+     "and": 27929,
+     "type": "de68ec83362253c42d8db4e59348eb2ee3e5b492d3eaace90c1023c21322b727ebd36c1d275a3786f15440f7fb38b90e959a55b87f77b6b8c13a6ba86c33e82a"
     }
    }
   ],
@@ -820,7 +846,8 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}",
    {
     "definitions": {
-     "and": 25499
+     "and": 25499,
+     "type": "b77e1b386c3b93d053b3b359a19d433444183511fa0dee0c35dea5beefa390e95686ca4904610408ed6ca964d45aa8169e236cc2e282921f6545bcac7346cd3f"
     }
    }
   ],
@@ -829,7 +856,8 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}",
    {
     "definitions": {
-     "and": 25499
+     "and": 25499,
+     "type": "b65b108ea45ebab95c32a9ace2e3807dbef7294170a55650b31fba9cddc0a93c2925cf05076968de59ea53f1033919c38189c2efc14baa59f061ede1be9f41be"
     }
    }
   ],
@@ -838,7 +866,8 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}",
    {
     "definitions": {
-     "and": 19072
+     "and": 19072,
+     "type": "8d818149a1a9e0e4ba879bc214e4f9251a829a78c94c6f06d067cf91be8ebe53356fed2ad0c4c8cdafcd2ba1082bf7765be799a45ebea3f3e6382f5e0bba5998"
     }
    }
   ],
@@ -967,7 +996,8 @@
    "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}",
    {
     "definitions": {
-     "and": 11371
+     "and": 11371,
+     "type": "389b57f106ba8f56be73fc1ce1064c8f00d1de0712a5aec0cb09a62cd339f5ee7c2ccb4bd55ad23bd288e74f3aa1fc0228f12ca1e77e2274fb5c9853d3d3ee83"
     }
    }
   ],
@@ -976,7 +1006,8 @@
    "MoeRouterBiasTopK_v1{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}",
    {
     "definitions": {
-     "and": 12914
+     "and": 12914,
+     "type": "a21502c56749a0825b4856fe13bd1464ec445188d1474786f4b65e31ac9c53b61ef00477eed690dd060b989ece2146025e2798e4b8ef7bd0dabf9d2f8d7f7d07"
     }
    }
   ],
@@ -1005,7 +1036,8 @@
    "MoeRouterNormalize_v1{E=8,VPT=4}",
    {
     "definitions": {
-     "and": 26738
+     "and": 26738,
+     "type": "f877d64df774b6cd676e9c82871e21434ac456ebf46529addfc23492acafbe174fc4bbdb550ecb12b1d1a9df0fb66c168dda5c4fee430b69ad4b0b1e9f344a98"
     }
    }
   ],
@@ -1044,7 +1076,8 @@
    "MoeRouterSelect_v1{E=8,TOPK=2}",
    {
     "definitions": {
-     "and": 2261
+     "and": 2261,
+     "type": "4757f93e922e43e1183861ab59797fc68585539d0ff5d332174cb8678a77ca56efbe8c7e4f65a4d7b3a5751481d0c69211475e9bd00a5d44528a1faedc69620b"
     }
    }
   ],
@@ -1053,7 +1086,8 @@
    "MoeRouterShift_v1{E=8,VPT=4}",
    {
     "definitions": {
-     "and": 6268
+     "and": 6268,
+     "type": "c3eb03fb3c6654569ffc6001173d3a19be22e93fee78791729458e3e2c8e1c4da4505940eac304e23b53d2900164976ef4f6b01951aedb8afd02875c5d631486"
     }
    }
   ],
@@ -1077,7 +1111,8 @@
    "MoeRouterSigmoidIn_v1",
    {
     "definitions": {
-     "and": 23369
+     "and": 23369,
+     "type": "f5c67a7f4d25addb36a770c53ad9fec215b41c1b4020592537fd224b6e98f871e08a26a5511ae189d6ab40fb46ae8db7478027f4d9d37825726decbbcb7b5f64"
     }
    }
   ],
@@ -1086,7 +1121,8 @@
    "MoeRouterSigmoidMid_v1",
    {
     "definitions": {
-     "and": 719
+     "and": 719,
+     "type": "0edd992676c45f8ceb14e59e441e54cbe96f51289643205fd6562a7cec26b9207517db8a15175b8b82b628fcb988840a0ff18bb4c79872fd515dd62e15d2ccc7"
     }
    }
   ],
@@ -1105,7 +1141,8 @@
    "MoeRouterSigmoidOut_v1",
    {
     "definitions": {
-     "and": 4776
+     "and": 4776,
+     "type": "cc3a33ef423e3e042cde8f2ebc72ea4eac89926bd4475f76a9ceb2710d1d37ba3d5bd38849b9412f36461d254db65dbb2a3febad9b671f745494325761dd7419"
     }
    }
   ],
@@ -1119,7 +1156,8 @@
    "MoeRouterSigmoidScore_v2",
    {
     "definitions": {
-     "and": 30795
+     "and": 30795,
+     "type": "539493be73f74930c0f9fb66d1348bcb22a9da7ea97ce5a245c30a991bf9dc6856bc9ec6f662b5f121cddc50b27c0776763f2ff8050161fd3f76ac0c26b41a1d"
     }
    }
   ],
@@ -1203,7 +1241,8 @@
    "MoeSumCoordinate_v2{TOPK=8}",
    {
     "definitions": {
-     "and": 5222
+     "and": 5222,
+     "type": "eefd679a8f473e9089a61c7fef1c079fbf7d7a2ac22efc5851bd61cd77188312dd56c1cd2dd6e480cd5a1b7f3c8aeda3381eaae7073af0124721e3de4376b95c"
     }
    }
   ],
@@ -1227,7 +1266,8 @@
    "MoeSum_v2{TOPK=8,H=8}",
    {
     "definitions": {
-     "and": 41776
+     "and": 41776,
+     "type": "79a140cb71c9a28e26afac3fe527f649f641e26351659fb71d8db96826999cfeb3702b7798ecbfb8bb3d648206881cc5fd48263e1a63d45beab642dba654944a"
     }
    }
   ],
@@ -1236,7 +1276,8 @@
    "MufuEx2Ftz_v2",
    {
     "definitions": {
-     "and": 1073
+     "and": 1073,
+     "type": "67161a1d6c08809091187009045ba23f7e23a73e1ad3d135afd455521a506fac770655dc66a1e52e3b996d9208533f7f007b1b37c05dc416795605ddad2d26ba"
     }
    }
   ],
@@ -1245,7 +1286,8 @@
    "MufuRcpFtz_v2",
    {
     "definitions": {
-     "and": 902
+     "and": 902,
+     "type": "994f5792316c29ac6c83dbd548de234d4f3b627cea5ffa4a88aa270e77681b3440da7728701a51f620c22cee96c59982fb3e8a5deeff67181e9e064f2c289b16"
     }
    }
   ],
@@ -1254,7 +1296,8 @@
    "NvExpfIn_v1",
    {
     "definitions": {
-     "and": 9556
+     "and": 9556,
+     "type": "a079864dc07332cb64dfe86eab22b842034e146532ab421d73c61d2c43e4316dc90809e0d3a4e8d0e817b1e304973145f7ec24ac613183b10ddf7d7301591d57"
     }
    }
   ],
@@ -1263,7 +1306,8 @@
    "NvExpfOut_v1",
    {
     "definitions": {
-     "and": 743
+     "and": 743,
+     "type": "61a865605c3ee5803f99fe3ace9fd97691fdfed0c128bb440790e44016b5d7fa9f7d34f67c0c100f886d998b94833919390333f89a674f41413e36ac936ba7ec"
     }
    }
   ],
@@ -1277,7 +1321,8 @@
    "NvExpf_v2",
    {
     "definitions": {
-     "and": 11371
+     "and": 11371,
+     "type": "5e49fef0fae3d2c3db2ef8b84f7cffe933a5fff0d3dcea2319e8dd658499ade17f1bc6fcf9be00551256352b8538677ea3570e492af44b062643f7b420e4e5bb"
     }
    }
   ],
@@ -1461,7 +1506,8 @@
    "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}",
    {
     "definitions": {
-     "and": 21103
+     "and": 21103,
+     "type": "5640c54926934f2ba49a27828ec25e7de7fd6ba0018471c45082eabaf16677cf86a4ccc37f99079017185b66778ce20a08c42aba8138ac84c0fa15e1ad9ab6af"
     }
    }
   ],
@@ -1475,7 +1521,8 @@
    "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 25683
+     "and": 25683,
+     "type": "76ed907acee30456a99d569e2bebc1248af3ef35eca982264d9a45bcca435be5b8fbe535af4d0c65287ec9e92acc65b6cf1bdbdcc267ee6fd46263b55a78c0ee"
     }
    }
   ],
@@ -1494,7 +1541,8 @@
    "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}",
    {
     "definitions": {
-     "and": 12530
+     "and": 12530,
+     "type": "9b0aff05fcd4a1ef4e77955b08481fd94196d280ad0cd367e96780ae24abc42e3d7a913af8f6cef71a20ce76a9c9ccc576290fb9e6bcf3f08e23f3224afd733a"
     }
    }
   ],
@@ -1508,7 +1556,8 @@
    "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 14820
+     "and": 14820,
+     "type": "59c8f4fefb64b5c227cca13c3c4ccf78e21c6e77d258b246b370895e7934387934c7214d67fdd54d7f6c448aa89f470b8b5ef099425cfbc2034df873ad5218d3"
     }
    }
   ],
@@ -1562,7 +1611,8 @@
    "ScaledMmFp8BlockSharedScale_v2{K=64,N=2,G=32}",
    {
     "definitions": {
-     "and": 47066
+     "and": 47066,
+     "type": "da7e828a22b370f0065ac2fdc477f720e1bcac4d4bb7db9417e2f5376d10b3973a743e95d861f5658a08880c493c8218a1efd6163b26adafd5ba050b055a4c38"
     }
    }
   ],
@@ -1626,7 +1676,8 @@
    "ScaledMmFp8Coordinate_v2{K=32,BIAS=False}",
    {
     "definitions": {
-     "and": 11213
+     "and": 11213,
+     "type": "f7f9633c3f7c809eb214ed9bce474ba457adb300cb68d27a768ec8a2afbd41b6521eb7dc293a0de0f669b9a769768e8769d4e2ee943ed81236a5c8f0be8e41fc"
     }
    }
   ],
@@ -1640,7 +1691,8 @@
    "ScaledMmFp8NoSwapCoordinate_v2{K=64,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 24784
+     "and": 24784,
+     "type": "5759fa159126935b43b384e920cf1fb6803ea0b333a929b5e6c6f40c852722728a47d3475b47b004090785648ab19cf9a2ca737b638a8cbb310ac935ac2fbeb6"
     }
    }
   ],
@@ -1654,7 +1706,8 @@
    "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 49568
+     "and": 49568,
+     "type": "e5f0f1545aaa6182b61ba4d45e2eafddec0291f346db551df7292888d2dd04c1109d09b6cfcc5ca69b033dc568822bf157fafe1bf893892496bab28c05534525"
     }
    }
   ],
@@ -1683,7 +1736,8 @@
    "ScaledMmFp8_v2{K=32,N=2,BIAS=False}",
    {
     "definitions": {
-     "and": 22426
+     "and": 22426,
+     "type": "b232f7254f7ad30c6469155df1c45ec907c8243b8f378dda8401da9300817e2a648c5cf9c8db8e91392d9bf423760e89d7e0b0da95154ce8d756385d7643443f"
     }
    }
   ],
@@ -1702,7 +1756,8 @@
    "SelectF32_v1",
    {
     "pieces": {
-     "and": 32
+     "and": 32,
+     "type": "3dff09218443ec46fe5bdb13d09ac2f20de60092c14ee80ccd8602a772474cd0df4e5a3a2989a9eac77042c390736d1fdb555446dec603548f8c42ee738d06ee"
     }
    }
   ],
@@ -1736,7 +1791,8 @@
    "SiluMulFp8BlockQuantResult_v2",
    {
     "definitions": {
-     "and": 13334
+     "and": 13334,
+     "type": "d2e3581314df7853ccf5242703cb795037ab699cda393a0c77e397fd1a6bd9a2e68a6bf1b18e2af1cfcfa5496e0f58510efb2cceaf170d07a9924c312e80e77a"
     }
    }
   ],
@@ -1822,6 +1878,7 @@
     "units": {
      "and": 328453,
      "not": 62814,
+     "type": "84ffa578e0b2eb33565d843783f043567e7776fb68ef37a19e1821010ebda2bba7d5127e987ab8fd0beaf8dac77830a6b2aa88c27505443a6d0ff01fa0d8de5e",
      "xor": 2165677
     }
    }
@@ -1833,6 +1890,7 @@
     "units": {
      "and": 148173,
      "not": 22942,
+     "type": "0e426647d7746df778fedf9363be7b2439010abcdb3020a2dee69d5de0b981c60ace5ecf25feeb3de15bf2643fe18dee755270c98a5b4f365f25244f47becc79",
      "xor": 1029829
     }
    }
@@ -1849,6 +1907,7 @@
     "units": {
      "and": 2633,
      "not": 172,
+     "type": "048c70fee63cce665e48f25d777294126b9abba6a6bf7fc63d8cdc126721742a19cc2995ed272981a8a736f9f74b547e95ba1ee689b0330491edaf4569847a2e",
      "xor": 54087
     }
    }

@@ -1,0 +1,46 @@
+{
+ "definitions": {
+  "ArithCountFinish_v1{CW=20}": {
+   "and": 41
+  },
+  "ArithCountStep_v1{K=18,BIN=0,CW=20}": {
+   "and": 3963
+  },
+  "ArithCountStep_v1{K=18,BIN=1,CW=20}": {
+   "and": 2243
+  },
+  "ArithCountStep_v1{K=3,BIN=1,CW=4}": {
+   "and": 1996
+  },
+  "ArithEncodeFinish_v1": {
+   "and": 6
+  },
+  "ArithEncodeStep_v1{K=18,BIN=0}": {
+   "and": 4964
+  },
+  "ArithEncodeStep_v1{K=18,BIN=1}": {
+   "and": 3244
+  },
+  "ArithEncodeStep_v1{K=3,BIN=1}": {
+   "and": 2089
+  },
+  "BookKT_v1{C=1}": {
+   "and": 210
+  },
+  "BookKT_v1{C=3}": {
+   "and": 337
+  },
+  "ChargeCount_v1{N=14}": {
+   "and": 50664
+  },
+  "ChargeCount_v1{N=2}": {
+   "and": 19536
+  },
+  "KTContext_v1{C=1,NW=15}": {
+   "and": 274
+  },
+  "KTContext_v1{C=3,NW=24}": {
+   "and": 1202
+  }
+ }
+}

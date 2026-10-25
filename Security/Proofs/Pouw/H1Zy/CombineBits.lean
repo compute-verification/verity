@@ -1,6 +1,6 @@
 import Definitions.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.CombineDefs
+import Definitions.Pouw.H1Zy.Combine
 
 /-!
 # The combine's pieces on bits compute their word views, and so does their composition

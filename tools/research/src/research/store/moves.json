@@ -1398,7 +1398,6 @@
         "Security/Definitions/Pouw/Fp8Atom/Vectors/C01.lean": "Security/Proofs/Pouw/Fp8Atom/Vectors/C01.lean",
         "Security/Definitions/Pouw/Fp8Atom/Vectors/coverage.json": "Security/Proofs/Pouw/Fp8Atom/Vectors/coverage.json",
         "Security/Definitions/Pouw/FpG1/Gemm.lean": "Security/Proofs/Pouw/FpG1/Gemm.lean",
-        "Security/Definitions/Pouw/H1Zy/LaneChunk.lean": "Security/Proofs/Pouw/H1Zy/LaneChunkDefs.lean",
         "Security/Definitions/Pouw/NCP/ExtraIdentity.lean": "Security/Proofs/Pouw/NCP/ExtraIdentity.lean",
         "Security/Definitions/Pouw/NCP/Pinned.lean": "Security/Proofs/Pouw/NCP/Pinned.lean",
         "Security/Definitions/Pouw/PearlC/Completeness.lean": "Security/Proofs/Pouw/PearlC/CompletenessDefs.lean",
@@ -1409,9 +1408,7 @@
         "Security/Definitions/Pouw/PearlC/PeelExactVectors.lean": "Security/Proofs/Pouw/PearlC/PeelExactVectors.lean",
         "Security/Definitions/Pouw/PearlC/PeelFp4Vectors.lean": "Security/Proofs/Pouw/PearlC/PeelFp4Vectors.lean",
         "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean": "Security/Proofs/Pouw/PearlC/RowPrimVectors.lean",
-        "Security/Definitions/Pouw/PearlC/Sha512.lean": "Security/Proofs/Pouw/PearlC/Sha512.lean",
         "Security/Definitions/Pouw/PearlC/Sm120Vectors.lean": "Security/Proofs/Pouw/PearlC/Sm120Vectors.lean",
-        "Security/Definitions/Pouw/PearlC/W1.lean": "Security/Proofs/Pouw/PearlC/W1.lean",
         "Security/Definitions/Pouw/TileBound/AlignedExactDefs.lean": "Security/Proofs/Pouw/TileBound/AlignedExactDefs.lean",
         "Security/Definitions/Pouw/TileBound/Defs.lean": "Security/Proofs/Pouw/TileBound/Defs.lean",
         "Security/Definitions/Pouw/TileBound/Fp8Defs.lean": "Security/Proofs/Pouw/TileBound/Fp8Defs.lean"

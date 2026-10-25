@@ -365,6 +365,18 @@ def _part(T, DR, DV, BN, scale, qn, qr, kv) -> np.ndarray:
     return np.asarray(evaluate(part, qn.tolist(), qr.tolist(), kv.reshape(-1).tolist()), dtype=U32)
 
 
+@pytest.mark.parametrize("T", [8, 16, 40])
+def test_the_part_twin_is_the_word(T: int) -> None:
+    """`part_rows` on a split's keys (one partial block, one whole block, a partial third) is the word part word for word."""
+    DR, DV, BN = 16, 16, 16
+    rng = np.random.default_rng(T + 100)
+    qn, qr, kv = _bf16(rng, (2, DV)), _bf16(rng, (2, DR)), _bf16(rng, (T, DV + DR), 0.5)
+    o, lse, nf = TW.part_rows(qn, qr, kv, T=T, DR_=DR, DV=DV, BN=BN, scale=0.0625)
+    assert not nf.any()
+    for r in range(2):
+        assert np.array_equal(np.append(o[r], lse[r]).astype(U32), _part(T, DR, DV, BN, 0.0625, qn[r], qr[r], kv))
+
+
 def _parts(T, NS, DR, DV, BN, scale, qn, qr, kv) -> tuple[np.ndarray, np.ndarray]:
     """Each split's `SparseMlaSplitPart_v1` on its own keys: (lse (NSPLIT,), o_partial (NSPLIT, DV))."""
     got = [_part(min(T, b1 * BN) - b0 * BN, DR, DV, BN, scale, qn, qr, kv[b0 * BN:min(T, b1 * BN)])

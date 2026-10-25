@@ -1,7 +1,7 @@
-import Proofs.Pouw.H1Zy.LaneChunkDefs
+import Definitions.Pouw.H1Zy.LaneChunk
 import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneDefs
-import Proofs.Pouw.H1Zy.CombineDefs
+import Definitions.Pouw.H1Zy.Lane
+import Definitions.Pouw.H1Zy.Combine
 
 /-!
 # A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`)

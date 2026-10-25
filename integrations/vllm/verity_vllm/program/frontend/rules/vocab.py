@@ -439,7 +439,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
            # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
            "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
-           # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
+           # the same select at a constant split count S (the registered S): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
@@ -538,10 +538,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "int8_scaled_mm": "ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}: verity_int8::scaled_mm on one quantized row -> "
                              "y bf16[N], ScaledMmS8Coordinate_v1 per output: K/32 satfinite s8 IMMA steps, y = bf16(RN32(RN32(f32(acc)·s_a)·s_w)); "
                              "W s8 [N,K] + s_w f32 [N] Inputs (ml.circuits.ops.gemm)",
-           "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant on one KV head of one request's S-key window -> (K' s8 [S,D] under "
+           "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant_batch's slice for one KV head of one request's S-key window -> (K' s8 [S,D] under "
                             "the layer's K scale (a Const32), V' s8 [S,D] per channel over the window, s_v f32 [D], f32(V'_0) [D]) "
                             "(registry.int8_exact)",
-           "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows on one (query row, head) over its S keys "
+           "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows_batch on one (query row, head) over its S keys "
                                  "-- Q' per row, S = Q'K'ᵀ, fattn's uint32 A and 256-entry exp2 LUT (Exp2Lut127_v1), P V', the sink "
                                  "term; K', V', s_v, f32(V'_0) its KV head's Int8KvQuant_v1 rows (registry.int8_exact)",
            "int8_attention_row_table": "Int8LutAttentionRow_v2{D,S,SCALE}(.., exp2_lut127): Int8LutAttentionRow_v1 with the exp2 LUT "

@@ -221,6 +221,7 @@ def test_a3_2_activity_primitives_on_random_noncanonical_words():
 # ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a3_3_honest_lifted_serving_program_emits_only_canonical_words_gate_for_gate():
     prompt, w = _inputs()
     eos = (int(prompt[0]) + 1,)  # some id; the transcript of the honest run decides where ⊥ starts

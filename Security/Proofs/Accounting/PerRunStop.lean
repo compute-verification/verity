@@ -1,7 +1,7 @@
 import Proofs.Accounting.PerRunPriced
 import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.PearlC.W1Stop
-import Proofs.Pouw.PearlC.W1
+import Definitions.Pouw.PearlC.W1
 import Proofs.Pouw.PearlC.W1StopDefs
 
 /-!

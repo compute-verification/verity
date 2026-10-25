@@ -1,6 +1,6 @@
-import Proofs.Pouw.PearlC.W1
+import Definitions.Pouw.PearlC.W1
 import Proofs.Pouw.PearlC.NoiseSha512
-import Proofs.Pouw.PearlC.Sha512
+import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # Checks of W1's cost model and SHA-512's noise
@@ -10,7 +10,8 @@ import Proofs.Pouw.PearlC.Sha512
 - `rowDigest_vec`, `rowSeed_vec`, `seedB_vec`, `lineEA_vec`, `lineFB_vec`: `NoiseSha512` against
   `verity/core/protocols/pouw/schemes/pearl_c.py` (`row_digest`, `row_seed`, `seed_b`, `sample_line`) on one 15-word row
   of unit 3, row 5, with salt `0, 1, …, 31` and root `(7i + 3) mod 256`, evaluated by the kernel.
-- `toPrices_h100`, `toPrices_sm120`, `toPrices_sm120Loop`: W1's tables give the coarse records the devices use.
+- `toPrices_h100`, `toPrices_sm120`, `toPrices_sm120Loop`: W1's tables give the coarse records the devices use;
+  `toFp4Prices_fp4Sm120` (and `toFp4Prices_fp4Sm120At` at any scale path): the FP4 record's, `Fp4Prices.sm120`.
 - `price_e4m3_sm120`, `price_bf16_sm120`, `price_e2m1_sm120`: each sm_120 fragment costs 4,096 units, however few of its
   outputs are used; `price_e4m3_sm120_taint`: under a branch on data, 2,048 more (16 per output word).
 - `cost_oneMma`: a whole program of one E4M3 fragment on scratch costs exactly 4,096 under `w1`, for every protocol,
@@ -88,6 +89,28 @@ theorem fp4Sm120_prices (sha fetch : ℚ) :
       (W1Prices.fp4Sm120 sha fetch).fp32 = 2 * (1047 / 125) := by
   simp only [W1Prices.fp4Sm120, W1Prices.scale, W1Prices.sm120Loop, W1Prices.sm120, Fp4Prices.sm120]
   norm_num
+
+/-- W1's FP4 table gives the FP4 record's coarse prices at any block-scale path: `Fp4Prices.sm120At` at the loop's
+FADD, `1047/125`. -/
+theorem toFp4Prices_fp4Sm120At (sha fetch : ℚ) (p : Fp4ScalePath) :
+    (W1Prices.fp4Sm120 sha fetch).toFp4Prices p = Fp4Prices.sm120At (1047 / 125) p := by
+  have hb : (W1Prices.fp4Sm120 sha fetch).mac .bf16 = 4 := by
+    norm_num [W1Prices.fp4Sm120, W1Prices.scale, W1Prices.sm120Loop, W1Prices.sm120]
+  have he : (W1Prices.fp4Sm120 sha fetch).mac .e2m1 = 1 := by
+    norm_num [W1Prices.fp4Sm120, W1Prices.scale, W1Prices.sm120Loop, W1Prices.sm120]
+  have hf : (W1Prices.fp4Sm120 sha fetch).fp32 = 2 * (1047 / 125) := by
+    norm_num [W1Prices.fp4Sm120, W1Prices.scale, W1Prices.sm120Loop, W1Prices.sm120]
+  have hc : (W1Prices.fp4Sm120 sha fetch).cvt = 32 := by
+    norm_num [W1Prices.fp4Sm120, W1Prices.scale, W1Prices.sm120Loop, W1Prices.sm120]
+  rw [W1Prices.toFp4Prices, Fp4Prices.sm120At, hb, he, hf, hc]
+  congr 1 <;> ring
+
+/-- **The FP4 record's pairing**: `W1Device.fp4Sm120`'s table gives `devFp4Sm120`'s prices `Fp4Prices.sm120` (the block
+scale on `lut256`, FADD at `1047/125`). -/
+theorem toFp4Prices_fp4Sm120 (sha fetch : ℚ) :
+    (W1Prices.fp4Sm120 sha fetch).toFp4Prices Fp4ScalePath.lut256 = Fp4Prices.sm120 := by
+  rw [toFp4Prices_fp4Sm120At]
+  norm_num [Fp4Prices.sm120At, Fp4ScalePath.lut256, Fp4Prices.sm120]
 
 /-! ## Fragments are priced whole -/
 

@@ -1,5 +1,4 @@
 import Definitions.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.CombineDefs
 
 /-!
 # The combine's `ok` is the receipt check

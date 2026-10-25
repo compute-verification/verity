@@ -1,3 +1,5 @@
+import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
+import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.Barrier.Defs
 import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
@@ -7,7 +9,6 @@ import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
-import Definitions.Pouw.FiatShamir
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
@@ -56,6 +57,7 @@ import Definitions.Pouw.PearlC.RowCircuit
 import Definitions.Pouw.PearlC.RowPrims
 import Definitions.Pouw.PearlC.RowSem
 import Definitions.Pouw.PearlC.SaltDead
+import Definitions.Pouw.PearlC.Sha512
 import Definitions.Pouw.PearlC.Skip
 import Definitions.Pouw.PearlC.SkipP
 import Definitions.Pouw.PearlC.Sm120
@@ -65,6 +67,7 @@ import Definitions.Pouw.PearlC.TileCheck
 import Definitions.Pouw.PearlC.TileCheck8
 import Definitions.Pouw.PearlC.TileCheck4
 import Definitions.Pouw.PearlC.TileCircuit
+import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
@@ -73,7 +76,6 @@ import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.RelativeSecurityJ10R
-import Definitions.Pouw.RelativeSecurityCall
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Rat.Cast.Order
 import Mathlib.LinearAlgebra.Matrix.Rank
