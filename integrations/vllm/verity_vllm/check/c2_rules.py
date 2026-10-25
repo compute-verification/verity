@@ -424,6 +424,29 @@ def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:
     return {k: v for k, v in out.items() if v is not None}
 
 
+C_SR = ("local_replay/sampled_replay", "DECISIONS-2 §4 C2 form (A) / F-cb-02",
+        "A post-commitment stratified sample of required values replays exactly (bit-for-bit) from the committed bytes under the Program's registered relations.",
+        ["sampled_replay.result", "sampled_replay.grade", "sampled_replay.why", "sampled_replay.sample", "sampled_replay_p*.json", "replay_cache"])
+C_SEED = ("local_replay/seed_of_record", "F-r16-23 / M-0579",
+          "The replay's seed is post-commitment as a FACT: recomputed from the run root (or the recorded verifier challenge), never prover-chosen.",
+          ["sampled_replay.sample.seed", "sampled_replay.sample.seed_source", "sampled_replay.sample.challenge"])
+C_GAP = ("local_replay/population_gaps", "COORD M-0721 (1) / F-r16-02 / F-r16-07 / F-r16-20",
+         "Every VU the replay left unevaluated is named under a class form (B) covers, and form (B) is complete over the values where it must stand in; plane-fed VUs never pass by name.",
+         ["sampled_replay.population.not_evaluable", "sampled_replay.strata_unevaluated", "sampled_replay.unevaluated_strata", "oracle_compare"])
+C_SCOPE = ("local_replay/population_scope", "R17-3 / R17-10 reqval",
+           "The replay's population is the required-value manifest Q(P) of record, reconciled identity by identity (reach + uncovered-by-name == |Q(P)|; engines agree).",
+           ["sampled_replay.population.query_total", "sampled_replay.population.query_checks", "sampled_replay.population.scope", "sampled_replay.population.uncovered_by_name"])
+C_ATT = ("local_replay/attribution", "F-cb-23 / rev M-0243",
+         "At B >= 2 the per-(step, request) attribution of every committed value is verified by a complete form (B); else the gap is named on the PASS.",
+         ["binding.population.requests", "oracle_compare.attribution"])
+C_LK = ("boundary_linkage/ordered_linkage", "DECISIONS-2 §4 C2 boundary linkage",
+        "Every (engine step, request) boundary is linked: declared prompt -> input ids at the arrival step; sampled id[s-1] -> input id[s]; none unlinked.",
+        ["boundary_linkage.result", "boundary_linkage.unlinked_n", "boundary_linkage.pairs", "boundary_linkage.horizon", "linkage"])
+C_WP = ("checkpoint_binding/weights_of_record", "MAN-09 / rev-cb M-0610",
+        "Every served parameter the Program names equals by digest the checkpoint-composed tensor of record; every shard is pinned by its manifest sha256.",
+        ["weights_pin.result", "weights_pin.why", "weights_pin.compared", "weights_pin.mismatched", "weights_pin.missing", "weights_pin.shards"])
+
+
 def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     """The C2-of-record block of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
     the SAME nesting (a branch v1 never took is not taken here), emitting: local_replay/sampled_replay, /seed_of_record, /population_gaps,
@@ -432,27 +455,6 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     row_proc = _is_row_procedure(commit)
     bnd = _d(commit.get("binding"))
     oc = _oracle_of(commit)
-    C_SR = ("local_replay/sampled_replay", "DECISIONS-2 §4 C2 form (A) / F-cb-02",
-            "A post-commitment stratified sample of required values replays exactly (bit-for-bit) from the committed bytes under the Program's registered relations.",
-            ["sampled_replay.result", "sampled_replay.grade", "sampled_replay.why", "sampled_replay.sample", "sampled_replay_p*.json", "replay_cache"])
-    C_SEED = ("local_replay/seed_of_record", "F-r16-23 / M-0579",
-              "The replay's seed is post-commitment as a FACT: recomputed from the run root (or the recorded verifier challenge), never prover-chosen.",
-              ["sampled_replay.sample.seed", "sampled_replay.sample.seed_source", "sampled_replay.sample.challenge"])
-    C_GAP = ("local_replay/population_gaps", "COORD M-0721 (1) / F-r16-02 / F-r16-07 / F-r16-20",
-             "Every VU the replay left unevaluated is named under a class form (B) covers, and form (B) is complete over the values where it must stand in; plane-fed VUs never pass by name.",
-             ["sampled_replay.population.not_evaluable", "sampled_replay.strata_unevaluated", "sampled_replay.unevaluated_strata", "oracle_compare"])
-    C_SCOPE = ("local_replay/population_scope", "R17-3 / R17-10 reqval",
-               "The replay's population is the required-value manifest Q(P) of record, reconciled identity by identity (reach + uncovered-by-name == |Q(P)|; engines agree).",
-               ["sampled_replay.population.query_total", "sampled_replay.population.query_checks", "sampled_replay.population.scope", "sampled_replay.population.uncovered_by_name"])
-    C_ATT = ("local_replay/attribution", "F-cb-23 / rev M-0243",
-             "At B >= 2 the per-(step, request) attribution of every committed value is verified by a complete form (B); else the gap is named on the PASS.",
-             ["binding.population.requests", "oracle_compare.attribution"])
-    C_LK = ("boundary_linkage/ordered_linkage", "DECISIONS-2 §4 C2 boundary linkage",
-            "Every (engine step, request) boundary is linked: declared prompt -> input ids at the arrival step; sampled id[s-1] -> input id[s]; none unlinked.",
-            ["boundary_linkage.result", "boundary_linkage.unlinked_n", "boundary_linkage.pairs", "boundary_linkage.horizon", "linkage"])
-    C_WP = ("checkpoint_binding/weights_of_record", "MAN-09 / rev-cb M-0610",
-            "Every served parameter the Program names equals by digest the checkpoint-composed tensor of record; every shard is pinned by its manifest sha256.",
-            ["weights_pin.result", "weights_pin.why", "weights_pin.compared", "weights_pin.mismatched", "weights_pin.missing", "weights_pin.shards"])
     out: dict[str, CheckResult] = {}
     sr_scope, sr_inputs = _replay_scope(sr), _replay_inputs(sr, ctx)
     sr_notes = [_leak("sampled_replay.EVALUATORS / NOT_YET", "which families the replay can evaluate is a table by family name (the stated applicability domain)")]
@@ -462,7 +464,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
 
     def put(spec: tuple, outcome: str, *, reason: str | None = None, differences: list | None = None, notes: list | None = None, scope: dict | None = None, inputs: dict | None = None) -> None:
         nm, rule, claim, compat = spec
-        out[nm] = _mk(nm, rule, claim, compat, commit, ctx, outcome=outcome, reason=reason, differences=differences or [], notes=notes or [], scope=scope or {}, inputs=inputs or {})
+        out[nm] = _mk(nm, rule, claim, list(compat), commit, ctx, outcome=outcome, reason=reason, differences=differences or [], notes=notes or [], scope=scope or {}, inputs=inputs or {})
 
     lk_scope = {k: _d(lk).get(k) for k in ("pairs", "unlinked_n", "linked", "prescribed", "embed_op_path")} if isinstance(lk, dict) else {}
     if isinstance(lk, dict):
