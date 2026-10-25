@@ -168,13 +168,16 @@ def coins_of(option, reserved) -> dict:
     """Where the PoUW option `option` took its salt coin: its ``coin_source``, the gate's answer it carries (``session``,
     no secret), its salt epoch's number (``pass_index``) and the root its salt coin follows (that epoch's pass root over
     the weights' root, `salt.pass_open_root`; the weights' root for a coin held in-process), its salt, and how its
-    session closed (``details.challenger``, once the engine has closed); `reserved` the gate's reserve answer `_live` took."""
+    session closed (``details.challenger``, once the engine has closed), and the session head a retained pass's manifest
+    names (``manifest_head``, `pouw_pearl_c_manifest.session_head`); `reserved` the gate's reserve answer `_live` took."""
     from verity.core.protocols.pouw import salt as PS
+    from verity_vllm.protocol_options.pouw_pearl_c_manifest import session_head
     c = option.commitment()
     k, w = c.get("pass_index"), c.get("weights_root")
     after = w if k is None or w is None else PS.pass_open_root(bytes.fromhex(w), k).hex()
     return {"source": c.get("coin_source", "in-process"), "reserved": reserved, "session": c.get("session"),
-            "pass_index": k, "salt_after": after, "salt": c.get("salt"), "closed": option.info().get("challenger")}
+            "pass_index": k, "weights_root": w, "salt_after": after, "salt": c.get("salt"),
+            "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
 def run(a) -> int:
