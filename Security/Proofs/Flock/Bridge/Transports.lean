@@ -160,9 +160,10 @@ end Layout
 
 /-- **A shaped registered opening opens the deployed commitment.** At a claims position `i` whose registered row `r`
 sits at port `r.port` of `16 w` bits, under roots that separate differently named ports (`PortRoots.RootFixesDomain`),
-unit `r.leaf < nl`, and bit `r.place`: a value `v` `RowShaped` of the row's width under a salt of `saltLen` bytes, whose hm96 leaf at a `sha512/row/v2` port is
-the registered leaf of row `(r.leaf, r.port)`, opens `commitDep` under `rootsOf` at `i` to its bit `r.place`, with data
-`dataOf`: the salt, the row's path in the verifier's tree and the value's bits. -/
+unit `r.leaf < nl`, and bit `r.place`: a value `v` `RowShaped` of the row's width under a salt of `saltLen` bytes, whose
+hm96 leaf at a `sha512/row/v2` port is the registered leaf of row `(r.leaf, r.port)`, opens `commitDep` under `rootsOf`
+at `i` to its bit `r.place`, with data `dataOf`: the salt, the row's path in the verifier's tree and the value's bits.
+-/
 theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < nl) (h16 : r.width % 16 = 0) (hpl : r.place < r.width)
@@ -466,10 +467,11 @@ noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
     ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
 /-- **A shaped registered opening of a row/v2 row opens the deployed commitment** (`TransportsLive` at the shaped
-openings). In `SampledKSLive`'s setting, at a circuit file whose ports are unsegmented row/v2 rows (`RowsV2`) and
-roots that separate differently named ports (`PortRoots.RootFixesDomain`), at a wire `g` held by a registered row `r`:
-an opening `(p, v, y)` of `g`'s registered commit string at registration `R`, whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes, opens `commitDep` under
-`rootsOf` at `g`'s claims position to `g`'s bit in `v`. -/
+openings). In `SampledKSLive`'s setting, at a circuit file whose ports are unsegmented row/v2 rows (`RowsV2`) and roots
+that separate differently named ports (`PortRoots.RootFixesDomain`), at a wire `g` held by a registered row `r`: an
+opening `(p, v, y)` of `g`'s registered commit string at registration `R`, whose value `v` is `RowShaped` of the row's
+width and whose salt `y` has `saltLen` bytes, opens `commitDep` under `rootsOf` at `g`'s claims position to `g`'s bit in
+`v`. -/
 theorem transports_shaped (R : Reg)
     (hv2 : RowsV2 c) (hsep : PortRoots.RootFixesDomain c pub n) {r : RowAt} (hr : rowsOf c hU n g = some r)
     (p : PosH c hU n) (v : ValH c) (y : List UInt8) (hv : RowShaped v) (hvw : v.1.val = r.width)
@@ -508,11 +510,11 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **`TransportsLiveC` under roots that separate differently named ports.** `TransportsLiveC`'s setting (circuit
-files whose ports are unsegmented row/v2 rows, `RowsV2`), commitment, roots and hash, when the registration's roots
-separate differently named ports (`PortRoots.RootFixesDomain`): at every unit `u` and committed wire `g` of `u`, every
-opening `o` of `g`'s registered commit string at the prover's registration that is canonical at `g` (`canonOpen`: `g` has a row, the
-value is `RowShaped` of its width, the salt has `saltLen` bytes) opens `g`'s claims position under `Cd` to `o`'s bit
+/-- **`TransportsLiveC` under roots that separate differently named ports.** `TransportsLiveC`'s setting (circuit files
+whose ports are unsegmented row/v2 rows, `RowsV2`), commitment, roots and hash, when the registration's roots separate
+differently named ports (`PortRoots.RootFixesDomain`): at every unit `u` and committed wire `g` of `u`, every opening
+`o` of `g`'s registered commit string at the prover's registration that is canonical at `g` (`canonOpen`: `g` has a row,
+the value is `RowShaped` of its width, the salt has `saltLen` bytes) opens `g`'s claims position under `Cd` to `o`'s bit
 there, at SHA-512. The deployed check passes no other openings but by a SHA-512 collision (`leaf_misshaped_dep`,
 `leaf_salt`). -/
 def TransportsLiveCS : Prop :=
