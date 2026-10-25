@@ -3,6 +3,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
 import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 import Proofs.Flock.Soundness.Discharge.FailClosed.General
+import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts
@@ -118,11 +119,50 @@ theorem exists_k_rateZ {F : Type} [Field F] [Fintype F] [DecidableEq F] {n mPts 
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, ZkLink.rateZ (plan S R) j k ≤ ρ :=
   exists_k (fun T : ZkSession.TabZK F mPts => (lvOf T.sch 0).logLen) plan hp hρ
 
+/-! ## The stratified law
+
+The claims at the stratified law (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`, and their `205` and per-test forms)
+take the live law from the inputs, as the verifier does: `liveLaw I`, `HmRow.stratifiedLaw` at the verifier's own
+`--partition`, `--program` and `--stratified K`, to which `setupTables` holds a stratified draw file's law (U2). Their
+miss term is the stratified law's at every assignment `σs` of the population's units to the strata that the strata
+describe (`ExecStrata`), the bound the infimum over them. At an accepted draw file's law that infimum ranges over a
+non-empty set (`liveStrata_of_ofJson`, from `Law.execStrata_of_ofJson`). -/
+
 section
 
 open Game Model Accounting Refine Audit Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
+
+/-- **The stratified law the verifier derives from its inputs**, and the population: `HmRow.stratifiedLaw` at
+`--partition`, `--program` and `--stratified K`; none without all three. -/
+def liveLaw (I : Inputs) : Option (Flock.Draw.Law × ℕ) :=
+  match I.partition, I.program, I.stratified with
+  | some obj, some prog, some k => (Flock.HmRow.stratifiedLaw obj prog k).toOption
+  | _, _, _ => none
+
+/-- **The strata of an accepted draw file describe an assignment**, at the strata's indices `Fin m`: an assignment `σs`
+of the population's units to the strata over which the stratified claims' infimum ranges (`Law.execStrata_of_ofJson`). -/
+theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitDraw} {Kd m : ℕ} {St : Fin m → Flock.Draw.Stratum}
+    (h : Flock.Draw.UnitDraw.ofJson j = .ok D) (hl : D.law = .stratified Kd (Array.ofFn St)) :
+    ∃ σs : Fin D.population → Fin m, Audit.Law.ExecStrata σs (fun s => (St s).k) St ∧
+      ∀ s, (St s).k ≤ (Audit.Law.stratum σs s).card := by
+  obtain ⟨σ, hS, hk⟩ := Audit.Law.execStrata_of_ofJson h hl
+  have hsz : (Array.ofFn St).size = m := Array.size_ofFn
+  have hst : ∀ s, Audit.Law.stratum (Fin.cast hsz ∘ σ) s = Audit.Law.stratum σ (Fin.cast hsz.symm s) := by
+    intro s
+    ext u
+    simp only [Audit.Law.stratum, Finset.mem_filter, Finset.mem_univ, true_and, Function.comp_apply, Fin.ext_iff,
+      Fin.val_cast]
+  refine ⟨Fin.cast hsz ∘ σ, fun s => ?_, fun s => ?_⟩
+  · obtain ⟨-, h2, h3⟩ := hS (Fin.cast hsz.symm s)
+    simp only [Fin.getElem_fin, Fin.val_cast, Array.getElem_ofFn, Fin.eta] at h2 h3
+    rw [hst]
+    exact ⟨rfl, h2, h3⟩
+  · have h1 := hk (Fin.cast hsz.symm s)
+    simp only [Fin.getElem_fin, Fin.val_cast, Array.getElem_ofFn, Fin.eta] at h1
+    rw [hst]
+    exact h1
 
 set_option linter.unusedVariables false in
 /-- The claim at a public-output statement without `--zk`: `flock_headline_exec_dec`'s. -/
@@ -131,8 +171,8 @@ def SoundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -175,7 +215,9 @@ def SoundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
                 (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
         StrictCR.ksAvgStrict (Integrate.planAt hs.typed dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
             (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -194,8 +236,8 @@ def SoundExecPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -239,7 +281,9 @@ def SoundExecPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
                 (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
         StrictCR.ksAvgStrict (Integrate.planAt hs.typed dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
             (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -250,8 +294,9 @@ def SoundExecPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
             (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t')
 
 theorem soundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundExec I hh :=
-  @fun _ _ dj _ x₀ _ _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ hCR _ _ hKS =>
-    flock_headline_exec_dec hh dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS
+  @fun _ _ dj _ x₀ _ _ St Kd pop _ _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ hCR _ _ hKS =>
+    le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
+      flock_headline_exec_dec hh dj x₀ σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS
 
 /-- `SoundExec`'s `hr` holds for some rerun count at every statement, draw file and setup. -/
 theorem hr_exec (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -291,8 +336,8 @@ def SoundExecHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScop
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -333,7 +378,9 @@ def SoundExecHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScop
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -353,8 +400,8 @@ def SoundExecHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -396,7 +443,9 @@ def SoundExecHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -408,8 +457,9 @@ def SoundExecHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
 
 theorem soundExecHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
     SoundExecHU I hh hf :=
-  @fun _ _ dj _ x₀ _ _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ hCR _ _ hKS =>
-    flock_headline_exec_hidden_dec hh hf dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS
+  @fun _ _ dj _ x₀ _ _ St Kd pop _ _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ hCR _ _ hKS =>
+    le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
+      flock_headline_exec_hidden_dec hh hf dj x₀ σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS
 
 set_option linter.unusedVariables false in
 /-- The claim at a hidden-output statement without `--zk` whose wires feed the unit or the outputs:
@@ -420,8 +470,8 @@ def SoundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScop
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -464,7 +514,9 @@ def SoundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScop
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -484,8 +536,8 @@ def SoundExecHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -529,7 +581,9 @@ def SoundExecHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -541,8 +595,9 @@ def SoundExecHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
 
 theorem soundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
     SoundExecHG I hh hf :=
-  @fun _ _ dj _ x₀ _ _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ hCR _ _ hKS =>
-    flock_headline_exec_hiddenG hh hf dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS
+  @fun _ _ dj _ x₀ _ _ St Kd pop _ _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ hCR _ _ hKS =>
+    le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
+      flock_headline_exec_hiddenG hh hf dj x₀ σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS
 
 /-- The claim at a hidden-output statement without `--zk`: `SoundExecHU` where the wires feed neither the unit nor
 the outputs, `SoundExecHG` where they feed either. -/
@@ -590,8 +645,8 @@ def SoundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1)
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the coin server's draw at each of the law's draws
@@ -616,7 +671,9 @@ def SoundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1)
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeZ I, ((Law.stratified σs ks hks).miss K₀ +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : ScopeZ I, ((Law.stratified σs (fun s => (St s).k) hks).miss K₀ +
         ksAvgStrictZ (planZAt dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZAt dj y₀) (tabZAt dj y₀)
@@ -634,8 +691,8 @@ def SoundZPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -661,7 +718,9 @@ def SoundZPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeZ I, ((Law.stratified σs ks hks).miss K₀ + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : ScopeZ I, ((Law.stratified σs (fun s => (St s).k) hks).miss K₀ + η +
         ksAvgStrictZ (planZAt dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZAt dj y₀) (tabZAt dj y₀)
@@ -670,8 +729,9 @@ def SoundZPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I hs.typed dj y₀ wr _ tablesAtZK_live (hs.tagsOk hh hn) hRec hDraw)) τ)))
 
 theorem soundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) : SoundZ I hh hn :=
-  @fun _ _ _ dj _ y₀ wr dg N _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
-    zk_session_sound I hh hn dj y₀ wr dg N σs ks hks St hS Kd pop Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
+  @fun _ _ _ dj _ y₀ wr dg N _ St Kd pop _ _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+    le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
+      zk_session_sound I hh hn dj y₀ wr dg N σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
 /-- The claim at a public-output statement of any number of tables under `--zk`, the law the live subset draw: `zk_session_soundJ`'s. -/
@@ -867,8 +927,8 @@ def SoundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the coin server's draw at each of the law's draws
@@ -893,7 +953,9 @@ def SoundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_live (hs.tagsOkH hh hn) hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_live (hs.tagsOkH hh hn) hRec hDraw)) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeZ I, ((Law.stratified σs ks hks).miss K₀ +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : ScopeZ I, ((Law.stratified σs (fun s => (St s).k) hks).miss K₀ +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_live (hs.tagsOkH hh hn) hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
@@ -912,8 +974,8 @@ def SoundZHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -939,7 +1001,9 @@ def SoundZHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_live (hs.tagsOkH hh hn) hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_live (hs.tagsOkH hh hn) hRec hDraw)) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeZ I, ((Law.stratified σs ks hks).miss K₀ + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : ScopeZ I, ((Law.stratified σs (fun s => (St s).k) hks).miss K₀ + η +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_live (hs.tagsOkH hh hn) hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
@@ -949,8 +1013,9 @@ def SoundZHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
 
 theorem soundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = false) : SoundZHU I hh hn hf :=
-  @fun _ _ _ dj _ y₀ wr dg N _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
-    zk_session_soundH I hh hf hn dj y₀ wr dg N σs ks hks St hS Kd pop Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
+  @fun _ _ _ dj _ y₀ wr dg N _ St Kd pop _ _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+    le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
+      zk_session_soundH I hh hf hn dj y₀ wr dg N σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
 set_option linter.unusedVariables false in
 /-- The claim at a hidden-output statement of one table under `--zk`, the law stratified, whose wires feed the unit or
@@ -962,8 +1027,8 @@ def SoundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the coin server's draw at each of the law's draws
@@ -992,10 +1057,12 @@ def SoundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1
               (rsZG_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
             (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
       ⨆ hs : ScopeZ I,
         (let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
           (runsZC_liveHI I hs.typed (hs.parseH hh) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
-        (Law.stratified σs ks hks).miss K₀ +
+        (Law.stratified σs (fun s => (St s).k) hks).miss K₀ +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg σ) +
         linkBoundZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planAtZKH dj y₀)
@@ -1015,8 +1082,8 @@ def SoundZHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the law and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -1046,10 +1113,12 @@ def SoundZHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
               (rsZG_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
             (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
       ⨆ hs : ScopeZ I,
         (let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
           (runsZC_liveHI I hs.typed (hs.parseH hh) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
-        (Law.stratified σs ks hks).miss K₀ + η +
+        (Law.stratified σs (fun s => (St s).k) hks).miss K₀ + η +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg σ) +
         linkBoundZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planAtZKH dj y₀)
@@ -1060,8 +1129,9 @@ def SoundZHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.coun
 
 theorem soundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = true) : SoundZHG I hh hn hf :=
-  @fun _ _ _ dj _ y₀ wr dg N _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
-    zk_session_soundHG I hh hf hn dj y₀ wr dg N σs ks hks St hS Kd pop Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
+  @fun _ _ _ dj _ y₀ wr dg N _ St Kd pop _ _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+    le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
+      zk_session_soundHG I hh hf hn dj y₀ wr dg N σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
 /-- The claim at a hidden-output statement of one table under `--zk`, the law stratified: `SoundZHU` where the wires
 feed neither the unit nor the outputs, `SoundZHG` where they feed either. -/

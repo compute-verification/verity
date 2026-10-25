@@ -254,8 +254,8 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -298,7 +298,9 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
                 (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
         StrictCR.ksAvgStrict205 (Integrate.planAt hs.typed dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
             (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -317,8 +319,8 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -362,7 +364,9 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
                 (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
         StrictCR.ksAvgStrict205 (Integrate.planAt hs.typed dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
             (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -374,10 +378,10 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
 
 /-- **`SoundExec` gives `SoundExec205`**: every table of the plan is in the wide range (`planAt_inRangeWide`). -/
 theorem SoundExec.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = false} (h : SoundExec I hh) : SoundExec205 I hh :=
-  @fun _ _ dj _ x₀ Reg _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
+  @fun _ _ dj _ x₀ Reg _ St _ _ hlaw _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
       hCR _ _ hKS =>
-    (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
-      (iSup_mono fun hs => add_le_add (add_le_add le_rfl
+    (h dj x₀ St hlaw Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
+      (iInf_mono fun _ => iInf_mono fun _ => iInf_mono fun _ => iSup_mono fun hs => add_le_add (add_le_add le_rfl
         (StrictCR.ksAvgStrict_le_205 (planAt (Reg := Reg) hs.typed dj x₀) (planAt_inRangeWide hs.typed dj x₀) _ _ _ _ _))
         le_rfl)
 
@@ -399,8 +403,8 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -441,7 +445,9 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
         StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -461,8 +467,8 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -504,7 +510,9 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
         StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -517,10 +525,10 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
 /-- **`SoundExecHU` gives `SoundExecHU205`**: every table of the plan is in the wide range (`planAtH_inRangeWide`). -/
 theorem SoundExecHU.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} {hf : ProvedScope.wiresFeed (circS I) = false}
     (h : SoundExecHU I hh hf) : SoundExecHU205 I hh hf :=
-  @fun _ _ dj _ x₀ Reg _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
+  @fun _ _ dj _ x₀ Reg _ St _ _ hlaw _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
       hCR _ _ hKS =>
-    (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
-      (iSup_mono fun _ => add_le_add (add_le_add le_rfl
+    (h dj x₀ St hlaw Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
+      (iInf_mono fun _ => iInf_mono fun _ => iInf_mono fun _ => iSup_mono fun _ => add_le_add (add_le_add le_rfl
         (StrictCR.ksAvgStrict_le_205 (planAtH (Reg := Reg) dj x₀) (planAtH_inRangeWide dj x₀) _ _ _ _ _)) le_rfl)
 
 set_option linter.unusedVariables false in
@@ -531,8 +539,8 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -575,7 +583,9 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
         StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -595,8 +605,8 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
     {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
+    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
@@ -640,7 +650,9 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : Scope I, ((Law.stratified σs ks hks).miss K + η +
+      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
+      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
         StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -653,10 +665,10 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
 /-- **`SoundExecHG` gives `SoundExecHG205`**, as `SoundExecHU.to205`. -/
 theorem SoundExecHG.to205 {I : Inputs} {hh : I.tags.hiddenOutputs = true} {hf : ProvedScope.wiresFeed (circS I) = true}
     (h : SoundExecHG I hh hf) : SoundExecHG205 I hh hf :=
-  @fun _ _ dj _ x₀ Reg _ σs ks hks St hS Kd pop _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
+  @fun _ _ dj _ x₀ Reg _ St _ _ hlaw _ _ _ Lb src hA3 _ hk _ _ hRw hM _ hρ hr _ ht' K wr dg N hwr hdraw τ
       hCR _ _ hKS =>
-    (h dj x₀ σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
-      (iSup_mono fun _ => add_le_add (add_le_add le_rfl
+    (h dj x₀ St hlaw Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ hCR hKS).trans
+      (iInf_mono fun _ => iInf_mono fun _ => iInf_mono fun _ => iSup_mono fun _ => add_le_add (add_le_add le_rfl
         (StrictCR.ksAvgStrict_le_205 (planAtH (Reg := Reg) dj x₀) (planAtH_inRangeWide dj x₀) _ _ _ _ _)) le_rfl)
 
 /-- `SoundExecH` at `fast100`'s numbers: `SoundExecHU205` where the wires feed neither the unit nor the outputs,
