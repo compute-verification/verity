@@ -77,8 +77,9 @@ are proven (the draw coin, released after registration). Each epoch's deadline c
 every pass of the epoch registers by it, so abandoning buys no time, and an install that outlasts the deadline is cut into
 intervals, each its own epoch. Best-of-`n` gains at most `n·ε`, where `ε` is the chance that one salt lets a dishonest
 pass through, while nothing keyed by the salt is rewarded. A Pearl-C period refuses a complete salt-only session that no
-accepted pass presents, which makes the gain zero within credited periods. That rule is the period checker's, not this
-check's (the note `compute-accounting/20261024T2324Z-draft-livesalt`, "The Pearl-C period rule").
+accepted pass presents, which makes the gain zero within credited periods. That rule is the period checker's,
+`PouwCheck.pearlCPeriodCredit` (`credit.pearl_c_period_credit`, CMP-82), not this check's (the note
+`compute-accounting/20261024T2324Z-draft-livesalt`, "The Pearl-C period rule").
 -/
 
 namespace Properties.Pouw.LiveSalt
@@ -305,10 +306,12 @@ def callIndices (m : Json) : List Int :=
 `epochOpenRoot w k` there (`ManifestNames`). -/
 def epochOf (m : Json) : Json := SampledProofs.getD (at? m "session") "root"
 
-/-- The signature of the Pearl-C period's credit: the verifier's challenger key, the auditor's ledger, the host's pins
-log, the verifier's copy of main's first-parent history and the period (its name, its close and the passes it presents,
-each a manifest with its session's files). On acceptance it returns the manifests of the passes it credits. -/
-abbrev PeriodCredit := (key ledger pins main period : Json) → R (List Json)
+/-- The signature of the Pearl-C period's credit, `PouwCheck.pearlCPeriodCredit`'s: the verifier's challenger key, the
+auditor's ledger, the host's pins log, the verifier's copy of main's first-parent history, the period's name, the passes
+it presents (each its window's context, its circuit's descriptor, its manifest and its session's files) and the lane's
+epochs credited in earlier periods. On acceptance it returns the period's epochs, each a weights' root and its epoch
+number, and the manifests of the passes it credits. -/
+abbrev PeriodCredit := (key ledger pins main name passes earlier : Json) → R (List (String × Nat) × List Json)
 
 /-! ## The properties -/
 
@@ -366,9 +369,9 @@ def PassesDistinct (credited : List Json) : Prop :=
     credited.Pairwise fun m m' => epochOf m = epochOf m' → ∀ u ∈ callIndices m, u ∉ callIndices m'
 
 /-- The Pearl-C period credits only passes that do distinct work within each epoch: whatever it credits meets
-`PassesDistinct`. -/
+`PassesDistinct`. Its proof shows it of `PouwCheck.pearlCPeriodCredit` (CMP-82). -/
 def CreditDistinct (credit : PeriodCredit) : Prop :=
-  ∀ key ledger pins main period credited,
-    credit key ledger pins main period = .ok credited → PassesDistinct credited
+  ∀ key ledger pins main name passes earlier epochs credited,
+    credit key ledger pins main name passes earlier = .ok (epochs, credited) → PassesDistinct credited
 
 end Properties.Pouw.LiveSalt

@@ -75,7 +75,8 @@
   "Properties.RemoteAudit.Schedule",
   "Properties.Proofs.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.Proofs.RemoteAudit.Live"
+  "Properties.Proofs.RemoteAudit.Live",
+  "Properties.Proofs.Pouw.LiveSalt.Period"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -179,6 +180,7 @@
   "PouwCheck.Protocol",
   "PouwCheck.Pass",
   "PouwCheck.Credit",
+  "PouwCheck.Period",
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
   "CoreProtocol.Protocol",
@@ -1390,6 +1392,9 @@
    "signature": ["Properties.Pouw.Credit.SecurityProofs.workDrawMisses : Properties.Pouw.Credit.WorkDrawMisses"],
    "assumptions": [],
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c"
+  },
+  "Properties.Pouw.LiveSalt.creditDistinct": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.LiveSalt.epochRootBinding": {
    "owner": "@compute-accounting",
@@ -2996,6 +3001,10 @@
    },
    "Properties.Pouw.LiveSalt.rowSeedBinding": {
     "function": "Properties.Pouw.LiveSalt.rowSeed",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.creditDistinct": {
+    "function": "PouwCheck.pearlCPeriodCredit",
     "outcome": "accept"
    }
   },
