@@ -31,6 +31,11 @@ theorem DrawNorm.eq_of_equiv (N : DrawNorm) {a b : Json} (ha : N.norm a = a) (hb
   rw [← ha, ← hb]
   exact N.congr h
 
+/-- **A normal form that keeps a value's form is idempotent**: `norm a` is a normal draw. -/
+theorem DrawNorm.norm_norm (N : DrawNorm) (hself : ∀ a, JsonEquiv (N.norm a) a) (a : Json) :
+    N.norm (N.norm a) = N.norm a :=
+  N.congr (hself a)
+
 /-- **Two optional draws, equivalent and each normal where present, are equal.** -/
 theorem DrawNorm.eq_of_rel (N : DrawNorm) {a b : Option Json} (ha : ∀ d, a = some d → N.norm d = d)
     (hb : ∀ d, b = some d → N.norm d = d) (h : Option.Rel JsonEquiv a b) : a = b := by
