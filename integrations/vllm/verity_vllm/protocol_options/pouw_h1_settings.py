@@ -22,7 +22,7 @@ CHALLENGED = (PH.SCHEME, "ncp-v2", *PPD.SCHEMES)
 #: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve
 #: answer, ``gate`` its open), by the root it opens it on, the one its salt coin follows
 OPENS = {PH.SCHEME: "its window-open root (salt.window_open_root, over round 0's request table)",
-         **dict.fromkeys(PPD.SCHEMES, "the weights' root")}
+         **dict.fromkeys(PPD.SCHEMES, "its salt epoch's pass root (salt.pass_open_root, over the weights' root)")}
 
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:

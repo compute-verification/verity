@@ -137,8 +137,9 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: list[int], bias
     us = G.units(counts, n, R.PD_MAX_ROWS)
     if not us:
         return x.new_zeros((0, n)) if bias is None else x.new_zeros((0, n)) + bias
-    rows, tiles, index, real = sum(u.seg for u in us), sum(u.tiles for u in us), len(cur.matmuls), len(x)
-    if run.hashing and (cur.tiles + tiles > run.capacity or index + len(us) > CALL_CAPACITY
+    rows, tiles, at_a, real = sum(u.seg for u in us), sum(u.tiles for u in us), len(cur.matmuls), len(x)
+    index = cur.base + at_a
+    if run.hashing and (cur.tiles + tiles > run.capacity or at_a + len(us) > CALL_CAPACITY
                         or cur.flag_rows + real > len(run.flag_buf)):
         raise RuntimeError(f"{run.entry}: the pass is over its capacity ({run.capacity} tiles, {CALL_CAPACITY} calls, "
                            f"{len(run.flag_buf)} screened rows); end it and begin another")
@@ -166,7 +167,7 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: list[int], bias
     if run.hashing:
         nodes = b["meta"][at + 8 * real:at + 8 * (real + len(us))].view(torch.int64)
         tree = b["tree_a"][:G.tree_bytes(R) * g.count].view(-1, run.nb)
-        run.roots_buf[:run.nb * (index + len(us))].view(-1, run.nb)[index:].copy_(tree.index_select(0, nodes))
+        run.roots_buf[:run.nb * (at_a + len(us))].view(-1, run.nb)[at_a:].copy_(tree.index_select(0, nodes))
         flags = run.flag_buf[cur.flag_rows:cur.flag_rows + real]
         alpha = b["alpha_a"][:4 * g.rows].view(torch.int32).index_select(0, idx).view(torch.uint8)
         aux = b["aux_a"][:8 * g.rows].view(torch.int64).index_select(0, idx).view(torch.uint8)

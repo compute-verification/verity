@@ -1,12 +1,13 @@
 """Served Pearl-C's live coins (`protocol_options.pouw`'s install under the setting ``challenger``): the install has the
-gate open the session it reserved on the weights' root it committed, its coins the salt coin alone
-(`window.SALT_FAMILIES`), takes that coin after the root (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`)
-and closes the session at release, so the session ends closed and complete; refused, before any patch or any coin: no
-session, a session of H1's layout, a session bound to another commitment or another root, an in-process coin beside the
-challenger's, a mix of the two, and a reinstall whose weights' root already had its session (each install draws a fresh
-hm96 key, so its root is its own). The verifier holds the pass to that session (`pouw_h1_challenger.session_reason`'s
-Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`): it counts only reserved salt-only and ended
-closed and complete, and the pass's coins and salt are read from the session, never from the pass.
+gate open the session it reserved on its salt epoch's pass root R = `salt.pass_open_root` of the weights' root W it
+committed and the epoch's number k over W (``pass_index``), its coins the salt coin alone (`window.SALT_FAMILIES`), takes
+that coin after R (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`) and closes the session at release, so
+the session ends closed and complete; refused, before any patch or any coin: no session, a session of H1's layout, a
+session bound to another commitment or another root, an in-process coin beside the challenger's and a mix of the two. A
+reinstall is an epoch of its own: a fresh hm96 key, and over the same W the next k. The verifier holds the pass to that
+session (`pouw_h1_challenger.session_reason`'s Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`),
+recomputing R from W and ``pass_index``: it counts only reserved salt-only and ended closed and complete, and the pass's
+coins and salt are read from the session, never from the pass.
 
 CPU only: the auditor host is `challenger_host.Host` or `challenger_host.Gate` in this process, and the device run a
 stand-in that starts its epoch through `pouw_pearl_c_device.epoch_of` (no GPU here).
@@ -24,6 +25,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Workload, salt_of, weights_root
 from verity.core.protocols.pouw.coins import Challenger
@@ -46,7 +48,7 @@ ENTRY = f"pouw:{SCHEME}"
 AUDITOR = "vy-challenger-1:7811"
 ROOTS = {0: b"\x05" * 64}
 SID = CH.session_id(1)
-#: the gate's reserve answer for the install's session, which the install opens itself on the weights' root
+#: the gate's reserve answer for the install's session, which the install opens itself on its salt epoch's pass root
 RESERVED = {"session": SID, "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
 #: the auditor's challenger key, its ledger's and its sessions' (five leaves a session: reserve, open, record, close, end)
 PRIVATE, KEY = CH.challenger_key(3, H=5)
@@ -83,10 +85,11 @@ class Run:
     """Pearl-C's device run with no device: its epoch from the coins it is handed (`PPD.epoch_of`), and what it records of
     them."""
 
-    def __init__(self, s, entry, kernel, weights, roots, coins, opening, **kw):
-        self.epoch = PPD.epoch_of(Workload((Matmul(0, Shape(16, 1024, 128), 0),)), roots, coins, opening)
+    def __init__(self, s, entry, kernel, weights, roots, coins, opening, pass_index=None, **kw):
+        self.epoch = PPD.epoch_of(Workload((Matmul(0, Shape(16, 1024, 128), 0),)), roots, coins, opening, pass_index)
         self.commits = {"scheme": s.name, "salt": self.epoch.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
-                        "coins": coins.to_json(), "salt_opening": opening.to_json()}
+                        "coins": coins.to_json(), "salt_opening": opening.to_json(),
+                        **({} if pass_index is None else {"pass_index": pass_index})}
         self.details, self.finished = {}, False
         RUNS.append(self)
 
@@ -107,7 +110,7 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: ROOTS)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
-    monkeypatch.setattr(PHW, "SPENT", set())
+    monkeypatch.setattr(PHW, "EPOCHS", {})
     RUNS.clear()
 
 
@@ -133,12 +136,13 @@ def _untouched(model):
     assert hooks.live(ENTRY) == () and all(m.quant_method.apply.__func__ is Apply.apply for m in model.layers)
 
 
-def test_a_served_install_takes_the_sessions_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
-    """The gate opens the reserved session on the weights' root the install committed, the run's epoch is the session's
-    salt coin opened after that root (and no other coin of it), the commitment carries the session without its secret,
-    and release closes the session."""
+def test_a_served_install_takes_the_sessions_salt_coin_after_its_epochs_pass_root(tmp_path, monkeypatch):
+    """The gate opens the reserved session on salt epoch 0's pass root over the weights' root W the install committed,
+    the run's epoch is the session's salt coin opened after that root (and no other coin of it), its salt over W, the
+    commitment carries the session without its secret and the epoch's ``pass_index``, and release closes the session."""
     host = _host(tmp_path, monkeypatch)
-    model, root, answers = _model(), weights_root(ROOTS), []
+    model, w, answers = _model(), weights_root(ROOTS), []
+    root = PS.pass_open_root(w, 0)
 
     def gate(sid, r):
         answers.append(host.open(sid, r))
@@ -152,30 +156,31 @@ def test_a_served_install_takes_the_sessions_salt_coin_after_the_weights_root(tm
     assert host.window == {"root": root.hex()} and c["coin_source"] == "challenger" and c["coins"] == coins.to_json()
     opening = LC.LiveOpening.from_json(c["salt_opening"])
     assert LC.live_reason(coins, opening, Wd.SALT, 0, root) is None
-    assert c["salt"] == run.epoch.salt.hex() == salt_of(coins, opening.coin, root).hex()
+    assert c["salt"] == run.epoch.salt.hex() == salt_of(coins, opening.coin, w).hex()
     assert answers == [{"session": SID, "seq": answers[0]["seq"], "root": root.hex(), "commitment": coins.root.hex()}]
-    assert c["session"] == answers[0]
+    assert c["session"] == answers[0] and c["pass_index"] == 0 and c["weights_root"] == w.hex()
     assert R.released_roots(host.directory / R.RELEASES, coins) == {Wd.SALT: (root,)}
     _untouched(model)
 
 
-def test_each_install_commits_under_a_fresh_hm96_key_and_a_spent_weights_root_is_refused_before_the_gate(
+def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one_weights_root_the_next_k(
         tmp_path, monkeypatch):
-    """Each install's `commit_weights` draws its own hm96 key, so a reinstall's weights' root W, and its salt session,
-    are its own. A reinstall committing a W this process already had a session opened on (the stand-in's fixed roots:
-    the same key over the same weights) is refused before the gate is asked, since the gate opens a root once."""
+    """Each install's `commit_weights` draws its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
+    committing a W this process already had an epoch over (the stand-in's fixed roots: the same key over the same weights)
+    is that W's next epoch: k = 1, its session opened on its own pass root, never epoch 0's."""
     keys = []
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: keys.append(salt_key) or ROOTS)
-    host, model, root = _host(tmp_path, monkeypatch), _model(), weights_root(ROOTS).hex()
-    with PO.install(model, _served(host.open)):
-        pass
-    assert host.ended() is None and RUNS[0].finished
-    asked = []
-    with pytest.raises(ValueError, match=re.escape(f"{ENTRY}: the weights' root {root[:16]}...'s salt session is spent "
-                                                   "(this process had the gate open one on it): re-key hm96")):
-        PO.install(model, _served(lambda sid, r: asked.append(r)))
-    assert asked == [] and len(RUNS) == 1 and len(keys) == 2 and keys[0] != keys[1]
-    assert all(len(k) == 32 for k in keys) and pouw._SALT_KEYS[ENTRY] == keys[1]
+    w, model, cs, hosts = weights_root(ROOTS), _model(), [], []
+    for k in range(2):
+        (tmp_path / str(k)).mkdir()
+        hosts.append(_host(tmp_path / str(k), monkeypatch, seed=1 + k))
+        with PO.install(model, _served(hosts[-1].open)) as comp:
+            cs.append(comp.get("pouw").commitment())
+        assert hosts[-1].ended() is None and RUNS[k].finished
+    assert [c["pass_index"] for c in cs] == [0, 1] and PHW.EPOCHS == {w.hex(): 2}
+    assert [h.window for h in hosts] == [{"root": PS.pass_open_root(w, k).hex()} for k in range(2)]
+    assert [c["session"]["root"] for c in cs] == [PS.pass_open_root(w, k).hex() for k in range(2)]
+    assert len(keys) == 2 and keys[0] != keys[1] and all(len(k) == 32 for k in keys) and pouw._SALT_KEYS[ENTRY] == keys[1]
     _untouched(model)
 
 
@@ -193,10 +198,12 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
         return str(e.value)
 
     assert "'challenger' needs 'session', the challenger gate's reserve answer" in refused(session=None)
-    assert "which it opens on the weights' root" in refused(session=None)
+    assert "which it opens on its salt epoch's pass root (salt.pass_open_root, over the weights' root)" in refused(
+        session=None)
     opened = {"session": SID, "seq": 3, "root": "ca" * 64, "commitment": "c0" * 64}
-    assert "opens its session itself, on the weights' root, committed before its salt" in refused(session=opened)
-    assert "opens its session itself, on the weights' root" in refused(gate=None)
+    assert "opens its session itself, on its salt epoch's pass root (salt.pass_open_root, over the weights' root), " \
+        "committed before its salt" in refused(session=opened)
+    assert "opens its session itself, on its salt epoch's pass root" in refused(gate=None)
     assert "the window's coins come from one source" in refused(coins=Challenger(0, random.Random(0).randbytes))
     capture = PO.Context(stage="capture", enabled=(ENTRY,), settings={"pouw": {
         "device": "cuda", "kernel": "k", "challenger": AUDITOR, "session": RESERVED, "gate": lambda *a: None}})
@@ -208,15 +215,24 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
 
     root, workload = weights_root(ROOTS), Workload((Matmul(0, Shape(16, 1024, 128), 0),))
     live = salt_only(2)
-    live_opening = LC.LiveRecord(live, Wd.SALT).record(root)
+    live_opening = LC.LiveRecord(live, Wd.SALT).record(PS.pass_open_root(root, 3))
     own = Challenger(0, random.Random(0).randbytes)
     own_opening = own.open("salt", root)
-    assert PPD.epoch_of(workload, ROOTS, live.commitment, live_opening).salt == salt_of(live.commitment,
-                                                                                      live_opening.coin, root)
+    assert PPD.epoch_of(workload, ROOTS, live.commitment, live_opening, 3).salt == salt_of(live.commitment,
+                                                                                         live_opening.coin, root)
     for coins, opening in ((live.commitment, own_opening), (own.commitment, live_opening)):
         with pytest.raises(DomainError, match="a live session's salt coin opens against that session's live coin "
                                               "commitment, and nothing else"):
-            PPD.epoch_of(workload, ROOTS, coins, opening)
+            PPD.epoch_of(workload, ROOTS, coins, opening, 3)
+    for k in (None, -1, True, 1 << 64, "3"):
+        with pytest.raises(DomainError, match=re.escape(PS.PASS_FORM)):
+            PPD.epoch_of(workload, ROOTS, live.commitment, live_opening, k)
+    for k in (0, 2, 4):                                   # opened after epoch 3's pass root, so no other epoch's
+        with pytest.raises(DomainError, match="the salt's "):
+            PPD.epoch_of(workload, ROOTS, live.commitment, live_opening, k)
+    on_w = salt_only(4)
+    with pytest.raises(DomainError, match="the salt's "):    # a coin opened after the bare weights' root
+        PPD.epoch_of(workload, ROOTS, on_w.commitment, LC.LiveRecord(on_w, Wd.SALT).record(root), 0)
 
 
 def test_a_session_bound_to_another_commitment_is_closed_and_refused_before_its_first_coin(tmp_path, monkeypatch):
@@ -236,9 +252,8 @@ def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp
     pass and end incomplete, which counts nothing: the install closes it before its salt coin and refuses, patching
     nothing and starting no run."""
     host, model = _host(tmp_path, monkeypatch, challenger=Wd.live_challenger(0, 1, CH.entropy(1))), _model()
-    with pytest.raises(ValueError, match=rf"{ENTRY}: the challenger at {AUDITOR} is not a live window's: the coin "
-                                         r"commitment's coins are \[\['pouw/salt', 1\], \['pouw/draw', 1\], "
-                                         r"\['pouw/round', 1\]\], not a Pearl-C salt session's \[\['pouw/salt', 1\]\]"):
+    with pytest.raises(ValueError, match=f"{ENTRY}: the challenger at {AUDITOR} is not a live window's: the coin "
+                                         "commitment's coins are not a Pearl-C salt session's: its salt coin alone"):
         PO.install(model, _served(host.open))
     assert host.ended() is None and RUNS == []
     assert R.released_roots(host.directory / R.RELEASES, host.challenger.commitment) == {
@@ -251,14 +266,14 @@ def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp
     {"session": CH.session_id(2), "seq": 0, "root": None, "commitment": "c0" * 64},
     None,
 ])
-def test_a_gate_answer_not_the_reserved_session_on_the_weights_root_is_refused_before_any_coin(monkeypatch, answer):
-    """The gate's answer must be the reserved session opened on the weights' root: another root, another session or no
-    open at all is refused before the challenger is reached."""
-    root, model = weights_root(ROOTS).hex(), _model()
+def test_a_gate_answer_not_the_reserved_session_on_the_pass_root_is_refused_before_any_coin(monkeypatch, answer):
+    """The gate's answer must be the reserved session opened on salt epoch 0's pass root: another root, another session
+    or no open at all is refused before the challenger is reached."""
+    root, model = PS.pass_open_root(weights_root(ROOTS), 0).hex(), _model()
     given = None if answer is None else {**answer, "root": answer["root"] or root}
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda *a, **k: pytest.fail("no challenger reached")))
-    with pytest.raises(ValueError, match=f"{ENTRY}: the gate's answer is not session {SID} opened on the weights' root "
-                                         f"{root[:16]}"):
+    with pytest.raises(ValueError, match=f"{ENTRY}: the gate's answer is not session {SID} opened on salt epoch 0's "
+                                         f"pass root {root[:16]}"):
         PO.install(model, _served(lambda sid, r: given))
     assert RUNS == []
     _untouched(model)
@@ -318,20 +333,23 @@ def _ended(gate):
 
 
 def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_complete(tmp_path, monkeypatch):
-    """CMP-81: the install's session, reserved with the salt coin alone and opened on the weights' root, ends closed and
-    complete with that one coin released, and the verifier holds the pass to it (`session_reason`'s Pearl-C branch): the
-    one session the ledger opened on the weights' root, read through the gate's fetch. The manifest head names it by its
-    `SESSION_KEYS` alone (`session_head`). The verifier's own weights' root, or the period's registered one, must be the
-    pass's; a pass naming its session by another ledger seq, or with its hello's secret, is refused."""
+    """CMP-81: the install's session, reserved with the salt coin alone and opened on salt epoch 0's pass root R over the
+    weights' root W, ends closed and complete with that one coin released, and the verifier holds the pass to it
+    (`session_reason`'s Pearl-C branch): the one session the ledger opened on R, which it recomputes from W and the
+    pass's ``pass_index``, read through the gate's fetch. The manifest head names it by its `SESSION_KEYS` alone, with
+    ``pass_index`` (`session_head`). The verifier's own weights' root, or the period's registered one, must be the
+    pass's; a pass naming no epoch number (`salt.PASS_FORM`), another epoch's, its session by another ledger seq, or
+    its hello's secret, is refused."""
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(5))
     with PO.install(_model(), _served(s.open)) as comp:
         c = comp.get("pouw").commitment()
-    root = weights_root(ROOTS)
+    root, r = weights_root(ROOTS), PS.pass_open_root(weights_root(ROOTS), 0)
     assert s.end() is None and RUNS[0].finished
     end = _ended(gate)
     assert (end["closed"], end["complete"], end["released"]) == (True, True, {Wd.SALT: 1})
-    assert c["weights_root"] == c["session"]["root"] == root.hex() and c["session"]["commitment"] == end["commitment"]
+    assert c["weights_root"] == root.hex() and c["pass_index"] == 0 and c["session"]["root"] == r.hex()
+    assert c["session"]["commitment"] == end["commitment"]
     ledger, fetch = gate.ledger(), {SID: s.tree}.get
     assert PHC.session_reason(c, ledger, fetch) is None
     assert PHC.session_reason(c, ledger, fetch, registered=root, commit=root.hex()) is None
@@ -346,9 +364,17 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
         f"the window's session {SID} is ledger entry {seq + 1} in its reply, but entry {seq} opened it")
     assert PHC.session_reason({**c, "session": {**c["session"], "secret": "ab" * 32}}, ledger, fetch) == (
         "the pass's session names its hello's secret, which a pass never records: a refused pass")
+    for k in (None, True, -1, 1 << 64, "0", 0.0):
+        assert PHC.session_reason({**c, "pass_index": k}, ledger, fetch) == PS.PASS_FORM
+    assert PHC.session_reason({k: v for k, v in c.items() if k != "pass_index"}, ledger, fetch) == PS.PASS_FORM
+    r1 = PS.pass_open_root(root, 1).hex()
+    assert PHC.session_reason({**c, "pass_index": 1}, ledger, fetch) == (
+        f"the window's session is for Commit {r.hex()}, not the window's Commit {r1}")
+    assert PHC.session_reason({**c, "pass_index": 1, "session": {**c["session"], "root": r1}}, ledger, fetch) == (
+        f"the auditor's ledger has no session for Commit {r1}, so the window's coins are no session's of record")
     assert PPM.SESSION_KEYS == PHC.SESSION_FIELDS and PPM.session_head({}) == {}
     assert PPM.session_head({**c, "session": {**c["session"], "secret": "ab" * 32}}) == {
-        "session": {k: c["session"][k] for k in PHC.SESSION_FIELDS}}
+        "session": {k: c["session"][k] for k in PHC.SESSION_FIELDS}, "pass_index": 0}
 
 
 def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_complete(tmp_path, monkeypatch):
@@ -359,13 +385,14 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.live_families(1), Wd.live_challenger(0, 1, CH.entropy(6)))
     root = weights_root(ROOTS)
-    answer = s.open(SID, root.hex())
-    opening = LC.LiveRecord(s.client, Wd.SALT).record(root)
+    r = PS.pass_open_root(root, 0)
+    answer = s.open(SID, r.hex())
+    opening = LC.LiveRecord(s.client, Wd.SALT).record(r)
     s.client.close()
     assert s.end() is None
     coins = s.challenger.commitment
-    h1 = {"scheme": SCHEME, "coin_source": "challenger", "weights_root": root.hex(), "coins": coins.to_json(),
-          "salt_opening": opening.to_json(), "salt": salt_of(coins, opening.coin, root).hex(),
+    h1 = {"scheme": SCHEME, "coin_source": "challenger", "weights_root": root.hex(), "pass_index": 0,
+          "coins": coins.to_json(), "salt_opening": opening.to_json(), "salt": salt_of(coins, opening.coin, root).hex(),
           "session": PHC.carried(PHC.session_of(answer))}
     released = {Wd.DRAW: 0, Wd.ROUND: 0, Wd.SALT: 1}
     assert (_ended(gate)["complete"], _ended(gate)["released"]) == (False, released)
@@ -373,7 +400,7 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     assert PHC.session_reason(h1, gate.ledger(), fetch) == (
         f"session {SID} ended without releasing every coin of its families (released {released}): a refused window")
     h1_layout = [list(f) for f in Wd.live_families(1)]
-    assert PHC.session_reason(h1, _ended_over(s.directory, Wd.live_families(1), root.hex(), complete=True), fetch) == (
+    assert PHC.session_reason(h1, _ended_over(s.directory, Wd.live_families(1), r.hex(), complete=True), fetch) == (
         f"session {SID} was reserved with {h1_layout}, not the salt coin alone [['pouw/salt', 1]]: a refused pass")
 
     one = tmp_path / "salt-only"
@@ -386,7 +413,7 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     fetch = {SID: s.tree}.get
 
     def over(**kw):
-        return PHC.session_reason(c, _ended_over(s.directory, Wd.SALT_FAMILIES, root.hex(), **kw), fetch)
+        return PHC.session_reason(c, _ended_over(s.directory, Wd.SALT_FAMILIES, r.hex(), **kw), fetch)
     assert over(end=False) == (
         f"session {SID} never ended (the auditor's ledger has its open entry and no end): a refused window")
     assert over(closed=False) == f"session {SID} ended without its client closing it (serve.py exited 1): a refused window"
@@ -409,9 +436,9 @@ def test_a_passs_salt_is_read_from_its_session_never_from_the_pass(tmp_path, mon
     ledger, fetch, root = gate.ledger(), {SID: s.tree}.get, weights_root(ROOTS)
     assert PHC.session_reason(c, ledger, fetch) is None
     forged = salt_only(9)
-    opening = LC.LiveRecord(forged, Wd.SALT).record(root)
+    opening = LC.LiveRecord(forged, Wd.SALT).record(PS.pass_open_root(root, 0))
     workload = Workload((Matmul(0, Shape(16, 1024, 128), 0),))
-    salt = PPD.epoch_of(workload, ROOTS, forged.commitment, opening).salt
+    salt = PPD.epoch_of(workload, ROOTS, forged.commitment, opening, 0).salt
     own = {**c, "coins": forged.commitment.to_json(), "salt_opening": opening.to_json(), "salt": salt.hex()}
     signed = s.challenger.commitment.root.hex()
     assert PHC.session_reason(own, ledger, fetch) == (

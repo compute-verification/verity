@@ -702,9 +702,9 @@ def install(scheme: str, target: Target) -> Option:
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    session, device = None, scheme in PPD.SCHEMES
+    session, device, k = None, scheme in PPD.SCHEMES, None
     if settings.challenger is not None:
-        session, commitment, opening, salt, carried = PHW.salt_session(entry, settings, weights_root(roots), device)
+        session, commitment, opening, salt, carried, k = PHW.salt_session(entry, settings, weights_root(roots), device)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
@@ -712,7 +712,7 @@ def install(scheme: str, target: Target) -> Option:
         if device:
             run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
+                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
             run.commits["registration"] = weights_claim(s)
         else:
             run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None

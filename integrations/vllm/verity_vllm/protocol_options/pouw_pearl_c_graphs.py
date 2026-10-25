@@ -301,11 +301,11 @@ class GraphCalls:
         cur = self.cur
         if not self.hashing or not calls:
             return False
-        at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
+        at, s = (cur.base + len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
         staged = s is not None and s.calls is calls and s.at == at
         if not staged:
             s = self._slots(calls, at)
-        if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
+        if s.after[1] > self.capacity or self.nb * (s.after[0] - cur.base) > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
         if self._slots_copied is not None:
             self._slots_copied.synchronize()
@@ -323,7 +323,7 @@ class GraphCalls:
         """After vLLM launches its replay of a forward captured whole: each call's matmul, and with hashing its tiles and
         rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
         files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
-        cur, index = self.cur, len(self.cur.matmuls)
+        cur, index = self.cur, self.cur.base + len(self.cur.matmuls)
         cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
         if not self.hashing or not calls:
             return
@@ -457,8 +457,8 @@ class GraphCalls:
         g.execs = (g.graph.raw_cuda_graph_exec(), g.tree.raw_cuda_graph_exec() if g.tree else 0, g.side.raw_cuda_graph_exec())
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
-        """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * index
+        """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (by its position in the pass)."""
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every

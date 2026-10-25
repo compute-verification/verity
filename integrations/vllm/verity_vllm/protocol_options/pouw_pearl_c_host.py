@@ -1,8 +1,8 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): the epoch of the challenger's salt coin, held in this
 process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
-handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
-kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
-their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
+handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the
+streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on their handles (`_Driver`), and a retained
+pass's files (`_write`, `write_manifest`).
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from typing import Any, ClassVar
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import (
     HM96,
@@ -32,13 +33,12 @@ from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, Live
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
-#: the device key table's slots (`_KeyTable`, 176 bytes each): every (weight, index, m₁₆) of 512 m₁₆ sizes over 128 weights
-KEY_SLOTS = 1 << 16
 #: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
 CHECK_ROWS = 16
-#: the calls whose keys `_Keys` keeps (a pass's calls take the same weights, indices and row counts pass after pass)
+#: the calls whose keys `_Keys` keeps, for a call whose keys are asked for again (a whole forward's staged slots, a slot's
+#: prediction); no index repeats across an epoch's passes (`PearlCDeviceRun.begin`)
 KEYS_KEPT = 1 << 14
 
 
@@ -80,13 +80,15 @@ SaltCoins = CoinCommitment | LiveCommitment
 SaltOpening = CoinOpening | LiveOpening
 
 
-def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening) -> Epoch:
+def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening,
+             pass_index: int | None = None) -> Epoch:
     """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
     `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
     (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
     commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
-    opening against it after the weights' root (`challenger.live_reason`).  Either is refused with `DomainError`; a live
-    salt is `audit.salt_of`'s, as H1's and ncp-v2's are."""
+    opening against it after the epoch's pass root (`challenger.live_reason`), `salt.pass_open_root` of the weights'
+    root W and `pass_index`, the epoch's number k over W (`salt.PASS_FORM` unless it is one).  Either is refused with
+    `DomainError`; a live salt is `audit.salt_of`'s over W, as H1's and ncp-v2's are."""
     live = isinstance(coins, LiveCommitment), isinstance(opening, LiveOpening)
     if not any(live):
         return Epoch.start(workload, roots, coins, opening)
@@ -94,8 +96,10 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
         raise DomainError("a live session's salt coin opens against that session's live coin commitment, and nothing else")
     if set(roots) != set(workload.weights()):
         raise DomainError("every weight of the workload is committed, and only those")
+    if (why := PS.pass_index_reason(pass_index)) is not None:
+        raise DomainError(why)
     root = weights_root(roots)
-    why = Wd.salt_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, root)
+    why = Wd.salt_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, PS.pass_open_root(root, pass_index))
     if why is not None:
         raise DomainError(f"the salt's {why}")
     return Epoch(workload, dict(roots), salt_of(coins, opening.coin, root))
@@ -266,37 +270,8 @@ class _Uploads:
         driver.record(self.events[i], stream)
 
 
-class _KeyTable:
-    """Each call's keys (`_Keys`) kept on the device by (weight, index, m₁₆), which fix them within an install: a call whose
-    keys are in the table copies them device to device (`copy`: dst, src, bytes, raw stream) on the stream that uploaded
-    them, in place of hashing and uploading them again.  A call on another stream, or past the table's slots, uploads its
-    keys as before."""
-
-    def __init__(self, keys: _Keys, uploads: _Uploads, device: Any, copy: Any, slots: int = KEY_SLOTS, width: int = 176):
-        self.keys, self.uploads, self.copy, self.slots, self.width = keys, uploads, copy, slots, width
-        self.table = _zeros(slots * width, device)
-        self.at: dict[tuple[int, int, int], tuple[int, int, int]] = {}   # (weight, index, m₁₆) -> (slot address, bytes, raw stream)
-
-    def put(self, dst: Any, w: int, root_b: bytes, index: int, m16: int, raw: int, stream: Any) -> None:
-        """Call `index`'s keys (weight `w`, B's root `root_b`, m₁₆ rows) into `dst`, on raw stream `raw` (torch's `stream`)."""
-        key = (w, index, m16)
-        got = self.at.get(key)
-        if got is not None and got[2] == raw:
-            self.copy(dst.data_ptr(), got[0], got[1], raw)
-            return
-        data = self.keys(root_b, index, m16)
-        if got is None and len(self.at) < self.slots:
-            i = len(self.at)
-            slot = self.table[self.width * i:self.width * (i + 1)]
-            self.uploads.put(slot, data, stream)
-            self.at[key] = (slot.data_ptr(), len(data), raw)
-            self.copy(dst.data_ptr(), slot.data_ptr(), len(data), raw)
-            return
-        self.uploads.put(dst, data, stream)
-
-
 def memmove(dst: int, src: int, n: int, raw: int) -> None:
-    """`_KeyTable`'s copy off the GPU: host memory, no stream."""
+    """A device run's copy off the GPU: host memory, no stream."""
     ctypes.memmove(dst, src, n)
 
 

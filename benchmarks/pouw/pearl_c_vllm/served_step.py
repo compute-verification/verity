@@ -123,8 +123,8 @@ def _patch_engine(llm) -> None:
 def _live(arm):
     """`arm` with its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
     ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option: a
-    session reserved on infra's gate (`bench_arm._LiveSession`), which the option opens on the weights' root and draws
-    its salt coin from (`pouw_h1_window.salt_session`), through the pouw settings ``challenger`` (this node's 127.0.0.1,
+    session reserved on infra's gate (`bench_arm._LiveSession`), which the option opens on its salt epoch's pass root
+    (`salt.pass_open_root` of the weights' root and the epoch's number) and draws its salt coin from (`pouw_h1_window.salt_session`), through the pouw settings ``challenger`` (this node's 127.0.0.1,
     at the port the gate's open answers), ``session`` (the reserve answer) and ``gate``. Returns the arm and the reserve
     answer, None when the arm's coins stay in-process."""
     import dataclasses
@@ -166,11 +166,15 @@ def _engine(spec_name: str, arm_id: str):
 
 def coins_of(option, reserved) -> dict:
     """Where the PoUW option `option` took its salt coin: its ``coin_source``, the gate's answer it carries (``session``,
-    no secret), the root its salt follows (the weights'), its salt, and how its session closed (``details.challenger``,
-    once the engine has closed); `reserved` the gate's reserve answer `_live` took."""
+    no secret), its salt epoch's number (``pass_index``) and the root its salt coin follows (that epoch's pass root over
+    the weights' root, `salt.pass_open_root`; the weights' root for a coin held in-process), its salt, and how its
+    session closed (``details.challenger``, once the engine has closed); `reserved` the gate's reserve answer `_live` took."""
+    from verity.core.protocols.pouw import salt as PS
     c = option.commitment()
+    k, w = c.get("pass_index"), c.get("weights_root")
+    after = w if k is None or w is None else PS.pass_open_root(bytes.fromhex(w), k).hex()
     return {"source": c.get("coin_source", "in-process"), "reserved": reserved, "session": c.get("session"),
-            "salt_after": c.get("weights_root"), "salt": c.get("salt"), "closed": option.info().get("challenger")}
+            "pass_index": k, "salt_after": after, "salt": c.get("salt"), "closed": option.info().get("challenger")}
 
 
 def run(a) -> int:
