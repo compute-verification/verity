@@ -782,6 +782,10 @@
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
+  "Claims.Flock.ListWithin": {
+   "owner": "@proofs",
+   "digest": "3a7f082e2c4b81ae0fc5a8c6aa76db542e596e0367016205f82198b482939425"
+  },
   "Claims.Flock.R": {
    "owner": "@proofs",
    "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
@@ -797,6 +801,10 @@
   "Claims.JsonSpec": {
    "owner": "@proofs",
    "digest": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
+  },
+  "Claims.Sampling.KS": {
+   "owner": "@proofs",
+   "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2"
   },
   "Claims.StrictBirthday": {
    "owner": "@proofs",
@@ -1311,7 +1319,8 @@
    "digest": "fd7a18966dce0b0e94501f13840cbe1a5cd700e5872d74b49775862e57fdcd3f"
   },
   "NetTiming.Guarantees.SampledAuditAccepted": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "digest": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
   },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
@@ -1807,12 +1816,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Claims.Sampling.KS": {
-   "owner": "@proofs"
-  },
-  "Claims.Flock.ListWithin": {
-   "owner": "@proofs"
   }
  },
  "meaning": [
@@ -8365,7 +8368,10 @@
    "type_hash": "1fb09f103876fc19dab84dfdb55ad0b09ba815c3e67ccee7e53e04ad6ea9eb3f"
   },
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted"],
+   "assumptions": [],
+   "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d"
   },
   "NetTiming.SecurityProofs.WardenViewEqClientView": {
    "owner": "@network-accounting",
@@ -14982,6 +14988,7 @@
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -15561,7 +15568,8 @@
     "Claims.Sampling.universal_meets",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
   "Definitions.Core.Advice": {
@@ -17112,7 +17120,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
@@ -17132,14 +17141,15 @@
     "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0",
     "NetTiming.Guarantees.SampledAuditAcceptedStated": "9009d1c7c22120166c4aa4c882e7e18b18de3dc9633d6988c52ae4436b74a55b"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "a0be196f7b87bf66a51f84cfa94a592d4f6c8a879e5215db79f1279812d2675a",
+   "digest": "cbbc23a5cbd08ab3e0a390eb6382d7810d6bce7be5e52c22b59e835d04139f01",
    "definitions": {
-    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8"
+    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8",
+    "NetTiming.Guarantees.SampledLeakAccepted": "8471bf082d2331bc73650da6c21734bf27df2bf205c0509f71c513948f7a8251"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Ingress": {
    "digest": "3c3f9fa4cf192807b611a03f6164a25f5407f9f252110a4c4f827b0107065ffc",
@@ -17215,7 +17225,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
@@ -17243,17 +17254,24 @@
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
     "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
+   ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "93be79885ff21ba07783d8034afb5e1d117c9db222c7c84546623ceb5f77ef6e",
+   "digest": "6fd1f65427b59f970cc05a195ca3b950225555a60c38f0b0de4b1ef3369efc18",
    "definitions": {
     "NetTiming.AccSeqsSampled": "05b16b5446955562b136a894719673fc47a049985da8f9880d9e4fb4ede3b771",
     "NetTiming.AcceptedFaulty": "df874e0f19724289c18f7080a173db8d45c039c2575c51212f5aa91a88496323",
+    "NetTiming.AsFree": "ed4f2c5d797b9a7068d69d56c5e8faf7bbfa6a3d7ec1b91f1e17e61fcb0f50b6",
+    "NetTiming.RLeak": "e181b18c4c7ea12dfbeee274e2654d5553f00082461343c6b20130de9430a9ff",
     "NetTiming.faultyBits": "8cbcfcedec4b99e4491bff7587994f46bb7b20e10acb4a4bf584da5d0f299f7f",
-    "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276"
+    "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276",
+    "NetTiming.freeInputs": "71960d7978491121a9408649c5d34ecffa4ac9f8b5067941406386c61c0779a0"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
