@@ -286,6 +286,33 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
+def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owner_withdrew_it(world):
+    """24 Oct: drive held a PR containing another open PR's head until that one closed, and no one's tooling may close a PR,
+    so lanes rebuilt #3401, #3570 and #3554 by hand.  A rebuild by the same owner, or one whose owner withdrew the PR it
+    contains, carries that change and lands without it."""
+    parent = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, parent, ready=False, body="Lane `Lane-4`.")
+    world.gh.put(4, world.change({"c.txt": "stacked\n"}, base=parent))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [4] and entries[4].after == () and entries[5].state == "waiting"
+    world.gh.put(5, parent, ready=False)                                    # another lane's PR: #4 waits behind it
+    members, entries = q.sync()
+    assert members == [] and entries[4].why == "contains #5, which isn't admitted"
+    q.marked_by = lambda n, h: "lane-5" if n == 5 else None                 # #5's owner wrote its `ready = false`
+    assert [m.pr for m in q.sync()[0]] == [4]
+    q.before_cutoff = lambda n, h: "2026-10-01T00:00Z" if n == 5 else None   # its owner's `ready = true`, but before cutoff
+    assert q.sync()[0] == []
+    q.marked_by = q.before_cutoff = None
+    assert q.sync()[0] == []
+    world.gh.put(5, parent)
+    q.eject(5, "superseded by #4", "lane-5")
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [4] and entries[5].state == "refused"
+    world.gh.put(5, parent, ready=False, labels=("hold",))                  # a hold isn't carried
+    assert q.sync()[0] == []
+
+
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -789,6 +816,30 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
+def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
+    """24 Oct (benchmarks): `research queue ready N --mark` seconds after a push preflighted GitHub's old head, which conflicted
+    with `next`, and a retry passed at the same commit. Without --sha, the branch's tip (git's refs, which a push moves at once)
+    is the head to mark, and GitHub's PR head is waited for as with --sha."""
+    import dataclasses
+
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    old, new = world.change({"s.txt": "old\n"}), world.change({"s.txt": "new\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], branch="lane-5/work")
+    monkeypatch.setattr(world.gh, "branch_tip", lambda branch: new if branch == "lane-5/work" else None, raising=False)
+    reads = []
+
+    def sleep(s):
+        reads.append(s)
+        world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], head=new)
+
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sleep=sleep) == 0
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert reads and labels.ready(5, new) is True and labels.ready(5, old) is False
+
+
 def test_ready_sha_waits_for_github_to_show_the_pushed_head_and_never_marks_another(world, capsys):
     """20 Oct: `git push && research queue ready 2848 --mark` marked the old head, since GitHub's headRefOid lagged the push."""
     from research.queue import SHA_READS, MarkOnly, StoreLabels, ready
@@ -1036,7 +1087,8 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     err = capsys.readouterr().err
     assert (f"it contains #5's head {parent[:8]}, which isn't marked ready at {parent[:8]}, so drive holds this PR behind it: "
-            f"close #5 if this PR carries its change, or mark #5 ready so it lands first") in err
+            f"if this PR carries its change, #5's owner withdraws its mark (`research data label pr:5@{parent[:12]} ready false "
+            f"--by OWNER`), or a PR of the same owner carries it; else mark #5 ready so it lands first") in err
     assert "merged onto `main` at" in err                                                    # no `next` yet
     world.gh.put(5, parent, labels=("hold",), ready=False)
     assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), preflight=pre) == 0
@@ -1044,6 +1096,9 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     assert "which is held (`hold` label)" in capsys.readouterr().err
     world.gh.put(5, parent, ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: drive lands it first
+    world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
+    world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
@@ -1501,6 +1556,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
+    assert "lands on an eyeball review, and the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
@@ -1747,3 +1803,10 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
     with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
         M._gh_cli(Path("."), "pr", "view", "1")
     assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
+
+
+def test_a_lane_line_names_its_handle_without_a_trailing_period():
+    """23 Oct: #3427's body said `Lane proofs.`, and the queue's owner was `proofs.`, a handle no one holds."""
+    for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),
+                       ("Lane: vllm\n\nmore", "vllm")):
+        assert PR(1, "h", "t", body).owner == lane, body

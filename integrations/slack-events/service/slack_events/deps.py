@@ -21,6 +21,11 @@ TOPIC = "slack-events"
 DEAD_TOPIC = "slack-events-dead"
 CACHE_NS = "slack-events"
 LAST_SUCCESS = "last-success-at"                                 # when a delivery or a cron last finished
+LAST_DONE = "last-done-at"                                       # when the consumer last finished a message (no cron writes it)
+LAST_ENQUEUED = "last-enqueued-at"                               # when the app last published an event
+STALL_RUNG = "stall-rung-at"                                     # when the watchdog last rang @comms for a stalled consumer
+CANARY_SENT = "canary-sent-at"                                   # when the watchdog last published its synthetic event
+CANARY_DONE = "canary-done-at"                                   # when the consumer last finished one
 DEAD = "dead-letters"                                            # {"count", "since"}: dead letters since the record began
 OLDEST = "oldest-unrouted"                                       # {"ts", "at"}: reconcile's oldest unrouted post, or ts None
 

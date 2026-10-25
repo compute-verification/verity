@@ -60,6 +60,29 @@ def b_words(k: int) -> int:
     return (k + 5) // 2
 
 
+#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
+CHUNK_MAX = 4096
+#: a chunk is whole blocks of its rows' and columns' noise streams (`circuit.seeds.BLOCK_BITS`, 512 bits)
+CHUNK_ALIGN = 512
+
+
+def chunks(k: int) -> int:
+    """The chunks an H1 lane at contraction ``k`` is proved in (`h1zy.lane_statements`), and so the chunk rows a table at
+    ``k`` commits each row as (`h1zy.chunk_leaves`): 1, the whole lane, at K <= `CHUNK_MAX`; past it the least n >= 2
+    whose chunks K / n are at most `CHUNK_MAX` entries and a multiple of `CHUNK_ALIGN`. ValueError at a K with no such n.
+    `PouwCheck.Chunks.chunks` is its Lean twin."""
+    k = int(k)
+    if k < 1:
+        raise ValueError(f"K = {k}: a lane is proved only at a positive K")
+    if k <= CHUNK_MAX:
+        return 1
+    for n in range(-(-k // CHUNK_MAX), k // CHUNK_ALIGN + 1):
+        if k % (n * CHUNK_ALIGN) == 0:
+            return n
+    raise ValueError(f"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole {CHUNK_ALIGN}-bit "
+                     f"noise blocks")
+
+
 def value(prefix: str, k: int) -> str:
     return f"{prefix}b/{k}"
 

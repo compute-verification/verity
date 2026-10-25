@@ -122,6 +122,39 @@ theorem IngressAct.upstream (link : String) (p : Params) (s : Nat) (b : ByteArra
 theorem IngressAct.connect (link : String) (p : Params) (s : Nat) : IngressAct link p (.connect s) :=
   ⟨fun _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
 
+theorem IngressAct.connectSalt (link : String) (p : Params) : IngressAct link p .connectSalt :=
+  ⟨fun _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
+
+theorem IngressAct.writeSalt (link : String) (p : Params) (b : ByteArray) : IngressAct link p (.writeSalt b) :=
+  ⟨fun _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
+
+/-- `releaseSalt` touches only the salt connection and its count. -/
+theorem releaseSalt_keeps (st : State) (p : Nat) :
+    (st.releaseSalt p).1.config = st.config ∧ (st.releaseSalt p).1.shaper = st.shaper ∧
+      (st.releaseSalt p).1.bucketer = st.bucketer := by
+  unfold State.releaseSalt
+  dsimp only
+  split <;> exact ⟨rfl, rfl, rfl⟩
+
+theorem releaseSalt_quiet (st : State) (p : Nat) : Quiet st (st.releaseSalt p).1 :=
+  have h := releaseSalt_keeps st p
+  Quiet.same h.1 h.2.1 (by rw [h.2.2])
+
+/-- `saltPump` touches only the salt connection, and writes salt frames only. -/
+theorem saltPump_keeps (st : State) :
+    st.saltPump.1.config = st.config ∧ st.saltPump.1.shaper = st.shaper ∧ st.saltPump.1.bucketer = st.bucketer ∧
+      ∀ a ∈ st.saltPump.2, ∃ b, a = .writeSalt b := by
+  unfold State.saltPump
+  split
+  · split
+    · exact ⟨rfl, rfl, rfl, fun a ha => ⟨_, by simpa using ha⟩⟩
+    · exact ⟨rfl, rfl, rfl, fun a ha => absurd ha (Array.not_mem_empty a)⟩
+  · exact ⟨rfl, rfl, rfl, fun a ha => absurd ha (Array.not_mem_empty a)⟩
+
+theorem saltPump_spec (st : State) : Quiet st st.saltPump.1 ∧ ∀ a ∈ st.saltPump.2, ∃ b, a = .writeSalt b :=
+  have h := saltPump_keeps st
+  ⟨Quiet.same h.1 h.2.1 (by rw [h.2.2.1]), h.2.2.2⟩
+
 def PumpOK (st : State) (r : State × Array Action) : Prop :=
   Quiet st r.1 ∧ ∀ a ∈ r.2, ∃ s b d, a = .writeUpstream s b d
 
@@ -143,6 +176,34 @@ theorem pump_spec (st : State) (s : Nat) : PumpOK st (st.pump s) := by
         · exact ⟨_, _, _, rfl⟩
     · intro r hr
       exact ⟨Quiet.setStream _ _ _, hr⟩
+
+theorem opened_fst (st : State) (s : Nat) :
+    (st.opened s).1 = ((st.setStream s { st.stream s with phase := .open }).pump s).1 := by
+  unfold State.opened
+  generalize (st.setStream s { st.stream s with phase := .open }).pump s = y
+  rcases y with ⟨_, _⟩
+  rfl
+
+/-- An opened connection's actions: its ordinal header, or what `pump` writes. -/
+theorem opened_mem {st : State} {s : Nat} {a : Action} (h : a ∈ (st.opened s).2) :
+    a = .writeUpstream s (ordinalHeader s) false ∨
+      a ∈ ((st.setStream s { st.stream s with phase := .open }).pump s).2 := by
+  unfold State.opened at h
+  generalize (st.setStream s { st.stream s with phase := .open }).pump s = y at h ⊢
+  rcases y with ⟨_, acts⟩
+  dsimp only at h ⊢
+  split at h
+  · rcases Array.mem_append.1 h with h | h
+    · exact Or.inl (by simpa using h)
+    · exact Or.inr h
+  · exact Or.inr h
+
+theorem opened_spec (st : State) (s : Nat) : PumpOK st (st.opened s) := by
+  obtain ⟨p1, p2⟩ := pump_spec (st.setStream s { st.stream s with phase := .open }) s
+  refine ⟨by rw [opened_fst]; exact (Quiet.setStream _ _ _).trans p1, fun a ha => ?_⟩
+  rcases opened_mem ha with rfl | ha
+  · exact ⟨_, _, _, rfl⟩
+  · exact p2 a ha
 
 theorem checkForwarding_quiet (st : State) (now : Nat) : Quiet st (st.checkForwarding now) := by
   unfold State.checkForwarding
@@ -173,12 +234,26 @@ theorem linkRead_quiet (st : State) (now : Nat) (data : ByteArray) : Quiet st (s
     · intro b hb
       exact Quiet.same rfl rfl hb
 
-theorem egressEvent_quiet (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
-    Quiet st (st.egressEvent s event ready) := by
-  unfold State.egressEvent
+theorem egressFrame_quiet (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) :
+    Quiet st (st.egressFrame s position bytes ready) := by
+  unfold State.egressFrame
   dsimp only
   split
   · exact Quiet.shaper (ShRel.arrive _ _ _ _)
+  · exact Quiet.shaper (ShRel.fault _ _)
+
+theorem egressEvent_quiet (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
+    Quiet st (st.egressEvent s event ready) := by
+  unfold State.egressEvent
+  split
+  · exact egressFrame_quiet _ _ _ _ _
+  · exact Quiet.shaper (ShRel.fault _ _)
+
+theorem egressRecord_quiet (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
+    Quiet st (st.egressRecord s position record ready) := by
+  unfold State.egressRecord
+  split
+  · exact egressFrame_quiet _ _ _ _ _
   · exact Quiet.shaper (ShRel.fault _ _)
 
 theorem upstreamEnd_quiet (st : State) (s now : Nat) : Quiet st (st.upstreamEnd s now) := by
@@ -193,27 +268,128 @@ theorem upstreamRead_quiet (st : State) (s now : Nat) (data : ByteArray) : Quiet
   dsimp only
   split
   · exact upstreamEnd_quiet _ _ _
-  · refine Id.bind_inv (Quiet st) (Quiet st) _ _ ?_ (fun _ h => h)
-    exact forIn_inv_arr _ (Quiet.setStream _ _ _) (fun _ _ b hb => hb.trans (egressEvent_quiet _ _ _ _))
+  · split
+    · refine Id.bind_inv (Quiet st) (Quiet st) _ _ ?_ (fun _ h => h)
+      refine forIn_inv_arr _ (Quiet.setStream _ _ _) (fun u _ b hb => ?_)
+      rcases u with ⟨position, record⟩
+      exact hb.trans (egressRecord_quiet _ _ _ _ _)
+    · refine Id.bind_inv (Quiet st) (Quiet st) _ _ ?_ (fun _ h => h)
+      exact forIn_inv_arr _ (Quiet.setStream _ _ _) (fun _ _ b hb => hb.trans (egressEvent_quiet _ _ _ _))
+
+/-! ## The bucketer before its certifier ticks -/
+
+/-- `c'` is `c` with frames enqueued: the same link, parameters, rows and window, and `c`'s shape kept. -/
+def EnqRel (c c' : Certifier) : Prop :=
+  c'.link = c.link ∧ c'.params = c.params ∧ c'.rows = c.rows ∧ c'.window = c.window ∧
+    ∀ link p, Shape c link p → Shape c' link p
+
+theorem EnqRel.refl (c : Certifier) : EnqRel c c := ⟨rfl, rfl, rfl, rfl, fun _ _ h => h⟩
+
+theorem EnqRel.trans {c c' c'' : Certifier} (h : EnqRel c c') (h' : EnqRel c' c'') : EnqRel c c'' :=
+  ⟨h'.1.trans h.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.1.trans h.2.2.2.1,
+    fun l p hs => h'.2.2.2.2 l p (h.2.2.2.2 l p hs)⟩
+
+theorem EnqRel.enqueue (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f) :=
+  ⟨enqueue_link c f, enqueue_params c f, enqueue_rows c f, enqueue_window c f, fun _ _ h => h.enqueue f⟩
+
+theorem EnqRel.foldl (c : Certifier) (l : Array (Int × ByteArray)) :
+    EnqRel c (l.foldl (fun c x => match x with | (_, f) => c.enqueue f) c) :=
+  foldl_inv (EnqRel c) (EnqRel.refl c) (fun x _ c' h => by
+    rcases x with ⟨_, f⟩
+    exact h.trans (EnqRel.enqueue c' f))
+
+theorem enqueue_first_eq (c : Certifier) (frame : ByteArray) :
+    c.enqueue frame true = c ∨ (∃ r, c.enqueue frame true = c.doFault r) ∨
+      (c.fault = none ∧ frame.size = c.params.frameBytes ∧
+        c.enqueue frame true = { c with queue := #[frame] ++ c.queue }) := by
+  unfold Certifier.enqueue
+  by_cases h1 : c.fault.isSome
+  · simp [h1]
+  · simp only [h1, Bool.false_eq_true, ite_false]
+    by_cases h2 : frame.size ≠ c.params.frameBytes
+    · exact Or.inr (Or.inl ⟨.malformed, by simp [h2]⟩)
+    · by_cases h3 : c.queue.size ≥ c.params.queueCapacity
+      · exact Or.inr (Or.inl ⟨.overflow, by simp [h2, h3]⟩)
+      · exact Or.inr (Or.inr ⟨by simpa using h1, by simpa using h2, by simp [h2, h3]⟩)
+
+theorem Shape.enqueueFirst {c : Certifier} {link : String} {p : Params} (h : Shape c link p) (f : ByteArray) :
+    Shape (c.enqueue f true) link p := by
+  rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨hn, hsz, he⟩ <;> rw [he]
+  · exact h
+  · exact h.doFault r
+  · refine ⟨h.link, h.params, ?_, ?_⟩
+    · intro g hg
+      rcases Array.mem_append.1 hg with hg | hg
+      · rw [Array.mem_singleton.1 hg, hsz, h.params]
+      · exact h.sizes g hg
+    · simp [hn]
+
+theorem EnqRel.enqueueFirst (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f true) := by
+  refine ⟨?_, ?_, ?_, ?_, fun _ _ h => h.enqueueFirst f⟩ <;>
+    rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨-, -, he⟩ <;> rw [he] <;>
+    simp [doFault_link, doFault_params, doFault_rows, doFault_window]
+
+theorem takeOwn_rel (b : Bucketer) : b.takeOwn.t = b.t ∧ EnqRel b.certifier b.takeOwn.certifier := by
+  unfold Bucketer.takeOwn
+  dsimp only
+  split
+  · split
+    · exact ⟨rfl, EnqRel.enqueueFirst _ _⟩
+    · exact ⟨rfl, EnqRel.refl _⟩
+  · exact ⟨rfl, EnqRel.refl _⟩
+
+theorem admit_rel (a : Admission) (b : Bucketer) :
+    (Bucketer.admit a b).t = b.t ∧ EnqRel b.certifier (Bucketer.admit a b).certifier := by
+  unfold Bucketer.admit
+  dsimp only
+  have h0 : ∀ b' : Bucketer, b' = (if b.t % b.certifier.params.buckets = 0 then { b with counts := #[] } else b) →
+      b'.t = b.t ∧ EnqRel b.certifier b'.certifier := by
+    intro b' hb
+    subst hb
+    split <;> exact ⟨rfl, EnqRel.refl _⟩
+  generalize hb : (if b.t % b.certifier.params.buckets = 0 then { b with counts := #[] } else b) = b0
+  have hb0 := h0 b0 hb.symm
+  refine Id.bind_inv (fun (b' : Bucketer) => b'.t = b.t ∧ EnqRel b.certifier b'.certifier)
+    (fun (b' : Bucketer) => b'.t = b.t ∧ EnqRel b.certifier b'.certifier) _ _ ?_ (fun _ h => h)
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  refine forIn_inv (fun (b' : Bucketer) => b'.t = b.t ∧ EnqRel b.certifier b'.certifier) hb0 ?_
+  intro _ _ b' hb'
+  split
+  · exact ⟨hb'.1, hb'.2.trans (EnqRel.foldl _ _)⟩
+  · exact hb'
+
+theorem enter_rel (b : Bucketer) : b.enter.t = b.t ∧ EnqRel b.certifier b.enter.certifier := by
+  unfold Bucketer.enter
+  split
+  · exact admit_rel _ _
+  · exact ⟨rfl, EnqRel.foldl _ _⟩
+
+/-- What a bucketer tick enqueues before its certifier ticks: its own frame and the frames that enter. -/
+theorem pre_rel (b : Bucketer) : b.takeOwn.enter.t = b.t ∧ EnqRel b.certifier b.takeOwn.enter.certifier :=
+  ⟨(enter_rel _).1.trans (takeOwn_rel b).1, (takeOwn_rel b).2.trans (enter_rel _).2⟩
+
+theorem follow_certifier (b : Bucketer) (row : Slots) : (b.follow row).certifier = b.certifier := by
+  unfold Bucketer.follow; split <;> rfl
+
+theorem follow_t (b : Bucketer) (row : Slots) : (b.follow row).t = b.t := by
+  unfold Bucketer.follow; split <;> rfl
 
 theorem bucketer_tick (b : Bucketer) :
     b.tick.1.certifier.link = b.certifier.link ∧ b.tick.1.certifier.params = b.certifier.params ∧
       ∀ r, b.tick.2.2 = some r → r.link = b.certifier.link := by
+  obtain ⟨-, hc⟩ := pre_rel b
   unfold Bucketer.tick
   dsimp only
-  have hc := foldl_inv (fun (c : Certifier) => c.link = b.certifier.link ∧ c.params = b.certifier.params)
-    (l := b.waiting.extract 0 (b.waiting.takeWhile fun (x, _) => x ≤ b.t).size) (b := b.certifier)
-    (f := fun c x => match x with | (_, f) => c.enqueue f) ⟨rfl, rfl⟩
-    (fun x _ c hc => ⟨(enqueue_link _ _).trans hc.1, (enqueue_params _ _).trans hc.2⟩)
-  generalize Array.foldl _ b.certifier _ = c at hc ⊢
-  obtain ⟨t1, t2, -, -, -⟩ := certTick_keeps c
-  generalize c.tick = x at t1 t2 ⊢
+  generalize b.takeOwn.enter = b1 at hc ⊢
+  obtain ⟨t1, t2, -, -, -⟩ := certTick_keeps b1.certifier
+  generalize b1.certifier.tick = x at t1 t2 ⊢
   rcases x with ⟨c', row⟩
   dsimp only at t1 t2 ⊢
+  simp only [follow_certifier]
   split
-  · exact ⟨t1.trans hc.1, t2.trans hc.2, fun r h => nomatch h⟩
+  · exact ⟨t1.trans hc.1, t2.trans hc.2.1, fun r h => nomatch h⟩
   · simp only [Certifier.closeWindow]
-    exact ⟨t1.trans hc.1, t2.trans hc.2, fun r h => by cases h; exact t1.trans hc.1⟩
+    exact ⟨t1.trans hc.1, t2.trans hc.2.1, fun r h => by cases h; exact t1.trans hc.1⟩
 
 /-- `ingressTick` after its late check. -/
 def ingressTail (st : State) (t : Nat) : State × Array Action := Id.run do
@@ -224,7 +400,12 @@ def ingressTail (st : State) (t : Nat) : State × Array Action := Id.run do
   st := { st with bucketer }
   let anchor := t * p.bucketMs / e.bucketMs
   let mut started := #[]
-  for slot in row.extract 0 (rowCount row) do
+  for (slot, i) in (row.extract 0 (rowCount row)).zipIdx do
+    if let some (_, w) := bucketer.own.find? (·.1 == i) then
+      let salt := st.releaseSalt (w / (st.config.salt.map (·.pouwWindow)).getD 1)
+      st := salt.1
+      if let some x := salt.2 then started := started.push x
+      continue
     let (kind, _, payload) := decodeFrame (slot.getD ByteArray.empty)
     if kind != kindData then continue
     let (requests, s, data, last) := st.requests.feed payload
@@ -248,6 +429,11 @@ def ingressTail (st : State) (t : Nat) : State × Array Action := Id.run do
     | .connect s => acts := acts.push (.connect s)
     | .pump s =>
       let (st', more) := st.pump s
+      st := st'
+      acts := acts ++ more
+    | .saltConnect => acts := acts.push .connectSalt
+    | .saltPump =>
+      let (st', more) := st.saltPump
       st := st'
       acts := acts ++ more
   return (st, acts)
@@ -279,19 +465,26 @@ theorem ingressTail_spec (st : State) (t : Nat) :
       ∀ a ∈ r.2, IngressAct st.bucketer.certifier.link st.config.ingress a) _ _ ?_ ?_
   · refine forIn_inv_arr (fun (r : State × Array State.Started) => Quiet st r.1) q1 ?_
     intro slot _ y hy
-    split
-    · exact hy
-    · repeat' split
-      all_goals exact hy.trans (Quiet.same rfl rfl rfl)
+    repeat' split
+    all_goals first
+      | exact hy
+      | exact hy.trans (Quiet.same rfl rfl rfl)
+      | exact hy.trans (releaseSalt_quiet _ _)
   · intro y hy
     have h0 : ∀ acts : Array Action, (∀ a ∈ acts, IngressAct st.bucketer.certifier.link st.config.ingress a) →
         Quiet st (Id.run (forIn y.2 (y.1, acts) fun x r => match x with
           | .connect s => pure (ForInStep.yield (r.1, r.2.push (.connect s)))
           | .pump s => match r.1.pump s with
+            | (st', more) => pure (ForInStep.yield (st', r.2 ++ more))
+          | .saltConnect => pure (ForInStep.yield (r.1, r.2.push .connectSalt))
+          | .saltPump => match r.1.saltPump with
             | (st', more) => pure (ForInStep.yield (st', r.2 ++ more)))).1 ∧
           ∀ a ∈ (Id.run (forIn y.2 (y.1, acts) fun x r => match x with
           | .connect s => pure (ForInStep.yield (r.1, r.2.push (.connect s)))
           | .pump s => match r.1.pump s with
+            | (st', more) => pure (ForInStep.yield (st', r.2 ++ more))
+          | .saltConnect => pure (ForInStep.yield (r.1, r.2.push .connectSalt))
+          | .saltPump => match r.1.saltPump with
             | (st', more) => pure (ForInStep.yield (st', r.2 ++ more)))).2,
             IngressAct st.bucketer.certifier.link st.config.ingress a := by
       intro acts hacts
@@ -312,6 +505,18 @@ theorem ingressTail_spec (st : State) (t : Nat) :
         · exact hr.2 a ha
         · obtain ⟨s, b, d, rfl⟩ := p2 a ha
           exact IngressAct.upstream _ _ _ _ _
+      · refine ⟨hr.1, fun a ha => ?_⟩
+        rcases Array.mem_push.1 ha with ha | rfl
+        · exact hr.2 a ha
+        · exact IngressAct.connectSalt _ _
+      · obtain ⟨p1, p2⟩ := saltPump_spec r.1
+        generalize r.1.saltPump = z at p1 p2 ⊢
+        rcases z with ⟨st', more⟩
+        refine ⟨hr.1.trans p1, fun a ha => ?_⟩
+        rcases Array.mem_append.1 ha with ha | ha
+        · exact hr.2 a ha
+        · obtain ⟨b, rfl⟩ := p2 a ha
+          exact IngressAct.writeSalt _ _ _
     split
     · refine h0 _ (fun a ha => ?_)
       rcases Array.mem_push.1 ha with ha | rfl
@@ -593,6 +798,22 @@ theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
     refine ⟨hq.trans p1, fun a ha => ?_⟩
     obtain ⟨s, b, d, rfl⟩ := p2 a (Array.mem_toList_iff.1 ha)
     exact IngressAct.upstream _ _ _ _ _
+  have opened_ok : ∀ s y, st.opened s = y → Quiet st y.1 ∧
+      ∀ a ∈ y.2.toList, IngressAct c.ingressLink c.ingress a := by
+    intro s y hy
+    subst hy
+    obtain ⟨p1, p2⟩ := opened_spec st s
+    refine ⟨p1, fun a ha => ?_⟩
+    obtain ⟨s, b, d, rfl⟩ := p2 a (Array.mem_toList_iff.1 ha)
+    exact IngressAct.upstream _ _ _ _ _
+  have saltPump_ok : ∀ st' y, Quiet st st' → st'.saltPump = y → Quiet st y.1 ∧
+      ∀ a ∈ y.2.toList, IngressAct c.ingressLink c.ingress a := by
+    intro st' y hq hy
+    subst hy
+    obtain ⟨p1, p2⟩ := saltPump_spec st'
+    refine ⟨hq.trans p1, fun a ha => ?_⟩
+    obtain ⟨b, rfl⟩ := p2 a (Array.mem_toList_iff.1 ha)
+    exact IngressAct.writeSalt _ _ _
   unfold step
   split
   · exact ⟨Quiet.refl _, fun a ha => by simp at ha⟩
@@ -614,7 +835,7 @@ theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
       · cases heq; exact ⟨linkRead_quiet _ _ _, fun a ha => by simp at ha⟩
       · cases heq; exact none_ok
     · split at heq
-      · exact pump_ok _ _ _ (Quiet.setStream _ _ _) heq
+      · exact opened_ok _ _ heq
       · cases heq; exact none_ok
     · split at heq
       · cases heq; exact ⟨(Quiet.bucketFault _ _).trans (Quiet.setStream _ _ _), fun a ha => by simp at ha⟩
@@ -625,6 +846,24 @@ theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
     · dsimp only at heq
       split at heq
       · exact pump_ok _ _ _ (Quiet.setStream _ _ _) heq
+      · cases heq; exact none_ok
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          exact Quiet.same rfl rfl rfl
+        · cases heq; exact none_ok
+      · cases heq; exact none_ok
+    · split at heq
+      · split at heq
+        · cases heq
+          exact ⟨⟨rfl, ShRel.refl _, doFault_link _ _, doFault_params _ _⟩, fun a ha => by simp at ha⟩
+        · cases heq; exact none_ok
+      · cases heq; exact none_ok
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          exact Quiet.same rfl rfl rfl
+        · cases heq; exact none_ok
       · cases heq; exact none_ok
 
 end Properties.CertifierDevice.Proofs

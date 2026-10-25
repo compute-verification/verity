@@ -1,12 +1,15 @@
 import CertifierDevice.Certifier
 import CertifierDevice.Online
+import CertifierDevice.Served
 
 /-!
 # The shaper and the bucketer: the reference's certifiers fed frames as they arrive
 
 The executable forms of `active.py`'s `Shaper` (the honest shaper and the egress certifier: `schedule.run_shaper`'s
 handing rule, `h(k) = max(eligible(k), h(k−1))` under the declared sync of the frame's anchor's window, then
-`max(h(k), ready(k), last)`) and `Bucketer` (the ingress certifier, each frame enqueued at the bucket it arrived by).
+`max(h(k), ready(k), last)`) and `Bucketer` (the ingress certifier, each frame enqueued at the bucket it arrived by,
+behind the certifier's own salt frame at a window's first bucket, and on a served link only as whole requests its
+admission rule admits).
 -/
 
 namespace CertifierDevice
@@ -124,21 +127,74 @@ def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
 
 end Shaper
 
-/-- `active.Bucketer`: frames wait in arrival order with the bucket they arrived by, and enter the certifier at its tick. -/
+/-- `active.Bucketer`: frames wait in arrival order with the bucket they arrived by, and enter the certifier at its tick.
+With `first`, each window's first tick enqueues the certifier's own frame `first w`, if it gives one, at the head of
+the queue, ahead of that bucket's arrivals and of any queue carried from the window before, so it leaves in slot 0 of
+that bucket (`ownNow`, its window): `own` maps the slot of the row last released that holds one to its window, and a
+fault before the release drops it with the queue. With `served`, arrived frames enter only as whole
+requests the admission rule admits (`admits` under the window's sync, `counts` the window's ingress counts so far); the
+rest wait, in order. -/
 structure Bucketer where
   certifier : Certifier
   waiting : Array (Int × ByteArray) := #[]
   t : Nat := 0
+  first : Nat → Option ByteArray := fun _ => none
+  served : Option Admission := none
+  counts : Array Nat := #[]
+  own : Array (Nat × Nat) := #[]
+  ownNow : Option Nat := none
 
 namespace Bucketer
 
 def arrive (b : Bucketer) (frame : ByteArray) (bucket : Int) : Bucketer := { b with waiting := b.waiting.push (bucket, frame) }
 
+/-- The certifier's own frame at a window's first tick, at the head of the queue, its window kept. -/
+def takeOwn (b : Bucketer) : Bucketer :=
+  let w := b.t / b.certifier.params.buckets
+  let b := { b with ownNow := none }
+  if b.t % b.certifier.params.buckets = 0 then
+    match b.first w with
+    | some frame => { b with ownNow := some w, certifier := b.certifier.enqueue frame (first := true) }
+    | none => b
+  else b
+
+/-- A served link's admission at a tick: whole requests of F_in frames that have arrived, while the window, with each,
+still ends idle. -/
+def admit (a : Admission) (b : Bucketer) : Bucketer := Id.run do
+  let n := a.profile.requestFrames
+  let T := b.certifier.params.buckets
+  let w := b.t / T
+  let mut b := if b.t % T = 0 then { b with counts := #[] } else b
+  for _ in [0:b.waiting.size] do
+    if n ≤ b.waiting.size && b.waiting[n - 1]!.1 ≤ b.t &&
+        admits b.counts (b.certifier.queue.size + n) (a.sync w) a.profile a.allocation b.certifier.params.allocation T then
+      b := { b with certifier := (b.waiting.extract 0 n).foldl (fun c (_, f) => c.enqueue f) b.certifier,
+                    waiting := b.waiting.extract n b.waiting.size }
+    else break
+  return b
+
+/-- The frames that enter the certifier at a tick: every frame arrived by it, or, served, the requests admitted. -/
+def enter (b : Bucketer) : Bucketer :=
+  match b.served with
+  | some a => admit a b
+  | none =>
+    let due := (b.waiting.takeWhile fun (x, _) => x ≤ b.t).size
+    { b with certifier := (b.waiting.extract 0 due).foldl (fun c (_, f) => c.enqueue f) b.certifier,
+             waiting := b.waiting.extract due b.waiting.size }
+
+/-- After a row is released: the own frame enqueued at this tick, in its slot 0, unless a fault before the release
+dropped it with the queue and padded the row. -/
+def follow (b : Bucketer) (row : Slots) : Bucketer :=
+  match b.ownNow, row[0]? with
+  | some w, some (some _) => { b with own := #[(0, w)], ownNow := none }
+  | _, _ => { b with own := #[], ownNow := none }
+
 def tick (b : Bucketer) : Bucketer × Slots × Option Record := Id.run do
-  let due := (b.waiting.takeWhile fun (x, _) => x ≤ b.t).size
-  let c := (b.waiting.extract 0 due).foldl (fun c (_, f) => c.enqueue f) b.certifier
-  let (c, row) := c.tick
-  let b := { b with certifier := c, waiting := b.waiting.extract due b.waiting.size, t := b.t + 1 }
+  let b := b.takeOwn.enter
+  let (c, row) := b.certifier.tick
+  let n := rowCount row
+  let b := { b with certifier := c, counts := if b.served.isSome then b.counts.push n else b.counts }
+  let b := { b.follow row with t := b.t + 1 }
   if b.t % c.params.buckets ≠ 0 then return (b, row, none)
   let (c, record) := c.closeWindow
   return ({ b with certifier := c }, row, some record)

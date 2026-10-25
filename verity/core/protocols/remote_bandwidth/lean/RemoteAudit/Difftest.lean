@@ -1,5 +1,7 @@
 import Difftest
+import RemoteAudit.Line
 import RemoteAudit.Registry
+import RemoteAudit.Store
 
 /-!
 # The difftest's Lean half
@@ -8,8 +10,14 @@ The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
 opening, a leaf's receipt, a window's draws and a registration's digest), the registration `audit.register` makes
-with its codec seed, and the verifier's registry (`registry`: registrations, sessions over them and their events,
-closes, and `registry/v0` both ways). `remote-audit-difftest` serves them.
+with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
+closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
+canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
+the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), `line.py`'s memory
+line (`line` of groups and windows given, `line_record` read off an accepted session's record, `RemoteAudit.Line`:
+rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
+reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
+so their reasons are compared. `remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -310,10 +318,246 @@ def drawsFn (j : Json) : V Json := do
     | throw "the draw ran past its reads"
   pure (.arr (ds.map pairJ))
 
+private def refusedOr (x : Except String Json) : Json :=
+  match x with
+  | .ok v => v
+  | .error why => Json.mkObj [("refused", .str why)]
+
+/-- `store.pin_of` (`model_pin` with `model`) on a pin file's bytes `data`, read from `path`. -/
+def pinFn (j : Json) : V Json := do
+  let data ← hex j "data"
+  let path ← J.str j "path" "input"
+  let role ← match ← J.get j "role" "input" with
+    | .null => pure none
+    | v => some <$> J.asStr v "role"
+  let model ← J.bool j "model" "input"
+  let pin ← match model, role with
+    | true, some r => pure (Store.modelPin data path r)
+    | true, none => throw "a binding's pin is a role's"
+    | false, r => pure (Store.pinOf data path r)
+  pure (refusedOr ((fun p => Json.mkObj [("pin", p.toJson)]) <$> pin))
+
+/-- `store.canonical_json` of a value with no number. -/
+def canonicalJsonFn (j : Json) : V Json := do
+  let some s := Store.pyJson (← J.get j "value" "input") | throw "a value with a number"
+  pure (.str s)
+
+/-- `store.checkpoint_sha512` of `{file: string}`, with the canonical JSON it hashes. -/
+def checkpointFn (j : Json) : V Json := do
+  let .obj kvs ← J.get j "files" "input" | throw "files is an object"
+  let files ← kvs.toArray.mapM fun (f, h) => do pure (f, ← J.asStr h "files")
+  pure (Json.mkObj [("canonical", .str (Store.filesJson files)), ("sha512", .str (Store.checkpointSha512 files))])
+
+def storeSaltFn (j : Json) : V Json := do
+  let c ← nat j "c"
+  if c ≥ 2 ^ 64 then throw "a block index is a u64"
+  pure (hexJ (Store.storeSalt (← hex j "key") (← hex j "label") c))
+
+/-- An arena's weights blocks' digests, `digests` as a list of 64-byte strings, as one string of 64 bytes a block. -/
+def digestsOf (j : Json) : V ByteArray := do
+  let ds ← hexes j "digests"
+  if ds.isEmpty || ds.any (·.size ≠ 64) then throw "an arena's weights are one or more blocks' digests of 64 bytes"
+  pure (ds.foldl (· ++ ·) ByteArray.empty)
+
+/-- `store.expected_root` of a store of `engines` arenas of `arena_blocks`, then `host_blocks`, its subtrees of
+`2^chunk_log2` leaves on `workers` threads. -/
+def expectedRootFn (j : Json) : V Json := do
+  let digests ← digestsOf j
+  let (engines, arenaBlocks, host) := (← nat j "engines", ← nat j "arena_blocks", ← nat j "host_blocks")
+  let node ← hex j "node"
+  if engines = 0 || arenaBlocks < Store.weightsOf digests then throw "a store is one or more arenas of at least the weights"
+  if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
+  pure (hexJ (Store.expectedRoot engines arenaBlocks host digests node (← hex j "key") (← nat j "workers")
+    (← nat j "chunk_log2")))
+
+def regionOf (j : Json) : V Store.Region := do
+  let xs ← J.asArr j "layout"
+  if xs.size ≠ 4 then throw "a region is [kind, tier, first, blocks]"
+  let kind ← J.asStr xs[0]! "kind"
+  let tier ← J.asStr xs[1]! "tier"
+  if !["weights", "kv", "filler", "activations"].contains kind || !["hbm", "host"].contains tier then
+    throw "a region's kind and tier are regions_of's"
+  pure (kind, tier, ← J.asInt xs[2]! "first", ← J.asInt xs[3]! "blocks")
+
+def regionJ (r : Store.Region) : Json := .arr #[.str r.1, .str r.2.1, toJson r.2.2.1, toJson r.2.2.2]
+
+/-- `Binding.hold`'s outcome as the verifier answers it: the regions bound, or why not, and the expected root
+`record()` keeps. -/
+def heldJ (h : Store.Held) : Json :=
+  Json.mkObj [match h.regions with
+      | .ok rs => ("regions", .arr (rs.map regionJ))
+      | .error why => ("refused", .str why),
+    ("expected_root", match h.expectedRoot with | some r => hexJ r | none => .null)]
+
+/-- A hello's store as `Binding.hold` reads it: `{"node", "blocks", "payload_root", "key", "layout"}`, the key the
+verifier's payload key and the layout `null` or `regions_of`'s regions as `[kind, tier, first, blocks]`. -/
+def helloOf (j : Json) : V (ByteArray × Int × ByteArray × ByteArray × Option (Array Store.Region)) := do
+  let layout ← match ← J.get j "layout" "input" with
+    | .null => pure none
+    | v => some <$> (← J.asArr v "layout").mapM regionOf
+  pure (← hex j "node", ← int j "blocks", ← hex j "payload_root", ← hex j "key", layout)
+
+/-- `Binding.hold` of the binding `b` on a hello (`helloOf`), the root on `workers` threads. -/
+def holdOf (b : Store.Binding) (hello : Json) (workers : Nat) : V Json := do
+  let (node, blocks, root, key, layout) ← helloOf hello
+  pure (heldJ (b.hold node blocks root key layout workers))
+
+/-- What the verifier answers of a binding it starts (`Store.bind`): the pin and the weights blocks, or why not. -/
+def boundJ : Except String Store.Binding → Json
+  | .ok b => Json.mkObj [("pin", b.pin.toJson), ("weights_blocks", toJson (Store.weightsOf b.digests))]
+  | .error why => Json.mkObj [("refused", .str why)]
+
+/-- The binding of `role` over an arena of the weights blocks' digests `digests` and `engines` arenas of
+`arena_blocks` (`Store`'s check as `Binding` starts), then `Binding.hold` of a hello: the regions bound, or why not,
+and the expected root `record()` keeps. -/
+def holdFn (j : Json) : V Json := do
+  let role ← J.str j "role" "input"
+  let digests ← digestsOf j
+  let (engines, arenaBlocks) := (← int j "engines", ← int j "arena_blocks")
+  let hello ← helloOf j
+  match Store.shape engines arenaBlocks (Store.weightsOf digests) with
+  | .error why => pure (Json.mkObj [("refused", .str why), ("expected_root", .null)])
+  | .ok () =>
+    let (node, blocks, root, key, layout) := hello
+    pure (heldJ (Store.hold role digests engines.toNat arenaBlocks.toNat node blocks root key layout))
+
+/-- The verifier's binding as its process runs it (`RemoteAudit.Verifier`'s `bind` and `hold`): `{"data", "path",
+"role", "digests", "engines", "arena_blocks", "workers", "hellos"}` to what `bind` answers (`bind`) and, once bound,
+what `hold` answers of each hello (`holds`, `helloOf`'s). -/
+def bindingFn (j : Json) : V Json := do
+  let data ← hex j "data"
+  let path ← J.str j "path" "input"
+  let role ← J.str j "role" "input"
+  let digests ← digestsOf j
+  let (engines, arenaBlocks, workers) := (← int j "engines", ← int j "arena_blocks", ← nat j "workers")
+  let hellos ← J.arr j "hellos" "input"
+  let b := Store.bind data path role digests engines arenaBlocks
+  let holds ← match b with
+    | .ok b => hellos.mapM (holdOf b · workers)
+    | .error _ => pure #[]
+  pure (Json.mkObj [("bind", boundJ b), ("holds", .arr holds)])
+
+private def ratIn (j : Json) (k ctx : String) : V Rat := do
+  match ← J.get j k ctx with
+  | .num n => pure ((← J.asInt (.num n) s!"{ctx}.{k}" : Int) : Rat)
+  | .str s => match Line.ratOf? s with
+    | some q => pure q
+    | none => throw s!"{ctx}.{k}: a rational is a string n or n/d, d positive"
+  | _ => throw s!"{ctx}.{k}: not an integer or a string"
+
+private def groupOf (j : Json) : V Line.Group := do
+  pure
+    { releasedNs := ← J.nat j "released_ns" "group"
+      lastNs := ← J.nat j "last_ns" "group"
+      passes := ← J.nat j "passes" "group"
+      least := ← J.nat j "least" "group"
+      weights := ← J.nat j "weights" "group"
+      hbm := ← J.nat j "hbm" "group"
+      host := ← J.nat j "host" "group" }
+
+private def ratJ (q : Rat) : Json := .str (toString q)
+
+private def readingJ (r : Line.Reading) : Json :=
+  Json.mkObj [("filler", ratJ r.filler), ("hbm", ratJ r.hbm), ("lost_blocks", ratJ r.lost), ("weights", ratJ r.weights)]
+
+private def stretchJ (x : Line.Stretch) : Json :=
+  Json.mkObj [("fill", ratJ x.fill),
+    ("held", Json.mkObj [("hbm", ratJ x.hbm), ("host", ratJ x.host), ("weights", ratJ x.weights)]),
+    ("hi", toJson x.hi), ("l_max_ns", toJson x.lMaxNs), ("l_sum_ns", toJson x.lSumNs), ("lo", toJson x.lo),
+    ("passes", toJson x.passes), ("rebuild_blocks", ratJ x.rebuild), ("snapshot", readingJ x.snapshot),
+    ("span_ns", toJson x.spanNs), ("stretch", toJson x.stretch), ("time", readingJ x.time)]
+
+private def formJ (nodeBytes : Nat) (f : Line.Form) : Json :=
+  let reading (time : Bool) : Json :=
+    let x := Line.worst f.stretches time
+    let r := x.reading time
+    let share (q : Rat) : Json := ratJ (q / (nodeBytes : Rat))
+    Json.mkObj [("filler_share", share r.filler), ("hbm_share", share r.hbm), ("stretch", toJson x.stretch),
+      ("weights_share", share r.weights)]
+  Json.mkObj [("burst", ratJ f.charge.burst), ("rate", ratJ f.charge.rate),
+    ("stretches", .arr (f.stretches.map stretchJ)), ("time", reading true), ("snapshot", reading false)]
+
+private def windowsOf (j : Json) : V (Array (Nat × Nat)) := do
+  (← J.arr j "windows" "input").mapM fun w => do
+    let xs ← J.asArr w "windows"
+    if xs.size ≠ 2 then throw "windows: a window is [receipts, draws]"
+    pure (← J.asNat xs[0]! "windows", ← J.asNat xs[1]! "windows")
+
+/-- `pooled.run_json`: the pooled bound of `{"windows": [[U, s], ...], "delta"}`, or why there is none. -/
+def pooledFn (j : Json) : V Json := do
+  let got := Pooled.pooled (← windowsOf j) (← ratIn j "delta" "input")
+  pure (refusedOr ((fun (b : Pooled.Bound) => Json.mkObj [("budget", ratJ b.budget), ("floor", ratJ b.floor),
+    ("floors", .arr (b.floors.map ratJ)), ("wrong", ratJ b.wrong)]) <$> got))
+
+private def ratesOf (j : Json) : V Line.Rates := do
+  let r ← J.get j "rates" "input"
+  pure
+    { squaringsPerS := ← ratIn r "squarings_per_s" "rates"
+      encodeSquarings := ← J.nat r "encode_squarings" "rates"
+      diskBytesPerS := ← ratIn r "disk_bytes_per_s" "rates"
+      linkBytesPerS := ← ratIn r "link_bytes_per_s" "rates"
+      rebuildBurstBytes := ← ratIn r "rebuild_burst_bytes" "rates"
+      diskBurstBytes := ← ratIn r "disk_burst_bytes" "rates"
+      linkBurstBytes := ← ratIn r "link_burst_bytes" "rates" }
+
+private def lineJ (got : Except String Line.Line) : Json :=
+  refusedOr ((fun (l : Line.Line) => Json.mkObj ((l.forms.toList.map fun (f : Line.Form) =>
+    (f.name, formJ l.nodeBytes f)) ++ [("wrong", ratJ l.wrong)])) <$> got)
+
+/-- `line.run_json`: the line of `{"groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows",
+"delta", "rates"}` in both forms with the wrong receipts it read, or why it has none. -/
+def lineFn (j : Json) : V Json := do
+  let groups ← (← J.arr j "groups" "input").mapM groupOf
+  pure (lineJ (Line.line groups (← nat j "per") (← nat j "blocks") (← nat j "block_bytes") (← nat j "chip_bytes")
+    (← nat j "node_bytes") (← windowsOf j) (← ratIn j "delta" "input") (← ratesOf j)))
+
+private def natsOf (j : Json) (k : String) : V (Array Nat) := do (← J.arr j k "window").mapM (J.asNat · k)
+
+private def hexOrNull (j : Json) (ctx : String) : V (Option ByteArray) := do
+  match j with
+  | .null => pure none
+  | v => some <$> bytesOf v ctx
+
+/-- An accepted session's record as `summaryJ` writes it (the verifier's `outcome` request's `record`), read back. -/
+def summaryOf (j : Json) : V Session.Summary := do
+  let pace ← match ← J.get j "pace" "record" with
+    | .null => pure none
+    | q => do pure (some ({ k := ← J.nat q "k" "pace", windowNs := ← J.nat q "window_ns" "pace" } : Session.Pace))
+  let windows ← (← J.arr j "windows" "record").mapM fun w => do
+    pure ({ lengths := ← natsOf w "lengths", steps := ← natsOf w "steps", post := ← natsOf w "post_seed",
+            heads := ← (← J.arr w "heads" "window").mapM (hexOrNull · "heads"), stale := ← natsOf w "stale",
+            arrivedNs := ← natsOf w "arrived_ns", releasedNs := ← J.nat w "released_ns" "window",
+            deadlineNs := ← J.nat w "deadline_ns" "window", openedNs := ← J.nat w "opened_ns" "window",
+            drawn := ← J.nat w "drawn" "window" } : Session.WindowSummary)
+  pure { windows, blocks := ← J.nat j "blocks" "record", appended := ← J.nat j "appended" "record",
+         released := ← J.nat j "released" "record", lifetime := ← J.nat j "lifetime" "record", pace,
+         appends := ← hexOrNull (← J.get j "appends" "record") "appends" }
+
+private def seenOf (j : Json) : V Line.Seen := do
+  pure
+    { releasedNs := ← J.nat j "released_ns" "seen"
+      lastNs := ← J.nat j "last_ns" "seen"
+      least := ← J.nat j "least" "seen"
+      weights := ← J.nat j "weights" "seen"
+      hbm := ← J.nat j "hbm" "seen"
+      host := ← J.nat j "host" "seen" }
+
+/-- `line.record_run_json`: the line of an accepted session's record, `{"record", "samples", "seen", "per",
+"block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives it,
+`summaryJ`'s), read off the record (`Line.lineOfRecord`), or why it has none. -/
+def lineRecordFn (j : Json) : V Json := do
+  let sm ← summaryOf (← J.get j "record" "input")
+  let seen ← (← J.arr j "seen" "input").mapM seenOf
+  pure (lineJ (Line.lineOfRecord sm (← nat j "samples") seen (← nat j "per") (← nat j "block_bytes")
+    (← nat j "chip_bytes") (← nat j "node_bytes") (← ratIn j "delta" "input") (← ratesOf j)))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn)]
+  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
+  ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
+  ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
+  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn)]
 
 end RemoteAudit.Difftest

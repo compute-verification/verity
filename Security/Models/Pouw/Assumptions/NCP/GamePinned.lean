@@ -39,16 +39,17 @@ accumulator is the checked values mod `2^32` by definition, and its useful outpu
 def LeadComplete : Prop :=
   ∀ (Q R S : Type) (P : Params Q R S), P.toProtocol.Complete leadDomain
 
-/-- **`G_γ` from TT_NCP**, with credited work `3·m·k·n`: for every cost model, protocol and domain, if
-`W_ref(u) ≤ Ω_max·3·W_mm(u)` on the domain and TT_NCP(γ₀) holds with error `ε`, then `G_γ` holds with
-`γ = 1 − (1 − γ₀)/Ω_max` and `η = ε`. -/
+/-- **`G_γ` from TT_NCP**, with credited work `3·m·k·n`: for every cost model, protocol, segment length `d` and
+domain, if `W_ref(u) ≤ Ω_max·3·W_mm(u)` and `γ₀ ≥ d/(3k)` on the domain and TT_NCP(γ₀) holds with error `ε`, then
+`G_γ` holds with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε`. -/
 def GammaFromTTNCP : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (d : ℕ) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ))) →
-    Assumptions.TTNCP CM P D γ₀ ε →
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
+    Assumptions.TTNCP CM P d D γ₀ ε →
     Gγ CM P D (reductionGamma γ₀ Ωmax) ε
 
 /-- **Satisfiability witness for TT_NCP** at every `γ₀ ∈ [0, 1)`: for every NCP instance with at most `c` queries per
@@ -58,7 +59,7 @@ def TTNCPWitness : Prop :=
   ∀ (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (P : Params Q R Salt) (c : ℕ) (γ₀ : ℝ),
     0 ≤ γ₀ → γ₀ < 1 → P.QueryBound c →
     (∀ U : Workload, U.InDomain leadDomain → ∀ u < U.layout.N, 3 * (U.layout.shape u).Wmm ≤ P.Wref U.layout u) →
-    Assumptions.TTNCP (outputPriced3 Q R Salt) P.toProtocol leadDomain γ₀ (fun _ _ => 0) ∧
+    Assumptions.TTNCP (outputPriced3 Q R Salt) P.toProtocol P.d leadDomain γ₀ (fun _ _ => 0) ∧
     AdmitsRef (outputPriced3 Q R Salt) P.toProtocol leadDomain (fun U => U.layout.N * c)
 
 /-- **The one-segment adversary** (class (c) for NCP, and why TT_NCP needs `γ₀ ≥ d/(3k)`): for every NCP instance
@@ -116,7 +117,7 @@ def LeadWitness : Prop :=
     P.toProtocol.Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain (fun _ => 0) ∧
     (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →
-      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain γ₀ (fun _ _ => 0)) ∧
+      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain γ₀ (fun _ _ => 0)) ∧
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain ∧ 0 < Lay.N ∧ ∀ u < Lay.N, P.d ∣ (Lay.shape u).k
 
 /-- **The int8 range at the lead's noise** (red-team P2-2): for `R` a signed permutation, `E₁`, `F₁` in `[−31, 32]`

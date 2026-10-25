@@ -56,8 +56,16 @@ model's rows are registered under that key before the salt, the window refused u
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
+
+``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
+serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `receipts_producer`): h1u.cu's units kernel of
+the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
+registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
+window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
+(`receipts_check`: live row blocks at step 0, dead at the last step).
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
@@ -68,7 +76,8 @@ auditor's registration), and reused by the later windows. Each
 Commit window is also held to core's ROOTS1 steps over its own evidence (`core_verdict`: `pouw_h1_challenger.manifest_reason`,
 `credit._a_link`, `credit._arow`), which it saves for ``--core-from DIR`` on a CPU node. ``--negatives`` then serves the
 window twice more with an honest Commit, H1 handed all-zero A codes or one A row off (`NEGATIVES`), each to be refused at
-``arow``. ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
+``arow``, and on a MoE (``--role OLMOE_INT8 --int8-exact linears``) once more with one routed expert call's codes zero
+(`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -79,10 +88,12 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
+import functools
 import gc
 import gzip
 import resource
 import hashlib
+import importlib.util
 import json
 import os
 import shlex
@@ -234,13 +245,17 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     that admitted it, recorded before that round's coin, at a first slot naming it (`pouw_h1_requests.request_reason`), every slot
     of every step naming the request its row is, under a round no later than its step (`slot_reason`), the log against the
     coins (`rounds_reason`), no served row without an entry (``gaps``), and each call's A table under its round's root
-    (``a_roots``, `pouw_h1_requests.tables_reason`)."""
+    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live (VLLM-85): their
+    leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its unit's
+    circuit evaluated on its statement) in place of the openings."""
+    from verity_vllm.protocol_options import pouw_h1_live as LV
     from verity_vllm.protocol_options import pouw_h1_requests as RQ
     coins = h1.rounds.challenger.commitment
-    why = [w for e in h1.requests if (w := RQ.request_reason(h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index),
-                                                             h1.open_first(e.index), h1.admission))]
-    manifest, slots = h1.manifest(), []
-    for s in range(len(h1.round_log)):
+    live = LV.verdicts(h1)
+    why = [] if live else [w for e in h1.requests if (w := RQ.request_reason(
+        h1.round_log, coins, h1.salt, h1.rows, e, h1.open_request(e.index), h1.open_first(e.index), h1.admission))]
+    manifest, slots = h1.manifest(), [f"{v['reason']} (m = {v['m']})" for v in live if not v["ok"]]
+    for s in range(0 if live else len(h1.round_log)):
         calls = [m for m in manifest if m["step"] == s]
         for p in range(h1.rows):
             slot = h1.open_slot(s, p)
@@ -255,9 +270,11 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     out = {**h1.details["requests"], "served": requests, "entries_refused": why[:20], "slots_refused": slots[:20],
            "rounds": rounds, "entries_checked": len(h1.requests), "slots_checked": len(h1.round_log) * h1.rows,
            "slot_owners": owners, "slots_are_rows": [len(o) for o in owners] == h1.step_rows()[:len(owners)],
-           "entries": [[e.index, e.round, e.slot] for e in h1.requests]}
+           "entries": [[e.index, e.round, e.slot] for e in h1.requests], "live": live,
+           "live_accepted": f"{sum(v['ok'] for v in live)}/{h1.steps}" if live else None}
     out["ok"] = bool(out["admitted"] == requests and not out["refused"] and not out["gaps"] and not why and not slots
-                     and rounds is None and out["slots_are_rows"] and str(out.get("a_roots")).startswith("bound"))
+                     and rounds is None and out["slots_are_rows"] and str(out.get("a_roots")).startswith("bound")
+                     and (not live or len(live) == h1.steps))
     return out
 
 
@@ -272,7 +289,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact, batch_invariant=a.batch_invariant)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
                            "scheme": PH.SCHEME}
     with tempfile.TemporaryDirectory() as scratch:
@@ -280,7 +297,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
         eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
                            max_num_seqs=len(PROMPTS), engine_args={"max_num_batched_tokens": a.rows,
-                                                                   "enable_chunked_prefill": True, "enable_prefix_caching": False})
+                                                                   "enable_chunked_prefill": True, "enable_prefix_caching": False,
+                                                                   **a.engine_arg})
     steps_public = a.steps or 2 * (a.max_tokens + 2)
     doc["public"] = {"slots": len(PROMPTS), "rows": a.rows, "steps": steps_public, "max_tokens": a.max_tokens}
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager")}
@@ -336,7 +354,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
         zs = []
         for index, xq, _sa, y in h1.retained:
-            call = h1.calls[index]
+            call = h1.call(index)
             w = PH.numpy_of(layers[call.layer].weight).astype(np.int64)
             exact = xq.astype(np.int64) @ w.T
             zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, exact))})
@@ -430,7 +448,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     decl = declared_of(a)
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact, batch_invariant=a.batch_invariant)
     doc: dict[str, Any] = {"schema": SCHEMA + "/fill", "argv": sys.argv, "torch": torch.__version__,
                            "device": torch.cuda.get_device_name(0), "scheme": PH.SCHEME,
                            "public": {"slots": decl.slots, "prompt_lens": list(decl.prompt_lens), "max_tokens": decl.max_tokens,
@@ -438,11 +456,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as scratch:
         entry, how = pin(a)
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
-        args = decl.engine_args()
+        args = {**decl.engine_args(), **a.engine_arg}
         eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
                            max_num_seqs=args.pop("max_num_seqs"), engine_args=args)
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager"),
-                     "effective": eng.effective, "args": decl.engine_args()}
+                     "effective": eng.effective, "args": {**decl.engine_args(), **a.engine_arg}}
     entry_name = f"pouw:{PH.SCHEME}"
     registry = model_key_of(a.gate, a.model, a.circuit) if a.model else None
     if registry is not None:
@@ -501,24 +519,42 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
             shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
-            print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
+            doc["b_registered"] = {"s": round(time.monotonic() - t0, 1), "path": SV.NR.path()}
+            print(f"[fill] B registered under a local key {doc['b_registered']}", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
                             window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
                   if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
+        hashed_s: dict[int, float] = {}
+        nr_commit = SV.NR.commit
+        prof = None
         if served is not None and not a.handoff:
-            served_commit = served.commit
+            served_commit, at = served.commit, [0]
+            if a.profile_register:
+                import cProfile
+
+                prof = cProfile.Profile()
+                served_commit = profiled(prof, served_commit)
+
+            def hashing(*args: Any, **kw: Any) -> Any:
+                t = time.monotonic()
+                try:
+                    return nr_commit(*args, **kw)
+                finally:
+                    hashed_s[at[0]] = hashed_s.get(at[0], 0.0) + time.monotonic() - t
 
             def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
-                t = time.monotonic()
+                t, at[0] = time.monotonic(), call.step
                 if call.layer == 0:
                     print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
-                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} hashed_s(prev)="
+                          f"{round(hashed_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
                 try:
                     return served_commit(run, call, *rest)
                 finally:
                     registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
             served.commit = timed
+            SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -528,12 +564,13 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         print(f"[fill] {name} installed install_s={out['install_s']} rss_gib={rss_gib()}", flush=True)
         if served is not None and served.weights is not None:
             shared[0] = served.weights
-        lie = Hooks(f"roots1-{edit}")
+        lie, ed = Hooks(f"roots1-{edit}"), None
         if edit is not None:
             out["edit"], ed = edit, editor(edit)
             for m in layers:
                 lie.wrap(m.quant_method, "observe", lambda orig: edited(orig, ed))
         h1 = pouw.h1_run(entry_name)
+        made = receipts_producer(a.receipts, served, h1, layers, decl.steps) if a.receipts and served is not None else None
         if served is not None:
             out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
         bad: list[str] = []
@@ -557,13 +594,20 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             got = generate_static(eng.llm, prompts[:len(want)], cap)
             end = time.monotonic()
             serving[0] = False
+            if ed is not None and ed.at is not None:
+                out["edited"] = ed.at
             out["gpu"] = gpu_peak()
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["hashed_s"] = [round(hashed_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["register_path"] = SV.NR.path()
                 del served.commit
+                SV.NR.commit = nr_commit
+                if prof is not None:
+                    write_profile(prof, tdir / "register-profile.txt")
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
-                  f"rss_gib={rss_gib()}", flush=True)
+                  f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
                 rc = com.finalize()
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
@@ -578,10 +622,19 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 h1.close()
                 out["close_s"] = round(time.monotonic() - end, 1)
                 closed_measures(h1, out, len(want), lambda w: layers[w].weight, bad, decl)
+                if made is not None:
+                    t1 = time.monotonic()
+                    out["receipts"] = {**receipts_check(made), "check_s": round(time.monotonic() - t1, 1)}
+                    print(f"[fill] {name} receipts {json.dumps(out['receipts'])}", flush=True)
+                    out["ok"] = bool(out["ok"] and out["receipts"]["ok"])
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
+                    if a.live_dump and out["requests"].get("live"):
+                        from verity_vllm.protocol_options import pouw_h1_live as LV
+                        out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
+            SV.NR.commit = nr_commit
             lie.uninstall()
             comp.close()
             if com is not None:
@@ -607,7 +660,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
         if a.negatives:
             doc["negatives"] = {}
-            for edit in NEGATIVES:
+            for edit in negatives_of(layers):
                 got = window(f"commit-{edit}", plain, outdir / f"commit-{edit}", commit=True, edit=edit)
                 doc["negatives"][edit] = {**negative_verdict(got), "window": got}
                 gc.collect()
@@ -618,7 +671,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     if a.commit:
         doc["h1_solo"] = {"skipped": "--commit measures the fill window with and without the Commit"}
         h, c = doc["h1"], doc["h1_commit"]
-        negs = {k: {x: v[x] for x in ("refused", "arow", "roots1")} for k, v in (doc.get("negatives") or {}).items()}
+        negs = {k: {x: v[x] for x in ("refused", "arow", "roots1", "edited")} for k, v in (doc.get("negatives") or {}).items()}
         doc["host"] = host_memory()
         doc["commit"] = {"step_s": {"plain_mean": doc["plain"]["fill"]["step_s"], "h1_decode_median": h["decode_step_s_median"],
                                     "h1_commit_decode_median": c["decode_step_s_median"], "h1_mean": h["serve"]["step_s"],
@@ -629,7 +682,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
                          "committer": c.get("committer"),
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
-                                    and all(v["refused"] for v in negs.values()) and len(negs) == len(NEGATIVES) * a.negatives)}
+                                    and all(v["refused"] for v in negs.values())
+                                    and len(negs) == len(negatives_of(layers)) * a.negatives)}
         print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
     elif a.challenger:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
@@ -641,6 +695,30 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001
             doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     return fill_record(doc, outdir)
+
+
+def profiled(prof: Any, fn: Any) -> Any:
+    """``fn`` run under the profiler ``prof``."""
+    def run(*args: Any, **kw: Any) -> Any:
+        prof.enable()
+        try:
+            return fn(*args, **kw)
+        finally:
+            prof.disable()
+    return run
+
+
+def write_profile(prof: Any, path: Path) -> None:
+    """``prof``'s 60 functions of most cumulative time, then of most own time, as text at ``path``."""
+    import io
+    import pstats
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    stats = pstats.Stats(prof, stream=buf).strip_dirs()
+    stats.sort_stats("cumulative").print_stats(60)
+    stats.sort_stats("tottime").print_stats(60)
+    path.write_text(buf.getvalue())
 
 
 def rss_gib() -> float:
@@ -672,7 +750,7 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
     decl_w = decl if want == decl.slots else PH.Static(decl.prompt_lens[:want], cap, decl.rows, decl.steps)
     zs = []
     for index, xq, _sa, y in h1.retained:
-        call = h1.calls[index]
+        call = h1.call(index)
         w = PH.numpy_of(weight_of(call.layer)).astype(np.int64)
         zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, xq.astype(np.int64) @ w.T))})
     credit = h1.credit()
@@ -810,30 +888,48 @@ def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: 
 #: the windows ``--negatives`` serves with the Commit in the engine, each handing H1 A codes other than the ones the
 #: Commit acquires (`test_pouw_h1_commit`'s edits, here on the served engine)
 NEGATIVES = ("a-zero", "a-row-off")
+#: the window ``--negatives`` adds on a model with routed experts: one expert call's codes all zero
+EXPERT_NEGATIVE = "a-zero-expert"
 #: a window's core evidence for ``--core-from`` (`core_tie`)
 CORE_EVIDENCE = "core_evidence.json.gz"
 
 
+def negatives_of(layers: list[Any]) -> tuple[str, ...]:
+    """The windows ``--negatives`` serves over H1's linears ``layers``: `NEGATIVES`, and `EXPERT_NEGATIVE` when some are
+    routed experts (`pouw_h1_hooks.expert_names`)."""
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
+    return NEGATIVES + ((EXPERT_NEGATIVE,) if PHK.expert_names(layers) else ())
+
+
 def editor(kind: str) -> Any:
-    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe), or
-    row 1's first code moved off by one in the first call of two rows or more (``a-row-off``)."""
+    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe),
+    row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
+    expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
+    edit's ``at`` names the expert site it zeroed."""
+    from verity_vllm.engine import int8_experts as X
     done = [False]
 
-    def edit(xq: Any) -> Any:
+    def edit(layer: Any, xq: Any) -> Any:
         if kind == "a-zero":
+            return torch.zeros_like(xq)
+        if kind == EXPERT_NEGATIVE:
+            if done[0] or not xq.shape[0] or not isinstance(layer, X.ExpertSite) or layer.projection != X.DOWN:
+                return xq
+            done[0], edit.at = True, layer.name
             return torch.zeros_like(xq)
         if done[0] or xq.shape[0] < 2:
             return xq
         done[0], xq = True, xq.clone()
         xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
         return xq
+    edit.at = None
     return edit
 
 
 def edited(orig: Any, edit: Any) -> Any:
     """A layer's ``observe`` (H1's) handed ``edit`` of the arm's codes; the served y and z/y records are the arm's own."""
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> Any:
-        return orig(layer, edit(xq), s_a, y, z)
+        return orig(layer, edit(layer, xq), s_a, y, z)
     return observe
 
 
@@ -896,6 +992,7 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
     refused = bool(arow and arow[0] == "arow" and "is not the Commit's" in arow[1] and core.get("manifest") is None
                    and core.get("a_link") is None and r1.get("reason") and r1.get("own_trees"))
     return {"refused": refused, "arow": arow, "roots1": r1.get("reason"), "own_trees": r1.get("own_trees"),
+            "edited": out.get("edited"),
             "manifest": core.get("manifest"), "a_link": core.get("a_link"), "same_tokens": out.get("same_tokens")}
 
 
@@ -964,6 +1061,44 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
           flush=True)
     return doc
+
+
+PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served_h1" / "producer.py"
+
+
+@functools.cache
+def producer() -> Any:
+    """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
+    spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
+    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
+    `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
+    on the GPU), keeping the first block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`."""
+    P = producer()
+    made = P.Receipts(served, h1, P.Units(so), weight=lambda c: layers[c.layer].weight,
+                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1))
+    served.receipts = made
+    return made
+
+
+def receipts_check(made: Any) -> dict[str, Any]:
+    """The kept calls' receipts (`receipts_producer`) at the first unit of each row block against `h1tile.reference`
+    seeded from the unit's public row as the verifier builds it, word for word (`producer().check`; a unit is bad unless
+    that row is also the producer's salt, position and roots); ``ok`` needs live and dead row blocks both."""
+    rows = []
+    for c, kept in sorted(made.kept.items()):
+        ncb = kept["b"].shape[0] // 32
+        rows += [(c, u, v["live"], v["ok"] and v["pub"])
+                 for u, v in producer().check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
+    live = sum(r[2] for r in rows)
+    return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
+            "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
+            "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
 
 
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
@@ -1094,6 +1229,11 @@ def main(argv: list[str] | None = None) -> int:
                                                          "batch and the one alone)")
     ap.add_argument("--int8-exact", default="all", choices=["linears", "all"],
                     help="TargetProfile.int8_exact: linears alone for a model with no int8 K scales (a MoE: OLMoE)")
+    ap.add_argument("--no-batch-invariant", dest="batch_invariant", action="store_false",
+                    help="VLLM_BATCH_INVARIANT=0: GLM-5.3's sparse MLA has no batch-invariant backend (sm_90 or sm_120)")
+    ap.add_argument("--engine-arg", metavar="KEY=VALUE", action="append", default=[],
+                    help="an LLM() keyword over the workload's (repeatable, the value JSON when it parses): "
+                         "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
@@ -1146,6 +1286,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
     ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
                                                        "close, outside --out (pouw_h1_prover: its salt key and values)")
+    ap.add_argument("--live-dump", metavar="DIR", help="with --commit: each Commit window's live@<s> statements, the "
+                                                       "prover's rows and openings (pouw_h1_live.dump), into DIR/<window>, "
+                                                       "outside --out, for benchmarks/pouw/h1_prove/live.sh")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "
@@ -1154,6 +1297,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="fill with --served, in-process coins: after the 64's window, serve it again with the Commit in "
                          "the engine (pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory "
                          "and step time beside the plain run's and the Commit's tie (no solo window, no --registered files)")
+    ap.add_argument("--receipts", metavar="SO",
+                    help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
+                         "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
+                         "first block's linears' calls at step 0 and the last step held to h1tile.reference")
     ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
                          "of pouw_h1.FILL's 64,16,64,18")
@@ -1161,11 +1308,19 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--profile-register", action="store_true",
+                    help="fill with --served: profile each served window's registration (Served.commit) and write its "
+                         "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
+    from verity_vllm.engine.build import parse_engine_args
+    a.engine_arg = parse_engine_args(a.engine_arg)
     if a.core_from:
         return 0 if core_from(a.core_from, a.out)["ok"] else 1
+    if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
+        ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
+                 "the units kernel)")
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.negatives and not a.commit:

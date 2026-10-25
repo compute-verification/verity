@@ -152,7 +152,7 @@ open Pouw.NCP Pouw.NCP.RouteU Finset
 def TTNCPUIff : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Params Q R S) (β : ℤ) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
-    Assumptions.TTNCP_U β CM P D γ₀ ε ↔ Assumptions.TTNCP CM (P.toProtocolU β) D γ₀ ε
+    Assumptions.TTNCP_U β CM P D γ₀ ε ↔ Assumptions.TTNCP CM (P.toProtocolU β) P.d D γ₀ ε
 
 end
 
@@ -164,7 +164,7 @@ open Finset
 
 /-- **`G_γ` from TT_NCP_U** (`GamePinned.GammaFromTTNCP` on route U): for every bias `β`, count `f` of forming
 units per position, cost model, NCP instance whose `W_ref` is route U's, `wrefU f`, and domain on which every unit
-has at least `n₀ > 0` columns, TT_NCP_U(γ₀) at `β` with error `ε` gives `G_γ` for route U's protocol at `β` with
+has at least `n₀ > 0` columns and `γ₀ ≥ P.d/(3k)`, TT_NCP_U(γ₀) at `β` with error `ε` gives `G_γ` for route U's protocol at `β` with
 `Ω_max = 1 + f/(3n₀)`, so `γ = 1 − (1 − γ₀)/(1 + f/(3n₀))`, and `η = ε`. -/
 def GammaFromTTNCP_U : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
@@ -172,6 +172,7 @@ def GammaFromTTNCP_U : Prop :=
     (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU f L u) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, n₀ ≤ (U.layout.shape u).n) →
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Assumptions.TTNCP_U β CM P D γ₀ ε →
     Gγ CM (P.toProtocolU β) D (reductionGamma γ₀ (1 + f / (3 * n₀))) ε
 
@@ -190,6 +191,7 @@ def GammaFromTTNCP_U_v1 : Prop :=
     (CM : CostModel Q R S) (P : Params Q R S) (D : Layout → Prop) (γ₀ : ℝ) (n₀ : ℕ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU 24 L u) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, n₀ ≤ (U.layout.shape u).n) →
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Assumptions.TTNCP_U 128 CM P D γ₀ ε →
     Gγ CM (P.toProtocolU 128) D (reductionGamma γ₀ (1 + 8 / n₀)) ε
 
@@ -200,6 +202,7 @@ def GammaFromTTNCP_U_C2 : Prop :=
     (CM : CostModel Q R S) (P : Params Q R S) (D : Layout → Prop) (γ₀ : ℝ) (n₀ : ℕ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < n₀ → (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU 20 L u) →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, n₀ ≤ (U.layout.shape u).n) →
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Assumptions.TTNCP_U 129 CM P D γ₀ ε →
     Gγ CM (P.toProtocolU 129) D (reductionGamma γ₀ (1 + 20 / (3 * n₀))) ε
 

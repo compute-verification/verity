@@ -18,4 +18,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Serve_v4", lambda: bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=16)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
+        # greedy token selection cut along V: a chunk's step, a chunk, and a row of 200 in chunks of 64 (the last one 8 wide)
+        ("TokenSelectChunkStep_v1", lambda: bind(b1.TokenSelectChunkStep)),
+        ("TokenSelectChunk_v1", lambda: bind(b1.TokenSelectChunk, C=64)),
+        ("TokenSelectCombine_v1", lambda: bind(b1.TokenSelectCombine, V=200, C=64)),
     ]

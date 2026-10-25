@@ -94,6 +94,17 @@ theorem encodeFrame_size {kind s : Nat} {payload : ByteArray} {B : Nat} {bytes :
     simp only [ByteArray.size, Array.size_replicate, List.size_toArray, List.length_singleton, headerSize]
     omega
 
+theorem compactCell_size {record : ByteArray} {B : Nat} {bytes : ByteArray} (h : compactCell record B = some bytes) :
+    bytes.size = B := by
+  unfold compactCell at h
+  split at h
+  · cases h
+  · rename_i hle
+    cases h
+    have : (⟨Array.replicate (B - record.size) 0⟩ : ByteArray).size = B - record.size := Array.size_replicate
+    rw [ByteArray.size_append]
+    omega
+
 theorem Sized.arrive {B : Nat} {s : Shaper} (h : Sized B s) (position : Nat) {frame : Frame} (hf : frame.bytes.size = B)
     (ready : Int) : Sized B (s.arrive position frame ready) := by
   unfold Shaper.arrive
@@ -166,19 +177,50 @@ theorem upstreamEnd_pending (st : State) (s now : Nat) :
   dsimp only
   split <;> rfl
 
+theorem egressFrame_config (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) :
+    (st.egressFrame s position bytes ready).config = st.config := by
+  unfold State.egressFrame
+  dsimp only
+  split <;> rfl
+
 theorem egressEvent_config (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
     (st.egressEvent s event ready).config = st.config := by
   unfold State.egressEvent
+  split
+  · exact egressFrame_config _ _ _ _ _
+  · rfl
+
+theorem egressRecord_config (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
+    (st.egressRecord s position record ready).config = st.config := by
+  unfold State.egressRecord
+  split
+  · exact egressFrame_config _ _ _ _ _
+  · rfl
+
+theorem egressFrame_sized {st : State} (h : Sized st.config.egress.frameBytes st.shaper) (s position : Nat)
+    {bytes : ByteArray} (hb : bytes.size = st.config.egress.frameBytes) (ready : Int) :
+    Sized st.config.egress.frameBytes (st.egressFrame s position bytes ready).shaper := by
+  unfold State.egressFrame
   dsimp only
-  split <;> rfl
+  split
+  · exact Sized.arrive h position hb ready
+  · exact h.of_pending rfl
 
 theorem egressEvent_sized {st : State} (h : Sized st.config.egress.frameBytes st.shaper) (s : Nat) (event : ByteArray)
     (ready : Int) : Sized st.config.egress.frameBytes (st.egressEvent s event ready).shaper := by
   unfold State.egressEvent
-  dsimp only
   split
-  · rename_i position anchor bytes _ _ hb
-    exact Sized.arrive h position (encodeFrame_size hb) ready
+  · rename_i position bytes _ hb
+    exact egressFrame_sized h s position (encodeFrame_size hb) ready
+  · exact h.of_pending rfl
+
+theorem egressRecord_sized {st : State} (h : Sized st.config.egress.frameBytes st.shaper) (s position : Nat)
+    (record : ByteArray) (ready : Int) :
+    Sized st.config.egress.frameBytes (st.egressRecord s position record ready).shaper := by
+  unfold State.egressRecord
+  split
+  · rename_i bytes _ hb
+    exact egressFrame_sized h s position (compactCell_size hb) ready
   · exact h.of_pending rfl
 
 theorem upstreamRead_sized {st : State} (h : Sized st.config.egress.frameBytes st.shaper) (s now : Nat)
@@ -187,17 +229,30 @@ theorem upstreamRead_sized {st : State} (h : Sized st.config.egress.frameBytes s
   dsimp only
   split
   · exact h.of_pending (upstreamEnd_pending _ _ _)
-  · refine Id.bind_inv (fun (r : State) => r.config = st.config ∧ Sized st.config.egress.frameBytes r.shaper)
-      (fun (r : State) => Sized st.config.egress.frameBytes r.shaper) _ _ ?_ (fun _ h => h.2)
-    refine forIn_inv_arr (fun (r : State) => r.config = st.config ∧ Sized st.config.egress.frameBytes r.shaper)
-      ⟨rfl, h⟩ ?_
-    intro ev _ b hb
-    have key : ∀ r, (b.egressEvent s ev r).config = st.config ∧
-        Sized st.config.egress.frameBytes (b.egressEvent s ev r).shaper := fun r =>
-      ⟨(egressEvent_config _ _ _ _).trans hb.1, by
-        have := egressEvent_sized (st := b) (by rw [hb.1]; exact hb.2) s ev r
-        rwa [hb.1] at this⟩
-    exact key _
+  · split
+    · refine Id.bind_inv (fun (r : State) => r.config = st.config ∧ Sized st.config.egress.frameBytes r.shaper)
+        (fun (r : State) => Sized st.config.egress.frameBytes r.shaper) _ _ ?_ (fun _ h => h.2)
+      refine forIn_inv_arr (fun (r : State) => r.config = st.config ∧ Sized st.config.egress.frameBytes r.shaper)
+        ⟨rfl, h⟩ ?_
+      intro u _ b hb
+      rcases u with ⟨position, record⟩
+      have key : ∀ r, (b.egressRecord s position record r).config = st.config ∧
+          Sized st.config.egress.frameBytes (b.egressRecord s position record r).shaper := fun r =>
+        ⟨(egressRecord_config _ _ _ _ _).trans hb.1, by
+          have := egressRecord_sized (st := b) (by rw [hb.1]; exact hb.2) s position record r
+          rwa [hb.1] at this⟩
+      exact key _
+    · refine Id.bind_inv (fun (r : State) => r.config = st.config ∧ Sized st.config.egress.frameBytes r.shaper)
+        (fun (r : State) => Sized st.config.egress.frameBytes r.shaper) _ _ ?_ (fun _ h => h.2)
+      refine forIn_inv_arr (fun (r : State) => r.config = st.config ∧ Sized st.config.egress.frameBytes r.shaper)
+        ⟨rfl, h⟩ ?_
+      intro ev _ b hb
+      have key : ∀ r, (b.egressEvent s ev r).config = st.config ∧
+          Sized st.config.egress.frameBytes (b.egressEvent s ev r).shaper := fun r =>
+        ⟨(egressEvent_config _ _ _ _).trans hb.1, by
+          have := egressEvent_sized (st := b) (by rw [hb.1]; exact hb.2) s ev r
+          rwa [hb.1] at this⟩
+      exact key _
 
 theorem ingressTail_shaper (st : State) (t : Nat) : (ingressTail st t).1.shaper = st.shaper := by
   unfold ingressTail
@@ -209,15 +264,18 @@ theorem ingressTail_shaper (st : State) (t : Nat) : (ingressTail st t).1.shaper 
     (fun (r : State × Array Action) => r.1.shaper = st.shaper) _ _ ?_ ?_
   · refine forIn_inv_arr (fun (r : State × Array State.Started) => r.1.shaper = st.shaper) rfl ?_
     intro slot _ y hy
-    split
-    · exact hy
-    · repeat' split
-      all_goals exact hy
+    repeat' split
+    all_goals first
+      | exact hy
+      | exact (releaseSalt_keeps _ _).2.1.trans hy
   · intro y hy
     have h0 : ∀ acts : Array Action,
         (Id.run (forIn y.2 (y.1, acts) fun x r => match x with
           | .connect s => pure (ForInStep.yield (r.1, r.2.push (.connect s)))
           | .pump s => match r.1.pump s with
+            | (st', more) => pure (ForInStep.yield (st', r.2 ++ more))
+          | .saltConnect => pure (ForInStep.yield (r.1, r.2.push .connectSalt))
+          | .saltPump => match r.1.saltPump with
             | (st', more) => pure (ForInStep.yield (st', r.2 ++ more)))).1.shaper = st.shaper := by
       intro acts
       refine forIn_inv_arr (fun (r : State × Array Action) => r.1.shaper = st.shaper) hy ?_
@@ -227,6 +285,11 @@ theorem ingressTail_shaper (st : State) (t : Nat) : (ingressTail st t).1.shaper 
       · rename_i s _
         have p1 := pump_shaper r.1 s
         generalize r.1.pump s = z at p1 ⊢
+        rcases z with ⟨st', more⟩
+        exact p1.trans hr
+      · exact hr
+      · have p1 := (saltPump_keeps r.1).2.1
+        generalize r.1.saltPump = z at p1 ⊢
         rcases z with ⟨st', more⟩
         exact p1.trans hr
     split
@@ -248,6 +311,15 @@ theorem step_sized {c : Config} {st : State} (hg : Good c st) (hs : Sized c.egre
     intro st' s y hq hy
     subst hy
     exact hs.of_pending (by rw [pump_shaper, hq])
+  have opened_ok : ∀ (s : Nat) (y : State × Array Action), st.opened s = y → Sized c.egress.frameBytes y.1.shaper := by
+    intro s y hy
+    subst hy
+    exact hs.of_pending (by rw [opened_fst, pump_shaper]; rfl)
+  have saltPump_ok : ∀ (st' : State) (y : State × Array Action), st'.shaper = st.shaper → st'.saltPump = y →
+      Sized c.egress.frameBytes y.1.shaper := by
+    intro st' y hq hy
+    subst hy
+    exact hs.of_pending (by rw [(saltPump_keeps st').2.1, hq])
   unfold step
   split
   · exact hs
@@ -271,7 +343,7 @@ theorem step_sized {c : Config} {st : State} (hg : Good c st) (hs : Sized c.egre
       · cases heq; rw [linkRead_shaper]; exact hs
       · cases heq; exact hs
     · split at heq
-      · exact pump_ok _ _ _ (by rfl) heq
+      · exact opened_ok _ _ heq
       · cases heq; exact hs
     · split at heq
       · cases heq; exact hs
@@ -282,6 +354,23 @@ theorem step_sized {c : Config} {st : State} (hg : Good c st) (hs : Sized c.egre
     · dsimp only at heq
       split at heq
       · exact pump_ok _ _ _ (by rfl) heq
+      · cases heq; exact hs
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          rfl
+        · cases heq; exact hs
+      · cases heq; exact hs
+    · split at heq
+      · split at heq
+        · cases heq; exact hs
+        · cases heq; exact hs
+      · cases heq; exact hs
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          rfl
+        · cases heq; exact hs
       · cases heq; exact hs
 
 theorem init_sized (c : Config) : Sized c.egress.frameBytes (init c).shaper := by
