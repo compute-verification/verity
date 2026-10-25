@@ -153,6 +153,25 @@ def test_a_found_piece_the_driver_cant_name_is_leaked(tmp_path):
         "placed": {"pos @0": [(REPS[0], 39, "across"), (REPS[1], 39, "across")]}}
 
 
+def test_a_rescan_with_a8_searches_the_kept_files_afresh(tmp_path):
+    """With `a8`, `rescan` searches the kept files for the pieces as `cut` now cuts them: one the run's cutter didn't cut
+    (a row's zero-padded last element) is found, and leaked; a run's find of a row the driver recomputes that the fresh
+    search doesn't repeat is dropped; a salt the run drew stays, and is leaked."""
+    row = bytes(16) + b"\x07\x08\x09"
+    pieces = LS.cut({"r 0": row}, 16)
+    assert set(pieces) == {"r 0 @0", "r 0 @3", "r 0 @16"}
+    vdir = _streams(tmp_path, {112: (pieces["r 0 @16"], b"")})
+    got = {**_received({REPS[1]: ["r 0 @3", "wit salt 3 @0"]}), "leaked": ["r 0 @3", "wit salt 3 @0"]}
+    a8 = SimpleNamespace(needles=lambda p: {x: k for k, x in p.items()},
+                         find=lambda data, t: {k: 1 for nd, k in t.items() if nd in data})
+    assert LS.rescan(got, pieces, vdir, reads=_reads) == {
+        "was": ["r 0 @3", "wit salt 3 @0"], "leaked": ["r 0 @3", "wit salt 3 @0"], "structured": {},
+        "placed": {"r 0 @3": [(REPS[1], None, "file")]}}
+    assert LS.rescan(got, pieces, vdir, reads=_reads, a8=a8, rows={"r 0"}) == {
+        "was": ["r 0 @3", "wit salt 3 @0"], "leaked": ["r 0 @16", "wit salt 3 @0"], "structured": {},
+        "placed": {"r 0 @16": [(REPS[0], 112, "field")]}}
+
+
 def test_reads_are_the_formats_fields_and_its_nonces():
     """`reads` on a ``--zk`` stream of the format's shape, every vector empty but one zerocheck nonce, the icap hash, the
     lig.qn grinding nonces and the zk words: its reads, in order, are the stream's every field (the root's and the tau
