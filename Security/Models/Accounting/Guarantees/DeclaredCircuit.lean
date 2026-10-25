@@ -39,17 +39,22 @@ at most `k` passes (the audit refuses a group's root `k + 1`, `order`, in Python
 KV-credited session meets `G` when it is paced. Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where
 `c` is the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so
 the layout may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
-(`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; the schedule check is what makes `a`
-small. A layout that is the verifier's plan of a schedule the check accepted at `b ≤ a₀` bits, its steering bits, is
-`SteeredLayout` at `a = a₀ + 1` (`Properties.RemoteAudit.steered_of_checked`, #3828), under the named gap
-`Properties.RemoteAudit.ScheduleLayoutGap`: that the model's layout of a pass is the verifier's positions of the
-session's appends and the plan the pass sent. A layout that follows a coin at a counted schedule is refused
-(`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so `a` does not collapse to `|Y|`. Each
-append has its own coin, uniform and independent of the others', so a re-key, which appends a block again, draws a
-fresh one. Each append's blocks are read within `L` windows of the window `joined x t` it joined
-(`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life of `D = 30` s in whole
-windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`, #3786), with `L_min` 2
-when the prover defers residency and 1 otherwise; a paced session counts its groups at their nominal length.
+(`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
+check (#3828) at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
+`Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
+check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
+`Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
+appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin, over which
+the check refuses a schedule (memory-accounting's steer-cap, in progress), not the bits of the one schedule a session
+published: a prover whose schedule is 200 bits on most coins and 300 where it steers meets `SteeredLayout` only at 301
+(RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, open until the cap lands). A layout that follows a
+coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
+`a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
+which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
+`joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
+of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`,
+#3786), with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
+nominal length.
 
 *The prover system.* Its pass devices are verbatim (`rate-sketch-verbatim`), and they are told their pass's summary:
 `A` has a session for each value of the summary (`RateSketch.SketchSummarySession`), and pass `j` of window `w` runs
