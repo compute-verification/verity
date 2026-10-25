@@ -18,8 +18,8 @@ unit drawn `all`, or a sampled audit at `δ ≥ miss(1)`. At a smaller `δ` an a
 with the faulty units' committed gates held as advice (`SampledAuditAccepted`), so the charge adds their committed bits
 and `log2` of the number of possible faulty sets, except with probability `δ + ε_ks + ε_bind` over the selection
 (`SampledLeakAccepted`, with `SampledAuditAccepted` as its hypothesis and `EncardAccSeqsSampledLe` its count,
-`Definitions/NetworkCertifier/Guarantees/SampledCharge`). It charges every value of the inputs other than the ingress,
-not the caps here, since `RAcc`'s advice is any value of them.
+`Definitions/NetworkCertifier/Guarantees/SampledCharge`). It charges every value of the free inputs other than the
+registered ones, not the caps here, since `RAcc` pins the inputs only to the trace.
 
 The caps are summed over the `W` windows with advice, whatever the horizon. Charging a window only for the windows up
 to it would need a causality assumption about the compiler, which these guarantees don't take.
