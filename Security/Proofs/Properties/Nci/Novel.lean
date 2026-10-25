@@ -11,7 +11,7 @@ nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside a
 (`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here
 (`novelExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
 name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
-segment's first piece. `readsExact` (`Properties.Proofs.Nci.Agrees`) proves it.
+segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 
 `descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.

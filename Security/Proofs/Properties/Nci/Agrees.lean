@@ -1,15 +1,15 @@
-import Properties.Proofs.Nci.BodiesOk
-import Properties.Proofs.Nci.BodiesOk.ReadsDecoded
-import Properties.Proofs.Nci.Novel
-import Properties.Proofs.Nci.OperandsResolve
+import Proofs.Properties.Nci.BodiesOk
+import Proofs.Properties.Nci.BodiesOk.ReadsDecoded
+import Proofs.Properties.Nci.Novel
+import Proofs.Properties.Nci.OperandsResolve
 
 /-!
 # The description-sized check agrees with the check gate by gate
 
-`descAgrees_of_open` proves `DescAgrees` from three statements: `Resolve.bodiesOk` (`Properties.Proofs.Nci.BodiesOk`)
-proves `Resolve.BodiesOk`, `operandsResolve_of` (`Properties.Proofs.Nci.OperandsResolve`) proves `Walk.OperandsResolve`
+`descAgrees_of_open` proves `DescAgrees` from three statements: `Resolve.bodiesOk` (`Proofs.Properties.Nci.BodiesOk`)
+proves `Resolve.BodiesOk`, `operandsResolve_of` (`Proofs.Properties.Nci.OperandsResolve`) proves `Walk.OperandsResolve`
 from it, and `readsExact` proves `Novel.ReadsExact` (`Desc.analyze`'s reads are the unrolled operands outside each root
-node) from `BodiesOk.rootSet` (`readsExact_of_set`, `Properties.Proofs.Nci.BodiesOk.ReadsDecoded`).
+node) from `BodiesOk.rootSet` (`readsExact_of_set`, `Proofs.Properties.Nci.BodiesOk.ReadsDecoded`).
 `descAgrees_of_readsExact` proves `DescAgrees` from `ReadsExact`, and `SecurityProofs.DescAgrees` is the guarantee.
 -/
 

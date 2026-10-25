@@ -1,5 +1,5 @@
 import Proofs.Properties.Nci
-import Properties.Proofs.Nci.Agrees
+import Proofs.Properties.Nci.Agrees
 import Properties.NciDesc.Verdict
 
 /-!
@@ -8,7 +8,7 @@ import Properties.NciDesc.Verdict
 Each statement of `Properties.NciDesc.Verdict` is its `Properties.Nci` counterpart carried to every expansion by
 `DescAgrees` (`onExpansions_of`): `descReports_of` and `descWitnesses_of` from `Reports` and `Witnesses`, and the four
 thread bounds from `Throttles` and its forms, which `Proofs.Nci.DescVerdict` (package `security_proofs`) supplies.
-`DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Properties.Proofs.Nci.Agrees`).
+`DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Proofs.Properties.Nci.Agrees`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs
