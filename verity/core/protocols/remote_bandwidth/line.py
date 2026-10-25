@@ -16,7 +16,8 @@ once beyond that rate (`Charge`, from the node's rates and bursts: `charges`), s
 from outside the store while the stretch's reads are served:
 
 - held over time: at most S + (2L·R + fill)/Σ registered blocks are absent at an instant, on average over Σ, S the
-  on-chip storage in blocks and `fill` the wrong receipts W spread over the groups lo..hi at v_g = Δ_g/n_g block-ns
+  on-chip storage in blocks rounded up (`ChipCeiling` counts whole blocks, and a block split between a chip and memory
+  is one of them) and `fill` the wrong receipts W spread over the groups lo..hi at v_g = Δ_g/n_g block-ns
   each (L/n_hi in hi), highest first, at most n_g·N in group g;
 - the snapshot: at most (W + R)/P + S are absent at a pass, on average over the passes.
 
@@ -252,7 +253,7 @@ def _stretches(groups: Sequence[Group], per: int, N: int, b: int, chip_bytes: in
     e = [max(x.last_ns, s[g + 1]) if g + 1 < G else x.last_ns for g, x in enumerate(groups)]
     L = [eg - sg for eg, sg in zip(e, s)]
     gap = [s[g + 1] - s[g] if g + 1 < G else L[g] for g in range(G)]
-    S = Fraction(chip_bytes, b)
+    S = -(-chip_bytes // b)
     out = []
     for m in range(G // per - 1):
         lo, hi = m * per, (m + 1) * per

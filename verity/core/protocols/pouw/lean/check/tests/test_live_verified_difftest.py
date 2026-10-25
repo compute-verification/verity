@@ -42,7 +42,7 @@ def _args(case: dict) -> tuple | tuple[str, str]:
     roots, why = Cr._live_roots(case["entries"], got["prefix"], got["T"], got["S"])
     if why is not None:
         return why
-    return raw, got, roots, case["ms"], case["program"], case["window"], case["session"]
+    return raw, got, roots, case["ms"], case["program"], case["window"], case["session"], case["max_tokens"]
 
 
 def live_verified(case: dict) -> dict:

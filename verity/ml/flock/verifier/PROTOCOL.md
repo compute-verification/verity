@@ -142,6 +142,11 @@ The pipeline:
 The record is UTF-8 JSON. The verifier reads only the fields below; it ignores every other field, including `verdict`
 (the live server's own opinion) and timing fields. Hex strings are lowercase, even-length.
 
+Every writer emits the record in its canonical text: Lean's `Json.compress` of it (keys in code-point order, no
+whitespace, Lean's string escapes and number printing), which `live/src/record_text.rs` (`canonical_json`) and
+`verity_flock.record_text` (`session_text`) write, both held to Lean's output by `live/src/record_text_vectors.json`. The
+agreement job re-renders the stored vectors that predate it (`verifier/ci.py`).
+
 | field | type | meaning |
 |---|---|---|
 | `kind` | string | must be `"flock-live-session/v1"` |

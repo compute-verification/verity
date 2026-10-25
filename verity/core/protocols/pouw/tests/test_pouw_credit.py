@@ -129,9 +129,13 @@ WINDOW_EXPECT = {
     "req0-other-prefix": ("arow", "the window registers request table x/"),
     "req0-other-session": ("registration", "requests@0" + OTHER_REGISTRATION),
     "req0-window": ("registration", "requests@0" + OTHER_REGISTRATION),
-    "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
+    "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("a-link", "the window's layout gives it"),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
     "rows-past": ("manifest", NO_SERVED), "rows-form": ("manifest", NO_SERVED), "rows-other": ("manifest", OTHER_SERVED),
+    "length-none": ("length", "no-fixed-length"), "length-eos": ("length", "eos-keyed-row"),
+    "length-form": ("length", "is not {max_tokens, stop}"), "length-past": ("length", "ran past its public max_tokens"),
+    "length-early": ("length", "its done source is not the public cap"),
+    "length-slots": ("length", "more than the window's"),
     "t-other": ("layout", OTHER_SLOT), "t-form": ("layout", Cr.ROWS_FORM),
     "live-no-slots": ("live", "each registered once"), "live-no-requests": ("live", "each registered once"),
     "live-slots-rows": ("live", "16-bit words its live unit reads"),
@@ -144,8 +148,10 @@ WINDOW_EXPECT = {
     "live-past": ("live", "has a proof outcome and the window has"), "live-failed": ("live", "proof was rejected"),
     "live-other-circuit": ("live", "against another circuit than the window's live Program"),
     "live-m-other": ("live", LIVE_FINDING), "live-round-other": ("live", LIVE_FINDING),
-    "live-slots-other": ("live", LIVE_FINDING),
+    "live-slots-other": ("live", LIVE_FINDING), "live-caps-swapped": ("live", LIVE_FINDING),
+    "live-caps-other": ("live", LIVE_FINDING),
     "live-ok-off": ("live", LIVE_FINDING), "live-proofs-form": ("live", Cr.LIVE_PROOFS_FORM),
+    "live-v1": ("live", Cr.NOT_LIVE),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -175,12 +181,13 @@ PERIOD_EXPECT = {
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "live-refused": ("window", "so the period earns nothing: live: round "),
-    "stale-pin": ("pin", "past its freshness floor"),
+    "stale-pin": ("pin", "past its freshness floor"), "length-none": ("window", "length: no-fixed-length"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
     "extra": "`credit.cover`", "swapped": "`credit.cover`", "misaligned": "`credit.cover`",
-    "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain",
+    "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain", "leaves-cap": "is not from 1 to",
+    "layout-rows": "the window's layout gives it",
     "blocks": "rounds' equal blocks", "log-form": Cr.LOG_FORM, "round-form": "inner root is not",
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
     "table-other-round": ", which only round ", "table-past": "and the window has",
@@ -433,23 +440,33 @@ def test_the_layout_is_the_committed_circuits():
 
 def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
     """The tile's proof covers 32 | K and K < 2^17, the K its ``GemmAccumulatorS8`` binds: `credit.layout_of` on the
-    compiled `h1window.program`'s descriptor accepts a tile at K = 64, 4096 or 2^17 − 32, and refuses one at K = 2^17
-    or past or at a K no multiple of 32 (``tile-k``), the why naming the K to pad its linears to or the split. The
-    descriptors are the stand-in tile's (`test_circuit_h1window.unit`), which binds any K, and `credit.strata`, which
-    reads no tile, accepts their layouts."""
+    compiled `h1window.program`'s descriptor accepts a tile at K = 64, 4096 or 2^17 − 512 (51 chunk rows of 2560,
+    `weights.chunks`), and refuses one at K = 2^17 or past or at a K no multiple of 32 (``tile-k``), the why naming the
+    K to pad its linears to or the split. The descriptors are the chunk-row stand-in tile's
+    (`test_circuit_h1window.chunk_unit`), which binds any K, and `credit.strata`, which reads no tile, accepts their
+    layouts. At a K past 4096 that has no chunk rows (2^17 − 32, 2^17 + 32, 2^17 − 22, 4097) `h1window.program` builds
+    no window, and the Definition's bind refuses those it doesn't cover; the difftest's ``tile-k`` cases hold
+    `layout_of`'s refusal there."""
     assert (Cr.TILE_K_STEP, Cr.TILE_K_LIMIT) == (32, S8_K_LIMIT) == (32, 1 << 17)
     pad = "pad its linears' A and B rows with zero codes to K = {}".format
-    for k, fix in ((64, None), (4096, None), ((1 << 17) - 32, None), (1 << 17, SPLIT), ((1 << 17) + 32, SPLIT),
-                   ((1 << 17) - 22, SPLIT), (48, pad(64)), (100, pad(128)), (4097, pad(4128))):
-        linears, calls = (("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0))
+    lay_of = lambda k: ((("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0)))
+    for k, fix in ((64, None), (4096, None), ((1 << 17) - 512, None), (1 << 17, SPLIT), ((1 << 17) + 512, SPLIT),
+                   (48, pad(64)), (100, pad(128))):
+        linears, calls = lay_of(k)
         lay = {"calls": [list(c) for c in calls], "linears": [list(x) for x in linears], "m": 8, "tile": list(h1.TILE)}
         assert Cr.strata(lay)[1] is None, k
-        got = Cr.layout_of(_compiled(linears, calls, 8))
+        got = Cr.layout_of(_compiled(linears, calls, 8, unit=h1.chunk_unit))
         if fix is None:
             assert got == (lay, None), k
             bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
         else:
             assert got == (None, ("tile-k", f"the window's tile at K = {k} {TILE_K}{fix}")), k
+            with pytest.raises(ValueError, match="refuses this binding"):
+                bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
+    for k in ((1 << 17) - 32, (1 << 17) + 32, (1 << 17) - 22, 4097):
+        with pytest.raises(ValueError, match="no n splits it"):
+            h1.HW.program(*lay_of(k), 8, h1.TILE, unit=h1.chunk_unit)
+        if k % 32 or k >= 1 << 17:
             with pytest.raises(ValueError, match="refuses this binding"):
                 bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
 
@@ -583,10 +600,10 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_table_the_served_commit_did_not_commit_refuses(seed):
-    """ROOTS1: a round's A table of a K with every row zero, one row off, its rows offset by one call, or a call missing
-    from it, or a round's input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened
-    by the drawn units' proofs at its root, is not the Commit's value of the same rows, so the window is refused before
-    any proof is read. The honest window's tables are the Commit's, by its names: each round's A table of each K
+    """ROOTS1: a round's A table of a K with every row zero, one row off or its rows offset by one call, or a round's
+    input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened by the drawn units'
+    proofs at its root, is not the Commit's value of the same rows, so the window is refused before any proof is read;
+    one with a call missing has fewer rows than the layout gives it, which `_a_link` refuses first. The honest window's tables are the Commit's, by its names: each round's A table of each K
     ``row-table/<round>/k<K>`` and each round's ``input-ids/<round>``."""
     d = cases.window_instance(random.Random(f"honest/{seed}"))
     (_digest, reg), _ = Cr.commit_of(d["commit"])
@@ -598,7 +615,60 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
         d = cases.window_instance(random.Random(f"{name}/{seed}"), name)
         assert Cr._a_link(d["rounds"], d["entries"]) is None, name
         got, refused = Cr._window_outcomes(*cases.window_args(d))
-        assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+        if name == "a-call-missing":
+            assert got is None and refused[0] == "a-link" and "the window's layout gives it" in refused[1], refused
+        else:
+            assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+
+
+def _no_pads(*_args, **_kwargs):
+    raise AssertionError("the verifier hashed a pad of a count it should have refused first")
+
+
+def test_a_hostile_leaf_count_is_refused_before_the_verifier_hashes_any_pad(monkeypatch):
+    """A registered A value's, round A table's or receipt table's leaf count other than the rows the window's layout
+    gives it (`table_rows`), 2^40 among them, and an unsized value's (an input-ids table's) past `MAX_ROWS`, are refused
+    by `_a_link` before `tree_root` hashes any pad: every entry's count is checked first, and a hostile count is never
+    padded to its tree. In a whole window too, where `_a_link` reads the layout's rows."""
+    monkeypatch.setattr(Cr, "tree_root", _no_pads)
+    for name in ("layout-rows", "leaves-cap"):
+        for seed in range(10):
+            d = cases.a_link_instance(random.Random(f"{name}/{seed}"), name)
+            refused = Cr._a_link(d["rounds"], d["entries"], d["calls"], d["rows"])
+            assert refused is not None and refused[0] == "a-link" and A_LINK_EXPECT[name] in refused[1], (seed, refused)
+    for seed in SEEDS:
+        d = cases.window_instance(random.Random(f"honest/{seed}"))
+        for pick, why in ((lambda v: Cr.a_value(v) and Cr.a_value(v)[1] is not None, "the window's layout gives it"),
+                          (lambda v: Cr.ids_step(v) is not None, f"is not from 1 to {Cr.MAX_ROWS}")):
+            e = json.loads(json.dumps(d))
+            next(x for x in e["entries"] if isinstance(x.get("value"), str) and pick(x["value"]))["leaves"] = 1 << 40
+            got, refused = Cr._window_outcomes(*cases.window_args(e))
+            assert got is None and refused[0] == "a-link" and why in refused[1], (seed, refused)
+
+
+def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past_2_to_the_24():
+    """GLM's routed experts at K = 6144 (`weights.chunks` 2: each B row 2 leaves of `weights.leaf_words` (6144) = 1538
+    words): Σn = 9 900 032 rows are 19 800 064 leaves, above 2^24. `_weights` accepts b/6144 at those leaves under its
+    registered domain, since the layout fixes a weights' value's rows and no `MAX_ROWS` bounds them, and one-stage's
+    entry form (`_entry`) takes it; the whole-row registration (Σn leaves of `b_words` (6144)) is refused."""
+    sigma = 9_900_032
+    lay = {"calls": [["experts", 0]], "linears": [["experts", 6144, sigma]], "m": 32, "tile": [32, 32]}
+    digest, requests, session = "ef" * 64, "ab" * 64, "s-1"
+    x, w = Wt.chunks(6144), Wt.leaf_words(6144)
+    assert Cr.strata(lay)[1] is None and (x, w) == (2, 1538) and sigma < Cr.MAX_ROWS < x * sigma
+    root = hashlib.sha512(b"b/6144").digest()
+    entry = {"value": "b/6144", "root": root.hex(), "leaves": x * sigma, "words": w,
+             "domain": G.domain(digest, "b/6144", w, x * sigma).domain_id.hex()}
+    wr = Wt.weights_root({6144: root})
+    window = {"root": PS.window_open_root(wr, bytes.fromhex(requests), session).hex()}
+    assert Cr._entry(entry)
+    assert Cr._weights(window, lay, [entry], requests, session, digest, "") == (wr, None)
+    bw = Wt.b_words(6144)
+    whole = {**entry, "leaves": sigma, "words": bw, "domain": G.domain(digest, "b/6144", bw, sigma).domain_id.hex()}
+    assert Cr._weights(window, lay, [whole], requests, session, digest, "") == (
+        None, ("weights", Cr.other_weights_entry("b/6144", 6144, sigma)))
+    assert Cr._weights(window, {**lay, "linears": [["experts", 6200, sigma]]}, [entry], requests, session, digest,
+                       "")[1][0] == "layout"
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -680,18 +750,23 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
 
 
 def test_the_live_program_is_read_from_its_compiled_descriptor():
-    """`credit.live_of` reads the compiled `live.program`'s T, S and PREFIX back from its descriptor (canonical JSON
+    """`credit.live_of` reads the compiled `live.program_v2`'s T, S and PREFIX back from its descriptor (canonical JSON
     without annotations, the bytes its program digest hashes), its unit the one template its query draws, unit s round
-    s's; the cases' stand-in descriptor (`live_program`) reads the same."""
+    s's; the cases' stand-in descriptor (`live_program`) reads the same. The v1 Program, whose units don't bind each
+    request's cap to its public max_tokens, is no live Program credit reads."""
     from verity.core.protocols.pouw.circuit import live as LV
+
+    def raw(prog):
+        return codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})
+
     for t, s, prefix in ((4, 3, "h1/w-1/"), (1, 1, ""), (32, 2, "x/y/")):
-        prog = LV.program(t, s, prefix)
-        raw = codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})
-        got, why = Cr.live_of(raw)
+        prog = LV.program_v2(t, s, prefix)
+        got, why = Cr.live_of(raw(prog))
         assert why is None and (got["T"], got["S"], got["prefix"]) == (t, s, prefix)
-        assert LV.query(t) == {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [got["unit"]]}}
-        assert hashlib.sha512(raw).hexdigest() == h1.P.program_digest(prog)
+        assert LV.query_v2(t) == {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [got["unit"]]}}
+        assert hashlib.sha512(raw(prog)).hexdigest() == h1.P.program_digest(prog)
         assert Cr.live_of(bytes.fromhex(cases.live_hex(cases.live_program(t, s, prefix)))) == (got, None)
+        assert Cr.live_of(raw(LV.program(t, s, prefix))) == (None, ("live", Cr.NOT_LIVE))
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -705,6 +780,21 @@ def test_each_steps_served_rows_are_proved_by_its_live_unit(seed):
     assert got is None and refused[0] == "live" and LIVE_FINDING in refused[1]
     got, refused = _period("live-refused", seed)
     assert got is None and refused[0] == "window" and "live: round " in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
+    """Each round's live@<s> proof outcome opens every ``cap_<i>`` at the known ``caps`` of the max_tokens its period's
+    open committed (`live_reads.caps_table`): an honest window is accepted, and one whose live proof was made against the
+    requests' max_tokens in reverse order (so its hidden headers could give request 0 the last request's cap, and its
+    decode rows) or any other caps is refused, and so is a window whose live Program is v1's, whose units read no caps."""
+    d = cases.window_instance(random.Random(f"honest/{seed}"))
+    assert Cr._window_outcomes(*cases.window_args(d))[1] is None
+    for name in ("live-caps-swapped", "live-caps-other"):
+        got, refused = _window(name, seed)
+        assert got is None and refused[0] == "live" and LIVE_FINDING in refused[1], (name, refused)
+    got, refused = _window("live-v1", seed)
+    assert got is None and refused == ("live", Cr.NOT_LIVE)
 
 
 def test_the_commit_record_is_bound_under_calls_root():

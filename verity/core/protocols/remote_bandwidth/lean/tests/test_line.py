@@ -206,3 +206,11 @@ def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why
             x["released_ns"], x["last_ns"] = 40, 40
     assert line.run_json(v) == {"refused": why}
     assert D.replay(port(), v, server) == refused(why)
+
+
+def test_both_lines_charge_the_chips_in_whole_blocks_rounded_up(server) -> None:
+    """One byte over 5 blocks of chip is charged as 6 blocks, in the Python and the Lean alike."""
+    over, six = session(1, n=8, chip_bytes=5 * B + 1), session(1, n=8, chip_bytes=6 * B)
+    assert line.run_json(over) == line.run_json(six) != line.run_json(session(1, n=8, chip_bytes=5 * B))
+    six_blocks = ("output", D.canonical(line.run_json(six)))
+    assert D.replay(port(), over, server) == D.replay(port(), six, server) == six_blocks

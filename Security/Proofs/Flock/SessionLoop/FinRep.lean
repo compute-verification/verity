@@ -1,5 +1,6 @@
 import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.Claims.ZK.FinishBridge
+import Proofs.Flock.Claims.ZK.FinishTrunc
 import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
@@ -22,7 +23,8 @@ two parts, each named here, none a premise of a guarantee:
 carries the round's `n` coins, then `T_n`, its salt and its path (`CoinLayer.openOf`), and the session's coin is all of it
 (`CoinLayer.rd`), where the firewall answers `0` past `n` (`asksOf`). A squeeze reads only its first `n` coins
 (`squeezeP`), and the firewall checks `n` against the request's (`asksOf`), so the two runs agree, given every squeeze's
-count below `2^64` (the round header's `u64`). Its premises, stated here:
+count below `2^64` (the round header's `u64`, `Finish.repFwC_br`). It holds in the masked scope (`Loop.finRepCut`), where
+the table's `m`, its schedule and the extra claims are small enough (`Loop.finRepBounds`). Its premises, stated here:
 
 * **(c.1) `Loop.FinRepCoins`**: the request's coins are the opened coins from the rep's first round (`Masked.repBase`),
   below each round's count, and the rep ends by the last opening. It holds in the masked scope (`Loop.finRepCoins`).
@@ -63,6 +65,38 @@ theorem proofFile_ok {t : Tab} {rep : ℕ} {dom : ByteArray} {q : RepIn} {f : By
         simp [hk] at h
 
 end Flock.Firewall.Finish
+
+namespace Claims.ZKMal.Masked
+
+open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
+
+open _root_.Flock FlockDeploy FlockComplete in
+/-- **In the masked scope every table has at most 1,024 regions** (the scope check's `checkInRange`, as `live_bounds`). -/
+theorem scope_regions {x : Msg} (hsc : Claims.Flock.Scope (deployZk Readable.relation) x) {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (hsx : setupOf true x = some (s, spec, sts)) :
+    ∀ j (hj : j < sts.size), sts[j].regions.size ≤ 1024 := by
+  obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk Readable.relation) Readable.relation (readOf true) rfl
+    (fun _ _ h => readOf_zk h) x).1 hsc
+  have hi := (setupOf_some hsx).1
+  unfold Readable.parseBytes readOf at hp
+  rw [hi] at hp
+  have ht := Readable.toRead_of_parse (r := s.read) hp
+  obtain ⟨hck, -⟩ := (Readable.scope_ok_iff p).1 hsc
+  have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hck).1
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
+  have hset := Ins.setup_read (setupOf_some hsx).2
+  rw [← ht] at hset
+  unfold Readable.Read.setup at hset
+  rw [hpi] at hset
+  intro j hj
+  obtain ⟨d, hd, -⟩ := (HiddenExec.setupTables_setupOne hset).2 j hj
+  rcases Bool.eq_false_or_eq_true (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count j).hiddenOutputs with hh | hh
+  · rw [HiddenExec.setupOne_hidden hh] at hd
+    exact FlockVBridge.Family.spec_regions_le (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd)
+  · rw [HiddenExec.setupOne_public hh] at hd
+    exact FlockVBridge.Family.setupH_regions_le hd
+
+end Claims.ZKMal.Masked
 
 namespace Claims.ZKServer
 
@@ -366,6 +400,97 @@ def FinRepCut : Prop :=
           tb.extra tb.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l).1 =
         .ok (p, tr)
+
+theorem flatMap_size_const {α β : Type} (xs : Array α) (f : α → Array β) (c : ℕ) (h : ∀ a, (f a).size = c) :
+    (xs.flatMap f).size = xs.size * c := by
+  rw [← Array.length_toList, Array.toList_flatMap, List.length_flatMap, ← Array.length_toList]
+  have e : (fun a => (f a).toList.length) = fun _ => c := funext fun a => by rw [Array.length_toList, h]
+  rw [e]
+  generalize xs.toList = L
+  induction L with
+  | nil => simp
+  | cons a L ih => simp only [List.map_cons, List.sum_cons, ih, List.length_cons, Nat.succ_mul]; omega
+
+theorem wordsAt_size_le (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : (wordsAt x cs q).size ≤ 65536 := by
+  unfold wordsAt
+  split
+  · simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range]
+    exact Nat.min_le_right _ _
+  · simp
+
+/-- **A rep's sizes in the masked scope**: rep stream `k`'s table has `25 ≤ m ≤ 35` and its `--zk` schedule
+(`tables_of_setup`, `Count.tabOfLevel0_sched`), and its request's extra claims, a region's point at each link point, are
+at most `1024 · 65536` (`scope_regions`, `wordsAt_size_le`). -/
+theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) {s0 spec}
+    (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < 2 * spec.tables.size)
+    {ρ h tb hi q f} (hR : RepAt L₀.draws src x w ρ h spec k tb hi q f) :
+    25 ≤ tb.st.m ∧ tb.st.m ≤ 35 ∧ _root_.Flock.Zk.schedule tb.st.m = .ok (tb.sch, tb.tPad) ∧
+      (_root_.Flock.Firewall.Finish.claimsOf q.xs).size + 2 < 2 ^ 64 := by
+  have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
+    intro α β y f b hb
+    cases y with
+    | error e => cases hb
+    | ok a => exact ⟨a, rfl, hb⟩
+  obtain ⟨-, -, hT, hall⟩ := FlockComplete.ZkTables.tables_of_setup hsc hsx
+  have hj : k / 2 < (Masked.stsOf x).size := by omega
+  obtain ⟨hr, hq, -⟩ := hR
+  unfold realOf at hr
+  rw [hsx] at hr
+  try dsimp only at hr
+  obtain ⟨⟨g, d, hi'⟩, -, hr⟩ := bok hr
+  obtain ⟨l, -, hr⟩ := bok hr
+  obtain ⟨tb', htb, hr⟩ := bok hr
+  have htb' : tb' = tb := by cases hr; rfl
+  rw [htb'] at htb
+  obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htb
+  obtain ⟨hm1, hm2, -⟩ := hall (k / 2) hj
+  have hm : tb.st.m = (Masked.stsOf x)[k / 2].m := by
+    rw [hts]
+    show (Masked.stsOf x)[k / 2]!.m = _
+    rw [getElem!_pos (Masked.stsOf x) (k / 2) hj]
+  refine ⟨by rw [hm]; exact hm1, by rw [hm]; exact hm2, by rw [hts]; exact hsch, ?_⟩
+  unfold repInOf at hq
+  obtain ⟨⟨lay, ms⟩, -, hq⟩ := bok hq
+  have hqx : q.xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[k / 2]!
+      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]!
+        (wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0)) := by
+    cases hq
+    rfl
+  have hreg := Claims.ZKMal.Masked.scope_regions hsc hsx (k / 2) hj
+  rw [← getElem!_pos (Masked.stsOf x) (k / 2) hj] at hreg
+  have hex : ∀ (st : _root_.Flock.Stmt) (pts : Array (Array F128)),
+      (_root_.Flock.Firewall.Drive.extras st pts).size = st.regions.size * pts.size := by
+    intro st pts
+    unfold _root_.Flock.Firewall.Drive.extras
+    exact flatMap_size_const _ _ _ fun _ => Array.size_map
+  have hlp : ∀ (st : _root_.Flock.Stmt) (c : Array F128),
+      (_root_.Flock.Firewall.Drive.linkPoints st c).size ≤ c.size := by
+    intro st c
+    unfold _root_.Flock.Firewall.Drive.linkPoints
+    simp only [Array.size_map, Array.size_range]
+    exact Nat.div_le_self _ _
+  have hx : q.xs.size ≤ 1024 * 65536 := by
+    rw [hqx, hex]
+    exact Nat.mul_le_mul hreg (le_trans (hlp _ _) (wordsAt_size_le _ _ _))
+  simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+  exact lt_of_le_of_lt (Nat.add_le_add_right hx 2) (by norm_num)
+
+/-- **`FinRepCut` holds in the masked scope**: the firewall's rep is `repFwC` at the request's coins (`repFw_eq`, at the
+table and pads (c.2) gives), and `repFwC` at those coins and at the opened coins from the rep's first round, which agree
+with them below each round's count and run past none (c.1), is related (`repFwC_br`), every squeeze below `2^64` coins
+(`finRepBounds`, `zkSchedule_small`). -/
+theorem finRepCut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
+    FinRepCut L₀ src real wk x w := by
+  intro ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hR ic' p tr hic' hrun l hl
+  obtain ⟨hend, hcoin⟩ := finRepCoins L₀ src real wk x w hsc ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hR
+  obtain ⟨hms, hps, hab, htw⟩ := finRepPads L₀ src real wk x w hsc ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hR
+  obtain ⟨h25, h35, hsch, hxs⟩ := finRepBounds (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hk hR
+  obtain ⟨hn, hq⟩ := FlockComplete.JsonRT.zkSchedule_small h25 h35 hsch
+  rw [_root_.Flock.Firewall.Finish.repFw_eq (M := StateT ℕ V) _ _ tb.st hms tb.sch _ _ _ _ _ _ _ _ _ _ _ _ hps hab htw
+    (fun e f => _root_.Flock.Firewall.Finish.throw_bind_sv e f)] at hrun
+  exact (_root_.Flock.Firewall.Finish.repFwC_br q.coins (Masked.repBase x k) (refK x)
+    (fun k i => Masked.slotAt (finCoins x ops) k i) hend hcoin tb.st tb.sch tb.tPad (k % 2) _ tb.g tb.cm0.toC _ _ _
+    q.vals tb.extra tb.lanePad _ (by omega) hxs hn hq _ 0 l (by omega) (p, tr) q.coins.size hrun).1
 
 /-- **(c.3) The firewall's rep at the views**: at a `Finish` `FinishIs` reads, at the schedules and level 0's
 commitments (a) gives, rep stream `k`'s extra claims and pads commitment from the views, and a history at its first

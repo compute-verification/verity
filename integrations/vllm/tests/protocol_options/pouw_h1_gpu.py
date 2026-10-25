@@ -630,6 +630,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
+                    if a.live_dump and out["requests"].get("live"):
+                        from verity_vllm.protocol_options import pouw_h1_live as LV
+                        out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
             SV.NR.commit = nr_commit
             lie.uninstall()
@@ -966,14 +969,16 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
     (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
-    the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
+    leaves a row past K = 4096). ``tied`` when none refuses."""
     from verity.core.protocols.pouw import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
+    rows = CR.table_rows(layout, len(rounds), CR._prefix(raw)) if why is None and isinstance(rounds, list) else None
     out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
-                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+                           "a_link": CR._a_link(rounds, entries, len(ev["calls"]), rows), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
     out["commit_values"] = len(got[1]) if got else None
@@ -1283,6 +1288,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--handoff-state", metavar="DIR", help="with --handoff: the prover's scratch the window is saved in")
     ap.add_argument("--prover-dir", metavar="DIR", help="fill with --served: the prover's private directory, kept past the "
                                                        "close, outside --out (pouw_h1_prover: its salt key and values)")
+    ap.add_argument("--live-dump", metavar="DIR", help="with --commit: each Commit window's live@<s> statements, the "
+                                                       "prover's rows and openings (pouw_h1_live.dump), into DIR/<window>, "
+                                                       "outside --out, for benchmarks/pouw/h1_prove/live.sh")
     ap.add_argument("--close-from", metavar="DIR", help="no GPU: close and release the window a --handoff run saved in DIR, "
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "

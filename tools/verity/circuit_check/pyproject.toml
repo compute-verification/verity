@@ -67,6 +67,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/grid.py", "verity/core/protocols/certifier/schedule.py",
           "verity/core/protocols/certifier/head_check.py", "verity/core/protocols/certifier/head_check.circuit-check.py",
           "verity/core/protocols/certifier/head_check.circuit-check.json",
+          "verity/core/protocols/certifier/replay_step.py", "verity/core/protocols/certifier/replay_step.circuit-check.py",
+          "verity/core/protocols/certifier/replay_step.circuit-check.json",
           "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
           "verity/core/protocols/certifier/served.circuit-check.json",
           "verity/core/protocols/certifier/advice.py", "verity/core/protocols/certifier/advice_check.py",

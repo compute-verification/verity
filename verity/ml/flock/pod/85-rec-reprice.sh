@@ -64,7 +64,8 @@
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
 #              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
 #              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
-#              one to; empty: none)
+#              one to; the step refuses a W none of the parts it checks reads: challenge needs an alg part, query L0;
+#              empty: none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -772,6 +773,13 @@ lean)
   rec_inner_at() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session --rec-inner-transcript $1/public.json"; }
   REC_INNER=$(rec_inner_at $INNER)
   NEGS=
+  # a forged inner coin only the parts that read it can refuse (lean_verdicts.py's COVERS): without one among the parts
+  # this step checks, the step refuses to run it rather than judge it
+  VPARTS=$(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | xargs -rn1 basename | grep -v '^forged-' | while read -r l; do want $l && echo $l; done)
+  for w in ${NEG_INNER-challenge query}; do
+    [ -z "$VPARTS" ] || python3 verity/ml/flock/pod/lean_verdicts.py --cover inner-$w $VPARTS \
+      || { echo "lean: NEG_INNER=$w: include a part that reads it in LEVELS, or leave $w out of NEG_INNER"; exit 1; }
+  done
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
       && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1

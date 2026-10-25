@@ -45,6 +45,11 @@
   registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
   open root (`registered.domain`'s ``window``, `Served.root`, #3044), row j's salt `audit.hm96_salt` of the run's key at
   the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
+* **Chunk rows** (SPLITK). Past K = 4096 an A or B row of K is n = `weights.chunks` (K) leaves (6144 → 2, 14336 → 4):
+  row r's leaf n·r + c is its codes [c·K/n, (c + 1)·K/n) then its scale (`chunk_words`, `h1zy.ROW` (K/n)), so
+  ``a/<K>@<s>`` is n·M leaves a call and ``b/<K>`` n·Σn, leaf j salted at j, as `h1window.program`'s chunked
+  parameters and credit's `table_rows` and `_weights` count them. The Commit's AROW (`Served.a_words`) is the same
+  leaves. At K <= 4096 a row is one leaf, as before.
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
@@ -137,6 +142,18 @@ def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
 
 
+def chunk_words(codes: np.ndarray, scales: np.ndarray, n: int) -> np.ndarray:
+    """int8 code rows ``(r, K)`` and their f32 scales ``(r,)`` as ``n`` leaves a row (`weights.chunks` (K), SPLITK):
+    leaf ``n·i + c`` row i's codes ``[c·K/n, (c + 1)·K/n)`` then its scale, `row_words` of the codes' ``(n·r, K/n)``
+    view and each scale n times, ``(n·r, K/(2n) + 2)``. At n = 1 it is `row_words`. ValueError on an n that doesn't
+    divide K into whole u16 words."""
+    c = np.ascontiguousarray(np.asarray(codes, dtype=np.int8))
+    r, k = c.shape
+    if type(n) is not int or n < 1 or k % (2 * n):
+        raise ValueError(f"K = {k} is not {n} chunks of whole u16 words")
+    return row_words(c.reshape(n * r, k // n), np.repeat(np.asarray(scales, "<f4").reshape(r), n))
+
+
 def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
     """A step's input token ids over `slots` (M) as u16 words ``(slots, 2)``, each id's u32 little-endian, `EMPTY_ID` for
     None and past them. ValueError on more ids than slots or an id that isn't a u32 below `EMPTY_ID`."""
@@ -226,9 +243,10 @@ def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]
 @dataclass(frozen=True)
 class Weights:
     """A period's registered weights (VLLM-71): each K's ``<prefix>b/<K>``, the B rows of K's linears in the window's
-    linear order, each row its K int8 codes then its f32 s_w (`row_words`), registered once (`register_weights`) under the
+    linear order, each row its K int8 codes then its f32 s_w as `weights.chunks` (K) = n leaves (`chunk_words`; one
+    leaf, `row_words`, at K <= 4096), registered once (`register_weights`) under the
     period's declared Program (``circuit``, its `program_digest`), binding no window, its salts fixed for the
-    registration. ``at`` gives each linear's K and first row in its ``b/<K>``. Every window of the period registers these
+    registration. ``at`` gives each linear's K and first row in its ``b/<K>``, whose first leaf is n times it. Every window of the period registers these
     same entries, and `root`, `credit.weights_root` of their roots, is the weights' root every window's open root binds
     and the period-open signs (``--model``'s registration, `ModelKey`)."""
 
@@ -243,33 +261,34 @@ class Weights:
         return [self.registered[k].entry() for k in sorted(self.registered)]
 
     def matches(self, w: int, codes: np.ndarray, scales: np.ndarray) -> bool:
-        """Whether linear `w`'s served codes and s_w are its registered rows."""
+        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo."""
         k, lo = self.at[w]
-        reg = self.registered[k]
-        got = row_words(codes, scales)
-        return np.array_equal(got, np.asarray(reg.rows[lo:lo + len(got)], np.uint16))
+        n, reg = Wt.chunks(k), self.registered[k]
+        got = chunk_words(codes, scales, n)
+        return np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
 
 
 def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: Mapping[int, tuple[Any, Any]], key: bytes,
                      prefix: str = PREFIX) -> Weights:
     """The period's `Weights`: for each K, ascending, ``<prefix>b/<K>`` over K's linears' rows (``shapes`` each linear's
-    ``(n, K)``, in the window's order; ``weights`` each linear's int8 codes ``(n, K)`` and f32 s_w ``(n,)``), committed by
-    `pouw_h1_registered.commit` under the declared Program's digest ``circuit`` with no window, row j's salt
+    ``(n, K)``, in the window's order; ``weights`` each linear's int8 codes ``(n, K)`` and f32 s_w ``(n,)``), each row
+    `weights.chunks` (K) leaves (`chunk_words`), committed by
+    `pouw_h1_registered.commit` under the declared Program's digest ``circuit`` with no window, leaf j's salt
     `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
-    Committed once, before the period's first window's salt. ValueError on an odd K or a weight that isn't its linear's
-    n × K int8 codes and n scales."""
+    Committed once, before the period's first window's salt. ValueError on an odd K, a K `weights.chunks` refuses, or a
+    weight that isn't its linear's n × K int8 codes and n scales."""
     ks, reg, at = sorted({int(k) for _n, k in shapes}), {}, {}
     for i, k in enumerate(ks):
         if k % 2:
             raise ValueError(f"K = {k}: a row's codes are whole u16 words")
-        rows, lo = [], 0
+        x, rows, lo = Wt.chunks(k), [], 0
         for w, (n, kw) in enumerate(shapes):
             if kw != k:
                 continue
             codes, scales = (np.asarray(x) for x in weights[w])
             if codes.dtype != np.int8 or codes.shape != (n, k) or scales.reshape(-1).shape != (n,):
                 raise ValueError(f"linear {w}'s weight is not its {n} × {k} int8 codes and {n} scales")
-            rows.append(row_words(codes, scales.astype("<f4").reshape(-1)))
+            rows.append(chunk_words(codes, scales.astype("<f4").reshape(-1), x))
             at[w], lo = (k, lo), lo + n
         words = np.concatenate(rows)
         reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
@@ -428,10 +447,10 @@ class Served:
 
     def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
         """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
-        [m] (`row_words`), then zero codes of scale 0."""
+        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves)."""
         full, sc = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
         full[:len(codes)], sc[:len(codes)] = codes, scales
-        return row_words(full, sc)
+        return chunk_words(full, sc, Wt.chunks(call.k))
 
     @property
     def steps(self) -> int:
@@ -598,7 +617,7 @@ class Served:
         if not all(w in self._weights for w in mine):
             return True
         if self.weights is None:
-            words = np.concatenate([row_words(self._weights[w][1], self._scales[w]) for w in mine])
+            words = np.concatenate([chunk_words(self._weights[w][1], self._scales[w], Wt.chunks(call.k)) for w in mine])
             out[b] = self._register(run, b, words, B_NONCE + ks.index(call.k), None)
         elif bad := [w for w in mine if not self.weights.matches(w, self._weights[w][1], self._scales[w])]:
             self.refused.append(f"call {call.index}: linears {bad}' codes or s_w are not their rows of the period's "
@@ -738,6 +757,6 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
-           "V2", "Weights", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+           "V2", "Weights", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of"]

@@ -105,10 +105,10 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
 
 def test_the_table_against_the_red_teams_closed_form():
     """At the structural d = 1 the closed form caps nothing at any of the table's residuals, leaving D = 1 at the
-    ladder's r-hat (PoUW's floor credit, 0.508), as the ladder's memory rungs have it; at central boundary bits the fit
+    ladder's r-hat (PoUW's floor credit, 0.505), as the ladder's memory rungs have it; at central boundary bits the fit
     bound is stronger there, and void from 50 GB, where a server holds N* weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}
-    assert T.audited_residual(F.params(1.0)) == pytest.approx(0.508)
+    assert T.audited_residual(F.params(1.0)) == pytest.approx(0.505)
     assert rows[1.0]["D_closed"] == rows[6.0]["D_closed"] == rows[13.0]["D_closed"] == 1.0
     assert rows[6.0]["D_fit"] > rows[6.0]["D_closed"] and rows[13.0]["D_fit"] > rows[13.0]["D_closed"]
     assert rows[50.0]["periods"] == 0 and rows[166.0]["periods"] == 0

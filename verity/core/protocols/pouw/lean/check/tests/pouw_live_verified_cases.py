@@ -5,7 +5,7 @@ live units read and the verifier of record's answers.
 A `live_verified` case is a live Program (`pouw_credit_cases.live_program`, at T of one to four rows, one to three
 rounds, under a prefix or none), its registered entries (each round's slot table and round 0's request table, T rows
 each, `credit._live_roots`', with other values beside them), each step's m_s (at most T), the window Program's digest,
-its open root and its session, one statement a round in a shuffled order (its circuit and public files' paths and one or
+its open root, its session and its period's committed max_tokens (fewer or more requests than T), one statement a round in a shuffled order (its circuit and public files' paths and one or
 two sessions' directories), the committed circuit files (the live template's among them), and `runs`: null, the first
 of the Lean's two calls (`credit._lean_live_verified`), or the answers the served path gives: one a statement
 `credit._live_asks` names, in its order, until one the Lean refuses at, each session accepted with its round's unit and
@@ -13,7 +13,7 @@ its registered finding the ``--registered`` file's ports at their values and roo
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form, drop the live
 circuit file, break the statements' form, name a round past the window's or one twice, give a descriptor that is no
-live Program (``not-live``), and leave a live table unregistered, registered twice or at other than T rows
+v2 live Program (``not-live``, a v1 Program among them), and leave a live table unregistered, registered twice or at other than T rows
 (``no-table``). Its mutations of the answers (`RUN_NAMES`) make one statement's verifier fail to run (``error``) or
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
 
@@ -92,7 +92,8 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
     entries = _entries(rng, prefix, t, steps)
     case = {"files": files, "statements": statements, "descriptor": C.live_hex(p), "entries": entries,
             "ms": [rng.randint(0, t) for _s in range(steps)], "program": C._hex(rng), "window": C._hex(rng),
-            "session": f"session-{rng.randrange(1 << 16)}", "runs": None}
+            "session": f"session-{rng.randrange(1 << 16)}",
+            "max_tokens": [rng.randint(1, 40) for _q in range(rng.randint(1, t + 1))], "runs": None}
     st = rng.choice(statements)
     match name:
         case "honest" | "error" | "refused" | "rejected" | "unit-other":
@@ -115,7 +116,8 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
             zero = f"{Cr.LIVE_FN}{{T=0,S={steps},PREFIX=\"\"}}"
             case["descriptor"] = rng.choice([b"{}".hex(), C.live_hex({**p, "schema": "verity-ir/descriptor/v0"}),
                                              C.live_hex({**p, "program_fn": zero}),
-                                             C.live_hex({**p, "program_fn": "PouwH1Window_v3{}"})])
+                                             C.live_hex({**p, "program_fn": "PouwH1Window_v3{}"}),
+                                             C.live_hex(C.live_program(t, steps, prefix, version=1))])
         case "no-table":
             v = rng.choice([LR.table(prefix, LR.SLOTS, rng.randrange(steps)), LR.table(prefix, LR.REQUESTS)])
             e = next(x for x in entries if x["value"] == v)
@@ -175,4 +177,4 @@ def reference_asks(case: dict) -> list[dict]:
     if why is not None:
         return []
     return Cr._live_asks(case["files"], case["statements"], raw, got, roots, case["ms"], case["program"],
-                         case["window"], case["session"])[0]
+                         case["window"], case["session"], case["max_tokens"])[0]

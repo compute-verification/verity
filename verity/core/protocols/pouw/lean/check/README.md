@@ -26,7 +26,7 @@ Python reference held to it.
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `rounds`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
-| `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each drawn unit's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its draw coin, its round log the challenger's, its A trees tied to its round roots, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, its entries and its drawn units' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, and a period counted only closed and complete (RT4-INT-32, -34 and -42) |
+| `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each drawn unit's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its draw coin, its round log the challenger's, its A trees tied to its round roots, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, its entries and its drawn units' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, its served rows the fixed length its period's open committed (`Internal.length`, `committedLength`; ASK-39), and a period counted only closed and complete (RT4-INT-32, -34 and -42) |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 | `PouwCheck.LeafOwn` | not `credit.py`'s: a window unit's leaf statements' tile and the placement of the values they read in the window's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the window's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
 | `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
@@ -102,7 +102,7 @@ committed circuit's, never the window's evidence: read from the descriptor whose
 (its program function's record, its templates' A and B rows for R and C), whose root's nodes other than inputs must be
 each call's (M/R)·(n/C) instances of K's template in order. `window` runs every step on one served window and its one
 round log, crediting only when all accept: `credited`, `roundsCheck` (the log's roots are the ones the challenger
-received, `core_check.rounds`), `aLink` over the window's registered entries, `layoutOf`, `servedRows`, then `outcome`'s rule with the
+received, `core_check.rounds`), `aLink` over the window's registered entries, `layoutOf`, `servedRows`, `length`, then `outcome`'s rule with the
 stream its root, the registration its draw root and the receipt `{"receipts": …}`, then `registration`. `period`: the windows
 presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
 so a period with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also
@@ -122,7 +122,13 @@ each other value's a proof opened, is the one one-stage's registration gives it 
 SHA-512 and, for every value but the weights' `…/b/<K>`, the window's open root (`SampledProofs.Registered.domainAt`,
 PRF-127); and each proof was verified against that descriptor, opened only values the window registers once, each at
 its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
-is not the one its sessions opened are refused.
+is not the one its sessions opened are refused. `length`: the period's open commits each request's public max_tokens
+with the public-cap done source (`committedLength`, `{max_tokens, stop}`, stop `fixed`; Daniel, 19 Oct, ASK-39), and the
+served rows m_s each step's manifest rows fixed before the draw coin (`servedRows`) are that fixed length's schedule,
+every request admitted in round 0: round 0 serves at least one row a request, round s ≥ 1 one decode row for each
+request whose max_tokens is past s. A period whose open commits no length is
+not of record (`no-fixed-length`), an EOS-keyed stop mode is refused (`eos-keyed-row`), and a round serving more or fewer
+rows ran a request past its public max_tokens or stopped one before it (`length-mismatch`).
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.
@@ -153,7 +159,8 @@ missing, a period unclosed or a window of it missing or out of order, an A tree 
 descriptor whose record names another layout than its nodes, a round log the challenger never received, entries or a
 drawn unit's proof of another registration than the window's, an entry whose root is not its sessions', a window of a
 period whose B rows, one row's s_w or every code, are not the ones the period's open signed, a period whose open signs
-no weights' root, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
+no weights' root, a window whose request runs past its public max_tokens or stops before it, a period whose open
+commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean
