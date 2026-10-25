@@ -34,8 +34,9 @@ every KV read in its place, is the id the user sent there.
   not the sink, every other slot the sink;
 - the members sorted by class (`IoTieRoute` over M2 = 2^D2 ≥ NK + E): each slot (class, 0, value), each opened entry
   (ekeys[e], 1, its id), the rest the sink; `IoTieIdsChain` checks the classes non-decreasing, the values equal within
-  a class but the sink, and each class's first member a slot. A Beneš network is a permutation under any switches, so
-  every member is in the sorted order and the switches only sort.
+  a class but the sink, and each class's first member a slot (`IoTieIdsFirst` on the first member and `IoTieIdsLink`
+  on each member and its successor, one batch). A Beneš network is a permutation under any switches, so every
+  member is in the sorted order and the switches only sort.
 Public: IoTieRequest's lanes, the Commit's root and domain id (its registration), the steps (the port's read
 positions), `keys` and `ekeys`. Witness: the row and the read rows (each with its salt and path, the registered
 reads'), and both routings' switches.
@@ -429,31 +430,70 @@ IoTieIdsKeys = _part(
     "(2^CB − 1); a field's class is its record's, every other slot's the sink")
 
 
+def _member(S, m):
+    return m[:S.CB], m[S.CB], m[S.CB + 1:]
+
+
+def _check_member(S):
+    if type(S.CB) is not int or not 1 <= S.CB <= 32:
+        raise ValueError(f"a chain's member has 1 <= CB <= 32, not CB={S.CB!r}")
+
+
+def _sig_first(S):
+    _check_member(S)
+    return (("m", Array(S.CB + 33, BIT)),), BIT
+
+
+def _build_first(C, S, m):
+    key, kind, _ = _member(S, m)
+    return [C.AND(kind, and_reduce(C, key).inv()).inv()]
+
+
+IoTieIdsFirst = _part(
+    "IoTieIdsFirst", ("CB",), _sig_first, _build_first,
+    "1 iff the member (class, kind, value) is a slot (kind 0) or its class is the sink (2^CB − 1): the chain's first")
+
+
+def _sig_link(S):
+    _check_member(S)
+    return (("a", Array(S.CB + 33, BIT)), ("b", Array(S.CB + 33, BIT))), Array(3, BIT)
+
+
+def _build_link(C, S, a, b):
+    (ka, _, va), (kb, kind, vb) = _member(S, a), _member(S, b)
+    same, sink = IT._eq(C, ka, kb), and_reduce(C, kb)
+    return [IT._lt(C, kb, ka).inv(), C.AND(C.AND(same, sink.inv()), IT._eq(C, va, vb).inv()).inv(),
+            C.AND(C.AND(same.inv(), sink.inv()), kind).inv()]
+
+
+IoTieIdsLink = _part(
+    "IoTieIdsLink", ("CB",), _sig_link, _build_link,
+    "(b's class isn't below a's, b has a's value if they share a class but the sink, b is a slot if it starts a class "
+    "but the sink) of a member a and its successor b (class, kind, value), CB-bit classes, the sink 2^CB − 1")
+
+
 def _sig_chain(S):
     if type(S.CB) is not int or not 1 <= S.CB <= 32 or type(S.D2) is not int or not 1 <= S.D2 <= 32:
         raise ValueError(f"a chain has 1 <= CB <= 32 and 1 <= D2 <= 32, not CB={S.CB!r}, D2={S.D2!r}")
     return (("members", Array(1 << S.D2, Array(S.CB + 33, BIT))),), BIT
 
 
-def _build_chain(C, S, *ms):
-    def parts(m):
-        return m[:S.CB], m[S.CB], m[S.CB + 1:]
-
-    key, kind, _ = parts(ms[0])
-    oks = [C.AND(kind, and_reduce(C, key).inv()).inv()]
-    for t in range(1, len(ms)):
-        (ka, _, va), (kb, kind, vb) = parts(ms[t - 1]), parts(ms[t])
-        same, sink = IT._eq(C, ka, kb), and_reduce(C, kb)
-        oks += [IT._lt(C, kb, ka).inv(), C.AND(C.AND(same, sink.inv()), IT._eq(C, va, vb).inv()).inv(),
-                C.AND(C.AND(same.inv(), sink.inv()), kind).inv()]
-    return [and_reduce(C, oks)]
+def _body_chain(B, S, members):
+    W, n, m = S.CB + 33, 1 << S.D2, HC._refs(members)
+    pairs = Array(n - 1, Array(W, BIT))
+    first = B.call(bind(IoTieIdsFirst, CB=S.CB), HC._coll(Array(W, BIT), m[:W]))
+    links = B.batch(bind(IoTieIdsLink, CB=S.CB), HC._coll(pairs, m[:W * (n - 1)]), HC._coll(pairs, m[W:]), axes=(0, 0))
+    # one And over the first member's bit and each link's three in order: the flat build's `and_reduce`, gate for gate
+    bits = [*HC._refs(first), *HC._refs(links)]
+    return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
 
 
-IoTieIdsChain = _part(
-    "IoTieIdsChain", ("CB", "D2"), _sig_chain, _build_chain,
-    "1 iff the 2^D2 members (class, kind, value) are sorted by class, CB bits, each member with its predecessor's "
-    "class has its value unless the class is the sink (2^CB − 1), and each member that starts a class other than the "
-    "sink is a slot (kind 0)")
+IoTieIdsChain = CompositeDefinition(
+    "IoTieIdsChain", 1, ("CB", "D2"), _sig_chain, _body_chain, conformance="exact-model-tested",
+    doc="1 iff the 2^D2 members (class, kind, value) are sorted by class, CB bits, each member with its predecessor's "
+        "class has its value unless the class is the sink (2^CB − 1), and each member that starts a class other than "
+        "the sink is a slot (kind 0): `IoTieIdsFirst` on the first member and `IoTieIdsLink` on each member and its "
+        "successor, batched, so a binding traces one link however many members")
 
 
 def _unit_shape(S) -> Shape:
@@ -537,7 +577,7 @@ def arguments(shape: Shape, inst: Instance, route: Sequence[int], sort: Sequence
             list(route), list(sort)]
 
 
-__all__ = ["INPUT_IDS", "Instance", "IoTieIdsChain", "IoTieIdsKeys", "IoTieIdsSlots", "IoTieRequestIds", "Map", "Row",
-           "SLOT", "Shape", "arguments", "bucket_map", "commit", "commit_rows", "entry", "fields_of", "instance",
-           "matches", "port_reads", "reads_open", "reference", "root", "route_switches", "scan", "slots_arguments",
-           "sort_switches", "unit_reference"]
+__all__ = ["INPUT_IDS", "Instance", "IoTieIdsChain", "IoTieIdsFirst", "IoTieIdsKeys", "IoTieIdsLink", "IoTieIdsSlots",
+           "IoTieRequestIds", "Map", "Row", "SLOT", "Shape", "arguments", "bucket_map", "commit", "commit_rows", "entry",
+           "fields_of", "instance", "matches", "port_reads", "reads_open", "reference", "root", "route_switches", "scan",
+           "slots_arguments", "sort_switches", "unit_reference"]
