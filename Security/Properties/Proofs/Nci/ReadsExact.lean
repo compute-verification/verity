@@ -7545,12 +7545,12 @@ theorem forall2_mem {α β : Type} {R : α → β → Prop} : ∀ {l : List α} 
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
 /-- A segment of Definition `d`'s body as `down` gives it: naming its `len` positions, each at or past 0 and naming a
-gate or a leaf of one of `d`'s parameters in range, its pieces each of positive count. -/
+gate or a leaf of one of `d`'s parameters in range, its pieces each of positive count, of one copy at least. -/
 def ShapeOk (P : Prog) (d : Nat) (s : Seg) : Prop :=
   SegOk s ∧ (∀ x ∈ segPos s, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
     ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
       x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)) ∧
-  ∀ g ∈ s.ps.toList, 0 < g.count
+  (∀ g ∈ s.ps.toList, 0 < g.count) ∧ 1 ≤ s.reps
 
 /-- **Open: the shape of `down`'s segments**, at every fuel: of a piece of positive count whose positions are at or past
 0 and name its nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`. -/
@@ -7566,7 +7566,7 @@ theorem shapeOk_one (P : Prog) (d : Nat) (q : Piece) (h0 : 0 < q.count) (hq : �
     (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
       x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)) :
     ShapeOk P d (Seg.one q) := by
-  refine ⟨segOk_one q, fun x hx => ?_, fun g hg => ?_⟩
+  refine ⟨segOk_one q, fun x hx => ?_, fun g hg => ?_, Nat.le_refl 1⟩
   · rw [segPos_one] at hx
     exact ⟨hq x hx, fun k e => hk k (by rw [← mem_pos_tgt hx]; exact e), hp x hx⟩
   · have e : g = q := by simpa [Seg.one] using hg
@@ -7960,7 +7960,7 @@ theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
     rotate_left
     · change g ∈ (PS.of ret).segs.toList at hg
       rw [of_segs, Array.toList_filter, List.mem_filter] at hg
-      exact (hshape g hg.1).2.2
+      exact (hshape g hg.1).2.2.1
     · show Agree P sc (psPos (PS.of ret)) ((List.range body.ret.count).map fun j =>
         Flock.Program.resolve P sc (body.ret.get j))
       rw [hpsPos, hout, segsPos_foldl, show segsPos ret0 = [] from rfl, List.nil_append]
