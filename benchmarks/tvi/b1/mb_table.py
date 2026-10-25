@@ -54,7 +54,10 @@ def fmt_acc(r):
 
 
 def mb(bits):
-    return f"{bits / 8e6:.3g} MB" if bits >= 8e6 else f"{bits / 8e3:.3g} kB"
+    for scale, unit in ((8e9, "GB"), (8e6, "MB")):
+        if bits >= scale:
+            return f"{bits / scale:.3g} {unit}"
+    return f"{bits / 8e3:.3g} kB"
 
 
 def main():
