@@ -29,12 +29,11 @@ import hashlib
 import json
 import sys
 import uuid
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
-import numpy as np
-from dataclasses import dataclass
-
+from verity_vllm.commit import challenge as CH
 from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, option
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
@@ -69,7 +68,7 @@ def draw_lengths(profile: str, ctx: str, seed: int) -> list[dict]:
     """The (prompt_len, max_tokens, arrive_step) draws of one (profile, ctx, seed) -- model independent."""
     c = CTX[ctx]
     n = 1 if profile == "B1" else 8
-    rng = np.random.default_rng([seed, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0FFEE])
+    rng = CH.generator([seed, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0FFEE])
     plens = [int(x) for x in rng.integers(c["lo"], c["cap"] + 1, size=n)]
     mts = [max(c["min_out"], pl // 10) for pl in plens]
     if profile == "B8-mixed":
@@ -101,12 +100,12 @@ def corpus_paragraphs() -> list[dict]:
     return out
 
 
-def build_requests(tok: Tok, draws: list[dict], *, case: str, profile: str, ctx: str, seed: int, prompt_seed: int | None = None) -> list[dict]:
+def build_requests(tok: Tok, draws: list[dict], *, case: str, profile: str, ctx: str, seed: int, prompt_seed: int | None) -> list[dict]:
     """The requests: lengths from `draws` (a function of (profile, ctx, seed) only), text from the corpus chosen by `prompt_seed`
-    (default: the length seed).  A replicate keeps the draws and changes the prompt seed -- same structural configuration, other prompts."""
+    (None: the length seed).  A replicate keeps the draws and changes the prompt seed -- same structural configuration, other prompts."""
     paras = corpus_paragraphs()
     ps = seed if prompt_seed is None else prompt_seed
-    rng = np.random.default_rng([ps, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0DE])
+    rng = CH.generator([ps, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0DE])
     starts = rng.choice(len(paras), size=len(draws), replace=False)
     reqs = []
     for i, (d, s0) in enumerate(zip(draws, starts)):
@@ -282,7 +281,7 @@ def simulate_schedule_chunked(reqs: list[dict], budget: int, max_num_seqs: int =
 
 
 def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, seed: int, tokenizer_revision: str | None,
-                 replicate: int = 0, variant: str = "greedy", sampling_seed: int | None = None, chunked: int | None = None,
+                 sampling_seed: int | None, replicate: int = 0, variant: str = "greedy", chunked: int | None = None,
                  dtype: str | None = None) -> dict:
     """replicate r > 0: same length draws (same structural configuration), prompts from prompt seed seed + 1000 r.  variant "t1":
     the temp=1 column -- every request sampled at temperature 1.0 with `sampling_seed` (vLLM's per-request seeded sampler).
