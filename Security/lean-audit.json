@@ -1804,6 +1804,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Claims.Sampling.KS": {
+   "owner": "@proofs",
+   "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2"
   }
  },
  "meaning": [
@@ -8350,7 +8354,10 @@
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
+   "assumptions": [],
+   "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048"
   },
   "NetTiming.SecurityProofs.WardenViewEqClientView": {
    "owner": "@network-accounting",
@@ -14965,7 +14972,7 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -15545,7 +15552,7 @@
     "Claims.Sampling.universal_meets",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
+    "NetTiming.SecurityProofs.SampledAuditAccepted"
    ]
   },
   "Definitions.Core.Advice": {
@@ -17096,7 +17103,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
+    "NetTiming.SecurityProofs.SampledAuditAccepted"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
@@ -17111,12 +17118,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
-   "digest": "3e714f9391fa9dfc51619b38590282c0e7e13766ed86776d397aaa6cbc6fbea8",
+   "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
    "definitions": {
-    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0",
-    "NetTiming.Guarantees.SampledAuditAcceptedStated": "9009d1c7c22120166c4aa4c882e7e18b18de3dc9633d6988c52ae4436b74a55b"
+    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
    "digest": "a0be196f7b87bf66a51f84cfa94a592d4f6c8a879e5215db79f1279812d2675a",
@@ -17199,7 +17205,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
+    "NetTiming.SecurityProofs.SampledAuditAccepted"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
@@ -17227,7 +17233,7 @@
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
     "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledAuditAccepted"]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
    "digest": "93be79885ff21ba07783d8034afb5e1d117c9db222c7c84546623ceb5f77ef6e",
