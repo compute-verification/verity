@@ -40,6 +40,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -436,8 +437,9 @@ def statements(d: SimpleNamespace, per: int) -> list[tuple[str, list]]:
 def rescan(a) -> int:
     """`prove`'s statements under `--from` scanned again (`leak_scan.rescan`): the verifier's files each one kept searched
     afresh for its pieces, recomputed from the sealed run as `prove` cut them (its units, then the honest blocks it filled
-    the statement with, and their ``srv`` salts, less the pieces the kept circuit holds). A found salt `prove` drew isn't
-    recomputed, so its summary's find of it stays and reads leaked."""
+    the statement with, and their ``srv`` salts, less the pieces the circuit holds: the kept one, else the statement
+    lowered again and held to the run's pin). A found salt `prove` drew isn't recomputed, so its summary's find of it
+    stays and reads leaked."""
     d = units_of(a)
     N2 = __import__("n2_zk")
     M = N2._one_stage()
@@ -451,7 +453,16 @@ def rescan(a) -> int:
             raise SystemExit(f"{name}: these units aren't the run's {summary['statements'][name]}")
         units, vdir = fill(us, honest, summary[name]["staged"]["n"]), src / name / "verifier"
         rows, held = blobs_of(units, {"srv": [u.reg.registration.salts[0] for u in units]})
-        blobs = LS.public_pieces(M.a8, rows, held, (vdir / "circuit.txt").read_bytes())[0]
+        if (vdir / "circuit.txt").is_file():
+            circuit = (vdir / "circuit.txt").read_bytes()
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                sg = stager(M, ST.unit(**d.st), d.St, len(units), Path(tmp))
+                if sg.st.pin != summary[name]["staged"]["pin"]:
+                    raise SystemExit(f"{name}: the statement lowered again isn't the run's (pin {sg.st.pin[:16]}, the run's "
+                                     f"{summary[name]['staged']['pin'][:16]}): rescan it with the commit that proved it")
+                circuit = (Path(tmp) / "circuit.txt").read_bytes()
+        blobs = LS.public_pieces(M.a8, rows, held, circuit)[0]
         got = summary[name]["received"]
         res[name] = r = {"pieces": len(blobs), **LS.rescan(got, blobs, vdir, a8=M.a8, rows=rows)}
         ok &= not r["leaked"]

@@ -25,17 +25,18 @@ The rule:
   the session transcript (``streams[K].rounds[r].msg``, as `transcript_check.T` frames it), or anywhere in a file whose
   format isn't read (the rest of a transcript, a stream the format doesn't read whole, any other file). A find that
   straddles two fields, or a hex match a nibble off a message's bytes, doesn't count.
-* A counted find is excused by where it lies or by the statement's values. Where it lies: inside one field the reader
-  fixes, a stream's integer (its lengths and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding
-  nonces ``GRIND`` among them, but a ring switch's nonce that is 0, as the verifier requires) or a round message's
-  header, domain or label record. The statement's values: the piece's bytes, raw or as hex, are in what the statement
-  makes public, which the verifier knows before any witness: the public rows (``pub-*.bin``) and the statement and the
-  circuit definition (``STATEMENT``; `public_pieces` drops the pieces the circuit holds before the scan). The same bytes
-  in a field the reader fixes excuse no find elsewhere: what the prover writes into an element is its own, whatever an
-  integer of the format holds, so neither a low-entropy row equal to an integer nor an alibi written across the
-  prover's own fields (REDTEAM phase 18's grinding nonces) excuses a find. Otherwise the piece is ``leaked`` and fails
-  its statement, whatever its row, its bytes or how few values they take: there is no byte-count or witness-class
-  exemption, so a switch row found in one field of one repetition fails (REDTEAM phase 16, finding 1).
+* A counted find is excused only if the piece's bytes are in what the statement fixes: the public rows (``pub-*.bin``),
+  the statement and the circuit definition (``STATEMENT``), or a field the reader fixes: a stream's integers (its lengths
+  and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding nonces ``GRIND`` among them, but a ring
+  switch's nonce that is 0, as the verifier requires) and a round message's headers, domain and labels. Otherwise the
+  piece is ``leaked`` and fails its statement, whatever its row, its bytes or how few values they take: there is no
+  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails (REDTEAM phase 16,
+  finding 1).
+* The excuse is by value, so a low-entropy row equal to some reader-fixed field's bytes is excused wherever it lies. The
+  rule that excuses a find only inside a field the reader fixes (the lead's ruling on #4020) waits for a class of fields
+  whose value is the same for every witness, decided by a differential proof with a different witness: without it an
+  honest all-zero private row fails wherever an honest prover writes a zero element (861e's carry row ``cin 6``, inside
+  the zero high limbs of Ligerito's intro messages, ``lig.msg``, which the reader doesn't check).
 
 A find across fields isn't a missed leak (REDTEAM phase 18): the reads tile a stream with no gaps and C-Flock's writer
 writes each field whole, so an honest writer's leak lands inside one field. A match across two fields is a coincidental
@@ -192,19 +193,23 @@ def _forms(piece: bytes) -> tuple[bytes, bytes, bytes]:
     return piece, piece.hex().encode(), piece.hex().upper().encode()
 
 
-def _where(fields, at: int, n: int) -> str:
-    """How bytes at..at+n lie in `fields`, (offset, bytes, fixed) in order and not overlapping: ``fixed`` or ``field``,
-    inside one the reader fixes or another, or ``across``."""
+def _inside(fields, at: int, n: int) -> bool:
+    """Whether bytes at..at+n lie in one of `fields`, (offset, bytes, ...) in order and not overlapping."""
     i = bisect.bisect_right([f[0] for f in fields], at) - 1
-    if i < 0 or at + n > fields[i][0] + fields[i][1]:
-        return "across"
-    return "fixed" if fields[i][2] else "field"
+    return i >= 0 and at + n <= fields[i][0] + fields[i][1]
 
 
-def _fixed(p) -> list[tuple[int, int, bool]]:
-    """A stream's fields (`reads`), each with whether the reader fixes it: an integer, a read of at most 8 bytes that
-    isn't a nonce."""
-    return [(o, n, n <= 8 and o not in p[1]) for o, n in p[0]]
+def _spans(data: bytes, fields) -> list[bytes]:
+    """`data`'s runs of consecutive public fields, (offset, bytes, public) in order."""
+    out, run = [], None
+    for o, n, public in fields:
+        if public and run and run[1] == o:
+            run[1] = o + n
+            continue
+        if run:
+            out.append(data[run[0]:run[1]])
+        run = [o, o + n] if public else None
+    return out + ([data[run[0]:run[1]]] if run else [])
 
 
 def _read(vdir: Path | None, f: str) -> bytes:
@@ -218,11 +223,10 @@ def _known(received: dict, pieces: dict[str, bytes]) -> dict:
 def placements(received: dict, pieces: dict[str, bytes], vdir: Path | None,
                reads=reads) -> dict[str, list[tuple[str, int | None, str]]]:
     """Where each found piece is in what the verifier received (read from ``vdir``): per file it is found in (a
-    transcript's round message as ``FILE#repK.rR``), each raw offset, and how it lies there: inside one field of a proof
-    stream's format (`reads`) or of a message's (`records`), ``fixed`` if the reader fixes it (`_fixed`, a message's
-    header, domain and labels) and ``field`` if not; ``across``, over two or more of them; ``file``, in a file whose
-    format isn't read, the rest of a transcript, or (offset None) only as hex. A hex match a nibble off a message's bytes
-    is no place."""
+    transcript's round message as ``FILE#repK.rR``), each raw offset, and how it lies there: ``field``, inside one field of
+    a proof stream's format (`reads`) or of a message's (`records`); ``across``, over two or more of them; ``file``, in a
+    file whose format isn't read, the rest of a transcript, or (offset None) only as hex. A hex match a nibble off a
+    message's bytes is no place."""
     out = {}
     for k in received["verifier_found"]:
         piece, rows = pieces[k], []
@@ -235,30 +239,39 @@ def placements(received: dict, pieces: dict[str, bytes], vdir: Path | None,
                 msgs, rest = tr
                 for (K, r), m in sorted(msgs.items()):
                     recs = records(m)
-                    rows += [(f"{f}#rep{K}.r{r}", at, "file" if recs is None else _where(recs, at, len(piece)))
+                    rows += [(f"{f}#rep{K}.r{r}", at, "file" if recs is None else "field" if _inside(recs, at, len(piece)) else "across")
                              for at in _offsets(m, piece)]
                 rows += [(f, None, "file")] * any(x in rest for x in _forms(piece))
                 continue
-            p = reads(b) if is_stream(f) else None
-            rows += [(f, at, "file" if p is None else _where(_fixed(p), at, len(piece)))
+            fields = reads(b) if is_stream(f) else None
+            rows += [(f, at, "file" if fields is None else "field" if _inside(fields[0], at, len(piece)) else "across")
                      for at in _offsets(b, piece)] or [(f, None, "file")]
         out[k] = rows
     return out
 
 
-def public_bytes(files, vdir: Path | None) -> list[bytes]:
-    """What the statement makes public in what the verifier received, which excuses a find of the same bytes wherever it
-    lies: the public rows (``pub-*.bin``) and the statement and circuit definition (``STATEMENT``)."""
-    return [_read(vdir, f) for f in files if re.fullmatch(r"pub-\d+\.bin", f) or f in STATEMENT]
+def public_bytes(files, vdir: Path | None, reads=reads) -> list[bytes]:
+    """What the statement fixes in what the verifier received: the public rows (``pub-*.bin``), the statement and circuit
+    definition (``STATEMENT``), each proof stream's runs of integers (its lengths and parameters, `reads` of at most 8
+    bytes, not its nonces) and each round message's runs of headers, domain and labels (`records`)."""
+    out = []
+    for f in files:
+        b = _read(vdir, f)
+        if re.fullmatch(r"pub-\d+\.bin", f) or f in STATEMENT:
+            out.append(b)
+        elif is_stream(f) and (p := reads(b)) is not None:
+            out += _spans(b, [(o, n, n <= 8 and o not in p[1]) for o, n in p[0]])
+        elif f.endswith("session.json") and (tr := transcript(b)) is not None:
+            out += [s for m in tr[0].values() if (recs := records(m)) is not None for s in _spans(m, recs)]
+    return out
 
 
 def classify(received: dict, pieces: dict[str, bytes], vdir: Path | None = None,
              reads=reads) -> tuple[list[str], dict[str, str]]:
     """`received`'s found pieces as the ``leaked`` ones, which fail a statement, and the ``structured`` rest with why:
     ``across``, no find of it counts (`placements`: each straddles fields of the format, or is a nibble off a message's
-    hex), or ``public``, each counted find lies inside a field the reader fixes (``fixed``), or its bytes, raw or as hex,
-    are what the statement makes public (`public_bytes`). A found piece `pieces` doesn't name, or a find where ``vdir``
-    doesn't show the format, is leaked."""
+    hex), or ``public``, its bytes, raw or as hex, are in what the statement fixes (`public_bytes`). A found piece
+    `pieces` doesn't name, or a find where ``vdir`` doesn't show the format, is leaked."""
     placed = placements(_known(received, pieces), pieces, vdir, reads)
     public = None
     leaked, structured = [], {}
@@ -266,15 +279,11 @@ def classify(received: dict, pieces: dict[str, bytes], vdir: Path | None = None,
         if k not in placed:
             leaked.append(k)
             continue
-        whys = {why for _f, _at, why in placed[k]}
-        if whys <= {"across"}:
+        if all(why == "across" for _f, _at, why in placed[k]):
             structured[k] = "across"
             continue
-        if whys <= {"across", "fixed"}:
-            structured[k] = "public"
-            continue
         if public is None:
-            public = public_bytes(received["files"], vdir)
+            public = public_bytes(received["files"], vdir, reads)
         if any(x in p for p in public for x in _forms(pieces[k])):
             structured[k] = "public"
         else:

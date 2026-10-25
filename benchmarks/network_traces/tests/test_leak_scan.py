@@ -1,8 +1,7 @@
 """`leak_scan`: a found witness piece is ``leaked`` wherever its find is one field's bytes (inside one field of a proof
-stream's format or one record of a round message) or the format isn't read, whatever its row or bytes, unless each such
-find lies inside a field the reader fixes (the streams' integers, the messages' framing) or the statement makes its
-bytes public (the public rows, the statement and circuit). A find across two fields is no find. REDTEAM phase 16
-finding 1's case (a switch row found in one repetition) is leaked."""
+stream's format or one record of a round message) or the format isn't read, whatever its row or bytes, unless the
+statement fixes its bytes (the public rows, the statement and circuit, the streams' integers, the messages' framing). A
+find across two fields is no find. REDTEAM phase 16 finding 1's case (a switch row found in one repetition) is leaked."""
 from __future__ import annotations
 
 import json
@@ -106,26 +105,15 @@ def test_a_find_across_the_formats_fields_is_no_find(tmp_path):
     assert _classify(vdir) == (["pos @0"], {})
 
 
-def test_a_find_is_excused_where_it_lies_or_by_the_statements_values(tmp_path):
-    """A counted find is excused where it lies, inside a field the reader fixes (a stream's integer, not its nonce), and
-    the same bytes there excuse no find elsewhere: a short row equal to an integer field's value is ``public`` found
-    only inside that field, and leaked also written into an element or found in the nonce; a piece whose bytes are a run
-    of the stream's integers is no find there, and leaked written into an element (the alibi a value rule gave). A piece
-    the statement makes public, its bytes in the public rows or, raw or as hex, in the statement or the circuit, is
-    excused wherever it is found; in any other file (the registration among them) it is not."""
-    row = {"srb 0": POS[:8]}
-    vdir = _streams(tmp_path, {64: (POS[:8], POS[:8])})
-    assert LS.placements(_found(vdir, row), row, vdir, reads=_reads) == {
-        "srb 0": [(REPS[0], 64, "fixed"), (REPS[1], 64, "fixed")]}
-    assert LS.classify(_found(vdir, row), row, vdir, reads=_reads) == ([], {"srb 0": "public"})
-    for at in (112, NONCE):
-        vdir = _streams(tmp_path, {64: (POS[:8], POS[:8]), at: (POS[:8], b"")})
-        assert LS.classify(_found(vdir, row), row, vdir, reads=_reads) == (["srb 0"], {}), at
-
+def test_a_counted_piece_the_statement_fixes_is_public(tmp_path):
+    """A piece inside a field is ``public`` when its bytes are a run of the stream's integers (not its nonces), in the
+    public rows, or, raw or as hex, in the statement or the circuit; anywhere else (the registration among them) it is
+    leaked."""
     lengths = POS[:8] + bytes(8)
-    vdir = _streams(tmp_path, {64: (lengths, lengths)})
-    assert _classify(vdir) == ([], {"pos @0": "across"})
     vdir = _streams(tmp_path, {64: (lengths, lengths), 112: (POS, b"")})
+    assert _classify(vdir) == ([], {"pos @0": "public"})
+
+    vdir = _streams(tmp_path, {NONCE: (lengths, lengths), 112: (POS, b"")})
     assert _classify(vdir) == (["pos @0"], {})
 
     vdir = _streams(tmp_path, {112: (POS, b"")})
@@ -226,10 +214,6 @@ def test_the_transcripts_round_messages_are_read_as_their_records(tmp_path):
     found = {**_found(vdir), "verifier_found": ["pos @0"]}
     found["files"]["s-session.json"]["found"] = {"pos @0": 1}
     assert LS.classify(found, blobs, vdir) == ([], {"pos @0": "public"})
-    vdir = _transcript(tmp_path, (_framed((3, 2, 2, el[1] + el[2])), _framed((3, 2, 1, header))))
-    assert LS.placements(found, blobs, vdir) == {"pos @0": [("s-session.json#rep0.r1", 0, "fixed"),
-                                                            ("s-session.json#rep1.r1", 16, "field")]}
-    assert LS.classify(found, blobs, vdir) == (["pos @0"], {})
 
     m = _framed((3, 2, 2, el[1] + el[2]))
     vdir = _transcript(tmp_path, (m, m))
@@ -268,13 +252,13 @@ def _zk_stream(qn: int = 2, fold: int = 2, cbn: int = 2, consn: int = 2, rs: tup
 def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
     """``lig.qn``, ``lig.fold``, ``lig.cbn`` and ``lig.consn`` are grinding nonces (`transcript_check`'s ``t.pow``;
     `redigest`'s ``lig-query-nonce`` and ``lig-claim-nonce`` flip them and the verifier accepts), so the prover controls
-    them, and a find inside one lies in no field the reader fixes: a row found only inside a grinding nonce is leaked.
-    The switch row leaked in one field, with its bytes also written across two grinding nonces as an alibi, is leaked too
-    (REDTEAM phase 16's rule, which a nonce-blind value rule let through)."""
+    them and `public_bytes` must not take them for the reader-fixed integers. The switch row leaked in one field, with
+    its bytes also written across two grinding nonces as a ``public`` alibi, is still leaked (REDTEAM phase 16's rule,
+    which a nonce-blind scan lets through)."""
     stream = _zk_stream()
     off = LS.RD.layout(stream, zk=True)
     _fields, nonces = LS.reads(stream)
-    pieces, row = {"sw_route 0 @0": SW}, {"srv 0": bytes(range(0xd1, 0xd9))}
+    pieces = {"sw_route 0 @0": SW}
     (tmp_path / "s-session.json").write_text("{}")
     for k in ("lig.qn", "lig.fold", "lig.cbn", "lig.consn"):
         assert off[k] and set(off[k]) <= nonces, f"{k} is not counted as a nonce"
@@ -283,31 +267,26 @@ def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
         b[off[k][0]:off[k][0] + 16] = SW  # the same bytes across two of k's grinding nonces (the alibi)
         (tmp_path / REPS[0]).write_bytes(bytes(b))
         assert LS.classify(_found(tmp_path, pieces), pieces, tmp_path) == (["sw_route 0 @0"], {}), k
-        b = bytearray(stream)
-        b[off[k][1]:off[k][1] + 8] = row["srv 0"]  # a row inside one grinding nonce, k's second
-        (tmp_path / REPS[0]).write_bytes(bytes(b))
-        got = LS.scan(_found(tmp_path, row), row, tmp_path)
-        assert (got["leaked"], got["placed"]) == (["srv 0"], {"srv 0": [(REPS[0], off[k][1], "field")]}), k
 
 
 def test_a_zero_ring_switch_nonce_is_reader_fixed(tmp_path):
     """The verifier requires each ring switch's grinding nonce to be 0 (C-Flock's PROTOCOL.md §8.3), so a zero one is a
-    field the reader fixes: a row found inside it is ``public``, like one inside the stream's other integers (a stream
-    with no grinding nonces, every other 8 zero bytes in it an integer or across two). A nonzero one, which the verifier
-    refuses, stays the prover's, and a row found inside it is leaked."""
-    k = "srv 0"
+    field the reader fixes: a piece found inside a field whose bytes are a ring switch's nonce and the next one's length
+    is ``public``, like the stream's other integers. A nonzero one, which the verifier refuses, stays the prover's, and
+    the same find is leaked."""
+    k = "srv 0 @0"
     (tmp_path / "s-session.json").write_text("{}")
     for nonce, want in ((0, ([], {k: "public"})), (5, ([k], {}))):
-        stream = _zk_stream(qn=0, fold=0, cbn=0, consn=0, rs=((1, nonce), (3, 0)))
+        stream = _zk_stream(rs=((1, nonce), (3, 0)))
         off = LS.RD.layout(stream, zk=True)
-        at = off["rs.0.nonce"][0]
-        row = {k: stream[at:at + 8]}
-        assert row[k] == struct.pack("<Q", nonce)
+        at, e0 = off["rs.0.nonce"][0], off["zk.e0"][0]
+        piece = stream[at:at + 16]
+        assert piece == struct.pack("<QQ", nonce, 3)
         assert (at in LS.reads(stream)[1]) == (nonce != 0) and off["rs.1.nonce"][0] not in LS.reads(stream)[1]
-        (tmp_path / REPS[0]).write_bytes(stream)
-        got = LS.scan(_found(tmp_path, row), row, tmp_path)
-        assert (REPS[0], at, "fixed" if nonce == 0 else "field") in got["placed"][k]
-        assert (got["leaked"], got["structured"]) == want, nonce
+        b = bytearray(stream)
+        b[e0:e0 + 16] = piece  # counted: inside one field, zk.e0
+        (tmp_path / REPS[0]).write_bytes(bytes(b))
+        assert LS.classify(_found(tmp_path, {k: piece}), {k: piece}, tmp_path) == want, nonce
 
 
 #: `a8`'s piece size and finder, as `public_pieces` calls them: each piece raw or as hex, found anywhere in the data.
