@@ -61,7 +61,10 @@ theorem _root_.Flock.Bridge.openingsCanonH : Bridge.OpeningsCanonTargetH := by
   rcases hx : FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g
     with _ | ⟨u', q, k⟩
   · exact Or.inl (by simp [rows, hx])
-  have hpos : vb.pos g = Sum.inl (u', q) := Discharge.Layout.ofRows_pos_some _ hx
+  have hpos : vb.pos g = Sum.inl (u', q) :=
+    Discharge.Layout.ofRows_pos_some (rowAddr := fun _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩)
+      (saltAddr := fun _ _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩) (bcAddr := fun _ _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩)
+      (regBc := fun _ _ _ => []) (regGate := fun _ _ => false) _ hx
   obtain ⟨b, hb⟩ : ∃ b, vb.val (vb.opening S R u M (Sum.inl (u', q))) =
       (Discharge.Layout.widthOf (Finset.univ.sup (Discharge.Layout.portRowW D.unroll) + 1)
         (Discharge.Layout.portRowW D.unroll q), Discharge.Layout.padBits b) := ⟨_, rfl⟩
