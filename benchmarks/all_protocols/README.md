@@ -34,7 +34,9 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   link-window (`--zk` behind the Lean firewall); the certified outputs checked against the period's registered ones; then
   `NetworkCheck.Period` (`verity/certifier/v0`, `network-period check`) on the period's link-windows and its compute
   audit: on acceptance `public.K`, the bits a covert sender in the server can move over the link in the period, except
-  with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's).
+  with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's). Its `summary.json`'s
+  `stubbed` names what the verdict still stands on: the records are the certifier-only path's, not the network
+  certifier's own cells, and the device runs beside the server, not on the auditor's machine through the gate.
 - `verity_all_protocols/runner.py`: the periods, each report in `$OUT/p<P>/report.json` and `$OUT/reports.jsonl`, and one
   `ALLP` line per period. `--tamper P,...` makes those periods' loop record outputs that aren't its model's.
 

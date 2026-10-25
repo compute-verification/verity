@@ -57,6 +57,18 @@ SESSION = "certifier-session"
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40
+#: what the leg's verdict still stands on that isn't the network certifier's own, each with its fix (``stubbed`` in
+#: ``summary.json``)
+STUBBED = (
+    {"gap": "the records are certifier_serve.py's certifier-only path (active.Proxy), not the network certifier's own "
+            "cells as one device",
+     "fix": "the gate PR: warden-rehearse --prompts FILE --window-per-group on vy-challenger-gate, the loop stub "
+            "answering id-form (io_tie.id_event, P = 503), and the leg reading the device's cells.jsonl and certified "
+            "records"},
+    {"gap": "the device runs off-host, beside the server on the node, not on the auditor's machine (vy-challenger-1) "
+            "through the gate",
+     "fix": "the same gate PR: the leg serves the stub on a peer and runs warden-rehearse through the gate with the "
+            "lane's gate key"})
 #: a canonical event's most bytes (`active.TOKEN_BYTES`)
 TOKEN_BYTES = 64
 
@@ -434,7 +446,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     outputs = registered_outputs(units)
     per, exe = len(sess["prompts"]), sess["exes"]["network-period"]
     summary: dict[str, Any] = {"session": {k: sess[k] for k in ("prompts", "steps", "h", "periods", "height",
-                                                                 "strategies", "rehearse_exit", "n2_exit")}}
+                                                                 "strategies", "rehearse_exit", "n2_exit")},
+                               "stubbed": list(STUBBED)}
     answer = None
     for strategy in sess["strategies"]:
         rw = run_windows(sess, strategy)
