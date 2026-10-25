@@ -17,6 +17,8 @@ import Definitions.Flock.Session
 import Definitions.Flock.Holo
 import Definitions.Flock.LigeritoPad
 import Definitions.Flock.Compiled
+import Definitions.Flock.HoloCompiled
+import Definitions.Flock.Game.Lock
 
 /-!
 # C-Flock's definitions
