@@ -92,6 +92,8 @@ Period.lean     the leak through the wardens over a period: each good window's o
                                          AccSeqsSampled at its registration (mem_accSeqsSampled_of_windowGood), and the
                                          secrets the wardens' views decode to, counted over the windows
                                          (encard_periodGood_le, periodLeak)
+PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
+                                         period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the

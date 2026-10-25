@@ -13,6 +13,7 @@ import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledAuditInstance
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
+import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Period
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
