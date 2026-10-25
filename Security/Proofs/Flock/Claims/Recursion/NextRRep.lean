@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.NextRShaped
 import Proofs.Flock.Claims.Complete.Shaped
 import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
 
 /-!
 # The honest rep's proof at any table
@@ -9,8 +10,9 @@ import Proofs.Flock.Claims.Complete.Discharge
 (`Case.table`). Its proof reads only that table's facts (`TableOk`: `22 ≤ m ≤ 35`, an untyped row circuit the scope
 parsed, `m = k_log + nbl`, `6 ≤ k_log`, a registered scheme) and a bound on the extra claims, so it holds at any table
 that has them (`repShapedOk`). At rep `k` of a set-up statement, table `k / 2`'s returned proof is then an honest rep of
-`repCtx` wherever its nonces are zero (`honestRep_of_repP`), which is the per-rep hypothesis `ReadsBack` takes, less the
-schedule (`schedOf_repCtx`) and the cap.
+`repCtx` wherever its nonces are zero and its `finalC` is at the reader's `z` (`honestRep_of_repP`), which is the
+per-rep hypothesis `ReadsBack` takes, less the schedule (`schedOf_repCtx`) and the cap. `repP` sets `params` and
+`initialCap` as V\* takes them (`repP_unabsorbed`).
 
 The plain case's one table is `TableOk` (`Case.tableOk`); a statement of several plain tables has no deployed relation
 yet, so there `TableOk` stays a hypothesis per table.
@@ -77,6 +79,34 @@ theorem repShapedOk {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {st :
     (fileBound_lt (le_trans hsp (FlockVBridge.Family.fast100_file _ _ hsch).2.1) hm35 (by show st.c.kLog ≤ 35; omega)
       (by show 2 + e.size ≤ 2050; omega)), hp⟩
 
+/-- **Ligerito's proof starts at the commitment's cap**: `ligeritoP` returns `cm0.cap` as `initialCap`. -/
+theorem ligeritoP_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
+    (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (t₀ : Transcript) :
+    Ret ((ligeritoP (asksS resp) hs ms sch T cm0 t b salt nonce).run t₀) fun r => r.1.initialCap = cm0.cap := by
+  unfold ligeritoP
+  refine Replay.Ret.run_bind (Ret.true _) fun _ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun _ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun _ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun ⟨⟨_, _, _, _⟩, _⟩ _ _ => ?_
+  rw [StateT.run_pure]
+  exact Ret.pure rfl
+
+/-- **`repP` sets the fields V\* takes unabsorbed**: `params` as `pcsParams`, and the level-0 cap as `initialCap`
+(`ligeritoP_initialCap`). -/
+theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+    (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (t₀ : Transcript) :
+    Ret ((repP (asksS resp) hs st sch tr t cm0 extras salt nonce).run t₀) fun pt =>
+      pt.1.params = pcsParams st.merkle sch ∧ pt.1.ligerito.initialCap = pt.1.cap := by
+  unfold repP
+  refine Replay.Ret.run_bind (Ret.true _) fun ⟨_, _⟩ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun ⟨_, _⟩ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun ⟨_, _, _⟩ _ _ => ?_
+  refine Replay.Ret.run_bind (ligeritoP_initialCap ..) fun _ _ h => ?_
+  rw [StateT.run_pure]
+  exact Ret.pure ⟨rfl, h⟩
+
 end FlockComplete.JsonRT
 
 namespace FlockDeploy
@@ -85,10 +115,11 @@ open Flock FlockComplete FlockSoundness.Refine
 
 /-- **Table `k / 2`'s returned proof is an honest rep of `repCtx`** at rep `k` of a set-up statement: at a `TableOk`
 table with its `fast100` schedule and at most 2,048 extra claims at the first coin's link points, the proof `repP`
-returns on any trace, under any salts, is `ProofShaped` (`repShapedOk`), so with zero nonces it is an honest rep
-(`honestRep_of_shaped`). -/
+returns on any trace, under any salts, is `ProofShaped` (`repShapedOk`) with V\*'s `params` and `initialCap`
+(`repP_unabsorbed`), so with zero nonces it is an honest rep (`honestRep_of_shaped`) wherever its `finalC` is the
+zerocheck's at the reader's `z` (`hfc`, a hypothesis here). -/
 theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {spec : SessionSpec}
-    {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {k : ℕ} (hk : k / 2 < sts.size)
+    {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin} {k : ℕ} (hk : k / 2 < sts.size)
     (hok : JsonRT.TableOk sts[k / 2]) {sch : Schedule} (hsch : fast100 sts[k / 2].m = some sch)
     {e : Array Claim} (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok e) (he2 : e.size ≤ 2048)
     (resp : ℕ → Claims.Msg) (tr : Trace) {salt₀ : ℕ → ByteArray} {cm : Commit}
@@ -99,9 +130,12 @@ theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit sts[k / 2]) sch tr
       (packed tr (Setup.ofCircuit sts[k / 2]).m) cm e salt nonce).run (Transcript.init #[] d)).go l = (.ok pt, l'))
     (hz : (∀ n ∈ pt.1.ligerito.queryNonces, n = 0) ∧ (∀ n ∈ pt.1.ligerito.claimNonces, n = 0) ∧
-      ∀ n ∈ pt.1.ligerito.consistencyNonces, n = 0) :
-    HonestRep (repCtx spec sts c₁ r₀ k) pt.1 := by
+      ∀ n ∈ pt.1.ligerito.consistencyNonces, n = 0)
+    (hfc : pt.1.zerocheck.finalC =
+      dot (lagrange nodesL den6Inv (repCtx spec sts c₁ r₀ cs k).z) pt.1.zerocheck.round1c) :
+    HonestRep (repCtx spec sts c₁ r₀ cs k) pt.1 := by
   have hp := JsonRT.repShapedOk h64 hok hsch resp tr hcm he2 salt nonce d l pt l' hrun
+  obtain ⟨hpa, hic⟩ := JsonRT.repP_unabsorbed resp _ _ _ _ _ _ _ salt nonce _ l pt l' hrun
   have hk' : k / 2 < (tabsOf sts).size := by
     unfold tabsOf
     rw [Array.size_map]
@@ -109,13 +143,13 @@ theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
   have ht : (tabsOf sts)[k / 2]! = Setup.ofCircuit sts[k / 2] := by
     rw [getElem!_pos (tabsOf sts) (k / 2) hk']
     exact Array.getElem_map ..
-  have hst : (repCtx spec sts c₁ r₀ k).st = Setup.ofCircuit sts[k / 2] := ht
-  have hsch' : (repCtx spec sts c₁ r₀ k).sch = sch := by
+  have hst : (repCtx spec sts c₁ r₀ cs k).st = Setup.ofCircuit sts[k / 2] := ht
+  have hsch' : (repCtx spec sts c₁ r₀ cs k).sch = sch := by
     show (fast100 (tabsOf sts)[k / 2]!.m).getD default = sch
     rw [ht]
     show (fast100 sts[k / 2].m).getD default = sch
     rw [hsch, Option.getD_some]
-  have hn : (repCtx spec sts c₁ r₀ k).n = 2 + e.size := by
+  have hn : (repCtx spec sts c₁ r₀ cs k).n = 2 + e.size := by
     show 2 + (match (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) with
       | .ok e => e.size
       | .error _ => 0) = _
@@ -124,8 +158,9 @@ theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
       | .ok e => e.size
       | .error _ => 0) = _
     rw [he]
-  refine honestRep_of_shaped hn ?_ hz
-  rw [hst, hsch']
-  exact hp
+  refine honestRep_of_shaped hn ?_ hz ?_ hic hfc
+  · rw [hst, hsch']
+    exact hp
+  · rw [hpa, hst, hsch']
 
 end FlockDeploy
