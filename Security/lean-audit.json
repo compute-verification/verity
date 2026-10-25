@@ -1364,7 +1364,7 @@
   },
   "NetTiming.Layout.Fits": {
    "owner": "@network-accounting",
-   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
+   "digest": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb"
   },
   "NetTiming.OccupancyReadsOwnBlock": {
    "owner": "@network-accounting",
@@ -20988,7 +20988,7 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "81e07e6aaeb0f50bfbd88dccd0606a1da2273d906bdfff776e1bd9f0d1d5cb41",
+   "digest": "bec268592083d2d0ae02caeacbf9e32919cbb31b37986f78cbaa9535d7417aba",
    "definitions": {
     "NetTiming.Carries": "e7ac004752a175d793960824660f46b99d8fe3911fef93379ad2e7665d073f86",
     "NetTiming.Covered": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
@@ -20996,7 +20996,7 @@
     "NetTiming.FaultyGate": "4f48cf5bca92bba73ee756048da872f5f53491ed43fbc79654bdcb5264cc7f62",
     "NetTiming.KSAccepted": "db54ee54c4ea0bae4d062f50d980afb70ba3adbff86ba9df979b2b3e5bc5731c",
     "NetTiming.Layout": "26a9ae100864386a6350d51b5b6511ead4b61a09a5355752b75f28b2f03e9181",
-    "NetTiming.Layout.Fits": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3",
+    "NetTiming.Layout.Fits": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb",
     "NetTiming.Layout.egress": "a0e95168b97f01529a65a69348753486689a46062a932d1f2dbbd90c62369a03",
     "NetTiming.Layout.ingress": "1447b138bfb81ed0a928b0541b290f051e19d9e543e1eb3a2789041608cb6a45",
     "NetTiming.Layout.inputOf": "7a78045a4090690a8548b0d4877ead2d00470b9b2a523ac287fbc6476c5c6cba",
