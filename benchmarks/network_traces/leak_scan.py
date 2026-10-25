@@ -2,9 +2,13 @@
 (`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against C-Flock's proof format.
 
     sys.path.insert(0, "benchmarks/network_traces"); import leak_scan as LS
+    pieces, held, public = LS.public_pieces(a8, blobs, held, circuit)  # each witness row cut whole, less the public
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
 
 It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
+
+The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
+cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes.
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
@@ -14,10 +18,11 @@ The rule:
   straddles two fields, or a hex match a nibble off a message's bytes, doesn't count.
 * A counted find is excused only if the piece's bytes are in what the statement fixes: the public rows (``pub-*.bin``),
   the statement and the circuit definition (``STATEMENT``), or a field the reader fixes: a stream's integers (its lengths
-  and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding nonces ``GRIND`` among them) and a round
-  message's headers, domain and labels. Otherwise the piece is ``leaked`` and fails its statement, whatever its row, its
-  bytes or how few values they take: there is no byte-count or witness-class exemption, so a switch row found in one
-  field of one repetition fails (REDTEAM phase 16, finding 1).
+  and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding nonces ``GRIND`` among them, but a ring
+  switch's nonce that is 0, as the verifier requires) and a round message's headers, domain and labels. Otherwise the
+  piece is ``leaked`` and fails its statement, whatever its row, its bytes or how few values they take: there is no
+  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails (REDTEAM phase 16,
+  finding 1).
 
 A find across fields isn't a missed leak (REDTEAM phase 18): the reads tile a stream with no gaps and C-Flock's writer
 writes each field whole, so an honest writer's leak lands inside one field. A match across two fields is a coincidental
@@ -49,6 +54,39 @@ _SWAP = threading.Lock()
 #: ``lig.fold`` (``fold_grinding_nonces``) is one too: the verifier requires it empty, but the scan reads what it got.
 GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 
+#: A ring switch's grinding nonce, which the verifier requires to be 0 (C-Flock's PROTOCOL.md §8.3): a zero one is a
+#: field the reader fixes, and a nonzero one, which the verifier refuses, stays the prover's.
+RS_NONCE = re.compile(r"rs\.\d+\.nonce")
+
+
+def cut(blobs: dict[str, bytes], size: int) -> dict[str, bytes]:
+    """`blobs` cut into `size`-byte pieces that cover each whole, each distinct piece once under its first name
+    (``"<blob> @<offset>"``): its aligned pieces and, when its length isn't a multiple of `size`, its last `size` bytes,
+    which overlap the piece before them."""
+    pieces: dict[str, bytes] = {}
+    seen: set[bytes] = set()
+    for name, b in blobs.items():
+        if len(b) < size:
+            raise ValueError(f"{name!r} is {len(b)} bytes, shorter than the scan's {size}-byte piece, which `a8.needles` "
+                             "won't cut: scan it whole with its own finder (as compile_slice_zk's `found` does its carry rows)")
+        for o in [*range(0, len(b) - size + 1, size)] + [len(b) - size] * (len(b) % size > 0):
+            x = b[o:o + size]
+            if x not in seen:
+                seen.add(x)
+                pieces[f"{name} @{o}"] = x
+    return pieces
+
+
+def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
+    """`blobs` cut into the scan's pieces (`cut`, at `a8.needles`' size), less the pieces `public` holds raw or as hex:
+    what the statement fixes before any witness (the staged circuit, which the stager writes from the Definition before
+    any instance), which the verifier has whatever the witness. Returns the pieces to scan for, the held ones (pieces of
+    a blob in `held`) and the excluded pieces' hex."""
+    pieces = cut(blobs, a8.PIECE)
+    out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
+    kept = {k: x for k, x in pieces.items() if x not in out}
+    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+
 
 def is_stream(name: str) -> bool:
     """Whether `name` is a repetition's proof stream, ``S.repK.bin``."""
@@ -59,7 +97,8 @@ def is_stream(name: str) -> bool:
 def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
     """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read C-Flock's proof format makes of it
     (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets
-    (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`); None when the format doesn't read the whole stream."""
+    (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`, but a ring switch's that is 0, `RS_NONCE`); None
+    when the format doesn't read the whole stream."""
     readers = []
     # `transcript_check.R` is swapped process-wide while `redigest.layout` reads: one caller at a time, or a recorder
     # subclasses another's and stays installed (n2_zk scans its members in threads).
@@ -82,7 +121,8 @@ def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] |
         finally:
             RD.tc.R = R
     got = next((r.reads for r in reversed(readers) if r.i == len(stream)), None)
-    nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") or k in GRIND for o in os)
+    nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") or k in GRIND for o in os
+                       if not (RS_NONCE.fullmatch(k) and not any(stream[o:o + 8])))
     return None if got is None else (tuple(got), nonces)
 
 
