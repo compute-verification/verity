@@ -14,6 +14,8 @@ unit is one of them.
 * `IntegrityPeriod`: the probability that some window is accepted with at least its `K₀` units wrong is at most
   `Σ_w (miss_w + ε_ks,w + δ_link,w)`, each window's `EndToEndHidden` bound. So outside that probability, if flock-verify
   accepts every window, every window has fewer than its `K₀` units wrong.
+* `IntegrityPeriodLog`: `IntegrityPeriod` with each window's threshold `K₀ ≥ ln(1/δ)/q`, where its draw covers a
+  fraction `q` of its units, so each window's sampling term is at most `δ`.
 * `IntegrityHorizon`: over `T` windows whose draws each cover at least a fraction `q` of their units, the probability
   that every window is accepted and the wrong units total at least `ln(1/δ)/q` is at most `δ + Σ_w (ε_ks,w + δ_link,w)`.
 
@@ -21,7 +23,7 @@ unit is one of them.
 prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every window:
 A3 (`uniform/io-getrandombytes`) for the window's draw bytes, `live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512`
 and `ecr/sha-512` (`HiddenWindow.CR`) at the strategy the period's prover plays the window with, on every run
-(`Period.CR`). The proofs are `Flock.SecurityProofs.IntegrityPeriod` and `Flock.SecurityProofs.IntegrityHorizon`.
+(`Period.CR`). The proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityHorizon`.
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -104,7 +106,8 @@ noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Trans
 noncomputable def P := (keyProg w.D.unroll w.hU w.n).partition (Discharge.Layout.outsOf w.D.unroll w.hU w.n)
 
 /-- The public file's commitments. -/
-noncomputable def vb := (rsZHJ w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg)).bindingZ
+noncomputable def vb :=
+  (rsZHJ w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg)).bindingZ
   (rsZHJ_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg))
 
 /-- The model audit's strategy that a live strategy `τ` refines to (`EndToEndHidden`'s `σ`). -/
@@ -192,6 +195,21 @@ def IntegrityPeriod : Prop :=
     ∀ s : Strategy (Period.game W T), Period.CR W T s →
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, ((W t).miss + (W t).ks + (W t).link)
+
+/-- **The integrity audit over a period, at `δ`.** In a period as in `IntegrityPeriod` whose windows' draws each cover
+at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each window's threshold `K₀,t ≥ ln(1/δ)/q`, the
+probability that some window is accepted with at least its `K₀` units wrong is at most
+$$\sum_t (\delta + \varepsilon_{ks,t} + \delta_{link,t}),$$
+each window's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
+`IntegrityPeriod`'s. -/
+def IntegrityPeriodLog : Prop :=
+  ∀ (W : ℕ → HiddenWindow) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
+    (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
+    (∀ t < T, Real.log (1 / δ) / q ≤ (W t).K₀) →
+    (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
+    ∀ s : Strategy (Period.game W T), Period.CR W T s →
+    value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
+      ∑ t ∈ Finset.range T, (ENNReal.ofReal δ + (W t).ks + (W t).link)
 
 /-- **The integrity audit over a horizon.** In `T` windows as in `IntegrityPeriod`, each window's draw covering at
 least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every window is accepted and the wrong

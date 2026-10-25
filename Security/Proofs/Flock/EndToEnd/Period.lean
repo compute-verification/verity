@@ -19,6 +19,24 @@ import Proofs.Flock.Soundness.Game.Union
   `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
+namespace Flock.SecurityProofs
+
+open scoped ENNReal
+
+/-- `(1 − q)^M ≤ e^{−qM} ≤ δ` once `M ≥ ln(1/δ)/q`. -/
+theorem one_sub_pow_le_of_log {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) {M : ℕ} (hM : Real.log (1 / δ) / q ≤ M) :
+    ENNReal.ofReal (1 - q) ^ M ≤ ENNReal.ofReal δ := by
+  calc ENNReal.ofReal (1 - q) ^ M ≤ ENNReal.ofReal (Real.exp (-q)) ^ M :=
+        pow_le_pow_left₀ zero_le (ENNReal.ofReal_le_ofReal (by linarith [Real.add_one_le_exp (-q)])) M
+    _ = ENNReal.ofReal (Real.exp (-q * M)) := by
+        rw [← ENNReal.ofReal_pow (Real.exp_pos _).le, ← Real.exp_nat_mul, mul_comm]
+    _ ≤ ENNReal.ofReal (Real.exp (-q * (Real.log (1 / δ) / q))) :=
+        ENNReal.ofReal_le_ofReal (Real.exp_le_exp.2 (mul_le_mul_of_nonpos_left hM (by linarith)))
+    _ = ENNReal.ofReal δ := by
+        rw [neg_mul, mul_div_cancel₀ _ hq.ne', one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
+
+end Flock.SecurityProofs
+
 namespace Flock.Guarantees.HiddenWindow
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
@@ -88,6 +106,26 @@ theorem drawMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.
   rw [Law.subset_escape]
   exact Law.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
+
+/-- A draw covering a fraction `q` of the window's units: `1 − kd/n ≤ 1 − q`. -/
+theorem one_sub_le {q : ℝ} (hq : 0 < q) (hqk : q ≤ (w.kd : ℝ) / w.n) :
+    1 - (w.kd : ℝ≥0∞) / w.n ≤ ENNReal.ofReal (1 - q) := by
+  have hn : (0 : ℝ) < w.n := by
+    rcases Nat.eq_zero_or_pos w.n with h0 | h0
+    · rw [h0, Nat.cast_zero, div_zero] at hqk
+      linarith
+    · exact_mod_cast h0
+  rw [show (w.kd : ℝ≥0∞) / w.n = ENNReal.ofReal ((w.kd : ℝ) / w.n) by
+    rw [ENNReal.ofReal_div_of_pos hn, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]]
+  rw [← ENNReal.ofReal_one, ← ENNReal.ofReal_sub _ (div_nonneg (Nat.cast_nonneg _) hn.le)]
+  exact ENNReal.ofReal_le_ofReal (by linarith)
+
+/-- **The sampling term at `δ`**: `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀} ≤ δ` once `K₀ ≥ ln(1/δ)/q`. -/
+theorem miss_le {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) (hqk : q ≤ (w.kd : ℝ) / w.n)
+    (hK : Real.log (1 / δ) / q ≤ w.K₀) : w.miss ≤ ENNReal.ofReal δ :=
+  (Law.choose_div_le_one_sub_pow w.hkd w.hK₀).trans
+    ((pow_le_pow_left₀ zero_le (w.one_sub_le hq hqk) _).trans (Flock.SecurityProofs.one_sub_pow_le_of_log hq hδ hK))
+
 end Flock.Guarantees.HiddenWindow
 
 namespace Flock.SecurityProofs
@@ -105,6 +143,14 @@ theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
     (periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩) hs)
   simpa [Period.run] using h
 
+/-- **The integrity audit over a period, at `δ`.** -/
+theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
+  intro W T q δ hq hδ hqt hK hA3 s hs
+  refine (IntegrityPeriod W T hA3 s hs).trans (Finset.sum_le_sum fun t ht => ?_)
+  have ht' := Finset.mem_range.1 ht
+  gcongr
+  exact (W t).miss_le hq hδ (hqt t ht') (hK t ht')
+
 /-- **The integrity audit over a horizon.** -/
 theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
   intro W T q δ hq hδ hqt hA3 s hs
@@ -112,21 +158,8 @@ theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
   set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  -- a window's draw-miss factor is at most `x ^ |W|`
-  have hfac : ∀ t < T, ∀ m : ℕ, (1 - ((W t).kd : ℝ≥0∞) / (W t).n) ^ m ≤ x ^ m := by
-    intro t ht m
-    refine pow_le_pow_left₀ zero_le ?_ m
-    have hn : (0 : ℝ) < (W t).n := by
-      rcases Nat.eq_zero_or_pos (W t).n with h0 | h0
-      · have := hqt t ht
-        rw [h0, Nat.cast_zero, div_zero] at this
-        linarith
-      · exact_mod_cast h0
-    have hkd : ((W t).kd : ℝ) / (W t).n ≤ 1 := (div_le_one hn).2 (by exact_mod_cast (W t).hkd)
-    rw [show ((W t).kd : ℝ≥0∞) / (W t).n = ENNReal.ofReal (((W t).kd : ℝ) / (W t).n) by
-      rw [ENNReal.ofReal_div_of_pos hn, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]]
-    rw [← ENNReal.ofReal_one, ← ENNReal.ofReal_sub _ (div_nonneg (Nat.cast_nonneg _) hn.le)]
-    exact ENNReal.ofReal_le_ofReal (by linarith [hqt t ht])
+  have hfac : ∀ t < T, ∀ m : ℕ, (1 - ((W t).kd : ℝ≥0∞) / (W t).n) ^ m ≤ x ^ m :=
+    fun t ht m => pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) m
   have hgood := periodGood_mono _ T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < T ∧ (W j).CR τ)) hs
   -- every window accepted with a drawn unit wrong
   have hA := period_union (fun t => (W t).game) (fun t => (W t).record t)
@@ -138,17 +171,7 @@ theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
     WindowRec.wrong (fun t τ => t < T ∧ (W t).CR τ) x hx
     (fun t τ hτ => ⟨((W t).wrongSet τ).card, fun _ => rfl,
       ((W t).drawMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) T 0 s M hgood
-  have hxM : x ^ M ≤ ENNReal.ofReal δ := by
-    set L : ℝ := Real.log (1 / δ) / q with hL
-    calc x ^ M ≤ ENNReal.ofReal (Real.exp (-q)) ^ M :=
-          pow_le_pow_left₀ zero_le (ENNReal.ofReal_le_ofReal (by linarith [Real.add_one_le_exp (-q)])) M
-      _ = ENNReal.ofReal (Real.exp (-q * M)) := by
-          rw [← ENNReal.ofReal_pow (Real.exp_pos _).le, ← Real.exp_nat_mul, mul_comm]
-      _ ≤ ENNReal.ofReal (Real.exp (-q * L)) :=
-          ENNReal.ofReal_le_ofReal
-            (Real.exp_le_exp.2 (mul_le_mul_of_nonpos_left (Nat.le_ceil L) (by linarith)))
-      _ = ENNReal.ofReal δ := by
-          rw [hL, neg_mul, mul_div_cancel₀ _ hq.ne', one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
+  have hxM : x ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
   calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ))
         (Period.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.drawnWrong) ∨
