@@ -103,6 +103,9 @@ BC_BYTES = 128
 ROW_V2 = "hm96-sha512/row/v2"
 #: a salted unit's public row: the window's certified salt, the unit's position (a u64) and its entry's side roots
 PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * 64)
+#: a J10-R unit's public row (`h1tile.PouwH1Tile5`'s): `PUBLIC_ROW_BITS`, then its call's first position ``call`` and its
+#: ``blocks``, its first row block and its first column block in its call's stream, each a u64
+PUBLIC_ROW_J10R_BITS = PUBLIC_ROW_BITS + 8 * 3 * 8
 PUBLIC_ROW_SALT_DOMAIN = b"verity/pouw/public-row-salt/v1\0"
 
 
@@ -646,19 +649,44 @@ def _no_constant(s: str) -> Any:
     raise ValueError(f"{s} is not JSON")
 
 
-def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
+def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes],
+               j10r: tuple[int, tuple[int, int]] | None = None) -> bytes:
     """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out (`h1unit.pub_words`):
-    `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first."""
+    `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first. With `j10r` ``(call, blocks)``, a
+    J10-R unit's (`PUBLIC_ROW_J10R_BITS`): then its call's first position and its two blocks (`j10r_blocks`), each a u64
+    in the same layout."""
     x = salt + position.to_bytes(8, "big") + roots[0] + roots[1]
-    if len(x) * 8 != PUBLIC_ROW_BITS:
-        raise ValueError(f"a public row is {PUBLIC_ROW_BITS} bits")
+    if j10r is not None:
+        x += b"".join(v.to_bytes(8, "big") for v in (j10r[0], *j10r[1]))
+    if len(x) * 8 != (PUBLIC_ROW_BITS if j10r is None else PUBLIC_ROW_J10R_BITS):
+        raise ValueError(f"a public row is {PUBLIC_ROW_BITS} bits, a J10-R unit's {PUBLIC_ROW_J10R_BITS}")
     return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
 
 
-def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
+def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes],
+                 j10r: tuple[int, tuple[int, int]] | None = None) -> list[int]:
     """`public_row` as a ``row/v2`` row of 16-bit leaves: word w its bits 16 w .. 16 w + 15, low byte first."""
-    x = public_row(salt, position, roots)
+    x = public_row(salt, position, roots, j10r)
     return [x[i] | x[i + 1] << 8 for i in range(0, len(x), 2)]
+
+
+def n_digits(k: int) -> int:
+    """H1's digit count m at contraction `k` (`segment.n_digits` of KS = k / 32): the least m with 128 KS <= 128^m and
+    127 KS // 128^(m - 1) <= 127."""
+    ks, m = k // 32, 1
+    while not (128 * ks <= 128 ** m and 127 * ks // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
+def j10r_blocks(m: int, k: int, tile: tuple[int, int], i: int, j: int) -> tuple[int, int]:
+    """`h1tile.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one stream at
+    call scale, row block R I at R I RB and column block C J at M RB + C J CB, for a call of slot `m` (its A rows), an
+    R × C `tile` and K = `k`: RB = ⌈(K + 32 (m_K - 1)) / 512⌉ a row's blocks and CB = ⌈(K + 256) / 512⌉ a column's
+    (`h1tile.Layout`'s). Every input is the window's public structure, so the verifier derives them."""
+    r, c = tile
+    rb, cb = -(-(k + 32 * (n_digits(k) - 1)) // 512), -(-(k + 256) // 512)
+    return r * i * rb, m * rb + c * j * cb
 
 
 def public_row_salt(context: str, position: int) -> bytes:

@@ -16,12 +16,13 @@ deficit add:
   detected faulty proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
   what the blocks accepted before their identity's first detection (`escaped`) skip;
 * `DampenerRemote` composes them with `ThreadedThrottled`'s declared computation, charging the escaped blocks by
-  Markov's inequality under `SampledEscape` and PoUW's deficit `ε_W` through the certified work: with probability at
-  least `1 − p/ε' − J ((1 − q)/q) B/(θ C)`, `η ≤ s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the
-  hardware multiple the developer needs is at least
-  `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ)/MFU₀))`. The factor `1 − s = C/(C + U)` is
-  tiers' (`evaluate` counts the residual over `C + U`); it only raises `ρ` over the form above, as `0 ≤ s ≤ 1`. With
-  every proof block proved (T1–T4), `q = 1` and the escape term's probability is 0 at any `θ > 0`.
+  Markov's inequality on their expected work, at most `((1 − q)/q) B` per identity when each faulty block is caught with
+  probability at least `q` whatever came before (`SampledDetection`), and PoUW's deficit `ε_W` through the certified
+  work: with probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)`,
+  `η ≤ s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the hardware multiple the developer needs is at
+  least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ)/MFU₀))`. The factor
+  `1 − s = C/(C + U)` is tiers' (`evaluate` counts the residual over `C + U`); it only raises `ρ` over the form above,
+  as `0 ≤ s ≤ 1`. With every proof block proved (T1–T4), `q = 1` and the escape term's probability is 0 at any `θ > 0`.
 -/
 
 namespace Nci.Guarantees
@@ -56,17 +57,18 @@ def VerdictLag : Prop :=
 windows of capacities `c_i ≥ 0`, `∑ c_i ≤ C`, each certificate wrong (`wrong ω i`) with probability at most `p ≥ 0`
 (`PouwSound`). The developer's faulty proof blocks `bad ω`, run by `J = |I|` identities, those `detected ω` failing
 their proof, under `TerminalDetection` at a lag `Δ`, skip `w_b ≥ 0` of declared work each, at most `Φ Δ` per identity
-within any span of `Δ`, `Φ H ≤ C`, as in `VerdictLag`; those accepted before their identity's first detection skip at
-most `((1 − q)/q) B` per identity in expectation (`SampledEscape`). Its counted multiplications `M` are as in
-`DampenerThreaded`, with no memory cap: unmonitored compute trains like the unconstrained developer, at model-FLOP
-utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full efficiency on the monitored compute
-outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the wrong windows' capacity and the
-skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`); the declared
-computation is bounded by `ThreadedThrottled`; faulty proof blocks inject at most the cheating share `χ`, 0 with no
-sampling. Then, at an escape slack `θ > 0`, with probability at least `1 − δ`, `δ = p/ε' + J ((1 − q)/q) B/(θ C)`, the
-compute efficiency is at most `s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the hardware multiple the
-developer needs is at least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ)/MFU₀))`, with
-`r̂ = 1 − W_cert/C`. -/
+within any span of `Δ`, `Φ H ≤ C`, as in `VerdictLag`, and at most `B` each; each faulty block with no earlier detection
+of its identity is detected with probability at least `q ∈ (0, 1]` whatever came before (`SampledDetection`), so those
+accepted before their identity's first detection skip at most `((1 − q)/q) B` per identity in expectation. Its counted
+multiplications `M` are as in `DampenerThreaded`, with no memory cap: unmonitored compute trains like the unconstrained
+developer, at model-FLOP utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full efficiency on the
+monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the wrong windows'
+capacity and the skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`); the
+declared computation is bounded by `ThreadedThrottled`; faulty proof blocks inject at most the cheating share `χ`, 0
+with no sampling. Then, at an escape slack `θ > 0`, with probability at least `1 − δ`,
+`δ = p/ε' + J ((1 − q)/q) B/(θ C)`, the compute efficiency is at most
+`s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the hardware multiple the developer needs is at least
+`ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ)/MFU₀))`, with `r̂ = 1 − W_cert/C`. -/
 def DampenerRemote : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad detected : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ)
@@ -77,7 +79,8 @@ def DampenerRemote : Prop :=
     0 < H → 0 ≤ Δ → Φ * H ≤ C → (∀ ω, ∀ b ∈ bad ω, ident b ∈ I) →
     (∀ ω, Assumptions.TerminalDetection (bad ω) (detected ω) ident τ Δ) →
     (∀ ω j t, ∑ b ∈ bad ω with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
-    0 < θ → (∀ b, 0 ≤ w b) → Assumptions.SampledEscape μ bad detected ident τ w q B →
+    0 < θ → (∀ b, 0 ≤ w b) → 0 < q → q ≤ 1 → 0 ≤ B → (∀ ω, ∀ b ∈ bad ω, w b ≤ B) →
+    Assumptions.SampledDetection μ bad detected ident τ q →
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
     Complies Γ α d → Assumptions.BaselineRegistered r d (PartialContainment.ofContainment Mc) →
     T.Threaded Γ (α * Γ) dd e →

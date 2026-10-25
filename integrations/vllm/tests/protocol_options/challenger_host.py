@@ -201,9 +201,11 @@ class Gate:
 
     def period_open(self, name: str, lane: str = "vllm", *, by: str = "vllm", cap: int | None = None,
                     circuit: str | None = None, draw_k: int | None = None, rows: int | None = None,
-                    model: str | None = None, weights_root: str | None = None, **override) -> dict:
+                    model: str | None = None, weights_root: str | None = None, length: dict | None = None,
+                    **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
-        proof service's committed draw K, `credit.K_FIELD`) and ``rows`` (the table rows T, `credit.ROWS_FIELD`) when
+        proof service's committed draw K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
+        ``length`` (``--length``, `credit.LENGTH_FIELD`) when
         given, and with ``model`` (``--model``) or
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused
         (`models.Refused`) for a root it has no entry of."""
@@ -211,7 +213,8 @@ class Gate:
         body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
                 **({"circuit": circuit} if circuit is not None else {}),
                 **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
-                **({CR.ROWS_FIELD: rows} if rows is not None else {}), **signed, "pinned": PINNED,
+                **({CR.ROWS_FIELD: rows} if rows is not None else {}),
+                **({CR.LENGTH_FIELD: length} if length is not None else {}), **signed, "pinned": PINNED,
                 "key_sha512": self.pin, "opened_utc": "2026-10-20T11:00:00Z", **override}
         self._periods[name], self._current[lane] = {"lane": lane, "windows": []}, name
         return self.append("period-open", None, body)
@@ -340,18 +343,20 @@ class Ledger:
 
     def period_open(self, name: str, *, circuit: str, cap: int = 1, draw_k: int | None = None, rows: int | None = None,
                     model: str | None = None, weights_root: str | None = None, circuit_files: dict | None = None,
-                    leaf: int | None = None) -> None:
+                    length: dict | None = None, leaf: int | None = None) -> None:
         """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
         with ``draw_k`` (`credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`), ``model`` (the gate's
         ``--model``: `registry`'s registration's weights' root,
-        signed with its ``model``) or ``weights_root`` (``--weights-root``, Refused unless a registration's), and
-        ``circuit_files`` (each K's circuit file's SHA-512, ``{k<K>: SHA-512}``) when given."""
+        signed with its ``model``) or ``weights_root`` (``--weights-root``, Refused unless a registration's),
+        ``circuit_files`` (each K's circuit file's SHA-512, ``{k<K>: SHA-512}``) and ``length`` (the gate's ``--length``,
+        `credit.LENGTH_FIELD`) when given."""
         signed = self.registry.opened(circuit, model, weights_root)
         self._period, self._windows = name, []
         self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
                                           **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
                                           **({CR.ROWS_FIELD: rows} if rows is not None else {}), **signed,
                                           **({"circuit_files": circuit_files} if circuit_files is not None else {}),
+                                          **({CR.LENGTH_FIELD: length} if length is not None else {}),
                                           "key_sha512": self.key_sha512}, leaf)
 
     def period_close(self, name: str, leaf: int | None = None) -> None:

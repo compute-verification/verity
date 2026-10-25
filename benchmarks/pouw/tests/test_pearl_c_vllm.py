@@ -357,9 +357,10 @@ class _Engine:
         return []
 
 
-def _served(monkeypatch, kernel, weights, **run):
+def _served(monkeypatch, kernel, weights, more=None, **run):
     """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
-    with the epoch's coins from a seeded challenger; `run` overrides the device run's buffer sizes."""
+    with the epoch's coins from a seeded challenger and the further pouw settings `more`; `run` overrides the device run's
+    buffer sizes."""
     import functools
 
     from verity_vllm import protocol_options as PO
@@ -369,7 +370,7 @@ def _served(monkeypatch, kernel, weights, **run):
     if run:
         monkeypatch.setattr(PPD, "PearlCDeviceRun", functools.partial(PPD.PearlCDeviceRun, **run))
     model = _Model(weights)
-    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k"}}
+    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
     return model, comp, comp.get("pouw")
 
@@ -596,6 +597,63 @@ def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
     comp.close()
     assert [p["units"] for p in passes] == [1, 1, 1, 3]
     assert "execute_model" not in vars(v1) and "execute_model" not in vars(v2)
+
+
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, dev):
+    """Plain serving (a model runner, nothing else ending passes) under ``transcript_dir``, three steps: each pass is one
+    step's forward over every weight, retained in ``pass-NNNNN`` in the order the passes began (the one the install began
+    first among them), its manifest's commitment the one it published and its calls the step's, its weights' files hard
+    links to the first pass's; the pass left open and empty after the last step writes nothing.  On ``twin`` the hash
+    kernels run, so A's roots are real and differ pass to pass."""
+    rng = np.random.default_rng(23)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
+    kernel = PPD.Kernel(R, F, TwinDev(HD.build(tmp_path)) if dev == "twin" else RecordingDev(), "0" * 64)
+    (runner,) = _runners(monkeypatch)
+    root = tmp_path / "passes"
+    model, comp, option = _served(monkeypatch, kernel, weights, {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
+    core = _Core(runner(), _Engine(model, steps))
+    for _ in steps:
+        core.step()
+    comp.close()
+    passes = option.details["passes"]
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in passes] == [(2, 24, 400), (2, 12, 240), (2, 6, 6)]
+    assert [Path(p["manifest"]) for p in passes] == [root / f"pass-{i:05d}" / "manifest.json" for i in range(3)]
+    assert sorted(d.name for d in root.iterdir()) == [f"pass-{i:05d}" for i in range(3)]
+    for i, (p, step) in enumerate(zip(passes, steps)):
+        man = json.loads(Path(p["manifest"]).read_text())
+        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [(j, w, m) for j, (w, m) in enumerate(step)]
+        assert man["commitment"] == {"root": p["transcript_root"], "count": p["tiles"]} and sorted(man["weights"]) == ["0", "1"]
+    for f in ("weights/0.rows.bf16", "weights/0.tree", "weights/1.rows.bf16", "weights/1.tree"):
+        stats = [(root / f"pass-{i:05d}" / f).stat() for i in range(3)]
+        assert len({s.st_ino for s in stats}) == 1 and stats[0].st_nlink == 3, f
+    if dev == "twin":
+        assert len({p["activation_roots"] for p in passes}) == 3
+
+
+def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
+    """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
+    rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
+    (``details["max_step_tokens"]``).  A step scheduled over it is refused before its forward runs, leaving the open pass
+    empty and nothing committed; a step at the limit commits as one pass, within both caps."""
+    rng = np.random.default_rng(29)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    (runner,) = _runners(monkeypatch)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
+    assert option.details["max_step_tokens"] == 256
+    r = runner()
+    type(r).engine = _Engine(model, [[(0, 257), (1, 257)], [(0, 256), (1, 256)]])
+    with pytest.raises(RuntimeError, match=r"a step of 257 tokens is over one pass \(256 tokens a step"):
+        r.execute_model(types.SimpleNamespace(total_num_scheduled_tokens=257))
+    assert not option.end_pass.__self__.cur.matmuls and option.details["passes"] == []
+    type(r).engine.at = 1
+    r.execute_model(types.SimpleNamespace(total_num_scheduled_tokens=256))
+    comp.close()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 512)]
 
 
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
@@ -831,6 +889,29 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     path.write_text(json.dumps(man))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
     assert not r["accepted"] and "records are not the ones" in r["line"]
+
+
+@pytest.mark.slow
+def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
+    """``served_passes.py verify`` replays each pass with calls that the serve's served.json names, skipping the empty one
+    the run left open: it accepts an honest pass, and the same pass with a weight row flipped fails the whole run."""
+    path, *_ = honest_pass
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
+                                     {"pass": 1, "units": 0, "tiles": 0}]}
+    (path.parent / "served.json").write_text(json.dumps(served))
+    out = tmp_path / "verify.json"
+    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert (doc["verified"], doc["accepted"], doc["ok"]) == (1, 1, True) and doc["verdicts"][0]["line"].startswith("ACCEPT")
+    man = json.loads(path.read_text())
+    rows = path.parent / man["weights"]["0"]["rows"]["path"]
+    bad = bytearray(rows.read_bytes())
+    bad[1] ^= 0x01
+    rows.write_bytes(bytes(bad))
+    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 1
+    doc = json.loads(out.read_text())
+    assert (doc["accepted"], doc["ok"]) == (0, False) and doc["verdicts"][0]["line"].startswith("REJECT")
 
 
 @pytest.mark.slow
@@ -1870,7 +1951,8 @@ def edge_rows(k: int = 1024) -> tuple:
 def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_would_launch_the_same(monkeypatch):
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
-    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    # the module itself: under the layout move its package re-exports a function named as the module
+    PS = importlib.import_module("verity_vllm.protocol_options.pouw_pearl_c_screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -1925,7 +2007,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    PS = importlib.import_module("verity_vllm.protocol_options.pouw_pearl_c_screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -1936,6 +2018,24 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     want[0][3200:3200 + 32 * tiles], want[1][74:74 + 2 * rows], want[2][288:320] = leaves, flags[:rows].flatten(), root
     PS.scatter_into(x, alpha, aux, rows, bufs[1], leaves, bufs[0], root, bufs[2], torch.tensor([3200, 74, 288]))
     assert all(torch.equal(a, b) for a, b in zip(bufs, want, strict=True))
+
+
+def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypatch):
+    """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
+    (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
+    interpreted_triton(monkeypatch)
+    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    _, x, alpha, aux = edge_rows()
+    flags = torch.zeros((12, 2), dtype=torch.uint8)
+    PS.screen_into(flags, x, alpha, aux, fused=True)
+    at = torch.tensor([5, 0, 11, 2, 4, 3])
+    leaves, root = torch.arange(64, dtype=torch.uint8), torch.arange(100, 132, dtype=torch.uint8)
+    bufs = [torch.full((n,), 0xA5, dtype=torch.uint8) for n in (256, 64, 128)]
+    want = [t.clone() for t in bufs]
+    want[0][32:96], want[1][10:10 + 2 * len(at)], want[2][64:96] = leaves, flags[at].flatten(), root
+    PS.scatter_into(x, alpha, aux, len(at), bufs[1], leaves, bufs[0], root, bufs[2], torch.tensor([32, 10, 64]), at)
+    assert all(torch.equal(a, b) for a, b in zip(bufs, want, strict=True))
+    assert len({tuple(r) for r in flags[at].tolist()}) > 1
 
 # ---- step 2 of the decode plan: the deferred schedule -------------------------------------------------------------
 

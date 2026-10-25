@@ -20,7 +20,10 @@
 #   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
-#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0).
+#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
+#     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
+#     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
+#     `prove_path.py compiler` prints).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn).
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
@@ -150,7 +153,7 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
     mkdir -p $O/$1-records
     cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
-    $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} | tee $O/$1-records/compiler.json || return 1
+    $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
     run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
     run $1-forged "$src" - ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1

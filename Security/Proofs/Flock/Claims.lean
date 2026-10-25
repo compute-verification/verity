@@ -121,6 +121,8 @@ import Proofs.Flock.Claims.Recursion.RecOpen
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.CoinTie
+import Proofs.Flock.Claims.Recursion.CoinPos
 import Proofs.Flock.Claims.Recursion.CapOpens
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.KSLin2E
@@ -136,6 +138,7 @@ import Proofs.Flock.Claims.Recursion.NextShaS17
 import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Recursion.NextR
+import Proofs.Flock.Claims.Recursion.VerdictParts
 import Proofs.Flock.Claims.Recursion.NextRHonest
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.NextRShaped
@@ -162,6 +165,7 @@ import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployE
 import Proofs.Flock.Claims.DeployVK
 import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+import Proofs.Flock.Claims.Recursion.PlainK
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
