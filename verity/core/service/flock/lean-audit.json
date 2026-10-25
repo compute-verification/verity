@@ -167,7 +167,6 @@
    "Nat.decLt",
    "Nat.div",
    "Nat.gcd",
-   "Nat.gcd._unary",
    "Nat.land",
    "Nat.log2",
    "Nat.lor",
