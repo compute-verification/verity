@@ -4,6 +4,7 @@ import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.Horizon
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -15,6 +16,7 @@ import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.Horizon
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -156,5 +158,6 @@ theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTi
 theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
   @NetTiming.encard_wardenDecodable_le
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
+theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
 
 end NetTiming.SecurityProofs

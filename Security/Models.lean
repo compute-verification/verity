@@ -34,6 +34,7 @@ import Definitions.NetworkCertifier.Assumptions
 import Definitions.NetworkCertifier.Guarantees
 import Definitions.NetworkCertifier.Assumptions.AdviceString
 import Definitions.NetworkCertifier.Assumptions.Period
+import Definitions.NetworkCertifier.Assumptions.Horizon
 import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
@@ -44,5 +45,6 @@ import Definitions.Accounting.Assumptions.RemoteOutside
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.Horizon
 
 /-! Each component's named assumptions and guarantee statements. -/
