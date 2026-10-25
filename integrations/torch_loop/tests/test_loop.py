@@ -1,7 +1,8 @@
 """The torch loop as an integration of Verity's (`verity.ml.windows.interface`): its model computes its template's function,
 its written window is the one core's registration check derives (and a port under another domain is refused), the
 verifier's window from its records alone is the loop's, the circuit it registers before running is the one it writes, its
-compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule, its unit
+compiler registers its code's digest at its commit, compiles its committed schedule to the circuit it registers and refuses
+advice that is not a schedule, its unit
 composes into C-Flock's unit statement, a tampering loop's outputs are not its Definition's, and it loads no vLLM."""
 from __future__ import annotations
 
@@ -84,6 +85,17 @@ def test_its_compiler_compiles_the_committed_schedule_to_the_circuit_it_register
     (tmp_path / "other.bin").write_bytes(C.schedule_bytes([3, 7], 1))
     assert C.main([*compile_, str(tmp_path / "other.bin")]) == 0
     assert IF.circuit_of(json.loads((tmp_path / "c.json").read_text())) != IF.circuit_of(mine)
+
+
+def test_its_compiler_registers_its_code_s_digest_at_its_commit_and_the_verifier_s_entry_names_that_code(capsys):
+    c = C.compiler()
+    assert c == {"name": C.NAME, "digest": IF.compiler_digest(C.NAME, C.REPO, C.CODE), "commit": IF.commit_of(C.REPO)}
+    assert IF.advice_binding(c, "ab" * 64, 8)["compiler"] == c
+    assert C.main(["--table", "py", "-m", "verity_torch_loop.compile", "--law", "subset:2"]) == 0
+    assert json.loads(capsys.readouterr().out) == {C.NAME: {
+        "digest": c["digest"], "argv": ["py", "-m", "verity_torch_loop.compile", "--law", "subset:2"],
+        "code": list(C.CODE), "pythonpath": list(C.PYTHONPATH)}}
+    assert all((C.REPO / p).is_dir() for p in (*C.CODE, *C.PYTHONPATH))
 
 
 @pytest.mark.parametrize("advice", [b"", b"not json", b'{"requests": [3], "steps": 1}', b'{"requests":[16],"steps":1}',

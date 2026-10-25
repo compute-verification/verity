@@ -13,6 +13,8 @@ committed row longer than one SHA-512 block.
   loop's shape alone (`--circuit-only`), the one the verifier registers when there is no compiler.
 - `verity_torch_loop/compile.py`: its registered compiler, the command the audit runs on the opened advice (the contract in
   `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
+  It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the
+  commit that code is at; the audit runs it from its own checkout of that commit (`--table ARGV...`: the verifier's entry).
 - `tests/`: the loop's outputs are the Definition's, unit by unit; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit

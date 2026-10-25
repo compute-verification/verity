@@ -215,12 +215,10 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
   export PYTHONPATH=$REPO/integrations/torch_loop
   CIRCUIT=$($TL --circuit-only | tee $O/torch-loop-circuit.json | $PY -c 'import json, sys; print(json.load(sys.stdin)["circuit"])') || exit 8
-  # the verifier's table of the loop's compiler: the name and digest it computes from the code it runs, and the command
-  $PY -c 'import json, sys
-from verity_torch_loop import compile as C
-c = C.compiler()
-print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[1:]}}))' \
-    $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP > $O/torch-loop-compilers.json || exit 8
+  # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
+  # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
+  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP \
+    > $O/torch-loop-compilers.json || exit 8
   loop() {  # NAME [--compiled] [--tamper]: the torch loop's window, audited from its records alone against the circuit
             # registered before it ran, or (--compiled) against its compiler's output on its committed schedule
     local name=$1 forged= serve=() held=(--circuit $CIRCUIT); shift

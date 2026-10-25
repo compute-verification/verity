@@ -7,13 +7,12 @@ The advice is the loop's schedule (`schedule_bytes`: its requests' token ids and
 circuit depends on: one unit per output coordinate of each linear at each request and step. The command writes the circuit
 record of a window of that circuit under ``--law`` in members of at most ``--cap`` units, its run fields empty, prints
 ``{"bits": N}`` (the advice's length, which is charged) and exits 0; on advice that is not a schedule it exits `REFUSED`,
-the reason on stderr (the contract is `benchmarks/prove_path/records_audit.py`'s). ``--identity`` prints the name and
-digest it is registered under: SHA-512 of this module's code and `loop`'s, which together fix the map from schedule to
-circuit."""
+the reason on stderr (the contract is `benchmarks/prove_path/records_audit.py`'s). ``--identity`` prints the name, digest
+and commit it is registered under (`compiler`), and ``--table ARGV...`` the verifier's table entry for it running as ARGV
+(`table`)."""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -27,12 +26,24 @@ from . import loop as L
 NAME = "torch-loop/compile/v0"
 #: the exit code for advice it refuses (`records_audit.REFUSED`)
 REFUSED = 2
+#: the repository paths whose code fixes the map from schedule to circuit, which the compiler's digest is over: this package
+#: and Verity, whose interface and circuits it builds the record with
+CODE = ("integrations/torch_loop/verity_torch_loop", "verity")
+#: the repository paths the command imports from, its ``PYTHONPATH`` in the verifier's checkout of its commit
+PYTHONPATH = (".", "integrations/torch_loop")
+REPO = Path(__file__).resolve().parents[3]
 
 
 def compiler() -> dict[str, str]:
-    """The name and digest the loop's registration binds its compiler under."""
-    code = Path(__file__).read_bytes() + Path(L.__file__).read_bytes()
-    return {"name": NAME, "digest": hashlib.sha512(code).hexdigest()}
+    """The name, digest and commit the loop's registration binds its compiler under: the digest over `CODE` in the work tree
+    this module runs from (`interface.compiler_digest`), at the commit it is at, where a verifier fetches that code."""
+    return {"name": NAME, "digest": IF.compiler_digest(NAME, REPO, CODE), "commit": IF.commit_of(REPO)}
+
+
+def table(argv: list[str]) -> dict[str, Any]:
+    """The verifier's table of compilers holding this one, run as ``argv`` from a checkout of its commit (records_audit's
+    ``--compilers``)."""
+    return {NAME: {"digest": compiler()["digest"], "argv": list(argv), "code": list(CODE), "pythonpath": list(PYTHONPATH)}}
 
 
 def schedule_bytes(requests: list[int], steps: int) -> bytes:
@@ -62,6 +73,7 @@ def circuit_record(requests: list[int], steps: int, law: Any, cap: int) -> dict[
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--identity", action="store_true")
+    ap.add_argument("--table", nargs=argparse.REMAINDER, help="the verifier's table entry for this compiler run as the rest")
     ap.add_argument("--law", default="subset:2")
     ap.add_argument("--cap", type=int, default=8)
     ap.add_argument("--advice")
@@ -70,8 +82,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.identity:
         print(json.dumps(compiler()))
         return 0
+    if a.table:
+        print(json.dumps(table(a.table)))
+        return 0
     if not (a.advice and a.out):
-        ap.error("--advice FILE --out FILE, or --identity")
+        ap.error("--advice FILE --out FILE, --identity or --table ARGV...")
     data = Path(a.advice).read_bytes()
     try:
         requests, steps = schedule(data)
