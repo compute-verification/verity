@@ -98,6 +98,10 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--upstream", "10.0.0.2:8011"], "unrecognized arguments: --upstream"),
     (["--rate", "5"], "unrecognized arguments: --rate"),
     (["--command", "id"], "unrecognized arguments: --command"),
+    (["--ids", "1"], "unrecognized arguments: --ids 1"),
+    (["--delay", "21"], "unrecognized arguments: --delay"),
+    (["--window", "32"], "unrecognized arguments: --window"),
+    (["--scan", "1"], "unrecognized arguments: 1"),
     (["--temperature", "2.5"], "--temperature '2.5': 0 to 2"),
     (["--temperature", "-0.1"], "--temperature '-0.1': 0 to 2"),
     (["--temperature", "nan"], "--temperature 'nan': 0 to 2"),
@@ -249,6 +253,28 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
                             tree=Path("/opt/vy-challenger") / PIN) == argv
     assert A.warden_command(req | {"height": 10}, tmp_path, "u")[7:9] == ["--height", "10"]
     assert A.warden_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
+
+
+def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_the_scans_schedule(host, tmp_path):
+    """`--scan` is recorded (`scan: true`) only when given, and its run is the same rehearsal with `--ids` and
+    `SCAN_SCHEDULE` added: the same traffic, sampling, height and tokens, so `warden_minutes` bounds it as it does any
+    (`test_warden_serve` holds the schedule to `scan_zk.PARAMS`)."""
+    rc, out = gate(host, REQUEST + ["--scan", "--tokens", "64"], started=[])
+    assert rc == 0, out
+    scan = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert scan["scan"] is True and scan["device"] == "warden" and scan["tokens"] == 64
+    rc, out = gate(host, REQUEST, started=[], token="cd34")
+    plain = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert "scan" not in plain
+    rc, out = gate(host, REQUEST + ["--scan", "--minutes", "10"], started=[], token="ef56")
+    assert rc == 3 and "--minutes 10: 100 requests take 11 minutes" in json.loads(out)["refused"]
+
+    argv = A.warden_command(scan, tmp_path, "http://127.0.0.1:40001")
+    without = A.warden_command({k: v for k, v in scan.items() if k != "scan"}, tmp_path, "http://127.0.0.1:40001")
+    at = without.index("--max-tokens")
+    assert argv == [*without[:at], "--ids", *A.SCAN_SCHEDULE, *without[at:]]
+    assert A.warden_command(plain, tmp_path, "u") == A.warden_command(plain | {"scan": False}, tmp_path, "u")
+    assert "--ids" not in A.warden_command(plain, tmp_path, "u")
 
 
 def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
