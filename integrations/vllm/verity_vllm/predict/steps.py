@@ -17,9 +17,9 @@
   (`output_len` − 1), C its prefix-cache hit (the cached request wrapper: every layer's first C key and value rows are its `prefix`
   input, the producers' rows, which GP-01 records per block). The one row async scheduling runs past a request's last kept output
   samples nothing kept: it is `discarded`, in no Program; a request its client aborted (finish `abort`) compiles as one that
-  stopped at its last kept output, since the endpoint frees it after the step in flight. A request's (LP, T, C, policy) reads its own advice record and body
-  alone, never its batch; requests of one (LP, T, C, policy) share one Program. A chunked or preempted request compiles to the
-  same Program: chunking and preemption are advice no Program reads.
+  stopped at its last kept output, since the endpoint frees it after the step in flight. A request's (LP, T, C, policy) reads
+  its own advice record and body alone, never its batch; requests of one (LP, T, C, policy) share one Program. A chunked or
+  preempted request compiles to the same Program: chunking and preemption are advice no Program reads.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
   The Program holds each of its positions C..LP+T-1 once, in the row that first reaches it: a chunked prefill's chunks are its
