@@ -14,6 +14,7 @@ import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Raise
 import Proofs.Flock.Claims.Sampling.Reference
+import Proofs.Flock.Claims.Sampling.RowAnd
 import Proofs.Flock.Claims.Sampling.Select
 import Proofs.Flock.Claims.Sampling.Seq
 import Proofs.Flock.Claims.Sampling.Runs
