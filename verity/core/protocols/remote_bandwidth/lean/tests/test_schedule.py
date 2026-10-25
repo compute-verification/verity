@@ -92,7 +92,11 @@ def inputs(draw) -> dict:
         sc = schedule.Schedule(sc.registered + draw(st.sampled_from([((0, 1, 0),), ((0, blocks + 1, 0),),
                                                                        ((blocks - 1, 1, 2 ** 64),)])),
                                sc.appends, sc.steps)
-    cap = draw(st.integers(0, sc.bits - 1)) if fault == "cap" else sc.bits + draw(st.sampled_from([0, 0, 1, 8, 2 ** 70]))
+    try:
+        bits = sc.bits
+    except ValueError:  # a block freed before its write has no encoding; the check refuses it before reading the cap
+        bits = 0
+    cap = draw(st.integers(0, bits - 1)) if fault == "cap" else bits + draw(st.sampled_from([0, 0, 1, 8, 2 ** 70]))
     v = as_json(blocks, cap, sc, passes, appends)
     if fault == "malformed":
         bad = draw(st.sampled_from([-1, None, True, "1", [], {}, [1, 2, 3]]))
