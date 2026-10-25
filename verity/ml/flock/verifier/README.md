@@ -21,9 +21,10 @@ with `refused: <why>: a statement form the soundness proof does not cover` (`Flo
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
 rows, the typed statements, public input ports, several tables without `--zk` (unless `--plain-tables`: a statement with
 public outputs, or hidden outputs and `hm96-sha512/v1` leaves, at up to 64 tables, at a subset draw, with the verifier's
-own `--program` the one META's `program_sha512` names, `ProvedScope.checkP` and `drawLawP`, which `flock_verify_sound`'s
-`SoundExecJ` and `SoundExecHJ` cover) and more than 2^16 with it (`ProvedScope.zkTableCap`), shared-row public files (except under
-`--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
+own `--program` the one META's `program_sha512` names, `ProvedScope.checkP` and `ProvedScope.lawWhy` at `plainTables`,
+which `flock_verify_sound`'s `SoundExecJ` and `SoundExecHJ` cover) and more than 2^16 with it (`ProvedScope.zkTableCap`),
+shared-row public files (except at hidden outputs and `hm96-sha512/v1` leaves with the verifier's own `--registered F`,
+which `FailClosed.SoundZHJR` covers under `--zk` and `FailClosed.SoundExecHR` without it), and circuits
 outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
 a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
 general instance form: a unit reading any number of input groups and tail stages returning the outputs (a repeated last
@@ -33,7 +34,7 @@ Those statements still parse, set up and verify (`statement` prints their digest
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
 sampling design no soundness claim draws by is refused at setup, with
 `refused: <why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with
-or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). So is a session without a draw, with
+or without a closure, and a subset draw without `--zk` at a statement with public outputs (`lean_refuses_drawn`). So is a session without a draw, with
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
 its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)

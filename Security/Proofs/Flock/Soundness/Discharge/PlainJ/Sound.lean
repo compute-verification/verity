@@ -14,7 +14,7 @@ It is `Integrate.flock_headline_exec` with the session's tables in place of its 
 as `Composed.zk_session_soundJ` makes them under `--zk`:
 
 * the law is the live subset draw `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other law,
-  `ProvedScope.drawLawP`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
+  `ProvedScope.lawWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
   (`Law.subset_miss`), under A3 at its one byte source;
 * the tags, the record and the draws are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),
   `DecodeZLJ.RecordsLiveJ` and `DrawOkPJ`, the coin server's draw setting each table up at its part.
@@ -84,13 +84,13 @@ theorem plain_session_soundJ
           ((rsPJ ht dj x₀ hc hpub hpt hU hscope).binding (rsPJ_computes ht dj x₀ hc hpub hpt hU hscope)) k Rw M ρ t' := by
   intro σ hCR hKS
   exact (Placed.keyProg c hU n).flock_headline_live_tables_subset_miss (Layout.outsOf c hU n) kd hkd Lb src hA3
-    (planPJ ht dj x₀) (tabPJ ht dj x₀)
+    (planPJ (Reg := Reg) ht dj x₀) (tabPJ ht dj x₀)
     (Placed.Sites.progPlaces_keyProg hU (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n))
     {Layout.oneG} (Const.constCols_keyProg hU (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n))
     {Layout.zeroG} (Zero.zeroCols_keyProg hU (sitesPJ_parse ht dj x₀ hc) (Layout.outsOf c hU n))
     (layPJ ht dj x₀ hc hU (pub := pub)) (rsPJ ht dj x₀ hc hpub hpt hU hscope)
     (rsPJ_computes ht dj x₀ hc hpub hpt hU hscope) hk hRw hM hρ hr ht' K I wr
-    (opnPJ I (planPJ ht dj x₀) dj) dg (decJ (planPJ ht dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => [])
+    (opnPJ I (planPJ (Reg := Reg) ht dj x₀) dj) dg (decJ (planPJ (Reg := Reg) ht dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => [])
     (fun _ _ rs j => capOfRoot rs[j.val]!) N (decodesOnPJ_exec ht dj x₀ _ wr hTags hRec hDraw) τ hCR hKS
 
 end FlockSoundness.Discharge.PlainJ

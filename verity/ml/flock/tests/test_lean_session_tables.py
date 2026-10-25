@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_flock.record_text import session_text
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -33,7 +34,7 @@ def rope(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -64,7 +65,7 @@ def _copy(src: Path, dst: Path, edit=None) -> Path:
     if edit:
         rec = json.loads((dst / "session.json").read_text())
         edit(rec)
-        (dst / "session.json").write_text(json.dumps(rec))
+        (dst / "session.json").write_text(session_text(rec))
     return dst
 
 

@@ -4,7 +4,8 @@
   "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone; IO around the audited check, not a proof",
   "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof"
+  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
@@ -45,6 +46,14 @@
     "baseline_difftest/python.jsonl": "46a62e2b44122e4f53fb0bb1899a92aa2a1951c95beecc856fe51435b0b1a1b7"
    },
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.DescLivenessMain": {
+   "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what NciCheck.Desc walks one by one (NciCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one NciCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which NciCheck.check gives on that one expanded gate by gate",
+   "args": ["{desc_liveness/cases.jsonl}", "13"],
+   "data": {
+    "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
+   },
+   "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {

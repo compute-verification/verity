@@ -17,7 +17,7 @@ verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from
                                                                    records are fetched and read with this reader)
 verity bench recursion_e2e store RESULT... [--merge]              the results and their table as one art: id
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
-       --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
+       --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
 - **Where it runs.** A run with no GPU prove (firewalled, on 85's CPU prover, the default; or `--cpu`) is a plain run on a
@@ -55,9 +55,22 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no
   VERDICT accepting) and every statement has a verdict over it. This is `lean_verdicts.py`'s rule. The row names the
   statements that refused it and those that rightly accepted it.
+- **Forgeries** (`--forge`, default none): 85's forged statements (`FORGE`, `rec_vstage --forge`: message, sum, comb,
+  top, top-salt, coef, dirs, filler), staged by vstage and proved by oprove one session each. A forgery is refused when
+  one of its statements is, whether the firewall stopped it before release (`FIREWALL-REFUSED`) or Lean refused it, and
+  a statement it leaves as the honest one is accepted (forged-message's alg-p1). This is `lean_verdicts.py`'s rule. Its
+  rows are left out of the outer totals. `--max-min` sizes each forged session as its honest statement's
+  (`FORGED_AS`). With coef, dirs or message among them, the **`forge-after`** step runs after lean (unless
+  `--no-forge-after`; `--steps ...,forge-after` asks for it alone). The firewall stops those three before Lean sees them,
+  so `forge_after.py` makes each one after proving instead, on copies of the honest L0 and alg-p0 statements: row 0 of
+  the port one bit off, as its `b || c` alone, as `pub.bin`'s consistent table, and as the whole registration. Lean
+  verifies each with the lean step's own flags, beside the honest control, which must accept (first run
+  r20261024-160722-958b: all refused at setup, the controls accepted; as a step, r20261024-172707-4385 at K = 64, N = 16
+  with `--forge coef,dirs,message`: complete and accepted, every forgery refused). The headline's `forged_refused` gives
+  each kind's verdict.
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   session needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
-  honest verdict accepted and every flipped coin was refused. A merged table's verdict is only as whole as its runs.
+  honest verdict accepted, every flipped coin and every forgery was refused. A merged table's verdict is only as whole as its runs.
 - **Data.** 85's staged statements and sessions go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
   `--env KEEP_DATA=1`. A later run takes them with `--env TAG=rb-<run id> --env KEEP_DATA=1 --steps oprove,...`. Runs on
   one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.
@@ -77,11 +90,12 @@ with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=
 | 0 | `build` | `60-circuit.sh MODE=build` (the prover), `lake build flock-verify` (Lean), `class_statement --stage-only` twice; `lake build flock-firewall` (the firewall's Lean session loop) from the same Lean sources | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: today's `--zk`, the baseline) | n1, CPU |
 | 1 | `inner` | `flock-circuit prove --gpu` (M0, ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner firewall's proxy); then today's M0 and `--zk` on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` | n1, GPU |
 | 2 | `icheck` | `flock-circuit replay` of the last inner session, `python -m verity_flock.rec_vstar` (V*'s hashing reference) | `inner/` | records only | n1, CPU |
-| 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts (forgeries off: `FORGE=`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/` | n1, CPU |
+| 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, and `--forge`'s forged statements (`FORGE`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-<kind>/` | n1, CPU |
 | 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops (V*'s verdict needs them) | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | n1, CPU |
 | 4 | `oprove` | per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | n1, GPU |
 | 5 | `oreplay` | `flock-circuit replay --zk` of each V* session (upstream's verifier) | `v-sess/` | records only | n1, CPU |
 | 6 | `lean` | `flock-verify verify --zk` on each V* session with V*'s own inputs (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`), the inner session (`INNER_LEAN=1`), `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed | `v-sess/`, `stage/`, `inner/` | records only | n1, CPU |
+| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each `flock-verify verify --zk` with step 6's flags beside its honest control (not a STEP of 85) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` | records only | n1, CPU |
 | 7 | `negative` | step 6 with `NEG_INNER`: each V* session again over each flipped copy of the inner session | as 6 | records only | n1, CPU |
 
 What the recursive audit has that 85 doesn't run, so no number here covers it:

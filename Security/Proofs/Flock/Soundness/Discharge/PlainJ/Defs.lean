@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 # One plain sampled session of `J` tables: the plan, sites, layout and rows
 
 `flock-verify verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
-`Tags.MAX_TABLES` tables at a subset draw (`ProvedScope.checkP`, `ProvedScope.drawLawP`). `Stmt.setupTables` sets table
+`Tags.MAX_TABLES` tables at a subset draw (`ProvedScope.checkP`, `ProvedScope.drawLaw` at `plainTables`). `Stmt.setupTables` sets table
 `j` up under `tagsAt` at its draw `Composed.drawJ` (the session's draw at one table, its part `j` at several). These are
 `Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are e2e-layout's directly,
 with no transfer to compiled tables:
