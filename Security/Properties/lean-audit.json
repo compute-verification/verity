@@ -1384,6 +1384,12 @@
    "assumptions": [],
    "type_hash": "a689e7512d811f97c080ab5920d02bea4bec2633b2a6d4ec515d7d7e183daf52"
   },
+  "Properties.Pouw.LiveSalt.liveCoinBinding": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.LiveSalt.onePair": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.LiveSalt.oneRoot": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.LiveSalt.oneRoot : Properties.Pouw.LiveSalt.OneRoot PouwCheck.liveSaltCheck"],
@@ -2929,6 +2935,14 @@
     "function": "Properties.Pouw.LiveSalt.rowSeed",
     "outcome": "accept"
    },
+   "Properties.Pouw.LiveSalt.liveCoinBinding": {
+    "function": "SampledProofs.Challenger.liveReason",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.onePair": {
+    "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
    "Properties.RemoteAudit.liveIsRun": {
     "function": "Properties.RemoteAudit.Live.run",
     "outcome": "accept"
@@ -2968,7 +2982,8 @@
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)"
+   "Properties.Pouw.LiveSalt.liveCoinBinding": "restatable: its hypothesis `c.root = c'.root` is not an acceptance of `liveReason`; stated over one root, the commitments `⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩` with `r` bound once (equivalent), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
+   "Properties.Pouw.LiveSalt.onePair": "restatable: its hypotheses `EpochRoot m w k` and `EpochRoot m' w k` are not acceptances of `PouwCheck.liveSaltCheck`, and they come before its conclusion because `w` and `k` are bound ahead of the two acceptances; with `∀ w k` bound after the acceptances (equivalent) it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

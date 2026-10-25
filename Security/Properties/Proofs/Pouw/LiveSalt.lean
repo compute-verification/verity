@@ -16,7 +16,8 @@ one open and its one root (`oneRoot_of`), and so for `PouwCheck.liveSaltCheck` (
 and the ledger's are `LedgerShows`, from the ledger's invariant (`Ledger.ledgerShows_of`). Two accepted passes of one
 epoch are pinned on one root, so they read one session of the ledger, and each one's commitment has the root whose hex
 the session's `end` recorded (`Ledger.sessionNamed_root`). So, given `LiveCoinBinding`, their salt coins are one coin
-and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`).
+and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`). `LiveSalt.Coin` proves
+`LiveCoinBinding` (`liveCoinBinding`), so `onePair` holds with no hypothesis.
 -/
 
 set_option mvcgen.warning false
