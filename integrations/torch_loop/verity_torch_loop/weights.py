@@ -486,8 +486,10 @@ def first_rows(shape: Shape, seed: bytes) -> list[list[str]]:
 
 def fixture() -> dict[str, Any]:
     """The interface's fixture (``tests/fixtures/weights-v1.json``): under `TEST_SEED` and `TEST_SALT_KEY`, `TINY`'s and
-    `PHASE1`'s manifests with digests, entries and registration digests, `H200`'s manifest and each tensor's first and
-    last rows, and the first 64 bytes of `H200`'s stream."""
+    `PHASE1`'s manifests with digests, entries and registration digests; at `H200` the stream's length and first 64
+    bytes, the first and last rows of layer 0's tensors and of those outside the layers, and SHA-256 of every tensor's
+    (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
+    of the evidence store (``integrations/torch_loop/README.md``)."""
     out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v1", "seed": TEST_SEED.hex(),
                            "salt_key": TEST_SALT_KEY.hex(), "shapes": {}}
     for s in (TINY, PHASE1):
@@ -495,9 +497,11 @@ def fixture() -> dict[str, Any]:
         out["shapes"][s.name] = {"manifest": manifest(s, TEST_SEED, digests=True),
                                  "values": entries(s, TEST_SEED, roots),
                                  "registration": registration_digest(s, TEST_SEED, roots)}
-    m = manifest(H200, TEST_SEED)
-    out["shapes"][H200.name] = {"manifest": m, "rows": first_rows(H200, TEST_SEED),
-                                "stream_head": stream(H200, TEST_SEED, 0, 64).hex()}
+    rows = first_rows(H200, TEST_SEED)
+    out["shapes"][H200.name] = {
+        "stream_bytes": stream_bytes(H200), "stream_head": stream(H200, TEST_SEED, 0, 64).hex(),
+        "rows": [r for r in rows if not r[0].startswith("l") or r[0].startswith("l0.")],
+        "rows_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest()}
     return out
 
 
