@@ -1,5 +1,6 @@
 import Definitions.Nci
 import Definitions.Nci.Transfers
+import Proofs.Core.BooleanDefs
 
 /-!
 # NCI from the bits on the wire and the credited gates
