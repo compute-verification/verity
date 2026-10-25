@@ -76,7 +76,7 @@ Two kinds of committed run:
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
-  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 4 slots, 1,024 prompt ids and 64
+  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids and 64
   outputs, the certifier run of record's envelope): its record (or ``--description``, its description) and its input
   count at the verifier's pins (``--pin``, the parameters whose roots it fixed before the run; a registered read of any
   other is free), which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
@@ -1308,7 +1308,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
     for name in ("window-circuit", "class-size"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS "
-                                       "(`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 4,1024,64)")
+                                       "(`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64)")
     for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
