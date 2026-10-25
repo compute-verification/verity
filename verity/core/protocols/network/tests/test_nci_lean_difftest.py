@@ -1,7 +1,8 @@
 """The difftest of the NCI policy's Lean check against its Python reference: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions and
-two pinned ones (θ with an input bound per run, refused, and θ the registered input, accepted), and
+`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
+335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
+neighbours, and two pinned ones (θ with an input bound per run, refused, and θ the registered input, accepted), and
 `scripts/nci_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
 `lean-audit.json`): `NciCheck/DifftestMain.lean` checks every instance with `NciCheck.check` and fails on any difference.
@@ -41,7 +42,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.Difft
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,002 instances and the reference's results on them, byte for byte as the record pins them."""
+    """All 4,337 instances and the reference's results on them, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", str(vectors.total())]

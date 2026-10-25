@@ -36,7 +36,8 @@ An instance is one JSON object:
   is checked as `novelReads R · den ≤ num · size R` in ℕ.
 
 `evaluate` refuses a malformed instance with the first failing code, in the order checked: `instance` (a field missing
-or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it), then gate by gate `program` or
+or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it, or a reference reads a leaf at
+another width than it was committed with, `E_REINTERPRET`: `decodeProgram`, with a `message`), then gate by gate `program` or
 `not-topological`, then θ entry by
 entry (`theta-unknown`: not a gate id, `theta-not-input`, `theta-not-registered`: an input bound per run,
 `theta-duplicate`), then the owners (`owner-length`: not one per gate, so an id outside the circuit or a gate left out;

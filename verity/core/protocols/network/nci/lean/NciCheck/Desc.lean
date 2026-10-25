@@ -48,7 +48,8 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 
 ## Refusals
 
-In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
+In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it, or a reference
+reads a leaf at another width than it was committed with, `E_REINTERPRET`: `NciCheck.decodeProgram`), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a

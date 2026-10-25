@@ -15,7 +15,9 @@ across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
-`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
+`NciCheck.Desc.walkBound`'s limit, then `mistyped_vectors.cases()`'s (`mistyped`: references that name leaves of
+other widths than their types give them, which both sides refuse as `program`, and their well-typed neighbours), then
+`difftest_vectors.pinned()`'s two (θ every
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
@@ -225,12 +227,24 @@ def walks() -> list[dict]:
     return out
 
 
+@functools.cache
+def mistyped() -> list[dict]:
+    """`mistyped_vectors.cases()`: references naming leaves of other widths than their types give them, which the codec
+    refuses (`E_REINTERPRET`), and their well-typed neighbours."""
+    return _load("mistyped_vectors").cases(instance)
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`, then
+    `mistyped()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
     first_walk = first_decoy + len(decoys())
+    first_mistyped = first_walk + len(walks())
+    if seed >= first_mistyped:
+        return {"instance": mistyped()[seed - first_mistyped], "shape": "mistyped", "theta_kind": None,
+                "division": None, "malformed": None}
     if seed >= first_walk:
         return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
                 "malformed": None}
@@ -325,9 +339,10 @@ NAMES = ("instances", "expanded", "python")
 
 
 def total() -> int:
-    """How many instances the audit's data has: the random ones, every fixture's, the decoys,
-    `difftest_vectors.pinned()`'s and the walks."""
-    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
+    """How many instances the audit's data has: the random ones, every fixture's, the decoys, the walks, the mistyped
+    ones and `difftest_vectors.pinned()`'s."""
+    return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(walks()) + len(mistyped())
+            + len(vectors.pinned()))
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
