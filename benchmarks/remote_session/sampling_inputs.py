@@ -71,10 +71,12 @@ def groups_of(seen: list[dict]) -> SimpleNamespace:
     return SimpleNamespace(s=s, n=n, ends=ends, L=L, gap=gap)
 
 
-def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int, per_ns: float, chip: float) -> dict:
+def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int, per_ns: float, chip: float,
+              burst: float = 0.0) -> dict:
     """`paced_line`'s arithmetic (#2612's verifier.py) over groups [lo, hi), group hi the one after them: the span (from
     the first group's end when lo is 0), L_max, and the blocks lost in both forms, `per_ns` the rebuild and ingress
-    ceilings in blocks a ns and `chip` the chip's blocks."""
+    ceilings in blocks a ns, `chip` the chip's blocks and `burst` the routes' bursts in blocks (a record from before
+    they were charged has none)."""
     span = g.s[hi] - (g.ends[0] if lo == 0 else g.s[lo])
     P = sum(g.n[lo:hi])
     l_max = max(g.L[max(0, lo - 1):hi + 1])
@@ -89,8 +91,8 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
             break
     return {"span_ns": span, "passes": P, "groups": hi - lo, "l_max_ns": l_max, "rebuild_blocks": rebuilds,
             "rebuild_absent_blocks": 2 * l_max * rebuilds / span, "wrong_absent_blocks": fill / span,
-            "snapshot_lost_blocks": wrong / P + rebuilds / P + chip,
-            "held_lost_blocks": chip + (2 * l_max * rebuilds + fill) / span}
+            "snapshot_lost_blocks": (wrong + rebuilds + burst) / P + chip,
+            "held_lost_blocks": chip + (2 * l_max * (rebuilds + burst) + fill) / span}
 
 
 def record_of(windows: list[tuple[int, int]]) -> SimpleNamespace:
@@ -129,9 +131,9 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
         agree(f"session {i} wrong", wrong, paced["wrong"])
         x_r = sess["ledger"]["inputs"]["squarings_per_s"] / enc
         per_ns = (x_r + ingress_bytes_per_s / BLOCK) / 1e9
-        chip = paced["chip_blocks"]
+        chip, burst = paced["chip_blocks"], paced.get("burst_blocks", 0.0)
         g, G = groups_of(seen), pace["groups"]
-        stretches = [span_line(g, m * G, (m + 1) * G, wrong=wrong, blocks=N, per_ns=per_ns, chip=chip)
+        stretches = [span_line(g, m * G, (m + 1) * G, wrong=wrong, blocks=N, per_ns=per_ns, chip=chip, burst=burst)
                      for m in range(len(seen) // G - 1)]
         if len(stretches) != len(paced["stretches"]):
             raise SystemExit(f"session {i}: {len(stretches)} stretches against the ledger's {len(paced['stretches'])}")
@@ -150,7 +152,7 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
             agree(f"session {i} stretch {m} closed form, held", held * N, a["wrong_absent_blocks"])
             a.update(eps_snapshot=wrong / a["passes"] / N, eps_held=a["wrong_absent_blocks"] / N,
                      rebuild_held=a["rebuild_absent_blocks"] / N)
-        whole = span_line(g, 0, pace["windows"] * G, wrong=wrong, blocks=N, per_ns=per_ns, chip=chip)
+        whole = span_line(g, 0, pace["windows"] * G, wrong=wrong, blocks=N, per_ns=per_ns, chip=chip, burst=burst)
         whole.update(eps_snapshot=wrong / whole["passes"] / N, eps_held=whole["wrong_absent_blocks"] / N,
                      rebuild_held=whole["rebuild_absent_blocks"] / N)
         mean_gap = (g.s[-1] - g.s[0]) / (len(g.s) - 1) / 1e9

@@ -32,14 +32,92 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
+- one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
+  committed queue state, the certified arrivals and the committed decision bits to the step's rows (request, kind,
+  start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
+  what its size class or the prefix layer's counts can't express. It is the compile unit's core, between the committed
+  decisions and `compile_steps`' Programs, and is held step for step to the replay
+  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet. It takes the circuits
+  and their evaluator from `verity`;
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  on draws, a served link-window's frame k under the head's frames root is the canonical event of the token id the
-  Commit's token port holds for request ⌊k / F⌋'s output k mod F. It has the reference and one draw's Boolean
-  Definition (`IoTieDraw`: `NetworkFrameRead`, `IoTieEvent`, the port row's `NetworkHidingRead`, `IoTieColumn`);
+  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
+  warden set, and each is the output the advice's map names at its place (`window_map`, from advice v0's outputs and
+  release buckets; the verifier computes it in the clear from the opened advice, the named gap, until the map is read
+  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of
+  ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding row. It has the
+  reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+  `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
 - the capacity counts;
 - the calibration of honest runs;
+- advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
+  rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
+  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
+  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
+  compressed length of the advice;
+- advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile unit's first part as a Boolean Definition, 1
+  exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
+  (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
+  `verity` it takes the circuits and their evaluator;
+- the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step unit to the next as the
+  state rows of a produced value a window, with private heads into the window row every step reads: the certified
+  arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
+  each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
+  window and carries the decisions the last window left unread; `ReplayClose` ends the session with none unread. The
+  windows join by equal openings and the session starts from the empty rows under public salts (`check_chain`). Its
+  cost at a shape is `size`;
+- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
+  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, `CacheStep_v1`'s calls on the certified tokens
+  checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
+  carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
+  ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
+  (`protocol/compile-slice.md`), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
+  evaluator from `verity`;
+- the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
+  draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
+  the slice's ``srv`` row). `leaf_ok` holds a unit's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
+  and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
+  hm96 rows from `verity`;
+- the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a
+  window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
+  then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
+  unit is proved, and its port, selection and cost are its docstring. It takes the circuits, their evaluator and the
+  hm96 leaves from `verity`;
+- the served rows held to their Programs (`served_statics`): `ServedStaticsTie_v1`, a Boolean Definition with `check`
+  its reference, holds each block's registered served rows, read through the Lean verifier's registered reads, to the
+  RoPE statics of the Programs its steps ran, with no row hashed but the block's
+  ([protocol/served-statics.md](protocol/served-statics.md)). It takes the circuits and their evaluator from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
+- the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
+  whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
+  row's hit (the longest cached prefix while no block can have been evicted, a
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
+  circuits and their evaluator from `verity`;
+- advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
+  variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
+  symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
+  holds the window to its declared charge, and `BookKT_v1{C}` is `code_v1`'s KT estimate for a bit's context. `ChargeCount_v1{N}` composes them into one window's charge from its decisions, the compile
+  unit's one call a window. The context and the frequencies are the circuit's, from the replay's position and the
+  registered book's counts, never witness. The bit-checking variant, the alternative: `ArithEncodeStep_v1{K, BIN}` and
+  `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
+  `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
+  v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
+  in no proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
+- the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hm96 rows,
+  window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
+  and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
+  takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
+- the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
+  direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
+  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
+  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
+- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a cell,
+  padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer. The
+  registration is what a proof unit's `--registered` port reads, so the sender's unit opens a cell as its output and
+  the receiver's as its input (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -58,11 +136,15 @@ A spec-level reference for network accounting's timing channel:
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
   the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
   link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
-  window) its ingress admits whole requests by the admission rule (`served.Admission`).
+  window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
+  (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
+  sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
-Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
+Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
+AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.

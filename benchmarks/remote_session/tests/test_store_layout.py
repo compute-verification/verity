@@ -2,7 +2,9 @@
 own tests are beside it). On a small synthetic checkpoint (`store_layout.synthetic`): the arena is the engine's packing
 (`engine.pack`); a prover that registers the store the pin lays out under the verifier's payload key is accepted and
 bound, and one whose root is any other (its own salts, another checkpoint, another shape) is refused with the reason
-before the registry draws anything; `verifier.py --model` refuses a pin whose files aren't the checkpoint's before it
+before the registry draws anything, under `lean` by the Lean verifier (`bind`, `hold`), a hello on which it and
+store.py differ refused as `disagreement`, the two roots computed at once and the hello decided once both have
+answered, whichever is first; `verifier.py --model` refuses a pin whose files aren't the checkpoint's before it
 listens; `store_layout`'s pin is the one core reads, and its SHA-256s are the arena's; and the paced line reports weights
 held and filler held apart."""
 from __future__ import annotations
@@ -75,14 +77,16 @@ def test_store_layouts_pin_is_the_one_core_reads_and_its_sha256s_the_arenas(ckpt
     assert len(spans) == 3 and sl.arena_sha256(a, nbytes) == sl.arena_sha256(a, nbytes, 2) == spans
 
 
-def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt):
+@pytest.mark.parametrize("verdict", ["lean", "python"])
+def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt, verdict):
     """The prover's store is the pinned checkpoint's (two arenas of weights and zero filler, then a host tier), salted
     under the payload key the verifier sent: the verifier recomputes the same root, binds the registration, takes its
-    regions from the layout, and the honest session is accepted."""
+    regions from the layout, and the honest session is accepted. Under `lean` the Lean verifier decided it (`hold`, on
+    two threads), at the same root."""
     b = binding(ckpt, workers=2)
     store = rstore.Store(b.arena, 2, 7, 2)
     got = {}
-    (r,), (p,) = run("honest", store=store, binding=b, verdict="python",
+    (r,), (p,) = run("honest", store=store, binding=b, verdict=verdict,
                      then=lambda v: got.update(reg=v.registration, regions=v.regions, key=v.payload_key))
     assert r["accepted"] and p["accepted"]
     rec = b.record()
@@ -90,11 +94,16 @@ def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt
     assert rec["expected_root"] == rec["payload_root"] == got["reg"].payload_root.hex()
     assert rec["payload_key"] == got["key"].hex() and rec["host_blocks"] == 2 and rec["blocks"] == 16
     assert got["regions"] == tuple((x["kind"], x["tier"], x["first"], x["blocks"]) for x in store.regions())
+    if verdict == "lean":
+        assert rec["lean"] == {"regions": [list(x) for x in got["regions"]], "expected_root": rec["expected_root"]}
+    else:
+        assert "lean" not in rec
 
 
-def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
-    """A prover over `backend` greeting a verifier that binds to `b`: the verifier, its refusal, and the `bye` the prover
-    read."""
+def greet(backend, b: rstore.Binding | None, verdict: str = "python", **kw) -> tuple[verifier.Verifier,
+                                                                                    ValueError | None, list[str]]:
+    """A prover over `backend` greeting a verifier under `verdict` that binds to `b`: the verifier, its refusal, and the
+    `bye` the prover read."""
     x, y = socket.socketpair()
     p = prover.ProverSide(wire.Conn(y), backend, NODE, prover.parse_plan("honest"), seed=11, log=lambda m: None, **kw)
     heard = []
@@ -108,7 +117,7 @@ def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, V
     th = threading.Thread(target=prove, daemon=True)
     th.start()
     v = verifier.Verifier(wire.Conn(x), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, verdict="python", binding=b)
+                          jitter_ns=10 ** 9, log=lambda m: None, verdict=verdict, binding=b)
     refused = None
     try:
         v.register()
@@ -119,10 +128,13 @@ def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, V
     return v, refused, heard
 
 
-def test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_the_registry_draws(ckpt, tmp_path):
+@pytest.mark.parametrize("verdict", ["lean", "python"])
+def test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_the_registry_draws(ckpt, tmp_path,
+                                                                                                 verdict):
     """Each of: the right store salted with the prover's own key (`--seed-payload-key`), another checkpoint's arenas
     of the same shape, a store of other arenas, and a store short of the arenas. The verifier answers `bye` with the
-    reason and the registry has drawn nothing for the node."""
+    reason and the registry has drawn nothing for the node; under `lean` the reason is the Lean's, which store.py's
+    is word for word."""
     b = binding(ckpt)
     store = rstore.Store(b.arena, 2, 7, 2)
     assert b.arena.weights_blocks == 6
@@ -139,15 +151,128 @@ def test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_th
                                                       "arenas of 7"),
     ]
     for backend, kw, why in cases:
-        v, refused, heard = greet(backend, b, **kw)
+        v, refused, heard = greet(backend, b, verdict, **kw)
         assert isinstance(refused, rstore.Refused), why
         assert re.search(why, str(refused)), (why, str(refused))
         assert heard == [f"refused: {refused}"] and v.registry.drawn(NODE) == 0
         assert b.record()["bound"] is False
+        if verdict == "lean":
+            assert b.record()["lean"]["refused"] == str(refused) and "regions" not in b.record()["lean"]
     assert "register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent" in str(
-        greet(cases[0][0], b, seed_payload_key=True)[1])
-    v, refused, heard = greet(prover.CpuBackend(16, random.Random(7), store=store), b)
+        greet(cases[0][0], b, verdict, seed_payload_key=True)[1])
+    v, refused, heard = greet(prover.CpuBackend(16, random.Random(7), store=store), b, verdict)
     assert refused is None and heard == [] and v.registry.drawn(NODE) == 1 and b.record()["bound"] is True
+
+
+def test_a_hello_the_verifiers_bind_differently_is_refused_as_disagreement(ckpt, monkeypatch):
+    """The Lean's binding is of record and store.py's is held to it: a hello store.py refuses and the Lean binds (here
+    store.py's root made another), one store.py binds and the Lean refuses (store.py's hold made to take any root, the
+    prover's own salts), and a Lean started on another pin than store.py read are each refused before the registry
+    draws, as `disagreement` naming both answers, and leave the store unbound."""
+    b = binding(ckpt)
+    store = rstore.Store(b.arena, 2, 7, 2)
+    regions = tuple((x["kind"], x["tier"], x["first"], x["blocks"]) for x in store.regions())
+
+    def honest() -> prover.CpuBackend:
+        return prover.CpuBackend(16, random.Random(7), store=store)
+
+    def any_root(node, blocks, root, key, layout):
+        b.state.update(expected_root=root.hex(), bound=True)
+        return regions
+
+    def refused_as_disagreement(backend, **kw) -> dict:
+        v, refused, heard = greet(backend, b, "lean", **kw)
+        assert isinstance(refused, rstore.Refused) and str(refused).startswith(
+            "disagreement: the Lean verifier's binding is "), refused
+        assert heard == [f"refused: {refused}"] and v.registry.drawn(NODE) == 0 and b.record()["bound"] is False
+        return b.record()["lean"]
+
+    with monkeypatch.context() as m:
+        m.setattr(rstore, "expected_root", lambda *a, **kw: bytes(64))
+        lean = refused_as_disagreement(honest())
+    assert lean["regions"] == [list(r) for r in regions] and "refused" not in lean
+    with monkeypatch.context() as m:
+        m.setattr(b, "hold", any_root)
+        lean = refused_as_disagreement(honest(), seed_payload_key=True)
+    assert "under this verifier's payload key" in lean["refused"]
+    with monkeypatch.context() as m:
+        m.setattr(b, "pin_data", json.dumps({**b.pin, "name": "other"}).encode())
+        lean = refused_as_disagreement(honest())
+    assert lean == {"bind": {"refused": f"the pin {ckpt / 'pin.json'} is other's, not --model {ROLE}'s"}}
+    v, refused, heard = greet(honest(), b, "lean")
+    assert refused is None and v.registry.drawn(NODE) == 1 and b.record()["bound"] is True
+
+
+@pytest.mark.parametrize("first", ["lean", "store.py"])
+def test_the_two_roots_are_computed_at_once_and_a_disagreement_refused_whichever_answers_first(ckpt, monkeypatch,
+                                                                                                first):
+    """At a hello the Lean's `hold` is asked before store.py's `Binding.hold` starts, so the two roots are computed at
+    once, and the hello is decided only once both have answered: with the Lean's answer in before store.py's and with
+    it held back until store.py's is in, a hello store.py refuses and the Lean binds, and one store.py binds and the
+    Lean refuses, are each refused as `disagreement` before the registry draws, and the honest hello is bound."""
+    b = binding(ckpt)
+    store = rstore.Store(b.arena, 2, 7, 2)
+    regions = [[x["kind"], x["tier"], x["first"], x["blocks"]] for x in store.regions()]
+    real_hold, put = b.hold, verifier.lv.Lean._put
+    seen: list[str] = []
+    lean_in, mine_in = threading.Event(), threading.Event()
+
+    def asked(self, request, body, answered):
+        if request.get("op") != "hold":
+            return put(self, request, body, answered)
+        seen.append("lean asked")
+
+        def answer(msg):
+            if first == "store.py":
+                mine_in.wait()
+            seen.append("lean answered")
+            lean_in.set()
+            answered(msg)
+
+        return put(self, request, body, answer)
+
+    def ordered(inner):
+        def hold(*args):
+            seen.append("store.py asked")
+            if first == "lean" and "lean asked" in seen:
+                lean_in.wait()
+            try:
+                return inner(*args)
+            finally:
+                seen.append("store.py answered")
+                mine_in.set()
+        return hold
+
+    def any_root(node, blocks, root, key, layout):
+        b.state.update(expected_root=root.hex(), bound=True)
+        return tuple(tuple(r) for r in regions)
+
+    def greeted(inner, **kw) -> tuple[ValueError | None, list[str], int]:
+        seen.clear()
+        lean_in.clear()
+        mine_in.clear()
+        monkeypatch.setattr(b, "hold", ordered(inner))
+        v, refused, heard = greet(prover.CpuBackend(16, random.Random(7), store=store), b, "lean", **kw)
+        answers = ["lean answered", "store.py answered"]
+        assert seen == ["lean asked", "store.py asked", *(answers if first == "lean" else answers[::-1])]
+        return refused, heard, v.registry.drawn(NODE)
+
+    def disagreement(inner, **kw) -> dict:
+        refused, heard, drawn = greeted(inner, **kw)
+        assert isinstance(refused, rstore.Refused) and str(refused).startswith(
+            "disagreement: the Lean verifier's binding is "), refused
+        assert heard == [f"refused: {refused}"] and drawn == 0 and b.record()["bound"] is False
+        return b.record()["lean"]
+
+    monkeypatch.setattr(verifier.lv.Lean, "_put", asked)
+    with monkeypatch.context() as m:
+        m.setattr(rstore, "expected_root", lambda *a, **kw: bytes(64))
+        assert disagreement(real_hold) == {"regions": regions, "expected_root": b.record()["payload_root"]}
+    lean = disagreement(any_root, seed_payload_key=True)
+    assert "under this verifier's payload key" in lean["refused"] and "regions" not in lean
+    refused, heard, drawn = greeted(real_hold)
+    assert refused is None and heard == [] and drawn == 1 and b.record()["bound"] is True
+    assert b.record()["lean"] == {"regions": regions, "expected_root": b.record()["expected_root"]}
 
 
 def test_verifier_py_refuses_a_pin_whose_files_arent_the_checkpoints_before_it_listens(ckpt, tmp_path):
@@ -180,7 +305,7 @@ def test_the_paced_line_reports_weights_held_and_filler_held_apart():
 
     def line(wrong: float) -> dict:
         return verifier.paced_line(mem, seen, groups=4, wrong=wrong, blocks=N, rebuild_per_ns=0.0, chip_bytes=0,
-                                   block_bytes=b, node_bytes=10 * N * b)
+                                   block_bytes=b, node_bytes=10 * N * b, burst_bytes=0.0)
 
     whole = line(0.0)
     for form in ("time", "snapshot"):

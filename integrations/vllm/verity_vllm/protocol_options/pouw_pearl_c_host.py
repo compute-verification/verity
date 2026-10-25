@@ -1,13 +1,14 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
-handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`) and the
-streams a run owns (`_Lane`), and a retained pass's files (`_write`, `write_manifest`).
+handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the
+streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on their handles (`_Driver`), and a retained
+pass's files (`_write`, `write_manifest`).
 """
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
@@ -19,6 +20,8 @@ UPLOAD_SLOTS = 1024
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
 CHECK_ROWS = 16
+#: the calls whose keys `_Keys` keeps (a pass's calls take the same weights, indices and row counts pass after pass)
+KEYS_KEPT = 1 << 14
 
 
 def torch_uint8() -> Any:
@@ -73,11 +76,14 @@ def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, ha
 class _Keys:
     """`call_keys` natively: dom_a is `merkle.domain_message` hashed by hashlib's SHA-512.  The native path is held to
     `call_keys` once at construction, so a tree hash whose domain id isn't that digest of that message fails there.
-    ``native`` set to None takes `call_keys` itself (the reference path)."""
+    A call's keys are a function of the salt, B's root, the call's index and its m₁₆, so the native path keeps the last
+    `KEYS_KEPT` calls' (``kept``), their framing being most of a call's host time before its first launch.  ``native`` set
+    to None takes `call_keys` itself (the reference path)."""
 
     def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
         self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
         self.positions: dict[int, bytes] = {}
+        self.kept: dict[tuple[bytes, int, int], bytes] = {}
         root = bytes(64)
         if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
             raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
@@ -85,52 +91,119 @@ class _Keys:
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
             return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
-        pos = self.positions.get(m16)
-        if pos is None:
-            pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
-        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
-        return self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
+        got = self.kept.get((root_b, index, m16))
+        if got is None:
+            pos = self.positions.get(m16)
+            if pos is None:
+                pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
+            msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
+            got = self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
+            if len(self.kept) >= KEYS_KEPT:
+                self.kept.clear()
+            self.kept[root_b, index, m16] = got
+        return got
+
+
+def _event() -> Any:
+    """A CUDA event (no timing), created now, so that its handle (``cuda_event``) is valid for `_Driver`'s calls before torch
+    first records it."""
+    import torch
+    e = torch.cuda.Event()
+    e.record()
+    return e
+
+
+class _Driver:
+    """The CUDA driver calls a lane graph's replay makes on raw handles (`pouw_pearl_c_lanes`): graph launches, event records
+    and waits, and the slot's copy, each a few µs fewer than through torch, which looks up the device and the current stream
+    around each.  `cu` is the kernel's driver library (``run.Dev.cu``); a call that fails raises with the driver's code."""
+
+    SIGS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "cuGraphLaunch": ("vp", "vp"), "cuEventRecord": ("vp", "vp"), "cuStreamWaitEvent": ("vp", "vp", "u"),
+        "cuMemcpyHtoDAsync_v2": ("u64", "vp", "sz", "vp")}
+
+    def __init__(self, cu: Any):
+        import ctypes as C
+        types = {"vp": C.c_void_p, "u": C.c_uint, "u64": C.c_uint64, "sz": C.c_size_t}
+        self.f = {}
+        for name, args in self.SIGS.items():
+            f = getattr(cu, name)
+            f.argtypes, f.restype = [types[a] for a in args], C.c_int
+            self.f[name] = f
+
+    def _ck(self, name: str, *args: Any) -> None:
+        rc = self.f[name](*args)
+        if rc:
+            raise RuntimeError(f"{name} failed: CUDA driver error {rc}")
+
+    def launch(self, graph_exec: int, stream: int) -> None:
+        self._ck("cuGraphLaunch", graph_exec, stream)
+
+    def record(self, event: Any, stream: int) -> None:
+        self._ck("cuEventRecord", event.cuda_event, stream)
+
+    def wait(self, stream: int, event: Any) -> None:
+        self._ck("cuStreamWaitEvent", stream, event.cuda_event, 0)
+
+    def copy_in(self, dst: int, src: int, n: int, stream: int) -> None:
+        self._ck("cuMemcpyHtoDAsync_v2", dst, src, n, stream)
 
 
 class _Lane:
     """A stream the run owns, at a schedule's priority, and its handle; off the GPU a stand-in handle (``standin``) for the
-    recording device's log.  ``priority`` is the one the device gave it."""
+    recording device's log.  ``priority`` is the one the device gave it.  Its events hand work over to it: from the lane
+    before it (``event``; for A's tree, the main lane's per-row keying) and, on a side lane, from the other side lane
+    where that ran the call's A tree, at its end (``tree_event``)."""
 
     def __init__(self, device: Any, priority: str, standin: int):
         import torch
         if device.type == "cuda":
             self.stream = torch.cuda.Stream(device=device, priority=PRIORITY[priority])
             self.raw, self.priority = self.stream.cuda_stream, self.stream.priority
+            self.event, self.tree_event = _event(), _event()
         else:
             self.stream, self.raw, self.priority = None, standin, PRIORITY[priority]
-        self.event = torch.cuda.Event() if device.type == "cuda" else None
+            self.event = self.tree_event = None
 
 
 class _Uploads:
     """Small host-to-device copies through a pinned ring allocated once: each is one copy on the current stream, and a slot is
     written again only once its last copy is done (its event)."""
 
-    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 176):
+    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 256):
         import torch
-        self.cuda, self.slots, self.i = device.type == "cuda", slots, 0
+        self.cuda, self.slots, self.width, self.i = device.type == "cuda", slots, width, 0
         self.host = torch.zeros((slots, width), dtype=torch.uint8, pin_memory=self.cuda)
-        self.view = self.host.numpy()
+        self.view, self.host_ptr = self.host.numpy(), self.host.data_ptr()
         self.events: list[Any] = [None] * slots
 
-    def put(self, dst: Any, data: bytes, stream: Any = None) -> None:
-        """`data` into `dst` on `stream` (torch's current stream when None)."""
+    def _slot(self, data: bytes) -> int:
+        """The next slot, once its last copy is done, holding `data`."""
         import numpy as np
-        import torch
-        i, n = self.i, len(data)
+        i = self.i
         self.i = (i + 1) % self.slots
         if self.events[i] is not None:
             self.events[i].synchronize()
-        self.view[i, :n] = np.frombuffer(data, np.uint8)
+        self.view[i, :len(data)] = np.frombuffer(data, np.uint8)
+        return i
+
+    def put(self, dst: Any, data: bytes, stream: Any = None) -> None:
+        """`data` into `dst` on `stream` (torch's current stream when None)."""
+        import torch
+        i, n = self._slot(data), len(data)
         dst[:n].copy_(self.host[i, :n], non_blocking=self.cuda)
         if self.cuda:
             if self.events[i] is None:
                 self.events[i] = torch.cuda.Event()
             self.events[i].record(stream)
+
+    def put_raw(self, dst: int, data: bytes, stream: int, driver: _Driver) -> None:
+        """`data` into device address `dst` on raw stream `stream`, by `driver`'s calls."""
+        i = self._slot(data)
+        driver.copy_in(dst, self.host_ptr + i * self.width, len(data), stream)
+        if self.events[i] is None:
+            self.events[i] = _event()
+        driver.record(self.events[i], stream)
 
 
 def _write(path: Path, data: bytes, digest: bool = True) -> dict:

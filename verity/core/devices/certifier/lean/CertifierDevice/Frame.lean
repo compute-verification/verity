@@ -4,7 +4,8 @@ import Flock.Bytes
 # The link's frames and the server's events
 
 Executable forms of `active.py`'s framing: a link frame is B bytes, a header (kind u8, stream u32be, length u32be), the
-payload and zero fill (`encodeFrame`, `decodeFrame`); a server's byte stream is cut after every `\n\n` (`Events.feed`), an
+payload and zero fill (`encodeFrame`, `decodeFrame`), and a salt frame carries its PoUW window and its salt or the
+placeholder (`saltFrame`); a server's byte stream is cut after every `\n\n` (`Events.feed`), an
 event's `id:` field is its canonical position (`eventPosition`), and what follows that line is the frame's payload
 (`eventBody`). On the link every request is its length (u32be) and its bytes over `DATA` frames, and `Requests.feed` cuts
 the released payloads back into requests, the k-th on stream k. A frame's bits (`bitsOf`) are the payload the Program
@@ -37,6 +38,21 @@ def encodeFrame (kind stream : Nat) (payload : ByteArray) (B : Nat) : Option Byt
   if headerSize + payload.size > B then none
   else some (⟨#[kind.toUInt8]⟩ ++ be32 stream.toUInt32 ++ be32 payload.size.toUInt32 ++ payload
     ++ ⟨Array.replicate (B - headerSize - payload.size) 0⟩)
+
+def kindSalt : Nat := 3
+
+/-- `SALT_STREAM`: the stream a salt frame's header carries. -/
+def saltStream : Nat := 0xFFFFFFFF
+
+/-- `PLACEHOLDER`: what the certifier's own frame on the link carries in its salt's place. -/
+def placeholder : ByteArray := ⟨Array.replicate 64 0⟩
+
+/-- `SALT_FRAME_BYTES`: the header, the PoUW window (u64be) and the placeholder. -/
+def saltFrameBytes : Nat := headerSize + 8 + placeholder.size
+
+/-- `salt_frame`: PoUW window `p`'s salt frame of `B` bytes, carrying `value` after the window (u64be). -/
+def saltFrame (p : Nat) (value : ByteArray) (B : Nat) : Option ByteArray :=
+  encodeFrame kindSalt saltStream (be64 p.toUInt64 ++ value) B
 
 /-- `decode_frame`: (kind, stream, payload) of a frame of at least `headerSize` bytes; the payload is cut at the frame's
 end, as Python's slice is. -/

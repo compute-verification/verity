@@ -21,7 +21,7 @@ and so `pf.SoundAt δ`. It sits in the proofs package because the sessions do (`
 It proves the checked layer only. Its relation, `CheckedRel`, says the opened rows are one wire assignment the circuit's
 evaluation agrees with, and nothing of what the circuit computes: don't cite it for the product or `dq`. The tile's
 Definition with `ok = 1` (each cell `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`) is
-`Accounting.Guarantees.TS.TileSessionSound`'s, under its premise `Accounting.Assumptions.TS.TileChecks`; the declared
+`Accounting.Guarantees.TS.TileSessionSound`'s, under its premise `Accounting.TS.Tile.TileComputes`; the declared
 circuit's checks are `Accounting.Guarantees.TS.HeldSessionSound`'s.
 -/
 

@@ -464,12 +464,13 @@ def _wires(low: IL.Lowering, tail) -> list:
     return wires
 
 
-def _ret_ports(st) -> list:
-    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's as ``[slot, port]``."""
+def _ret_ports(st, slotted: bool = False) -> list:
+    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's, or every stage's
+    when ``slotted``, as ``[slot, port]``."""
     at = {tag[1]: (s, j) for s in range(st.count) for j, tag in enumerate(st.tags(s)[1]) if tag[0] == "ret"}
     if sorted(at) != list(range(len(at))):
         raise ValueError("the last stage's returned outputs are not each output word once")
-    return [at[o][1] if st.count == 1 else list(at[o]) for o in range(len(at))]
+    return [at[o][1] if st.count == 1 and not slotted else list(at[o]) for o in range(len(at))]
 
 
 def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:
@@ -577,8 +578,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     them one META already has.
 
     ``tail`` (a :class:`tail.Tail`): the stages as given, in place of :func:`tail.lower_tail`'s, for a lowering whose split is
-    its own (`multi_unit`): a stage of ``count`` slots per VU is a second repeated unit type, wired slot by slot (META
-    ``per_vu``), and returned outputs on a repeated last stage are ``out_net_ports`` of ``[slot, port]``.
+    its own (`multi_unit`; `read_slots`, whose tail carries its wires): a stage of ``count`` slots per VU is a second repeated
+    unit type, wired slot by slot (META ``per_vu``), and returned outputs on a repeated last stage (or a ``slotted_rets`` tail's)
+    are ``out_net_ports`` of ``[slot, port]``.
 
     ``layout`` (a layout mode, `tmpl.mode_of`; TMPL1's is ``iv/hybrid/4``): the templated statement
     (:data:`TMPL_STATEMENT`, PRF-133, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
@@ -688,7 +690,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     tmpl_text = TM.write(template) if template is not None else None
     per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": tail.stages[i].count for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
-    tail_wires = _wires(low, tail) if tail else []
+    tail_wires = (tail.wires if tail.wires is not None else _wires(low, tail)) if tail else []
     public = dict(getattr(U, "public", []))
     # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16
     leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
@@ -696,7 +698,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise NotImplementedError(f"{low.name}: a cut input read from a public input port")
     leaf_cuts = [[*x[:3], owner[x[3]][1]] for x in leaf_cuts]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
-    out_net_ports = _ret_ports(tail.stages[-1]) if U.tail_rets else []
+    out_net_ports = _ret_ports(tail.stages[-1], tail.slotted_rets) if U.tail_rets else []
     programs = program_digests(sub, statics)
     unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
     unit_sha256 = low.sha256_of(unit)
@@ -764,13 +766,13 @@ def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], o
            counts: list[int] | None = None) -> dict:
     """The all-zero instance's output words (every output leaf) and every row's ``b || c`` under zero salts (its zero input rows,
     then its output rows), as the padding instances hold (a tail that returns the outputs: the template's reference evaluation of
-    the zero instance). Its public inputs are zero too."""
+    the zero instance, or the lowering's own where it evaluates the tail, ``evaluates_rets``). Its public inputs are zero too."""
     n_in = sum(w for _, w in in_ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     reads_cut = any(k == "cut" for src in low.units.in_src for k, _ in src)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut and reads_cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
-    if low.units.tail_rets:
+    if low.units.tail_rets and not getattr(low, "evaluates_rets", False):
         ev = sub.evaluate({nm: [np.zeros(w, dtype=np.uint16)] for nm, w in in_ports})
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     words = [int(x) for x in outs[0]]

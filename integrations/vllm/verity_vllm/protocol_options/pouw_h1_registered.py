@@ -144,16 +144,20 @@ class Rows(Sequence):
 
 
 def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, keep_rows: bool = False,
-           **binding: Any) -> G.Registered:
+           row_salts: bytes | None = None, **binding: Any) -> G.Registered:
     """`registered.Registered.commit(program, value, rows, salts, schema=SCHEMA_V2, **binding)` of ``words`` ``(n, W)``
-    u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`. ``binding``: the domain's other
-    arguments (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none."""
+    u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
+    concatenated, each used once) those, ``key`` and ``nonce`` unread. ``binding``: the domain's other arguments
+    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none."""
     words = np.asarray(words)
     if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = words.shape
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
-    ys = salts(key, nonce, n)
+    ys = salts(key, nonce, n) if row_salts is None else bytes(row_salts)
+    fixed = None if row_salts is None else tuple(ys[192 * j:192 * (j + 1)] for j in range(n))
+    if fixed is not None and (len(ys) != 192 * n or len(set(fixed)) != n):
+        raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
     b = (row_digests(words) ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
     salt_h, leaf_h = hashlib.sha512(_INST.salt_prefix), hashlib.sha512(_INST.leaf_prefix(_INST.default_key))
     frame, schema = _Frame(dom.domain_id), _part(G.SCHEMA_V2.encode())
@@ -168,7 +172,8 @@ def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, 
         bcs.append(bc)
         leaves.append(frame._h(frame.leaf, u + u + schema + _part(g.digest())))
     return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
-                        rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n), salts=Salts(key, nonce, n),
+                        rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
+                        salts=Salts(key, nonce, n) if fixed is None else fixed,
                         bcs=tuple(bcs), levels=frame.levels(leaves), schema=G.SCHEMA_V2, **binding)
 
 

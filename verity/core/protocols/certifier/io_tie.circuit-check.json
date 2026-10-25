@@ -1,0 +1,19 @@
+{
+ "definitions": {
+  "IoTieCell_v1{B=256}": {
+   "and": 3678
+  },
+  "IoTieCell_v1{B=4096}": {
+   "and": 34398
+  },
+  "IoTieContent_v1{B=256,T=3,R=4,P=4,S=4}": {
+   "and": 47487
+  },
+  "IoTieMatch_v1{N=12,D=4,E=16}": {
+   "and": 1559
+  },
+  "IoTieRoute_v1{W=36,D=4}": {
+   "and": 2016
+  }
+ }
+}

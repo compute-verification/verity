@@ -1,7 +1,7 @@
 """The templates of the serving rows (`pipeline.serving_rows`, whose module text states their rules): a template read through its
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
 itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks, a ``PARTS``
-family's parts and a ``SLICES`` family's slices)."""
+family's parts, a ``SLICES`` family's slices and a ``KCHUNKS`` row's K-chunks)."""
 from __future__ import annotations
 
 import math
@@ -37,6 +37,10 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
 PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0), ("arg", 1)), (1,)),
                                       ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,)))}
 PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
+#: the chunk families that cut a ``COORDS`` family's coordinate along K (the ``kchunk`` layout, `kchunk_rows`), by the row family:
+#: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
+#: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)
+KCHUNKS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8CoordinateChunk_v1"}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
@@ -48,7 +52,7 @@ class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
-    ``SLICES`` family at every axis 1; else ``"row"``).
+    ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family; else ``"row"``).
     ``packed``: a row or coordinate template with a port that is not 16-bit elements, each port's element bits (its parameters', then its
     return fields'); its ports are committed as their elements' bytes."""
     id: str
@@ -104,12 +108,12 @@ def template(t: str) -> Template:
     sl = SLICES.get(spec_base(word))
     layout = ("coord" if spec_base(word) in COORDS and int(spec_statics(word)["N"]) == 1 else "cols" if spec_base(word) in COLS
               else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
-              else LAYOUTS.get(spec_base(word), "row"))
+              else "kchunk" if spec_base(word) in KCHUNKS.values() else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout != "s8":
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
-        if layout not in ("row", "coord", "slice") or any(len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16
+        if layout not in ("row", "coord", "slice", "kchunk") or any(len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16
                                                  for e, ty in zip(elems, ports)):
             raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                              f"are {sorted(widths)} bits (a row template's port may be elements of one of {sorted(PACKED)} bits, "
@@ -128,6 +132,11 @@ def part(word: str, spec: str) -> tuple | None:
     return hit[1] if hit is not None and hit[0] == spec_base(spec) else None
 
 
+def chunk_widths(K: int, G: int, KB: int) -> list[int]:
+    """The K-chunk widths of a ``KCHUNKS`` coordinate of K weights: each k < K that cuts it into whole scale blocks and tiles."""
+    return [K // c for c in range(2, K // G + 1) if K % c == 0 and (K // c) % G == 0 and (K // c) % KB == 0]
+
+
 _UNITS: dict[str, tuple[tuple[str, int], ...]] = {}
 
 
@@ -136,8 +145,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     the row itself, then, for a ``CUT`` family, each Definition its body batches (a batch's members; Input batches are its
     parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), for a ``COLS`` family,
     its Definition at each halving W / k of its width (k of them), for a ``PARTS`` family, each part at the row's statics
-    (a ``COLS`` part also at each halving), and for a ``SLICES`` family, its Definition at every axis 1 (the product of its
-    extents of them).  None when the spec does not bind to exactly its own descriptor id."""
+    (a ``COLS`` part also at each halving), for a ``SLICES`` family, its Definition at every axis 1 (the product of its
+    extents of them), and for a ``KCHUNKS`` row family, at each chunk width k (`chunk_widths`), its first, middle and
+    last chunks (N, N (K / k - 2) and N of them).  None when the spec does not bind to exactly its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -168,6 +178,13 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                     if (c := _bind(spec, None if own else fam, **{axis: W // k})) is not None:
                         hit += ((descriptor_id(c), k),)
                     k *= 2
+        if (fam := KCHUNKS.get(spec_base(spec))) is not None:
+            S = spec_statics(spec)
+            for kc in chunk_widths(int(S["K"]), int(S["G"]), int(S["KB"])):
+                C = int(S["K"]) // kc
+                for first, last, n in ((True, False, 1), (False, False, C - 2), (False, True, 1)):
+                    if n and (c := _bind(spec, fam, K=kc, FIRST=first, LAST=last)) is not None:
+                        hit += ((descriptor_id(c), n * int(S["N"])),)
     _UNITS[spec] = hit
     return hit
 

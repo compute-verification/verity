@@ -256,10 +256,10 @@ def test_cores_models_json_is_read_as_its_roles_pin_held_to_the_same_checks(ckpt
     want = {"name": "SYNTHETIC_BF16", "checkpoint": pin["checkpoint"], "checkpoint_sha512": pin["checkpoint_sha512"]}
     assert store.read_pin(models_json, "SYNTHETIC_BF16") == want
     assert store.Binding("SYNTHETIC_BF16", ckpt, models_json, 2, 7, log=lambda m: None).pin == want
-    for role in ("LLAMA31_8B_INT8", None):
+    for role, named in (("LLAMA31_8B_INT8", '"LLAMA31_8B_INT8"'), (None, "null")):
         with pytest.raises(store.Refused) as e:
             store.read_pin(models_json, role)
-        assert str(e.value) == f"the pin {models_json} pins no role {role!r}: its roles are ['OTHER_BF16', 'SYNTHETIC_BF16']"
+        assert str(e.value) == f'the pin {models_json} pins no role {named}: its roles are ["OTHER_BF16","SYNTHETIC_BF16"]'
     with pytest.raises(store.Refused, match=re.escape(f"{ckpt / 'config.json'}: SHA-512 ")):
         store.Binding("OTHER_BF16", ckpt, models_json, 2, 7, log=lambda m: None)
 

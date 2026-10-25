@@ -11,7 +11,7 @@ those like any other caller. This file is the harness's contract: how a point is
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
-verity-bench check SPEC      # exit 0 only when every point has a passing run
+verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
@@ -22,8 +22,8 @@ vLLM pin, engine settings), its arms and the modules of its experimental arms, i
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
 which never enter identity). Loading is strict: an unknown key, a wrong type or an unknown GPU id is an error before
 anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
-`model_digest` (`presets.local_checkpoint`'s hash of its files), which a dispatched point recomputes and refuses to run on
-when it differs.
+`model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
+reads), which a dispatched point recomputes and refuses to run on when it differs.
 
 A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
 control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
@@ -60,13 +60,19 @@ invariant (`bi-eager`, `bi-compiled`).
 A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
 serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
 arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
-unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity.
+unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
+experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
+Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
 that `run_point.sh` sources before the point's Python starts (to build the arm's libraries from the dispatched commit and
 export their paths, say), are part of the resolved spec and so of every point's identity. The dispatcher forwards both
 (`--env`, the setup as `VERITY_BENCH_SETUP`), and a point refuses to run under any other.
+
+A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
+can't load the preset's: in `llama31-8b-1gpu-pouw-h1-served`, H1's served ratio, `stock-fp8@compiled` loads the int8
+pin's BF16 base.
 
 ## How a point is timed
 
@@ -165,8 +171,11 @@ which the dispatcher forwards. `benchmarks` is on its path, so a spec names an e
 the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
 as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
 passed, exit code 0 and a clean source tree. A requeued point first deletes its run's old `result.json`. The lookup
-reads the dispatching machine's catalog, so a machine that never pulled other machines' runs sees them as missing
-(BENCH-10).
+reads the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes
+the attempts this store lacks among those started since a day before the commit's committer date (a point's runs
+can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
+other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
+catalog alone.
 
 ## Out of scope here
 
