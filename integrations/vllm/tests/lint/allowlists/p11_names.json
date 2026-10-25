@@ -277,7 +277,6 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "doc-round", "symbol": "declared_live_counts", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "doc-round", "symbol": "sampling_policy", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/gc_tuning.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
-    {"file": "verity_vllm/pipeline/hot.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/launch_context.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/launch_context.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "flag-name", "symbol": "CompareOptions", "detail": "--v1"},
