@@ -1,4 +1,4 @@
-"""Candidate arm 3 (R10 acq-native): native collection at the existing hook boundaries — same committed values, same layout as CMT-3.
+"""Candidate arm 3: native collection at the existing hook boundaries — same committed values, same layout as CMT-3.
 Glossary (Draft 3 §12): this module is VALUE ACQUISITION (taking each required Value's bytes at its runtime occurrence, the module
 hook) feeding the commitment; the `_flush_*` / `*_LEAVES` tables below are the hand-written runtime correspondence (which module
 leaf produces which Value, and when its bytes are stable) that Phase 3/4 replace with recorded correspondence + an acquisition plan.
@@ -33,15 +33,15 @@ Stress / negative-test knobs (never in headline runs; recorded when used):
                                   must grow instead of recycling a block early; openings must still verify 64/64 and roots must still equal arm 2
   VERITY_FAULT=release_before_keep  DELIBERATE ordering bug: the arena block is released for reuse BEFORE the retained copy (openings read it)
                                   is taken, and the worker waits for the next step to land in it -> the openings check must FAIL loudly.
-                                  [R15 capacity] On the WINDOWED path (rc3 default) the same fault releases the window slot before the
+                                  On the WINDOWED path (rc3 default) the same fault releases the window slot before the
                                   retained copy and takes the copy only after the ring refilled the slot (native wait_slot_reused):
-                                  tree correct, retained bytes wrong -> openings (after release) FAIL named; until R15 the flag was a
+                                  tree correct, retained bytes wrong -> openings (after release) FAIL named; before that the flag was a
                                   silent no-op there (the windowed branch returned before the fault check).
-  VERITY_FAULT=drop1_dup0         DELIBERATE identity bug (R14 BIND-01 negative, F-rev-01): every layer>0 input_layernorm binds Value /0 twice and drops /1
+  VERITY_FAULT=drop1_dup0         DELIBERATE identity bug (BIND-01 negative, F-rev-01): every layer>0 input_layernorm binds Value /0 twice and drops /1
                                   -> counts and classes unchanged; the required-value coverage check MUST fail (Python wrappers are used for every module)
   VERITY_FAULT=skip_copy:<k>      DELIBERATE value bug: the k-th snapshot of every step is not issued (stale arena bytes) -> the root must differ
                                   from arm 2 (root-equality gate) while the tree stays self-consistent (openings alone cannot see it)
-  VERITY_FAULT=hang_after_dead    [R16 sys, F-stoch-03] DELIBERATE hang: after the slot-wait timeout declared the collector dead, finalize
+  VERITY_FAULT=hang_after_dead    [F-stoch-03] DELIBERATE hang: after the slot-wait timeout declared the collector dead, finalize
                                   blocks forever instead of failing the run closed -> the C++ dead-watchdog alone must end the process
                                   (rc 3 + <out>/COLLECTOR_DEAD_HUNG.json) within VERITY_COLLECT_DEAD_GRACE_S (default 120 s).
 """
@@ -82,7 +82,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
 
-    [R17 fp8, F-fp8-PLANKEY] Until 01:28Z 2026-09-21 the key was (ntok << 16) | nreq.  That is not the layout: the FA3 hidden M1 export
+    [F-fp8-PLANKEY] The key used to be (ntok << 16) | nreq.  That is not the layout: the FA3 hidden M1 export
     plane (`fa3_hidden_m1`) is sized by each request's KV length (BN-blocks of the sequence), so two decode steps with the same
     (ntok, nreq) stage different byte counts -- the B8 mixed 1024/128 record run hit it at steps 35 and 80 (both ntok 4 / nreq 4, the same
     four live requests 45 positions apart: 78,892,288 vs 87,297,280 bytes) and failed CLOSED by name, as the bounded path must (a hit-plan
@@ -126,7 +126,7 @@ def build_source_digest() -> str:
 
 def ext(build_dir: str | None = None, verbose: bool = False):
     """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
-    PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- [COORD R17-41 (1)] torch's
+    PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- torch's
     mtime test is never the arbiter of staleness (record_v5/ship.sh preserves source mtimes; a pod-wide dir warmed by another tree's build
     was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
     on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
@@ -177,7 +177,7 @@ def window_mb_default(windowed_worker: bool, retain: str) -> int:
 class NativeCollectCommitter(NativeHostCommitter):
     """Arm 3.  Inherits the whole R9 complete path; replaces the serving-thread acquisition (see module docstring).
 
-    R11 `native_hooks=True` (collector v2, `native_collect_v2`): the module.forward wrappers are C++ callables (`HookFwd`) and the FA2
+    `native_hooks=True` (collector v2, `native_collect_v2`): the module.forward wrappers are C++ callables (`HookFwd`) and the FA2
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
@@ -497,17 +497,17 @@ class NativeCollectCommitter(NativeHostCommitter):
         return leaf in GATHER_FLUSH_LEAVES
 
     def _pre_flush_leaf(self, name: str) -> bool:
-        """[R15 moe FLUSH-02] flush BEFORE this module runs: the fused add-RMSNorm (`input_layernorm`, final `norm`) overwrites its `x`
+        """[FLUSH-02] flush BEFORE this module runs: the fused add-RMSNorm (`input_layernorm`, final `norm`) overwrites its `x`
         (the previous block's output) and `residual` (the previous `post_attention_layernorm/1`) in place, and a fused-MoE block has no
         down_proj hook to have flushed them.  Negative `VERITY_FAULT=late_flush_norm`: the pre-flush is dropped -> on an MoE model the
-        committed `post_attention_layernorm/1` is the NEXT layer's residual (the r15-int-3 OLMoE record, ALERT M-0479)."""
+        committed `post_attention_layernorm/1` is the NEXT layer's residual (as on the r15-int-3 OLMoE record)."""
         leaf = name.rsplit(".", 1)[-1]
         if self.fault == "late_flush_norm":
             return False
         return leaf in PRE_FLUSH_LEAVES
 
     def _flush_plane(self, what: str) -> bool:
-        """[R16 moe FLUSH-03] does the staged fused-MoE plane `what` leave the device NOW (before the block's next launch)?  `up` lives in
+        """[FLUSH-03] does the staged fused-MoE plane `what` leave the device NOW (before the block's next launch)?  `up` lives in
         the workspace the block's own w2 launch overwrites (cache1/cache3 alias); the other planes are overwritten only by the next layer,
         after its `input_layernorm` pre-flush.  Negative `VERITY_FAULT=late_flush_moe_up`: the flush is dropped -> the committed `up` is
         the same layer's `down` (the pre-FLUSH-03 record)."""
@@ -536,7 +536,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         return fwd_pre_flush
 
     def _make_native_wrapper(self, orig, name: str, pre: bool):
-        """R11 v2: the hook body is `HookFwd` (C++): one pybind dispatch per producer call, CPython type checks, name ids bound here."""
+        """Collector v2: the hook body is `HookFwd` (C++): one pybind dispatch per producer call, CPython type checks, name ids bound here."""
         nid_out = self._intern(name)
         nids_k = tuple(self._intern(f"{name}/{k}") for k in range(8))
         nid_in = self._intern(f"{name}/in") if pre else -1
@@ -622,7 +622,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         return self._with_pre_flush(fwd, name)
 
     def _make_input_wrapper(self, orig, name: str):
-        """[R19 int-20] the INPUT-ONLY hook body of a consumer module the required manifest names for a promoted member and the committer
+        """The INPUT-ONLY hook body of a consumer module the required manifest names for a promoted member and the committer
         did not select (no acquire class): its first positional tensor argument goes to the collector as `<name>/in` (`_acquire`: X-03
         expected + committed accounting), its output is no identity and is not acquired.  One Python frame per call on the few such
         modules; a consumer of an acquire class takes the native `HookFwd` path with `nid_in` instead (`install`)."""
@@ -682,7 +682,7 @@ class NativeCollectCommitter(NativeHostCommitter):
     # ------------------------------------------------------------------ step boundaries (serving thread)
 
     def _record_step_rows(self, job: _StepJob, defer: bool = False) -> None:
-        """R14 BIND-01 (B>1 binding): the engine's row order of this step -- `InputBatch.req_ids` (the persistent batch after the step's
+        """BIND-01 (B>1 binding): the engine's row order of this step -- `InputBatch.req_ids` (the persistent batch after the step's
         `_update_states`) x `scheduler_output.num_scheduled_tokens` -> [(request_id, token_row_lo, token_row_hi)] in the flattened token
         order every per-token member uses; request-indexed members (logits, sampled ids) use the list index.  -> `self.step_rows[step]`.
         `defer`: only copy what the expansion reads (the batch's lists are reused by the next step) into `job.rows_snapshot`."""

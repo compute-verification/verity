@@ -83,11 +83,11 @@ def l0Msg (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array
   maskMsg lay h i (roundPoly (tabS coin p0 t i) (wS coin p0 b sch.n i))
 
 /-- **Level 0's masked bodies of `ligeritoPZk` at the coins from round `p₀`**, from the pending bytes `P`: `LigHyp`'s
-out-of-domain value, lane messages and pair's sums at the pads `h`, the claim nonce `nonce 2 0`. -/
+out-of-domain value, lane messages and pair's sums at the pads `h`, the claim nonce `0` (R4). -/
 def l0BodyAt (coin : ℕ → ℕ → F128) (p0 : ℕ) (P : List UInt8) (T : F128) (cap : ByteArray) (sch : Schedule)
     (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep : ℕ) (extra : ℕ → ℕ → F128)
-    (nonce : ℕ → ℕ → UInt64) : ℕ → Claims.Msg :=
-  l0Body P T cap sch.n sch.k0 (mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!) (le64 (nonce 2 0))
+    (_nonce : ℕ → ℕ → UInt64) : ℕ → Claims.Msg :=
+  l0Body P T cap sch.n sch.k0 (mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!) (le64 0)
     (l0Msg coin p0 sch t b lay h)
     (dotK (wS coin p0 b sch.n sch.k0) (embedF ((Array.range (tabS coin p0 t sch.k0).size).map (extra (2 * rep)))) +
       ⟨h[lay.lgE 0 0]!, h[lay.lgE 0 1]!⟩)
@@ -106,7 +106,7 @@ theorem l0BodyAt_zero : l0BodyAt coin p0 P T cap sch t b lay h rep extra nonce 0
   l0Body_zero
 
 theorem l0BodyAt_one : l0BodyAt coin p0 P T cap sch t b lay h rep extra nonce 1 =
-    encs (Claims.ZKServer.oodFr (mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!) (le64 (nonce 2 0))) ++
+    encs (Claims.ZKServer.oodFr (mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!) (le64 0)) ++
       (Frame.sq 1 1).enc :=
   l0Body_one
 
@@ -199,7 +199,7 @@ theorem pow_ok (v : UInt64) (t : Transcript) :
 
 theorem powP2_bind_run {γ : Type} (nonce : ℕ → ℕ → UInt64) (f : Unit → LP PS γ) (s : LigState) :
     (powP nonce 2 >>= f).run s =
-      (liftT (liftTM (pow (nonce 2 s.cbn.size))) >>= f).run { s with cbn := s.cbn.push (nonce 2 s.cbn.size) } := by
+      (liftT (liftTM (pow 0)) >>= f).run { s with cbn := s.cbn.push 0 } := by
   simp only [powP, bind_assoc, get_bind_run, set_bind_run]
 
 /-! ## The lane loop that never finishes -/
