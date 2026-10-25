@@ -141,17 +141,18 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
     """module -> (canonical module, invocation) for module bodies that are one shared instance, and the faults.
 
     Two bodies are one instance when they read the SAME non-empty set of registered parameters and have the same body signature (the
-    set of (Definition, hint) of their Calls, not their counts: `dead_free` drops one invocation's dead rows, as the last layer's
-    prompt queries before the last, never its body); the canonical body is the one a shared parameter is registered under (vLLM
-    registers a shared module under the first path that holds it); invocation = the body's order among the group.  Fail-closed: a
-    group with no or several canonical candidates, or unequal signatures, is not aliased and is reported."""
+    (Definition, hint) of their Calls); the canonical body is the one a shared parameter is registered under (vLLM registers a shared
+    module under the first path that holds it); invocation = the body's order among the group.  Bodies under one registered owner
+    need only the same set of (Definition, hint), not the same counts: `dead_free` drops one invocation's dead rows, as the last
+    layer's prompt queries before the last, never its body.  Without one, only bodies equal Call for Call are one instance.
+    Fail-closed: a group with no or several canonical candidates is not aliased and is reported."""
     reads: dict[str, set[str]] = defaultdict(set)
-    sig: dict[str, set] = defaultdict(set)
+    sig: dict[str, Counter] = defaultdict(Counter)
     first: dict[str, int] = {}
     for c in P.calls:
         m = corr.module_of(c.id)
         first.setdefault(m, c.id)
-        sig[m].add((c.definition, corr.name(c.id).hint))
+        sig[m][(c.definition, corr.name(c.id).hint)] += 1
         for v in param_reads(c):                          # record_fields keys are prescribed-input Values: only those reads can hit
             f = record_fields.get(v)
             if f is not None:
@@ -164,18 +165,22 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
             groups[(frozenset(fs), frozenset(sig[m]))].append(m)
     out: dict[str, tuple[str, int]] = {}
     faults: list[str] = []
-    for (fs, _sig), mods in groups.items():
-        if len(mods) < 2:
-            continue
-        mods = sorted(mods, key=first.__getitem__)
-        canon = [m for m in mods if any(under(f, m) for f in fs)]
-        if len(canon) != 1:
-            faults.append(f"shared parameters {sorted(fs)[:2]} read by {len(mods)} identical bodies with {len(canon)} registered owner(s): not aliased")
-            continue
-        c0 = canon[0]
-        rest = [m for m in mods if m != c0]
-        for k, m in enumerate([c0] + rest):
-            out[m] = (c0, k)
+    for (fs, _sig), group in groups.items():
+        by_count: dict[frozenset, list[str]] = defaultdict(list)
+        for m in group:
+            by_count[frozenset(sig[m].items())].append(m)
+        for mods in [group] if sum(any(under(f, m) for f in fs) for m in group) == 1 else by_count.values():
+            if len(mods) < 2:
+                continue
+            mods = sorted(mods, key=first.__getitem__)
+            canon = [m for m in mods if any(under(f, m) for f in fs)]
+            if len(canon) != 1:
+                faults.append(f"shared parameters {sorted(fs)[:2]} read by {len(mods)} identical bodies with {len(canon)} registered owner(s): not aliased")
+                continue
+            c0 = canon[0]
+            rest = [m for m in mods if m != c0]
+            for k, m in enumerate([c0] + rest):
+                out[m] = (c0, k)
     return out, faults
 
 
