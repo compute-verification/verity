@@ -882,9 +882,7 @@ extern "C" __global__ void pa(const Args a) {
 
 // pa from A'F_B's windows (gemm_words_win_d's): each AF word their sum from +0, one FADD (RN) a window in ascending k, as
 // gemm_words_d's total, stored to p2 and into P_A as pa's.  p0 E'_A codes, p1 the windows (i1 slabs of rows x 32), p2 AF
-// words out, p3 out; i0 rows, i1 windows.  PA_LOADS windows' loads are issued before their adds, so a thread waits on
-// ceil(wins / PA_LOADS) round trips of loads; the adds are the same, in the same order
-constexpr int PA_LOADS = 32;
+// words out, p3 out; i0 rows, i1 windows
 extern "C" __global__ void pa_w(const Args a) {
   pdl_entry();
   const int t = blockIdx.x * blockDim.x + threadIdx.x, rows = a.i[0], wins = a.i[1];
@@ -896,14 +894,8 @@ extern "C" __global__ void pa_w(const Args a) {
   } else {
     const float* w = reinterpret_cast<const float*>(a.p[1]) + row * 32 + e - 32;
     float total = 0.0f;
-    for (int kb0 = 0; kb0 < wins; kb0 += PA_LOADS) {
-      float x[PA_LOADS];
-#pragma unroll
-      for (int j = 0; j < PA_LOADS; j++) x[j] = kb0 + j < wins ? w[(size_t)(kb0 + j) * rows * 32] : 0.0f;
-#pragma unroll
-      for (int j = 0; j < PA_LOADS; j++)
-        if (kb0 + j < wins) total = __fadd_rn(total, x[j]);
-    }
+#pragma unroll 8
+    for (int kb = 0; kb < wins; kb++) total = __fadd_rn(total, w[(size_t)kb * rows * 32]);
     reinterpret_cast<float*>(a.p[2])[row * 32 + e - 32] = total;
     v = f2bf(total);
   }
