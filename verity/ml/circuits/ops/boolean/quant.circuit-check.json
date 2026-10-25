@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "QuantS8Pair_v2{H=128,RELU=False}": {
+   "and": 9787,
+   "type": "642954a79f1819078013444b9909c43737453f4937e0aeea5877c464bbd2ceb6b2dd63f28e82b69d5338cb3ae48f35dedff3be33983266e3dfecbca50537901a"
+  },
+  "QuantS8Pair_v2{H=128,RELU=True}": {
+   "and": 14269,
+   "type": "fad32a0e0016d39a1f08312f7ea4df32e3dc303d2c54706bc9ff035df840cdee49c1451b1135c900efb9b0d9b9e6312eae38dfa98f181a65b12d3360320a6864"
+  },
+  "QuantS8Scale_v2{H=128,HALF=0,RELU=False}": {
+   "and": 4512,
+   "type": "20dc7bd58d33fd2dc2d93489ba90f51330be36a983634b2ffd53efbc6ac67c455174fb430585328e79ca9551984e02736bfd0642d089b40fada978f263dbb45c"
+  },
+  "QuantS8Scale_v2{H=128,HALF=0,RELU=True}": {
+   "and": 8992,
+   "type": "190fb5252b4b4a8268c2817fe348bf652a38c246aa279b7f17d1638f219f54a631bd7962448aed993efbca38fb9154d8570671bbbaf9fb0c78bb3a1bd0374a1d"
+  },
+  "QuantS8Scale_v2{H=128,HALF=1,RELU=False}": {
+   "and": 4542,
+   "type": "f4b4d543e30f0d5f265bc359280ff169787c3b02f489355aa32e443543a12cb7b13e20e5f7efa6d327cfc119da151b780caf952afcc7a0d9cca91edae2850ea2"
+  },
+  "QuantS8Scale_v2{H=128,HALF=1,RELU=True}": {
+   "and": 9022,
+   "type": "dd7ecf979f27384a17bfcf2a5d2806ca3b47656530bbe7f3b81da032af96de162840cdd63b213fca058fda6d45010e1a6888e675cd213de604d2e19f47c4d090"
+  }
+ }
+}
