@@ -46,7 +46,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
+- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
   through C-Flock's prover and the Lean verifier.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
@@ -67,6 +67,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
     Daniel's laptop.
   - `nebius/`: the console's units.
+  - `slack-events/`: the Slack events service, a Vercel project (root `infra/slack-events/service`) that routes people's
+    posts and new members through `research msg`'s code. comms owns it.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.

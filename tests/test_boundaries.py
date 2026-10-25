@@ -327,9 +327,11 @@ def test_core_ml_edges_shrink_with_allowed() -> None:
 
 
 def _infra_packages() -> set[str]:
-    """The import packages of ``infra/``'s distributions, from each one's wheel configuration."""
+    """The import packages of ``infra/``'s distributions, from each one's wheel configuration.  A project with no wheel (the
+    Slack events service's suite, whose code Vercel deploys) has no package to import."""
     return {Path(p).name for pyproject in sorted((ROOT / "infra").glob("*/pyproject.toml"))
-            for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]}
+            for p in tomllib.loads(pyproject.read_text()).get("tool", {}).get("hatch", {}).get("build", {})
+            .get("targets", {}).get("wheel", {}).get("packages", [])}
 
 
 def test_nothing_outside_infra_imports_it() -> None:

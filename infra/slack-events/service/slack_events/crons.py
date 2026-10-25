@@ -153,7 +153,7 @@ def stall(deps: Deps, now: float) -> bool:
     deps.slack.call("chat.postMessage", channel=r.get("channel") or rs.channel_id_for(deps.registry, rs.FRONT_DOOR),
                     thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                     text=f"{STALL_HEAD} the last event published at {at(enq)}, the consumer's last message done at "
-                         f"{at(done)}. Check /api/cron/drain and the deployment's logs (integrations/slack-events).")
+                         f"{at(done)}. Check /api/cron/drain and the deployment's logs (infra/slack-events).")
     deps.write(STALL_RUNG, now)
     deps.log("stalled", enqueued=enq, done=done)
     return True
