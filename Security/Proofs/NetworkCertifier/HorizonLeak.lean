@@ -1,9 +1,10 @@
 import Definitions.NetworkCertifier.Guarantees.HorizonLeak
 import Proofs.NetworkCertifier.Horizon
 import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.Tap
 
 /-!
-# The leak through the wardens over a horizon of sampled audits
+# The leak through the network certifier over a monitoring period of sampled audits
 
 The probability half is `horizonWrongUnits`'s argument with the conditional escape as its input: each window's audit,
 given the earlier windows' coins, accepts with probability at most the escape of its witness's faulty set plus `e i`,
@@ -13,9 +14,10 @@ a union bound adds the leak relations' errors `e' i`.
 The count half: a family of faulty sets with fewer than `Fmax` units in total is the units listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
-`encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. The trusted wardens' views of the
-data the certifier framed from those observations number at most `#Ss · ∏_c (cap_c + 1)` times as many
-(`encard_wardenViews_le`), which bounds the secrets they decode to (`encard_horizonGood_le`).
+`encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
+the client receives read back from the network certifier's record under the schedule (`tap_cells_read`), so they
+number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_horizonGood_le`);
+`∏_c (cap_c + 1)` is room, as in the period's bound.
 -/
 
 namespace NetTiming
@@ -199,38 +201,39 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
     {m : ℕ} (sw : Fin m → Stmt) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
     (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ) (b : ℕ)
     (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
-    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell) (w : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → Conn → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
-    (obsOf : Srv → Fin m → List (Obs L K S)) (cells : (Fin m → List (Obs L K S)) → Conn → List Cell)
-    (hegress : WardenCertifierEgress arr obsOf cells)
+    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
+    (f : TapRecord Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn))
     (Zs : Set Z) (sched : Z → WardenSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run w (sched z, srv z)) = z)
+    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
     (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ) :
-    {z | z ∈ Zs ∧ HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z) (obsOf (srv z))}.encard ≤
+    {z | z ∈ Zs ∧ HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z) (run tap (sched z, srv z)).2}.encard ≤
       Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
         ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
   classical
-  set G := {z | z ∈ Zs ∧ HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z) (obsOf (srv z))} with hG
+  set G := {z | z ∈ Zs ∧ HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z) (run tap (sched z, srv z)).2} with hG
   set c : Fin m → ℕ := fun i => (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card with hc
   set B : ℕ := 2 ^ (b * Fmax) * ∏ i, (2 ^ c i * Dj ^ k (sw i)) with hB
   let s : Finset (Fin Fmax → Option (Σ i : Fin m, Fin (n i))) := univ.filter fun g => ∑ i, (famOf g i).card < Fmax
   let X : (Fin Fmax → Option (Σ i : Fin m, Fin (n i))) → Set (Fin m → List (Obs L K S)) := fun g =>
     Set.pi Set.univ fun i => {o | LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (famOf g i) o}
-  let Ds : Set (Conn → List Cell) := cells '' ⋃ g ∈ s, X g
-  have hD : ∀ σ ∈ srv '' G, (fun c => (arr σ c).stream) ∈ Ds := by
-    rintro _ ⟨z, hz, rfl⟩
-    obtain ⟨hzs, hlt, hleak⟩ := hz
+  let Y : Set (Fin m → List (Obs L K S)) := ⋃ g ∈ s, X g
+  let V : Set (Conn → List (ℕ × CellView Cell)) :=
+    (fun p : WardenSchedule Conn × (Fin m → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Y)
+  have hgood : ∀ z ∈ G, (run tap (sched z, srv z)).2 ∈ Y := by
+    rintro z ⟨-, hlt, hleak⟩
     obtain ⟨g, hg⟩ := exists_famOf_eq n Fmax (W z) (hWn z) hlt.le
-    refine ⟨obsOf (srv z), Set.mem_biUnion (x := g) ?_ ?_, (hegress (srv z)).symm⟩
+    refine Set.mem_biUnion (x := g) ?_ ?_
     · simp only [s, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq, hg]
       exact hlt
     · intro i _
       simp only [Set.mem_ofPred_eq, hg]
       exact hleak i
-  have hsub : G ⊆ dec '' {v | ∃ s ∈ Ss, ∃ σ ∈ srv '' G, run w (s, σ) = v} := fun z hz =>
-    ⟨run w (sched z, srv z), ⟨sched z, hs z hz.1, srv z, ⟨z, hz, rfl⟩, rfl⟩, hdz z hz.1⟩
+  have hsub : G ⊆ dec '' V := fun z hz =>
+    ⟨(run tap (sched z, srv z)).1, ⟨(sched z, (run tap (sched z, srv z)).2), ⟨hs z hz.1, hgood z hz⟩,
+      (tap_cells_read f arr tap run htrust _ _).symm⟩, hdz z hz.1⟩
   have hX : ∀ g ∈ s, (X g).encard ≤ ((B : ℕ) : ℕ∞) := by
     intro g hg
     have hlt : ∑ i, (famOf g i).card < Fmax := (Finset.mem_filter.1 hg).2
@@ -255,9 +258,8 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
       _ = ((∏ i, (2 ^ c i * (2 ^ faultyBits (sw i).prog (Pw i) (famOf g i) * Dj ^ k (sw i))) : ℕ) : ℕ∞) :=
           (Nat.cast_prod _ _).symm
       _ ≤ ((B : ℕ) : ℕ∞) := by exact_mod_cast hnat
-  have hDs : Ds.encard ≤ ((((∑ i, n i) + 1) ^ Fmax * B : ℕ) : ℕ∞) := by
-    calc Ds.encard ≤ (⋃ g ∈ s, X g).encard := Set.encard_image_le _ _
-      _ ≤ ∑ g ∈ s, (X g).encard := encard_biUnion_le s X
+  have hY : Y.encard ≤ ((((∑ i, n i) + 1) ^ Fmax * B : ℕ) : ℕ∞) := by
+    calc Y.encard ≤ ∑ g ∈ s, (X g).encard := encard_biUnion_le s X
       _ ≤ ∑ _g ∈ s, ((B : ℕ) : ℕ∞) := sum_le_sum hX
       _ = ((s.card * B : ℕ) : ℕ∞) := by rw [sum_const, nsmul_eq_mul]; push_cast; ring
       _ ≤ ((((∑ i, n i) + 1) ^ Fmax * B : ℕ) : ℕ∞) := by
@@ -266,27 +268,31 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
             rw [Fintype.card_fun, Fintype.card_option, Fintype.card_sigma, Fintype.card_fin]
             simp only [Fintype.card_fin]
           exact_mod_cast Nat.mul_le_mul_right B this
-  calc G.encard ≤ (dec '' {v | ∃ s ∈ Ss, ∃ σ ∈ srv '' G, run w (s, σ) = v}).encard := Set.encard_le_encard hsub
-    _ ≤ {v | ∃ s ∈ Ss, ∃ σ ∈ srv '' G, run w (s, σ) = v}.encard := Set.encard_image_le _ _
-    _ ≤ Ss.encard * ((∏ c, (cap c + 1) : ℕ) : ℕ∞) * Ds.encard :=
-        encard_wardenViews_le arr w run htrust cap Ss hcap _ Ds hD
-    _ ≤ Ss.encard * ((∏ c, (cap c + 1) : ℕ) : ℕ∞) * ((((∑ i, n i) + 1) ^ Fmax * B : ℕ) : ℕ∞) := by gcongr
-    _ = _ := by
-        rw [mul_assoc, ← Nat.cast_mul, hB]
-        congr 2
-        ring
+  have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
+  have hroom : ((∑ i, n i) + 1) ^ Fmax * B ≤ (∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
+      ∏ i, (2 ^ c i * Dj ^ k (sw i)) := by
+    calc ((∑ i, n i) + 1) ^ Fmax * B ≤ (∏ c, (cap c + 1)) * (((∑ i, n i) + 1) ^ Fmax * B) :=
+          Nat.le_mul_of_pos_left _ hcap1
+      _ = _ := by rw [hB]; ring
+  calc G.encard ≤ (dec '' V).encard := Set.encard_le_encard hsub
+    _ ≤ V.encard := Set.encard_image_le _ _
+    _ ≤ (Ss ×ˢ Y).encard := Set.encard_image_le _ _
+    _ = Ss.encard * Y.encard := Set.encard_prod
+    _ ≤ _ := by
+        gcongr
+        exact hY.trans (by exact_mod_cast hroom)
 
-/-! ### The horizon -/
+/-! ### The monitoring period -/
 
-/-- **The leak through the wardens over a horizon**: `Guarantees.HorizonLeakAccepted`, from `pr_adaptive_add_le` at the
-conditional escape with `choose_ratio_le`, a union bound over the leak relations, and `encard_horizonGood_le` at each
-draw of the coins. -/
+/-- **The leak through the network certifier over a monitoring period**: `Guarantees.HorizonLeakAccepted`, from
+`pr_adaptive_add_le` at the conditional escape with `choose_ratio_le`, a union bound over the leak relations, and
+`encard_horizonGood_le` at each draw of the coins. -/
 theorem horizonLeak : Guarantees.HorizonLeakAccepted := by
-  intro L K S lay k reg Dj m sw Pw ρ op n kd b hb Ω _ _ Conn Cell Srv Dev Z _ arr w run htrust cap Ss hcap obsOf cells
-    hegress Zs schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he hesc hleak q hq0 hq1 hq δ hδ Fmax hF
-  refine ⟨fun z hz => ?_, fun ω => encard_horizonGood_le lay k reg Dj sw Pw ρ op n b hb arr w run htrust cap Ss hcap
-    obsOf cells hegress Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
-    (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax⟩
+  intro L K S lay k reg Dj m sw Pw ρ op n kd b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap Zs
+    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he hesc hleak q hq0 hq1 hq δ hδ Fmax hF
+  refine ⟨fun z hz => ?_, fun ω => encard_horizonGood_le lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss
+    Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
+    (fun z => W z ω) (fun z i => hWn z ω i) Fmax⟩
   classical
   have hmiss := pr_adaptive_add_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m (acc z)
     (fun i ω => (W z ω i).card) e (fun i ω ω' h => hacc z i ω ω' h)
@@ -299,16 +305,17 @@ theorem horizonLeak : Guarantees.HorizonLeakAccepted := by
       _ = Real.exp (Fmax * (-q)) := (Real.exp_nat_mul _ _).symm
       _ ≤ Real.exp (-Real.log (1 / δ)) := Real.exp_le_exp.2 (by nlinarith)
       _ = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
-  calc Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ ¬HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z ω) (obsOf (srvOf z ω)))
+  calc Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
+        ¬HorizonGood lay k reg Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2)
       ≤ Pr (fun ω => ((∀ i, acc z i ω (ω i)) ∧ Fmax ≤ ∑ i, (W z ω i).card) ∨
           ∃ i ∈ (univ : Finset (Fin m)), acc z i ω (ω i) ∧
-            ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) (obsOf (srvOf z ω) i)) := by
+            ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i)) := by
         refine Pr_mono fun ω h => ?_
         obtain ⟨hall, hng⟩ := h
         unfold HorizonGood at hng
         by_cases hlt : ∑ i, (W z ω i).card < Fmax
-        · have : ¬∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) (obsOf (srvOf z ω) i) :=
-            fun hl => hng ⟨hlt, hl⟩
+        · have : ¬∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
+              ((run tap (schedOf z ω, srvOf z ω)).2 i) := fun hl => hng ⟨hlt, hl⟩
           push Not at this
           obtain ⟨i, hi⟩ := this
           exact Or.inr ⟨i, mem_univ i, hall i, hi⟩
