@@ -498,6 +498,9 @@ class Pipeline:
     #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
     #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
     beside = 0
+    #: pd_tiles takes PD_GROUP's tiles, PD_G a CTA, at every pd shape (the same leaves on a quarter of the CTAs): a whole
+    #: capture's tile hashing beside A's tree, whose CTA and pd_commit's each hold an SM whole
+    tiles_group = False
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
@@ -694,8 +697,9 @@ class Pipeline:
                  i=(self.m_real, 0, 0, self.m))
 
     def pd_tiles(self) -> None:
-        """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP a CTA of PD_G tiles of a row block."""
-        d, b, v, mr, n = self.dev, self.b, self.pd, self.m_real, self.n
+        """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP (or `tiles_group`) a CTA of PD_G
+        tiles of a row block."""
+        d, b, v, mr, n = self.dev, self.b, self.pd | (PD_GROUP if self.tiles_group else 0), self.m_real, self.n
         p = (b["c"], b["u"], b["leaves"])
         if v & PD_GROUP:
             d.launch(f"pd_tiles_{v}", cdiv(mr, TILE) * cdiv(n // TILE, PD_G), 32 * PD_G, PD_PAIR_SMEM // 2, p=p, i=(mr, n))
