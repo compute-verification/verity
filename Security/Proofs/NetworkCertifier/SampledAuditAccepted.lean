@@ -251,7 +251,6 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
       read_of_not_const fun b h => by rw [hx] at h; cases h]
   congr 1
   refine val_congr hxi fun i hi => ?_
-  beta_reduce
   have hlt := hT.1 g x hx i hi
   have hgi := hgood g x hx hgd i hi
   rw [dite_eq_left hlt]
@@ -320,7 +319,7 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
   have hv : v ∉ F := fun hv => hfg ⟨v, hv, r, hr, mem_ru_gates hu hg, boundary_of_out hout⟩
   obtain ⟨b, hb, hrun⟩ := (hι v r hr hv u hu g hg).2 (boundary_of_out hout)
   rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v r u hr hv hu hg, hrun, traceVal, read_of_not_const hconst,
-    ← ref_of_boundary (r := r) (ι := ι v) (boundary_of_out hout), hb]
+    ← ref_of_boundary (r := r) (ref := ref) (ι := ι v) (boundary_of_out hout), hb]
   rfl
 
 end Run
