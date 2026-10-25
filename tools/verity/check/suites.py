@@ -749,18 +749,19 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
     return {v: k for v, k in reg.items() if held[v] == "absent"}
 
 
-def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
-    """Fetch the entries (`research data fetch-fixtures`); returns the paths that are still missing or different afterwards."""
+def fetch_fixtures(fixtures: dict[str, str], log: Path) -> set[str]:
+    """Fetch the entries (`research data fetch-fixtures`), its output in `log`; returns the paths that are still missing or
+    different afterwards."""
     if not fixtures:
         return set()
-    log = logs / "fetch-fixtures.log"
     p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
                        cwd=ROOT, capture_output=True, text=True)
     log.write_text(p.stdout + p.stderr)
     try:
         rep = json.loads(p.stdout)
     except ValueError:
-        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}")
+        err = "\n".join("    " + line for line in p.stderr.strip().splitlines()[:5])
+        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}" + (f"\n{err}" if err else ""))
         return set(fixtures)
     bad = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
     blobs = rep["fetch"]["blobs"]
@@ -1968,7 +1969,8 @@ def main(argv: list[str] | None = None) -> int:
         sweep_basetemps()
     # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
     needed = {p: art for p, art in fixtures.items() if any(covered(p, [x for x in ps if x != "."], cuts[s]) for s, ps in inputs.items())}
-    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
+    fetch_log = logs / f"fetch-fixtures-{os.getpid()}.log"            # check's pytest and lean-suites steps share `logs`
+    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, fetch_log)
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
@@ -2003,8 +2005,8 @@ def main(argv: list[str] | None = None) -> int:
                if (a.fresh or not hit) and any(covered(p, [x for x in paths if x != "."], cuts[s]) for p in unfetched)]
     for s in blocked:
         print(f"failed  {s.name:28} its fixtures could not be fetched: "
-              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
-        results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
+              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {fetch_log})")
+        results.append(Result(s, "failed", log=fetch_log))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
            for s, _paths, _keys, deps in todo if not a.no_per_test}
