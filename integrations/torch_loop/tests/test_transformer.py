@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
@@ -32,8 +33,9 @@ def recorded(win: IF.Window, tid: str, op: str) -> list[tuple[dict, list[np.ndar
     return [(b.label, b.inputs, b.outputs[0]) for b in win._recorded[tid] if b.label["op"].endswith(op)]
 
 
+@pytest.mark.slow
 def test_every_unit_it_records_is_its_template_s_function():
-    """~5 s: every unit of one request decoded 3 bytes past a 2-byte prompt (11,048 units), through the reference."""
+    """~6 s: every unit of one request decoded 3 bytes past a 2-byte prompt (11,048 units), through the reference."""
     loop, win = served()
     assert win.window.population == sum(loop.units.values()) == 11_048
     assert all(win.count(t) == n for t, n in loop.units.items())
