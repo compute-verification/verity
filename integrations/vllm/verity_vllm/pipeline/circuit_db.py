@@ -28,14 +28,14 @@ A `research run` job has no store (its custody key stays with the runner): the l
 the job reads into one file (`bundle`), ships it (`research run --send FILE`), and the job decodes them from it (`programs(row,
 bundle=...)`), each digest checked against the record as from the store.
 
-    from verity_vllm import records
+    from verity_vllm.pipeline import circuit_db
     from verity.ml.circuits.evaluation.reference import evaluate
-    rec = records.record(row)                         # the config record
-    progs = records.programs(row, ranks=[0], part=["workload"])   # {rank: {part: DecodedProgram}}, each digest checked
+    rec = circuit_db.record(row)                      # the config record
+    progs = circuit_db.programs(row, ranks=[0], part=["workload"])   # {rank: {part: DecodedProgram}}, each digest checked
     p = progs[0]["workload"]                          # the Program the Commit binds; "build_step", "build_request_LP*_T*" beside it
     p.root, p.defs                                    # its root and its Definitions, decoded through the registry
     evaluate(p.defs[fid], *synthetic_inputs)          # any Definition on synthetic inputs
-    records.programs(row, [0], part=["workload"], bundle=Path(os.environ["RESEARCH_RUN_DIR"]) / "inputs" / "glm53.tar")  # in a job
+    circuit_db.programs(row, [0], part=["workload"], bundle=Path(os.environ["RESEARCH_RUN_DIR"]) / "inputs" / "glm53.tar")  # in a job
 
     verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--tier fast|heavy] [--manifest art:…]
                                 [--match art:…] [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE]
