@@ -62,22 +62,25 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
     """The auditor host's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs `rehearse` on traffic the
-    gate fixes, and refuses a request whose minutes are under `warden_minutes` of its requests: for every request count
-    the gate takes, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
+    gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
+    minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
+    lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
     origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
     args = ws.parser().parse_args(argv[2:])
-    assert (args.command, args.upstream, args.fake, args.out, args.requests, args.max_tokens) == \
-        ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64)
+    assert (args.command, args.upstream, args.fake, args.out, args.requests, args.max_tokens, args.height) == \
+        ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64, 20)
+    assert ws.parser().parse_args(A.warden_command({"requests": 7, "height": 10}, tmp_path, "http://h:1")[2:]).height \
+        == 10
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
     assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
         last = ws.varied_traffic(n, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)[-1]["at"]
         took = math.ceil((last + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
-        assert took <= A.warden_minutes(n) * 60, n
+        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
 def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
@@ -101,6 +104,40 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
         assert {(x["body"]["temperature"], x["body"]["top_p"]) for x in traffic} == {want}
         assert rest(traffic) == rest(varied)
     assert all("top_p" not in x["body"] for x in varied)
+
+
+def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_least_minutes_cover_its_traffic(
+        tmp_path, capsys):
+    """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
+    --warden-run` refuses any other of), which the scan's class serves, on the gate's arrivals at the gate's sampling;
+    for every request count the gate takes, at its lowest height, `warden_minutes` covers the id traffic's last arrival,
+    its tail, the rest of the window it ends in, the origin's delay and 30 s for the key and the check."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
+    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    assert args.ids and not args.fake and ws._params(args) == sz.PARAMS
+    sz.CLASS.serves(ws._params(args))
+    assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
+    assert sz.main(["schedule"]) == 0 and capsys.readouterr().out.split() == list(A.SCAN_SCHEDULE)
+    traffic = ws.traffic_of(args, "m")
+    assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(0.6, 0.9)}
+    drawn = ws.id_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED, max_tokens=(1, 64))
+
+    def rest(t):
+        return [{**x, "ids": {k: v for k, v in x["ids"].items() if k not in ("temperature", "top_p")}} for x in t]
+    assert rest(traffic) == rest(drawn) and {x["ids"]["top_p"] for x in drawn} == {1.0}
+    plain = ws.parser().parse_args(A.warden_command({"requests": 7, "scan": True}, tmp_path, "http://h:1")[2:])
+    assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in ws.traffic_of(plain, "m")} == {(0.0, 1.0)}
+
+    window_s = sz.PARAMS.window * sz.PARAMS.bucket_ms / 1000
+    most = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+                         max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
+        took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
@@ -138,6 +175,41 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     assert asyncio.run(models()) == "fake"
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n") == (b"abcde", True)
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nd") == (b"abcd", False)
+
+
+def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
+    """`rehearse --ids`: an `id_traffic` request, sent warden-form (`active.id_request`), is answered with its
+    `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
+    `parse_id_response` reads its count, and a cut or altered response isn't complete."""
+    sys.path.insert(0, str(HERE))
+    import scan_zk as sz
+    traffic = ws.id_traffic(20, model="m", seed=2, max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    assert traffic == ws.id_traffic(20, model="m", seed=2, max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    assert all(1 <= x["ids"]["max_tokens"] <= 64 and all(i < 1 << 17 for i in x["ids"]["prompt"]) for x in traffic)
+    fields, P, B = traffic[0]["ids"], sz.PARAMS.payload, sz.PARAMS.cell_bytes
+    request = ws.id_request(**fields, frame_bytes=B, offset=0)
+
+    async def main() -> bytes:
+        server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep, id_payload=P),
+                                            "127.0.0.1", 0)
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.sockets[0].getsockname()[1])
+        writer.write(request)
+        data = await reader.read()
+        writer.close()
+        server.close()
+        return data
+
+    data = asyncio.run(main())
+    ids = ws.fake_ids(json.loads(request.partition(b"\r\n\r\n")[2]))
+    assert data == ws.id_response(ids, P) and 1 <= len(ids) <= fields["max_tokens"]
+    assert data[len(ids) * P:] == sz.IT.TRAILER
+    assert [sz.IT.data_cell(x, 1, B)[sz.IT.HEADER.size:sz.IT.HEADER.size + P] for x in ids] == [
+        data[i:i + P] for i in range(0, len(ids) * P, P)]
+    got = ws.parse_id_response(data, P)
+    assert (got["ids"], got["complete"], got["completion_tokens"]) == (len(ids), True, len(ids))
+    assert not ws.parse_id_response(data[:-1], P)["complete"] and not ws.parse_id_response(data[:-len(sz.IT.TRAILER)],
+                                                                                            P)["complete"]
+    assert not ws.parse_id_response(data.replace(b"data:", b"datum", 1), P)["complete"]
 
 
 class _Writer:
