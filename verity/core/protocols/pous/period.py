@@ -327,7 +327,8 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
 
 
 SETUP_WORKERS = 32
-"""The processes the leg encodes a node's `C*` in, at most (`setup_store`)."""
+"""The processes the leg encodes a node's `C*` in and makes the memory challenger's key in, at most, within the CPUs it
+may run on (`setup_store`, `challenger`)."""
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
@@ -342,8 +343,9 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     that set a store up, `out/pous-setup.case.json`."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
+    workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
     device = Path(period_dir).parent / "pous-challenger"
-    signer = challenger(device)
+    signer = challenger(device, workers=workers)
     if not (device / "sessions").exists():
         mc.SessionLog.create(device / "sessions")
     log, kept = mc.SessionLog(device / "sessions"), Path(period_dir).parent / "pous-store"
@@ -351,8 +353,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     if small or not (kept / "store.json").exists():
         store = records(period_dir)
         point = point_for(len(store)) if small else certified_point(len(store))
-        held = setup_store(store, secrets.token_bytes(64), point,
-                           workers=1 if small else min(SETUP_WORKERS, os.cpu_count() or 1))
+        held = setup_store(store, secrets.token_bytes(64), point, workers=1 if small else workers)
         if not small:
             held.save(kept)
         fresh = True
