@@ -6,18 +6,15 @@ from typing import Any
 
 
 def _network_egress_roots() -> list[Any]:
-    """N2's egress encoder (`verity.core.protocols.certifier.egress`): a bucket at the tests' size class (R = 8 256-byte
-    slots, NR = 16 request slots of K = 16 outputs, K a power of two), at the smallest even cell with K not a power of
-    two and two ready words, and at the warden's defaults (R = 64, NR = 16, K = 4,096), the unit a link-window has T of;
-    and the router at the tests' window (T·R = 12 slots, NR·K = 20 entries, D = 5) and at a power of two of each
-    (T·R = 32, NR·K = 256, D = 8)."""
+    """N2's egress bucket (`verity.core.protocols.certifier.egress`), the unit a link-window has T of: at egress_zk.py's
+    shape (8 256-byte cells in 4 lanes of 2, 4 request slots of 16 outputs, 18-bit ids, D = 2), at the scan note's
+    class (16 256-byte cells in 4 lanes of 4, 4 request slots of 64 outputs, 17-bit ids, D = 22), and at the smallest
+    even cell with lanes of 3, more request slots than lanes, K not a power of two and D = 0."""
     from verity.ml.circuits.defs import bind
-    from verity.core.protocols.certifier.egress import EgressBucket, EgressRoute
+    from verity.core.protocols.certifier.egress import EgressBucket
 
     return [
-        bind(EgressBucket, B=256, R=8, NR=16, K=16),
-        bind(EgressBucket, B=148, R=4, NR=17, K=6),
-        bind(EgressBucket, B=256, R=64, NR=16, K=4096),
-        bind(EgressRoute, NR=4, K=5, T=3, R=4),
-        bind(EgressRoute, NR=16, K=16, T=4, R=8),
+        bind(EgressBucket, B=256, R=8, r=2, NR=4, K=16, IB=18, D=2),
+        bind(EgressBucket, B=256, R=16, r=4, NR=4, K=64, IB=17, D=22),
+        bind(EgressBucket, B=148, R=6, r=3, NR=3, K=5, IB=7, D=0),
     ]

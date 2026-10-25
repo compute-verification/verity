@@ -1,4 +1,4 @@
-"""A fake upstream's egress served through the warden, and each link-window's encoder inputs: the egress tests'
+"""A fake upstream's egress served through the warden, and the slot state each egress bucket reads: the egress tests'
 traffic (`test_network_certifier_egress.py`) and `benchmarks/network_traces/egress_zk.py`'s. It imports no test
 framework, so a node's bare venv runs it."""
 
@@ -10,11 +10,12 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W
+from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.grid import Certifier, Record
 
-#: the token ids' range (GLM's vocabulary)
+#: the token ids' range (GLM's vocabulary), and the bits an id takes
 V = 151_329
+IB = (V - 1).bit_length()
 
 
 @dataclass(frozen=True)
@@ -70,32 +71,34 @@ def busy(seed: int, params: W.WardenParams, count: int, longest: int, windows: i
     return serve(params, arrivals, responses, windows)
 
 
-def window(served: Served, w: int, NR: int, K: int) -> SimpleNamespace:
-    """Link-window w's encoder inputs: its request slots (the requests that hold a slot in one of its buckets, by
-    ordinal, j their place), its NR·K ids (entry j·K + k request slot j's output k, zero past its outputs), each
-    bucket's records and ready bits, the prover's switches and each bucket's routed entries; with the window's shape and
-    each bucket's overflow bit."""
+def shape(params: W.WardenParams, NR: int, K: int) -> EG.Shape:
+    return EG.Shape(params.cell_bytes, params.grid.allocation, params.slots, NR, K, IB, params.delay)
+
+
+def states(served: Served, NR: int, K: int) -> list[EG.State]:
+    """The state each bucket's egress reads (S_t, the scan's ingress step t's), over the link's buckets: each request
+    in the lowest request slot free at its admission, held from its admission to its last egress bucket (admitted +
+    D + ⌊n / r⌋) and free after it, with its n and its ids (the anchored Programs' outputs)."""
     p = served.params
-    T, r, D = p.window, p.slots, p.delay
-    first, last = w * T, w * T + T - 1
-    held = [k for k, s in enumerate(served.requests) if s.admitted <= last and first <= s.admitted + D + s.n // r]
-    if len(held) > NR or any(served.requests[k].n >= K for k in held):
-        raise ValueError(f"window {w} holds {len(held)} requests, more than NR = {NR}, or one of K = {K} outputs or "
-                         "more")
-    shape = EG.Shape(p.cell_bytes, T, p.grid.allocation, NR, K)
-    slots = [served.requests[k] for k in held] + [None] * (NR - len(held))
-    ids = [0] * (NR * K)
-    for j, k in enumerate(held):
-        ids[j * K:j * K + len(served.responses[k])] = served.responses[k]
-    maps, overflow = zip(*(EG.bucket_map(first + t, slots, shape.R, r, D) for t in range(T)))
-    bits = EG.switches(shape, maps)
-    routed = EG.routed(shape, ids, bits)
-    return SimpleNamespace(shape=shape, slots=slots, ids=ids, maps=maps, overflow=overflow,
-                           ready=[EG.honest_ready(first + t, slots, NR) for t in range(T)], switches=bits,
-                           routed=[routed[t * shape.R:(t + 1) * shape.R] for t in range(T)])
+    r, D = p.slots, p.delay
+    end = [s.admitted + D + s.n // r for s in served.requests]
+    held: list[int | None] = [None] * NR
+    out = []
+    for t in range(len(served.records) * p.window):
+        held = [k if k is not None and end[k] >= t else None for k in held]
+        for k, s in enumerate(served.requests):
+            if s.admitted == t:
+                if None not in held:
+                    raise ValueError(f"bucket {t} holds more than NR = {NR} requests")
+                if s.n > K:
+                    raise ValueError(f"request {k} has {s.n} outputs, more than K = {K}")
+                held[held.index(None)] = k
+        slots = tuple(EG.FREE if k is None else EG.Slot(1, served.requests[k].q, served.requests[k].admitted,
+                                                        served.requests[k].n, served.responses[k]) for k in held)
+        out.append(EG.State(t, slots))
+    return out
 
 
-def row(win: SimpleNamespace, t: int) -> bytes:
-    """Bucket t's row as the encoder renders it (`egress.bucket_row`)."""
-    sh = win.shape
-    return EG.bucket_row(sh.B, sh.NR, sh.K, win.maps[t], win.routed[t], win.ready[t])
+def rows(served: Served) -> list[bytes]:
+    """The warden's registered egress rows of the link, bucket by bucket (`warden_rows.window_rows`)."""
+    return [x for record in served.records for x in WR.window_rows(record, served.params)]

@@ -1,15 +1,15 @@
-"""N2's egress encoder (`egress`) on the warden's own egress: links of variable-length responses served through the
-warden's schedule (`egress_traffic`, `warden.Warden._egress`), each link-window's map, ready bits and routing made by
-the prover's side. The reference renders every bucket row the warden registered, the Boolean Definitions are their
-references bit for bit on honest and adversarial inputs, a row reads only its ready data slots' ids, and the
-verifier's registered read accepts the rendered rows and refuses each way they can differ."""
+"""N2's egress side of the scan (`egress`) on the warden's own egress: links of variable-length responses served
+through the warden's schedule (`egress_traffic`, `warden.Warden._egress`), and the slot state each bucket's egress
+reads. The reference renders every bucket row the warden registered from that state; the Boolean Definition is its
+reference's verdict on honest and adversarial states and rows, accepts the warden's rows and refuses every other; its
+one output is a 16-bit word; and the verifier's registered read of the row port holds the rows to the warden's."""
 
 import random
 
 import numpy as np
 import pytest
 
-from egress_traffic import busy, row, serve, window
+from egress_traffic import IB, busy, rows, serve, shape, states
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import egress as EG, head_check as HC, io_tie as IT, warden as W, warden_rows as WR
@@ -19,37 +19,64 @@ from verity.core.protocols.certifier.certificate import Direction
 #: the warden's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
 PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 SESSION = bytes(range(32))
+#: the request slots and outputs a slot the served links' states hold
+NR, K = 4, 16
 
 
-def _bytes(bits) -> bytes:
-    bits = [int(b) for b in bits]
-    return bytes(sum(bits[8 * k + i] << i for i in range(8)) for k in range(len(bits) // 8))
-
-
-def _rows(fn, cases, B: int, R: int) -> list[tuple[bytes, list[int]]]:
-    """The circuit's (o0 as bytes, o1's bits) on each case's (records, routed, ready)."""
-    args = [EG.bucket_arguments(fn.bindings["NR"], *c) for c in cases]
+def _verdicts(fn, sh, cases) -> list[list[int]]:
+    """The circuit's output bits on each (state, row)."""
+    args = [EG.bucket_arguments(sh, s, r) for s, r in cases]
     out = np.asarray(evaluate_bits(fn, *[np.asarray(col, dtype=np.uint8) for col in zip(*args)]))
-    return [(_bytes(o[:8 * R * B]), [int(x) for x in o[8 * R * B:]]) for o in out.reshape(len(cases), -1)]
+    return [[int(x) for x in o] for o in out.reshape(len(cases), -1)]
 
 
-def _windows(served, NR, K):
-    return [window(served, w, NR, K) for w in range(len(served.records))]
+def _fn(sh):
+    return bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)
 
 
-def test_the_shapes_and_the_statics_are_checked():
-    sh = EG.Shape(256, 600, 64, 16, 4096)
-    assert (sh.PB, sh.W, sh.D, sh.M, sh.switches) == (17, 49, 16, 65_536, 1_015_808)
-    assert EG.entry_bits(5, 6) == 5 and EG.ready_words(16) == 1 and EG.ready_words(17) == 2
-    refused = ((dict(B=255), "even"), (dict(B=146), "at least"), (dict(R=0), "R >= 1"), (dict(NR=0), "NR >= 1"),
-               (dict(K=IT.END_ENTRY), "K < 2"), (dict(NR=1 << 16, K=1 << 16), "NR·K < 2"), (dict(T=0), "T >= 1"))
+def test_the_shape_and_the_statics_are_checked():
+    """The state's layout at the scan note's class (4 request slots of 64 outputs, 17-bit ids) and its checks."""
+    sh = EG.Shape(256, 16, 4, 4, 64, 17, 22)
+    assert (sh.lanes, sh.slot_bits, sh.state_bits, sh.state_words, sh.slot_at(1)) == (4, 1200, 4832, 302, 1232)
+    assert EG.Shape(148, 4, 2, 3, 5, 7, 0).slot_bits == 160
+    refused = ((dict(B=255), "even"), (dict(B=146), "at least"), (dict(R=0), "lanes of r"), (dict(r=3), "lanes of r"),
+               (dict(NR=0), "NR < 2"), (dict(K=IT.END_ENTRY), "K < 2"), (dict(IB=0), "IB <= 32"),
+               (dict(IB=33), "IB <= 32"), (dict(D=-1), "delay"))
     for kw, match in refused:
+        statics = dict(B=256, R=4, r=2, NR=2, K=4, IB=8, D=1) | kw
         with pytest.raises(ValueError, match=match):
-            EG.Shape(**(dict(B=256, T=2, R=4, NR=2, K=4) | kw))
-        if "T" not in kw:
-            statics = dict(B=256, R=4, NR=2, K=4) | kw
-            with pytest.raises(ValueError, match=match):
-                bind(EG.EgressBucket, **statics).signature()
+            EG.Shape(**statics)
+        with pytest.raises(ValueError, match=match):
+            bind(EG.EgressBucket, **statics).signature()
+
+
+def test_the_state_row_is_its_layout():
+    """b, then each request slot's live, q, admitted, n and ids at their offsets, zero-padded; refused past its
+    capacities."""
+    sh = EG.Shape(148, 4, 2, 3, 5, 7, 1)
+    st = EG.State(9, (EG.Slot(3, 7, 2, 4, (1, 127)), EG.FREE, EG.Slot(1, (1 << 32) - 1, 5, 0, ())))
+    bits = EG.state_bits(sh, st)
+    assert len(bits) == sh.state_bits == 16 * len(EG.state_words(sh, st))
+
+    def field(at, w):
+        return sum(b << i for i, b in enumerate(bits[at:at + w]))
+
+    assert field(0, 32) == 9
+    for j, s in enumerate((st.slots[0], EG.FREE, st.slots[2])):
+        at = sh.slot_at(j)
+        assert (field(at + EG.LIVE, 16), field(at + EG.Q, 32), field(at + EG.ADMITTED, 32), field(at + EG.N, 32)) \
+            == s[:4]
+        assert [field(at + EG.IDS + k * 7, 7) for k in range(5)] == list(s.ids) + [0] * (5 - len(s.ids))
+        assert not any(bits[at + EG.IDS + 35:at + sh.slot_bits])
+    words = EG.state_words(sh, st)
+    assert words[0] == 9 and words[1] == 0
+    for bad, match in ((st._replace(slots=st.slots + (EG.FREE,)), "NR = 3"),
+                       (EG.State(0, (EG.Slot(1, 1, 0, 0, (128,)),)), "IB = 7"),
+                       (EG.State(0, (EG.Slot(1, 1, 0, 0, (0,) * 6),)), "K = 5"),
+                       (EG.State(0, (EG.Slot(1 << 16, 1, 0, 0, ()),)), "u16"),
+                       (EG.State(1 << 32, ()), "u32")):
+        with pytest.raises(ValueError, match=match):
+            EG.state_bits(sh, bad)
 
 
 def test_the_map_is_the_wardens_slots():
@@ -68,143 +95,116 @@ def test_the_map_is_the_wardens_slots():
     assert maps[4] == ((EG.UNHELD,) * 4, False)
     over = EG.bucket_map(2, [EG.Request(1, 0, 3), EG.Request(2, 2, 0), EG.Request(3, 2, 1)], 4, 2, 1)
     assert over == ((R(1, 0, 2), R(1, 0, E), R(2, 1, P), R(2, 1, P)), True)
-    assert EG.honest_ready(1, slots, 6) == [1, 1, 0, 0, 0, 0]
     for args in ((0, slots, 4, 3, 1), (0, slots, 4, 2, -1)):
         with pytest.raises(ValueError, match="lanes of r"):
             EG.bucket_map(*args)
 
 
-@pytest.mark.parametrize("seed, NR, K", [(1, 12, 16), (2, 12, 20), (3, 16, 18)])
-def test_the_encoder_renders_the_wardens_registered_rows(seed, NR, K):
-    """Every bucket row of every link-window of a busy link, idle ones too, is the warden's registered row
-    (`warden_rows.window_rows` of the record its grid closed), from the window's ids, an honest map and the prover's
-    switches; each DATA slot's routed entry is its record's (j·K + e, id)."""
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_the_state_renders_the_wardens_registered_rows(seed):
+    """Every bucket row of a busy link, idle ones too, is the warden's registered row (`warden_rows.window_rows` of
+    the record its grid closed), rendered from the state the scan's ingress step wrote at that bucket (each request
+    in the lowest free slot from its admission to its last egress bucket)."""
     served = busy(seed, PARAMS, 14, 15, 6)
     assert not served.fails
-    kinds, data = set(), 0
-    for w, (record, win) in enumerate(zip(served.records, _windows(served, NR, K))):
-        rows = WR.window_rows(record, PARAMS)
-        assert not any(win.overflow)
-        for t in range(PARAMS.window):
-            assert row(win, t) == rows[t], (w, t)
-            kinds |= {rows[t][s * PARAMS.cell_bytes] for s in range(win.shape.R)}
-            for m, (p, x) in zip(win.maps[t], win.routed[t]):
-                if m.e < K:
-                    assert (p, x) == (m.j * K + m.e, win.ids[p])
-                    data += 1
-    assert kinds == {PAD, DATA, W.END} and data >= 60
+    sh, kinds = shape(PARAMS, NR, K), set()
+    for t, (st, want) in enumerate(zip(states(served, NR, K), rows(served))):
+        assert EG.rendered(sh, st) == want and EG.verdict(sh, st, want) == EG.ACCEPT, t
+        kinds |= {want[s * sh.B] for s in range(sh.R)}
+    assert kinds == {PAD, DATA, W.END}
 
 
-def _edge_cases(rng, R, NR, K, n):
-    """Random slots that reach every case of `cell`: q = 0 and 2^32 − 1, j at and past NR, e at and past K and both
-    markers, routed indices right, with high bits set, wrong by one bit and the filler, ids 0, 2^32 − 1 and around
-    powers of ten, and not-ready DATA and END."""
-    PB = EG.entry_bits(NR, K)
-    cases = []
-    for _ in range(n):
-        ready = [rng.randrange(2) for _ in range(NR)]
-        records, routed = [], []
-        for _ in range(R):
-            q = rng.choice([0, 1, 7, (1 << 32) - 1, rng.randrange(1 << 32)])
-            j = rng.choice([NR, NR + 1, (1 << 32) - 1, rng.randrange(1 << 32)] + [rng.randrange(NR)] * 6)
-            e = rng.choice([IT.EMPTY, IT.END_ENTRY, K, K + 1, rng.randrange(1 << 32)] + [rng.randrange(K)] * 8)
-            x = rng.choice([0, (1 << 32) - 1, 9, 10, 99, 100, 999_999_999, 1_000_000_000, rng.randrange(1 << 32),
-                            rng.randrange(1000)])
-            at = (j * K + e) % (1 << PB)
-            p = rng.choice([at] * 4 + [at | rng.randrange(1, 1 << (32 - PB)) << PB, at ^ 1 << rng.randrange(PB), NR * K,
-                                       rng.randrange(1 << 32)])
-            records.append((q, j, e))
-            routed.append((p, x))
-        cases.append((records, routed, ready))
-    return cases
+def _states(rng, sh, n):
+    """Random states through every case of the map: slots not live (live's high bits set either way), admitted after
+    b, in the delay, at their outputs, at their END and past it; ties in q; n past K; u32 extremes (admitted + D past
+    2^32, b and n 2^32 − 1); ids 0 and 2^IB − 1. A third have every slot live at b, to overflow when NR > R / r."""
+    top, out = (1 << 32) - 1, []
+    for c in range(n):
+        b = rng.choice([rng.randrange(40)] * 5 + [top, rng.randrange(1 << 32)])
+        slots = []
+        for _ in range(sh.NR):
+            q = rng.choice([1, 2, 3, top, rng.randrange(1 << 32)])
+            ids = tuple(rng.choice([0, (1 << sh.IB) - 1, rng.randrange(1 << sh.IB)])
+                        for _ in range(rng.randrange(sh.K + 1)))
+            if c % 3 == 0:
+                slots.append(EG.Slot(1, q, b - rng.randrange(min(b, sh.D + 3) + 1), rng.randrange(2 * sh.K), ids))
+                continue
+            a = rng.choice([b - rng.randrange(min(b, sh.D + 6) + 1)] * 4
+                           + [min(b + 1, top), top, rng.randrange(1 << 32)])
+            n_ = rng.choice([rng.randrange(sh.K + 1)] * 4 + [sh.K + 1, top, rng.randrange(1 << 32)])
+            live = rng.choice([1, 1, 1, 0, 2, 3, (1 << 16) - 2, (1 << 16) - 1])
+            slots.append(EG.Slot(live, q, a, n_, ids))
+        out.append(EG.State(b, tuple(slots)))
+    return out
 
 
-@pytest.mark.parametrize("B, R, NR, K", [(256, 8, 5, 6), (148, 8, 17, 4), (150, 4, 1, 1), (256, 4, 3, 7)])
-def test_the_bucket_circuit_is_its_reference(B, R, NR, K):
-    """`EgressBucket` against `bucket_row` bit for bit, and its presence, on random slots through every case (K a
-    power of two and not, NR across one ready word and two); every cell but the poison is one `parse_cell` reads."""
-    rng = random.Random(B * R + NR * K)
-    cases = _edge_cases(rng, R, NR, K, 480 // R)
-    fn = bind(EG.EgressBucket, B=B, R=R, NR=NR, K=K)
-    kinds = {}
-    for c, (o0, o1) in zip(cases, _rows(fn, cases, B, R)):
-        want = EG.bucket_row(B, NR, K, *c)
-        assert o0 == want and o1 == [1] + [0] * 15
-        for s in range(R):
-            cell = want[s * B:(s + 1) * B]
-            kinds[cell[0]] = kinds.get(cell[0], 0) + 1
-            parsed = IT.parse_cell(cell)
-            assert (parsed is None) == (cell == bytes([EG.POISON]) * B)
-            if parsed is not None:
-                q, j, e = c[0][s]
-                assert parsed.stream == q and (parsed.id == c[1][s][1] if parsed.data else True)
-    assert set(kinds) == {PAD, DATA, W.END, EG.POISON} and min(kinds.values()) >= 4
+@pytest.mark.parametrize("B, R, r, NR, K, IB_, D", [(148, 4, 2, 3, 5, 7, 1), (150, 6, 3, 2, 4, 5, 0),
+                                                    (148, 2, 1, 3, 1, 3, 2), (148, 4, 1, 2, 8, 32, 3)])
+def test_the_bucket_circuit_is_its_reference(B, R, r, NR, K, IB_, D):
+    """`EgressBucket`'s output against `verdict` on random states (r a power of two and not, K one and a power of two,
+    NR above the lanes and below, D = 0, 32-bit ids), each with the row it renders, that row with one bit flipped, the
+    row another state renders, and random bytes: every verdict both ways, states that render no row among them, and
+    the other 15 bits 0."""
+    sh = EG.Shape(B, R, r, NR, K, IB_, D)
+    rng = random.Random(B * R + NR * K + D)
+    sts = _states(rng, sh, 150)
+    cases, none = [], 0
+    for i, st in enumerate(sts):
+        want = EG.rendered(sh, st)
+        none += want is None
+        if want is not None:
+            cases.append((st, want))
+            k = rng.randrange(len(want) * 8)
+            cases.append((st, bytes(x ^ (1 << k % 8 if j == k // 8 else 0) for j, x in enumerate(want))))
+        other = EG.rendered(sh, sts[i - 1])
+        cases.append((st, other if other is not None else bytes(B * R)))
+        cases.append((st, bytes(rng.randrange(256) for _ in range(B * R))))
+    got = _verdicts(_fn(sh), sh, cases)
+    for (st, row), out in zip(cases, got):
+        assert out == [EG.verdict(sh, st, row)] + [0] * 15
+    accepted = sum(o[0] for o in got)
+    assert accepted >= 40 and len(cases) - accepted >= 40 and none >= 1, (accepted, len(cases), none)
 
 
-def test_the_bucket_circuit_renders_the_wardens_rows():
-    """`EgressBucket` on every bucket of a busy link's busiest windows is the warden's registered row: what the
-    reference's test can't reach is the circuit's wiring of the map, the routed entries and the ready words."""
+def test_the_bucket_circuit_accepts_the_wardens_rows_and_refuses_any_other():
+    """On every bucket of a busy link, the circuit accepts the warden's registered row under the state the ingress
+    step wrote, and refuses that row with one bit flipped, the next bucket's row, and the row under a state one of
+    whose rendered output ids is another (what links the state's layout to the circuit)."""
     served = busy(4, PARAMS, 14, 15, 6)
-    NR, K, B, R = 12, 16, PARAMS.cell_bytes, PARAMS.grid.allocation
-    wins = _windows(served, NR, K)
+    sh = shape(PARAMS, NR, K)
+    sts, rs = states(served, NR, K), rows(served)
+    rng = random.Random(4)
     cases, want = [], []
-    for w in sorted(range(len(wins)), key=lambda w: -sum(m.e < K for ms in wins[w].maps for m in ms))[:2]:
-        rows = WR.window_rows(served.records[w], PARAMS)
-        for t in range(PARAMS.window):
-            cases.append((wins[w].maps[t], wins[w].routed[t], wins[w].ready[t]))
-            want.append(rows[t])
-    assert [o0 for o0, _ in _rows(bind(EG.EgressBucket, B=B, R=R, NR=NR, K=K), cases, B, R)] == want
+    for t, (st, row) in enumerate(zip(sts, rs)):
+        k = rng.randrange(len(row) * 8)
+        flipped = bytes(x ^ (1 << k % 8 if j == k // 8 else 0) for j, x in enumerate(row))
+        cases += [(st, row), (st, flipped)]
+        want += [1, 0]
+        if t + 1 < len(rs) and rs[t + 1] != row:
+            cases.append((st, rs[t + 1]))
+            want.append(0)
+        records, _ = EG.bucket_map(st.b, [EG.Request(s.q, s.admitted, s.n) if s.live else None for s in st.slots],
+                                   sh.R, sh.r, sh.D)
+        data = [m for m in records if m.e < K]
+        if data:
+            m = data[0]
+            ids = list(st.slots[m.j].ids)
+            ids[m.e] = (ids[m.e] + 1) % (1 << IB)
+            slots = list(st.slots)
+            slots[m.j] = slots[m.j]._replace(ids=tuple(ids))
+            cases.append((st._replace(slots=tuple(slots)), row))
+            want.append(0)
+    assert len(cases) > 3 * len(rs) and sum(want) == len(rs)
+    assert [o[0] for o in _verdicts(_fn(sh), sh, cases)] == want
 
 
-def test_a_row_reads_no_id_but_its_ready_data_slots():
-    """The local lemma (the spec's §7): a bucket's row is a function of its map, its ready bits and the ids of its
-    ready DATA slots whose routed index is theirs. Every other slot's routed id, and every routed index of a slot
-    whose record isn't DATA, changed at random, leaves the circuit's row as it was."""
-    B, R, NR, K = 256, 8, 5, 6
-    rng = random.Random(9)
-    cases = _edge_cases(rng, R, NR, K, 30)
-    moved = []
-    for records, routed, ready in cases:
-        out = []
-        for (q, j, e), (p, x) in zip(records, routed):
-            cell = EG.cell(B, NR, K, (q, j, e), (p, x), ready)
-            if cell[0] != DATA:
-                x = rng.randrange(1 << 32)
-                p = rng.randrange(1 << 32) if e >= K else p
-            out.append((p, x))
-        moved.append((records, out, ready))
-    fn = bind(EG.EgressBucket, B=B, R=R, NR=NR, K=K)
-    assert _rows(fn, moved, B, R) == _rows(fn, cases, B, R)
-    assert any(r != m for c, d in zip(cases, moved) for r, m in zip(c[1], d[1]))
-
-
-def test_the_router_places_each_entry_at_its_records_slot():
-    """The prover's switches put entry j·K + e at the slot whose record is DATA (q, j, e), in every window of a busy
-    link; any setting of the switches is a permutation of the entries. `EgressRoute` is `routed` on the window's ids,
-    under the prover's switches and random ones."""
-    served = busy(5, W.WardenParams(cell_bytes=256, slots=2, delay=1, lanes=2, window=3), 6, 4, 6)
-    NR, K = 4, 5
-    wins = _windows(served, NR, K)
-    sh = wins[0].shape
-    assert (sh.T * sh.R, NR * K, sh.D, sh.PB) == (12, 20, 5, 5)
-    rng = random.Random(11)
-    cases = []
-    for win in wins:
-        for t, (ms, rs) in enumerate(zip(win.maps, win.routed)):
-            for m, (p, x) in zip(ms, rs):
-                if m.e < K:
-                    assert (p, x) == (m.j * K + m.e, win.ids[m.j * K + m.e])
-        cases.append((win.ids, win.switches))
-        noise = [rng.randrange(2) for _ in range(sh.switches)]
-        cases.append((win.ids, noise))
-        full = IT.benes_apply(EG.entries(sh, win.ids), noise)
-        assert sorted(full) == sorted(EG.entries(sh, win.ids))
-    fn = bind(EG.EgressRoute, NR=NR, K=K, T=sh.T, R=sh.R)
-    args = [EG.route_arguments(*c) for c in cases]
-    out = np.asarray(evaluate_bits(fn, *[np.asarray(col, dtype=np.uint8) for col in zip(*args)]))
-    for (ids, bits), o in zip(cases, out.reshape(len(cases), sh.T * sh.R, 2, 32)):
-        got = [(sum(int(b) << i for i, b in enumerate(p)), sum(int(b) << i for i, b in enumerate(x))) for p, x in o]
-        assert got == EG.routed(sh, ids, bits)
+def test_the_unit_reads_two_rows_and_outputs_one_word():
+    """A proof unit's outputs are at most 16 bits: the unit's one output is a u16, and its only inputs are the
+    state's row and the warden's row (every switch computed, none witness)."""
+    for sh in (shape(PARAMS, NR, K), EG.Shape(256, 16, 4, 4, 64, 17, 22)):
+        params, out = _fn(sh).signature()
+        assert out.leaves == 16 and out.width_set() == frozenset({1})
+        assert [(name, t.leaves) for name, t in params] == [("state", sh.state_words * 16), ("row", sh.R * sh.B * 8)]
 
 
 def _committed(served, w):
@@ -212,66 +212,57 @@ def _committed(served, w):
     return cells, WR.bucket_port(cells.head, PARAMS, reads_from=3)
 
 
-def test_the_registered_read_holds_the_rendered_rows():
-    """The verifier's registered read (`warden_rows.refusal` on `bucket_port`: unit 3 + t reads row t) accepts a
-    window's rendered rows committed under the warden's salts, and refuses a row with one bit flipped, a row moved to
-    another bucket, and a row with one slot poisoned (a DATA record naming another output)."""
+def test_the_registered_read_holds_the_row_port_to_the_wardens_rows():
+    """The verifier's registered read of the unit's ``row`` port (`warden_rows.refusal` on `bucket_port`: unit 3 + t
+    reads row t) accepts a window's rows committed under the warden's salts, and refuses a row with one bit flipped and
+    a row moved to another bucket, at its own position and at the other's."""
     served = busy(6, PARAMS, 14, 15, 6)
-    NR, K, T = 12, 16, PARAMS.window
-    wins = _windows(served, NR, K)
-    w = max(range(len(wins)), key=lambda w: sum(m.e < K for ms in wins[w].maps for m in ms))
-    win, (cells, port) = wins[w], _committed(served, w)
-    rendered = [row(win, t) for t in range(T)]
+    T = PARAMS.window
+    w = max(range(len(served.records)), key=lambda w: len(set(WR.window_rows(served.records[w], PARAMS))))
+    cells, port = _committed(served, w)
+    honest = list(WR.window_rows(served.records[w], PARAMS))
     _words, salts, entry = cells.statement(range(T))
 
-    def refusal(rows, positions=range(T)):
+    def refusal(rows_, positions=range(T)):
         e = entry | {"positions": list(positions), "paths": [cells.path(p).hex() for p in positions]}
-        return WR.refusal(port, cells.domain, e, [WR.bc(r, s) for r, s in zip(rows, salts)])
+        return WR.refusal(port, cells.domain, e, [WR.bc(r, s) for r, s in zip(rows_, salts)])
 
-    assert refusal(rendered) is None
-    flipped = list(rendered)
-    flipped[2] = bytes([rendered[2][0] ^ 1]) + rendered[2][1:]
+    assert refusal(honest) is None
+    flipped = list(honest)
+    flipped[2] = bytes([honest[2][0] ^ 1]) + honest[2][1:]
     assert "does not open" in refusal(flipped)
-    t = next(t for t in range(T - 1) if rendered[t] != rendered[t + 1])
+    t = next(t for t in range(T - 1) if honest[t] != honest[t + 1])
     moved = list(range(T))
     moved[t], moved[t + 1] = t + 1, t
-    swapped = [rendered[p] for p in moved]
+    swapped = [honest[p] for p in moved]
     assert "does not open" in refusal(swapped)
     salts[t], salts[t + 1] = salts[t + 1], salts[t]
     assert "reads position" in refusal(swapped, moved)
-    salts[t], salts[t + 1] = salts[t + 1], salts[t]
-    t, s = next((t, s) for t in range(T) for s, m in enumerate(win.maps[t]) if m.e < K)
-    m = win.maps[t][s]
-    maps = list(win.maps[t])
-    maps[s] = m._replace(e=(m.e + 1) % K)
-    poisoned = EG.bucket_row(PARAMS.cell_bytes, NR, K, maps, win.routed[t], win.ready[t])
-    assert poisoned[s * PARAMS.cell_bytes:(s + 1) * PARAMS.cell_bytes] == bytes([EG.POISON]) * PARAMS.cell_bytes
-    assert "does not open" in refusal([poisoned if i == t else r for i, r in enumerate(rendered)])
 
 
-def test_a_late_ingress_poisons_its_slots():
-    """A DATA or END record of a request slot whose ready bit is 0 renders the poison, which no registered row is;
-    the warden's row needs the slot ready."""
+def test_a_request_not_yet_in_the_state_is_refused():
+    """The row of a request's admission bucket holds its lane (a `PAD` on its q), so a state that omits a request the
+    warden admitted, or admits it a bucket late, renders another row: the verdict is 0."""
     served = serve(PARAMS, [0, 0], [[5, 6, 7], [8]], 2)
-    win = window(served, 0, 2, 4)
-    t = next(t for t in range(PARAMS.window) if any(m.e != IT.EMPTY for m in win.maps[t]))
-    late = list(win.ready[t])
-    late[0] = 0
-    rendered = EG.bucket_row(PARAMS.cell_bytes, 2, 4, win.maps[t], win.routed[t], late)
-    assert rendered != row(win, t) == WR.window_rows(served.records[0], PARAMS)[t]
-    assert all(rendered[s * 256] == EG.POISON for s, m in enumerate(win.maps[t]) if m.j == 0 and m.e != IT.EMPTY)
+    sh = shape(PARAMS, 2, 4)
+    sts, rs = states(served, 2, 4), rows(served)
+    assert EG.verdict(sh, sts[0], rs[0]) == EG.ACCEPT
+    omitted = sts[0]._replace(slots=(EG.FREE, sts[0].slots[1]))
+    late = sts[0]._replace(slots=(sts[0].slots[0]._replace(admitted=1), sts[0].slots[1]))
+    for st in (omitted, late):
+        assert EG.verdict(sh, st, rs[0]) == 0
+    assert [o[0] for o in _verdicts(_fn(sh), sh, [(sts[0], rs[0]), (omitted, rs[0]), (late, rs[0])])] == [1, 0, 0]
 
 
-def test_the_parts_ands():
-    """The router is at most its Beneš network, W ANDs a switch (the constant index bits fold and the positions past
-    T·R are pruned); the encoder is R slots of the same ANDs (at the warden's defaults, NR = 16 and K = 4,096,
-    `ANDS_SLOT` a slot): what the circuit-check pins and the status extrapolate."""
+def test_the_units_ands():
+    """The unit's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
+    request slots of 64 outputs, 17-bit ids, D = 22): what circuit-check pins and the status extrapolates."""
     memo = {}
-    for NR, K, T, R in ((3, 5, 3, 4), (4, 16, 6, 8)):
-        sh = EG.Shape(256, T, R, NR, K)
-        assert 0 < HC.ands(bind(EG.EgressRoute, NR=NR, K=K, T=T, R=R), memo) <= sh.W * sh.switches
-    one = HC.ands(bind(EG.EgressBucket, B=256, R=1, NR=16, K=4096), memo)
-    assert one == ANDS_SLOT and HC.ands(bind(EG.EgressBucket, B=256, R=8, NR=16, K=4096), memo) == 8 * one
+    assert HC.ands(_fn(shape(PARAMS, NR, K)), memo) == ANDS_ZK
+    assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22)), memo) == ANDS_CLASS
 
 
-ANDS_SLOT = 1_004
+#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's unit
+ANDS_ZK = 22_179
+#: `EgressBucket_v1{B=256,R=16,r=4,NR=4,K=64,IB=17,D=22}`'s
+ANDS_CLASS = 44_323
