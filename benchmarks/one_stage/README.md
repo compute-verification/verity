@@ -24,7 +24,7 @@ negatives.
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
-  verifies each drawn chunk with its table's registered reads (`--registered`, `row_tables.registered_reads`).
+  verifies each drawn chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
   A5 on a window with transfer gates, which no served window has yet: two chunks of the warden's toy unit whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the warden's
