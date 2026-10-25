@@ -113,7 +113,8 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
 }
 // the maps are written before the launch (run.py's encode_maps), so a prefetch is all they need
 // a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
-// before it touches global memory, then lets the next launch start behind this one; both are no-ops in a plain launch
+// before it touches global memory that a launch since the weights' jobs writes, then lets the next launch start behind this
+// one; both are no-ops in a plain launch
 DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
 // its two halves, for a kernel that reads the launch before it's output late (gemm_body's LATE)
 DEV void pdl_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
@@ -646,14 +647,20 @@ template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV vo
   static_assert(!WORDS || EP, "the windows are form_s5_ep's");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
-  pdl_entry();
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
-  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
-  const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
-                     (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
-  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
-  // the windows' F_B^T bytes, read now so their latency is under the forming: line n's 16-byte chunk c, a warp's quarter on
-  // eight lines (n & 7) of one chunk, so its staging stores hit distinct banks
+  auto stage_f = [&] {
+    const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
+                       (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
+      *reinterpret_cast<uint4*>(sF + core(r, 16 * c)) = *reinterpret_cast<const uint4*>(F + (size_t)(t0 + r) * 32 + 16 * c);
+    }
+  };
+  // The F lines (p3) and the windows' F_B^T bytes (p7) are a weight's, written by its job's launches when it is registered and
+  // by no launch since, so they are read before the wait, their latency under the launch before (GR's expert map, p5, after).
+  // The F_B^T bytes: line n's 16-byte chunk c, a warp's quarter on eight lines (n & 7) of one chunk, so its staging stores hit
+  // distinct banks
   uint4 fb[2];
   if constexpr (WORDS) {
 #pragma unroll
@@ -662,6 +669,11 @@ template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV vo
       fb[j] = *reinterpret_cast<const uint4*>(a.p[7] + (size_t)n * k + t0 + 16 * c);
     }
   }
+  if constexpr (!GR) stage_f();
+  pdl_entry();
+  if constexpr (GR) stage_f();
+  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
+  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
   uint4 ev = *reinterpret_cast<const uint4*>(E + eo);
   if constexpr (EP) {
     const float beta = reinterpret_cast<const float*>(a.p[5])[r0 + tid / 2];
@@ -677,11 +689,6 @@ template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV vo
     if (blockIdx.x == 0) *reinterpret_cast<uint4*>(a.p[6] + eo) = ev;
   }
   *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) = ev;
-#pragma unroll
-  for (int j = 0; j < 2; j++) {
-    const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
-    *reinterpret_cast<uint4*>(sF + core(r, 16 * c)) = *reinterpret_cast<const uint4*>(F + (size_t)(t0 + r) * 32 + 16 * c);
-  }
   const float* x = reinterpret_cast<const float*>(a.p[0]);
   const float* alpha = reinterpret_cast<const float*>(a.p[1]);
   const int rA = 16 * (tid / 32) + (tid % 32) / 4, cA = 2 * (tid % 4);

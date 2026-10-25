@@ -237,7 +237,8 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
-    read a stale line), the forming, pa_w, widen_a and pd_commit first; and pd_commit then lets the forming launch behind it.  The Pearl-C GEMMs
+    read a stale line), pa_w, widen_a and pd_commit first, and the forming once it has read the weight's F lines (p3) and F_B^T
+    bytes (p7), which only the weight's job writes (`lines_fa`, `lines_fb`); and pd_commit then lets the forming launch behind it.  The Pearl-C GEMMs
     (LATE) read only P_A of what the launch before them (pa_w, pa) writes, so only their producer waits, before its first
     P_A box; pa_w waits at its entry, so what they read before that was written by launches that had completed."""
     def body(start):
@@ -256,9 +257,17 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert re.search(r"pdl_wait\(\) \{ asm volatile\(\"griddepcontrol\.wait;\"", SOURCE)
     assert re.search(r"pdl_launch\(\) \{ asm volatile\(\"griddepcontrol\.launch_dependents;\"", SOURCE)
     assert "cp.async.bulk.prefetch.tensor.2d.L2.global" in body("DEV void tma_prefetch_l2")
-    for b in (form, pa_w, body('void widen_a(')):
+    for b in (pa_w, body('void widen_a(')):
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head
+    head = form[:form.index("pdl_entry();")]
+    assert set(re.findall(r"a\.p\[(\d+)\]", head)) == {"3", "5", "7"} and "return" not in head
+    assert "if constexpr (!GR) stage_f();\n  pdl_entry();\n  if constexpr (GR) stage_f();" in form
+    run = (HERE / "run.py").read_text()
+    assert 'form_side("a", m, "xa", "ea_codes", "fa_codes", "at"' in run and 'form_side("b", n, "xb", "eb_codes", "fb_codes"' in run
+    assert 'b["ea_codes"], b["fa_codes"], b["at"], b["beta_a"],\n' in run and 'b["epa_codes"], b["fbT32"], b["af_win"]' in run
+    job = run[run.index("        job = ["):run.index("        mr, tiles = ")]
+    assert '"fa_codes", b["faT32"])' in job and '"fb_codes", b["fbT32"], b["fbT128"])' in job
     assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
