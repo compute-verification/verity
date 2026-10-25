@@ -44,7 +44,7 @@ from verity_vllm.pipeline.row_driver import CLI, utc
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
 ACCOUNT = {"build": "build", "plan": "plan", "match": "match", "commit": "verdict", "replay": "verdict"}
-#: The stages whose passing Attempts make a row of record, which the chain then publishes (`verity_vllm.records`).
+#: The stages whose passing Attempts make a row of record, which the chain then publishes (`pipeline.circuit_db`).
 OF_RECORD = ("build", "match", "commit")
 #: The chain's exit when its stages passed and `records publish` refused the row's record.
 PUBLISH_REFUSED = 21

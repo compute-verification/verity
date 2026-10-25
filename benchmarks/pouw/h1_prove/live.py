@@ -5,21 +5,22 @@ verifier's side and the prover's staging; `live.sh` proves them by C-Flock --zk 
     python live.py summarize --work W --out OUT
 
 DIR is the serving process's dump (`pouw_h1_live.dump`, `pouw_h1_gpu --live-dump`'s DIR/<window>): DIR/window.json is public (T, S, the
-prefix, the window Program's digest, the open root, the session, the live tables' roots and each round's served rows m_s),
-and DIR/<s>/ the prover's rows and openings of round s.
+prefix, the window Program's digest, the open root, the session, the live tables' roots, each round's served rows m_s and
+round 0's requests' max_tokens), and DIR/<s>/ the prover's rows and openings of round s.
 
 ``prepare``:
 
-1. The verifier, from DIR/window.json alone, builds the live Program of T and S (`live.program`) and its template-instance
-   partition (`live.query`): W/verifier/program.json and partition.json, Lean's ``--program`` and ``--partition``. Unit s
-   is round s's ``live@<s>``. Each round's ``--registered`` file is `live_reads.reads_file` at the round's served rows m_s.
+1. The verifier, from DIR/window.json alone, builds the live Program of T and S (`live.program_v2`, credit's) and its
+   template-instance partition (`live.query_v2`): W/verifier/program.json and partition.json, Lean's ``--program`` and
+   ``--partition``. Unit s is round s's ``live@<s>``. Each round's ``--registered`` file is `live_reads.reads_file` at the
+   round's served rows m_s and the public max_tokens.
 2. The verifier checks each opened row of DIR/<s>/opening.json against its registered root, at the position its file
    reads (`registered.verify_read`): the slot rows ``slots@<s>``'s and the header rows ``requests@0``'s. It then builds its
    own public file of the round (`h1unit.verifier_pub`) from the opened ``b || c`` and its own rows of ``m@<s>``,
-   ``round@<s>`` and ``live-ok`` (`live_reads.m_table`, `round_table`, `ok_table`, all public).
-3. The prover stages each round as a one-instance shared-row statement on its rows (`UnitStager` of `live.template(T)`,
+   ``round@<s>``, ``caps`` and ``live-ok`` (`live_reads.m_table`, `round_table`, `caps_table`, `ok_table`, all public).
+3. The prover stages each round as a one-instance shared-row statement on its rows (`UnitStager` of `live.template_v2(T)`,
    bound to the live Program and partition, the instance unit s). Its pub.bin must be the verifier's byte for byte, and the
-   staged ok must be `live.live_ok`'s on the round's words.
+   staged ok must be `live.live_ok_v2`'s on the round's words.
 
 The checks of W/plan.tsv (``C`` lines; ``S`` lines are the statements to prove):
 
@@ -62,15 +63,19 @@ def log(msg: str) -> None:
 
 
 def files(pub: dict, s: int, m: int) -> dict:
-    """The verifier's ``--registered`` file of round s at m (`live_reads.reads_file`)."""
-    return LR.reads_file(pub["program"], pub["T"], pub["S"], s, pub["roots"], pub["window"], pub["session"], m, pub["prefix"])
+    """The verifier's ``--registered`` file of round s at m and the public max_tokens (`live_reads.reads_file`)."""
+    return LR.reads_file(pub["program"], pub["T"], pub["S"], s, pub["roots"], pub["window"], pub["session"], m, pub["prefix"],
+                         pub["max_tokens"])
 
 
 def known_rows(pub: dict, s: int, m: int) -> dict[str, tuple[G.Registered, int]]:
-    """The verifier's own registered rows of round s: ``m@<s>`` at m (row 0), ``round@<s>`` (row 0) and ``live-ok`` (row s)."""
+    """The verifier's own registered rows of round s: ``m@<s>`` at m (row 0), ``round@<s>`` (row 0), ``caps`` (row i for
+    ``cap_<i>``) and ``live-ok`` (row s)."""
     prog, prefix, window = pub["program"], pub["prefix"], pub["window"]
-    return {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0),
-            LR.OK_PORT: (LR.ok_table(prog, prefix, window, pub["S"])[2], s)}
+    cap = LR.caps_table(prog, prefix, window, pub["T"], pub["max_tokens"])[2]
+    return {f"cap_{i}": (cap, i) for i in range(pub["T"])} | {
+        "m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0),
+        LR.OK_PORT: (LR.ok_table(prog, prefix, window, pub["S"])[2], s)}
 
 
 def check_openings(pub: dict, s: int, opening: dict, reg: dict) -> list[str]:
@@ -109,14 +114,16 @@ def claimed(z: dict, pub: dict, s: int, m: int) -> dict:
 
 
 def live_reference(T: int):
-    """`UnitStager.reference_check`: the staged ok is `live.live_ok` of the instance's slot leaves, headers, m and round s."""
+    """`UnitStager.reference_check`: the staged ok is `live.live_ok_v2` of the instance's slot leaves, headers, m, round s
+    and caps."""
     def check(rows: dict, outs: dict) -> None:
         u32 = lambda w: [int(w[2 * j]) | int(w[2 * j + 1]) << 16 for j in range(len(w) // 2)]  # noqa: E731
         slot = [u32(rows[f"slot_{i}"][0])[0] for i in range(T)]
         req = [u32(rows[f"req_{i}"][0]) for i in range(T)]
-        want = L.live_ok(slot, req, u32(rows["m"][0])[0], u32(rows["s"][0])[0])
+        cap = [u32(rows[f"cap_{i}"][0])[0] for i in range(T)]
+        want = L.live_ok_v2(slot, req, u32(rows["m"][0])[0], u32(rows["s"][0])[0], cap)
         if int(outs["o0"][0][0]) != want:
-            raise AssertionError(f"{NAME}: the lowered circuit's ok is {int(outs['o0'][0][0])}, live_ok's {want}")
+            raise AssertionError(f"{NAME}: the lowered circuit's ok is {int(outs['o0'][0][0])}, live_ok_v2's {want}")
     return check
 
 
@@ -135,11 +142,11 @@ def cmd_prepare(a) -> int:
     T, S, served = pub["T"], pub["S"], pub["served"]
     vp, sp = work / "verifier", work / "st"
     vp.mkdir(parents=True, exist_ok=True)
-    program = L.program(T, S, pub["prefix"])
-    part = P.partition(program, L.query(T))
+    program = L.program_v2(T, S, pub["prefix"])
+    part = P.partition(program, L.query_v2(T))
     (vp / "program.json").write_bytes(canonical_json(encode_program(program)))
     (vp / "partition.json").write_text(json.dumps(part))
-    log(f"live Program: T={T} S={S}, {P.evaluate(program, L.query(T)).population} units, rounds served {served}")
+    log(f"live Program: T={T} S={S}, {P.evaluate(program, L.query_v2(T)).population} units, rounds served {served}")
     stager = live_stager(T, work / "circuit.txt", part)
     head = {"meta": stager.meta, "pin": stager.pin, "class": stager.class_sha512}
     (work / "pin.txt").write_text(stager.pin)
@@ -189,9 +196,9 @@ def cmd_prepare(a) -> int:
 
 
 def live_stager(T: int, circuit: Path, part: dict):
-    """C-Flock's stager of `live.template(T)`, bound to the live Program's partition, its circuit written once."""
+    """C-Flock's stager of `live.template_v2(T)`, bound to the live Program's partition, its circuit written once."""
     from verity_flock import class_statement as CS
-    stager = CS.UnitStager(L.template(T), NAME, LR.statement_rows(T), LR.STATEMENT_OUT_ROWS, circuit=circuit,
+    stager = CS.UnitStager(L.template_v2(T), NAME, LR.statement_rows(T, v2=True), LR.STATEMENT_OUT_ROWS, circuit=circuit,
                            bind={"partition": P.digest(part), "program": part["program"]})
     stager.reference_check = live_reference(T)
     return stager

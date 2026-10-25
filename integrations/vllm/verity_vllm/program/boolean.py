@@ -482,7 +482,7 @@ def derived(rep, *, check_registry: bool = True):
     from verity.ml.circuits.liveness import dead_gates
     from verity.ml.circuits.program import Program
     from verity_vllm.program.frontend.derive import DeriveReport, Unsupported
-    from verity_vllm.program.frontend.torch_frontend import check_identity
+    from verity_vllm.program.frontend.program_identity import check_identity
 
     if not rep.ok:
         return rep
