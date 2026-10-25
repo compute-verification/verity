@@ -10658,9 +10658,9 @@ theorem split_nodes {P : Prog} {c : Circuit} {s g : Seg} (hs : SegNodes P c s) (
     subst hg
     unfold Desc.Seg.alike at hr h0 ⊢
     by_cases ha : (s.reps > 1 && s.shift == 0) = true
-    · rw [if_pos ha] at hr
+    · simp only [ha, ↓reduceIte] at hr
       simp at hr
-    · rw [if_neg ha] at hr h0 ⊢
+    · simp only [ha, Bool.false_eq_true, ↓reduceIte] at hr h0 ⊢
       simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, not_and] at ha hr
       have h1 : 1 < s.reps := by
         rcases Nat.lt_or_ge 1 s.reps with h | h
