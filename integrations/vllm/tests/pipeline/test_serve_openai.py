@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import collections
 import json
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -16,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SRW
+from verity.core.protocols.certifier import active as A, compile_slice as CS, io_tie as IT, served_rows as SRW
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import cli
@@ -95,6 +96,31 @@ def test_plain_frames_agree_with_vllm():
     pytest.importorskip("vllm.entrypoints.openai.completion.protocol")
     got = proto.framing_agrees(proto.VllmProtocol())
     assert got["agrees"], got["differences"]
+
+
+#: a two-token id-form stream at P = 140, every byte: each event 138 bytes and two spaces, then the end
+TWO_IDS_AT_140 = (
+    b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,"token_id":      4853,'
+    b'"finish_reason":null}]}  \n\n'
+    b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,"token_id":      4884,'
+    b'"finish_reason":null}]}  \n\n'
+    b"data: [DONE]\n\n")
+
+
+def test_ids_frames_are_the_scans_id_events():
+    """`IdsProtocol`: each id its own `io_tie.id_event` of P bytes, however many ids a delta carries; the stream's end
+    is the scan's trailer; no usage, and a stream returns its ids, whatever the request asks; P below an event's 138
+    bytes is refused."""
+    p = proto.IdsProtocol(force_include_usage=True, payload=140, base=proto.PlainProtocol(True))
+    assert (p.name, p.http, proto.PlainProtocol.http) == ("ids", False, True)
+    assert p.events(token_ids=[4853, 4884], text="ab", finish_reason=None) + proto.SSE_DONE == TWO_IDS_AT_140
+    assert proto.SSE_DONE == IT.TRAILER and p.events(token_ids=[]) == b""
+    req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
+    assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
+    assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
+    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - A.HEADER.size
+    with pytest.raises(ValueError, match="at least 138"):
+        proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
 
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
@@ -279,13 +305,14 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 served: dict | None = None, marks: Any = None, block: int | None = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
-        self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
+        self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
+                                tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
         self.loop.engine.block = block
@@ -311,6 +338,16 @@ class Serving:
                 return r.status, r.read()
         except urllib.error.HTTPError as e:
             return e.code, e.read()
+
+    def send(self, request: bytes) -> bytes:
+        """``request``'s bytes on a connection of its own, and every byte the server sends until it closes."""
+        host, port = self.http.address
+        with socket.create_connection((host, port)) as c:
+            c.sendall(request)
+            got = b""
+            while chunk := c.recv(65536):
+                got += chunk
+        return got
 
 
 def events(raw: bytes) -> list[str]:
@@ -356,6 +393,28 @@ def test_errors_and_whole_response(tmp_path):
     body = json.loads(raw)
     assert status == 200 and body["usage"]["completion_tokens"] == 3 and body["choices"][0]["prompt_token_ids"] == [1, 101, 102]
     assert body["choices"][0]["text"] == "".join(f" w{t}" for t in body["choices"][0]["token_ids"])
+
+
+def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
+    """``--protocol ids`` on the warden's own id request (`active.id_request` at the scan's 512-byte cells, offset 0) with
+    the usage forced: the server sends no HTTP head, no chunking and no usage, each sampled id one event of P bytes, then
+    ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the scan's P = 503 every P bytes are one id event,
+    the cells the warden makes of them, and the whole is what warden_serve's id-form parser (`parse_id_response`) takes:
+    `io_tie.id_event`s, then `io_tie.TRAILER`. A whole response under ids is still the JSON one."""
+    request = A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=512, offset=0)
+    for payload in (140, proto.ID_PAYLOAD):
+        ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
+        with Serving(tmp_path / str(payload), commit=False, protocol=ids) as s:
+            raw = s.send(request)
+            status, whole = s.post("/v1/completions", dict(CERTIFIER_BODY, stream=False, max_tokens=2))
+        assert raw == b"".join(IT.id_event(t, payload) for t in (4853, 4884)) + IT.TRAILER
+        if payload == 140:
+            assert raw == TWO_IDS_AT_140
+        else:
+            cells = [raw[k:k + payload] for k in range(0, len(raw), payload)]
+            assert [len(c) for c in cells] == [payload, payload, len(IT.TRAILER)]
+            assert [int(c[len(IT.ID_EVENT_HEAD):len(IT.ID_EVENT_HEAD) + IT.ID_DIGITS]) for c in cells[:2]] == [4853, 4884]
+        assert status == 200 and json.loads(whole)["usage"]["completion_tokens"] == 2
 
 
 def records(out: Path, name: str) -> list[dict]:

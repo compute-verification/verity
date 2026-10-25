@@ -1,7 +1,8 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
-        [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
+        [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--no-gpu-tree] [--window-steps 64]
+        [--force-include-usage | --no-force-include-usage]
         [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
@@ -13,7 +14,9 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start.
+each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) parses requests as
+vLLM does but streams the scan's id form, for a warden in front of the server: no HTTP head, one ``io_tie.id_event`` of
+``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a whole response is vLLM's.
 
 Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
@@ -92,8 +95,8 @@ from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
                                                served_statics, user_of)
-from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
-                                                 error_body, framing_agrees, http_chunk, sse, usage_of)
+from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
+                                                 VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -114,8 +117,12 @@ class Options:
     served_model_name: str | None = option("--served-model-name", default=None, help="the name /v1/models lists (default --model)")
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None, help="the checkpoint store (default $HF_HOME)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
-    protocol: str = option("--protocol", choices=("vllm", "plain"), default="vllm",
-                           help="vllm: vLLM's own request and response classes; plain: the same framing without them")
+    protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
+                           help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: vLLM's "
+                                "requests, each stream the scan's id form for the warden, raw (serve_protocol.IdsProtocol)")
+    id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
+                             help="--protocol ids: each id event's bytes, the warden's cell payload B − 9 (default 503: the scan's "
+                                  "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
                                  "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
@@ -471,29 +478,32 @@ class Server:
                                               prompt_token_ids=adm.prompt_ids if req.return_token_ids else None,
                                               token_ids=ids if req.return_token_ids else None, usage=usage_of(n_prompt, len(ids)))
                 return await self._json(writer, 200, payload.encode())
-            writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
+            http = self.proto.http
+            frame = http_chunk if http else bytes
+            if http:
+                writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
             self.streaming.add(writer)
             first = True
             while not finished:
                 d = await deltas.get()
                 finished = d.finished
                 if d.error:
-                    writer.write(http_chunk(sse(error_body(d.error, 500, "InternalServerError").decode())))
+                    writer.write(frame(sse(error_body(d.error, 500, "InternalServerError").decode())))
                     break
                 if not d.text and not d.token_ids and not n_out:
                     continue                                     # vLLM: no empty chunk before the first token
                 n_out += len(d.token_ids)
                 usage = usage_of(n_prompt, n_out) if req.continuous_usage else None
-                data = self.proto.chunk(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
-                                        stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
-                                        token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
+                data = self.proto.events(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
+                                         stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
+                                         token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
                 first = False
-                writer.write(http_chunk(sse(data)))
+                writer.write(frame(data))
                 await writer.drain()
             if req.include_usage and n_out:
-                writer.write(http_chunk(sse(self.proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
-                                                                   usage=usage_of(n_prompt, n_out)))))
-            writer.write(http_chunk(SSE_DONE) + b"0\r\n\r\n")
+                writer.write(frame(sse(self.proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
+                                                              usage=usage_of(n_prompt, n_out)))))
+            writer.write(frame(SSE_DONE) + (b"0\r\n\r\n" if http else b""))
             await writer.drain()
         finally:
             if not finished:
@@ -632,8 +642,9 @@ def main(opts: Options) -> int:
     out.mkdir(parents=True, exist_ok=True)
     llm, com = build(opts)
     engine = llm.vllm.llm_engine
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
-    framing = framing_agrees(proto) if isinstance(proto, VllmProtocol) else None
+    proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
+    reference = getattr(proto, "base", proto)
+    framing = framing_agrees(reference) if isinstance(reference, VllmProtocol) else None
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
@@ -677,7 +688,8 @@ def main(opts: Options) -> int:
     watchdog = SS.Watchdog(out / "pauses.jsonl")
     watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
-              "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
+              "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),
+              "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
