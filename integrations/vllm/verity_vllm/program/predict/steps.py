@@ -58,10 +58,6 @@ A refusal refuses the session. `partial=True` (a measurement over served traffic
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
 KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
-`Compiled.circuit(registered, cls, grain)` emits the window as its class's one `verity.ml.windows.interface.Circuit`
-(`window_circuit`): a class Program a request, each flattened into proof units, every input row wired from its writer, a
-registered read or the slot's ingress, so the circuit is a function of the class and the request count alone.
-
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
 transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
 --wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
@@ -184,12 +180,6 @@ class Compiled:
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
         ids |= {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes if n.fn.id.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
         return tuple(sorted(ids))
-
-    def circuit(self, registered: Registered, cls: Any, grain: Any = None) -> Any:
-        """The window as window class ``cls``'s one Circuit (`window_circuit`): a class Program a request, flattened into units at
-        ``grain``, each input row wired, registered or ingress."""
-        from .window_circuit import Grain, window_circuit
-        return window_circuit(registered, self, cls, grain or Grain())
 
     def summary(self) -> dict:
         from .score import code_version

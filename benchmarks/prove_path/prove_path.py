@@ -1135,19 +1135,21 @@ def window_class_of(arg: str | None) -> Any:
 
 
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
-    """A served window's advice through I2 as its window class's one Circuit (V3: `steps.Compiled.circuit` at ``--class``, a
-    class Program a request flattened into units, every input row wired, registered or ingress), written to ``--out`` as its
-    circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap`` units), or with
-    ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's length in bits and
-    the record's input count."""
+    """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
+    ``--class``, a class Program a request flattened into units, every input row wired, registered or ingress), written to
+    ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
+    units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
+    length in bits and the record's input count."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.predict.window_circuit import window_circuit
+
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
     t0 = time.time()
     try:
-        circuit = compile_steps(registered, data, compiler.inner.ingress).circuit(registered, cls)
+        circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0

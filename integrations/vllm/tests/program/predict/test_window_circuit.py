@@ -34,7 +34,7 @@ def _label(fn) -> str:
 
 def _circuit(window, grain: Grain = GRAIN, cls: WindowClass = CLASS):
     reg = S._registered()
-    return S.compile_steps(reg, *S._session(*window)).circuit(reg, cls, grain)
+    return window_circuit(reg, S.compile_steps(reg, *S._session(*window)), cls, grain)
 
 
 @pytest.fixture(scope="module")
