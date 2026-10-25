@@ -57,7 +57,8 @@ VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
     "check.replay", "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
-VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_rules", "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
+VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
+                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
 
 
 def layer_of(module: str) -> str:
