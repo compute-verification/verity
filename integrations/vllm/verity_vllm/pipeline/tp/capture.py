@@ -137,7 +137,7 @@ def main(args: Options) -> None:
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(args.max_num_seqs)
     kw.update(target_kw)

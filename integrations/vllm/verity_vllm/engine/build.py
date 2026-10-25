@@ -173,7 +173,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     register_int8_parts(target)
     cp = prof.checkpoint_for(case, checkpoints)
     want_eager = served.execution(execution)[0]["enforce_eager"]
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=want_eager)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=want_eager)
     kw["enforce_eager"] = want_eager
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(max_num_seqs)

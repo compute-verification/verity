@@ -87,7 +87,6 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_of_runner", "detail": "VLLM_BATCH_INVARIANT"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "seed-default", "symbol": "engine_kwargs", "detail": "seed"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
     {"file": "verity_vllm/observe/observer.py", "kind": "broad-except", "symbol": "encode_arg", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/observe/storage.py", "kind": "broad-except", "symbol": "_probe_weakrefs", "detail": "except Exception", "count": 2},
