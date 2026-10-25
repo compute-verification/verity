@@ -159,10 +159,11 @@ RDEAD_ENV = "DITHER_SO_RDEAD"
 # to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
-# R (with $DITHER_SO_UNITS=j10r, $DITHER_SO_FUSED=1 and no $DITHER_SO_UNITS_SMQ): a step whose units compute at least R
-# rows (the layout's M, its live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside
-# its rows, and its units read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace
-# kh_j10r_ws_bytes at T rows); the same receipts.  Unset, never: J10-R's units hash a column block once in each row tile
+# R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
+# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside its rows, and its units
+# read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
+# rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
+# units hash a column block once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
 # --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
@@ -350,14 +351,16 @@ class SoWindow(DO.Window):
         self.t_b0 = self.t_after_end = 0.0
 
     def _a_step_set(self) -> None:
-        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows and its scales' run of
-        `scale_all`; `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
+        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows, c = `DO.a_chunks` (K) leaves a
+        row (the group read K / c bytes a leaf), and its scales' run of `scale_all` (a scale every c leaves);
+        `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
         ks, t, tabs, at = sorted(self.a_calls), self.t, [], 0
         for k in ks:
-            n = len(self.a_calls[k])
-            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), n * t, {"step": (1, 0)}), n * t,
-                            data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
-                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
+            n, c = len(self.a_calls[k]), DO.a_chunks(k)
+            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), c * n * t, {"step": (1, 0)}), c * n * t,
+                            data=self.slot_groups[k].view(torch.uint8), stride=k // c, body=k // c, length=k // c + 4,
+                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, chunks=c,
+                            lab=(f"a/{k}@", "")))
             at += n
         v = os.environ.get(A_LVF_ENV)
         lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
@@ -365,6 +368,7 @@ class SoWindow(DO.Window):
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
+        self.ev_a = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
 
     def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
         if self.put_async:
@@ -373,9 +377,12 @@ class SoWindow(DO.Window):
             super()._put(dst, src)
 
     def a_step_build(self) -> None:
-        """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
+        """On the current stream, after the forward: the step's K tables and each call's a-step leaf (between `ev_a`,
+        the step's a_tables_ms)."""
+        self.ev_a[0].record()
         self.c.build(self.pre["ak"], self.stepv[0:1])
         self.a_leaves.copy_(self.pre["ak"].roots.view(-1, 8).index_select(0, self.a_gidx))
+        self.ev_a[1].record()
 
     def _epoch(self) -> None:
         self._start()
@@ -963,10 +970,15 @@ class SoWindow(DO.Window):
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
               "coin_late_ms": 1e3 * t_late}
+        if self.a_step:
+            ph["a_tables_ms"] = self.ev_a[0].elapsed_time(self.ev_a[1])
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
-            ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
-            ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
+            # under TAIL=2 the root came from the tail's own word, which the host can read before the stream is past
+            # ev_w[2] and ev_w[3]: a step whose stream isn't there yet has no tail times
+            if not zc or self.ev_w[3].query():
+                ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
+                ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
             if self.hmark:
                 ph["h_tail_ms"] = self.ev_w[1].elapsed_time(self.ev_h[0])
                 ph["h_read_ms"] = self.ev_w[3].elapsed_time(self.ev_h[1])
@@ -1224,9 +1236,8 @@ class SoSide(DA.Side):
         self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
-        if self.j10rc_min_t and (not self.j10r or self.units_smq):
-            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r and no ${UNITS_SMQ_ENV} (kh_units_multi_j10rc "
-                             "has every SM)")
+        if self.j10rc_min_t and not self.j10r:
+            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r")
         self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
                         self.units_cap)
         self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
@@ -1266,7 +1277,7 @@ class SoSide(DA.Side):
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
             vp, u32 = C.c_void_p, C.c_uint
-            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm"):
+            for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm", "kh_units_multi_j10rc_sm"):
                 if hasattr(self.h, f):
                     getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
             for f in ("kh_units_multi_smc", "kh_units_multi_j10r_smc"):
@@ -1300,6 +1311,9 @@ class SoSide(DA.Side):
         if q and not (self.fused and 1 <= q <= den <= SMQ_DEN_MAX and 0 <= cap <= 64 and hasattr(self.h, f)):
             raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= {SMQ_DEN_MAX}, cap <= 64 and an h1u build "
                              f"with {f}")
+        if q and self.j10rc_min_t and (cap or not hasattr(self.h, "kh_units_multi_j10rc_sm")):
+            raise ValueError(f"{what} with ${J10RC_MIN_T_ENV}: needs no cap (kh_units_multi_j10rc has no capped form) "
+                             "and an h1u build with kh_units_multi_j10rc_sm")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
@@ -1434,7 +1448,12 @@ class SoSide(DA.Side):
         if self.j10r:
             import j10r_so as JS
             M = JS.rows(self.j10r_m, win.t, m)
-            if self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t:
+            j10rc = self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t
+            if j10rc and self.units_smq:
+                rc = rc or self.h.kh_units_multi_j10rc_sm(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                          self.units_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                          self.unit_next.data_ptr(), st.cuda_stream)
+            elif j10rc:
                 rc = rc or self.h.kh_units_multi_j10rc(self.mtab[p].data_ptr(), L, self.m_units, M,
                                                        self.units_live[p].data_ptr(), 0, st.cuda_stream)
             elif self.units_cap:

@@ -19,6 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # e2e.py runs certifier-serve's rehearsals and N2's verdicts through n2_zk, and the chain NEG's negatives, which it imports
 # from there; the chain's derived bits are ENC-DERIVED's (the encodings suite's module, loaded by path); the claim's
-# zero-knowledge gaps are checked against the certifier README's.
+# zero-knowledge gaps are checked against the certifier README's. The compact finish's regression ties the gate's own
+# compact runs, network_traces' `gate_compact`, whose command is the auditor host's.
 inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
-          "verity/core/protocols/certifier/README.md"]
+          "verity/core/protocols/certifier/README.md", "benchmarks/live_challenger/auditor.py"]

@@ -62,8 +62,11 @@ ALLOWED: dict[str, str] = {
         "the GPU run records its step seconds and when serving ended; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill_close": "the close stage records its seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::credit_check": "the credit check records its seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_ranks_gpu.py::serve":
         "the GPU run records its build, serve and release seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_ranks_gpu.py::commit_window":
+        "the GPU run records each Commit window's install, serve and release seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_rehearsal.py::build_program":
         "the by-hand rehearsal (not collected) records the declared Program's build and encode seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_rehearsal.py::serve":

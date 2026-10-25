@@ -15,7 +15,7 @@ from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
-from verity_vllm.program.registry import b1, dead_free as DF, sampling as SA, topp_words as TW
+from verity_vllm.program.registry import b1, dead_free as DF, fa2_check_inf as F2, hopper, prims as P, sampling as SA, topp_words as TW
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1
@@ -220,3 +220,40 @@ def test_one_logit_selects_index_0():
             assert evaluate(bind(DF.GumbelTopPTokenSelectSharedGreedyV2, V=1), [w], TOP_P[1], seed, pos, temp, 32) == (0,)
             assert evaluate(bind(DF.GumbelSelectF32V3, V=1), [w << 16], seed, pos, temp) == (0,)
             assert evaluate(bind(DF.GumbelTopPTokenSelectV3, V=1, S=32), [w], TOP_P[1], seed, pos, temp, 32) == (0,)
+
+
+FA2 = dict(DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum)
+
+
+def _attention_cases(D: int, T: int) -> list[tuple[list[int], list[int], list[int]]]:
+    """(q, K rows, V rows): `_rows` cut to a query and T keys and values, random normals, and all -inf keys."""
+    cases = [(row[:D], row[:T * D], row[-T * D:]) for row in _rows(2 * T * D, 1)]
+    cases += [(_bf16(RNG.normal(0, 1, D)), _bf16(RNG.normal(0, 1, T * D)), _bf16(RNG.normal(0, 1, T * D))) for _ in range(3)]
+    return cases + [(_bf16(RNG.normal(0, 1, D)), [0xFF80] * (T * D), _bf16(RNG.normal(0, 1, T * D)))]
+
+
+@pytest.mark.parametrize("T,BN,MF,dead", [(16, 32, 0, 2), (48, 32, 1, 2), (48, 32, 0, 2), (40, 32, 1, 0), (1, 32, 0, 0),
+                                          (32, 32, 0, 0), (17, 16, 1, 0)])
+def test_attention_head_v18_equals_v5(T, BN, MF, dead):
+    """v5's 2 dead gates a head (its first block's zero row and P's zero word) where that block's key count is a multiple of 16 below
+    BN; v18 equal to v5 there and wherever v5 has none."""
+    new, old = bind(DF.AttentionHeadV18, T=T, D=16, BN=BN, MASKED_FROM=MF, **FA2), bind(F2.AttentionHeadV5, T=T, D=16, BN=BN, MASKED_FROM=MF, **FA2)
+    assert (_dead(new), _dead(old)) == (0, dead)
+    for q, k, v in _attention_cases(16, T):
+        _same(new, old, q, k, v)
+
+
+def test_attention_v18_equals_v5():
+    new, old = (bind(fn, T=48, NH=4, KVH=2, D=16, BN=32, MASKED_FROM=1, **FA2) for fn in (DF.AttentionV18, F2.AttentionV5))
+    assert (_dead(new), _dead(old)) == (0, 2 * 4)
+    for _ in range(2):
+        q, kc, vc = (_bf16(RNG.normal(0, 1, n)) for n in (4 * 16, 48 * 2 * 16, 48 * 2 * 16))
+        _same(new, old, q, kc, vc)
+
+
+@pytest.mark.parametrize("T", [16, 64, 112, 144, 65])
+def test_attention_v18_has_no_dead_gate_at_llama_geometry(T):
+    """Llama-3.2-1B's FA2 rows on sm_120 (32 query heads over 8 KV heads of 64, kBlockN 128): v5 has 64 dead gates a row whose first
+    block's key count is a multiple of 16 below 128."""
+    new, old = (bind(fn, T=T, NH=32, KVH=8, D=64, BN=128, MASKED_FROM=0, **FA2) for fn in (DF.AttentionV18, F2.AttentionV5))
+    assert (_dead(new), _dead(old)) == (0, 0 if T % 16 else 64)

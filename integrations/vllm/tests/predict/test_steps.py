@@ -26,6 +26,7 @@ from verity_vllm.predict.steps import (
     trace_commands,
     trace_dir,
 )
+from verity_vllm.program.prune import dead_free_versions
 from verity_vllm.program.registry import io_shell as IO
 from verity_vllm.program.registry.topp_geometry import registered_splits
 
@@ -312,7 +313,8 @@ def test_a_decodes_attention_guard_is_chosen_from_the_request_alone():
     alone = compile_steps(reg, *_session([(BN, 3, body, _prompt(0, BN))], [[(0, 0, BN)], [(0, BN, 1)], [(0, BN + 1, 1)]]))
     assert c.requests[0].digest == alone.requests[0].digest
     ids = {fn.id for _, fn in calls(c.programs[c.requests[0].digest])}
-    assert alone_fn.id in ids and beside_fn.id not in ids
+    alone_id, beside_id = (bind(dead_free_versions()[fn.base_id], **fn.bindings).id for fn in (alone_fn, beside_fn))
+    assert alone_id in ids and beside_id not in ids
 
 
 def test_compile_steps_raises_the_batch_rules_refusal_and_partial_records_it(monkeypatch):
@@ -446,24 +448,25 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect and the
-    top-p select at a constant split count at their versions without dead gates, and the last layer's fused qkv on the prompt rows
-    before the last narrowed to its keys and values), but gates inside Attention_v5 still reach no sample, so today's request
-    Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions."""
+    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect, the top-p
+    select at a constant split count and FA2's attention at their versions without dead gates, and the last layer's fused qkv on the
+    prompt rows before the last narrowed to its keys and values), so a request Program's only dead gates are inputs no gate reads:
+    `dead_gates_of` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
+    16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
-    c = compile_steps(_registered(), *_mixed())
-    got = dead_gates_of(c)
-    assert sorted(got["programs"]) == sorted(c.programs)
-    for d, p in c.programs.items():
-        rep = dead_gates(p, limit=0, transitive=True)
-        rec = got["programs"][d]
-        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
-        assert sum(rec["by_definition"].values()) == rep.computed + rep.input
-        by = rec["by_definition"]
-        assert sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
-        assert {k for k in by if not k.startswith("Input")} <= {"Attention_v5"}
-    assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
+    sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
+    for advice, ingress in (_mixed(), sixteen):
+        c = compile_steps(_registered(), advice, ingress)
+        got = dead_gates_of(c)
+        assert sorted(got["programs"]) == sorted(c.programs)
+        for d, p in c.programs.items():
+            rep = dead_gates(p, limit=0, transitive=True)
+            rec = got["programs"][d]
+            assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
+            assert rep.computed == 0 and all(k.startswith("Input") for k in rec["by_definition"])
+            assert sum(rec["by_definition"].values()) == rep.input
+        assert got["dead_computed"] == 0
 
 
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
@@ -507,5 +510,5 @@ def test_a_compiled_request_equals_the_traced_build():
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
     c = compile_steps(reg, advice, ingress)
-    assert c.requests[0].digest == ("7a96a646f3ded690fb6fbf33b1e31318e26570803b588f7560868390b1131d692f103828d10bd2351d1b9ac4bc368c9884531efaae96342bcc6763a27"
-                                    "c154bb7")
+    assert c.requests[0].digest == ("91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d84"
+                                    "11888")

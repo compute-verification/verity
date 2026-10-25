@@ -452,14 +452,26 @@ partial def premiseHead (moduleOf : Name → Option Name) (n : Nat) (t : Expr) :
     let b ← whnfR b
     if b.isForall && n > 0 then premiseHead moduleOf (n - 1) b else return head b
 
+/-- Whether a constant's result, past its binders, is one of them, as a `match`'s, a recursor's or `ite`'s is (its motive,
+`α`): what it returns is one of its arguments, its branches. -/
+def branching (c : Name) : MetaM Bool := do
+  let some ci := (← getEnv).find? c | return false
+  forallTelescope ci.type fun xs r => return xs.contains r.getAppFn
+
 /-- The heads (`premiseHead`) of the parts a hypothesis packs in `∧` and `∃`, past its binders: `(∃ x, A x) ∧ B` has
-`A` and `B`. -/
+`A` and `B`; one that applies a `branching` constant (a `match`) has those of its branches. -/
 partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
   forallTelescope t fun _ b => do
     if b.isAppOfArity ``And 2 then
       return (← packedHeads moduleOf b.appFn!.appArg!) ++ (← packedHeads moduleOf b.appArg!)
     if b.isAppOfArity ``Exists 2 then
       return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x])
+    if let .const c _ := b.getAppFn then
+      if ← branching c then
+        return ← b.getAppArgs.foldlM (init := #[]) fun out a => do
+          unless a.isLambda do return out
+          lambdaTelescope a fun _ body => do
+            return out ++ (← if ← isProp body then packedHeads moduleOf body else pure #[])
     return (← premiseHead moduleOf 4 b).toArray
 
 /-- `e` with its `let`s inlined, its metadata dropped and its β-redexes reduced: `forallTelescope` stops at each of them,
@@ -507,15 +519,72 @@ def unfoldSpec? (env : Environment) (meaning : Array Name) (moduleOf : Name → 
   guard (statement || (under meaning m && !m.components.contains `Assumptions))
   return (statement, (dv.value.instantiateLevelParams dv.levelParams us).beta e.getAppArgs)
 
+mutual
+/-- Whether the constant `c` states its argument `i`, a predicate: whether that argument stands as a proposition
+(`states`) in `c`'s value or in a `Prop` field of one of its constructors (`List.Pairwise R` takes `∀ a' ∈ l, R a a'`).
+A constant that takes it as data does not: a measure takes its event (`prob p`, `if p x then 1 else 0`, `{x | p x} ∈ f`),
+and so does a constant whose value isn't a proposition. A `branching` constant does, and so does one the walk can't see
+into (no value, the argument an index, `fuel` spent). -/
+partial def asserts (fuel : Nat) (c : Name) (i : Nat) : MetaM Bool := do
+  let some ci := (← getEnv).find? c | return true
+  if fuel == 0 || (← branching c) then return true
+  unless ← withReducible (forallTelescopeReducing ci.type fun _ r => return r.isProp) do return false
+  match ci with
+  | .defnInfo v => lambdaTelescope v.value fun xs b => do
+    let some p := xs[i]? | return true
+    if ← isProp b then states (fuel - 1) c p b else return true
+  | .inductInfo v =>
+    if i ≥ v.numParams then return true
+    v.ctors.anyM fun k => do
+      let some kc := (← getEnv).find? k | return true
+      forallTelescope kc.type fun xs _ => do
+        let some p := xs[i]? | return true
+        (xs.extract v.numParams xs.size).anyM fun f => do
+          let t ← inferType f
+          return (← isProp t) && (← states (fuel - 1) c p t)
+  | _ => return true
+
+/-- Whether the predicate `p` stands as a proposition in the proposition `e` (`asserts`, for `c`'s value): applied, under
+`∀`, `→` and `let`, or passed (itself, in a `fun`, or in a proposition) to a constant that states that argument. `c`
+applied again (a recursive definition, an inductive type's constructor) decides nothing. -/
+partial def states (fuel : Nat) (c : Name) (p e : Expr) : MetaM Bool := do
+  match e with
+  | .mdata _ b => states fuel c p b
+  | .forallE n t b bi =>
+    if (← isProp t) && (← states fuel c p t) then return true
+    withLocalDecl n bi t fun x => states fuel c p (b.instantiate1 x)
+  | .letE _ _ v b _ => states fuel c p (b.instantiate1 v)
+  | .app .. =>
+    let f := e.getAppFn
+    if f == p then return true
+    let args := e.getAppArgs
+    for h : j in [0:args.size] do
+      let a := args[j]
+      unless a.containsFVar p.fvarId! do continue
+      if let .const g _ := f then
+        if g == c then continue
+        unless ← asserts fuel g j do continue
+      if a == p then return true
+      let stated ← if a.isLambda then lambdaTelescope a fun _ b => do return (← isProp b) && (← states fuel c p b)
+        else if ← isProp a then states fuel c p a
+        else withReducible <| forallTelescopeReducing (← inferType a) fun ys t => do
+          return t.isProp && !ys.isEmpty && (← states fuel c p (mkAppN a ys))
+      if stated then return true
+    return false
+  | _ => return e == p
+end
+
 /-- The premises a statement takes (`plain`): the `Prop` hypotheses of each conjunct, each named by its head after
 reducible unfolding (so a `Premises` abbrev names the assumption it stands for), by the heads of the parts it packs in `∧`
 and `∃` (`packedHeads`) and by the assumptions it mentions, and the assumptions the fields of a structure a binder ranges
 over mention (`fieldPremises`); also those under the statement definitions (a `Guarantees` namespace's) a conclusion
 applies. In each conjunct, disjunct, `if` branch and `∃` body of a conclusion, under any other definition under `meaning`
 a conclusion applies (outside an assumptions module, `unfoldSpec?`), and in each predicate a conclusion passes to a
-constant it doesn't unfold (a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive definition's step), only the
-assumptions its hypotheses mention (`only`): its other hypotheses (an acceptance event, a target) are what the conclusion
-means, not premises. -/
+constant it doesn't unfold that states it (`asserts`: a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive
+definition's step), only the assumptions its hypotheses mention (`only`): its other hypotheses (an acceptance event, a
+target) are what the conclusion means, not premises. A predicate that constant takes as data, an event it measures
+(`Likely (fun o => A o → bad o)` with `Likely E` holding when `prob E ≤ ε`), is what the conclusion means too: `A` there
+is part of the event, not something the statement rests on. -/
 partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (only : Bool)
     (e : Expr) : MetaM (Array Json) := do
   let mut out := #[]
@@ -539,11 +608,16 @@ partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Na
       else if let some (statement, v) := unfoldSpec? env meaning moduleOf body then
         ps := ps ++ (← premisesOf env meaning moduleOf (only || !statement) (← plain v))
       else
-        for a in body.getAppArgs do
+        let args := body.getAppArgs
+        for h : j in [0:args.size] do
+          let a := args[j]
+          unless a.isLambda || (unfoldSpec? env meaning moduleOf a).isSome do continue
+          if let .const c _ := body.getAppFn then
+            unless ← (asserts 6 c j <|> pure true) do continue
           if a.isLambda then
             ps := ps ++ (← lambdaTelescope a fun _ b => do
               if ← isProp b then premisesOf env meaning moduleOf true b else return #[])
-          else if (unfoldSpec? env meaning moduleOf a).isSome then
+          else
             ps := ps ++ (← forallTelescopeReducing (← inferType a) fun ys t => do
               if t.isProp then premisesOf env meaning moduleOf true (mkAppN a ys) else return #[])
       return ps)

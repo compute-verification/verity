@@ -2,7 +2,6 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
-  "verity_vllm.acquire.h1_commit": "the Commit's install in H1's serving engine (ROOTS1, VLLM-73), run by the GPU harness tests/protocol_options/pouw_h1_gpu.py --commit and checked by tests/protocol_options/test_pouw_h1_commit.py ahead of a production caller",
   "verity_vllm.program.frontend.serve_families": "which Serve family and attention geometry an instance pins, read by tests/program/test_composition.py ahead of a production caller (LIVE registry.b1)",
   "verity_vllm.program.kernels.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",

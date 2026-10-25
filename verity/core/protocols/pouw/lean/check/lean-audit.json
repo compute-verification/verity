@@ -73,6 +73,7 @@
     "Flock.Program",
     "Flock.RegKnown",
     "PouwCommit.Frame",
+    "PouwCheck.Chunks",
     "PouwCheck.Json",
     "PouwCheck.Opening",
     "PouwCheck.Pass",

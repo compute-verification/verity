@@ -180,7 +180,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
                           "codec": "p1024/k2/masked",
                           "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
                           "coins": s.commitment.root.hex(), "heads": [[None] * 4, [None] * 3, [None] * 3],
-                          "layout": "store-order/v0", "lifetime": audit.LIFETIME, "pace": None,
+                          "layout": "store-order/v0", "lifetime": audit.lifetime_windows(1000), "pace": None,
                           "passes": [4, 3, 3],
                           "post_seed": [0, 0, 0], "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
@@ -213,7 +213,8 @@ def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store
 
 
 def test_plans_sent_as_arrays_are_received_as_their_runs_are(store) -> None:
-    """The verifier takes a plan as the store holds it, an (R, 2) array, and checks it in numpy (`Plan.from_array`)."""
+    """The verifier takes a plan as the store holds it, an (R, 2) array, and checks it from the array's buffer
+    (`Plan.from_array`)."""
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial,
                                      sent=lambda ps: np.array(ps.plan.runs, np.int64))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
@@ -324,9 +325,10 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.timing == pytest.approx(1 - 10 * 300 / r.span_ns)
     assert g.sample == 0                                  # every receipt opened
     assert g.chip == pytest.approx(r.passes * 4096 / whole)
-    named = [audit.named_bits(k) + 41 for w in r.windows for k in w.lengths]
+    named = [audit.named_bits(k) + audit.SLACK_LOG2 for w in r.windows for k in w.lengths]
     assert g.counting == pytest.approx(sum(named) / 8 / whole) and r.receipts == r.passes * N
-    assert sum(named) == r.passes * (audit.named_bits(N) + 41) < 64 * r.receipts + 41 * r.passes
+    assert sum(named) == r.passes * (audit.named_bits(N) + audit.SLACK_LOG2)
+    assert sum(named) < 64 * r.receipts + audit.SLACK_LOG2 * r.passes
     assert g.rebuild == pytest.approx(timing.SQUARINGS_PER_S["p1024"] * 4096 / (65_344 * capacity))
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + g.rebuild + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
@@ -337,7 +339,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     for w, x in zip(g.windows, r.windows):
         whole_t = capacity * x.span_ns / 1e9
         assert w.chip == pytest.approx(x.passes * 4096 / whole_t) and w.sample == w.horizon == w.floor == 0
-        assert w.counting == pytest.approx(sum(audit.named_bits(k) + 41 for k in x.lengths) / 8 / whole_t)
+        assert w.counting == pytest.approx(sum(audit.named_bits(k) + audit.SLACK_LOG2 for k in x.lengths) / 8 / whole_t)
         assert w.rebuild == g.rebuild
         assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + w.rebuild + 0.002)
     assert g.worst.gamma == max(w.gamma for w in g.windows) > g.gamma
@@ -409,7 +411,7 @@ def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None
     assert audit.floors(synthetic((u,) * n, d, delta)) == pytest.approx((g.floor,) * n)
     assert all(w.horizon == pytest.approx(g.floor) and w.sample == pytest.approx(g.sample) for w in g.windows)
     w = g.worst_horizon
-    assert w.horizon < 0.01 and w.counting == pytest.approx((audit.named_bits(u) + 41) / 8 / (u * 4096))
+    assert w.horizon < 0.01 and w.counting == pytest.approx((audit.named_bits(u) + audit.SLACK_LOG2) / 8 / (u * 4096))
     assert 48.8 < audit.named_bits(u) / u < 48.9
     assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0114 < w.gamma_horizon < 0.0115
     assert g.to_json()["worst"]["horizon"] == {"gamma": w.gamma_horizon, "window": w.window}
@@ -1075,19 +1077,20 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
     """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Bandwidth.Guarantees.AuditRO`'s last term
-    C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + 41`, a pass's term is at most 2^-41, checked in exact
-    integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5), never above
-    k·log2 q, and at q = 2^40 at most the 40·k + 41 AuditRO's statement reads.  At 94 GB of 4 KiB receipts and
+    C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + SLACK_LOG2`, a pass's term is at most 2^-SLACK_LOG2,
+    checked in exact integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5),
+    never above k·log2 q, and at q = 2^40 at most the 40·k AuditRO's docstring reads.  At 94 GB of 4 KiB receipts and
     q = 2^64 it is 40.99 bits a receipt, at the node's 789 GB over every tier 37.92, and the grid's sizing reads the
     same count."""
     cases = [(q_log2, k) for q_log2 in (1, 10, 40) for k in (0, 1, 2, 3, 7, 2 ** q_log2 // 2, 2 ** q_log2)
              if k <= 2 ** q_log2 and k <= 4096] + [(20, 1000), (64, 3), (64, 3000), (64, 10 ** 4), (64, 10 ** 5)]
     for q_log2, k in cases:
         named = audit.named_bits(k, q_log2)
-        assert math.comb(2 ** q_log2, k) * 2 ** 41 <= 2 ** (named + 41) and named <= k * q_log2
+        slack = audit.SLACK_LOG2
+        assert math.comb(2 ** q_log2, k) * 2 ** slack <= 2 ** (named + slack) and named <= k * q_log2
         assert named - (k * q_log2 - math.log2(math.factorial(k))) < 2
         if q_log2 == 40:
-            assert named + 41 <= 40 * k + 41
+            assert named <= 40 * k
         assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
     k = 94 * 10 ** 9 // codec.BLOCK_BYTES
     assert 40.98 < audit.named_bits(k) / k < 41.0 and audit.named_bits(k) < 64 * k
@@ -1098,6 +1101,16 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
             audit.named_bits(bad)
     with pytest.raises(ValueError, match="nonnegative integers"):
         audit.named_bits(1, -1)
+
+
+def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_fastest_passes() -> None:
+    """`SLACK_LOG2`'s reason: an hour of the node's passes over gate runs 8 and 9's store, 130,023,424 blocks read at
+    `timing.READ_BYTES_PER_S`, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
+    line's δ, 2^-10 of `DELTA`."""
+    pass_s = 130_023_424 * codec.BLOCK_BYTES / timing.READ_BYTES_PER_S
+    passes = math.ceil(3600 / pass_s)
+    assert 41.2e-3 < pass_s < 41.3e-3 and passes == 87_326 < 2 ** 17
+    assert 2 ** 17 * 2.0 ** -audit.SLACK_LOG2 <= 2.0 ** -50 == audit.DELTA / 2 ** 10
 
 
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:

@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.SimLead
 import Proofs.Flock.Claims.KS.PlainSched
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The simulated strategy after `Commit` leads with rep 0, from the live prover's schedule
@@ -133,6 +134,13 @@ noncomputable abbrev plainLive (x : Claims.Msg) (spec : SessionSpec) (st : Stmt)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) :
     Strategy (liveSession (plainDg spec) 1 spec.mPts (plainN x)) :=
   liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x
+    (ω, u)
+
+/-- The plain simulator's live strategy. -/
+noncomputable abbrev plainLiveK (keep : Bool → Bool) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
+    {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) :
+    Strategy (liveSession (plainDg spec) 1 spec.mPts (plainN x)) :=
+  liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x
     (ω, u)
 
 /-- **`plainSimAt` leads with rep 0 for `n` coins** where the plain simulator's live strategy submits its next `n`

@@ -40,7 +40,9 @@ environment extension loaded, so none of the package's code runs), and replays t
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
-                 `imports` prefixes
+                 `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
+                 `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
+                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it)
     assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
                  as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
@@ -1226,8 +1228,14 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for p in sorted(exempt):
         if not any(under([p], m) for m in files):
             fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
-    for layer, rule in sorted(policy.get("layers", {}).items()):
-        inside = [m for m in sorted(modules) if under([layer], m)]
+    layers = policy.get("layers", {})
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+
+    def admits(prefixes: list[str], i: str) -> bool:
+        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+    for layer, rule in sorted(layers.items()):
+        inside = [m for m in sorted(modules) if under([layer], m)
+                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
         if not inside:
             fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
         for m in rule.get("except", []):
@@ -1238,7 +1246,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             if m in rule.get("except", []):
                 continue
             for i in facts["imports"].get(m, []):
-                if not under(rule["imports"], i) and i != "Init":
+                if not admits(rule["imports"], i) and i != "Init":
                     fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
                                          f"({', '.join(rule['imports'])})"))
     if conflicts := facts.get("moved_conflicts"):
@@ -2906,8 +2914,9 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
+    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
+    toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -2974,6 +2983,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
                 fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
         elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
         f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails

@@ -168,7 +168,8 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     W, N = session["windows"], reg["blocks"]
     record = session.get("record") or {}
     profile = (record.get("profile") or {}).get("windows") or []
-    lifetime = (record.get("public") or {}).get("lifetime") or audit.LIFETIME
+    lifetime = ((record.get("public") or {}).get("lifetime") or session.get("lifetime")
+                or audit.lifetime_windows(session["window_ns"]))
     seen = session["windows_seen"]
     drawn = {int(t) for t in session.get("draws") or {}}
     failure = session.get("failure") or {}
