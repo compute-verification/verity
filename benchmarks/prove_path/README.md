@@ -75,8 +75,11 @@ What doesn't change:
 
 ## What an accepted plain audit means
 
-One property covers both of tonight's chains. In 2b, plain sessions run on the CPU TP stand-in. In 2a, the served window
-runs under `--zk`, and that is the demo of record. The chains differ only in which links below are proved.
+One property covers both configurations. 2a, the served window under `--zk`, is the demo (top, 25 Oct). 2b, plain on the
+CPU TP stand-in, has soundness as its only guarantee (Daniel, 24 Oct, #4016). Each layer is proved once over the layer
+below and instantiated per configuration. **No theorem on main yet takes an accepted audit, under `--zk` or plain, to
+`Accepted` or to the leak bound.** What's proved stops at each session's verdict, plus, under `--zk`, sampling's KS given
+the run's hypotheses. So 2b demonstrates per-session plain soundness, not an audit guarantee.
 
 **The property.** The sampled step units are the sampled class of `NetTiming.Guarantees.SampledAuditAccepted` (#3608,
 PRF-144). Wherever sampling's knowledge soundness `Claims.Sampling.KS` holds at the deployment, it gives `KSAccepted`. On
@@ -95,8 +98,8 @@ the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every decoder within
 - β_δ, the faulty units' committed bits;
 - n·log2 D, the timing (J's D classes over n steps).
 
-At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. Composing the count with the property is prose until
-the property is proved.
+At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. The count is over sequences, so the step to the audit
+also needs the run's inputs, besides the ingress, to lie in the count's `As` (|As| ≤ 2^c), and `RAcc` doesn't bound that.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`):
 - c is `advice.bits`, the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as
@@ -111,28 +114,45 @@ the property is proved.
   field names.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
-**The links**, on main at 169118abc1. TODO(proofs): complete the table.
+**The `--zk` chain (2a)**, on main at 169118abc1. "Shared" marks a link the plain chain uses as it is. proofs has the
+last word on every Lean name and status in both tables.
 
-| Link | Lean name | Status | Where |
+| Link | Lean name | Status, owner, date | File |
 |---|---|---|---|
-| Each session's verdict | `FlockSoundness.Discharge.FailClosed.flock_verify_sound` | proved, under the assumptions below; plain at one table: `SoundExec` (public outputs), `SoundExecH` (hidden); `--zk`: `SoundZHJR` | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean` |
-| Flock KS, plain | `FlockDeploy.Assembled.flock_plain_assembled` (`_trim`), `FlockDeploy.KS.plain_KS_of_liveAcc` | proved from `PlainLiveAcc`, an open hypothesis (`plain_KS_of_w` gives it from `PlainLiveW`) | `Security/Proofs/Flock/Claims/Assembled.lean`, `Security/Proofs/Flock/Claims/KS/PlainAcc.lean`, `Security/Proofs/Flock/Claims/KS/PlainWrP.lean` |
-| Flock KS, `--zk` | `FlockDeploy.KS.zk_KS_untrim` | proved, no premise | `Security/Proofs/Flock/Claims/KS/ZkExtend.lean` |
-| Sampling KS | `Claims.Sampling.sampling_assembled`, `SamplingDeploy.sampling_deployed_sha512` | proved at `deployZk` only, under the hypotheses its docstring lists; none at `deployPlain` | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/DeployedSha512.lean` |
-| Accepted audit ⇒ `Accepted` | `NetTiming.Guarantees.SampledAuditAccepted` | stated only (the lock lists `SampledAuditAcceptedStated`) | `Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean` |
-| Leak count | `NetTiming.SecurityProofs.EncardAccSeqsSampledLe` | proved, no hypothesis; as a bound on an accepted audit it waits on the row above | `Security/Proofs/NetworkCertifier.lean` |
-| Plain registered reads | `sharedRowsOk` | refused (fails closed) without `--zk` | `verity/core/service/flock/Flock/ProvedScope.lean` |
+| A session's verdict (one theorem for both, `zk : Bool`) | `FlockSoundness.Discharge.FailClosed.flock_verify_sound`, `--zk` part: `SoundZ` and `SoundZH` at one table, `SoundZJ` and `SoundZHJ` at J tables and the subset draw, `SoundZHJR` with registered reads | proved, under the assumptions below; end to end at J tables, `Flock.SecurityProofs.EndToEnd` | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`, `Security/Proofs/Flock/EndToEnd.lean` |
+| Flock KS at sampling's record | `FlockDeploy.KS.zk_KS_untrim`, at the untrimmed `deployZk` | proved, no premise | `Security/Proofs/Flock/Claims/KS/ZkExtend.lean` |
+| Flock KS ⇒ sampling KS (shared) | `Claims.Sampling.SessionKS_of`, `Claims.Sampling.KS_of` | proved, at any record | `Security/Proofs/Flock/Claims/Sampling/Session.lean`, `Security/Proofs/Flock/Claims/Sampling/KS.lean` |
+| Sampling KS | `Claims.Sampling.sampling_assembled`, `SamplingDeploy.sampling_deployed_sha512` | proved at `deployZk`, with the run's facts as hypotheses (`DrawFixed`, `SessionRuns`, `SessionOpens`, `InteriorFixed` and others). FINTAU is generalizing it to any Flock record with KS | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/DeployedSha512.lean` |
+| Accepted audit ⇒ `Accepted` (shared) | `NetTiming.Guarantees.SampledAuditAccepted` | stated only (PRF-144; the lock holds its text through `SampledAuditAcceptedStated`). FINTAU: plan and date by 06:00Z 25 Oct | `Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean` |
+| Leak count (shared) | `NetTiming.SecurityProofs.EncardAccSeqsSampledLe` | proved, no hypothesis (`NetTiming.encard_accSeqsSampled_le`) | `Security/Proofs/NetworkCertifier.lean`, `Security/Proofs/NetworkCertifier/SampledCharge.lean` |
+| Accepted audit ⇒ leak bound (shared) | TODO(LEAK-LEAN): its name | prose only on main. Stated, proof in progress (LEAK-LEAN): over any deployment, with `SampledAuditAccepted` and the inputs in `As` as hypotheses | — |
 
-So the open links are the property itself for 2a. For 2b, they are the property, sampling KS at `deployPlain`, and
-`PlainLiveAcc`.
+**The plain chain (2b).** The shared links above hold as they are. Plain's own links:
 
-**The named assumptions** the links rest on:
+| Link | Lean name | Status, owner, date | File |
+|---|---|---|---|
+| A session's verdict | `flock_verify_sound`, plain part: `SoundExec` (public outputs), `SoundExecH` (hidden outputs) | proved, at one table and the stratified draw | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean` |
+| Flock KS at the trimmed record | `FlockDeploy.KS.plain_KS`, at `deployPlainTrim` | proved, no premise | `Security/Proofs/Flock/Claims/KS/PlainLeafKS.lean` |
+| Flock KS at sampling's record | `FlockDeploy.KS.plain_KS_of_table`, at the untrimmed `deployPlain` | open: one table at every accepted statement and `TableBoundθ` are hypotheses. The trimmed KS doesn't carry over: the bridge runs only from untrimmed to trimmed (`plain_KS_trim_of_KS`; `hole_agree`). DECOMPB is building one bridge that `--zk` and plain both instantiate; its date comes in its first report, about 05:00Z 25 Oct | `Security/Proofs/Flock/Claims/KS/ConflictTied.lean`, `Security/Proofs/Flock/Claims/KS/TrimBridge.lean` |
+| Flock's claims | `FlockDeploy.Assembled.flock_plain_assembled`, `flock_plain_assembled_trim`, at `deployPlainTrim` | proved, with KS and completeness as hypotheses. `_trim` takes KS from `PlainLiveAcc`, an open hypothesis (DECOMPB, same date), though `plain_KS` gives it with none | `Security/Proofs/Flock/Claims/Assembled.lean`, `Security/Proofs/Flock/Claims/KS/PlainAcc.lean` |
+| Sampling KS | none on main | open: FINTAU's generalized `sampling_assembled` (branch `cursor/proofs-plainsamp-944c`), which needs the untrimmed KS above | — |
+| Registered reads, shared rows | `sharedRowsOk` | refused without `--zk` (fails closed); PR C | `verity/core/service/flock/Flock/ProvedScope.lean` |
+
+So 2a's open links are the property and the leak step. 2b's are those two, plus Flock KS and sampling KS at sampling's
+record.
+
+**The named assumptions.** The session links read the first three, in both chains. Sampling's KS and the property read
+none: their bounds carry the collision events.
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRExpected` and `SHA512CRStrict`
   (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.ExpectedCR` (`Security/Definitions/Claims.lean`).
 - A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
 - Record custody, under `--zk`: `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
-  (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`). Plain's custody is the hypothesis `RecordsLive`, which the lock
-  doesn't name. TODO(proofs).
+  (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`). Plain's is the premise `RecordsLive`, which the lock doesn't
+  name yet. proofs is naming and listing it as it does `Zk.RecordCustodyZKJ` (REROWS, by 12:00Z 25 Oct). TODO(REROWS): its
+  name.
+
+No link above reads the rest. `TrustedNebiusHost` is why `Carries` holds of the real run, and the wire and advice
+assumptions enter through the wire bounds, which have no sampled form yet.
 - `Verity.Assumptions.TrustedNebiusHost` (`Security/Models/Core/Assumptions.lean`).
 - The certifier's wire (`Security/Models/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. W3 (`Padded`), W5 (`UntimedStatus`) and W6
@@ -144,15 +164,19 @@ So the open links are the property itself for 2a. For 2b, they are the property,
 **Tonight's interim.**
 - **2b's plain sessions are inside what `flock_verify_sound` covers today.** Each session has one table: `statementRules`
   refuses more without `--zk`. Each draws by the stratified law: `lawWhy` refuses a subset draw without `--zk`, and a
-  bernoulli or work draw in either mode. The outputs are public, and there are no registered reads.
-- **The drawn units' committed rows are not opened outside the session in plain mode** (proofs, thread
-  1792894842.280569). `keyRowsH_computes` (`Security/Proofs/Flock/Soundness/Discharge/HiddenExec/KeyH.lean`) already
-  binds each drawn row's b‖c to its input words, up to a SHA-512 collision, and the registered tree's leaves are built over
-  the same b‖c. A check outside `flock_verify_sound` would be a new form ahead of its proof. flock-verify refuses every
-  plain registered-read session (`sharedRowsOk`), so a plain served window fails closed.
-- **A plain served window waits for proofs' PRs.** A adds more tables and the subset draw, B hidden outputs, and C
-  registered reads. TODO(proofs): what B adds beyond `SoundExecH` at one table. Tonight, the served window runs under
-  `--zk` (2a).
+  bernoulli or work draw in either mode. The outputs are public, and there are no registered reads. One-table plain
+  already covers hidden outputs (`SoundExecH`).
+- **In plain mode, the drawn units' committed rows are not opened outside the session** (proofs). `keyRowsH_computes`
+  (`Security/Proofs/Flock/Soundness/Discharge/HiddenExec/KeyH.lean`) already binds each drawn row's b‖c to its input
+  words, up to a SHA-512 collision, and a check outside `flock_verify_sound` would be a new form ahead of its proof. A plain
+  session with registered reads is refused (`sharedRowsOk`), so a plain served window fails closed.
+- **A plain served window waits for proofs' PRs.**
+  - A, J tables and the subset draw: DECOMPCOMP, Mon 26 Oct.
+  - C, checked registered reads and shared rows: PLAINC, Mon 26 Oct at one table, lifted after B (Tue 27 Oct at the
+    earliest).
+  - B, hidden outputs past one table: PLAINB, Tue 27 Oct.
+
+  A plain one_stage audit follows, Wed 28 Oct at the earliest. Tonight the served window runs under `--zk` (2a).
 
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
 match is refused. It is never a soundness gap.
