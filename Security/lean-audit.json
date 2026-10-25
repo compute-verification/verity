@@ -438,6 +438,10 @@
    "owner": "@memory-accounting",
    "digest": "044d87c4d62cdc247e32c17d11254755d63f8de976c1b199ecd87fcc35637f35"
   },
+  "Accounting.PeriodRun.Sound": {
+   "owner": "@lean",
+   "digest": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba"
+  },
   "Accounting.Placed.Causal": {
    "owner": "@lean",
    "digest": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6"
@@ -1848,10 +1852,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.PeriodRun.Sound": {
-   "owner": "@lean",
-   "digest": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba"
   }
  },
  "meaning": [
