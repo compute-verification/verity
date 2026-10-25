@@ -52,7 +52,9 @@ git error.
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
 whole subtree in BASE moved there file by file. When only `verity/core/protocols/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
-below a directory that moved whole is paired with its place there, whichever identical file git paired it with.
+below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
+path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path
+new at HEAD is that move and another file landing on its path (`landings`), each pair again judged as above.
 `--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a Python or Lean module and those below it.
 """
 from __future__ import annotations
@@ -738,6 +740,37 @@ def spelled(word: str) -> str:
     return joined.replace("\\.", ".")
 
 
+def base_maps(base: Tree) -> list[tuple[dict, object]]:
+    """The move scripts' word maps at BASE, each as its data and its whole `Words`."""
+    R, out = _rename(), []
+    for p in base.files:
+        if not (p.startswith(MAPS) and p.endswith(".toml") and "/" not in p[len(MAPS):]):
+            continue
+        try:
+            data = tomllib.loads(base.text(p) or "")
+            if data.get("words"):
+                out.append((data, R.Words(data)))
+        except (tomllib.TOMLDecodeError, SystemExit, KeyError, TypeError, AttributeError):
+            continue
+    return out
+
+
+def landings(entries: list[dict], base: Tree, head: Tree) -> list[dict]:
+    """``entries`` with each in-place edit of a path that a word map at BASE moves to a path new at HEAD split into its
+    delete and an add: its file moved out and another moved in (`Area.lean` to `Area/Check.lean` while `Area/Check.lean`
+    goes to `Area/Check/Check.lean`). `certify` pairs both through the maps."""
+    whole = [w for _, w in base_maps(base)]
+    out = []
+    for e in entries:
+        p = e["old"]
+        if e["status"] == "M" and any((n := w.path(p)) != p and n in head.set and n not in base.set for w in whole):
+            out.append({**e, "status": "D", "modes": (e["modes"][0], "0" * 6), "shas": (e["shas"][0], "0" * 40)})
+            out.append({**e, "status": "A", "modes": ("0" * 6, e["modes"][1]), "shas": ("0" * 40, e["shas"][1])})
+        else:
+            out.append(e)
+    return out
+
+
 def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str], pmap: dict[str, str]) -> list:
     """The move scripts' word maps at BASE, each cut to the words that rename what the range moved: a word is kept when it
     renames a path, a directory the range moved whole (as `dir/`) or a Lean module that its map, applied whole, renames to
@@ -745,16 +778,7 @@ def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str],
     R = _rename()
     names = [*renamed, *lmods.items(), *((o + "/", n + "/") for o, n in pmap.items())]
     out = []
-    for p in base.files:
-        if not (p.startswith(MAPS) and p.endswith(".toml") and "/" not in p[len(MAPS):]):
-            continue
-        try:
-            data = tomllib.loads(base.text(p) or "")
-            whole = R.Words(data) if data.get("words") else None
-        except (tomllib.TOMLDecodeError, SystemExit, KeyError, TypeError, AttributeError):
-            continue
-        if whole is None:
-            continue
+    for data, whole in base_maps(base):
         moved = {a: b for a, b in names if whole.path(a) == b and a != b}
         kept = {o: n for o, n in data["words"].items()
                 if any(R.Words({"words": {o: n}}).path(a) != a for a in moved)}
@@ -824,7 +848,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
     extra = extra or {}
     dotted = {o: n for o, n in extra.items() if "/" not in o}
     B, H = Tree(base, cwd), Tree(head, cwd)
-    entries = raw_diff(base, head, cwd)
+    entries = landings(raw_diff(base, head, cwd), B, H)
+    whole = [w for _, w in base_maps(B)]
     exact = [(e["old"], e["new"]) for e in entries
              if e["status"] == "R" and e["score"] == 100 and e["modes"][0] == e["modes"][1]]
     dels = {e["old"]: e for e in entries if e["status"] == "D"}
@@ -842,7 +867,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
     for old, d in list(dels.items()):
         new = map_path(old, pmap)
         if new == old or new not in adds:
-            new = similar.get(old)
+            if (worded_to := next((n for w in whole if (n := w.path(old)) in adds), None)) is not None:
+                pmap[old] = worded_to
+            new = worded_to or similar.get(old)
         if new in adds:
             a = adds.pop(new)
             entries.remove(a)
