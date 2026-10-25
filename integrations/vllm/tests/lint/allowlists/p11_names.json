@@ -301,7 +301,6 @@
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "flag-name", "symbol": "Options", "detail": "--tp2-match"},
     {"file": "verity_vllm/target_family.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 4},
     {"file": "verity_vllm/target_family.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/pipeline/telemetry/__init__.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "doc-board-id", "symbol": "_decision", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "doc-board-id", "symbol": "plan_row", "detail": "M-nnnn"},
