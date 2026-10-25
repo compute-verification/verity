@@ -59,13 +59,12 @@ A spec-level reference for network accounting's timing channel:
   `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
   prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
 - the capacity counts;
-- the egress encoder (`egress`, N2) on a fake upstream, in no Spec: each egress bucket's row rendered inside the
-  window's circuit as the warden's registered row, an output the verifier's registered read
-  (`warden_rows.bucket_port`) holds to the warden's signed row. It has the reference (`cell`, `bucket_row`, the map
-  `bucket_map` and the prover's routing `switches`) and the units' Boolean Definitions (`EgressBucket`: one bucket's R
-  cells from its private map, routed ids and ready bits; `EgressRoute`: a link-window's ids through `IoTieRoute`'s
-  Beneš network; `EgressMap`: one bucket's map from its request slots' streams, admissions and output counts).
-  Structural Fits refuses a window holding them until causality is semantic, so they are proved standalone;
+- the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one unit a link and bucket
+  t (`EgressBucket`) that reads the scan's slot state S_t and the warden's egress row t, both registered reads of
+  input ports (`warden_rows.bucket_port` for the row), computes the bucket's cells from the state with every switch
+  computed and none witness, and outputs one u16 verdict, `ACCEPT` exactly when the row is the one the state renders.
+  It has the reference (`bucket_map`, `rendered`, `verdict`) and the state's egress-view layout (`Shape`'s offsets),
+  which the scan's ingress step writes;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
