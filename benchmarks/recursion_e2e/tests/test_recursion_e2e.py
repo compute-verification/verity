@@ -444,3 +444,82 @@ def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> No
     assert r["what"].endswith(", CPU prover") and r["extra"]["prover"] == "cpu"
     assert RUN.main(["run", "--dry-run", "--oprove-gpu", "1"]) == 0
     assert "OPROVE_GPU=1" in capsys.readouterr().out.split()
+
+
+def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> None:
+    def job_env(*argv: str) -> list[str]:
+        assert RUN.main(["run", "--dry-run", *argv]) == 0
+        cmd = capsys.readouterr().out.split()
+        return cmd[cmd.index("--") + 1:]
+
+    env = job_env("--forge", "coef,sum")
+    assert "STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative" in env
+    assert "FORGE=coef,sum" in env and "FORGE_AFTER=coef" in env
+    assert "STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative" in job_env()   # no forgery, no forge-after
+    assert "FORGE=" in job_env() and not any(e.startswith("FORGE_AFTER") for e in job_env("--forge", "sum"))
+    assert "forge-after" not in " ".join(job_env("--forge", "coef", "--no-forge-after"))
+    assert "forge-after" not in " ".join(job_env("--forge", "coef", "--steps", "build,inner"))   # nothing to forge after
+    # asked for by name, it forges every kind it knows (job.sh's FORGE_AFTER default)
+    assert "STEPS=lean,forge-after" in job_env("--steps", "forge-after,lean") and "FORGE_AFTER=" in job_env("--steps", "lean,forge-after")
+    def limit(*argv: str) -> int:
+        assert RUN.main(["run", "--dry-run", *argv]) == 0
+        cmd = capsys.readouterr().out.split()
+        return int(cmd[cmd.index("--timeout") + 1][:-1])
+
+    assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.FW_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
+    with pytest.raises(SystemExit, match="--forge: nope"):
+        RUN.main(["run", "--dry-run", "--forge", "coef,nope"])
+    assert RUN.main(["run", "--dry-run", "--steps", "lean,forge-after", "--repeat", "1"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[cmd.index("--timeout") + 1] == f"{RUN.SETUP_MIN + RUN.OTHER_MIN['lean'] + RUN.OTHER_MIN['forge-after']}m"
+
+
+def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"
+    d.mkdir(parents=True)
+    stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
+    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop, 'prove_s': 1900.0})}\n")
+    d = d.parent / "forged-dirs-L0-firewall"
+    d.mkdir()
+    (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")
+    for n in (1, 2):
+        lr = o / "steps" / "lean" / f"r{n}" / "out" / "lean"
+        (lr / "time-forged-top-L0.txt").write_text(timev("0:04.00"))
+        (lr / "forged-top-L0.log").write_text('VERDICT {"accepted": false, "why": "an opening climbs to another node"}\n')
+        # forged-sum leaves alg-p1 as the honest one, so it stands refused; both of forged-comb's parts accepted
+        for part, accepted in (("alg-p1", True), ("forged-sum-alg-p0", False), ("forged-sum-alg-p1", True),
+                               ("forged-comb-alg-p0", True), ("forged-comb-alg-p1", True)):
+            (lr / f"time-{part}.txt").write_text(timev("0:30.00"))
+            (lr / f"{part}.log").write_text(f'VERDICT {{"accepted": {json.dumps(accepted)}, "why": "w"}}\n')
+    fa = o / "steps" / "forge-after" / "r1"
+    (fa / "out").mkdir(parents=True)
+    (fa / "rc").write_text("1\n")
+    (fa / "time-step.txt").write_text(timev("3:00.00"))
+    verify = {"run/coef-honest": {"rc": 0, "accepted": True, "why": "accepted"},
+              "run/coef-value": {"rc": 1, "accepted": False, "why": "setup: rec-coins: the statement's coef row is not the verifier's"},
+              "run/message-honest": {"rc": 0, "accepted": True, "why": "accepted"},
+              "run/message-bc": {"rc": 0, "accepted": True, "why": "accepted"}}
+    (fa / "out" / "forge-after.json").write_text(json.dumps({"verify": verify, "untouched": True}))
+    doc = RP.read(o)
+    coef = row(doc, "outer forged-coef-L0")
+    assert coef["ok"] is True and coef["note"].endswith(stop)        # the session the firewall stopped, from its LIVE record
+    outer = row(doc, "outer forged-dirs-L0")
+    assert outer["ok"] is True and outer["note"].startswith("no session finished") and "FIREWALL-REFUSED" in outer["note"]
+    assert doc["summary"]["outer"]["firewall"]["statements"] == 1      # a forged statement is no part of the session's cost
+    assert row(doc, "lean forged-top-L0")["ok"] is True
+    assert row(doc, "lean forged-sum-alg-p0")["ok"] is True
+    honest_part = row(doc, "lean forged-sum-alg-p1")
+    assert honest_part["ok"] is True and honest_part["note"].startswith("accepted: a part this forgery leaves as the honest one")
+    assert [row(doc, f"lean forged-comb-alg-p{i}")["note"].startswith("ACCEPTED: no part") for i in (0, 1)] == [True, True]
+    assert row(doc, "forge-after run/coef-honest")["ok"] is True and row(doc, "forge-after run/coef-value")["ok"] is True
+    bad = row(doc, "forge-after run/message-bc")
+    assert bad["ok"] is False and bad["note"].startswith("ACCEPTED")
+    assert doc["headline"]["forged_refused"] == {"coef": True, "dirs": True, "comb": False, "sum": True, "top": True,
+                                                 "message": False}
+    assert "forge-after run/message-bc" in doc["summary"]["not_ok"] and doc["steps"]["forge-after"] == ["1"]
+    md = RP.markdown(doc)
+    line = next(ln for ln in md.splitlines() if ln.startswith("Forgeries"))
+    assert "forge-after run/message-bc" in md and line.endswith(
+        "each refused: " + ", ".join(f"{k} {'yes' if v else '**no**'}" for k, v in doc["headline"]["forged_refused"].items()) + ".")
+    assert "comb **no**" in line and "sum yes" in line and "message **no**" in line

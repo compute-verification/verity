@@ -393,8 +393,9 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
 
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
     """A drawn chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
-    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its value's root
-    replaced, and (a value of more than one row) every unit reading the next row."""
+    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
+    value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
+    ports' reads as registered."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port = next(iter(honest["ports"]))
@@ -408,7 +409,8 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
         alt = {x: y for x, y in st.items() if x != "registered_file"}
         if change is not None:
             alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps({**honest, "ports": {port: {**honest["ports"][port], **change}}}, sort_keys=True))
+            alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], port: {**honest["ports"][port], **change}}},
+                                                         sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
     return out

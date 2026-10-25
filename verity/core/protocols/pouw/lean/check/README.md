@@ -30,6 +30,8 @@ Python reference held to it.
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 | `PouwCheck.LeafOwn` | not `credit.py`'s: a window unit's leaf statements' tile and the placement of the values they read in the window's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the window's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
 | `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
+| `PouwCheck.Verified` | `credit.py`'s `_asks` and `_verified`: a served window's statements verified, the verdict `credit.window` and `credit.period_credit` take each drawn unit's outcome from (`credit._lean_verified`). The verifier of record runs outside, so `verified` is asked twice: it names each run (the statement, its K's committed circuit file, the call's `--registered` file and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, a session that opened its call's public table or the ok rows elsewhere than the `--registered` file's value and root, or a unit of another call, refuses the window) |
+| `PouwCheck.VerifiedDifftest` | the difftest's `credit-verified` behind `pouw-check-difftest` (`VerifiedDifftest.all`, `CreditDifftest.all`'s then it, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
@@ -158,6 +160,11 @@ period whose B rows, one row's s_w or every code, are not the ones the period's 
 no weights' root, a window whose request runs past its public max_tokens or stops before it, a period whose open
 commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
 holds each mutation to its refusal.
+
+`tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean
+of record, over `tests/pouw_verified_cases.py` (a window's statements, null or answered as the served path answers,
+and one mutation per refusal before the verifier runs and of its answers), and holds the served
+`credit._lean_verified` to `credit._verified`'s verdict and verifier runs.
 
 ~~~text
 lake build                                                         the library, pouw-check and pouw-check-difftest

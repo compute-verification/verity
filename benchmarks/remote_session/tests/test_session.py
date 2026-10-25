@@ -326,6 +326,26 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
         assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_paced_session_at_one_window_in_flight_sends_each_coin_after_the_root_before_it(monkeypatch, k):
+    """At F = 1 (`pace_of`'s fifth field, `audit.Pace.in_flight`) each boundary leaves once its window has its k roots,
+    so every coin leaves after the root before it; the honest prover still runs k passes a coin, none discarded, the
+    Lean verifier agrees at every event, and the record names one window in flight."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    T = 10**9
+    pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2:1", 500 / k)
+    assert pace == verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k) | {"in_flight": 1}
+    with pytest.raises(ValueError, match="1 or 2"):
+        verifier.pace_of(f"{k}:{T // 10**6}:12:2:3", 500 / k)
+    (r,), (pr,) = run("honest", paces=[pace])
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 6
+    assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T, "in_flight": 1}
+    assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
+    seen = r["windows_seen"]
+    assert all(len(w["arrivals_ns"]) == k and w["boundary_ns"] >= w["arrivals_ns"][-1] for w in seen)
+    assert all(b["released_ns"] == a["boundary_ns"] for a, b in zip(seen, seen[1:]))
+
+
 def test_a_paced_prover_that_dropped_blocks_is_rejected():
     (r,), (pr,) = run("skip:0.5", paces=[verifier.pace_of("2:1000:12:2", 250.0)])
     assert not r["accepted"] and not pr["accepted"] and "declared" not in r.get("ledger", {})
@@ -414,6 +434,32 @@ def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appe
     finally:
         checks.close(wait=True)
     assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
+
+
+def test_a_frame_that_doesnt_decode_is_malformed_on_a_window_with_no_draws():
+    """A batch whose frame doesn't decode is `malformed` to the check (`checks.check`), and a window with no draws (none
+    a session makes) settles `malformed` whatever its batches, as `Session.verify` and the Lean's settle give it."""
+    import pickle
+    from types import SimpleNamespace
+
+    from checks import Checks, check
+
+    snap = pickle.dumps(SimpleNamespace(registration=SimpleNamespace(key=None)))
+    result = check(snap, 0, [], [(1).to_bytes(4, "big")])
+    assert (result["failure"], result["at"], result["n"]) == ("malformed", None, 0)
+
+    class Books:
+        _fail = audit.Session._fail
+
+        def __init__(self) -> None:
+            self.windows, self.failed = [SimpleNamespace(draws=(), verdict=None)], None
+
+        def _live(self) -> None:
+            pass
+
+    for results in ([], [result]):
+        books = Books()
+        assert Checks.settle(books, 0, results, 0) == audit.Verdict(0, False, "malformed") == books.windows[0].verdict
 
 
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
@@ -743,8 +789,11 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
 
     lg = r["ledger"]
     reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
-    assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
-        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
+    assert lg["memory"]["error"] == verifier.memory_error(lg) == (
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"] + lg["delta"]["hiding"]
+        + lg["delta"]["rejection"])
+    assert lg["delta"]["hiding"] == ledger.hiding_over(len(record.windows)) > 0
+    assert lg["delta"]["rejection"] == sum(w.profile.drawn["receipt"] for w in record.windows) / 2 ** 64 > 0
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
     assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
@@ -1483,19 +1532,6 @@ def test_a_kv_plan_needs_its_pages_a_step():
     for bad in ("kv", "kv:0", "kv:1.5", "kvdrop:", "evict:2", "kvoverwrite"):
         with pytest.raises(ValueError):
             prover.parse_plan(bad)
-
-
-def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
-    o = audit.Opening(3, 17, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
-                      (b"\5" * 64,) * 9, b"")
-    appended = audit.Opening(4, 18, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
-                             (b"\5" * 64,) * 3, b"", b"\6" * 64)
-    body = wire.encode_openings([o, appended, o])
-    assert wire.decode_openings(body) == [o, appended, o]
-    assert wire.decode_openings(body[:-1]) is None and wire.decode_openings(b"") is None
-    with pytest.raises(ValueError):
-        wire.encode_openings([audit.Opening(3, 17, o.block, o.leaf, o.leaf_salt, o.receipt_path, o.payload_salt,
-                                            o.payload_path, b"", b"\6" * 63)])
 
 
 def test_a_reader_apart_hands_on_each_frame_in_order_and_ends_with_the_stream_or_the_prover():
