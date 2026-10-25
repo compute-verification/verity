@@ -14,6 +14,10 @@
    "owner": "@memory-accounting",
    "digest": "3dee4687f0a5685366080d463e9353692d5143af24e7a7600de6e093a4e07d2d"
   },
+  "Accounting.Assumptions.CircuitCarriers": {
+   "owner": "@compute-accounting",
+   "digest": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a"
+  },
   "Accounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
    "digest": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
@@ -80,7 +84,7 @@
   },
   "Accounting.Assumptions.SketchHashRandom": {
    "owner": "@memory-accounting",
-   "digest": "9a507ea966011d3f8987f7ad0fc573827682a4f68684bc39a7939c11f48a7574"
+   "digest": "3e61314a8079aa83ddf9f4d27c4b669a01d6470868cc4bbacce26dd6e40d8896"
   },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@memory-accounting",
@@ -89,6 +93,10 @@
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
+  },
+  "Accounting.Assumptions.SteeredLayout": {
+   "owner": "@compute-accounting",
+   "digest": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
   },
   "Accounting.Assumptions.TS.AcceptedLive": {
    "owner": "@proofs",
@@ -458,6 +466,10 @@
    "owner": "@memory-accounting",
    "digest": "805f881307461f7dbe6f9f8f08c97e96405c337a951d1ea058f46e16f615575b"
   },
+  "Accounting.RateSketch.LifetimeCapped": {
+   "owner": "@compute-accounting",
+   "digest": "27d307bce051e699aa03ae7de515da270bfbe86912958602ac0daa75628bce55"
+  },
   "Accounting.RateSketch.SectorsBind": {
    "owner": "@memory-accounting",
    "digest": "417918e593039c18b2d42cfbaa2ef5de213f132ba87e2f60673bf2e2bcf56ea5"
@@ -537,6 +549,10 @@
   "Accounting.Requirement.OneBlockEach": {
    "owner": "@memory-accounting",
    "digest": "ae57e960a411de7fccb71c709eff4393cb29c6902da95c1402dcabbd9f410dab"
+  },
+  "Accounting.Requirement.Placement.Deadlines": {
+   "owner": "@compute-accounting",
+   "digest": "813c1a3277f83608aa52114b44ce69ceac8fa573e3030f6e39517e028e5bd96e"
   },
   "Accounting.Requirement.Placement.Paced": {
    "owner": "@memory-accounting",
@@ -1562,29 +1578,29 @@
    "owner": "@compute-accounting",
    "digest": "11fbbc8e631ecb9b44f15770dce1d3f071b4cc0a57c467e03cf8cd3f08821e7a"
   },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap": {
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": {
    "owner": "@compute-accounting",
-   "digest": "b55a88e3f3be9a980861d2a1244b219f3b72854f49272ee148c7efd169ce636d"
+   "digest": "72b34e446c00f62344af9d27de395857280e7444db34a385e5b63804f7b48515"
   },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly": {
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": {
    "owner": "@compute-accounting",
-   "digest": "96cbcffa2dd79ef186ad3b81562d208b86e8c02e0ca3621312f964d61e6044f2"
+   "digest": "776d403cfff4d73c824ddda801c0c3e7826e9a1acc9b05544ed48bcafcf16690"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1": {
    "owner": "@compute-accounting",
    "digest": "55403e10d07aa1c93855ae008a8d009efe16daa715b460bfe7504ca04158c295"
   },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly": {
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": {
    "owner": "@compute-accounting",
-   "digest": "c0403faf7a90ffd6979dd16c4ff4d6d676e6e40daa6f43e63929936de3067657"
+   "digest": "ffbb12bffae03325fa90b3a803eedc50cccd019e1460a91ceb6db606851ccb0c"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": {
    "owner": "@compute-accounting",
    "digest": "2b3befb21b399d6d3616069d02531a6a819f4359d1df30c6e12de2c26c9eaa00"
   },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": {
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": {
    "owner": "@compute-accounting",
-   "digest": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409"
+   "digest": "5b522a3a0d187ee4b63c8a0d613ce1b00c191dc2d52ff6e9fb108d204b750f88"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": {
    "owner": "@compute-accounting",
@@ -1602,9 +1618,9 @@
    "owner": "@compute-accounting",
    "digest": "f5c362fcaafa9a56b8b773e9a2ed90bae93c4c517a7892a0b5db8de4a5e2799d"
   },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap": {
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": {
    "owner": "@compute-accounting",
-   "digest": "20cfd44bf0a2df63d67e2390dba4ca9352eddedc0e7da56e716fcd352f2ba5be"
+   "digest": "11b0df76ee505ea115448540bad130def9ee3e11023f5c2d8e9804b0affabb5d"
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
    "owner": "@compute-accounting",
@@ -1626,9 +1642,9 @@
    "owner": "@compute-accounting",
    "digest": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801"
   },
-  "Pouw.PearlC.Assumptions.TTOutU": {
+  "Pouw.PearlC.Assumptions.TTOutW1": {
    "owner": "@compute-accounting",
-   "digest": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f"
+   "digest": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
   },
   "Pouw.PearlC.Assumptions.TileProofSound": {
    "owner": "@compute-accounting",
@@ -2089,7 +2105,7 @@
    "Claims.Json.Wf": "a helper the claims read: a well-formed JSON value, which `JsonSpec` reads",
    "Claims.Out64": "a hypothesis `Complete` reads (the oracle's outputs are 64 bytes, SHA-512's whole output), no claim",
    "Claims.Recursion.Bound.Binds": "a premise of `Bridge` on the bound record (its row digest input is injective), a condition on the record like `decOK`, no claim",
-   "Claims.Recursion.Bound.LastBinds": "P4 as first stated, superseded by `Bound.LastBindsEC` with `Bound.LastCoinFree` (card ef47c02e): two accepted last messages that `final` keeps apart, after the same rounds and coins, give a collision; false at the deployed bound record (`RecDeploy.lastBinds_deployed_rejects`, a trailing space in the record's text), kept because `RecDeploy.KSBoundRoute` reads it, a premise, no claim",
+   "Claims.Recursion.Bound.LastBinds": "P4 as first stated, superseded by `Bound.LastBindsEC` with `Bound.LastCoinFree` (card ef47c02e): two accepted last messages that `final` keeps apart, after the same rounds and coins, give a collision; false at the deployed bound record before S0 (a trailing space in the record's text, which S0 refuses: `RecDeploy.LastGap.check_space`), kept because `RecDeploy.KSBoundRoute` reads it, a premise, no claim",
    "Claims.Recursion.Bound.PlainKSAbort": "a premise of `KSBound`'s route on the bound record (P1: the element-level Flock's KS against aborting provers at plain leaves, `Inner.KSAbort` at `DE`), which `Bridge` takes at each decoder and Flock's table bound at `DE` is to give, no claim",
    "Claims.Recursion.Bound.WeightCovers": "a premise of `Bridge` on the bound record (`γ`'s weight covers the bridge's loss, `N_I · k_I · √Pr[B]`: `√C_DE + N_I · √(k_I/32) ≤ √C_IVStar`), a condition on the record like `decOK`, no claim",
    "Claims.Recursion.Bridge": "option (d)'s inner claim (`KSBound` rests on it), a statement over every bound record, proved from Flock's KS at `DE`, `Bound.Binds` and `Bound.WeightCovers` wherever a decoder inverts the record's answers (`Bound.bridge_of_dec`), the deployed record among them (`RecDeploy.bridge_bdDeployed`); it reads no deployed record, so it has no antecedent there to witness, no claim",
@@ -2857,6 +2873,14 @@
    ],
    "assumptions": [],
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167"
+  },
+  "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement"
+   ],
+   "assumptions": [],
+   "type_hash": "569af6c8280ed061c1dcf7fbb42d7a6af76c8f42a3809cef93fe0f83eb7ecc8f"
   },
   "Accounting.SecurityProofs.DerivedStateResidual": {
    "owner": "@memory-accounting",
@@ -8194,11 +8218,26 @@
    "assumptions": [],
    "type_hash": "9d968ee8cd314d2f358b07d062e218a6b24ef0ed4d1bf6669caaec94c0801c65"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted :",
+    "  NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted"
+   ],
+   "assumptions": [],
+   "type_hash": "7d7b2cc9599ec64be69b1be215cfba86f23ad464848daf7aef91be781b9f00ee"
+  },
   "NetTiming.SecurityProofs.EncardChargedLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardChargedLe : NetTiming.Guarantees.EncardChargedLe"],
    "assumptions": [],
    "type_hash": "886ea913690fe8450cf3a35d36d9851949a8c17ee3fb4b36b0b98d45a6aa050a"
+  },
+  "NetTiming.SecurityProofs.EncardChargedLeCounted": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardChargedLeCounted : NetTiming.Guarantees.EncardChargedLeCounted"],
+   "assumptions": [],
+   "type_hash": "89ddc83c6f306f60d9f871c3237dfdfcf2ef33fab77240d9b44398330390de03"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
@@ -8243,6 +8282,15 @@
    "assumptions": [],
    "type_hash": "d88f0cba3aa004a8778740fc4e4abff70e425bb894d4c7ce024701cb880b4a50"
   },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted :",
+    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted"
+   ],
+   "assumptions": [],
+   "type_hash": "6ad0233446a7ef060ee4bc607f1bc614267b1353c1cfa8492f14277fbdd6b6b6"
+  },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": {
    "owner": "@network-accounting",
    "signature": [
@@ -8250,6 +8298,15 @@
    ],
    "assumptions": [],
    "type_hash": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted :",
+    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted"
+   ],
+   "assumptions": [],
+   "type_hash": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "owner": "@network-accounting",
@@ -8635,11 +8692,11 @@
    "owner": "@compute-accounting",
    "signature": [
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
-    "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) (sem : Pouw.PearlC.PearlCSem Q R S)",
+    "  [Fintype S] (sha fetch : Rat) (salt : S → List Nat) (sem : Pouw.PearlC.PearlCSem Q R S)",
     "  (HA : Pouw.PearlC.HiddenAudit Q R S) (ηzk : Nat → Real)",
     "  (hTT :",
-    "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem",
-    "      (1 / 1000))",
+    "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt",
+    "      (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000))",
     "  (hzk :",
     "    Pouw.PearlC.Assumptions.TileProofSoundAll",
     "      (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
@@ -8647,7 +8704,7 @@
     "      (Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "        (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "      (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192) HA ηzk) :",
-    "  Pouw.PearlC.GγHidden CM",
+    "  Pouw.PearlC.GγHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)",
     "    (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
@@ -8656,7 +8713,7 @@
     "    (1648180439 / 446072750000).cast Pouw.PearlC.εPearlC ηzk"
    ],
    "assumptions": [],
-   "type_hash": "b276de57012d9589f560c1eb1b9aac07ced7f573e6730105ed0644faf931b819"
+   "type_hash": "7f2d668d96e1f5097f9e29147c9ec0ca635557fef356465ab6d8ca979a4dc3ab"
   },
   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
    "owner": "@compute-accounting",
@@ -10665,7 +10722,7 @@
    "Pous.SecurityProofs.P2SlackFamilyFreeBlocks": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.P2SlackFamilyUncond": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pouw.NCP.GameProofs.gammaFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,obligation,vacuous,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. It also takes TileProofSoundAll, an open obligation that holds trivially until TileRead lands.",
+   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,obligation,vacuous,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. It also takes TileProofSoundAll, an open obligation that holds trivially until TileRead lands.",
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": "frozen (conjecture,obligation,vacuous,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Models/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. It also takes TileProofSoundAll, an open obligation that holds trivially until TileRead lands.",
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": "frozen (conjecture,obligation,vacuous,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Models/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. It also takes TileProofSoundAll, an open obligation that holds trivially until TileRead lands.",
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Models/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
@@ -10705,18 +10762,18 @@
    "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCH100Rev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCH100Rev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1ChainOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
@@ -10729,18 +10786,18 @@
    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainCap, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainCap, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainCapW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainCapW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevUOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevUOnly, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevUOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevUOnlyW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainCap, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1, the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean:32-33, :47-51), and it holds trivially for an empty class until TileRead lands.",
+   "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevChainCapW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1W1 (the device's timing at the cap at the W1 machine, W1.w1Priced), the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean:32-33, :47-51), and it holds trivially for an empty class until TileRead lands.",
    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
@@ -10757,8 +10814,8 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevChainCap, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevChainCap, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevChainCapW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevChainCapW1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut": "lemma: leaves the list under the 5:11 PM ruling",
    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in Security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in Security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
@@ -10915,7 +10972,7 @@
    "Accounting.SecurityProofs.TileUnpredictableMono": "frozen (no-function,hash): An implication between two instances of the hypothesis Accounting.Guarantees.TileUnpredictable over PoUW's game with a uniform oracle, for protocols with equal checked values and nested compared entries, about no Lean function of the protocol's code.",
    "Accounting.SecurityProofs.TileUnpredictableOfNCPU": "frozen (conjecture,no-function,hash): As Accounting.SecurityProofs.TileUnpredictableOfTT, for NCP's named conjecture TT_NCP_U on route U.",
    "Accounting.SecurityProofs.TileUnpredictableOfTT": "frozen (conjecture,no-function,hash): It carries the named open conjecture TT over PoUW's game with a uniform oracle to one unit's checked values (Accounting.Guarantees.TileUnpredictable), about no Lean function of the protocol's code.",
-   "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": "frozen (conjecture,no-function,hash): It carries an assumption of the named open conjecture TT_OUT's shape, at any Pearl-C protocol, over Pearl-C's game with a uniform oracle to one unit's correctness (Accounting.Guarantees.TileUnpredictablePearlC), about no Lean function of the protocol's code.",
+   "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": "frozen (conjecture,no-function,hash): It carries an assumption of the named open conjecture TT_OUT's shape at the W1 machine (TTOutW1, W1.w1Priced), at any Pearl-C protocol, over Pearl-C's game with a uniform oracle to one unit's correctness (Accounting.Guarantees.TileUnpredictablePearlC), about no Lean function of the protocol's code.",
    "Bandwidth.SecurityProofs.AuditJoint": "frozen (no-function,hash): As AuditRO, for a device whose layout also reads n bits z, uniform and independent of the store, which its chip outputs (Security/Definitions/Accounting/Bandwidth/Joint.lean): the compression over the pair (store, z) moves the floor up by n, so an accept gives n <= ingress - cert_bw at AuditRO's error (Mbw, bandwidth additivity by counting).",
    "Bandwidth.SecurityProofs.B3": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from the store and the oracle to Accounting.Actual.Run) causal from every tick (CausalFrom), with the chip's ports' constraints (Alphabet, PassiveMemory, OracleLocation, and every wire into the chip on a port of HBM, the rest or the oracle: Security/Definitions/Accounting/Bandwidth/Causal.lean) as hypotheses that are not on the premises list, rather than a function's acceptance; it is AuditInteractive's bound at S = M + 1 and c = beta_side * T for the chip of such a run (the console's B3 at e > 0, m * b less for relayed tags).",
    "Bandwidth.SecurityProofs.B3RO": "frozen (no-function,world-unlisted): As B3, when the rest's ports' signals don't depend on the oracle, at AuditInteractiveRO's bound with no relayed-tag term (the console's B3 at e = 0: the chip read at least k * b - M_chip - 1 - c_side - lam bits from HBM).",
@@ -11048,7 +11105,7 @@
    "Accounting.SecurityProofs.TS.DrawnRightOff": "lemma: the crypto half of (I8) for a sampled window over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding of every committed position before the coin that follows its commitment at delta_bind and the proofs' soundness jointly over a round's draws at delta_ks as probability hypotheses, and each unit's pinning (DrawnLayer.Pins) as a definitional hypothesis, give the drawn units right at their committed values outside S(delta_bind + delta_ks); ProofsSoundOfDrawn and a composition's folded credit, which take the drawn units right, are what it is for.",
    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "lemma: (I8) ProofsSound of EPS1-SPEC at n_pi = 1, delta_ZK = delta_ks, from its pieces over every sampled play and its drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: DrawnRightOff's hypotheses, the play being its drawn units' proofs' (DrawnLayer.Of), each position's writer reading it (DrawnLayer.WriterReads), the unit weights summing to the window's words and the share covering every unit that isn't good, good being the run having computed the unit's late cone at the run's modes, drawn at each unit's coin (DrawnLayer.Covers, proved for each game) as definitional hypotheses, and E1(c) per unit with its fold clause as the named assumption UnitFixed, not on the premises list; CompilerC and the composed credit, which take ProofsSound, are what it is for.",
    "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "lemma: the rewinding step behind a sampled window's delta_bind over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding's failure in a round, squared, is at most |L|^2 times its fork form at its positions' cuts, L the positions its units read (two runs sharing every value committed before a position's cut, opening it differently in accepted proofs of drawn units), so a bound on the fork form is binding at |L| times its square root; DrawnRightOff and ProofsSoundOfDrawn, which take binding at delta_bind, are what it is for.",
-   "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace (note:20261024T0839Z-report-sketchbound), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
+   "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Pouw.Guarantees.Window.WindowEps": "unstated: M2 with C1, a window's epsilon from its calls' in the compiled tables' shape (max of the calls' knowledge constants, plus one window-level collision term of the prover's state, plus the sum of their link terms at the window's state, at a draw that depends on the registration); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), and its theorem Pouw.SecurityProofs.Window.WindowEps is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
    "Pouw.Guarantees.Window.ServiceEscapes": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so WindowEps reads the deployed draw with each session a call; stated with WindowEps, and its theorem Pouw.SecurityProofs.Window.ServiceEscapes is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
    "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
@@ -11059,7 +11116,6 @@
    "Accounting.SecurityProofs.StackedSessionConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationRelay on a store, one for the session, made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), for pass devices that also read a carrier at odd side addresses (Accounting.Rate.PassProvenance, whose inputs may depend on the pass's stream and oracle), at side link L + C with C the carriers' input and encoded bits under the property's budgets, with delta once and no advice, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
-   "Accounting.Guarantees.DeclaredCircuitRequirement": "unstated: G, memory accounting's Milestone 2 composed statement (note:20261018T0230Z-report-declared-circuit-g), stated first: its theorem Accounting.SecurityProofs.DeclaredCircuitRequirement lands with its proof once the red team of the statement reports, and the named assumptions only it reads (Accounting.Assumptions.CircuitCarriers, SteeredLayout) return to `assumptions` with it. Its shape will be frozen (no-function,hash): the deployed sketch game on a steered per-pass store whose devices are told the steering summary, each append's blocks read within the lifetime cap L of the window it joined, a layer-1 bound on the prover system with carriers charged over L windows, with the circuit's credited reads in appended blocks linked pass by pass through the one-sided StoreMatches and PlanMatches, on the devices' clocks.",
    "Pous.SecurityProofs.StreamedWipe": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline at 5.860%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* 3564/3761 on issue and 197/3761 on shared memory (the least weight there at which the bulk-reduction floors cost N_w phi*, RT4-SHEET-1), p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches never give epsilon < 5.779% and give under 6% only from 17,460; Compose's live line is under 1% only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (5.859%; the folded one gives 5.805%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4; measured to hold at saturation, r20261019-120714-132b, RT2-120-4; A5 with A5b, a bulk or TMA instruction holding its size of bank bytes, which no vendor document states either and without which a fold on the bulk engine costs less than the menu's: RT4-SHEET-1), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, checked within a stated menu: the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
@@ -11157,8 +11213,8 @@
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
-   "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace (note:20261024T0839Z-report-sketchbound), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace (note:20261024T0839Z-report-sketchbound), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
+   "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Nci.SecurityProofs.PackedContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain it runs (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions/Packed.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -11190,11 +11246,11 @@
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link and Finish (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws; LeanRelease.withFiles, Loop.filesE: each rep's Finish.proofFile on what the loop holds of it, and the record the auditor assembles, recordJson of the streams it saw), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), every input the loop takes from its host and operating system being the tape's (Loop.Src, flock-firewall-os-src: its level-0 inputs, Loop.Level0Src, and its rep draws, Loop.RepSrc), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
-   "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); Live, Refused and Counted are stated on the session, the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); Live, Refused and Counted are stated on the session, the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); Live, Refused and Counted are stated on the session, the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace (note:20261024T0839Z-report-sketchbound)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); Live, Refused and Counted are stated on the session, the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace (note:20261024T0839Z-report-sketchbound)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); Live, Refused and Counted are stated on the session, the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace (note:20261024T0839Z-report-sketchbound)",
+   "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each draw a call of any shape (OJSpot), the round's run one straight-line program over every call's bits, both sides shared across each call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlapJ10R (ServiceSoundOverlap with the seed identified with the overlapped window's call coins), KScopeOverlapOneSidedJ10R (Theorem K's scope across calls: products one-sided per call at every bit point of the other calls' (OneSidedAtJ), the error each call's int8-wrapped prefix product, and charging purity across calls mod 2 at every segment's frame, which no check of the service refuses a run outside of) and ChargeVF3j16OverlapJ10R (the active vector VF3j-16's prices with B_theta complete, each product counted once). Its floor and luck are OverlapFloorKOneSided's: c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "frozen (no-function): It bounds AccSeqsWithin, the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes BitsCount about an abstract charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -11279,15 +11335,15 @@
    "Pous.SecurityProofs.SecureErasureMeetsFamily": "frozen (no-function,hash): an `EraseMeets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.SegMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.SegTagMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
-   "Accounting.SecurityProofs.Remote.SketchBoundSession": "frozen (no-function,hash): It is about a model of the receipts' sketch over a remote session (Accounting.Remote.Sketch: a uniform registered store, verbatim-sector devices chosen by the prover's coins and the earlier passes' keys, and each candidate seed's signs and receipt-hash key what the session's key map (Session.keys) gives at the outcome's SHA-512), not the verifier's code (remote_bandwidth.receipts); its random-oracle step is one named premise, Accounting.Assumptions.SketchHashRandom (claim random-oracle: at every prover coin and store, SHA-512's keys at the candidate seeds are uniform), which the proof uses once to carry the bound from the model's coins to the outcomes (Session.pr_coins_le), and the store's uniformity stays in the outcome's coins; it derives SketchBound on a trace over the outcomes that Receipted and Present tie to that model, under SketchRank and the per-pass hash budget KeyBudget (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
-   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the deployed receipts (4096-byte blocks of 128 sectors, 16 sign rows, SHA-512 tags) and rank 12, with at most Q + P candidate seeds and Q receipt-hash queries for Q = F·C the hashes the prover can try over the session, C the node's SHA-512 compressions and F the outside-compute factor: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512), timing.sketch_failure(C, P, 16, N, outside=F), under SketchHashRandom (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
+   "Accounting.SecurityProofs.Remote.SketchBoundSession": "frozen (no-function,hash): It is about a model of the receipts' sketch over a remote session (Accounting.Remote.Sketch: a uniform registered store, verbatim-sector devices chosen by the prover's coins and the earlier passes' keys, and each candidate seed's signs and receipt-hash key what the session's key map (Session.keys) gives at the outcome's SHA-512), not the verifier's code (remote_bandwidth.receipts); its random-oracle step is one named premise, Accounting.Assumptions.SketchHashRandom at ε_ro (claim random-oracle: at every prover coin and store, the keys SHA-512 gives at the candidate seeds are within ε_ro of uniform on every event, not uniform: two distinct seeds can share a 256-bit sign key; note:20261024T1817Z-report-rt4-fixes), which the proof uses once to carry the bound from the model's coins to the outcomes at the cost of ε_ro, added to δs (Session.pr_coins_le), and the store's uniformity stays in the outcome's coins; it derives SketchBound on a trace over the outcomes that Receipted and Present tie to that model, under SketchRank and the per-pass hash budget KeyBudget (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the deployed receipts (4096-byte blocks of 128 sectors, 16 sign rows, SHA-512 tags) and rank 12, with at most Q + P candidate seeds and Q receipt-hash queries for Q = F·C the hashes the prover can try over the session, C the node's SHA-512 compressions and F the outside-compute factor: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257, timing.sketch_failure(C, P, 16, N, outside=F), under SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.SpareCapacityAtDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1W1, at W1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (Layout.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted, once proved, carries an accepted sampled audit to RAcc delta, which is the restatement path.",
    "Flock.SecurityProofs.RecursiveSoundExec": "frozen (world-unlisted,scope): RecursiveSound at the compiled inner protocol the verifier of record runs (innerAt), with InnerSound proved (the compile lemma in fork form, an inner fork its fourth disjunct) and no A3; beside VBridge, the one listed premise it takes, which candidate 3 does not give in full, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
@@ -11303,7 +11359,12 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
-   "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Models/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
+   "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Models/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness (at its floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "NetTiming.SecurityProofs.EncardChargedLeCounted": "frozen (no-function): It counts each window's decision stream and counts by AdviceV1.chargesCounted, the decisions' charge (the definitions' mirror of arith_encode.py's reference_charge, ChargeCount_v1{N}'s charge) plus any count code's length (lengths meeting Kraft), not a compiled program's code: circuit-check holds ChargeCount_v1's circuit to that reference, no circuit codes the counts yet, and no Lean program of the network check computes the charge, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": "frozen (no-function): It bounds AccSeqsWithin with each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11703,7 +11764,7 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "adc38ca4cb29744f904d9a951ebce2aefe085197c0b83bd2d1841ad491459025",
+   "digest": "3ad1293eeeecf14ee461aa300f485eb4adbd1d94341151ecd03bebee935fb5ba",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
@@ -11721,7 +11782,10 @@
     "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
     "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
     "Accounting.RateSketch.Carrier.provenance": "83fe2280f4e4a4cafcf9e61259f2d053aec04fb3fc65a15873296a8a3d6a0df4",
+    "Accounting.RateSketch.Chip.rebuildsIn": "b82fb553e10657675bf1cb590e7449d30004993e1ffea93a7df6dabad9a62dd5",
+    "Accounting.RateSketch.LifetimeCapped": "27d307bce051e699aa03ae7de515da270bfbe86912958602ac0daa75628bce55",
     "Accounting.RateSketch.Provenance": "e1c403ace5ce67331b8bc30903a25604bdb1c5587793475ffc4fd90c358bd839",
+    "Accounting.RateSketch.Provenance.OfCircuit": "9720606afac4619092f0e2efcf182e32bcd3177e20723733f6a8d25c6fc72304",
     "Accounting.RateSketch.Provenance.below": "4a48f157a7503f7554ee492f74fbecd0ceb6fc0bec60f0972ca47d597325c54b",
     "Accounting.RateSketch.Provenance.brecOn": "ff2bee70e358db270dc1f9003b9314e630160852d793ad5f482f796f4e21359f",
     "Accounting.RateSketch.Provenance.brecOn.go": "291335639b407bf01e1245cbca082ba4f9a9b58751242c79fe55b0d9ace72021",
@@ -11735,16 +11799,29 @@
     "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
     "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf",
     "Accounting.RateSketch.SketchDeployedWindow.correctOn": "dc50e94282b5a9924e9bad4abf22c547b80cf436b8914c64a5c36f8360f2dbc9",
+    "Accounting.RateSketch.SketchDeployedWindow.readsIn": "6363e10290c0cea321ee3be9786639c485ed6dfabc15d41c1a09070234e64c8c",
     "Accounting.RateSketch.SketchDeployedWindow.readsOn": "9582b9fe872e4468f07cb2ad4ebed9dbea2e8d589a9c747a597e04d40da92e82",
     "Accounting.RateSketch.SketchPrefix": "bc7d444025216fd652270044404eb72ef7443e4bb83aa38cc7b24fad18380e33",
+    "Accounting.RateSketch.SketchPrefix.j": "015df25a1a55e0fbd4fece1f474eb8af2d59a501dc4964f9be238f69b99be5b5",
     "Accounting.RateSketch.SketchPrefix.of": "47c5593dde0b838373447a801b4641585b2b445fb5b4c6aa64e9c2185ae2acd7",
+    "Accounting.RateSketch.SketchPrefix.passes": "efc0acae5d7f2367353005cb01f17fa5bb3c70bf33370124f461c20be2a6f9d6",
+    "Accounting.RateSketch.SketchPrefix.signs": "d48c75798df2d7289f00d378242c1a08f65733cafbe3b5377eab8c4fae9568b2",
+    "Accounting.RateSketch.SketchPrefix.w": "8408961df7d21814116585f74339e592e74a2ed81b1d4a4df9a24e0e808ab036",
+    "Accounting.RateSketch.SketchPrefix.windows": "30cea2590640885f02b0136a993ac931afa96bbc7bfc55b2bf2b58997eaa6921",
+    "Accounting.RateSketch.StackedCoins": "85592ae5eae40b5e3db0144242371c241acede632131dbde804f59cbb4590cd5",
+    "Accounting.RateSketch.appendedTiles": "0a8916fd0aca2e07686594f4045c3e40ebc81acabb478e6090cd091a3aa08dc5",
     "Accounting.RateSketch.coinStore": "d28d5837fcb7dbac5beea7b4c4fd18457ff07959f76a4102f144601eb11bdf0f",
     "Accounting.RateSketch.programmed": "085b9626b60659b90f27f2315c28c0b59e3a0a53f9ec4a7b4fd08f48890fd2df",
+    "Accounting.RateSketch.steeredStore": "33418186501154eb79c4c6e8ad5b0ea0ad8ce94ed0aed87b7e953fc7601250d7",
+    "Accounting.Requirement.Placement.Deadlines": "813c1a3277f83608aa52114b44ce69ceac8fa573e3030f6e39517e028e5bd96e",
+    "Accounting.Requirement.Placement.passTicks": "a275bc4a10df11ff2f39fee90206b4cae844c4682ce801e5c6848bbb3da1894f",
+    "Accounting.Requirement.Placement.windowTicks": "a5b0e5331b3ae497865352a31ee721b81ee277abe005b65cc76556cf1cd26ad1",
     "Accounting.appendCoinBlocks": "bc4317475084be00b2ce3d53a254399d6817a4f68ca2bb62363dd99a8fd79903",
     "Accounting.encodeBitsCost": "1808f6f6b51023f9cfefb8f7ec75fceaadc53a568568bb6e427dd1fd4cb7f64a"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -12220,6 +12297,7 @@
     "Accounting.Gates.sparse": "7c1a17c12010cff703689a84ee595aa07cc738e98414387aca0b0db81c4ba6a1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
@@ -12253,7 +12331,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "25a56d21876c94e82763212c84efea5d362f7a8fbfcae738fe63114f4ebff092",
+   "digest": "24e85b2ffbae109cc74aed59ebda9dc4c62a4a4edbd2667a5d67b2acf408321c",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -12284,6 +12362,7 @@
     "Accounting.Gates.Caps.runBytes": "05abd9abe93cd26c6ebb40d858cae0bfdf71f9cef71d76e97021add4d38d5339",
     "Accounting.Gates.Caps.total": "1f3a1226ba6a85a4db23c823457896014ccd7af3628864447de6689f3bcbb9ce",
     "Accounting.Gates.Census": "86d06c3962effe92d4d181104847b73e9fb55a49086fd48656621a85dd8996ba",
+    "Accounting.Gates.Census.budgeted": "4344ab37db3b0429b3dccb0cdfc837831094e6d415e51d8523fde3233c7cb486",
     "Accounting.Gates.Census.compareSelect": "f5c3b1014eaedcd3898a73d1533171313dcae62b3aff3911c03f02a06d5621df",
     "Accounting.Gates.Census.fold": "82a235967f9e6fdf9fff5919454679a5575eb7752dadee233d71489118395e4d",
     "Accounting.Gates.Census.gather": "c56b62b16e7467a7f97137ab8e5b8585a3bf1c138c7e71a986c418f5cc61d988",
@@ -12420,6 +12499,7 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.Bf16ToF32Affine",
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
     "Accounting.SecurityProofs.Gates.DeclaredWindow",
@@ -13416,6 +13496,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
@@ -13434,7 +13515,7 @@
    ]
   },
   "Definitions.Accounting.RateAuditSketchDeployed": {
-   "digest": "fd1c02f279c356f70faa725ccd9a83522beceb5e2be54201b7fc2824334252b9",
+   "digest": "f2466a29253743deae0375c803401f714912c0e34f200500aa6f12c79303fe5f",
    "definitions": {
     "Accounting.RateSketch.Data.ofParts": "a60b017a6780a68097308ef5ebf8e8f29470885faf50d90d39c9cd60471e390a",
     "Accounting.RateSketch.SketchDeployedSession": "a840924e954cd6cfc03b388148c9df8f4384e2814b1ef1e93f1f46bdd0eb53e5",
@@ -13451,6 +13532,9 @@
     "Accounting.RateSketch.SketchPassCoins": "371f4c1a0f16b2cbde2f4f192f39143871a4c1b09b6109ac354d76767e989702",
     "Accounting.RateSketch.SketchStore": "00773f858bbb7e05a6df4502dcf5b3ea2b7a613a465ce8947835a2bc95879959",
     "Accounting.RateSketch.SketchStream": "29266ed00efc5422dcdbe1740e6ce8bf08ddc1709078474088ff212adf03a4ab",
+    "Accounting.RateSketch.SketchSummarySession": "33a8f4a669f8005d7daebb73994e3298112be3d40c4752ab544e8f043452aa1b",
+    "Accounting.RateSketch.SketchSummarySession.session": "164adab63c15013427f713198fdd8864781753bc703577a574526d5c32507fec",
+    "Accounting.RateSketch.SketchSummarySession.win": "5963628a8e4cce68a298d71dc8ba6b1384b95dddac92e141fb979c95a32f8ba8",
     "Accounting.RateSketch.SketchWindowCoins": "d46e219fc4d46dc4953b7f2258d5239e8ff7ff2c147a5201dec86209f9d74a11",
     "Accounting.RateSketch.gammaSketch": "bccba307e6211c544c0929ed4e9d24c1e62555948bda6a68c1a6e25000b5d38e",
     "Accounting.RateSketch.instFintypeSketchPassCoins": "100ad544423e881509d9460993c9fcda72df07107a80a9f217a4fa735832a6ec",
@@ -13458,6 +13542,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
@@ -13539,10 +13624,15 @@
    ]
   },
   "Definitions.Accounting.Remote.Draw": {
-   "digest": "2aef326bd1ab0dd686824ce2554151eea234440143a0a1baafb28dbf8bedd454",
+   "digest": "7876cadfb63b6cbe3b24cfc413176090d5563297d284ab4717d1cdd5d096618c",
    "definitions": {
     "Accounting.Remote.Draw.Blocks": "c039d32ff0024407a58df4ca4cd9489e00cd3968a16cc2b29cd83ff475aad5c8",
     "Accounting.Remote.Draw.Coins": "2f7cc1f6aba6148b468add0d9e19c65c8fbc3c14c0869a701c2eb8a47b114f0e",
+    "Accounting.Remote.Draw.Committed": "8d5a27ed5020df51f364fe17853a01de1eeabd27b7f472291f38a9ea31848b9f",
+    "Accounting.Remote.Draw.Committed.hide": "276f5d3c01bfa013c0c5dafdc9cede59767e978c37aa21221af2999ebe2d6e81",
+    "Accounting.Remote.Draw.Committed.junk": "f54a705eff576473dbc3bc29a82ff9b6b21451e18b75ddef473ef4b2adb8f6b3",
+    "Accounting.Remote.Draw.Committed.play": "b4021d5c5bf4c2cf96ea43085af2e5486d59222be56ebd483adbe93131ab61bc",
+    "Accounting.Remote.Draw.Committed.view": "ef821b4c4ca72a36487ad098844c31f66680c424d505fe7038f718a2e940bd25",
     "Accounting.Remote.Draw.Session": "941ba13f9bb572a8f393d61cc00f47748ebe85bf7586ec44acd7b4e409f7378f",
     "Accounting.Remote.Draw.Session.bound": "dfa9fc1a0ba16e75c1c165d86ad380feeca3d05fdd11c215284a4323ad0ea2f0",
     "Accounting.Remote.Draw.Session.correct": "7a758b411d408715105f90ace2ed209efb98671de7d88223d7f6bef9f5abb26c",
@@ -13552,6 +13642,7 @@
     "Accounting.Remote.Draw.Session.lands": "46b48e256df60ccc26559997409f520b337a023fa4a4f5360db410a0e5e00dde",
     "Accounting.Remote.Draw.Session.opened": "099546d4ec6c4501eb30a14545212cbfa9e971b9cd8a9c7d4b7c86fc4c8b44a1",
     "Accounting.Remote.Draw.Session.pooled": "da515c7764fc56368be00b250a02164eaaf56a1eeefbaa8027b150f93b1104fd",
+    "Accounting.Remote.Draw.Session.potential": "d917389ed42ec1b1d19bd7fb95ca6aba17d4132a68bab1f9cecc8659794c380a",
     "Accounting.Remote.Draw.Session.size": "0eea821c86033cda6df2dacba304e9084e642040e5868e872fd12059353d3992",
     "Accounting.Remote.Draw.Session.wrong": "6f669c00ea5f96e2ebc5d63abe8515c635ddf600f6bc00a1247a5b98e954b12c",
     "Accounting.Remote.Draw.accepted": "b0a92a5e05c26a8037ed70a16b94ff1287fdac2e513330dbe5679c1d499b94c6",
@@ -13748,6 +13839,7 @@
     "Accounting.Window.steps": "37b955a3ac78e48bbab5600c405890c73f0deef2ffc2472b6084e297dc4e922d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RequirementCredits",
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementDense",
@@ -14563,6 +14655,7 @@
     "Accounting.Tag.unreadSum": "1f8e83f1fa0da60f295e0e8589e62dcd3099e7d20aac633bad80388bb962172d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
@@ -17942,10 +18035,13 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
@@ -17995,9 +18091,31 @@
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardChargedLe",
+    "NetTiming.SecurityProofs.EncardChargedLeCounted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
+   ]
+  },
+  "Definitions.NetworkCertifier.AdviceV1Counted": {
+   "digest": "266c372bb750fc00fc1fc94fb9d9461477a0dd1fe4542f92fce05cabaaf22f5c",
+   "definitions": {
+    "NetTiming.AdviceV1.CountCode": "1257b21d4f267da02749ac0a8b61e91f4ba28a9772b2a2bba350c66708204856",
+    "NetTiming.AdviceV1.CountCode.len": "03ef3c99c51611ef9d437aea43ab72c5028d9de9698d00e63665aedee35f8d0e",
+    "NetTiming.AdviceV1.StreamsCounted": "197bda59354aba137846a4897771bb71d390c45be576e8778c803726c65f1e9a",
+    "NetTiming.AdviceV1.bitsCounted": "4d0376ceb9e128eef5b1d07d4f1122b6e888320ccc5a4d1353fa813fcccd100f",
+    "NetTiming.AdviceV1.chargesCounted": "f362213e18f86283cd918a700375c5360d557a8e1c5a69b4890aa0900b3e1f01",
+    "NetTiming.AdviceV1.sessionCounted": "5c5c6cb4d94e33216a415d1017907c1a4ccfaccd62e57016dbdd7e938def9379",
+    "NetTiming.AdviceV1.windowCounted": "6576e2e4b8e94cab59ce126f320db38e2ef903267b508358f5936479948bed64"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
+    "NetTiming.SecurityProofs.EncardChargedLeCounted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
@@ -18029,12 +18147,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardFifoGrids",
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
@@ -18048,14 +18169,18 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
-   "digest": "1fcd28e8fa747deab3ac260e1821914295e91618c53951b48551742430ce30bd",
+   "digest": "92990b9f172352984e1d68f31611b5608d746222be1e12753d8ce0ed1392da39",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1": "f72da5d22ba00982d6046c15c5368b06f2bf7fedb093fb209872842e438f8b8b",
-    "NetTiming.Guarantees.EncardChargedLe": "50969b0712f57bd5911434e144aad2582ab23ae6b092dbe107072c41c08163aa"
+    "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted": "ba09b395c7dd17b8420c666db51606f4f25459e367da0c096ac431b41249a2b0",
+    "NetTiming.Guarantees.EncardChargedLe": "50969b0712f57bd5911434e144aad2582ab23ae6b092dbe107072c41c08163aa",
+    "NetTiming.Guarantees.EncardChargedLeCounted": "e4967b61666261b8ec244a1f150644e50c3b33bcce1d304798bce73f608e9e8c"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardChargedLe"
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
+    "NetTiming.SecurityProofs.EncardChargedLe",
+    "NetTiming.SecurityProofs.EncardChargedLeCounted"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
@@ -18135,12 +18260,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -18218,12 +18346,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
@@ -18465,6 +18596,7 @@
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.Memory.Adds",
@@ -19316,6 +19448,21 @@
    },
    "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure", "Pous.SecurityProofs.P2RingGradedOfRoundSecure"]
   },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1": {
+   "digest": "c73cb662dd2272e95505450b132b40a954e28fab967af8b5503d57612d88c86c",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": "776d403cfff4d73c824ddda801c0c3e7826e9a1acc9b05544ed48bcafcf16690",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": "ffbb12bffae03325fa90b3a803eedc50cccd019e1460a91ceb6db606851ccb0c"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192"
+   ]
+  },
   "Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1": {
    "digest": "addacf2ca365c4febd7e35ff02603a4e15683fbf2ba8260fb952c5f7684ee7dd",
    "definitions": {
@@ -19344,12 +19491,16 @@
     "Pouw.PearlC.Assumptions.TTOutW1": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -19360,8 +19511,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -19379,10 +19532,16 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -19408,7 +19567,13 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.Barrier.Defs": {
@@ -20015,6 +20180,7 @@
     "Accounting.SecurityProofs.Sketch.Exact",
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -21387,6 +21553,8 @@
     "Pouw.PearlC.wrefFp4": "956e630ec94ddb752dcb1fa45f2de970df26fb8c99063b96faf581751b7f5309"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120IssueLut256_16384",
@@ -21398,7 +21566,9 @@
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -21409,8 +21579,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -21428,10 +21600,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -21458,7 +21638,13 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.DeviceFp4ChainOnly": {
@@ -21875,6 +22061,8 @@
     "Pouw.PearlC.Fp4.truncRZ": "9371ceea673ed9f3f4ffbe5edc635aeab8fc053aaa66799b5f7e4dfb68088156"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120IssueLut256_16384",
@@ -21886,7 +22074,9 @@
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -21897,8 +22087,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -21916,10 +22108,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -21946,8 +22146,14 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Fp4Chain": {
@@ -22332,6 +22538,7 @@
     "Pouw.PearlC.PeelExact.windowWord?": "614a46158508b90d7a00a69737e4d81e5570527e420dcb400cd70c0ba7b86e7a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -22385,7 +22592,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
@@ -22845,12 +23055,16 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -22861,8 +23075,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -22880,10 +23096,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -22909,7 +23133,13 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Skip": {
@@ -23177,7 +23407,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
@@ -23534,12 +23767,16 @@
     "Pouw.PearlC.W1.zig": "b2f8330c3dda8d3a9ee986b205a245253650df162efef6eef6040f4853af91ef"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
@@ -23550,8 +23787,10 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -23569,10 +23808,18 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -23598,7 +23845,13 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.W1Stop": {
@@ -30580,6 +30833,7 @@
     "Accounting.Assumptions.EncodeChainHardness": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.StackedRequirementRelay",
@@ -30635,6 +30889,7 @@
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
@@ -30696,9 +30951,9 @@
    ]
   },
   "Models.Accounting.Assumptions.RemoteSketch": {
-   "digest": "622e737875834846df512d274a974df46e2405b0e5a86c1be2a243a8cbdec6ff",
+   "digest": "e1d73658f12d29e86ae14da1a56378efbdd59ba7176334b45d6896773d2a8b44",
    "definitions": {
-    "Accounting.Assumptions.SketchHashRandom": "9a507ea966011d3f8987f7ad0fc573827682a4f68684bc39a7939c11f48a7574",
+    "Accounting.Assumptions.SketchHashRandom": "3e61314a8079aa83ddf9f4d27c4b669a01d6470868cc4bbacce26dd6e40d8896",
     "Accounting.Remote.Sketch.Assumptions.KeyBudget": "96b9e1b10509949f6a776f27cda39b1defc1f88006a7491fc877da21e20e4afe",
     "Accounting.Remote.Sketch.Assumptions.Present": "cbf1e069cc0fe91bfb409c2299f1c238f484be229a654b62b0935d046525b16d",
     "Accounting.Remote.Sketch.Assumptions.Receipted": "3328eff94adee2bee0cbb7d9c30b8b946e673c5f4bf74f25d23235318016ad41"
@@ -30736,11 +30991,14 @@
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
-   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "digest": "bf222b12845ea12e66df6757ffb2229d009250a6a0c3088d6910c2ad33c89027",
    "definitions": {
-    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+    "Accounting.Assumptions.CircuitCarriers": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a",
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
+    "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -30971,7 +31229,7 @@
    "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
   },
   "Models.Accounting.Guarantees.BoundReceipt": {
-   "digest": "68266a4a88f70326ace7a9d30d47dbdce81ad51c33d7be3be9dffc3944902e95",
+   "digest": "cfc04f46a5e00cdac1c5cd53390a9847d84e3b73589aa9c1ca72fec6ff4b5330",
    "definitions": {
     "Accounting.Guarantees.BoundReceiptLink": "8af8cf34ac0c51cf351be6a8a8cfbb18eac7745e7e5fad766f3d1ad84abd2f2f",
     "Accounting.Guarantees.BoundReceiptLinkInteractive": "228d2b8ff7fab32eea69415e24f5b2be094f7b7b147c8ffd3fd8d21355001c6b",
@@ -30982,7 +31240,7 @@
     "Accounting.Guarantees.TileUnpredictableOfNCPU": "d04832b14efbece2bc986a767a5ce3d781d3051af3bcd21e6a618b3fc4f8e079",
     "Accounting.Guarantees.TileUnpredictableOfTT": "91df48861310d961344ba8740e89a033669f8585a967cba17707b99d18f4c25f",
     "Accounting.Guarantees.TileUnpredictablePearlC": "a5a5ae33f1fb918e6c0c037d44ab82dd9820f80465232a1e2ddc42a7cb086482",
-    "Accounting.Guarantees.TileUnpredictablePearlCOfTTOut": "ad839c2df0f60442d1a0989db18c0c085ae21f47c9e564c321682299dbbe41f8"
+    "Accounting.Guarantees.TileUnpredictablePearlCOfTTOut": "0b84ef293f2f22cffa67533f8ddfd5605e0c7bae141d9d34b44a637d9d23f460"
    },
    "guarantees": [
     "Accounting.SecurityProofs.BoundReceiptLink",
@@ -31093,6 +31351,13 @@
     "Accounting.Guarantees.Fit": "3dad2744dedc3335f643260612186bf5c3ce25104fde75630f3a0b405302b605"
    },
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
+  },
+  "Models.Accounting.Guarantees.DeclaredCircuit": {
+   "digest": "86adcdb25af4fde56e3ef3b6d8921a6e2105e82da737bdf158f0c4fbc6aeb4a7",
+   "definitions": {
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "e150559da199b64cd22be96eafa8607e3328b3ff011e44ad4c0662863fa05564"
+   },
+   "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
   "Models.Accounting.Guarantees.FillerLuck": {
    "digest": "d3cde4e711bc94a457e80fc73d8515d402260e5bf42307429c1415f56759a67b",
@@ -31485,13 +31750,13 @@
    ]
   },
   "Models.Accounting.Guarantees.RemoteDraw": {
-   "digest": "7089dc53cd380e5043b8cd97f95c7a769d9689932442f4ccd9490240622598f0",
+   "digest": "ee588f92e34fc3aabd9a3a4effedb3f0800be582761025e8e662ca494fd72b7b",
    "definitions": {
-    "Accounting.Guarantees.Remote.HeldDrawn": "98ac40c42400d69f54164246b47cf1e2646538404d3dc8e278153819ac7b9627",
-    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "758e61bd3c604d212b3e29a1fdd241acb238edcee249d16e71d5b3b91144dbb7",
-    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "a83d8053316dda54d7ea45642ecef5e55f887cc1a4de3f521d1989e1bc85a1ea",
-    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "42e20a80d7f001f9ba17b9de26feba18ca8ee3df74d74a7c2dfea6ce68b8cdab",
-    "Accounting.Guarantees.Remote.PooledDraw": "3e849e223237482476e2b241367e63f317d31b6a852306c676a1ea6a62b63257"
+    "Accounting.Guarantees.Remote.HeldDrawn": "6bd9a98bcb2521ac6e4f4c4527de217c30145c6c5cdfc56ebcb52da6d7744793",
+    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "b1a340d90c1f365e13e5aedaba7a5fc362089650bd0e48fa7d225860b865a3da",
+    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "63eeb877c82e121519ac2bc0394b0a08d2c03c89f2ae967456ddbbc00e9c166c",
+    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "ad316f4b652bd92c7498bb488091f4677104278d9bdcde15bde38c936f1e2bd4",
+    "Accounting.Guarantees.Remote.PooledDraw": "092a97d93888b88ab1a4db6ac0c5d4dc221535e49dd0cbe24c3536552ae789de"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
@@ -31515,10 +31780,10 @@
    ]
   },
   "Models.Accounting.Guarantees.RemoteSketch": {
-   "digest": "1477c5b2b5070cda35528d1578a62f4c8afb6b748fc90ef6e4780ae4ac52cb51",
+   "digest": "c60362ffb59d956be55efcc71f5b9108e9025bc59343c7877a6ba334a0e7c520",
    "definitions": {
-    "Accounting.Guarantees.Remote.SketchBoundDeployed": "ed6cb7176a2ec67cfb13e0fc6e8961ad3c5e87c167596cddd6ce83041a09944e",
-    "Accounting.Guarantees.Remote.SketchBoundSession": "fa503f08030969fd024b3a118637f528b91792580ed82ae9745470c7f149dbab"
+    "Accounting.Guarantees.Remote.SketchBoundDeployed": "a9c730df59ff21c2e3a51581d26aa9df9a50c5af8f2fbe2298f58819ad3bea4e",
+    "Accounting.Guarantees.Remote.SketchBoundSession": "ead9119c9c94ca5ebc8e212cd23a60a2e43b4471f2280a47163a450fd2d5f796"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
@@ -32609,7 +32874,9 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -32630,7 +32897,9 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
@@ -32699,14 +32968,18 @@
    ]
   },
   "Models.NetworkCertifier.Guarantees.AdviceV1": {
-   "digest": "4dae539f4da23f0cba7dbce77e282663453b6623e8c40c9638f3eeb1e774a117",
+   "digest": "04e8744b610cbbbb57edf9066bb6470b706c55fc54dd76e9883819a61db58349",
    "definitions": {
     "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1": "7df52819eda592fffba9f6de153943aab07302effecfd68234f83e914f60ed38",
-    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1": "d4e9c6adc50d81ffe2a7139c0c6c2d0761b88a34bb88a39a941fd9ebb0531cd1"
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted": "659acc3ad1c2c7d772639cc4e7e50aadd718cb9786eddd36aebaf2a20b570c6c",
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1": "d4e9c6adc50d81ffe2a7139c0c6c2d0761b88a34bb88a39a941fd9ebb0531cd1",
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted": "062f0a3b200c503c503c0994d227715cf8e8511bc43c41a724ebe6abf7e379d3"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
    ]
   },
   "Models.NetworkCertifier.Guarantees.Warden": {
@@ -33063,10 +33336,10 @@
    ]
   },
   "Models.Pouw.Assumptions.PearlC.DeviceChainCap": {
-   "digest": "33873a3bc226aee36c7497fef72010c7a84de8fa977e7a868ec33cc03295b1bc",
+   "digest": "8e741a68e3b2d2a91dcf22fb4409d4693a5fd42438f7d24fc23ab031ba5ff639",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap": "b55a88e3f3be9a980861d2a1244b219f3b72854f49272ee148c7efd169ce636d",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap": "20cfd44bf0a2df63d67e2390dba4ca9352eddedc0e7da56e716fcd352f2ba5be",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": "72b34e446c00f62344af9d27de395857280e7444db34a385e5b63804f7b48515",
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": "11b0df76ee505ea115448540bad130def9ee3e11023f5c2d8e9804b0affabb5d",
     "Pouw.PearlC.chainCreditDev": "6e4d7c50189df577e5e4a060c20f50516332d4dda5d497288e0d52b91a58e362",
     "Pouw.PearlC.pearlCProtocolDevChainCap": "693866e02c5d1ba3a3156bdd97c55c599ccc7e22210d39e9eaef0ec3b9b49083",
     "Pouw.PearlC.pearlCTilesDevChainCap": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
@@ -33098,46 +33371,13 @@
     "Pouw.PearlC.Assumptions.TTOutTile": "953f75b038ef12f1ca8e035102cd694d2a82f97ea079f1ebbd54fa365fefab88"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
-    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192",
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
-   ]
-  },
-  "Models.Pouw.Assumptions.PearlC.TTOutChainOnly": {
-   "digest": "cf36ed9f4c004a1e7b3ce2471c40f2f0bd6c79daf077832a6252be103ecf03b2",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly": "96cbcffa2dd79ef186ad3b81562d208b86e8c02e0ca3621312f964d61e6044f2",
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly": "c0403faf7a90ffd6979dd16c4ff4d6d676e6e40daa6f43e63929936de3067657"
-   },
-   "guarantees": [
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutRev1": {
@@ -33148,19 +33388,13 @@
     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103"
    },
    "guarantees": [
-    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256",
     "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192",
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutRowSeed": {
@@ -33210,10 +33444,10 @@
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutUOnly": {
-   "digest": "b0780d9b9fcc31da076fa9c4d9809dbe443f4eee21b8b04dfdd2adf3aaf709b4",
+   "digest": "1069230ad44d00b7da91f1438f7cb0a6c8533a59f9a397e524e17478ad2d884c",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409",
-    "Pouw.PearlC.Assumptions.TTOutU": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": "5b522a3a0d187ee4b63c8a0d613ce1b00c191dc2d52ff6e9fb108d204b750f88",
+    "Pouw.PearlC.Assumptions.TTOutUW1": "1f20fa7ea9307baf031d9e7b47fa80d1cee52020582980de83356f4fcfdcc6b7",
     "Pouw.PearlC.CorrectU": "d3ce7dce232fed50bc654fb85ceaee5f1f56045d7b1afc7bcd56b2c2f2b3978f",
     "Pouw.PearlC.GγU": "1deb508aa34e8e69400b9c7081082f29536f378222faaa3808787383dd6c7d59",
     "Pouw.PearlC.WinsU": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c",
@@ -33276,13 +33510,13 @@
    "guarantees": ["Pouw.SecurityProofs.Barrier.Generic"]
   },
   "Models.Pouw.Guarantees.Deadline": {
-   "digest": "e79145f5fee4b2ec8f89a049051ddf3e5640603df74f696dda584fc52ced4d09",
+   "digest": "886d1f2fc50cc7b4ac8032a8dcf41b2e729e526b14a35a937dc440acbead5384",
    "definitions": {
     "Pouw.Guarantees.PearlCSampledByDeadline": "3a86f2ea9e2f778fce619faebcdbfa13b544082c767b89e03b4db16763ec141e",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "acf0c465c4ba8e09344972583d14a9d31b8b15bd6eee04ce28738c3080fd26c7",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "499e71472679b027802333f39822ecd66ca0afdf0bbfbc9e8f39e8323bb3a63b",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "cb100deb8f0fb464079bee549a4e86a3cb7566e8a3d5d9ecd34d69a151dffbe9",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "3c51cce69f00c1502d090052146702472addd3a576cb5bdbeb87404b868d2e35",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "3f70c46b5861bc4e01c517eb6b28edcf43427225f5c420d895c5ad226615d3af",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "95c105727416f34f21f35592835a40ff61c621592fad46625ae8e6795c06e9d5",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "4e47effc6fa3fd2c1776dedee01818ccc18c4bb400c91eb2e85b5a3e32874737",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "f069a8337c449466ab80a4757ba762f544e43a24a4c0773b330b1d6aa4b29c56",
     "Pouw.Guarantees.SpareCapacityAtDeadline": "fce79a1b3a99f37d1c77ca7e75afdd39bcf01d5aca010d24d79196206e28fd4b",
     "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "3788462f2fdf84cd3f392455f2a420582c649e83cbe274c773123fee66e690df"
    },
@@ -33381,7 +33615,7 @@
    ]
   },
   "Models.Pouw.Guarantees.PearlC": {
-   "digest": "6588d463ed1cb5172e3d148bc53e66695cd3691394c2c8bf16f298fe50189383",
+   "digest": "cf8941b9cebdc583e6120886c20a3a4d30ffa31e233e34920c68d980ba6aa439",
    "definitions": {
     "Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": "24bab8a60bd37f1419bed2a8f2cb96a48d1477976413a0d86f5e431ed188876b",
     "Pouw.Guarantees.PearlC.GammaFp4ChainOnlySm120LoopLut256_8192": "1a736a9e4f153f255fff5be1a3504d81be9ce273d97f4e94089f3e1f0aff541b",
@@ -33394,9 +33628,9 @@
     "Pouw.Guarantees.PearlC.GammaH100Rev1_16384": "b8ce8bd7c6ba4f8a121963ad5bbcb7a043065b7c716969994a208b82c4550a6b",
     "Pouw.Guarantees.PearlC.GammaH100Rev1_8192": "80a86ad9ada289a0c8674bfd0612eba7b8c0825728397a862b8bcf6e2adf9f43",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast16Rev1_8192": "07db178320256171809e82e070e7860642eaf52752eb68db42c134bef7022e73",
-    "Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192": "848ab9404cca7dbf9aaa16457fee836db65b48eeaf451554117eb1117c7b8407",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192": "794de9026bf491f43bc30284bbccd080f9c011b5063cea6ca53785021c6be265",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06Rev1_8192": "c9ea2884c4d46b7496cd43cccc440ee029242506363a2d8b420efb8b35b730f4",
-    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "1ae16c944c1bc57c26164646ae527e5b8e4c6993dec28bbdc87adbfe24637936",
+    "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192": "48a99b6b1c419e82e3046c148910a3f3f376ed9eeb4d61f448123b75b92b90d2",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384": "a56f24fe1f071cb68cbe71d2b5b6b9c1cbd248c5cde5838bf02dd3e647ed9686",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192": "6e8cf8f793e8c565c0a679fe9ca78426b778868ea0b019612a4ce24b793bf28e",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b": "f8241d676f2e6e55e5a1642d98eaba1cc6b1ee324a0ed42eb3b9419e28ea94d1",
@@ -33407,10 +33641,10 @@
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_16384": "fa55436b780842cf631065204bc97e94492d8463e456fe1669751b63cff0b950",
     "Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_8192": "1ac32598c1e5312086671a9c574893ad2630023b00c8f2570c01d36231c7c84c",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast16Rev1_8192": "7a312a19f5aec3b95dba162d86a101aa8bd869e8fe3ad79eda6c7a0e5144e1f8",
-    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192": "5e5f67787298d76df2dbb686d662f13fbc6f3058f796b8906c9676321a07467a",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192": "0e172e00f97c9d848e258877aa2248b47caf6f40a22f08a4c68afdee6a86ca3a",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06Rev1_8192": "d4595e01090c94002e914e81e4dab11e29df35eba12380be997710e0fb3e3322",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8Rev1_8192": "7631b76d206e8c3cbdcd8501f5460f9ce496895d0207cc123492c2a099702b55",
-    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192": "091cef473ab83cc556cfd0b172af31d9604d7755da42c17fa9b1e46a6fbb8b14",
+    "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192": "5b8ca1b8acf21bcc3b5ba68d5619a76ba6229e8bad8a76c345f463144a8fedca",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384": "2161859080622a9bfc05268276ece56fb83edcf878c4105faed5c278a009bd1e",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400": "628b9bc2821b2d643f2e18e20a51ebbdd58c98ed206b21621436de5fe52141ec",
     "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192": "561192852886a2d602b604fea7e1c606bbdd557d479c52a2d393f628e4c40bad",
@@ -33428,17 +33662,17 @@
     "Pouw.Guarantees.PearlC.GammaSm120v2Cap1000_8192": "463773ea778b5f0385c0c5fc3cb8ee2f39964dee98a796377883aa52b6880564",
     "Pouw.Guarantees.PearlC.GammaSm120v2Cast16Cap1000_8192": "2cdaa5be290e6421a3621c38a7b13fdf5546fdb97f254a43ded47cfccc3f757a",
     "Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72Cap1000_8192": "fbbabd15d82b2a0d7814ac1812f6d8f28569f9241edcab94aef997d1dc72e33e",
-    "Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192": "7b34a941a04c10d96d9a13222ef9878a7379b4f696de3c27a019d50ec66d257a",
-    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_16384": "9ce2756554685ab31ada3e3d2510ce06aa0b3c487aabee99245e2f89d285e5f8",
-    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_8192": "4100d89fb2693ea108877497dc6d2b41aa1550061aafbcc7f8276cf6699d6a04",
+    "Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192": "a1f9bcd238c7a15cde003075cf040ee11c4d1eeb383ac810f7fb6e5a0dc42c3c",
+    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_16384": "4a51400970e37d5faceff462de90077118670efeb7ccf9463a1e98abebda63a2",
+    "Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_8192": "7f12a124ff653d19f945a9d13a0671a4c8d774839bc67c5f3df2bdb6e6cf0da1",
     "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast16Cap1000_8192": "3a2120a4bbd5cc824a8e385f205be06d46fd127ac2017e983f03860624f9f78a",
     "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8Cap1000_8192": "ee62e8a0a043462c15934c35dfb099a345b5cfc0f0865615240d65d268f458dd",
     "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192": "9e1d40d3558ecbac1742cb2448e94c86e487724e4dcd168675efe729fabec56a",
-    "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": "47cc0d5690ffea307f2f9579addfc261535366880b6b6419363d433d53c2ead6",
-    "Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192": "19e5ecd5a8b8ea0f4e57306429327950d959d277c21038a598a1ae2a86ed5c42",
-    "Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192": "d80817bbab674b46e7a9fd545c025c52c1229253d8f4f4ecf3000c2c9bfb040d",
+    "Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192": "292a524207f8aa6c1d9ba195ba94a9e6b84a83bc49a3c6af8b1dfd2107f1a401",
+    "Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192": "107af2d33dcd73498d524ab1dfa3e7f09290ec003747080c608e0e29ca82d926",
+    "Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192": "590ba9483eaf0b7eed40ca310273ab770e9299ed9853e44e102e56fb73d7cfa5",
     "Pouw.Guarantees.PearlC.GammaUnpromotedCap1000_8192": "4a16c5d49aac399db5fe12743876f59e9ea47ab2e99064f626d99b8cbe41ed38",
-    "Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192": "2be769ab69c4eb5ba24f0ab1a12b9fa1d69cfe42c79dc3514576909c33c75ec7",
+    "Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192": "c51e0f641fcb04d59f22745ea2cb6c59d80d25b242961efe0b29dc304351a9eb",
     "Pouw.Guarantees.PearlC.SampledFp4Sm120_16384": "68a7dfeecb0682f35018206b4b013e291369f34f2c360ea8272595e0fd2313aa",
     "Pouw.Guarantees.PearlC.SampledFp4Sm120_8192": "000c739556dae08d75ae54fb27669a48acd060bf7b3e14c5f77d4c708d88be94",
     "Pouw.Guarantees.PearlC.SampledH100Rev1_16384": "dc2e7ec94a13c9c45714c3ec7cf3c44a59e048fd473bf7679f0c7548b922a38a",
@@ -33465,8 +33699,8 @@
     "Pouw.Guarantees.PearlC.SampledSm120v1Rev1_8192": "352c49b77b80cc7ff5782d19e591edc4fd3334cae5ef41ad3f1a23f72f97cf93",
     "Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384": "98b92d7dbe5ecf73388924189d6d9bc1b263312aa46ae6afd5c40787447f4734",
     "Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192": "98282179980a8a463abb194ff7b0611e893db2081ddbbdbd0001aeb2c15390d8",
-    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384": "f9cafb4a05713ae64bbaef92b460217a80140e862ceb4dabf980835606df3c16",
-    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192": "b81fefeaf056eaee3869c987a4c8ffb7f8e7226979becb107731432331d610dd",
+    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384": "58a5ee81398bc90bd0c7d29b3f566fd30787a5bb7c3d5c2f5d62d3fe03d1c273",
+    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192": "f326061212d627b92fd1e661fa71a214cbab8ac3b772001d84fac50fbbf2e996",
     "Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut": "c302df776cd74fb27fbc745c5dc3391fdb0ac49ee0072e298e51af4f87ff09c0"
    },
    "guarantees": [
@@ -42263,9 +42497,9 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
   "Proofs.Pouw.PearlC.FlockTile.Statement": {
-   "digest": "c8fc0fe9b0f428303c8efd9f8209f8fa1247988af5fe66202a038f1647f0015b",
+   "digest": "465f5655deb1bcd97a1eeb02d07f26aa53a6a8db3b9f91d54e2dbbd0ee083284",
    "definitions": {
-    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "facd7a05e330da424281c2d025ee7c9c42998148e2e4e0f115231b36279d1c02"
+    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "e6e7094d949ae08c4d2d27d03cc844cdb92cab1a89752f6479547017446e67fb"
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },

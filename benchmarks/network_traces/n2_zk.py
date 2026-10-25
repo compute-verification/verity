@@ -36,8 +36,9 @@ decides nothing.
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
   descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
-  certifier salt of the member (`a8.received`) but the pieces the public circuit holds (`public_pieces`); the prover's
-  instance files, which hold the heads, are the control.
+  certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
+  (`public_pieces`), which the verifier has whatever the witness; the prover's instance files, which hold the heads,
+  are the control.
 """
 from __future__ import annotations
 
@@ -49,6 +50,7 @@ import json
 import os
 import secrets
 import shutil
+import socket
 import sys
 import tempfile
 import time
@@ -148,7 +150,7 @@ def link_windows(run: Path, edit=None, clock=None) -> SimpleNamespace:
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
+    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
     if clock is not None:
         st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
         previous = None
@@ -397,7 +399,7 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
         (d / "tables").mkdir(exist_ok=True)
         os.link(sg.circuit, d / "circuit.txt")
         bcs = SVC._commitments(d / "pub-1.bin", 0)
-        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs)
+        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs, members[name].advice)
         if not (bcs and mine is not None and lw.row(mine, "pub") == lw.row(x.args, "pub")
                 and SVC._opens(lw.row(mine, "pub"), lw.bits("pub"), salts["pub"][0], bcs["pub"])
                 and SVC._opens(SVC.output_row(words[k]), SVC.OUT_BITS, salts["o0"][0], bcs["o0"])):
@@ -421,10 +423,18 @@ def _certificate(c) -> dict:
     return {k: (v.hex() if isinstance(v, bytes) else getattr(v, "code", v)) for k, v in asdict(c).items()}
 
 
+def _free_port() -> int:
+    """A loopback port the OS has free now. A pool's slots share a machine, so a fixed port collides across runs."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
     firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
-    verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window."""
+    verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
+    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free."""
     lw = rd.lw
     stream = lw.stream(budget=rd.plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins,
                        clock=time.monotonic)
@@ -443,19 +453,20 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
-        record, live, proc = M.a8.session(av, m, sdir, [0], port + j, env=env)
+        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)
         late = stream.deliver(draw, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
+                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None,
+                                     advice=rd.advice)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
         findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
-        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs, rd.advice)
         proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
                  "refused": refused, "proved": refused is None and lw.proved(findings or [])
                  and all(list(f.units) == [0] for f in findings),
@@ -485,7 +496,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
-                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
+                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1}
+                              | lw._advice_output(rd.advice))
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
@@ -497,7 +509,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
 
 
 def _member_scan(M, sg, rd, out: Path) -> dict:
-    blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes())
+    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows if x.args is not None)
+    blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes() + rows)
     control = out / "prover-instances.bin"
     with open(control, "wb") as f:
         for x in rd.windows:
@@ -555,7 +568,7 @@ def prove(a) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     def go(k: int, name: str) -> tuple[str, dict]:
-        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k)
+        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0)
         res["received"] = _member_scan(M, sg, members[name], out / name)
         return name, res
 
@@ -594,7 +607,8 @@ def main(argv=None) -> int:
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
-    p.add_argument("--port", type=int, default=7681)
+    p.add_argument("--port", type=int, default=0,
+                   help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
     p.add_argument("--jobs", type=int, default=4, help="members proved at once")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
