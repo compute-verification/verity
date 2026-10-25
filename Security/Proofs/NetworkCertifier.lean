@@ -10,6 +10,7 @@ import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.SampledAudit
 import Proofs.NetworkCertifier.SampledAuditAccepted
+import Proofs.NetworkCertifier.SampledAuditInstance
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.Schedule
@@ -38,6 +39,7 @@ PRF-144 proves it (`NetTiming.sampledLeak`). `Sanity` shows every named assumpti
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
+`SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
 -/
 
 namespace NetTiming.SecurityProofs
