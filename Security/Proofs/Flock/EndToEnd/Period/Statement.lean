@@ -97,15 +97,15 @@ variable (w : HiddenWindow)
 def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
 
 /-- The window's audit as it runs: `EndToEndHidden`'s game. -/
-def game : Game (w.Reg × Finset (Fin w.n) × Transcript) :=
+def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
   auditLive w.L w.Reg (liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr)
 
 /-- The key program's partition into proof units. -/
 noncomputable def P := (keyProg w.D.unroll w.hU w.n).partition (Discharge.Layout.outsOf w.D.unroll w.hU w.n)
 
 /-- The public file's commitments. -/
-noncomputable def vb := (rsZHJ w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt).bindingZ
-  (rsZHJ_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt)
+noncomputable def vb := (rsZHJ w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg)).bindingZ
+  (rsZHJ_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg))
 
 /-- The model audit's strategy that a live strategy `τ` refines to (`EndToEndHidden`'s `σ`). -/
 noncomputable def sim (τ : Strategy w.game) :=
@@ -157,8 +157,8 @@ namespace HiddenWindow
 open Classical
 
 /-- Window `t`'s record, at the strategy `τ` that played it and its output `o`. -/
-noncomputable def record (w : HiddenWindow) (t : ℕ) (τ : Strategy w.game) (o : w.Reg × Finset (Fin w.n) × Transcript) :
-    WindowRec :=
+noncomputable def record (w : HiddenWindow) (t : ℕ) (τ : Strategy w.game)
+    (o : w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) : WindowRec :=
   ⟨t, LiveAcceptsZK w.I o, (w.wrongSet τ).card, ∃ u ∈ o.2.1, u ∈ w.wrongSet τ⟩
 
 end HiddenWindow

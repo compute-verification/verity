@@ -56,7 +56,7 @@ theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f 
       calc value p (runBind f k (Game.coin C kk) s)
           = ∑ x : C, (Fintype.card C : ℝ≥0∞)⁻¹ * value p (runBind f k (kk x) (s x)) := value_coin _ _ _
         _ ≤ ∑ x : C, (Fintype.card C : ℝ≥0∞)⁻¹ * (prob q (kk x) (Strategy.ofBind f (kk x) (s x)) + c) :=
-            Finset.sum_le_sum fun x _ => mul_le_mul_left' (hc x) _
+            Finset.sum_le_sum fun x _ => by gcongr; exact hc x
         _ = (∑ x : C, (Fintype.card C : ℝ≥0∞)⁻¹ * prob q (kk x) (Strategy.ofBind f (kk x) (s x))) +
               (∑ _x : C, (Fintype.card C : ℝ≥0∞)⁻¹) * c := by
             rw [Finset.sum_mul, ← Finset.sum_add_distrib]
@@ -68,6 +68,7 @@ theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f 
 /-- **One window, then the rest: the product step.** If the rest of the run has `p` with probability at most `c` from
 every end of `g` in `q`, and never from an end outside `q`, the run has `p` with probability at most `g`'s probability
 of `q`, times `c`. -/
+open Classical in
 theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) (p : γ → Prop)
     (q : α → Prop) (c : ℝ≥0∞) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -90,7 +91,7 @@ theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f 
       calc value p (runBind f k (Game.coin C kk) s)
           = ∑ x : C, (Fintype.card C : ℝ≥0∞)⁻¹ * value p (runBind f k (kk x) (s x)) := value_coin _ _ _
         _ ≤ ∑ x : C, (Fintype.card C : ℝ≥0∞)⁻¹ * (prob q (kk x) (Strategy.ofBind f (kk x) (s x)) * c) :=
-            Finset.sum_le_sum fun x _ => mul_le_mul_left' (hc x) _
+            Finset.sum_le_sum fun x _ => by gcongr; exact hc x
         _ = (∑ x : C, (Fintype.card C : ℝ≥0∞)⁻¹ * prob q (kk x) (Strategy.ofBind f (kk x) (s x))) * c := by
             rw [Finset.sum_mul]
             exact Finset.sum_congr rfl fun x _ => (mul_assoc _ _ _).symm
@@ -132,7 +133,7 @@ theorem period_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ
       calc value (fun l => ∃ r ∈ l, bad r) (periodRun G rec i (T + 1) s)
           ≤ prob (fun b => bad (rec i (Strategy.ofBind _ (G i) s) b)) (G i) (Strategy.ofBind _ (G i) s) +
               ∑ t ∈ Finset.range T, ε (i + 1 + t) := h
-        _ ≤ ε i + ∑ t ∈ Finset.range T, ε (i + 1 + t) := add_le_add_right (hstage i _ hs.1) _
+        _ ≤ ε i + ∑ t ∈ Finset.range T, ε (i + 1 + t) := by gcongr; exact hstage i _ hs.1
         _ = ∑ t ∈ Finset.range (T + 1), ε (i + t) := by
             rw [Finset.sum_range_succ', Nat.add_zero, add_comm]
             congr 1
@@ -174,7 +175,7 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
       calc value (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (periodRun G rec i (T + 1) s)
           ≤ prob (fun b => miss (rec i (Strategy.ofBind _ (G i) s) b)) (G i) (Strategy.ofBind _ (G i) s) *
               x ^ (M - w) := h
-        _ ≤ x ^ w * x ^ (M - w) := mul_le_mul_right' hp _
+        _ ≤ x ^ w * x ^ (M - w) := by gcongr
         _ = x ^ (w + (M - w)) := (pow_add _ _ _).symm
         _ ≤ x ^ M := pow_le_pow_of_le_one zero_le hx (by omega)
 
