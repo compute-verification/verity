@@ -36,4 +36,5 @@ and refuses a PR that grows a ratchet (naming the entries it added) or that the 
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 To retire an entry, fix what it allows and delete it: its rule's stale-entry check then keeps it gone. Each lint's
-`test_no_new*` tests are the ones the gate runs (`test_ratchet.py` holds every lint to having one that takes no fixture).
+`test_no_new*` tests are the ones the gate runs, under drive's Python, so `test_ratchet.py` holds every lint to having one
+that takes no fixture, to a `NAME` that is a string literal, and to importing only the standard library and this directory.
