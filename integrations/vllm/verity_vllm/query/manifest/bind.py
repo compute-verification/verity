@@ -7,7 +7,8 @@ site's enclosing module at invocation k, `<module>/<fx node>` for a Value two Ca
 Value when two fx nodes of the module produce a member of one name at the step); output_member is the Definition's port name when it
 returns several (`<hint>.<port>` when the Build recorded a hint, which names the Call), else the recorded hint, else `out`.  The
 protocol's encodings are identity format, each one constant the manifest and the committing tap share:
-`part_rank<r>` / `shard_rank<r>` (`format.TP_PARTIAL_MEMBER`), a norm site's `all_reduce` (`collective_names.NORM_SITE_MEMBER`), the
+`part_rank<r>` / `shard_rank<r>` (`format.TP_PARTIAL_MEMBER`), a narrowed linear's rows `<member>@<width>` beside the whole rows'
+`<member>` (`format.NARROWED_MEMBER`), a norm site's `all_reduce` (`collective_names.NORM_SITE_MEMBER`), the
 token ids `<consumer>/in`, `runner.sampler/sampled_token_ids`, the kernel streams `fa2.m1/L<k>/<geometry>` and `moe/L<k>/<plane>`.  A
 row also carries its Call's `spec`, `port` and `position` (Program order), outside the manifest digest.
 
@@ -35,7 +36,8 @@ each step's events in four passes; the k-th event of a name in the step is occur
    sampler, token-id and plane taps, a capture map's taps whose label is the Call's hint);
 4. the tuple slots of occurrence k of a module bind the members of that module at invocation k that 1-3 left, in Program order: slots
    0..n-1 for n members, slot i binds the i-th; one member left, slot 0 binds it; otherwise none binds (a hook that returned y while
-   the quant branch went unacquired never binds y to port 0).
+   the quant branch went unacquired never binds y to port 0).  A narrowed linear's rows (a row's `narrowed_of`: some columns of the
+   rows of a tensor the module returns) are no tuple slot: only a label binds them.
 
 An event no pass binds is an extra: a source label keeps itself as its identity (no manifest row has it), a tuple slot binds member
 `""`, which no row has.  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
@@ -133,6 +135,7 @@ class Binder:
         #: engine step -> (op_path, member, invocation) -> {request whose rows spell it: the row's position in that request's Program}
         self.requests: dict[int, dict[tuple[str, str, int], dict[str, tuple]]] = defaultdict(dict)
         self.promoted: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
+        self.narrowed: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
         for row in rows:
             r = {**row, **(row.get("identity") or {})}
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
@@ -144,6 +147,8 @@ class Binder:
                 self.requests[st].setdefault(key, {}).setdefault(_request(r, declared or {}), pos)
                 if r.get("promoted"):
                     self.promoted[st].add(key)
+                if r.get("narrowed_of"):
+                    self.narrowed[st].add(key)
         self._by_op: dict[int, dict[str, list[tuple[str, str, int]]]] = {}
         self._spelt: dict[tuple[int, tuple[str, str, int]], dict[str, tuple[str, str, int]]] = {}
 
@@ -242,9 +247,9 @@ class Binder:
                 out[i] = (*c, "port") if c else (op, label, k, "unbound")
                 if c:
                     taken.update([v[j] for v in each.values()] if each else [c])
-        ops = self._ops(step)
+        ops, narrowed = self._ops(step), self.narrowed.get(step, ())
         for (op, k), sl in slots.items():
-            left = [c for c in ops.get(op, []) if c[2] == k and c not in taken]
+            left = [c for c in ops.get(op, []) if c[2] == k and c not in taken and c not in narrowed]
             order = sorted(sl)
             pairs = list(zip(order, left)) if order == list(range(len(left))) else [(0, left[0])] if len(left) == 1 and 0 in sl else []
             for slot, c in pairs:

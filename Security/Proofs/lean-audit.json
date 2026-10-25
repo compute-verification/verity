@@ -15,6 +15,8 @@
   "Proofs.Properties.Pouw.Commit",
   "Proofs.Properties.Pouw.LiveSalt",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
+  "Proofs.Properties.Nci.ReadsExact",
+  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
   "Proofs.Properties.Pouw.Strata",

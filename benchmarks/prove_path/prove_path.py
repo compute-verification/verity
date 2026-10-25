@@ -40,6 +40,8 @@ Two kinds of committed run:
         [--peer NAME --challenger-key RECORD [--gate-key KEY]]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
+    prove_path.py circuit --serve-run DIR --window K --row-dir DIR --partition F --advice FILE --out FILE [--hf-config F] \\
+        [--target F] [--cap-bits L] [--transfer-gate T ...]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -65,6 +67,10 @@ Two kinds of committed run:
   window's advice under.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
+* **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
+  compile check runs: the circuit record the advice compiles to and the length it charges. ``records_audit.py`` audits a window
+  from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
+  opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -99,7 +105,7 @@ import multiprocessing
 import os
 import sys
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -109,9 +115,11 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from records_audit import PORTS, REFUSED, free_ports  # noqa: E402, F401
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
@@ -122,7 +130,7 @@ I2 = "verity/prove-path/i2-compile-steps/v0"
 #: bits a row)
 CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -131,9 +139,6 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``, #3619)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
-#: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
-#: which outbound connections take theirs
-PORTS = range(10000, 32000)
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
 PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
                  "C); the statement reads no registered values and no shared rows")
@@ -203,8 +208,8 @@ class I2Compiler:
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
         and the digest of the Program I2 compiled for it; I2's refusal (`Unexpressible`) is a ValueError naming it."""
-        from verity_vllm.predict.build import Unexpressible
-        from verity_vllm.predict.steps import compile_steps
+        from verity_vllm.program.predict.build import Unexpressible
+        from verity_vllm.program.predict.steps import compile_steps
 
         if data not in self.compiled:
             try:
@@ -399,8 +404,8 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
     served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
     ``transfer_gates``."""
-    from verity_vllm.predict.score import phi_of
-    from verity_vllm.predict.steps import Registered
+    from verity_vllm.program.predict.score import phi_of
+    from verity_vllm.program.predict.steps import Registered
 
     r = record1(str(bundle), str(row_dir))
     doc = json.loads(Path(workload).read_text())
@@ -458,7 +463,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
     the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
     (``execution``, else ``engine.execution``); no workload."""
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
     if not isinstance(prof, Mapping):
@@ -472,7 +477,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
-    from verity_vllm.predict.steps import Registered
+    from verity_vllm.program.predict.steps import Registered
 
     return Registered.of(phi_of_serve(serve, hf_config, target), int(serve.get("default_seed") or 0), cap_bits)
 
@@ -789,27 +794,6 @@ def in_processes(fn, jobs: int, items: list) -> Iterator[tuple[Any, Any]]:
             yield futures[f], f.result()
 
 
-def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
-    """A base port whose ``span`` loopback ports are all free now, the first of ``bases`` (default every base of `PORTS` in
-    random order). An audit's sessions listen at fixed offsets from it (``a5.RANK_PORTS`` a rank); a fixed default made two
-    audits on one node collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
-    import random
-    import socket
-
-    if bases is None:
-        bases = list(range(PORTS.start, PORTS.stop - span + 1, span))
-        random.SystemRandom().shuffle(bases)
-    for base in bases:
-        try:
-            with contextlib.ExitStack() as held:
-                for port in range(base, base + span):
-                    held.enter_context(socket.socket()).bind(("127.0.0.1", port))
-            return base
-        except OSError:
-            continue
-    raise SystemExit(f"no {span} free loopback ports in a row to listen on; give --port")
-
-
 def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
     a, r, requests, bound = job
     compiler = compiler_of_args(a)
@@ -1114,6 +1098,23 @@ def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
+def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
+    """A served window's registered compiler as the command `records_audit.compile_check` runs: the advice ``--advice``
+    compiled (`compile_advice`, every refusal a `ValueError`), the window over the compiler's Programs for it
+    (`serving_rows.population`, as `window1` makes the verifier's) and its circuit record (`serving_rows.circuit_record`)
+    written to ``--out``, under no run (its `interface.RUN_FIELDS` empty: the compiler knows none). -> the advice's length in
+    bits, the one the registration charges (`advice_windows.of_advice`)."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
+    p = compiler.load(0, 1, compile_advice(compiler, data))
+    window, _rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
+                                   transfer_gates=compiler.transfer_gates)
+    Path(a.out).write_bytes(IF.circuit_bytes(SRW.circuit_record(window)))
+    c = AW.codec_of()
+    return {"bits": int(c.total_bits(c.decode(data)))}
+
+
 def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's dir under ``a.out`` laid out from a single-GPU Commit of record, as serve-openai and `verity-vllm advice` lay
     one out: ``serve.json`` (the record's model, revision and seed, and the execution and target φ reads from its row,
@@ -1214,13 +1215,27 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
         p.add_argument(flag, required=True)
-    for name in ("compiler", "serve-standin"):
+    p = sub.add_parser("circuit", help="a served window's registered compiler as a command: the circuit record it compiles the "
+                       "advice to (records_audit.py's compile check)")
+    for flag in ("--serve-run", "--row-dir", "--partition", "--advice", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--window", type=int, required=True)
+    p.add_argument("--transfer-gate", action="append", default=[])
+    for name in ("compiler", "serve-standin", "circuit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    sub.choices["compiler"].add_argument("--target")
+    for name in ("compiler", "circuit"):
+        sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
+        return 0
+    if a.cmd == "circuit":
+        try:
+            print(json.dumps(circuit_of_advice(a)))
+        except ValueError as e:
+            print(f"prove_path.py circuit: {e}", file=sys.stderr)
+            return REFUSED
         return 0
     if a.cmd == "serve-standin":
         print(json.dumps(serve_standin(a), sort_keys=True))
