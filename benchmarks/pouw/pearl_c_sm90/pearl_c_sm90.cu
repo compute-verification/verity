@@ -118,6 +118,8 @@ DEV void pdl_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
 DEV void pdl_launch() { asm volatile("griddepcontrol.launch_dependents;" ::: "memory"); }
 // run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait
 extern "C" __global__ void pdl_waits() {}
+// and PDL_ENTRY_KERNELS (widen_a, and hash_decode.cuh's pd_commit under PD_PDL) only from one with this (PDL_ENTRY_MARK)
+extern "C" __global__ void pdl_waits_entry() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -781,8 +783,8 @@ extern "C" __global__ void quant_s5(const Args a) {
 // (`pearl_c_sm90.run.widen`'s choice "fp8_block": a defined B, not the exact real one when code x scale doesn't fit FP32).
 // p0 source, p1 scales (widen_fp8_block), p2 out (rows x k FP32); i0 rows, i1 k (a multiple of 8).  A thread per 8 elements.
 // widen_a: a served call's A words (pouw_pearl_c_device's xa), widen_bf16's widening of its i0 rows, then rows i0 to i2 - 1
-// zero, in one launch; p2 out (i2 x k FP32).  A PDL_KERNELS launch (pdl_entry), so the call's pd_commit, launched behind it,
-// is resident when it completes.
+// zero, in one launch; p2 out (i2 x k FP32).  A PDL_ENTRY_KERNELS launch (pdl_entry), so the call's pd_commit, launched
+// behind it, is resident when it completes.
 DEV void widen8(const uint4* src, uint4* out, size_t g) {
   const uint4 v = src[g];
   const uint32_t w[4] = {v.x, v.y, v.z, v.w};

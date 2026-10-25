@@ -968,8 +968,8 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   static_assert(!LATE || PAIR, "PD_LATE's helpers are warps 1-3, which PD_PAIR's 2 cw + 2 warps always have");
   static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
 #ifdef PD_PDL
-  // launched behind the launch before it (run.py's PDL_KERNELS), it waits for that one before it touches global memory, then
-  // lets a programmatic next launch start, which waits at its entry for this one to complete
+  // launched behind the launch before it (run.py's PDL_ENTRY_KERNELS), it waits for that one before it touches global
+  // memory, then lets a programmatic next launch start, which waits at its entry for this one to complete
   asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory");
 #endif
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, sw = PAIR ? 2 * cw : cw;

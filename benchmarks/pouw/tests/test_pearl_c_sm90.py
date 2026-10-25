@@ -206,8 +206,9 @@ def test_a_programmatic_launch_waits_at_its_entry():
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head
     assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
-    commits = {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
-    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d", "widen_a"} | commits
+    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
+    assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
+    assert f'void {RUN.PDL_ENTRY_MARK}() {{}}' in SOURCE
     assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
     entry = pd[pd.index("DEV void pd_commit_t("):]
@@ -364,7 +365,7 @@ def grouped_kernels() -> list[str]:
 
 
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK} - set(grouped_kernels())
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK, RUN.PDL_ENTRY_MARK} - set(grouped_kernels())
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -374,7 +375,7 @@ def kernel_names() -> list[str]:
     (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
     pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
-    return own_kernels() + [RUN.PDL_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
+    return own_kernels() + [RUN.PDL_MARK, RUN.PDL_ENTRY_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -554,6 +555,11 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     r2 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=old, capture_output=True,
                         text=True)
     assert r2.returncode == 4 and json.loads(r2.stdout.splitlines()[1])["pdl"] is False, r2.stderr
+    # a cubin without PDL_ENTRY_MARK (its widen_a and pd_commit don't wait) still launches its PDL_KERNELS programmatically
+    entryless = tmp_path / "entryless.jsonl"
+    r3 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], capture_output=True, text=True,
+                        env=dry_env(ship, entryless, FAKE_KERNELS=",".join(n for n in kernel_names() if n != RUN.PDL_ENTRY_MARK)))
+    assert r3.returncode == 4 and any(json.loads(x).get("pdl") for x in entryless.read_text().splitlines()), r3.stderr
     assert not any(json.loads(x).get("pdl") for x in unmarked.read_text().splitlines())   # a cubin whose kernels don't wait
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
     failed = rows[2]["variants"]["h100"]["failed"]
@@ -624,9 +630,9 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     names = {ev["name"] for ev in launched}
     assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "form_s5_epw", "pa_w", "gemm_words"} <= names
     assert {ev["i"][0] for ev in launched if ev["name"] == "form_s5_epw"} == {64}
-    # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
-    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep",
-                                                                                           "form_s5_epw"}
+    # the main lane's PDL_KERNELS and PDL_ENTRY_KERNELS start behind the launch before them, and no other launch does
+    pdl = (RUN.PDL_KERNELS | RUN.PDL_ENTRY_KERNELS) & names
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == pdl >= {"gemm_pearlc_d", "pa_w", "form_s5_ep", "form_s5_epw"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 

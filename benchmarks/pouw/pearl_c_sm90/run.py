@@ -78,9 +78,9 @@ GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
 #: against the other k = 4096 calls' pd_commit_851 at ~81, r20261025-014522-4f0a; pearl_c_sm120's run.py made this cut,
 #: r20261024-104625-7b57).  PEARLC_ONE_COMMIT=0 launches the shape's variant
 ONE_COMMIT = os.environ.get("PEARLC_ONE_COMMIT", "1") != "0"
-#: PEARLC_PDL=0 launches PDL_KERNELS (below PD_SERVED) plainly
+#: PEARLC_PDL=0 launches PDL_KERNELS and PDL_ENTRY_KERNELS (below PD_SERVED) plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
-PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK = 6, "pdl_waits"
+PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK, PDL_ENTRY_MARK = 6, "pdl_waits", "pdl_waits_entry"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -186,6 +186,7 @@ class Dev:
         self.live: set[int] = set()
         self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
         self.pdl = False                 # PDL_KERNELS launched programmatically (`open`: PDL, and the cubin has PDL_MARK)
+        self.pdl_names = frozenset()     # the launches that are: PDL_KERNELS, and PDL_ENTRY_KERNELS with PDL_ENTRY_MARK
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -213,6 +214,8 @@ class Dev:
         self.ck("cuModuleLoadData", C.byref(self.mod), self.cubin)
         mark = vp()
         self.pdl = PDL and self.cu.cuModuleGetFunction(C.byref(mark), self.mod, PDL_MARK.encode()) == 0
+        entry = self.pdl and self.cu.cuModuleGetFunction(C.byref(mark), self.mod, PDL_ENTRY_MARK.encode()) == 0
+        self.pdl_names = (PDL_KERNELS | PDL_ENTRY_KERNELS if entry else PDL_KERNELS) if self.pdl else frozenset()
 
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
@@ -274,7 +277,7 @@ class Dev:
             a.i[j] = v
         g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
         params, s = (vp * 1)(C.addressof(a)), self.stream if stream is None else stream
-        if self.pdl and name in PDL_KERNELS:
+        if name in self.pdl_names:
             attr = LaunchAttr(id=PROGRAMMATIC_STREAM_SERIALIZATION, value=1)
             cfg = LaunchConfig((u * 3)(*g), (u * 3)(block, 1, 1), smem, s.value if isinstance(s, vp) else s, C.pointer(attr), 1)
             self.ck("cuLaunchKernelEx", C.byref(cfg), self.fn(name), params, None)
@@ -352,11 +355,12 @@ PD_STAMPED = tuple(v | PD_STAMP for v in PD_SERVED)
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry, and
 #: hash_decode.cuh's pd_commit under PD_PDL), so they read and write what they did (gemm_pearlc_d's producer waits only
-#: before P_A, which alone of what it reads its launch before, pa_w or pa, writes): a call's widen_a behind the model's
-#: launch before it, and its pd_commit behind widen_a, each resident when the one before completes.  Only from a cubin whose
-#: kernels wait (its kernel PDL_MARK, `Dev.pdl`)
-PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d", "widen_a",
-                         *(f"pd_commit_{v}" for v in (*PD_SERVED, *PD_STAMPED))})
+#: before P_A, which alone of what it reads its launch before, pa_w or pa, writes): only from a cubin whose kernels wait (its
+#: kernel PDL_MARK, `Dev.pdl`).  PDL_ENTRY_KERNELS, a call's widen_a behind the model's launch before it and its pd_commit
+#: behind widen_a (each resident when the one before completes), only from a cubin that also has PDL_ENTRY_MARK, since an
+#: older cubin's widen_a and pd_commit don't wait
+PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
+PDL_ENTRY_KERNELS = frozenset({"widen_a", *(f"pd_commit_{v}" for v in (*PD_SERVED, *PD_STAMPED))})
 PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 #: hash_prefill.cuh's launches past decode's rows (`Pipeline`'s chain "pl"), in the variant pearl_c_sm90.cu builds them
 #: (PL_INSTANCE): pl_leaves, A's level 0 at PL_ROWS rows a CTA; pl_levels, PL_LEVELS levels a launch; pl_seed_a; pl_seeds,
