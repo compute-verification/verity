@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from verity.ml.commitments import vllm_v1
 
-from verity_vllm.commit.hiding import NAME, HidingLeaves
+from verity.ml.windows.hiding import NAME, HidingLeaves
 
 LEAF_SCHEMES = (vllm_v1.NAME, NAME)
 
