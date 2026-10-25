@@ -86,7 +86,7 @@ def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option
   else if salted.isSome then some "the window's template's unit reads a salt, which only a certified window has"
   else none
 
-/-- `window_domain`: the window root's domain, one-stage's served domain (`registration.served_domain`) of the
+/-- `window_domain`: the window root's domain, one-stage's window domain (`registration.window_domain`) of the
 registered program and partition over the check's P entries in the window's context. -/
 def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
   let n := p.check.entries

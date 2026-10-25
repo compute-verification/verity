@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: Basenames a tracked markdown file may have.  Everything else is a report, a handoff or a draft and belongs in the
 #: notes store (cite it from here by ``note:<id>``).
-ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md", "DISCREPANCIES.md",
-                                  "CHANGELOG.md"})
+ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
+                                  "DISCREPANCIES.md", "CHANGELOG.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
