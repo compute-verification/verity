@@ -57,7 +57,7 @@ from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.capture_log import read_steps, request_params
 from verity_vllm.check.match.dag_form import dag_hashes, live_cone
-from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _fast_stats, _install_profile_counters, _n_runs_of, _NoPhase,
+from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _memo_stats, _install_profile_counters, _n_runs_of, _NoPhase,
                                                     _Phase, _profile_on)
 from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (weights_input_nodes re-exported: tests)
@@ -407,7 +407,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         run_prof["seconds"] = res["seconds"]
         run_prof["verdict"] = res["verdict"]
         run_prof["x09_legs"] = "forked" if ops.legs is not None else "inline"
-        st = _fast_stats()
+        st = _memo_stats()
         if st is not None:
             run_prof["fast_stats_final"] = {k: int(v) for k, v in sorted(st.items())}
         try:

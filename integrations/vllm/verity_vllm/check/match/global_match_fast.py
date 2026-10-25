@@ -18,7 +18,7 @@ established -- see the call sites in global_match.check.)
 
 Enabled by the environment variable MATCH_IMPL=fast (`enabled()`): `global_match.check` then runs over `ops()` (a `program_ops.Ops`,
 passed explicitly to GM-01 and to the X-09 run inside it) -- the fold and components loaded as `MemoProg` (canon memoised per instance),
-Projections as `_ProjectionFast`, and memoising wrappers that call the checker of record's `compare_steps` / `_canonical_hash` /
+Projections as `_MemoProjection`, and memoising wrappers that call the checker of record's `compare_steps` / `_canonical_hash` /
 `dag_hashes` / `live_cone`.  Nothing is rebound: the record's functions stay what they are.  Without the flag nothing here runs.
 
 Differential gate: mfast's `verity_vllm/harness/match_diff.py` (old vs fast, identical verdicts / per-check outcomes / populations /
@@ -108,7 +108,7 @@ def leave() -> None:
 # ------------------------------------------------------------------------------------------------ canon (per Prog, per instance)
 
 class _CanonMemo:
-    """Mixin over compare.Prog (`MemoProg`) and projection.Projection (`_ProjectionFast`): `canon` computed once per (instance,
+    """Mixin over compare.Prog (`MemoProg`) and projection.Projection (`_MemoProjection`): `canon` computed once per (instance,
     unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, dag_form.dag_hashes
     / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
     replayed on every hit, so cross-request read counts are unchanged."""
@@ -159,7 +159,7 @@ def _compare_steps_memo(A: SEQ.Prog, B: SEQ.Prog, unfold_a: bool = False) -> dic
         stats["compare_steps_hit"] += 1
         return hit[2]
     stats["compare_steps_miss"] += 1
-    res = C.compare_steps(A, B, unfold_a, canon_step_relative=_canon_step_relative_fast, canonical_hash=_canonical_hash_memo)
+    res = C.compare_steps(A, B, unfold_a, canon_step_relative=_canon_step_relative_identity, canonical_hash=_canonical_hash_memo)
     _cmp_memo[key] = (A, B, res)
     return res
 
@@ -170,14 +170,14 @@ def _canonical_hash_memo(P: SEQ.Prog, seqs: list[list[int]], unfold: bool) -> st
     time, so its `P.xreq` counting (read by X-09 right after compare_steps) is untouched -- its canon calls hit the canon memo."""
     if hasattr(P, "_xreq"):
         stats["canonical_hash_projection"] += 1
-        return C._canonical_hash(P, seqs, unfold, canon_step_relative=_canon_step_relative_fast)
+        return C._canonical_hash(P, seqs, unfold, canon_step_relative=_canon_step_relative_identity)
     key = (id(P), bool(unfold))
     hit = _chash_memo.get(key)
     if hit is not None and hit[0] is P:
         stats["canonical_hash_hit"] += 1
         return hit[1]
     stats["canonical_hash_miss"] += 1
-    h = C._canonical_hash(P, seqs, unfold, canon_step_relative=_canon_step_relative_fast)
+    h = C._canonical_hash(P, seqs, unfold, canon_step_relative=_canon_step_relative_identity)
     _chash_memo[key] = (P, h)
     return h
 
@@ -320,7 +320,7 @@ def _dag_hashes_memo(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int
     return h
 
 
-def _canon_step_relative_fast(P: SEQ.Prog, i: int, seqs: list[list[int]], unfold: bool):
+def _canon_step_relative_identity(P: SEQ.Prog, i: int, seqs: list[list[int]], unfold: bool):
     """compare._canon_step_relative: with unfold=False and `seqs` == P.steps (compare_steps' seq(P, False) is P.steps minus empty
     trailing segments, and _segment never emits an empty one) the position remap is the identity -- ('N', s, jj, lo, hi) already names
     the producer by (step, index within step) -- so the result is canon(i) with each operand as a tuple.  Any other case runs the
@@ -358,7 +358,7 @@ def _live_cone_memo(P: SEQ.Prog) -> set[int]:
 
 # ------------------------------------------------------------------------------------------------ Projections (X-09 <-> GM-01 <-> alternate)
 
-_proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, Projection): every _ProjectionFast built
+_proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, Projection): every _MemoProjection built
 
 
 def _proj_key(oracle: SEQ.Prog, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
@@ -366,7 +366,7 @@ def _proj_key(oracle: SEQ.Prog, inst_idx, tok_node, weights_node, seed_node, pee
     return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # [R17 D90] the request's peers node is part of the view
 
 
-class _ProjectionFast(_CanonMemo, PJ.Projection):
+class _MemoProjection(_CanonMemo, PJ.Projection):
     """projection.Projection with canon memoised (`_CanonMemo`) that registers itself by its construction arguments.
     `Projection.__init__` is deterministic in (oracle, inst_idx, tok_node, weights_node, seed_node, peer_node) -- the label only names the
     object -- so two Projections with the same key are the same view of the fold: X-09 (`decompose`, run first inside GM-01 on the same
@@ -523,7 +523,7 @@ def ops() -> Ops:
                    "operand_form": "progressions/v1" if compact else "runs",
                    "x09_legs": "forked" if workers(1 << 30) > 1 else "in-process", "candidate_stage": CANDIDATE_STAGE})
     return Ops("fast", load_oracle=functools.partial(PL.load_oracle, cls=MemoProg, compact=compact),
-                  load_derived=functools.partial(PL.load_derived, cls=MemoProg, compact=compact), projection=_ProjectionFast,
+                  load_derived=functools.partial(PL.load_derived, cls=MemoProg, compact=compact), projection=_MemoProjection,
                   compare_steps=_compare_steps_memo, dag_hashes=_dag_hashes_memo, live_cone=_live_cone_memo, legs=_x09_legs)
 
 
@@ -553,7 +553,7 @@ def projection(loaded: dict, rid: str, oracle: SEQ.Prog, label: str, inst_idx: l
             P.digest = f"{oracle.digest}#{label}"
             stats["projection_reused_from_x09"] += 1
         else:
-            P = _ProjectionFast(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
+            P = _MemoProjection(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
         projs[rid] = P
     else:
         stats["projection_reused_alternate"] += 1
