@@ -35,6 +35,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
@@ -147,7 +148,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = {k: v for k, v in os.environ.items() if k.startswith("NCCL_")}
+    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",

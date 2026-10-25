@@ -31,6 +31,7 @@ from importlib import metadata
 from typing import Any
 
 from verity_vllm import protocols as PO
+from verity_vllm import settings
 from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
                                 done_source_refusal, group, option, row_world)
 from verity_vllm.pipeline import config_record as CR
@@ -41,7 +42,6 @@ EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
 ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
-_SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -162,7 +162,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
                           **{k: run[k] for k in ("world", "gpu_util", "protocols") if run[k] is not None}},
             "vllm_installed": vllm,
             "engine_env": {k: environ[k] for k in sorted(environ) if k.startswith(ENGINE_ENV)
-                           and not any(w in k.upper() for w in _SECRET_WORDS)}}
+                           and not settings.is_secret(k)}}
 
 
 def run_row(o: Run | Stage, stages: str) -> int:

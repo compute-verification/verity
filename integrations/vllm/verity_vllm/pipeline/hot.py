@@ -159,7 +159,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
 
 
 def env_identity() -> dict[str, str]:
-    return {k: v for k, v in sorted(settings.environ().items()) if k.startswith(ENV_PREFIXES) and k not in ENV_PER_JOB}
+    return settings.redact({k: v for k, v in sorted(settings.environ().items()) if k.startswith(ENV_PREFIXES) and k not in ENV_PER_JOB})
 
 
 def engine_identity(argv: list[str]) -> dict[str, Any]:
