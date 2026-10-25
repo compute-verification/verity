@@ -178,6 +178,7 @@ import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 import Proofs.Flock.Claims.ZK.RepLog
 import Proofs.Flock.Claims.ZK.CutPrefix
+import Proofs.Flock.Claims.ZK.PiopFree
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -712,6 +713,11 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 * `L0PinCoins`: the cut PIOP from a source ends where the firewall's does. It splits like `piopFw`
   (**`piopCut_split`**, **`piopCut_at`**), and at a deployed rep's coins its log ends at `ligP0` with basis `ligBasis`
   (**`Masked.piopCut_lig`**), so `repCut_cutL0`'s bodies are at the coins, `p0` and basis that `swSrcE_repCut` reads.
+* `PiopFree`: the cut PIOP returns on its coins alone. Where its phases returned at other values, it returns from any
+  source, layout, cap and root wherever its rank check passes (**`piopCut_of_phases`**), so two cut PIOPs from one log
+  size both return or neither does, with the same log size and switched claims (**`piopCut_src_free`**,
+  `piopCut_sws_eq`), and where the firewall's rep returned, the cut PIOP from any source does
+  (**`Masked.piopCut_of_repFwC`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies

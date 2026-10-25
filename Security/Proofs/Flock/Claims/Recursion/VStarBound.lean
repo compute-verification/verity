@@ -101,13 +101,17 @@ rest of its input's bits, and those of its output's; the rounds whose message th
 which no part holds; and each round that no part holds whole, assembled from pieces (`pieceAt x i`, empty at a round
 held whole or fixed), each a part and its segments, in order. A piece's bytes have the length its segments fix
 (`pieceLen`), so each piece sits at an offset the statement fixes. A bit at a position is the one-wire form
-(`segsAt`). -/
+(`segsAt`). V*'s shared registered rows, each read by more than one part (the running sums `acc0` and `acc1`, which
+rec-open units write and rec-residuals units read), are slots: where part `s` holds shared row `r` (`rowAt x s r`, as
+segments, `none` where it holds none), and the one part whose witness the row's value is read off (`rowOwner x r`). -/
 structure LayoutB where
   rounds : Msg → ℕ
   msgAt : Msg → ℕ → ℕ → Option (List (Msg × List _root_.Flock.HmNets.Lin))
   shaAt : Msg → ℕ → List (Msg × List _root_.Flock.HmNets.Lin × List _root_.Flock.HmNets.Lin)
   fixedAt : Msg → ℕ → Option Msg := fun _ _ => none
   pieceAt : Msg → ℕ → List (ℕ × List (Msg × List _root_.Flock.HmNets.Lin)) := fun _ _ => []
+  rowAt : Msg → ℕ → ℕ → Option (List (Msg × List _root_.Flock.HmNets.Lin)) := fun _ _ _ => none
+  rowOwner : Msg → ℕ → Option ℕ := fun _ _ => none
 
 /-- Inner round `i`'s message as part `s` holds it whole, off its witness `w`: none at a round the statement fixes. -/
 def LayoutB.held (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : Option Msg :=
@@ -141,6 +145,40 @@ def LayoutB.calls (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) : List (Msg 
 def LayoutB.allCalls (L : LayoutB) (x : Msg) (ws : List Flock.Wit) : List (Msg × Msg) :=
   (ws.mapIdx fun s w => L.calls x s w).flatten
 
+/-- Shared registered row `r` as part `s` holds it, off its witness `w`. -/
+def LayoutB.rowHeld (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (r : ℕ) : Option Msg :=
+  (L.rowAt x s r).map (readSegs w)
+
+/-- **Shared registered row `r` off the witnesses**: as its owner holds it; empty where it has no owner, the owner no
+witness, or the owner holds no such row. -/
+def LayoutB.row (L : LayoutB) (x : Msg) (ws : List Flock.Wit) (r : ℕ) : Msg :=
+  ((L.rowOwner x r).bind fun o => ws[o]?.bind fun w => L.rowHeld x o w r).getD []
+
+/-- **The parts agree on the shared rows**: every part that holds shared row `r` holds its owner's value. A piece that
+reads row `r` off the part that owns the piece then reads `L.row x ws r`, so each piece keeps one owner. -/
+def LayoutB.RowsAgree (L : LayoutB) (x : Msg) (ws : List Flock.Wit) : Prop :=
+  ∀ (r s : ℕ) (w : Flock.Wit) (v : Msg), ws[s]? = some w → L.rowHeld x s w r = some v → v = L.row x ws r
+
+theorem LayoutB.row_of_owner {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {r o : ℕ} {w : Flock.Wit} {v : Msg}
+    (ho : L.rowOwner x r = some o) (hw : ws[o]? = some w) (hv : L.rowHeld x o w r = some v) : L.row x ws r = v := by
+  simp [LayoutB.row, ho, hw, hv]
+
+theorem LayoutB.RowsAgree.held_eq {L : LayoutB} {x : Msg} {ws : List Flock.Wit} (h : L.RowsAgree x ws) {r s : ℕ}
+    {w : Flock.Wit} {v : Msg} (hw : ws[s]? = some w) (hv : L.rowHeld x s w r = some v) : v = L.row x ws r :=
+  h r s w v hw hv
+
+/-- **Two parts that hold a shared row hold the same value**, where the parts agree on the shared rows. -/
+theorem LayoutB.RowsAgree.held_eq_held {L : LayoutB} {x : Msg} {ws : List Flock.Wit} (h : L.RowsAgree x ws)
+    {r s t : ℕ} {w u : Flock.Wit} {v v' : Msg} (hw : ws[s]? = some w) (hu : ws[t]? = some u)
+    (hv : L.rowHeld x s w r = some v) (hv' : L.rowHeld x t u r = some v') : v = v' :=
+  (h.held_eq hw hv).trans (h.held_eq hu hv').symm
+
+/-- With no shared rows, the parts agree on them. -/
+theorem LayoutB.rowsAgree_of_none {L : LayoutB} {x : Msg} {ws : List Flock.Wit}
+    (h : ∀ s r, L.rowAt x s r = none) : L.RowsAgree x ws := by
+  intro r s w v _ hv
+  simp [LayoutB.rowHeld, h s r] at hv
+
 /-- **A layout at hidden-value positions as a bound layout**: its rounds, holdings and fixed rounds, every position its
 one-wire form (`segsAt`), with no pieces. It holds and records what the layout does (`held_ofLayout`,
 `calls_ofLayout`). -/
@@ -162,6 +200,11 @@ theorem LayoutB.held_ofLayout (L : VStar.Layout) (x : Msg) (s : ℕ) (w : Flock.
 theorem LayoutB.calls_ofLayout (L : VStar.Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) :
     (LayoutB.ofLayout L).calls x s w = L.calls x s w := by
   simp [LayoutB.calls, VStar.Layout.calls, LayoutB.ofLayout, readForms_pos]
+
+/-- A layout at hidden-value positions shares no registered rows. -/
+theorem LayoutB.rowsAgree_ofLayout (L : VStar.Layout) (x : Msg) (ws : List Flock.Wit) :
+    (LayoutB.ofLayout L).RowsAgree x ws :=
+  LayoutB.rowsAgree_of_none fun _ _ => rfl
 
 /-- **Part `s`'s pieces of round `i`**, off its witness: each piece it holds, with its byte offset in the round. -/
 def LayoutB.piecesOf (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : List (ℕ × Msg) :=

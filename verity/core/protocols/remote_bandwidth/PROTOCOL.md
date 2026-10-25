@@ -978,7 +978,8 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
   block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
   takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed), and the line of record says it is conditional on it (`auditor_line.json`'s
+  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is conditional on it (`auditor_line.json`'s
   `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
   node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
   credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
@@ -996,7 +997,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
 
 ## 8. What deployment changes, and what is open
 
-- **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
+- **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
   proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
