@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.VBridge.Family.Runs
+import Proofs.Flock.VBridge.Algebra.RingSwitch
+import Proofs.Flock.C3.Reps.LigNames
 
 /-!
 # A rep's rounds squeeze as its schedule's: `chunksOf_counts`
@@ -15,6 +17,8 @@ for the counts:
 * **The schedule's side** (`repRounds_counts`): `RecVStar.repRounds`' counts are `schedCnt`'s. Its loop's running
   split is each level's columns plus one, which `fast100` gives (`fast100_cols`, with every level's `q ≥ 2`, where
   `bitLength (q - 1)` is the frames' `(q - 1).log2 + 1`).
+* **`T`'s slot** (`valOf_T`): the witness a rep's chunks' values start reads its `T` slot (`wi_T`, right after the
+  prefix rounds and the claims' ring-switch blocks) at the `T` its frames were built at, given the proof's sizes.
 -/
 
 namespace FlockDeploy
@@ -288,7 +292,218 @@ theorem chunksOf_counts {c : RepCtx} (hs : SchedOf c) (hn : c.n ≠ 0) (p : Floc
   obtain ⟨h22, -, hn7, -, hL⟩ := RecDeploy.fast100_sizes hf
   obtain ⟨-, -, hq⟩ := fast100_cols hf
   unfold chunksOf
-  rw [chunks_counts, closeNs_repFrames c.dom c.n p T (by omega) hn (by omega) hq (by rw [hL]; split_ifs <;> omega),
+  have hL1 : 1 ≤ c.sch.levels.size := by rw [hL]; split_ifs <;> omega
+  rw [chunks_counts, closeNs_repFrames (st := c.st) (sch := c.sch) c.dom c.n p T (by omega) hn (by omega) hq hL1,
     hsc, repRounds_counts hf hrs]
+
+/-! ## `T`'s slot in w -/
+
+open Flock.RecAlgebra (Key wi wNames ligRounds preRounds rounds_split idxOf?_of blocks blocks_spec valOf hRound)
+open FlockC3.Reps (ligF1 ligF2 lig0 ligMid ligLast ligLevels ligRounds_eq)
+open FlockSoundness.Discharge.Exec (chunks_flatten repFrames_chunks_snd)
+open FlockSoundness.Discharge.DecodeZL (ProofSizes)
+
+/-- Rounds whose first is `T`'s alone. -/
+def TFirst (out : Array (Array Key)) : Prop := ∃ rest, out.toList = #[Key.T] :: rest
+
+theorem TFirst.push {out : Array (Array Key)} (h : TFirst out) (r : Array Key) : TFirst (out.push r) := by
+  obtain ⟨rest, h⟩ := h
+  exact ⟨rest ++ [r], by rw [Array.toList_push, h, List.cons_append]⟩
+
+theorem ligF1_first : ∀ (l : List ℕ) (mi : ℕ) (out : Array (Array Key)), TFirst out →
+    TFirst (l.foldl ligF1 (mi, out)).2
+  | [], _, _, h => h
+  | _ :: l, mi, out, h => ligF1_first l (mi + 1) (out.push (Flock.RecAlgebra.msgNames mi)) (h.push _)
+
+theorem ligF2_first : ∀ (l : List ℕ) (mi oi : ℕ) (out : Array (Array Key)), TFirst out →
+    TFirst (l.foldl ligF2 (mi, oi, out)).2.2
+  | [], _, _, _, h => h
+  | _ :: l, mi, oi, out, h =>
+    ligF2_first l (mi + 1) (oi + 1) (out.push (#[Key.ood oi] ++ Flock.RecAlgebra.msgNames mi)) (h.push _)
+
+theorem lig0_first (sch : Flock.Schedule) : TFirst (lig0 sch).2.2 := by
+  simp only [lig0]
+  exact (ligF2_first _ _ _ _
+    (ligF1_first (List.range' 0 (sch.k0 + 1)) 0 #[#[Key.T], #[Key.ood 0]] ⟨[#[Key.ood 0]], rfl⟩)).push _
+
+theorem ligMid_first (s : ℕ × ℕ × Array (Array Key)) (h : TFirst s.2.2) : TFirst (ligMid s).2.2 := by
+  simp only [ligMid]
+  exact (ligF2_first _ _ _ _ (ligF1_first _ _ _ h)).push _
+
+theorem ligLast_first (ext : ℕ) (s : ℕ × ℕ × Array (Array Key)) (h : TFirst s.2.2) :
+    TFirst (ligLast ext s).2.2 := by
+  simp only [ligLast]
+  exact (ligF1_first _ _ _ h).push _
+
+theorem ligLevels_first {R : ℕ} {G1 G2 : ℕ × ℕ × Array (Array Key) → ℕ × ℕ × Array (Array Key)}
+    (h1 : ∀ s, TFirst s.2.2 → TFirst (G1 s).2.2) (h2 : ∀ s, TFirst s.2.2 → TFirst (G2 s).2.2) :
+    ∀ (l : List ℕ) (init : ℕ × ℕ × Array (Array Key)), TFirst init.2.2 → TFirst (ligLevels R G1 G2 l init).2.2
+  | [], _, h => by
+    simp only [ligLevels, List.forIn_nil]
+    exact h
+  | a :: l, init, h => by
+    unfold ligLevels
+    rw [List.forIn_cons]
+    by_cases hn : a + 1 < R
+    · simp only [hn, ↓reduceIte, pure_bind]
+      exact ligLevels_first h1 h2 l _ (h1 init h)
+    · simp only [hn, ↓reduceIte, pure_bind]
+      exact ligLevels_first h1 h2 l _ (h2 init h)
+
+/-- **Ligerito's first round is `T`'s alone.** -/
+theorem ligRounds_first (sch : Flock.Schedule) : TFirst (ligRounds sch) := by
+  rw [ligRounds_eq]
+  exact ligLevels_first ligMid_first (ligLast_first sch.ext) _ _ (lig0_first sch)
+
+theorem T_not_pre (sh : Shape) : Key.T ∉ (preRounds sh).flatten := by
+  cases h : sh.holo <;> simp [preRounds, hRound, h, Array.mem_flatten]
+
+/-- **Where `T` is in w**: first after the ring switches. -/
+theorem wi_T (sh : Shape) : wi sh .T = some ((preRounds sh).flatten.size + 128 * sh.claims) := by
+  obtain ⟨rest, hr⟩ := ligRounds_first sh.sched
+  have hL : (ligRounds sh.sched).flatten[0]? = some Key.T := by
+    rw [← Array.getElem?_toList, Array.toList_flatten, hr]
+    simp
+  have hlen : 0 < (ligRounds sh.sched).flatten.size := (Array.getElem?_eq_some_iff.1 hL).1
+  unfold wi wNames
+  rw [rounds_split, Array.flatten_append, Array.flatten_append]
+  obtain ⟨hsz, hget⟩ := blocks_spec Key.rs sh.claims
+  have hB : (((Array.range sh.claims).map fun k => (Array.range 128).map (Key.rs k)).flatten) =
+      blocks Key.rs sh.claims := rfl
+  rw [hB]
+  have s1 : ((preRounds sh).flatten ++ blocks Key.rs sh.claims).size =
+      (preRounds sh).flatten.size + 128 * sh.claims := by rw [Array.size_append, hsz]
+  have s2 : ((preRounds sh).flatten ++ blocks Key.rs sh.claims ++ (ligRounds sh.sched).flatten).size =
+      (preRounds sh).flatten.size + 128 * sh.claims + (ligRounds sh.sched).flatten.size := by
+    rw [Array.size_append, s1]
+  apply idxOf?_of
+  · rw [Array.getElem?_append_left (show (preRounds sh).flatten.size + 128 * sh.claims <
+        ((preRounds sh).flatten ++ blocks Key.rs sh.claims ++ (ligRounds sh.sched).flatten).size by rw [s2]; omega),
+      Array.getElem?_append_right (show ((preRounds sh).flatten ++ blocks Key.rs sh.claims).size ≤
+        (preRounds sh).flatten.size + 128 * sh.claims by rw [s1]), s1, Nat.sub_self]
+    exact hL
+  · intro j hj he
+    rw [Array.getElem?_append_left (show j <
+        ((preRounds sh).flatten ++ blocks Key.rs sh.claims ++ (ligRounds sh.sched).flatten).size by rw [s2]; omega),
+      Array.getElem?_append_left (show j < ((preRounds sh).flatten ++ blocks Key.rs sh.claims).size by
+        rw [s1]; exact hj)] at he
+    by_cases hjp : j < (preRounds sh).flatten.size
+    · rw [Array.getElem?_append_left hjp] at he
+      exact T_not_pre sh (Array.mem_of_getElem? he)
+    · rw [Array.getElem?_append_right (by omega), hget _ (by omega)] at he
+      simp at he
+
+theorem pairs_flat_size (f g : ℕ → Key) : ∀ n, ((Array.range n).map fun i => #[f i, g i]).flatten.size = 2 * n
+  | 0 => by simp
+  | n + 1 => by
+    have h1 : (((#[n] : Array ℕ).map fun i => #[f i, g i]).flatten).size = 2 := by simp
+    rw [Array.range_succ, Array.map_append, Array.flatten_append, Array.size_append, pairs_flat_size f g n, h1]
+    omega
+
+theorem preRounds_size {sh : Shape} (hh : sh.holo = false) :
+    (preRounds sh).flatten.size = 128 + 2 * (sh.m - 6) + 2 + 2 * (sh.kLog - 6) + 64 := by
+  have h1 : (#[(Array.range 64).map Key.ab ++ (Array.range 64).map Key.c] : Array (Array Key)).flatten.size = 128 := by
+    simp
+  have h2 : (#[#[Key.fa, Key.fb]] : Array (Array Key)).flatten.size = 2 := by simp
+  have h3 : (#[(Array.range 64).map Key.zp] : Array (Array Key)).flatten.size = 64 := by simp
+  have h4 : (hRound sh).flatten.size = 0 := by simp [hRound, hh]
+  simp only [preRounds, Array.flatten_append, Array.size_append, pairs_flat_size, h1, h2, h3, h4]
+  omega
+
+/-! ### The frames' values -/
+
+theorem vals_nil : vals ([] : List Frame) = [] := rfl
+theorem vals_cons_one (v : F128) (fs : List Frame) : vals (.one v :: fs) = v :: vals fs := rfl
+theorem vals_cons_vec (vs : List F128) (fs : List Frame) : vals (.vec vs :: fs) = vs ++ vals fs := rfl
+theorem vals_cons_label (b : ByteArray) (fs : List Frame) : vals (.label b :: fs) = vals fs := rfl
+theorem vals_cons_bytes (b : ByteArray) (fs : List Frame) : vals (.bytes b :: fs) = vals fs := rfl
+theorem vals_cons_dom (b : ByteArray) (fs : List Frame) : vals (.dom b :: fs) = vals fs := rfl
+theorem vals_cons_sq (k : UInt8) (n : ℕ) (fs : List Frame) : vals (.sq k n :: fs) = vals fs := rfl
+
+theorem vals_pairs_length {x y : ℕ → F128} : ∀ a k,
+    (vals ((List.range' a k).flatMap fun i => [Frame.one (x i), .one (y i), .sq 1 1])).length = 2 * k
+  | _, 0 => rfl
+  | a, k + 1 => by
+    rw [List.range'_succ, List.flatMap_cons, vals_append, List.length_append, vals_pairs_length (a + 1) k]
+    have e : vals [Frame.one (x a), .one (y a), .sq 1 1] = [x a, y a] := rfl
+    rw [e, List.length_cons, List.length_cons, List.length_nil]
+    omega
+
+theorem vals_rsBlocks_length {rs : Array (Array F128)} : ∀ a k, (∀ j, a ≤ j → j < a + k → (rs[j]!).size = 128) →
+    (vals ((List.range' a k).flatMap fun j =>
+      [Frame.label "flock-ring-switch-v0".toUTF8, .vec (rs[j]!).toList, .sq 2 7])).length = 128 * k
+  | _, 0, _ => rfl
+  | a, k + 1, h => by
+    rw [List.range'_succ, List.flatMap_cons, vals_append, List.length_append,
+      vals_rsBlocks_length (a + 1) k fun j h1 h2 => h j (by omega) (by omega)]
+    have e : vals [Frame.label "flock-ring-switch-v0".toUTF8, .vec (rs[a]!).toList, .sq 2 7] =
+        (rs[a]!).toList ++ [] := rfl
+    rw [e, List.append_nil, Array.length_toList, h a (Nat.le_refl a) (by omega)]
+    omega
+
+theorem vals_zc_length {m : ℕ} (digest cap : ByteArray) {p : Flock.ZerocheckProof} (h1 : p.round1ab.size = 64)
+    (h2 : p.round1c.size = 64) : (vals (zcFrames m digest cap p)).length = 128 + 2 * (m - 6) + 2 := by
+  unfold zcFrames
+  simp only [vals_append, List.length_append, vals_pairs_length, vals_cons_one, vals_cons_vec, vals_cons_label,
+    vals_cons_bytes, vals_cons_sq, vals_nil, List.length_cons, List.length_nil, Array.length_toList, h1, h2]
+  omega
+
+theorem vals_lc_length (k : ℕ) {p : Flock.LincheckProof} (h : p.zPartial.size = 64) :
+    (vals (lcFrames k p)).length = 2 * (k - 6) + 64 := by
+  unfold lcFrames
+  simp only [vals_append, List.length_append, vals_pairs_length, vals_cons_vec, vals_cons_label, vals_cons_sq,
+    vals_nil, List.length_nil, Array.length_toList, h]
+  omega
+
+theorem vals_rs_length {n : ℕ} {rs : Array (Array F128)} (hs : rs.size = n) (he : ∀ v ∈ rs, v.size = 128) :
+    (vals (rsFrames n rs)).length = 128 * n := by
+  unfold rsFrames
+  rw [vals_cons_label, vals_append, List.length_append,
+    vals_rsBlocks_length (rs := rs) 0 n fun j _ hj => he _ (by
+      rw [getElem!_pos rs j (by omega)]; exact Array.getElem_mem _)]
+  rfl
+
+theorem vals_repFrames (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArray) (n : ℕ) (p : Flock.Proof)
+    (T : F128) : ∃ Y, vals (repFrames st sch d n p T) =
+      vals (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck) ++
+        vals (lcFrames st.fold.kLog p.lincheck) ++ vals (rsFrames n p.ringSwitches) ++ T :: Y := by
+  have hY : ∃ Y, vals (ligFrames sch T p.cap p.ligerito) = T :: Y := ⟨_, by unfold ligFrames; rw [vals_append]; rfl⟩
+  obtain ⟨Y, hY⟩ := hY
+  refine ⟨Y, ?_⟩
+  unfold repFrames
+  rw [vals_cons_dom, vals_append, vals_append, vals_append, hY]
+
+theorem getElem!_mid (X Y : List F128) (T : F128) (acc : Array F128) : ((X ++ T :: Y).toArray ++ acc)[X.length]! = T := by
+  rw [getElem!_def, Array.getElem?_append_left (show X.length < (X ++ T :: Y).toArray.size by simp),
+    List.getElem?_toArray,
+    List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero]
+
+/-- **w holds `T` at `T`'s slot**: at a proof of the lengths its shape fixes (`ProofSizes`), at a setup that folds at its
+own `k_log`, the value at `wi sh .T` of the values a rep's frames absorb, round by round, is `T`. -/
+theorem valOf_T {st : Flock.Setup} {sch : Flock.Schedule} {e : ℕ} (d : ByteArray) (p : Flock.Proof) (T : F128)
+    (acc comb : Array F128) (cons : ℕ → ℕ → F128)
+    (hs : ProofSizes (FlockSoundness.Refine.shapeOf st sch e) p) (hk : st.fold.kLog = st.kLog) :
+    valOf (FlockSoundness.Refine.shapeOf st sch e)
+      (((chunks (repFrames st sch d (2 + e) p T)).1.flatMap vals).toArray ++ acc) comb cons .T = T := by
+  have hw : (chunks (repFrames st sch d (2 + e) p T)).1.flatMap vals = vals (repFrames st sch d (2 + e) p T) := by
+    have h := chunks_flatten (repFrames st sch d (2 + e) p T)
+    rw [repFrames_chunks_snd, List.append_nil] at h
+    rw [List.flatMap_def, ← vals_flatten, h]
+  obtain ⟨Y, hY⟩ := vals_repFrames st sch d (2 + e) p T
+  have hz := vals_zc_length (m := st.m) st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) hs.r1ab hs.r1c
+  have hl := vals_lc_length st.fold.kLog hs.zPartial
+  have hr := vals_rs_length (n := 2 + e) hs.rs hs.rsEach
+  have hp := preRounds_size (sh := FlockSoundness.Refine.shapeOf st sch e) rfl
+  simp only [valOf, wi_T]
+  rw [hw, hY]
+  have hi : (preRounds (FlockSoundness.Refine.shapeOf st sch e)).flatten.size +
+      128 * (FlockSoundness.Refine.shapeOf st sch e).claims =
+      (vals (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck) ++
+        vals (lcFrames st.fold.kLog p.lincheck) ++ vals (rsFrames (2 + e) p.ringSwitches)).length := by
+    rw [hp, List.length_append, List.length_append, hz, hl, hr, hk]
+    simp only [FlockSoundness.Refine.shapeOf]
+    omega
+  rw [hi]
+  exact getElem!_mid _ Y T acc
 
 end FlockDeploy
