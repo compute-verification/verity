@@ -88,11 +88,10 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`Resolve.BodyOk`), its callees' summaries (`RetOk`) and the decoder's facts its private `composite` sets (`Decoded`,
   `ScanOut`) do (`specs_decoded`);
 * so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
-  `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), wherever besides those
-  the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`,
-  `downShape_decoded`; a stride of whole members by `batchStride_shape`; open only for a batch's piece of one row and
-  stride 1 past its one-run case, `BatchOneShape`), and a
-  composite's return is the sequence of its parts and a primitive's none (`RetParts`, the decoder's).
+  `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), the segments `down` gives
+  naming their `len` positions, at or past 0 and none a node's (`DownShape`, `downShape_decoded`; a batch's piece of
+  one row and stride 1 by `batchOne_shape`, a stride of whole members by `batchStride_shape`), wherever besides those
+  a composite's return is the sequence of its parts and a primitive's none (`RetParts`, the decoder's).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -8593,7 +8592,7 @@ theorem batchAffine_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
     have hL1' : (c.P.defs[node.fn]!).outLeaves ≠ 1 := by simpa using hL1
     have hG := hFG.resolve_left hL1'
     by_contra hneg
-    push_neg at hneg
+    push Not at hneg
     have hL0 : (0 : Int) < ((c.P.defs[node.fn]!).outLeaves : Int) := by exact_mod_cast Nat.pos_of_ne_zero hL
     nlinarith [Int.natCast_nonneg ((c.P.defs[node.fn]!).gates)]
 
@@ -8741,6 +8740,377 @@ theorem batchStride_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolv
         · exact batchPts_shape c fuel hD q ht h1 hq hf h
       · exact batchPts_shape c fuel hD q ht h1 hq hf h
   · exact batchPts_shape c fuel hD q ht h1 hq hf h
+
+/-- A batch's output leaves `[a, b)` from `mid` and what `fromCallee` keeps of the cut members at either end:
+`ShapeOk` wherever `mid`'s segments are (`CalleeShape`). -/
+theorem ends_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel) {k L a b : Nat} (hL : L ≠ 0)
+    (hab : (a + L - 1) / L ≤ b / L) (hLr : L ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    (hm : ∀ j, a ≤ j → j < b → j / L < (c.body.nodes[k]!).members)
+    {mid segs : Array Seg} (hmid : ∀ s ∈ mid.toList, ShapeOk c.P c.d s)
+    (h : batchEnds c fuel k L a b mid = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  unfold batchEnds at h
+  dsimp only at h
+  generalize hm0 : (a + L - 1) / L = m0 at *
+  generalize hm1 : b / L = m1 at *
+  have hLp : 0 < L := Nat.pos_of_ne_zero hL
+  have ha0 : a ≤ m0 * L := by
+    rw [← hm0]
+    have := Nat.div_add_mod (a + L - 1) L
+    have := Nat.mod_lt (a + L - 1) hLp
+    have : L * ((a + L - 1) / L) = (a + L - 1) / L * L := Nat.mul_comm _ _
+    omega
+  have hb0 : m1 * L ≤ b := by rw [← hm1]; exact Nat.div_mul_le_self _ _
+  have hb1 : b < m1 * L + L := by
+    rw [← hm1]
+    have := Nat.div_add_mod b L
+    have := Nat.mod_lt b hLp
+    have : L * (b / L) = b / L * L := Nat.mul_comm _ _
+    omega
+  have hmm : m0 * L ≤ m1 * L := Nat.mul_le_mul_right _ hab
+  have hfirst : ∀ x, a < m0 * L → Desc.fromCallee c fuel k (a / L) (a % L) L = .ok x →
+      ∀ s ∈ x.toList, ShapeOk c.P c.d s := fun x hlt hx =>
+    hCS k (a / L) (a % L) L x (hm a le_rfl (by omega)) (fun _ => hLr) hx
+  have hlast : ∀ y, m1 * L < b → Desc.fromCallee c fuel k m1 0 (b - m1 * L) = .ok y →
+      ∀ s ∈ y.toList, ShapeOk c.P c.d s := by
+    intro y hlt hy
+    have hmB := hm (m1 * L) (by omega) hlt
+    rw [Nat.mul_div_cancel _ hLp] at hmB
+    exact hCS k m1 0 (b - m1 * L) y hmB (fun _ => by omega) hy
+  obtain ⟨A, B, rfl, hA, hB⟩ : ∃ A B, segs = A ++ mid ++ B ∧ (∀ s ∈ A.toList, ShapeOk c.P c.d s) ∧
+      ∀ s ∈ B.toList, ShapeOk c.P c.d s := by
+    split at h
+    · rename_i hlt
+      obtain ⟨x, hx, h⟩ := Walk.except_bind_ok h
+      split at h
+      · rename_i hlt'
+        obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        exact ⟨x, y, by rw [← h]; try simp, hfirst x hlt hx, hlast y hlt' hy⟩
+      · simp only [pure, Except.pure, Except.ok.injEq] at h
+        exact ⟨x, #[], by rw [← h]; try simp, hfirst x hlt hx, by simp⟩
+    · split at h
+      · rename_i hlt'
+        obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        exact ⟨#[], y, by rw [← h]; try simp, by simp, hlast y hlt' hy⟩
+      · simp only [pure, Except.pure, Except.ok.injEq] at h
+        exact ⟨#[], #[], by rw [← h]; try simp, by simp, by simp⟩
+  intro s hs
+  simp only [Array.toList_append, List.mem_append] at hs
+  rcases hs with (hs | hs) | hs
+  · exact hA s hs
+  · exact hmid s hs
+  · exact hB s hs
+
+/-- A batch's output leaves `[a, b)` member by member: `ShapeOk` (`CalleeShape`). -/
+theorem batchMembers_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel) {k L a b : Nat}
+    (hLr : L ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) (hm : (b - 1) / L < (c.body.nodes[k]!).members)
+    {segs : Array Seg} (h : batchMembers c fuel k L a b = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  unfold batchMembers at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.add_sub_cancel, Nat.div_one] at h
+  exact loop_mem (ShapeOk c.P c.d)
+    (fun m => Desc.fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L)) _
+    (fun m hmm segs hs => by
+      rw [List.mem_range'_1] at hmm
+      refine hCS k m _ _ segs (by omega) (fun _ => ?_) hs
+      have hmL : (m + 1) * L = m * L + L := by rw [Nat.add_mul, Nat.one_mul]
+      omega) segs h
+
+/-- What `throughPS` gives, of an argument whose segments and pieces are of positive count: of positive count, at
+positions of the argument's one piece (its bounds check). -/
+theorem throughPS_mem {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some bp) (hok : PSOk ap)
+    (hP : ∀ s ∈ ap.segs.toList, ∀ g ∈ s.ps.toList, 0 < g.count) :
+    0 < bp.count ∧ ∀ x ∈ pos bp, x ∈ psPos ap := by
+  obtain ⟨segs, st, n⟩ := ap
+  rcases segs with ⟨_ | ⟨s, _ | ⟨s', l⟩⟩⟩
+  · unfold Desc.throughPS at h; dsimp only at h; cases h
+  rotate_left
+  · unfold Desc.throughPS at h; dsimp only at h; cases h
+  obtain ⟨ps, len, reps, shift⟩ := s
+  rcases ps with ⟨_ | ⟨pa, _ | ⟨pa', l'⟩⟩⟩
+  · unfold Desc.throughPS at h; dsimp only at h; cases h
+  rotate_left
+  · unfold Desc.throughPS at h; dsimp only at h; cases h
+  rw [throughPS_eq] at h
+  split at h
+  · cases h
+  rename_i hc
+  rw [Option.ite_none_left_eq_some] at h
+  obtain ⟨hb, hbp⟩ := h
+  simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, not_lt, not_le] at hc hb
+  have e := Option.some.inj hbp
+  subst e
+  obtain ⟨⟨hr1, hpr⟩, hq0⟩ := hc
+  have hsc : 0 < reps * len := (hok.1 0 (by simp)).2
+  have hpc : 0 < pa.rows * pa.len := hP ⟨#[pa], len, reps, shift⟩ (by simp) pa (by simp)
+  have hrep : reps = 1 := by
+    rcases Nat.eq_zero_or_pos reps with h0 | h0
+    · rw [h0, Nat.zero_mul] at hsc; omega
+    · omega
+  have hpr1 : pa.rows = 1 := by
+    rcases Nat.eq_zero_or_pos pa.rows with h0 | h0
+    · rw [h0, Nat.zero_mul] at hpc; omega
+    · omega
+  have hpos : psPos ⟨#[⟨#[pa], len, reps, shift⟩], st, n⟩ = pos pa := by
+    show segsPos #[_] = _
+    rw [segsPos_singleton, segPos_one_rep (show (⟨#[pa], len, reps, shift⟩ : Seg).reps = 1 from hrep)]
+    exact posAll_singleton pa
+  refine ⟨by show 0 < q.rows * q.len; unfold Desc.Piece.count at hq0; omega, fun x hx => ?_⟩
+  rw [hpos]
+  unfold pos at hx
+  obtain ⟨r, hr, hx⟩ := List.mem_flatMap.1 hx
+  obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hx
+  rw [List.mem_range] at hr ht
+  dsimp only at hr ht ⊢
+  have lo1 : (if q.stride < 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) ≤ (t : Int) * q.stride := by
+    split_ifs with hs
+    · have : (t : Int) ≤ ((q.len - 1 : Nat) : Int) := by omega
+      nlinarith
+    · push Not at hs
+      exact mul_nonneg (Int.natCast_nonneg t) hs
+  have lo2 : (if q.rowStride < 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0) ≤
+      (r : Int) * q.rowStride := by
+    split_ifs with hs
+    · have : (r : Int) ≤ ((q.rows - 1 : Nat) : Int) := by omega
+      nlinarith
+    · push Not at hs
+      exact mul_nonneg (Int.natCast_nonneg r) hs
+  have hi1 : (t : Int) * q.stride ≤ (if q.stride > 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) := by
+    split_ifs with hs
+    · have : (t : Int) ≤ ((q.len - 1 : Nat) : Int) := by omega
+      nlinarith
+    · push Not at hs
+      exact mul_nonpos_of_nonneg_of_nonpos (Int.natCast_nonneg t) hs
+  have hi2 : (r : Int) * q.rowStride ≤
+      (if q.rowStride > 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0) := by
+    split_ifs with hs
+    · have : (r : Int) ≤ ((q.rows - 1 : Nat) : Int) := by omega
+      nlinarith
+    · push Not at hs
+      exact mul_nonpos_of_nonneg_of_nonpos (Int.natCast_nonneg r) hs
+  have he0 : 0 ≤ q.base + (r : Int) * q.rowStride + (t : Int) * q.stride := by linarith [hb.1]
+  have heL : q.base + (r : Int) * q.rowStride + (t : Int) * q.stride < pa.len := by linarith [hb.2]
+  convert at_mem_pos hpr1 (t := (q.base + (r : Int) * q.rowStride + (t : Int) * q.stride).toNat) (by omega) using 2
+  unfold Desc.Piece.at
+  rw [Int.toNat_of_nonneg he0]
+  ring
+
+/-- `down` of the piece `throughPS` gives of an argument whose pieces are of positive count: `ShapeOk` segments, its
+positions being the argument's references. -/
+theorem throughPS_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : Nat} (hA : ArgOk c k i)
+    (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t))
+    {p bp : Piece} (h : Desc.throughPS (c.arg k i) p = some bp) {segs : Array Seg}
+    (hs : Desc.down c fuel bp = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  obtain ⟨hcnt, hmem⟩ := throughPS_mem h hA.1 hP
+  have hmem' : ∀ x ∈ pos bp, ∃ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      x = refPos (((c.body.nodes[k]!).args[i]!).seq.get t) := by
+    intro x hx
+    have := hmem x hx
+    rw [hA.2] at this
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 this
+    exact ⟨t, List.mem_range.1 ht, rfl⟩
+  exact hD bp segs hcnt
+    (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem' x hx; simp [refPos])
+    (fun x hx k' hk' => by
+      obtain ⟨t, ht, rfl⟩ := hmem' x hx
+      simp only [refPos, Tgt.ref.injEq] at hk'
+      obtain ⟨hp', rfl⟩ := hk'
+      have := ((hR t ht).2 hp').2
+      simp only [refPos]
+      exact_mod_cast this)
+    (fun x hx i' hi' => by
+      obtain ⟨t, ht, rfl⟩ := hmem' x hx
+      simp only [refPos, Tgt.ref.injEq] at hi'
+      obtain ⟨hp', rfl⟩ := hi'
+      have := (hR t ht).1 hp'
+      simp only [refPos]
+      exact ⟨this.1, by exact_mod_cast this.2⟩) hs
+
+/-- A batch's output leaves `[a, b)` through `throughPS`, else member by member: `ShapeOk`. -/
+theorem batchThrough_shape (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat) (hD : DownShapeAt c fuel)
+    (hCS : CalleeShape c fuel)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    {k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
+    (hLr : (c.P.defs[node.fn]!).outLeaves ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) {a b : Nat}
+    (hm : ∀ j, a ≤ j → j < b → j / (c.P.defs[node.fn]!).outLeaves < (c.body.nodes[k]!).members)
+    (hmB : (b - 1) / (c.P.defs[node.fn]!).outLeaves < (c.body.nodes[k]!).members)
+    {segs : Array Seg} (h : batchThrough c fuel k node a b = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  have hmem := fun (hh : batchMembers c fuel k (c.P.defs[node.fn]!).outLeaves a b = .ok segs) =>
+    batchMembers_shape c fuel hCS hLr hmB hh
+  unfold batchThrough at h
+  dsimp only at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hc
+    split at h
+    · rename_i i hti
+      split at h
+      · rename_i d Li hdl
+        split at h
+        · rename_i hg
+          split at h
+          · rename_i bp hbp
+            obtain ⟨x, hx, h⟩ := Walk.except_bind_ok h
+            obtain ⟨a', ha, -⟩ := Option.bind_eq_some_iff.1 hdl
+            obtain ⟨hia, -⟩ := Array.getElem?_eq_some_iff.1 ha
+            have hnode := node_get hn
+            have hk : k < c.body.nodes.size := node_lt hn
+            have hia' : i < (c.body.nodes[k]!).args.size := by rw [hnode]; exact hia
+            have hRk : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+                Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t) := (hB.1 k hk).2.1 i
+            exact ends_shape c fuel hCS hL (by omega) hLr hm
+              (throughPS_shape c fuel hD (hA k i hk hia') (hAP k i hk hia') hRk hbp hx) h
+          · exact hmem h
+        · exact hmem h
+      · exact hmem h
+    · exact hmem h
+  · exact hmem h
+
+/-- Copies of a return of gates only, each moved by a whole member's gates past an offset at or past 0: `ShapeOk`. -/
+theorem copiesSeg_shape (P : Prog) (d : Nat) (memo : Array Desc.Summary) (f : Nat) (hR : RetOk P memo f)
+    (hgo : ∀ x ∈ (memo[f]!).ret.segs.toList, x.reps ≤ 1 ∧ ∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w)
+    {o G : Int} (ho : 0 ≤ o) (hG : 0 ≤ G) {len n : Nat} (hl : len = (P.defs[f]!).body.ret.count) (hn : 1 ≤ n) :
+    ShapeOk P d (Desc.Seg.mk (Desc.shiftGates o ((memo[f]!).ret.segs.flatMap (·.ps))) len n G) := by
+  obtain ⟨hok, hnn, -, hag, hpp⟩ := hR
+  have hflat := psPos_flat _ hok (fun x hx => (hgo x hx).1)
+  have hlenr := (hag (.top f 0 none) rfl).length_eq
+  simp only [List.length_map, List.length_range] at hlenr
+  refine ⟨?_, fun x hx => ?_, ?_, hn⟩
+  · show (posAll (Desc.shiftGates _ _)).length = len
+    rw [shiftGates_pos, List.length_map, ← hflat, hlenr, hl]
+  · unfold segPos at hx
+    obtain ⟨u, -, hx⟩ := List.mem_flatMap.1 hx
+    simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
+    obtain ⟨y, hy, rfl⟩ := hx
+    have hy' := hy
+    unfold posAll at hy'
+    obtain ⟨g, hg, hyg⟩ := List.mem_flatMap.1 hy'
+    rw [Array.toList_flatMap, List.mem_flatMap] at hg
+    obtain ⟨s, hs, hg⟩ := hg
+    obtain ⟨w, hw⟩ := (hgo s hs).2 g hg
+    have hyt : y.1 = .gate w := (mem_pos_tgt hyg).trans hw
+    rw [← hflat] at hy
+    have hy0 := (hnn y hy).1
+    obtain ⟨t, v⟩ := y
+    dsimp only at hyt hy0
+    subst hyt
+    refine ⟨?_, fun k' hk' => ?_, fun i hi => ?_⟩
+    · simp only [shiftPos]
+      nlinarith [mul_nonneg (Int.natCast_nonneg u) hG]
+    · simp [shiftPos] at hk'
+    · simp [shiftPos] at hi
+  · exact shiftGates_count _ _ (fun g hg => by
+      rw [Array.toList_flatMap, List.mem_flatMap] at hg
+      obtain ⟨s, hs, hg⟩ := hg
+      exact hpp s hs g hg)
+
+/-- Copies of what `fromCallee` keeps of member `m`'s return leaves `[a, b)`, one copy each: `ShapeOk`
+(`CalleeShape`, of length `b - a` by `CalleeSpec`). -/
+theorem sharedSeg_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hCS : CalleeShape c fuel)
+    (hC : CalleeSpec c sc fuel) {k m a b len n : Nat} {one : Array Seg} (hm : m < (c.body.nodes[k]!).members)
+    (hb : a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    (hone : Desc.fromCallee c fuel k m a b = .ok one) (hone1 : one.all (·.reps ≤ 1) = true)
+    (hl : len = b - a) (hn : 1 ≤ n) :
+    ShapeOk c.P c.d (Desc.Seg.mk (one.flatMap (·.ps)) len n 0) := by
+  have hrep1 : ∀ x ∈ one.toList, x.reps = 1 := by
+    intro x hx
+    have h0 := ((reps_fuel c fuel).2.1 k _ _ _ one hone x hx).1
+    have hle := (Array.all_eq_true_iff_forall_mem.1 hone1) x (Array.mem_toList_iff.1 hx)
+    simp only [decide_eq_true_eq] at hle
+    omega
+  have hA := (hC k m a b one hm hb hone).length_eq
+  have hS := hCS k m a b one hm hb hone
+  have hposeq := posAll_flatMap_ps one hrep1
+  refine ⟨?_, fun x hx => ?_, fun g hg => ?_, hn⟩
+  · show (posAll (one.flatMap (·.ps))).length = len
+    rw [hposeq, hA, hl]
+    simp
+  · rw [segPos_alike rfl] at hx
+    obtain ⟨_, -, hx⟩ := List.mem_flatMap.1 hx
+    rw [hposeq] at hx
+    unfold segsPos at hx
+    obtain ⟨s, hs, hxs⟩ := List.mem_flatMap.1 hx
+    exact (hS s hs).2.1 x hxs
+  · rw [Array.toList_flatMap, List.mem_flatMap] at hg
+    obtain ⟨s, hs, hg⟩ := hg
+    exact (hS s hs).2.2.1 g hg
+
+/-- **A batch of a composite's piece of one row and stride 1 past its one-run case**, as `batchOne` reads it, gives
+`ShapeOk` segments: whole members as copies of a return of gates (`copiesSeg_shape`) or of what `fromCallee` keeps of
+a member's return of shared leaves (`sharedSeg_shape`), through `throughPS`, or member by member, the cut members at
+either end each through its return (`ends_shape`, `batchThrough_shape`). -/
+theorem batchOne_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
+    (hD : DownShapeAt c fuel) (hCS : CalleeShape c fuel) (hC : CalleeSpec c sc fuel)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
+      (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) : BatchOneShape c fuel := by
+  intro q k node segs ht hn hform hp hL h0 h1 hs hq hf h
+  have hlen : 0 < q.len := by rw [← count_one h1]; omega
+  have hdo := downOk_of hB hn
+  have hnode := node_get hn
+  have hol := hOL k node hn hp
+  have hLr : (c.P.defs[node.fn]!).outLeaves ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count := by
+    rw [hnode, hol]
+  have hbl : q.base.toNat + q.len ≤ node.out.leaves := by
+    have hm := at_mem_pos h1 (show q.len - 1 < q.len by omega)
+    have hb := hq _ (at_mem_pos h1 hlen)
+    have := hf _ hm k ht
+    simp only [hnode, Desc.Piece.at, hs] at this hb
+    omega
+  have hm : ∀ j, q.base.toNat ≤ j → j < q.base.toNat + q.len →
+      j / (c.P.defs[node.fn]!).outLeaves < (c.body.nodes[k]!).members := by
+    intro j _ hj
+    have := hdo j (by omega)
+    simp only [hform] at this
+    rw [hnode, members_batch hform]
+    exact this.1
+  have hmB := hm (q.base.toNat + q.len - 1) (by omega) (by omega)
+  have hm1 : (q.base.toNat + q.len) / (c.P.defs[node.fn]!).outLeaves ≤ (c.body.nodes[k]!).members := by
+    have hLp := Nat.pos_of_ne_zero hL
+    have e1 := Nat.div_mul_le_self (q.base.toNat + q.len) (c.P.defs[node.fn]!).outLeaves
+    have e5 := Nat.lt_div_mul_add (a := q.base.toNat + q.len - 1) hLp
+    have e6 : (q.base.toNat + q.len) / (c.P.defs[node.fn]!).outLeaves * (c.P.defs[node.fn]!).outLeaves ≤
+        ((q.base.toNat + q.len - 1) / (c.P.defs[node.fn]!).outLeaves + 1) * (c.P.defs[node.fn]!).outLeaves := by
+      rw [Nat.add_mul, Nat.one_mul]; omega
+    have := Nat.le_of_mul_le_mul_right e6 hLp
+    omega
+  unfold batchOne at h
+  dsimp only at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    have hgo : ∀ x ∈ (c.memo[node.fn]!).ret.segs.toList, x.reps ≤ 1 ∧ ∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w := by
+      intro x hx
+      have := (Array.all_eq_true_iff_forall_mem.1 hc.1) x (Array.mem_toList_iff.1 hx)
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+      exact ⟨this.1, gates_of_all this.2⟩
+    refine ends_shape c fuel hCS hL (by omega) hLr hm ?_ h
+    intro s hs
+    simp only [List.mem_singleton] at hs
+    subst hs
+    exact copiesSeg_shape c.P c.d c.memo node.fn (hR k node hn) hgo (by positivity) (by positivity) hol (by omega)
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    obtain ⟨one, hone, h⟩ := Walk.except_bind_ok h
+    split at h
+    · rename_i hone1
+      refine ends_shape c fuel hCS hL (by omega) hLr hm ?_ h
+      intro s hs
+      simp only [List.mem_singleton] at hs
+      subst hs
+      exact sharedSeg_shape c sc fuel hCS hC (by omega) (fun _ => hLr) hone hone1 (by omega) (by omega)
+    · exact batchThrough_shape c hB fuel hD hCS hA hAP hn hL hLr hm hmB h
+  · exact batchThrough_shape c hB fuel hD hCS hA hAP hn hL hLr hm hmB h
 
 /-- A scan's ys `[lo, hi)`, `yl` leaves to an iteration, through `fromCallee` iteration by iteration: `ShapeOk`
 segments. -/
@@ -8906,30 +9276,41 @@ theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut
     exact hA
 
 /-- **`DownShape` in a decoded Definition's body**, from `downShape_of` with the decoder's facts and `specs_decoded`,
-a batch's cases by `batchShape_of`, wherever `batchOne`'s segments are `ShapeOk` (`BatchOneShape`). -/
+a batch's cases by `batchShape_of`. -/
 theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
     (hDec : Decoded P) (hB : Resolve.BodyOk P d)
-    (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d))
-    (hOne : ∀ fuel, DownShapeAt (ctxOf P memo d) fuel → CalleeShape (ctxOf P memo d) fuel →
-      BatchOneShape (ctxOf P memo d) fuel) :
+    (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d)) :
     DownShape (ctxOf P memo d) := by
   have hS := specs_decoded P memo hdP hDec hB hR hSO (.top d 0 none) rfl
-  refine downShape_of (ctxOf P memo d) (.top d 0 none) rfl hB ?_ ?_ ?_ hR (fun fuel => (hS fuel).2.2.1)
-    (fun fuel hD hC => batchShape_of _ fuel hD (batchAffine_shape _ hR) (hOne fuel hD hC)
-      (batchStride_shape _ (.top d 0 none) hB fuel hD hC (hS fuel).2.1 hR))
-    (fun fuel hC hK => scanShape_of _ hB hSO fuel hC hK)
-  · intro k i hk hi
+  have hfn : ∀ k node, (ctxOf P memo d).node k = .ok node → node.fn < P.defs.size := by
+    intro k node hn
+    have hk := node_lt hn
+    have := (hB.1 k hk).1
+    have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
+    rwa [hg] at this
+  have hA : ∀ k i, k < (ctxOf P memo d).body.nodes.size → i < ((ctxOf P memo d).body.nodes[k]!).args.size →
+      ArgOk (ctxOf P memo d) k i := by
+    intro k i hk hi
     have := (hDec d hdP).2.2 k hk i hi
     exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
-  · intro k i hk hi
-    exact ctxOf_argCount P memo d k i hk hi
-  · intro k i e L hdims hL hip
-    change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
-    by_cases hk : k < (P.defs[d]!).body.nodes.size
-    · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
-      · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
-      · rw [getElem!_neg _ i hi] at hdims; cases hdims
-    · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
+  have hAP : ∀ k i, k < (ctxOf P memo d).body.nodes.size → i < ((ctxOf P memo d).body.nodes[k]!).args.size →
+      ∀ s ∈ ((ctxOf P memo d).arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count :=
+    fun k i hk hi => ctxOf_argCount P memo d k i hk hi
+  have hOL : ∀ k node, (ctxOf P memo d).node k = .ok node → (P.defs[node.fn]!).prim = false →
+      (P.defs[node.fn]!).outLeaves = (P.defs[node.fn]!).body.ret.count :=
+    fun k node hn hp => (hDec node.fn (hfn k node hn)).2.1 hp
+  refine downShape_of (ctxOf P memo d) (.top d 0 none) rfl hB hA hAP ?_ hR (fun fuel => (hS fuel).2.2.1)
+    (fun fuel hD hC => batchShape_of _ fuel hD (batchAffine_shape _ hR)
+      (batchOne_shape _ (.top d 0 none) hB fuel hD hC (hS fuel).2.1 hA hAP hR hOL)
+      (batchStride_shape _ (.top d 0 none) hB fuel hD hC (hS fuel).2.1 hR))
+    (fun fuel hC hK => scanShape_of _ hB hSO fuel hC hK)
+  intro k i e L hdims hL hip
+  change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
+  by_cases hk : k < (P.defs[d]!).body.nodes.size
+  · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+    · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
+    · rw [getElem!_neg _ i hi] at hdims; cases hdims
+  · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
 
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
@@ -9214,17 +9595,13 @@ theorem reached_closed (P : Prog)
 
 /-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever every
 Definition's callees are decoded before it and none is the root, and the reached Definitions' references
-(`Resolve.BodyOk`), the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) and, given their callees' summaries, the
-shape of what `batchOne` gives (`BatchOneShape`, which gives `DownShape` by `downShape_decoded`) hold. -/
+(`Resolve.BodyOk`) and the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) hold. -/
 theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
     (hnr : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
     (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
-    (hSO : ∀ m d, ScanOut (ctxOf P m d))
-    (hOne : ∀ m, ∀ d < P.defs.size, (Desc.reached P)[d]! = true →
-      (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) →
-      ∀ fuel, DownShapeAt (ctxOf P m d) fuel → CalleeShape (ctxOf P m d) fuel → BatchOneShape (ctxOf P m d) fuel) :
+    (hSO : ∀ m d, ScanOut (ctxOf P m d)) :
     ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P memo f := by
   unfold memoOf at h
   extract_lets seen memo0 at h
@@ -9260,7 +9637,7 @@ theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok 
       rw [← hg]
       exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP k hk)
     refine summarize_retOk P r f v htP hRP (hB f htP hrf)
-      (fun hp => downShape_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) (hOne r f htP hrf (hR hp)))
+      (fun hp => downShape_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f))
       (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) sc hsc
         Flock.Steps.FUEL).1) hv (r.push v) ?_
     subst hsz
