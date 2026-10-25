@@ -1,8 +1,10 @@
 """A served window's credited set, its drawn units and their outcome, its A rows, and the period it counts toward, as
 PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). `_window_outcomes` and `_period_outcomes` are the Python
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
-`window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run (`_verified`),
-which the Lean takes as given until it runs that verifier in-process.
+`window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run, which the
+Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
+the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
+its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`).
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
@@ -20,7 +22,10 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
   `h1window.table_reads_file`'s, main's per-call tables). A rejected session refuses the window, and so does a
   verifier that can't run. The circuit file's tie to the descriptor's Definitions rests on the auditor's lowering,
-  which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133).
+  which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133). The verdict
+  over the statements is the Lean's (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement
+  to verify and the inputs (`_asks`: up to the first statement a check before the verifier refuses), this module only
+  runs the verifier on them, and the Lean judges the answers (`_lean_verified`).
 * **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
   ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
@@ -178,6 +183,7 @@ from typing import Any, Callable
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
@@ -1421,16 +1427,41 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     that proved a unit of another call refuses it (``proof``). Each unit an accepted session proved is one outcome:
     accepted, the program its verdict names and its registered finding, which `_proved` and `_registration` then hold
     to the draw and to the window's registration."""
+    asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt)
+    out: list[dict] = []
+    for a in asks:
+        s = statements[a["statement"]]
+        try:
+            got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
+                           circuit_sha512=a["circuit_sha512"], program=raw, partition=a["partition"],
+                           registered=a["registered"])
+        except (PF.LeanError, OSError, ValueError, KeyError, TypeError) as e:
+            return None, ("proof", f"call {s['call']}'s statement could not be verified, so the window stays refused: "
+                                   f"{e}")
+        if why is not None:
+            return None, (why[0], f"call {s['call']}'s statement: {why[1]}")
+        why = _judged(layout, s["call"], a["registered"], got, out)
+        if why is not None:
+            return None, why
+    return (None, refused) if refused is not None else (out, None)
+
+
+def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
+          steps: int, salt: str) -> tuple[list[dict], tuple[str, str] | None]:
+    """The verifier runs `_verified` makes, in statement order, up to the first statement a check before the verifier
+    refuses, and that refusal (or None): each ``{statement, circuit_sha512, registered, partition}``, the statement's
+    index among `statements` and the verifier's inputs for it. The Python reference of the Lean's
+    `PouwCheck.Verified.asks`, which `_lean_verified` runs the verifier on."""
     if not (isinstance(files, dict) and all(type(x) is str and _digest(v) is not None for x, v in files.items())):
-        return None, ("circuit", FILES_FORM)
+        return [], ("circuit", FILES_FORM)
     if not (isinstance(statements, list)
             and all(isinstance(s, dict) and sorted(s) == list(STATEMENT_KEYS) and _nat(s["call"])
                     and type(s["circuit"]) is str and type(s["public"]) is str and type(s["sessions"]) is list
                     and s["sessions"] and all(type(x) is str for x in s["sessions"]) for s in statements)):
-        return None, ("proof", STATEMENTS_FORM)
+        return [], ("proof", STATEMENTS_FORM)
     sizes = [size for size, _work in call_work(layout)]
     if any(s["call"] >= len(sizes) for s in statements):
-        return None, ("proof", STATEMENTS_FORM)
+        return [], ("proof", STATEMENTS_FORM)
     starts = list(itertools.accumulate(sizes, initial=0))[:-1]
     drawn = {bisect.bisect_right(starts, u) - 1 for u in units}
     program, shape = hashlib.sha512(raw).hexdigest(), shape_of(raw)
@@ -1440,53 +1471,96 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
         roots.setdefault(e.get("value"), []).append(e.get("root"))
     ks = {name: k for name, k, _n in layout["linears"]}
     seen: set[int] = set()
-    out = []
-    for s in statements:
+    out: list[dict] = []
+    for i, s in enumerate(statements):
         c = s["call"]
         if c in seen:
-            return None, ("outcome", f"call {c} has two statements: a call's drawn units are proved in one statement and "
-                                     "verified once, and a retry never reproves them")
+            return out, ("outcome", f"call {c} has two statements: a call's drawn units are proved in one statement "
+                                    "and verified once, and a retry never reproves them")
         seen.add(c)
         if c not in drawn:
-            return None, ("outcome", f"call {c} has a statement and no drawn unit: only the draw's units are proved")
+            return out, ("outcome", f"call {c} has a statement and no drawn unit: only the draw's units are proved")
         k = ks[layout["calls"][c][0]]
         if f"k{k}" not in files:
-            return None, ("circuit", no_statement_files(k))
+            return out, ("circuit", no_statement_files(k))
         reg, why = registered_file(program, layout, shape, c, roots, window, steps, salt)
         if why is not None:
-            return None, why
-        try:
-            got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
-                           circuit_sha512=files[f"k{k}"], program=raw, partition=partition, registered=reg)
-        except (PF.LeanError, OSError, ValueError, KeyError, TypeError) as e:
-            return None, ("proof", f"call {c}'s statement could not be verified, so the window stays refused: {e}")
-        if why is not None:
-            return None, (why[0], f"call {c}'s statement: {why[1]}")
-        for f in got:
-            if not f.accepted:
-                return None, ("failed", f"call {c}'s session {f.session} was rejected by the verifier of record "
-                                        f"({f.why}): a failed drawn unit refuses the whole window, not only its call "
-                                        "(no partial credit, and no retry)")
-            pub = reg["ports"][PUB_PORT]
-            if any(pub_call(v) is not None and (port, v, root) != (PUB_PORT, pub["value"], pub["root"])
-                   for port, v, root in _finding(f.registered) or ()):
-                return None, ("registration", f"call {c}'s session {f.session} opened a public table at another port, "
-                                              f"value or root than the verifier's own {pub['value']} at port {PUB_PORT}: "
-                                              "a unit's public row is the window's salt, its position and its call's "
-                                              "roots, as credit builds them")
-            ok, opened = reg["ports"][OK_PORT], _finding(f.registered) or ()
-            if [(p, v, root) for p, v, root in opened if p == OK_PORT or v == ok["value"]] != [
-                    (OK_PORT, ok["value"], ok["root"])]:
-                return None, ("registration", f"call {c}'s session {f.session} opened the ok rows at another port, value "
-                                              f"or root than the verifier's own {ok['value']} at port {OK_PORT}, or not "
-                                              "at all: a unit's ok row is the one word 1 under its public ok salt, as "
-                                              "credit registers it, so a unit that computed 0 opens none of it")
-            for u in f.units:
-                if not starts[c] <= u < starts[c] + sizes[c]:
-                    return None, ("proof", f"call {c}'s session {f.session} proved unit {u}, which is no unit of call "
-                                           f"{c}: a call's statement proves its own call's units")
-                out.append({"unit": u, "verdict": "accept", "program": f.program, "registered": f.registered})
+            return out, why
+        out.append({"statement": i, "circuit_sha512": files[f"k{k}"], "registered": reg, "partition": partition})
     return out, None
+
+
+def _judged(layout: dict, c: int, reg: dict, got: list[PF.Finding], out: list[dict]) -> tuple[str, str] | None:
+    """Call `c`'s statement's findings `got`, verified against the ``--registered`` file `reg`, appended to `out` as
+    outcomes, and None; or the refusal of the first finding that credits nothing."""
+    sizes = [size for size, _work in call_work(layout)]
+    start = sum(sizes[:c])
+    for f in got:
+        if not f.accepted:
+            return ("failed", f"call {c}'s session {f.session} was rejected by the verifier of record ({f.why}): a "
+                              "failed drawn unit refuses the whole window, not only its call (no partial credit, and "
+                              "no retry)")
+        pub = reg["ports"][PUB_PORT]
+        if any(pub_call(v) is not None and (port, v, root) != (PUB_PORT, pub["value"], pub["root"])
+               for port, v, root in _finding(f.registered) or ()):
+            return ("registration", f"call {c}'s session {f.session} opened a public table at another port, value or "
+                                    f"root than the verifier's own {pub['value']} at port {PUB_PORT}: a unit's public "
+                                    "row is the window's salt, its position and its call's roots, as credit builds "
+                                    "them")
+        ok, opened = reg["ports"][OK_PORT], _finding(f.registered) or ()
+        if [(p, v, root) for p, v, root in opened if p == OK_PORT or v == ok["value"]] != [
+                (OK_PORT, ok["value"], ok["root"])]:
+            return ("registration", f"call {c}'s session {f.session} opened the ok rows at another port, value or root "
+                                    f"than the verifier's own {ok['value']} at port {OK_PORT}, or not at all: a unit's "
+                                    "ok row is the one word 1 under its public ok salt, as credit registers it, so a "
+                                    "unit that computed 0 opens none of it")
+        for u in f.units:
+            if not start <= u < start + sizes[c]:
+                return ("proof", f"call {c}'s session {f.session} proved unit {u}, which is no unit of call {c}: a "
+                                 "call's statement proves its own call's units")
+            out.append({"unit": u, "verdict": "accept", "program": f.program, "registered": f.registered})
+    return None
+
+
+def _finding_json(f: PF.Finding) -> dict:
+    """A verifier finding as `PouwCheck.Verified` reads it: ``{session, accepted, why, program, registered, units}``."""
+    return {"session": f.session, "accepted": f.accepted, "why": f.why, "program": f.program,
+            "registered": f.registered, "units": list(f.units)}
+
+
+def _answer(run: Run, s: dict, ask: dict, raw: bytes) -> dict:
+    """The verifier of record's answer for one of the Lean's asks (`_asks`'s form) on statement `s`'s proof files: its
+    findings, its refusal, or why it could not run, as `PouwCheck.Verified` reads them."""
+    try:
+        got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
+                       circuit_sha512=ask["circuit_sha512"], program=raw, partition=ask["partition"],
+                       registered=ask["registered"])
+    except (PF.LeanError, OSError, ValueError, KeyError, TypeError) as e:
+        return {"error": str(e)}
+    return {"refused": list(why)} if why is not None else {"findings": [_finding_json(f) for f in got]}
+
+
+def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, window: str, units: list[int], steps: int,
+                   run: Run, salt: str) -> tuple[list[dict] | None, tuple[str, str] | None]:
+    """`_verified`'s verdict from the Lean verifier of record (`PouwCheck.Verified.verified`, `verifier.lean`): the Lean
+    names the verifier runs (`_asks`), this runs `run` on each in order until an answer the Lean will refuse at
+    (an error, a refusal or a rejected session), and the Lean judges the answers. A Lean that can't run leaves the
+    window refused (``proof``)."""
+    q = {"statements": statements, "files": files, "descriptor": raw.hex(), "entries": entries, "window": window,
+         "units": units, "steps": steps, "salt": salt, "runs": None}
+    try:
+        got = V.lean("credit-verified", q)
+        if "run" in got:
+            runs = []
+            for a in got["run"]:
+                runs.append(_answer(run, statements[a["statement"]], a, raw))
+                if "findings" not in runs[-1] or not all(f["accepted"] for f in runs[-1]["findings"]):
+                    break
+            got = V.lean("credit-verified", {**q, "runs": runs})
+    except V.LeanError as e:
+        return None, ("proof", f"the Lean verifier of record could not judge the window's statements, so the window "
+                               f"stays refused: {e}")
+    return (None, tuple(got["refused"])) if "refused" in got else (got["outcomes"], None)
 
 
 def _parsed(descriptor: Any) -> dict | None:
@@ -1947,6 +2021,9 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 
 
 def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, run: Run) -> Proved:
+    if V.RECORD_VERDICT == "lean":
+        return lambda _layout, raw, units, steps: _lean_verified(statements, files, raw, entries, window["root"], units,
+                                                                 steps, run, salt)
     return lambda layout, raw, units, steps: _verified(statements, files, raw, layout, entries, window["root"], units,
                                                        steps, run, salt)
 

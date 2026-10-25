@@ -15,7 +15,7 @@ verity-bench run SPEC        # one recorded `research run --queue` per point wit
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
-verity-bench served-table    # every protocol's served overhead from the store's newest passing results (--json)
+verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 ~~~
 
@@ -194,16 +194,30 @@ catalog alone.
 
 ## The served table
 
-`verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B on the
-RTX PRO 6000 from the store, never from numbers in code: the protocols, their specs and arms are `PROTOCOLS`, and the
-conversion factors (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `llama31-8b-fp8-1gpu-compiled-full`)
-are their own section. For every point of every spec it takes the newest passing `vllm_bench_point` attempt whose
-`spec` and `point` params name it (the resume lookup's rule, without its one-commit identity), so a newer passing run
-supersedes an older one. It first pulls the remote's attempts started since the oldest spec was added, the same pull
-as `check`'s. A result labelled `superseded_by`, invalid, or without the row's arms is passed over and listed. Ratios
-are paired by rep from the result's own reps, each metric over `stock-fp8@compiled` and, where the spec runs an eager
-stock, over that. The caveat column is the newest `label` and `note` on the result's artifact and its run, read through
-from the remote.
+`verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B from
+the store, never from numbers in code. It has three sections.
+
+- **PoUW's run of record** is kernels' live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
+  `summary.json` and `stop.json` in the run's record: the arm's median decode step at batch 32 over its control's
+  (the int8-exact engine without PoUW) in the same run. That ratio is per step, so it sits in its own section, apart
+  from the per-token ratios over stock FP8. A row stands only when every gate the run records passed: the device gate,
+  the tokens at the gate and at every timed rep, and a live window at the run's end on off-node coins. A run that fails
+  one is passed over and listed with why.
+- **The served rows on the RTX PRO 6000** (`PROTOCOLS`) each come from a protocol's run of record or, without one, from
+  the newest passing run. A run of record (`Protocol.record`) is named by run id, or by an `art:` id whose `runs` meta
+  lists the runs (a list, or a map from point to run). It is read by id, from the remote where this machine lacks it,
+  and every point of each run is a row. Without a record, each point of each spec takes the newest passing
+  `vllm_bench_point` attempt whose `spec` and `point` params name it (the resume lookup's rule, without its one-commit
+  identity), so a newer passing run supersedes an older one; the command first pulls the remote's attempts started
+  since the oldest such spec was added, the same pull as `check`'s. A result labelled `superseded_by`, an invalid
+  result, a result without the row's arms, or a record run that isn't a passing point run is passed over and listed.
+  Ratios are paired by rep from the result's own reps, each metric over `stock-fp8@compiled` and, where the run times
+  an eager stock, over that.
+- **The conversion factors** (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `FACTORS`) are rendered the
+  same way.
+
+The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
+read through from the remote (and a live run's `row` label).
 
 ## Out of scope here
 

@@ -14,18 +14,19 @@ verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the
 * **The step** (`actJ`, `nextJ`): a coin is answered as the deployed plain verifier answers it (`nextJ_coin`, so
   `deploySplit` applies); at a decision it is `decisionJF` (`nextJ_decide`).
 * **The parsed value's decision is `nextCs`'s** (`decisionAtJ_eq`, `decisionJF_eq`): at the same session, link, first
-  coin and round messages, `nextJ`'s decision on a parsed value `j` is `nextCs`'s on every record that parses to `j`,
-  so a route through the plain step at every parsed value (`verifyJWithM`) covers both.
+  coin and round messages, `nextJ`'s decision on a parsed value `j` is `nextCs`'s on the record that parses to `j` in
+  its canonical text (`printT j`, which S0 passes: `RecordText.check_of`), so a route through the plain step at every
+  parsed value (`verifyJWithM`) covers both.
 * **The reader parts' checks** (`ReadOk`, `LastSplitJ`, `LastSplitJ.toLast`, `ownJ`): a split of `nextJ`'s last step
   whose soundness may assume the reading, the last message read by `rd` and the record value's fields custody reads
   present with their shapes (`liveOfJ` at the substituted value `.ok`). The reading is one check, `read`, given to the
   first part holding the last round whole, the reader part whose message carries the record value (`ownJ`); the
   verdict's checks keep their owners (`ownJ_lt`). `RecDeploy.decompB_nextJ` is the composition at `nextJ`.
 
-**Open gap: proof-file decoding.** The proof files (`FinalJ.proofs`) are bytes the verdict decodes inside
-`verifyRepWith`. That decoding is not a reader part's check here: it stays among the verdict's checks (`LastSplitJ`'s
-`checks`), and no part's lowering fact is known to compute it. No premise is taken for it; until a rep reader part owns
-it, a `LastSplitJ` whose checks are owned by parts that don't decode the proofs has an unsatisfiable `hlow`.
+**Proof-file decoding.** The proof files (`FinalJ.proofs`) are bytes the verdict decodes inside `verifyRepWith`. That
+decoding stays among the verdict's checks here (`LastSplitJ`'s `checks`), and no part's lowering fact computes it, so a
+`LastSplitJ` whose checks are owned by parts that don't decode the proofs has an unsatisfiable `hlow`. The route is
+`NextS`: its last message carries the decoded proofs and its decision decodes no proof file (`RecDeploy.decompB_nextS`).
 -/
 
 namespace FlockDeploy
@@ -119,24 +120,26 @@ theorem nextJ_decide {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : 
     nextJ rd x as cs = outOf (decisionJF s x link c₁ mids f) := by
   simp only [nextJ, h]
 
-/-- **The parsed value's decision at a session is `nextCs`'s** on a record that parses to it. -/
+/-- **The parsed value's decision at a session is `nextCs`'s** on a record in its canonical text that parses to it. -/
 theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (hj : Json.parse f.record = .ok j) :
+    (hj : Json.parse f.record = .ok j) (hc : RecordText.printT j = f.record) :
     decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCsAt s spec sts x link c₁ mids f := by
+  have hs : RecordText.check f.record = pure () := RecordText.check_of hj hc
   rw [decisionCsAt_parse s spec sts x link c₁ mids hj]
-  simp only [decisionAtJ, decisionJ, verdictJM, checksAtJ, checksJ, recordDraw_of_parse hj, Bool.false_eq_true,
-    ↓reduceIte]
+  simp only [decisionAtJ, decisionJ, verdictJM, checksAtJ, checksJ, recordDraw_of_parse hj, hs, bind_pure_unit,
+    Bool.false_eq_true, ↓reduceIte]
 
-/-- **The parsed value's decision is `nextCs`'s** on a record that parses to it. -/
+/-- **The parsed value's decision is `nextCs`'s** on a record in its canonical text that parses to it. -/
 theorem decisionJF_eq (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Json.parse f.record = .ok j) :
+    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Json.parse f.record = .ok j)
+    (hc : RecordText.printT j = f.record) :
     decisionJF s x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCs s x link c₁ mids f := by
   unfold decisionJF decisionCs
   congr 1
   funext p
   obtain ⟨spec, sts⟩ := p
-  exact decisionAtJ_eq s spec sts x link c₁ mids hj
+  exact decisionAtJ_eq s spec sts x link c₁ mids hj hc
 
 /-! ## The reader parts' checks -/
 
@@ -208,7 +211,7 @@ theorem ownJ_lt {H : Msg → Msg} {rd : Msg → Option FinalJ} {R : Type} (LJ : 
 split (`LastSplitJ.toLast`), the reading given to the reader part of the last round (`ownJ`). Where the verdict's owners
 are the statement's parts (`hR`), the checks no part holds hold off any witnesses (`hrest`), and each part's circuit
 accepting implies its share (`hlow`), `DecompB` holds at what each part's circuit accepts. Proof-file decoding is among
-the verdict's checks, owned by no reader part (this file's open gap). -/
+the verdict's checks, owned by no reader part; `RecDeploy.decompB_nextS` is the composition without it. -/
 theorem decompB_nextJ (H : Msg → Msg) (rd : Msg → Option FinalJ)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) {join : List Msg → Msg}
