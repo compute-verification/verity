@@ -45,10 +45,10 @@ end Accounting.TS.Tile
 
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Tile in
 theorem Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound := by
-  intro Ω _ S nπ R C K P sess out ok known form dqW rd right δ hCR hLaw hk hN hS hok _hComplete hKn hK32 hK hT hδ
+  intro Ω _ S nπ R C K P sess out ok known form dqW rd right δ hCR hLaw hk hS hok _hComplete hKn hK32 hK hT hδ
     hδ0
   refine ⟨fun _ _ _ h => h.1, fun w i => ?_⟩
-  have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hLaw hk hN hS hok hδ
+  have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hLaw hk hS hok hδ
     hδ0).2.2.2
   have hsub : ∀ x, (tileLayer sess out ok known (Lanes.dqOf dqW) (fun x w i v u => tileView (rd x w i v u))
       right).Unsound x w i → (checkedLayer sess out ok right).Unsound x w i := by

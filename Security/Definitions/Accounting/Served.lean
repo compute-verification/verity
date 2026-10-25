@@ -186,8 +186,7 @@ is that realization's to prove, at the premises `Accounting.Guarantees.TS.Sessio
   evaluation agrees with, which says nothing of the product or `dq`;
 * `pf.opened` holds the leaves of the round's record tables, the records committed under its root before σ_w;
 * `ServedRootsLinked`'s `rows` read the unit's `zy` and A ports at its round root's tables, which
-  `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered` and a circuit
-  that names each port once.
+  `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered`.
 
 A leaf proved as several statements is one unit (RT4-LOGIC-30): option A's 33 statements (#3109's 32 lanes
 `PouwH1LaneZy_v1` and their combine `PouwH1Combine_v1`) are one `Cd` unit, the leaf's, and the lanes' partials are
