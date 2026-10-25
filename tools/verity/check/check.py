@@ -309,8 +309,8 @@ SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
-LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
-            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
+LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
