@@ -1,0 +1,244 @@
+{
+ "schema": "verity-pous/p2-store-toy/v1",
+ "layout": {
+  "schema": "verity-pous/p2-store-layout/v1",
+  "scheme": "p2-16448/v4",
+  "model": {
+   "name": "toy-mqa-d64",
+   "d": 64,
+   "layers": 2,
+   "heads": 1,
+   "kv_heads": 1,
+   "head_dim": 64,
+   "ff": 256,
+   "vocab": 256,
+   "dtype": "int8",
+   "order": "[N, K] row-major"
+  },
+  "params": {
+   "scheme": "p2",
+   "w": 16448,
+   "c0": 21065,
+   "profile": "p2-2054B",
+   "blocks_per_segment": 12,
+   "segments": 5,
+   "expander": "sha512-ctr-v4"
+  },
+  "block_bytes": 2056,
+  "payload_bytes": 2054,
+  "blocks": 60,
+  "used_blocks": 56,
+  "w_bytes": 123240,
+  "c_star_bytes": 123360,
+  "segment_file_bytes": 24672,
+  "tensor_bytes": 114688,
+  "staging_align": 256,
+  "staging_bytes": 49152,
+  "framing": {
+   "block": "i = blocks_per_segment * s + v; W[2054 i : 2054 (i + 1)] is block i's payload m_i, big-endian",
+   "c_star": "block i is 2056 bytes, big-endian, at byte 2056 i; on disk one file per segment s, blocks in v order",
+   "keys": "prefix = schemes.p2.expand_prefix(params, salt) (128 B); base = prefix || u64be(s) || u64be(v); K = stream(base, 'K', 2056); t = the first 2056-byte word of stream(base, 't') below p",
+   "decode": "m = sq(sigma_K(sq(c))) - t mod p; sq(a) = a^2 mod p, negated for odd a; sigma_K(r) = r xor K if below p, else r; refused: c >= p, m >= 2^16432, nonzero padding past a tensor's end",
+   "staging": "layer l's tensors back to back from 0; staging[staging_offset + b] = W[offset + b] for b < size",
+   "leaf": "SHA512(0x00 || salt || u64le(s) || u16le(v) || sha512/row/v2(c_i)); nodes SHA512(0x01 || l || r), RFC 6962"
+  },
+  "tensor_columns": [
+   "name",
+   "layer",
+   "n",
+   "k",
+   "offset",
+   "size",
+   "first_block",
+   "blocks",
+   "staging_offset"
+  ],
+  "tensors": [
+   [
+    "model.layers.0.self_attn.qkv_proj.weight",
+    0,
+    192,
+    64,
+    0,
+    12288,
+    0,
+    6,
+    0
+   ],
+   [
+    "model.layers.0.self_attn.o_proj.weight",
+    0,
+    64,
+    64,
+    12324,
+    4096,
+    6,
+    2,
+    12288
+   ],
+   [
+    "model.layers.0.mlp.up_proj.weight",
+    0,
+    256,
+    64,
+    16432,
+    16384,
+    8,
+    8,
+    16384
+   ],
+   [
+    "model.layers.0.mlp.down_proj.weight",
+    0,
+    64,
+    256,
+    32864,
+    16384,
+    16,
+    8,
+    32768
+   ],
+   [
+    "model.layers.1.self_attn.qkv_proj.weight",
+    1,
+    192,
+    64,
+    49296,
+    12288,
+    24,
+    6,
+    0
+   ],
+   [
+    "model.layers.1.self_attn.o_proj.weight",
+    1,
+    64,
+    64,
+    61620,
+    4096,
+    30,
+    2,
+    12288
+   ],
+   [
+    "model.layers.1.mlp.up_proj.weight",
+    1,
+    256,
+    64,
+    65728,
+    16384,
+    32,
+    8,
+    16384
+   ],
+   [
+    "model.layers.1.mlp.down_proj.weight",
+    1,
+    64,
+    256,
+    82160,
+    16384,
+    40,
+    8,
+    32768
+   ],
+   [
+    "lm_head.weight",
+    2,
+    256,
+    64,
+    98592,
+    16384,
+    48,
+    8,
+    0
+   ]
+  ],
+  "layer_columns": [
+   "layer",
+   "first_block",
+   "blocks",
+   "staging_bytes"
+  ],
+  "layers": [
+   [
+    0,
+    0,
+    24,
+    49152
+   ],
+   [
+    1,
+    24,
+    24,
+    49152
+   ],
+   [
+    2,
+    48,
+    8,
+    16384
+   ]
+  ]
+ },
+ "source": "120e30fca673fd34d3ce1f258c8352add467f41805eb73e1dc7333c02bc06fe8b2c38e96192bae555a8873e5ef01e6ac1c8ff11d46ab9751efda38ccc3d63a45",
+ "commitment": "da4f6294cdb4891382541a44b26ae91f82790718430e23b823951684dad0f90f2a448c143a7d61ffd3acfd83e100f87a01a81293ca7e339d77f9720aaee5cf7b",
+ "salt": "2ac7f7a47396468dfeda0ace7c0e8ae3767cd08969fe43e9",
+ "prefix": "7665726974792f706f75732f70322f6b6579732f76340073000000000000000570322f763473000000000000001070322d7031363434382d6332313036356200000000000000182ac7f7a47396468dfeda0ace7c0e8ae3767cd08969fe43e9000000000000000000000000000000000000000000000000000000000000000000",
+ "root": "aa65e829cf6c03868b09862c6516a1e39dd9a44ae52ab1458cdf165a859ecc0cb303bff42d4bab7a87c193d790dfa74901c1db35cd36ba95755e77728a75422b",
+ "w_sha512": "7f51cb0f653e4f7811b06277d7587b6da6df7250150a93beba4c8d06fadace63b5e540fd345910dfc7e9e092ffe0dc90eed133cd4d7356cf6f331f93a99e62cc",
+ "c_star_sha512": "9e2bc99a3aeec4954380c22ae6cb1d7325677207fdcc5a24d1ee720d4843f29bbad42ca73571227e6a92a4ebfc53383dbd74b64ccc9170c62bb4d67f754d4b8b",
+ "staging_sha512": "907fb858d367251d72f01d3256b9725b62a423106d11c8236aeba017eaed77eb9300aa6330206d2f1538adb5b389b9e7718283c8e4f63948f8bb1af97c630a22",
+ "staging_columns": [
+  "layer",
+  "start",
+  "bytes",
+  "sha512"
+ ],
+ "staging": [
+  [
+   0,
+   0,
+   49152,
+   "55e2d27abed9af031942aa84d09ee85452b3849c8ab969918dc4f2f16c5630583b947a3ae759b564310de6484e4bfa6f9d7920fbb2155557f3cd7e2ed7929b3c"
+  ],
+  [
+   1,
+   49152,
+   49152,
+   "3260d1e288ac9c3588a0eb8bfe2dd4a8080540e6759cdf57ef6d5e25dfb340e7bd512d3e517d8ef7861a0c98f7ecbf83e03fff5d62282ef44869e19dbed62a5e"
+  ],
+  [
+   2,
+   98304,
+   16384,
+   "dc4a3e08461e8f9b43529c0d38be661da5bb440e6f8b8d3b3e1b570d7610eb1ea051d920d990af00959c3e949391de0bf16a5487ea539365d2db488e0127f73c"
+  ]
+ ],
+ "negatives": [
+  {
+   "id": "padding",
+   "layer": 0,
+   "block": 5,
+   "flag": 3,
+   "c": "0bb44914bddc85b48f27b5234a09a759aeaecd726832672b71ef3a85ab98bfbdcf52bac40f2f4842c84d20faca6111702c3afbe88f1eb31c5cdd9f4c966f06122d410f0b97aa942d77a6a15ff8b5a7ee760f546c9583dac983f4a176e298e7917864307090ff1c7cf927daabdf800803f725e43f9aca495eb5d8ad6fb43341130d73494e454ac54cb1d7968021d3a500ea221c7d737f5bf58c5263dfca6e8439a190b3ed08c7d3b6700dc9dd5a8efc71fa5d371d3753486195f667ba4be299a4f87a7ae8e7d298f7b5b6769102963933182503841e1bbd2e721899dfe1c5bfaa5113126270d280115f1c6d604feba7cb45d6cd9ca872f67cdc25cfc5052124162889a96479bcda9a660a46b8f1fc84c25f09bf726093049db015ca2b34b78c76a3490c0d7dc6d47123a3cb7d53eb0895a520c0b99d1da7a85c624c0a724539986e307f2ad1820278afd6ea0fa19da50b357bdbc025957820a3c1bd6afe918293278a267a708b66debc290637a42253ae36c5c9e5523b341b03769ba8c51da5f958691285792c4a1997cba541b35ebe501a81b180df9827a56a5e3a4aa4b839499ea540f16a38e40b1afe5d221bb9d8bee47ec4d9a5a3c5ba5f141b4ad9d34af3d45d1fbc2b797f258900bdade8dbae6db7edc70429aeb9c72bdf9b89d1876bf7fb8e772fe43c07c8d1bf5c4419fd9c31ee1ec5b886eb754774d641e053b2c465cf5f1706c339df100c8ee249112b9d0c9d06121b089ecd0183d3caece6e070912530b8407084edc69fa8b00cb41cdd8b6ac5cbcfcb03f0f11f78603366dafc1f9e7c699facc37992cd86f785e169eb8b6a5b12829004a03c80074bd50dc02680319227b84123882553df947644d45300afe6e738fc789adc9be1e76b3f5174c0a72349001e3b9886a63b4ff89b9405e26589d5889cad8d3f8d071bda7ff0026c371e8e5c3d074f916869d228c50ca9e45a2cffee913802738fe1847e04b79b65978f589b23bf61cab1707c0e053393f13ebc444141a519a5d79655669e2144baf7e1b91d349ac55671a552b6a329d5b247c519459a08e329cf1e3deabed244b49dfd4092c27838a11bcada3555643891d26a2ddae3684ce7ed0cc884116447a7d5b4109b71ddfa18688390510a44bcc45e592f5f36ee2d519244827c6f413fc098467b95fec3917d2703d9df198a14066c74ee38111d487504da6f46265975e096d56d472cc706d7213a67381b0612a5e960fcb2219ce1e8a21ba377321b3421cf1654c5e94a533df11153350f4a92fcde62d8928905a3f4538e74caa44e70d3d254a42f8c255bf0a0534f8c7799ab6f5f1029fd6ae481866348b9cee99666d46ab7d510e6223a1a1a01ef4bdd86a67236abf5090e8feff99a9d5f5efb1558c50dde5bd9326fd6c2e34c080d3f50b7e9f7f3d7afbc20cf83ed8cfa013deef53e752d68bc6fec94b26d7d1c383f0dec8b17124fc46f7e33be61f7a368399f96230b54212ebba6aea7ff0a3a413df8fb97df170f1c93c41e33d6bfd09d58acd6c1b27561e7f24e27794d66a5e454bacbebb74adec2451e351aaa38eb67c02f779159d53e2002462a2208a94713cc0946a48831a850fdfe2263a28e8a9a471da029dad4849bb6d3cac9802161e7e50190a76503f427e8bfbac8e93208badc039a9d676077b0dbee42f48a2a4bd11612e12e3951372f7d1fa0815e89f8e974549f3eaf7471e38bed3094e4b896eee49b36a261e0e77f7bc5416783a948a729301af9a513f49d438ea947f7aa31d9c9c45774612a266df586d5c8e2a1084a00e666722c86b2d6fef1755a5c9d16c15b088d31aa411f25559d9af70a02705e1bba0dca2b4a3afc7451d4eac528e25e4a5e5f31d85ff1aff7764c291773da0bf3ba870a966f544bbe4c73e25df85e86ef791ee7b90b9a9854f8143e808d648e2d4df999dd4de9c803ae477cfa4e10f9cfdb7395ac34e06d08c4c868ce1d275bc7a3b5aaa20cf1af8c55fac8c11a8b75a4886be8ac882bc4e68c841399919fa34a9fd078cd2a226285b97a55ead96940f4d53d41631ae49501ae0e9b828290632b7e360d5caedfe1e57488de898fbb499fbd0a73ed07ce1a7605c814e82c6d1d4bdc203678b4c15f4702ff2117dec00a1fc86f233e6429e2010698bb2175b1798de6cbaf0bf2897b9bb5b3a5ca518913c3806a798827707826e8287f412546df66f5b78812155527facc4bc75250821c69247c1c46853221d2abd5250a149b2629d1ae29555656555baf46832545ff627b0241b3f3b5443854d7c061b49c2e689ab83d948886541b25331a25b9378c9d8672c109e2160d8125925af8b22eadd9cc21bd640ed8e44f1c681d434b0257a92c62d43a61111cfc6645cab8a783b3cbcfce9df626f7f12d8ac67fb8c2ca6e3d81d6daf477f88fd0f7c306b09490a34582618b1a08d8209eb3816e549771125eeee967aa04564d37e3fe89e4ae297e6893fdc7697d25effe35f405f8bb75bd337c46e3e916686364638f7f8804dccbb638964fb5a92dddcd88d08c1a80d9249eef6927e1079e7390d1ead37352c56444b08e2b9ac202af6190f8e3bc3f64caacc15e5bf3f59835e425333b1d63979f7dc759eecf760bb702bd605542793a6ce420d562515caaacb637c550f3130a73d25382a1cc5160362f334280e57d16e1959734480e9737faf3918fd99b30cb74b18f292e5788c65ac2b932ed30dc0d823b55c7d64e13418a9d20ebec4198aebb782e91f1a9d8eb13b6d3d32a8c55406332d5dc9510ed5cdc25701203e11617b3824a3949925c5a4cd8a2cfc824da62b3f56bb8de9cf2beeed347f650c955abcbb4f75caade65c014fe0ce2019600dee930c8a5a32e6543b936edadbd1467ef6f4260534c426141fc448d164b29",
+   "why": "the true payload with its last byte, past the tensor's end, xor 1"
+  },
+  {
+   "id": "not-below-p",
+   "layer": 0,
+   "block": 0,
+   "flag": 2,
+   "c": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffadb7",
+   "why": "c = p"
+  },
+  {
+   "id": "flipped",
+   "layer": 0,
+   "block": 8,
+   "flag": 2,
+   "c": "91e25dad773306dad47ce8b93e36fbc7b91f70a28f016a37f8fc208ffe644ca3ffd133f1ccb1b5928d777d2c71d2c0be44c2cc39170759320207ae1e16b12f1259b7b63808cbe6ee027d47cc7984b5bfd2d54dea14286d1ec09f26c19ebf08d74faf6ba3e4a40284d885b8c15450dc8a66b54534c5b39295fce451da3b1045346442017f0b62b9c7b6e8f3496bc533c647446c676e31ef63cca9d51ef87bfe429b6bf4335d67612b5bda0a8d37f842f443255e3272ebe29ef18d7c0dcd45ce93915d5cad46c5bcf35bd6d03d39f1911888fce6bfe6da95c3cbc843dc17905c49868efe5230a1d28e6d20f2a665bec156b87e8123b7e91bce72e49f5b82f84fbbc64f5aa289bc56320709b0c863d1e2c5eb9cd50860e1fddefe598422d491d60598d206699d80c98366cac180d1106b74bc594d50a85970f42fa8d9794efb07a8dd1f4b3864dee304100f9b5891d0bf8173e88eb174ccaeb47e7a28e42914a307c0318db244440dbeaaf259c03d47d76cb7fc31d71a0a60c3c7fa2b97c0edeae8b4f6d9dbb4f0854d492dceb06f2c7c1a695d99cb4690f8d7ae1db421032162e50828018b0926810f1cb2d4bca13660e4ad2489553b996f5e65a3d8aebcce8bd44f893dd70efbaecbb1b43a44d44af97ac3639aba3f70f8cb36cacb1f6477787657aaf64a0b2c63a36dfd316a61efa904714365568313a38f08177245fdec931f492852a36a0a53be803cba2547ace1c77043fbfe804cd790389ea5fb89b6a128cc269e856e0162e327d92c919b8c6dfd8c2625bc6daba781ece35b87ede0805703444fd25ad81d9a3aea2c4057e61daf400784a1bb206d550d9d6a6efc8ab39989c98665b4c7970d0aeb867891004ea0278f531a2b74b9c96ea7e380f67dd9f95d82218dbb3824d392050fb6c4f5efdac84c14d90dbf92cfcd9b5886374ae04cfe2502088603b8832f2bd8b8f187051f857e791e1734781fc41afaa8c9a8dc7936e876f41030406b5a65b42c053e9c64db78079023abed2d4c058fc3f65976b6b4eb1937397811b4a5a6b190a098b33864cdfaaa641ac573c70944f23f4e093e38a405e9d35a692c595a51a3b7431361e59ef5b135a135759fe0ba48be58a5b4619e219c1db801a8945190fe71ffc529ecd7e176073fb7e014aa691baa83b50ee7b9e11eb2f8b7dc36d1a6d6ce7d2b5852e2770d02629b67020cc576b4e0dc32755cad33b61800e06ca6fbc9064ab8cb5c5a0610a5d6b31731ccb4a4ba03943656cdff6b1756ea0544d494eaf7475dec08b24fd6033c028b77d9b78463aef61d464c31376210468c0838cdf42b0fb413ba540e7ac217dc39ef75f3a64acf63cae745f2b229fcd2c14a5eba87ae8a09c1c7db342bc777a3e92b1bf68001cb97beaa69e5a2e12b66494af4fa6cf19dbac37ad16c3a18deb653c8ebdf7340768f0e8e197864e0d218a87b6442115d7286a6b391e60e522de57f97c60301af591ac2001c97b6b136fe7df56bd545bfb19e2758920575dcc8eea01fc2dea4a38bb1b8d2daa7e3e33d0e6761561b3bf7e932002056dcf4784080aaffd2c265568daa4a66944dcf65b645aada6a888b175746fbb44ca320d5d248037029ff2baeb62992418e5b6c211d695868a85ba32008d64f0d6003117436a3228f2c8fef0a6e867e212ac0fadc7c8f57142dd0ba4ee415d9131314f8ddee29f533b304b0402a53c599ee486533f0369b386f4add3463b1894af018878c5c078a5b5d73149582ec02bac544e5b2fb6f00ab05e1ac5f65489446b40e82b5aba97a440441d2f026e3e91404c8ac8d13e155d54a2d57fa411c1197ab4c2f6658627e885d16853e4259c9687bca8059e30b187bfdff176531b4384f7559fdb1bb7e1fc7a35ae82fa7e270378ab507e64ecf1e232bcad03bf69ee451d6d84fecef10067f2485af569f53bfb6a22e5f878ac7f87c8656af3046babaa3c58ccfd304560f0065da7a0d1f25ed8a418f80cff02cb834d454fa0a712c992f81f2bda5d0e742447c287d509972d769ce8e6a2d4a77ddee33e5bcaa6b77c8205e028e614b485ae584d3ff753c7fda7cc6e40d9d3d1d084bb0b06de7d171e92a893415fb3e9ca8a67caf534b813b6571ae95232739faaa9801b30f830e7b93ae08c8caa3951d2e9ab15329bb6ab435cf3e1a596d2b3d498962c703d1bc26980858ef6fbc983efd1d44e0d9d60fd3c920d93eaddb247c9d72a7b4f901d1c682c06836afbb7bfab21e7223cf4704d3da3a0bbf33f63caa74a18237fe0269d909ddc2b00975aac811b26cc7f3d26f7c3ba995c6f36e943fdda596454848f0491819b13a8d5beb08f5991f70b8c8733c61e616e22b91aab32647ea2e0411c6c78197d61e0d7718041dbddd2ac40f20515557b8fcb209b68f43ac29b24847d00d4c2310ad9c16d830583157b3ad04b0ef2bec3c08f5712c08e328b92eb32ac242cac3ad7b22a8f50ff5bbc0f1c30e1cdb0b00a975f902e2fb2c51520164d32ff52a323ebfe45995939c1ada4dfa97dfb49b0b50f02e454befa94c8eb58a8ddb451bd9992d7cc8c68f1e35f1610f8e1d1af57266ff740602f777954502c7ea141c58dd7dd10107dfe209f2699c6e83bfe565e78c7e7b0ff6d4224d4d9a9fbda5c1c61e78c7c7223e526935753e048a106b53fe8339b36bc74b3bffbe34265904f9051f247bc306f4729c0bb9097faafeeb5879711a4bdb87212adc6d6632c959157dfec27e103ca5fb9352b099e9c1ce519c6b1d650ace530b7d9fc10fc84d321a3592ab34af7ae494f41e860c16ac1690546cc33e33493907987b51fa3388cc0ca5615a3cb25f68c3c4f6cbe737f4ba031493f61ee70165f12d83254f88233a05fee57c2e54ec8edf30fa1a9390cf563488bb5d70876bd97f93",
+   "why": "C*'s block 8 with byte 1000 xor 1: decodes to more than 16,432 bits"
+  }
+ ]
+}
