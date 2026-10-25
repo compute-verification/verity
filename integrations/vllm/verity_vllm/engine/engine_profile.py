@@ -200,7 +200,7 @@ def get_scheduler(llm: Any) -> Any:
 def _run(cmd: list[str]) -> str:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout.strip()
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError, ValueError):
         return ""
 
 

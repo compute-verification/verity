@@ -91,7 +91,7 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
     if model is not None:
         try:
             doc["flash_attn_version"] = observed_flash_attn_version(model)
-        except Exception:  # noqa: BLE001
+        except (AttributeError, TypeError, ValueError):
             doc["flash_attn_version"] = None
     doc["execution_label"] = execution_label_of(doc.get("enforce_eager"), doc.get("batch_invariant"))
     return doc
@@ -327,7 +327,7 @@ def resolved_async_scheduling(llm: Any) -> bool | None:
     after the build; None means the engine did not expose a resolved bool (unattested), never "off"."""
     try:
         v = llm.llm_engine.vllm_config.scheduler_config.async_scheduling
-    except Exception:  # noqa: BLE001
+    except AttributeError:
         return None
     return None if v is None else bool(v)
 

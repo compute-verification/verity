@@ -1108,7 +1108,7 @@ class TP2CaptureWorkerExtension:
         import dataclasses
         try:
             return dataclasses.replace(rc, run_root=bytes.fromhex(claimed_root_hex))
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError):
             import copy
             rc2 = copy.copy(rc)
             rc2.run_root = bytes.fromhex(claimed_root_hex)
