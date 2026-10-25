@@ -56,6 +56,7 @@
   "Properties.Proofs.RemoteAudit.Order",
   "Properties.RemoteAudit.Shared",
   "Properties.Proofs.RemoteAudit.Shared",
+  "Properties.Proofs.RemoteAudit.SharedLink",
   "Properties.RemoteAudit.Pooled",
   "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
@@ -1558,6 +1559,9 @@
    "assumptions": [],
    "type_hash": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae"
   },
+  "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
@@ -2864,6 +2868,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
+    "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
