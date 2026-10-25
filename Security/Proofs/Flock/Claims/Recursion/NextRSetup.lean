@@ -49,8 +49,7 @@ theorem honestPs_get {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {k : 
     (honestPs spec sts c₁)[k]! = honestP spec sts c₁ k := by
   have hk' : k < (honestPs spec sts c₁).size := by rw [honestPs_size]; exact hk
   rw [getElem!_pos (honestPs spec sts c₁) k hk']
-  unfold honestPs
-  rw [Array.getElem_map, Array.getElem_range]
+  simp only [honestPs, Array.getElem_map, Array.getElem_range]
 
 theorem honestCaps_size (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) :
     (honestCaps spec sts c₁).size = sts.size := by
@@ -61,8 +60,7 @@ theorem honestCaps_get {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {i 
     (honestCaps spec sts c₁)[i]! = (honestP spec sts c₁ (2 * i)).cap := by
   have hi' : i < (honestCaps spec sts c₁).size := by rw [honestCaps_size]; exact hi
   rw [getElem!_pos (honestCaps spec sts c₁) i hi']
-  unfold honestCaps
-  rw [Array.getElem_map, Array.getElem_range]
+  simp only [honestCaps, Array.getElem_map, Array.getElem_range]
 
 /-- A rep's honest cap is its table's: it reads only `k / 2`. -/
 theorem honestP_cap (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (k : ℕ) :
@@ -127,6 +125,6 @@ theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.M
     have h2 : 2 * (k / 2) / 2 = k / 2 := by omega
     rw [honestCaps_get hk2, honestP_cap, honestP_cap, h2]
   exact ⟨_, readsBack rd x last cs s spec sts c₁ (honestCaps spec sts c₁) (honestPs spec sts c₁) Ts fl hx hc
-    (honestCaps_size ..) hcaps (by rw [honestPs_size, honestCaps_size]) hrep hfit0 hfit hrd hps⟩
+    (honestCaps_size ..) hcaps (honestPs_size ..) hrep hfit0 hfit hrd hps⟩
 
 end FlockDeploy
