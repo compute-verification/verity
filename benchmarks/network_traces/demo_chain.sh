@@ -12,7 +12,8 @@
 #      DC_ENGINE (demo_endpoint's --engine, seeded:phase1)  DC_SEED (its --seed, 0)  DC_EOS (its --eos and the plan's
 #      --eos-ids, 0)  DC_UPSTREAM (an endpoint already serving)  DC_REQUESTS (24)  DC_TOKENS (16)  DC_PROMPTS (1:16, the
 #      prompt lengths: the demo's context is 32)  DC_RATE (2)  DC_TRAFFIC_SEED (0)  DC_HEIGHT (the LMS keys' height, 20)
-#      DC_STRATEGIES (honest,extra,token)
+#      DC_STRATEGIES (honest,late,extra,token: late and extra the rehearsal's check refuses, token's changed bytes the
+#      I/O tie)
 set -uo pipefail
 SRC=$(pwd)
 OUT=${RESEARCH_RUN_DIR:?}/out
@@ -47,7 +48,7 @@ else
 fi
 log "demo-chain: endpoint $URL ($(head -c 300 "$D/endpoint.out"))"
 
-STRATEGIES=${DC_STRATEGIES:-honest,extra,token}
+STRATEGIES=${DC_STRATEGIES:-honest,late,extra,token}
 ARGS=(--upstream "$URL" --traffic varied --requests "${DC_REQUESTS:-24}" --tokens "${DC_TOKENS:-16}"
       --prompt-range "${DC_PROMPTS:-1:16}" --rate "${DC_RATE:-2}" --seed "${DC_TRAFFIC_SEED:-0}" --eos-ids "$EOS"
       --height "${DC_HEIGHT:-20}" --strategies "$STRATEGIES")
