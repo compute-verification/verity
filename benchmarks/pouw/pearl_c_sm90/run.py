@@ -70,8 +70,10 @@ FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
 WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: a persistent GEMM takes the fewest CTAs that keep its rounds of tiles (decode's gate_up: 448 tiles, four rounds on 112 CTAs
 #: as on 131), leaving the rest of the SMs to the side lanes; a tile's bytes don't depend on its CTA.  PEARLC_GRID_BALANCE=0
-#: takes every SM it may
+#: takes every SM it may; PEARLC_GRID_ROUNDS=r gives it r rounds more than its fewest, and PEARLC_GRID_CAP=c at most c CTAs
+#: before the balance (fewer CTAs still)
 GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
+GRID_ROUNDS, GRID_CAP = int(os.environ.get("PEARLC_GRID_ROUNDS", "0")), int(os.environ.get("PEARLC_GRID_CAP", "0"))
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
 #: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
@@ -753,7 +755,8 @@ class Pipeline:
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         ctas = min(tiles, grid or self.dev.sms - self.beside)
         if GRID_BALANCE and grid is None:
-            ctas = cdiv(tiles, cdiv(tiles, ctas))
+            ctas = min(ctas, GRID_CAP or ctas)
+            ctas = cdiv(tiles, cdiv(tiles, ctas) + GRID_ROUNDS)
         self.dev.launch(name, ctas, gemm_threads(name), self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER, live))
 
     def extra(self) -> dict[str, object]:
