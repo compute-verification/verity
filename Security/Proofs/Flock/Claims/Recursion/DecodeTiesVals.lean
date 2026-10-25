@@ -17,9 +17,10 @@ value off the proof, and `T`.
   loop, flatten to `ligEls`; at a plain shape, all the rounds flatten to the four lists in turn.
 -/
 
-namespace FlockDeploy
+namespace FlockDecodeTies
 
 open Flock
+open FlockDeploy (vals)
 open Flock.RecAlgebra (Key msgNames ligRounds rounds hRound)
 open FlockSoundness.Refine (Frame)
 open FlockSoundness.Discharge.Exec
@@ -319,4 +320,4 @@ theorem vals_repFrames_rounds {sh : Shape} {st : Setup} {sch : Schedule} {n : â„
     vals (repFrames st sch dom n p T) = (rounds sh).flatten.toList.map (keyVal p T) := by
   rw [vals_repFrames p T st sch dom n hab hc hz hrs hyr, rounds_els hh, hm, hk, hn, hs]
 
-end FlockDeploy
+end FlockDecodeTies
