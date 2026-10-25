@@ -335,10 +335,11 @@ KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(?!__launc
 #: s512_pads.
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
-#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's commitment (whole, and split
-#: into pd_commit's mode 1 and pd_tree) and tile leaves, and its stamp twin's commitment
-PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tree", "tiles")),
-               *(f"pd_commit_{v}" for v in RUN.PD_STAMPED)}
+#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's tile leaves, and its
+#: commitment (whole, and split into pd_commit's mode 1 and pd_tree) and its stamp twin's on the variant without PD_GROUP
+#: (run.py's ONE_COMMIT)
+PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v & ~RUN.PD_GROUP}" for v in RUN.PD_SERVED for kind in ("commit", "tree")),
+               *(f"pd_tiles_{v}" for v in RUN.PD_SERVED), *(f"pd_commit_{v & ~RUN.PD_GROUP}" for v in RUN.PD_STAMPED)}
 #: hash_prefill.cuh's launches (run.py's chain "pl", the default past pd)
 PL_LAUNCHED = {f"pl_{kind}_{RUN.PL_VARIANT}" for kind in PL_KINDS}
 

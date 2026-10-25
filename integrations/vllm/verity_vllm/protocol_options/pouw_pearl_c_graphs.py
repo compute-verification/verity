@@ -40,6 +40,11 @@ tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): t
 A's root to the pass (the tile hashing before it reads nothing the tree writes, and runs beside it: `TILES_BESIDE_TREE`),
 and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a call of its shape joins
 that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+With ``whole_shape_joins`` too, a call doesn't join the call before's side steps: the capturing stream joins a call's side
+steps (and through their scatter its A tree) only before the next call of its shape writes the shape's buffers, which they
+read (`join_before`, at an event after them where other calls' side steps followed), so they run beside the calls of other
+shapes between (a decoder layer's linears are of four shapes); the forward's last call joins them all.  Every step is still
+inside the forward's graph, and the same kernels write the same bytes.
 With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persistent CTA fewer (the pipeline's ``beside``),
 since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
 computed as before, by another CTA.
@@ -54,7 +59,6 @@ With a `statement` enabled (and hashing), a whole capture also copies each call'
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -75,8 +79,9 @@ LANE_SLOT_BYTES = SLOT_BYTES + 24
 #: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
 #: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's
 #: ``tiles_group``) so that its CTAs leave pd_commit's and pd_tree's whole SMs free (beside the tree a CTA a tile, and
-#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  PEARLC_TILES_BESIDE_TREE=0 joins them first
-TILES_BESIDE_TREE = os.environ.get("PEARLC_TILES_BESIDE_TREE", "1") != "0"
+#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  False joins them first (e8ea036243's
+#: PEARLC_TILES_BESIDE_TREE=0 arm)
+TILES_BESIDE_TREE = True
 
 
 def _capturing() -> bool:
@@ -157,9 +162,12 @@ class GraphCalls:
     _next: _Slots | None = None
     #: whether a whole capture defers each call's tile hashing beside the next call (with hashing)
     whole_defer: bool = False
-    #: inside a deferred whole capture, the shape whose call's side steps no call has joined yet, and the side stream
-    _deferred: Any = None
+    #: inside a deferred whole capture, the calls whose side steps the capturing stream hasn't joined yet, oldest first: each
+    #: one's shape and (``whole_shape_joins``) the side stream's event after them; and the side stream
+    _pending: list | None = None
     _side_stream: Any = None
+    #: with ``whole_defer``, whether a call joins only the side steps of its shape's last call, not the call before's
+    whole_shape_joins: bool = False
     #: with ``whole_defer``, whether a whole capture also forks each call's A tree beside its forming and GEMM (with hashing,
     #: where the call's pipeline splits A's commitment); inside one, whether a call forked a tree the capturing stream hasn't
     #: joined yet, and the tree stream
@@ -228,6 +236,7 @@ class GraphCalls:
         key = (*key, "a_tree") if self._defers_a() else key
         key = (*key, "tree_sm") if self._defers_a() and self.whole_tree_sm else key
         key = (*key, "stats") if self._forks_stats() else key
+        key = (*key, "shape_joins") if self._defers() and self.whole_shape_joins else key
         return (*key, "statement") if self._statement_on() else key
 
     def _defers(self) -> bool:
@@ -249,7 +258,7 @@ class GraphCalls:
     def whole_capture_begin(self, key: tuple | None = None) -> None:
         """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None).
         A deferring run's side stream (and tree stream, deferring A's trees) is made here, before vLLM's capture begins."""
-        self._whole, self._whole_retained, self._deferred, self._tree_open = [], bool(key and key[3]), None, False
+        self._whole, self._whole_retained, self._pending, self._tree_open = [], bool(key and key[3]), [], False
         if self._whole_retained and self._stages is None:
             self._stages = {}
         if self._defers() and self._side_stream is None:
@@ -265,7 +274,7 @@ class GraphCalls:
     def whole_capture_end(self) -> tuple[WholeCall, ...]:
         """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
         in one forward is refused."""
-        calls, self._whole, self._whole_retained, self._deferred = tuple(self._whole or ()), None, False, None
+        calls, self._whole, self._whole_retained, self._pending = tuple(self._whole or ()), None, False, None
         self._tree_open = False
         seen = [c.w for c in calls]
         if len(set(seen)) != len(seen):
@@ -557,7 +566,8 @@ class GraphCalls:
         Deferring A's trees (`_defers_a`, where the call's graph has one, ``tree_at``), the call forks its tree after its
         per-row keying, then joins the call before's side steps; the last call joins the tree stream too.  Forking A's
         scales (`_forks_stats`, ``stats_at``), the call forks ``stats_a`` before its A commitment and joins it in its
-        place, before the forming steps that read it."""
+        place, before the forming steps that read it.  Joining by shape (``whole_shape_joins``), the call doesn't join the call
+        before's side steps; `join_before` joins its shape's."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -579,7 +589,8 @@ class GraphCalls:
                     f()
                 if t is not None:
                     self._fork_tree(g.steps[t:a], raw)
-                self._join()
+                if not self.whole_shape_joins:
+                    self._join()
                 pipe.beside = int(t is not None and self.whole_tree_sm)
                 try:
                     for i in range(a, b):
@@ -651,7 +662,8 @@ class GraphCalls:
     def _fork(self, sh: Any, steps: list, raw: int) -> None:
         """`steps` on the side stream, after everything the capturing stream has launched so far, the last (with hashing, the
         scatter, which copies A's root) after the A trees forked so far too (`TILES_BESIDE_TREE`), with torch's current stream
-        the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them."""
+        the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them, or joining
+        by shape, `join_before` the next call of `sh`, at the event recorded after them."""
         import torch
         side = self._side_stream
         side.wait_stream(torch.cuda.current_stream(self.device))
@@ -667,21 +679,30 @@ class GraphCalls:
                     f()
         finally:
             self.kernel.dev.stream = raw
-        self._deferred = sh
+        self._pending.append((sh, side.record_event() if self.whole_shape_joins else None))
 
     def _join(self) -> None:
         """The capturing stream waits for the side steps no call has joined yet, if any."""
-        if self._deferred is None:
+        if not self._pending:
             return
         import torch
         torch.cuda.current_stream(self.device).wait_stream(self._side_stream)
-        self._deferred = None
+        self._pending = []
 
     def join_before(self, sh: Any) -> None:
-        """Before a call writes `sh`'s buffers (its A words first): the side steps of a call of the same shape, which still
-        read them, joined."""
-        if self._deferred is not None and self._deferred is sh:
+        """Before a call writes `sh`'s buffers (its A words first): the side steps of the last call of the same shape, which
+        still read them, joined, and on the one side stream every call's before it; at the event after them where other
+        calls' side steps followed (``whole_shape_joins``)."""
+        pending = self._pending or []
+        at = next((i for i in range(len(pending) - 1, -1, -1) if pending[i][0] is sh), None)
+        if at is None:
+            return
+        if at == len(pending) - 1:
             self._join()
+            return
+        import torch
+        torch.cuda.current_stream(self.device).wait_event(pending[at][1])
+        del pending[:at + 1]
 
     def _scatter(self, w: int, sh: Any, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
         """The graph's last step, one launch: the screen of the call's first `flag_rows` rows (all of them when it screens,
