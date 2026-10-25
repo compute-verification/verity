@@ -21,9 +21,9 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: `pod/91-plain-hidden.sh`'s fixture: stage/ (circuit.txt, pub-32.bin, program.json, partition.json, tables/), session/ (the
-#: drawn plain session's record and proofs), live.json (the prover's LIVE record)
-FIXTURE = "art:PENDING"
+#: `pod/91-plain-hidden.sh`'s fixture (run r20261025-033320-4832): stage/ (circuit.txt, pub-32.bin, program.json,
+#: partition.json), session/ (the drawn plain session's record and proofs), live.json (the prover's LIVE record)
+FIXTURE = "art:06435437"
 STATEMENT = "verity/flock-circuit"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]

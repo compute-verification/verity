@@ -101,5 +101,5 @@ cp $O/live.json $X/live.json
 if [ -n "$RESEARCH" ]; then
   $RESEARCH data put --kind fixture/v1 --tree $X --preserve > $O/fixture.txt 2> $O/fixture.err || tail -5 $O/fixture.err
 fi
-[ -s $O/fixture.txt ] || { mkdir -p $O/fixture && cp -r $X/. $O/fixture/; echo "no research CLI: the fixture is out/fixture" > $O/fixture.txt; }
+[ -s $O/fixture.txt ] || { mkdir -p $O/fixture && cp -r $X/. $O/fixture/; echo "not in the store (no research CLI, or fixture.err): the fixture is out/fixture" > $O/fixture.txt; }
 cat $O/fixture.txt
