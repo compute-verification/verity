@@ -172,16 +172,31 @@ def endpoint_step(e: dict | None) -> dict:
             "stand_ins": t.get("stand_ins")}, "in_the_clear": CLEAR["endpoint"]}
 
 
+def unexpected(name: str, m: dict) -> list[str]:
+    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` and `n2_advised_zk` hold it to."""
+    wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
+    return ([f"windows {[w.get('window') for w in wins if not w.get('as_expected')]} not as expected"]
+            * any(not w.get("as_expected") for w in wins)
+            + [f"network {'accepted' if net.get('accepted') else 'refused'}"] * (net.get("accepted") != (name == "honest"))
+            + ["a witness piece in what the verifier received"] * bool(rec.get("leaked") or rec.get("verifier_found"))
+            + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) holds "
+               f"{(rec.get('control') or {}).get('blobs_found')} of {(rec.get('control') or {}).get('of')} pieces, "
+               "so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
+
+
 def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
     job = job or {}
     why, stand_in = (job.get("why") or {}).get("n2"), (job.get("stand_in") or {}).get("n2")
-    if s is None or (job.get("rc") or {}).get("n2") not in (None, "0"):
-        return {"verdict": "not run" if s is None and (job.get("rc") or {}).get("n2") in (None, "2") else "failed",
+    rc = (job.get("rc") or {}).get("n2")
+    if s is None or (rc not in (None, "0") and not any((m.get("windows") or [])
+                                                        for m in (s.get("members") or {}).values())):
+        return {"verdict": "not run" if s is None and rc in (None, "2") else "failed",
                 "why": why, "stand_in": stand_in, "in_the_clear": CLEAR["n2"]}
     members = {}
     for name, m in (s.get("members") or {}).items():
         wins = m.get("windows") or []
         members[name] = {"network_accepted": (m.get("network") or {}).get("accepted"),
+                         "unexpected": unexpected(name, m) if wins else None,
                          "refused_windows": (m.get("network") or {}).get("refused"),
                          "windows": len(wins), "accepted_windows": sum(bool(w.get("accepted")) for w in wins),
                          "lean_proved": sum(bool((w.get("proof") or {}).get("proved")) for w in wins),
@@ -193,7 +208,9 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
     n = honest.get("windows") or (s.get("link") or {}).get("planned_windows", {}).get("honest") or 0
     drawn = s.get("drawn", n)
     law = s.get("law", "all")
-    proved = bool(members) and s.get("ok") is True
+    proved = bool(members) and s.get("ok") is True and rc in (None, "0")
+    if not proved and honest.get("windows"):
+        why = "; ".join(f"{k}: {', '.join(v['unexpected'])}" for k, v in members.items() if v.get("unexpected")) or why
     return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
             ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,

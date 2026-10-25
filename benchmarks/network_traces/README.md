@@ -44,11 +44,30 @@ that carries a request across its open or close (`verity_vllm.pipeline.window_ad
 `verity-vllm/window-advice/v1`) is refused, and with it the whole run's advice. On the :18097 endpoint, 8 of the 56
 Commit windows of c20261025T062158Z-9ff3 are such windows (4 carry requests in), so the advised N2 can't take that run.
 
-**The dry run.** r20261025-175902-bde4 (vy-nebius-cpu-2, network slot n2), at a38f43e65f, on the honest gate run
-c20261025T062158Z-9ff3 (art:140f0e61b266a8f22b5153323d37b32e2645a2e7d5c564749745e87568feaecb: :18097, 100 varied
-requests at 0.6/s, 26 windows). It ran the pieces that exist: N2 under Selection All on the plan's declared syncs (the
-certificates step found them equal to the signed ones), the scan on its own synthetic warden run, and a certifier key of
-H = 10. It isn't of record.
+**The dry runs.** Two runs on vy-nebius-cpu-2's network slot, on the honest gate run c20261025T062158Z-9ff3
+(art:140f0e61b266a8f22b5153323d37b32e2645a2e7d5c564749745e87568feaecb: :18097, 100 varied requests at 0.6/s, 26
+windows, the advice profile, a certifier key of H = 10). Neither is of record.
+
+- r20261025-180338-1dca, at f5f67ea462:
+  - Custody: accepted.
+  - Certificates: accepted. All 26 windows were certified, and all 26 clock certificates verified and equal the plan's
+    syncs.
+  - Scan, on its own synthetic warden run (T = 32, Selection All): honest accepted with 0 wrong units of 64 at
+    δ = 2^-20, and chain and forged refused.
+  - N2: `n2_zk` refused the run at its verifier. An advice-profile link has no occupancy profile for the plain unit, so
+    the job now proves N2 by the run's profile.
+- r20261025-183805-7c27, at bbf4a5e6e1, adds the endpoint's records (the four files of :18097's serve directory), and
+  its scan step reuses 1dca's summary:
+  - I/O tie, in the clear: accepted the honest run (100 requests, 3,172 outputs placed).
+  - Advice: didn't bind (the gap above).
+  - N2: ran its stand-in, the advised unit (NetworkAdvisedLinkWindow_v2 at T = 512, 8,063,826 ANDs, k_log 24) on
+    `n2_advised_zk`'s simulated link, under the certifier's signed clocks.
+    - Verdicts: every window was proved, held by Lean and as expected. Honest was accepted in all 4 windows, and extra
+      was refused at window 0 by its advised counts.
+    - Cost per window on 21 cores: a proving session of 128–149 s and a Lean verify of about 104 s.
+    - No witness piece was found in what the verifier received.
+    - The driver still failed, on its control: the prover's own `prover-instances.bin` holds 57 of the 337 pieces the
+      scan looks for, so the scan isn't shown to find a leak in this unit's layout.
 
 **The theorem.** The run instantiates `NetTiming.Guarantees.PeriodLeakAccepted` (#4326, proved as
 `NetTiming.SecurityProofs.PeriodLeakAccepted`), with `Claims.Sampling.KS`, `Claims.Flock.ListWithin` and

@@ -134,8 +134,16 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     failed = cr.report(_steps(tmp_path, {"profile": "advice", "rc": {"n2": "1", "scan": "0"},
                                          "why": {"n2": "ValueError: no profile"}}))
     assert failed["verdict"] == "refused"
-    assert failed["steps"]["n2"] | {"in_the_clear": None} == {"verdict": "failed", "why": "ValueError: no profile",
-                                                             "stand_in": None, "in_the_clear": None}
+    assert (failed["steps"]["n2"]["verdict"], failed["steps"]["n2"]["why"]) == ("failed", "ValueError: no profile")
+    steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "1", "scan": "0"}, "why": {"n2": "done: FAILED"}})
+    n2 = json.loads(Path(steps.n2).read_text())
+    n2["ok"] = False
+    n2["members"]["honest"]["received"] = {"control": {"holds_all": False, "blobs_found": 57, "of": 337,
+                                                       "file": "prover-instances.bin"}}
+    Path(steps.n2).write_text(json.dumps(n2))
+    got = cr.report(steps)["steps"]["n2"]
+    assert got["verdict"] == "failed" and got["members"]["honest"]["accepted_windows"] == 1
+    assert got["why"].startswith("honest: the control (the prover's own prover-instances.bin) holds 57 of 337")
 
 
 def test_subset_bound():
