@@ -827,8 +827,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
         self.retain_pinned = settings.VERITY_RETAIN_PINNED
-        retain = settings.VERITY_RETAIN
-        self.retain = retain if retain is not None else "device" if retain_values else "none"
+        self.retain = r if (r := settings.VERITY_RETAIN) is not None else "device" if retain_values else "none"
         if self.retain not in RETAIN_MODES:
             raise ValueError(f"VERITY_RETAIN={self.retain!r}: expected one of {RETAIN_MODES}")
         self.retain_windows: set[tuple[int, int]] = set()   # retain=sample (windowed only): (step, window k) pairs whose raw bytes are kept
@@ -1320,8 +1319,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             # verity.ml.circuits / verity_vllm / vllm-poc as loaded in this process) is written beside the attempt when the driver names the
             # dir ($VERITY_SOURCE_IDENTITY_DIR, set by commit_delta from --out): <dir>/source_identity.gpu_ext_load.json.  The start-of-run
             # record has hidden_gpu loaded:false; this one is the evidence that what LOADED at the import site was this tree's.
-            _sid_dir = settings.VERITY_SOURCE_IDENTITY_DIR
-            _sid_out = os.path.join(_sid_dir, "source_identity.gpu_ext_load.json") if _sid_dir else None
+            _sid_out = os.path.join(d, "source_identity.gpu_ext_load.json") if (d := settings.VERITY_SOURCE_IDENTITY_DIR) else None
             _sid_doc = _sid.precheck("commit.gpu_ext_load", _tree, out=_sid_out)
             _sid_doc.setdefault("loaded_modules", {})["hidden_gpu"] = {"file": getattr(HG, "__file__", None), "repo": getattr(HG, "REPO", None)}
             if _sid_out:
