@@ -78,6 +78,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.NciDesc", "Properties.NciDesc.Verdict", "Properties.NciDesc.Cover", "Properties.Proofs.Nci.DescVerdict",
   "Properties.Proofs.Nci.DescAgree", "Properties.Proofs.Nci.Walk", "Properties.Proofs.Nci.Resolve",
   "Properties.Proofs.Nci.BodiesOk", "Properties.Proofs.Nci.Width", "Properties.Proofs.Nci.Novel",
+  "Properties.Nci.Baseline", "Properties.Proofs.Nci.BaselineSteps", "Properties.Proofs.Nci.Baseline",
   "Properties.Proofs.Nci.OperandsResolve", "Properties.Proofs.Nci.Agrees",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Proofs.SampledProofs.Halt",
@@ -87,4 +88,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Proofs.RemoteAudit", "Properties.RemoteAudit.Coins", "Properties.Proofs.RemoteAudit.Coins",
   "Properties.Proofs.RemoteAudit.Frozen", "Properties.Proofs.RemoteAudit.Order", "Properties.RemoteAudit.Pooled",
   "Properties.Proofs.RemoteAudit.Pooled", "Properties.Accounting.Served", "Properties.Proofs.Accounting.Served",
-  "Properties.RemoteAudit.Line", "Properties.Proofs.RemoteAudit.Line"]
+  "Properties.RemoteAudit.Line", "Properties.Proofs.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
+  "Properties.Proofs.RemoteAudit.Schedule"]

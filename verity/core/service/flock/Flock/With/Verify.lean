@@ -287,6 +287,41 @@ def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sched
   if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
   return cap
 
+/-- The shape `verifyRepWith` decodes a rep's proof file at, with `n` extra claims. -/
+def repFileShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
+  let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
+  { m := st.m, kLog := st.kLog, claims := 2 + n, sched := sch, hashLen := st.merkle.digestLen, saltLen }
+
+/-- **`verifyRepWith` at the decoded proof `p`**: everything after the decode, on the rep's stream with the statement's
+extra claims: the pinned PCS parameters (R7/F2), §9–§14, every recorded round consumed (S15/R2) and the cap the committed
+`root_B` (S16/R1). -/
+def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
+    (stream : StreamRec) (extras : Array Claim) (p : Proof) : M ByteArray := do
+  let t := spec.tables[i]!
+  let name := s!"{t}/rep{r}"
+  if p.params != pcsParams st.merkle sch then throw "R7/F2: the proof's PCS parameters are not the pinned fast100 parameters"
+  let prog : TMW M Unit := do
+    let zc ← bindAndZerocheckWith hs st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck
+    let lc ← lincheckWith hs st.fold zc p.lincheck
+    let (T, sws) ← ringSwitchWith hs st.m (abcClaims st.m st.kLog zc lc ++ extras) p.ringSwitches
+    ligeritoWith hs st.merkle sch T p.cap p.ligerito (basis sws)
+  let ((), tr) ← prog.run (Transcript.init stream.rounds (spec.domain t r).toUTF8)
+  if tr.k != stream.rounds.size then throw s!"S15/R2: {name}: {stream.rounds.size - tr.k} recorded rounds were never consumed"
+  let cap := p.cap.foldl (· ++ ·) ByteArray.empty
+  if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
+  return cap
+
+/-- **`verifyRepWith` splits at the decode**: the rep's stream (S11) and the extra claims, the proof file decoded at
+`repFileShape`, then `verifyRepPWith` at the decoded proof. -/
+theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+    (i r : Nat) (bytes : ByteArray) :
+    verifyRepWith hs spec st sch sess i r bytes = (do
+      let name := s!"{spec.tables[i]!}/rep{r}"
+      let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
+      let extras ← st.extra sess.points
+      let p ← decodeProof (repFileShape st sch extras.size) bytes
+      verifyRepPWith hs spec st sch sess i r stream extras p) := rfl
+
 /-- `verify` with every hash call the oracle's: `.ok ()` is Accept. -/
 def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) :
     M Unit := do
