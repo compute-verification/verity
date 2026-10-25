@@ -1780,6 +1780,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.Remote.Draw.Assumptions.HeldLikeliest": {
+   "owner": "@memory-accounting",
+   "digest": "8adbe0bb481e9725e660f3a14343fb966b4345ffd6894b55523344e8ced914de"
   }
  },
  "meaning": [
@@ -3582,10 +3586,20 @@
    "type_hash": "e11bd8f0d7411ecef278283d438e8bb82499aa76458b00817ae5109a7008ad97"
   },
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR : Accounting.Guarantees.Remote.ReceiptsBindingOfCR"
+   ],
+   "assumptions": [],
+   "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067"
   },
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFork"
+   ],
+   "assumptions": [],
+   "type_hash": "26fd0a6eaacfe57684738f19ad110ac0c51d3fa200a790d2ac498a67532d7fe6"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
    "owner": "@memory-accounting",
@@ -11385,7 +11399,9 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
-    "Accounting.SecurityProofs.Remote.PooledDraw"
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Actual.WipeHeld": {
@@ -13519,7 +13535,26 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
-    "Accounting.SecurityProofs.Remote.PooledDraw"
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
+   ]
+  },
+  "Definitions.Accounting.Remote.Fork": {
+   "digest": "39a5f27de649ce99f82437542c802aa213f821e1d65078ff36459da5bca68479",
+   "definitions": {
+    "Accounting.Remote.Draw.Receipts.Broken": "59501d40cf08d6960b9970b1ba1855b835be76d1a4312d9442cef71fd968c75f",
+    "Accounting.Remote.Draw.Receipts.Finds": "34a33bce4db88f4c1fad60bf4e35b1149805487d1fb25932fd3f1676361ee070",
+    "Accounting.Remote.Draw.Receipts.Shows": "b1578b2161811998c5899a0b1cb64da72b0ff220f0660fc3612aacccaad4f959",
+    "Accounting.Remote.Draw.Receipts.Split": "16cde9c0af4e33e83a79410d52c04c8b791fbc83477096f91a7214f129d122c8",
+    "Accounting.Remote.Draw.Receipts.finder": "5716de2bb2d0b43404cca31348a9c6a631bb2e277443930a1d4f08ebe91c6e5f",
+    "Accounting.Remote.Draw.Receipts.fork": "ca927660822cd18804b8ea2ab0564c0dc2ba9e27bbb19ac19386f6ac120f47d0",
+    "Accounting.Remote.Draw.Receipts.split": "239466009ed13774ffc6ade859df949fd3f9cc4dc8408fc73e5bb154a0695d96",
+    "Accounting.Remote.Draw.cont": "6b8333254ae6181a181e5638072b1547400c6724f1d6f1fd3fce5cb36287dea8"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Remote.Held": {
@@ -13825,6 +13860,8 @@
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
@@ -14781,6 +14818,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Claims.Bits_fails",
     "Claims.Complete_fails",
     "Claims.Flock.Bits_fails",
@@ -16221,6 +16260,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding"
    ]
@@ -16244,6 +16285,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -16277,6 +16320,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -16303,6 +16348,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -16320,6 +16367,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -16345,6 +16394,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding"
    ]
@@ -17430,6 +17481,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
@@ -17899,6 +17952,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -29052,6 +29107,16 @@
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
+  "Models.Accounting.Assumptions.RemoteBinding": {
+   "digest": "5b689697d0200fa2f3978c9c085f37e3829a52823f81a88e99796fa1f5cdb00c",
+   "definitions": {
+    "Accounting.Remote.Draw.Assumptions.HeldLikeliest": "8adbe0bb481e9725e660f3a14343fb966b4345ffd6894b55523344e8ced914de"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
+   ]
+  },
   "Models.Accounting.Assumptions.RemoteDraw": {
    "digest": "594c8b4333594e799d46313a6dd1af858346aab58eaa82460cfb26671367d08e",
    "definitions": {
@@ -29881,6 +29946,17 @@
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.SketchBinds",
     "Accounting.SecurityProofs.SketchRankFiber"
+   ]
+  },
+  "Models.Accounting.Guarantees.RemoteBinding": {
+   "digest": "a6aa4fb39b24caa364f2d559c5cbdde388b5b421e359f68eb01abcfff00325ff",
+   "definitions": {
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfCR": "067f6f58a3254bba52a961b3fae412b6dc38ec4ce96ccad7ec3af6dc260631b0",
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfFork": "5f207cf65b40235f2e44f7e71f5e83ce767d3cb34f175c2abb22fd967dc51066"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Models.Accounting.Guarantees.RemoteDraw": {
