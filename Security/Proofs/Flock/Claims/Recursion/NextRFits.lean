@@ -21,6 +21,9 @@ schedule's rounds agree round by round, on which rounds absorb element values an
 * **The rows** (`honestRows_fit`): where chunks absorb as rounds do and the rounds' tops are the caps' node counts, the
   honest rows are one per round, their tops cut back into the caps, and each holds its chunk's values (`RowsAt`): a
   round that absorbs nothing has a chunk with no values.
+
+`RepReadsBack`'s hypotheses hold together (`honest₀`): at `m = 22`, `k_log = 6`, two claims, a proof with every length
+its shape fixes and zero nonces (`sizedProof`), so one honest rep reads back on a run that exists (`readRep₀`).
 -/
 
 namespace FlockDeploy
@@ -443,5 +446,106 @@ theorem repReadsBack : RepReadsBack := repReadsBack_of repFits
 /-- **An honest prover's rounds read back** (`repReadsBack`, `readsBack_of_rep`): on the honest prover's messages `decR`
 decides, and reads exactly the honest proofs. -/
 theorem readsBack : ReadsBack := readsBack_of_rep repReadsBack
+
+/-! ## Non-vacuity: an honest rep at `m = 22` -/
+
+/-- `n` zero bytes. -/
+def zeroBytes (n : ℕ) : ByteArray := ⟨Array.replicate n 0⟩
+
+theorem zeroBytes_size (n : ℕ) : (zeroBytes n).size = n := Array.size_replicate
+
+/-- **A proof with the lengths `sh` fixes** (`ProofSizes`): every entry zero or `default`, every nonce 0. -/
+def sizedProof (sh : Flock.Shape) : Flock.Proof where
+  cap := .replicate (2 ^ (sh.sched.levels.getD 0 default).cap) (zeroBytes sh.hashLen)
+  params := default
+  zerocheck :=
+    { round1ab := .replicate 64 default, round1c := .replicate 64 default, rounds := .replicate (sh.m - 6) default
+      finalA := default, finalB := default, finalC := default }
+  lincheck := { rounds := .replicate (sh.kLog - 6) default, zPartial := .replicate 64 default }
+  ringSwitches := .replicate sh.claims (.replicate 128 default)
+  ligerito :=
+    { initialCap := #[], initialProof := default
+      recursiveCaps := (Array.range (sh.sched.levels.size - 1)).map fun i =>
+        .replicate (2 ^ (sh.sched.levels.getD (i + 1) default).cap) (zeroBytes sh.hashLen)
+      recursiveProofs := #[]
+      finalProof := { yr := .replicate (2 ^ (sh.sched.ext + 1)) default, rows := #[], siblings := #[] }
+      messages := .replicate (sh.sched.k0 + 8 + 7 * (sh.sched.levels.size - 1 - 1)) default
+      queryNonces := .replicate (sh.sched.levels.size - 1 + 1) 0
+      oodValues := .replicate (1 + 2 * (sh.sched.levels.size - 1)) default
+      claimNonces := .replicate (3 * (sh.sched.levels.size - 1) + 2) 0
+      consistencyNonces := .replicate (sh.sched.levels.size - 1 + 1) 0 }
+
+/-- `sizedProof sh` has `sh`'s lengths. -/
+theorem sizedProof_sizes (sh : Flock.Shape) : FlockSoundness.Discharge.DecodeZL.ProofSizes sh (sizedProof sh) where
+  r1ab := Array.size_replicate
+  r1c := Array.size_replicate
+  zcRounds := Array.size_replicate
+  lcRounds := Array.size_replicate
+  zPartial := Array.size_replicate
+  rs := Array.size_replicate
+  rsEach _ h := by rw [(Array.mem_replicate.1 h).2]; exact Array.size_replicate
+  cap := Array.size_replicate
+  capEach _ h := by rw [(Array.mem_replicate.1 h).2]; exact zeroBytes_size _
+  rcaps := by simp only [sizedProof, Array.size_map, Array.size_range]
+  rcapsEach i hi := by
+    simp only [sizedProof, Array.getElem_map, Array.getElem_range, Array.size_replicate, true_and]
+    intro e he
+    rw [(Array.mem_replicate.1 he).2]
+    exact zeroBytes_size _
+  yr := Array.size_replicate
+  messages := Array.size_replicate
+  queryNonces := Array.size_replicate
+  oodValues := Array.size_replicate
+  claimNonces := Array.size_replicate
+  consistencyNonces := Array.size_replicate
+
+/-- `sizedProof`'s nonces are 0. -/
+theorem sizedProof_nonces (sh : Flock.Shape) :
+    (∀ n ∈ (sizedProof sh).ligerito.queryNonces, n = 0) ∧ (∀ n ∈ (sizedProof sh).ligerito.claimNonces, n = 0) ∧
+      ∀ n ∈ (sizedProof sh).ligerito.consistencyNonces, n = 0 :=
+  ⟨fun _ h => (Array.mem_replicate.1 h).2, fun _ h => (Array.mem_replicate.1 h).2,
+    fun _ h => (Array.mem_replicate.1 h).2⟩
+
+/-- A setup at `m = 22`, `k_log = 6`, folding at its own `k_log`; everything else `default`. -/
+def st₀ : Flock.Setup :=
+  { (default : Flock.Setup) with m := 22, kLog := 6, fold := { (default : CircuitFold) with kLog := 6 } }
+
+/-- `fast100`'s schedule at `m = 22`. -/
+def sch₀ : Flock.Schedule := (fast100 22).getD default
+
+/-- The honest proof at `st₀`, no extra claims: `sizedProof` at its shape. -/
+def p₀ : Flock.Proof := sizedProof (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)
+
+/-- A rep at `st₀` with two claims, `repRounds`' schedule and `p₀`'s cap. -/
+def c₀ : RepCtx where
+  st := st₀
+  sch := sch₀
+  dom := ByteArray.empty
+  n := 2
+  sched := ((RecVStar.repRounds 22 6 2).getD #[]).toList
+  cap0 := p₀.cap.toList
+
+theorem fast100_22 : fast100 22 = some sch₀ := by
+  obtain ⟨s, hs⟩ := Option.isSome_iff_exists.1 (by decide +kernel : (fast100 22).isSome)
+  unfold sch₀
+  rw [hs, Option.getD_some]
+
+/-- **`RepReadsBack`'s hypotheses hold together** at `c₀` and `p₀`. -/
+theorem honest₀ : SchedOf c₀ ∧ HonestRep c₀ p₀ ∧ p₀.cap.toList = c₀.cap0 := by
+  obtain ⟨rs, hrs⟩ := Option.isSome_iff_exists.1 (by decide +kernel : (RecVStar.repRounds 22 6 2).isSome)
+  have hs : SchedOf c₀ := by
+    unfold SchedOf
+    refine ⟨fast100_22, rfl, rs, hrs, ?_⟩
+    show ((RecVStar.repRounds 22 6 2).getD #[]).toList = rs.toList
+    rw [hrs, Option.getD_some]
+  have hL : 2 ≤ sch₀.levels.size := by
+    show 2 ≤ ((fast100 22).getD default).levels.size
+    decide +kernel
+  exact ⟨hs, ⟨⟨0, rfl, sizedProof_sizes (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)⟩, hL,
+    sizedProof_nonces (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)⟩, rfl⟩
+
+/-- **An honest rep reads back** at `c₀`, at every `T`: `repReadsBack`'s conclusion on a run that exists. -/
+theorem readRep₀ (T : F128) : readRep c₀ (repRows c₀ p₀ T) p₀ = some (p₀, framesOf c₀ p₀ T) :=
+  repReadsBack c₀ p₀ T honest₀.1 honest₀.2.1 honest₀.2.2
 
 end FlockDeploy
