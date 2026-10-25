@@ -1,8 +1,8 @@
 """verity_vllm/engine/arrivals.py — step-indexed request arrivals (coverage campaign D87, serving profile B8-mixed).  Torch-free.
 
-`run_requests_arrivals(llm, requests, params_for, on_step=...)` is `verity_vllm.engine.engine_driver.run_requests` with one addition:
-request `r` is added to the engine right before engine step `r.arrive_step` (0 = before the first step, the historical
-behaviour).  Arrivals are keyed to the engine-step counter, never to wall time, so the observer run, the control run and the
+`run_requests_arrivals(llm, requests, params_for, on_step=...)` adds every request with *our* request id
+(`engine_driver.external_id`) and steps the engine until all finish, request `r` right before engine step `r.arrive_step`
+(0 = before the first step, the historical behaviour).  Arrivals are keyed to the engine-step counter, never to wall time, so the observer run, the control run and the
 non-interference variants schedule the same batch at every step -- dynamic batch membership becomes a declared, reproducible
 fact of the workload.  If every earlier request has finished before the next arrival's step, the next arrival is admitted at
 once (the engine would otherwise idle); the realized arrival step is what `timing["requests"]` records, and
@@ -11,7 +11,7 @@ forwards run so far (`ForwardCounter`), not `step()` iterations: under the outpu
 no forward, so an iteration clock would admit every later arrival one forward early per gap.
 
 `timing["requests"][rid]` = {arrive_step (planned), arrive_step_realized, first_step (the engine step that ran the request's
-prefill), finish_step, finish_reason, n_generated}.  With every request at step 0 the loop is the driver's loop.
+prefill), finish_step, finish_reason, n_generated}.  With every request at step 0 every request is added before the first step.
 
 Step indexing.  An "engine step" is a model forward pass -- the unit the observer, the census and the gates count.  vLLM V1's
 `engine.step()` returns the *previous* forward's sampled tokens (one-iteration output lag; the non-interference hooks variant
