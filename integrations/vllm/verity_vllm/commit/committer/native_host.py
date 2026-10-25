@@ -1211,7 +1211,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return
         self._end_step()
         self.gc_pauses.uninstall()
-        for src in self.sources:
+        for src in reversed(self.sources):
             src.uninstall()
         for h in self._handles:
             h.remove()
