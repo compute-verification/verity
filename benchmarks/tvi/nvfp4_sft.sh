@@ -1,6 +1,6 @@
 # The NVFP4 training study on one leased GPU: nvfp4_sft.py's arms one after another, one ITEMS entry
 # `ARM:ORDER:LR:SEED:MAX_STEPS` each (comma-separated). An item stops at val exact >= 0.995, MAX_STEPS, ITEM_MAX_MIN minutes
-# or DEADLINE_EPOCH, then runs its test eval; an item that would start within 5 min of DEADLINE_EPOCH is skipped.
+# or the deadline, then runs its test eval; an item that would start within 5 min of the deadline is skipped.
 # Writes $OUT/<arm>_<task>_lr<lr>_s<seed>/result.json, its log, and $OUT/table.md.
 set -u
 D=$(cd "$(dirname "$0")" && pwd)
@@ -8,7 +8,9 @@ SCR=$(mktemp -d "${SCRATCH_ROOT:-/tmp}/nvfp4_sft.XXXXXX")
 trap 'rm -rf "$SCR"' EXIT
 trap 'exit 143' TERM INT
 M=${MODEL:-Qwen/Qwen2.5-0.5B-Instruct}
-DEADLINE_EPOCH=${DEADLINE_EPOCH:-$(( $(date +%s) + 80 * 60 ))}
+# the earlier of DEADLINE_EPOCH and 80 min from the start (the queue's lease is --max-min 90)
+END=$(( $(date +%s) + 80 * 60 ))
+DEADLINE_EPOCH=$(( ${DEADLINE_EPOCH:-$END} < END ? ${DEADLINE_EPOCH:-$END} : END ))
 ITEM_MAX_MIN=${ITEM_MAX_MIN:-30}
 
 PY=${TVI_PY:-}
