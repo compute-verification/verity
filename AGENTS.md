@@ -13,7 +13,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
   Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
   tests sit beside it as their own suite.
-  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
+  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Definitions/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
@@ -46,7 +46,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
+- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
   through C-Flock's prover and the Lean verifier.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
@@ -67,6 +67,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
     Daniel's laptop.
   - `nebius/`: the console's units.
+  - `slack-events/`: the Slack events service, a Vercel project (root `infra/slack-events/service`) that routes people's
+    posts and new members through `research msg`'s code. comms owns it.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
@@ -165,7 +167,7 @@ the standing rulings stated nowhere else.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
-  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted.
+  assumption (`trusted-host`). Nothing the prover runs or hosts is trusted.
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
@@ -331,14 +333,15 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
     each proved guarantee.
     `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
-    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    (`Properties.<Protocol>`) and proved (`Proofs.Properties.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
-    until its spec is extracted.
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
+    `Definitions/Flock` holds what has been extracted so far (`Definitions/Flock.lean` lists it): its
+    guarantees are `Definitions/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
+    extracted.
   - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
     guarantee statements), properties (statements about the code, reading only the definitions and that code) and
     proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
@@ -506,8 +509,10 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
   research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
   runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
-  marking, run the Lean check of the packages you touched and `uv run tools/verity/check/suites.py --changed origin/main
-  --quick`, and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
+  marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
+  source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
+  --changed $(git rev-parse origin/main) --quick"` (main's SHA, expanded in your checkout: a shipped tree may hold no
+  `origin/main`), and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
