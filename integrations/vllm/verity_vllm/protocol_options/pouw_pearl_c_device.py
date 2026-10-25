@@ -42,12 +42,11 @@ torch's current stream, in the device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
 The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
-the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`) and their upload through a pinned ring (`_Uploads`); the
-records' screen as one fused kernel (`screen_into`, Triton, its compiled kernel launched directly after the first launch;
-`screen` where Triton can't run); A's roots copied into a pass buffer by one driver copy; filler rows zeroed only where an
-earlier call wrote them; the stream from torch's raw accessor.  The filler bookkeeping holds while no call has run under
-graphs (`eager_only`).  A call's keys are never another's: its index is numbered across the epoch (`pouw_pass.call_index`),
-since -h3's row seed binds the salt and the index but no pass, so each pass's indices continue the last's.
+the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`, the index numbered across the epoch: `pouw_pass.call_index`)
+and their upload through a pinned ring (`_Uploads`); the records' screen as one fused kernel (`screen_into`, Triton, its
+compiled kernel launched directly after the first launch; `screen` where Triton can't run); A's roots copied into a pass
+buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from torch's raw accessor.
+The filler bookkeeping holds while no call has run under graphs (`eager_only`).
 
 The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
 ``deferred`` runs the tile hashing on a side lane beside the next calls, and ``deferred-a`` A's tree there too, where the
@@ -79,7 +78,7 @@ from verity.core.protocols.pouw.serving import (
     hash_format,
 )
 
-from .pouw_pass import call_index, pass_dir, room
+from .pouw_pass import EpochCalls, call_index, pass_dir, room
 from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
     SIDE_GROUPS,
@@ -294,7 +293,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
         kernel.dev.stream = None
 
 
-class PearlCDeviceRun(LaneCalls, GraphCalls):
+class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
@@ -370,8 +369,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
-        self._used = 0                       # `epoch_calls` as of the last pass it saw
-        self.repeat_at: int | None = None    # the next pass's first index, once (`begin`'s ``at``)
         self.begin()
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
@@ -641,17 +638,13 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
 
     def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
               stepped: bool = False, at: int | None = None) -> None:
-        """A new pass: its own transcript under the install's epoch, its call indices continuing past every index the epoch
-        has used (`call_index`), under `schedule` (the last one's when None; a schedule changes only between passes).  With
-        `retain`, the pass writes what the prover opens from into that directory, from poisoned outputs, and its manifest
-        names `run`.  `stepped`: an engine step's end begins it.  `at` (else `repeat_at`, once) numbers the pass from that
-        index instead: a check that repeats an earlier pass's calls to compare their bytes, which shares that pass's indices,
-        so the two are never credited together (`credit.passes_distinct` refuses them)."""
+        """A new pass: its own transcript under the install's epoch, its indices from `pass_base` (``at``), under `schedule` (the
+        last one's when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens
+        from into that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: a step's end begins it."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
         retain = retain or pass_dir(self)
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
-        used, at, self.repeat_at = self.epoch_calls(), self.repeat_at if at is None else at, None
-        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=used if at is None else at)
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=self.pass_base(at))
         if retain and self.hashing:
             self.poison()
 
@@ -674,7 +667,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         commitment (also in `commits` and `details["passes"]`)."""
         import torch
         cur, K = self.cur, self.kernel
-        self.epoch_calls()
         out: dict[str, Any] = {"units": len(cur.matmuls), "base": cur.base, "tiles": cur.tiles, "hashing": self.hashing,
                                "schedule": self.schedule.name}
         if self.hashing and cur.matmuls:
@@ -747,14 +739,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                 "leaves": _write(d / "leaves", _bytes(self.leaves[:self.nb * count])),
                 "tree_t": _write(d / "tree_t", _bytes(tree)), "hm96_salt_key": self.salt_key.hex()}
         return write_manifest(d, head, weights, matmuls)
-
-    def epoch_calls(self) -> int:
-        """One past the highest call index any pass of the epoch has used (0 before the first call): where the next pass
-        numbers from."""
-        cur = self.cur
-        if cur is not None:
-            self._used = max(self._used, cur.base + len(cur.matmuls))
-        return self._used
 
     def finish(self) -> None:
         if self.cur is not None and self.cur.matmuls:

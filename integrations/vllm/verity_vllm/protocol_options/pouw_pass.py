@@ -63,6 +63,27 @@ def call_index(run: Any, calls: int = 1) -> int:
     return index
 
 
+class EpochCalls:
+    """A device run's call numbering across its epoch (`call_index`): where each pass's first call is numbered from."""
+    _used = 0                         # `epoch_calls` as of the last pass it saw
+    repeat_at: int | None = None      # the next pass's first index, once (`pass_base`'s ``at``)
+
+    def epoch_calls(self) -> int:
+        """One past the highest call index any pass of the epoch has used (0 before the first call): where the next pass
+        numbers from."""
+        cur = self.cur
+        if cur is not None:
+            self._used = max(self._used, cur.base + len(cur.matmuls))
+        return self._used
+
+    def pass_base(self, at: int | None = None) -> int:
+        """The next pass's first index: `epoch_calls`, or ``at`` (else `repeat_at`, which it clears) for a check that repeats
+        an earlier pass's calls to compare their bytes; the two share indices, so they are never credited together
+        (`credit.passes_distinct` refuses them)."""
+        used, at, self.repeat_at = self.epoch_calls(), self.repeat_at if at is None else at, None
+        return used if at is None else at
+
+
 def pass_dir(run: Any) -> str | None:
     """The next pass's retain directory under ``run.retain_dir`` (``pass-NNNNN``, numbered in the order passes begin), None
     without one."""
