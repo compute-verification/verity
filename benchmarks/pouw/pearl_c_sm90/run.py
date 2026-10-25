@@ -72,6 +72,9 @@ WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: as on 131), leaving the rest of the SMs to the side lanes; a tile's bytes don't depend on its CTA.  PEARLC_GRID_BALANCE=0
 #: takes every SM it may
 GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
+#: a probe: PEARLC_PD_TILES_GROUP=1 has pd_tiles take PD_GROUP's tiles (PD_G a CTA) at every pd shape, a quarter of the CTAs
+#: beside pd_commit's and pd_tree's whole SMs; the same leaves
+PD_TILES_GROUP = os.environ.get("PEARLC_PD_TILES_GROUP", "0") == "1"
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
 #: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
@@ -694,8 +697,9 @@ class Pipeline:
                  i=(self.m_real, 0, 0, self.m))
 
     def pd_tiles(self) -> None:
-        """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP a CTA of PD_G tiles of a row block."""
-        d, b, v, mr, n = self.dev, self.b, self.pd, self.m_real, self.n
+        """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP (or PD_TILES_GROUP) a CTA of PD_G
+        tiles of a row block."""
+        d, b, v, mr, n = self.dev, self.b, self.pd | (PD_GROUP if PD_TILES_GROUP else 0), self.m_real, self.n
         p = (b["c"], b["u"], b["leaves"])
         if v & PD_GROUP:
             d.launch(f"pd_tiles_{v}", cdiv(mr, TILE) * cdiv(n // TILE, PD_G), 32 * PD_G, PD_PAIR_SMEM // 2, p=p, i=(mr, n))

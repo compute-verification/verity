@@ -37,8 +37,9 @@ With ``whole_defer_a`` too, where the kernel's pipeline splits A's commitment (`
 `pouw_pearl_c_lanes`' ``deferred-a`` split, with no padding rows' E_A lines), a whole capture forks each call's A tree
 after its per-row keying onto a tree stream of the run's own, beside the call's forming and GEMM, which read nothing the
 tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps, whose scatter copies
-A's root to the pass, and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a
-call of its shape joins that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+A's root to the pass (with `TILES_BESIDE_TREE`, only the scatter: the tile hashing reads nothing the tree writes), and a
+retained capture's copy of A's tree to its stage; and so a call joining the side steps of a call of its shape joins that
+call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
 With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persistent CTA fewer (the pipeline's ``beside``),
 since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
 computed as before, by another CTA.
@@ -53,6 +54,7 @@ With a `statement` enabled (and hashing), a whole capture also copies each call'
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -70,6 +72,10 @@ GRAPH_ROWS = 256
 SLOT_BYTES = 176
 #: a lane graph's slot (`_lane_graph`): dom_a ‖ unit padded to `SLOT_BYTES`, then the call's three offsets
 LANE_SLOT_BYTES = SLOT_BYTES + 24
+#: a probe: PEARLC_TILES_BESIDE_TREE=1 has a whole capture's side steps join the A trees forked so far only before the
+#: scatter, the one step that reads A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree
+#: (alone it lost: r20261025-015411-7d73)
+TILES_BESIDE_TREE = os.environ.get("PEARLC_TILES_BESIDE_TREE", "0") == "1"
 
 
 def _capturing() -> bool:
@@ -638,17 +644,21 @@ class GraphCalls:
         self._tree_open = False
 
     def _fork(self, sh: Any, steps: list, raw: int) -> None:
-        """`steps` on the side stream, after everything the capturing stream has launched so far and the A trees forked so far
-        (the scatter copies A's root), with torch's current stream the side's too (the scatter is a Triton launch); the next
-        `_join` makes the capturing stream wait for them."""
+        """`steps` on the side stream, after everything the capturing stream has launched so far, the last (with hashing, the
+        scatter, which copies A's root) after the A trees forked so far too (`TILES_BESIDE_TREE`), with torch's current stream
+        the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them."""
         import torch
         side = self._side_stream
         side.wait_stream(torch.cuda.current_stream(self.device))
-        self._tree_joined(side)
+        cut = len(steps) - 1 if TILES_BESIDE_TREE and self.hashing and steps else 0
+        if not cut:
+            self._tree_joined(side)
         self.kernel.dev.stream = side.cuda_stream
         try:
             with torch.cuda.stream(side):
-                for f in steps:
+                for i, f in enumerate(steps):
+                    if cut and i == cut:
+                        self._tree_joined(side)
                     f()
         finally:
             self.kernel.dev.stream = raw
