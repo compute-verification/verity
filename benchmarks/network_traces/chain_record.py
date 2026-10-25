@@ -3,8 +3,8 @@
 
     python benchmarks/network_traces/chain_record.py custody --gates DIR --out FILE
     python benchmarks/network_traces/chain_record.py certs --run DIR [--client DIR] [--deployed] --out FILE
-    python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--n2 SUMMARY] [--scan SUMMARY]
-      [--job FILE] --out DIR
+    python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
+      [--n2 SUMMARY] [--scan SUMMARY] [--job FILE] --out DIR
 
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as `vy-challenger-gate
   fetch` writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
@@ -16,9 +16,13 @@
   (`advised.SignedClocks`), never the plan's. ``--deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` (#4326) summed by
-  `periodLeak_le_sum` (#4324). N2's summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved)
-  or, once it lands, N2-ZK's sampled draw's, read by the same fields; scan's is `scan_zk.py prove`'s, a stand-in on its
-  own synthetic warden run until IO-TIE's ``--warden-run`` takes the gate's warden rows.
+  `periodLeak_le_sum` (#4324). ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
+  records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
+  summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
+  All: every link-window's one unit proved) or, once it lands, N2-ZK's sampled draw's, read by the same fields. Scan's
+  is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until IO-TIE's ``--warden-run`` takes the gate's
+  warden rows. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes the report
+  accepted.
 """
 from __future__ import annotations
 
@@ -35,9 +39,13 @@ sys.path.insert(0, str(HERE))
 
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
+ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose counts N2's advised unit decides on the endpoint's advice
 
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
+    "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit window's advice "
+                "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
+                "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its own kept files: each certificate's and clock certificate's LMS signature "
                     "under the certifier's key and session, and the host audit of each window's certified heads "
                     "(the client's own records) against them",
@@ -145,9 +153,31 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
 
 # --- report -----------------------------------------------------------------------------------------------------------
 
-def n2_step(s: dict | None, certs_doc: dict) -> dict:
-    if s is None:
-        return {"verdict": "not run", "in_the_clear": CLEAR["n2"]}
+def endpoint_step(e: dict | None) -> dict:
+    """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
+    run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
+    (`chain.tie`), both in the clear."""
+    if e is None:
+        return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)", "in_the_clear": CLEAR["endpoint"]}
+    chain = e.get("chain") or {}
+    b, t = chain.get("bits") or {}, chain.get("tie") or {}
+    honest = (t.get("runs") or {}).get("honest") or {}
+    windows = b.get("commit_windows") or []
+    advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
+              "commit_windows": len(windows), "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt"))
+                                                                   for c in windows)}
+    tie = {k: honest.get(k) for k in ("verdict", "ok", "codes", "requests", "outputs", "placed", "unplaced", "why")}
+    ok = bool(advice["bound"] and advice["rebuilt"]) and honest.get("verdict") == "accepted"
+    return {"verdict": "accepted" if ok else "refused", "advice": advice, "tie": tie | {"ran": t.get("ran"),
+            "stand_ins": t.get("stand_ins")}, "in_the_clear": CLEAR["endpoint"]}
+
+
+def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
+    job = job or {}
+    why, stand_in = (job.get("why") or {}).get("n2"), (job.get("stand_in") or {}).get("n2")
+    if s is None or (job.get("rc") or {}).get("n2") not in (None, "0"):
+        return {"verdict": "not run" if s is None and (job.get("rc") or {}).get("n2") in (None, "2") else "failed",
+                "why": why, "stand_in": stand_in, "in_the_clear": CLEAR["n2"]}
     members = {}
     for name, m in (s.get("members") or {}).items():
         wins = m.get("windows") or []
@@ -165,7 +195,7 @@ def n2_step(s: dict | None, certs_doc: dict) -> dict:
     law = s.get("law", "all")
     proved = bool(members) and s.get("ok") is True
     return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
-            ("dry" if "members" in s and not honest.get("windows") else "failed"),
+            ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
             "negatives": {k: v["network_accepted"] is False for k, v in members.items() if k != "honest"},
             "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
@@ -174,9 +204,11 @@ def n2_step(s: dict | None, certs_doc: dict) -> dict:
             "eps_at_delta": eps_at_delta(n, drawn, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
 
 
-def scan_step(s: dict | None, warden_run: str | None) -> dict:
-    if s is None:
-        return {"verdict": "not run", "in_the_clear": CLEAR["scan"]}
+def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
+    job = job or {}
+    if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
+        return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
+                "why": (job.get("why") or {}).get("scan"), "in_the_clear": CLEAR["scan"]}
     rounds = {}
     for name, r in (s.get("rounds") or {}).items():
         a = r.get("audit") or {}
@@ -219,17 +251,20 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict) -> dict:
 
 def report(a) -> dict:
     cust, cert = _json(a.custody) or {}, _json(a.certs) or {}
-    n2 = n2_step(_json(a.n2), cert)
-    scan = scan_step(_json(a.scan), a.warden_run)
     job = _json(a.job) or {}
-    steps = {"custody": cust, "certificates": {k: v for k, v in cert.items() if k != "rows"}, "n2": n2,
-             "scan": scan, "lean": {"verdict": "accepted" if n2.get("verdict") == "accepted"
+    endpoint = endpoint_step(_json(a.endpoint))
+    n2 = n2_step(_json(a.n2), cert, job)
+    scan = scan_step(_json(a.scan), a.warden_run, job)
+    steps = {"custody": cust, "certificates": {k: v for k, v in cert.items() if k != "rows"}, "endpoint": endpoint,
+             "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if n2.get("verdict") == "accepted"
                                     and scan.get("verdict") == "accepted" else n2.get("verdict"),
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
                                     "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
-    accepted = all(steps[k].get("verdict") == "accepted" for k in ("custody", "certificates", "n2", "scan"))
+    required = ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()), "n2", "scan")
+    accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
+                and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     negatives = {**{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     return {"schema": SCHEMA, "job": job, "verdict": "accepted" if accepted else "refused",
@@ -241,11 +276,15 @@ def markdown(r: dict) -> str:
     lines = [f"# Network chain run {j.get('run', '?')}", "",
              f"Tree {j.get('tree', '?')}, gates {', '.join(j.get('gates', [])) or '?'}. Verdict: **{r['verdict']}**.",
              "", "| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
-    for k in ("custody", "certificates", "n2", "scan", "lean"):
+    for k in ("custody", "certificates", "endpoint", "n2", "scan", "lean"):
         e = s[k].get("eps_at_delta") or {}
         eps = (f"{e['law']}, {e['drawn']} of {e['units']}: wrong ≤ {e['wrong_units_at_delta']}" if e else "")
         lines.append(f"| {k} | {s[k].get('verdict')} | {eps} | {s[k].get('in_the_clear', '')} |")
-    lines += ["", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
+    notes = [f"- {k}: {s[k][f]}" for k in ("endpoint", "n2", "scan") for f in ("why", "stand_in") if s[k].get(f)]
+    ep = s["endpoint"]
+    if ep.get("advice"):
+        notes.append(f"- endpoint: advice {ep['advice']}; I/O tie on honest {ep['tie']}")
+    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
               f"- Σ ε_w = {d['sum_eps']}", "- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
@@ -264,7 +303,7 @@ def main(argv=None) -> int:
     v.add_argument("--deployed", action="store_true", help="refuse a certifier key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
     r = sub.add_parser("report", help="one report over the steps' outputs")
-    for f in ("custody", "certs", "n2", "scan", "job"):
+    for f in ("custody", "certs", "endpoint", "n2", "scan", "job"):
         r.add_argument(f"--{f}")
     r.add_argument("--warden-run")
     r.add_argument("--out", required=True, type=Path)
