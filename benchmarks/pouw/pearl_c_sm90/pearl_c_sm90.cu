@@ -40,7 +40,7 @@ DEV Args pd_unit(const Args& g) {
 #define PD_GROUPED(V)                                                                                                    \
   extern "C" __global__ void __launch_bounds__(192) pd_commit_g_##V(const Args g) {                                    \
     const Args a = pd_unit(g);                                                                                           \
-    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V>(a);                                                                     \
+    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V, false>(a);                                                              \
   }                                                                                                                      \
   extern "C" __global__ void __launch_bounds__(32) pd_tiles_g_##V(const Args g) {                                      \
     const Args a = pd_unit(g);                                                                                           \

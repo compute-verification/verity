@@ -951,8 +951,9 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
 // out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
-// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0
-template <int V> DEV void pd_commit_t(const Args a) {
+// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0.  WARM (with PD_LATE): the warming runs and the called
+// copies they warm, off where the Args sit in registers across those calls (pearl_c_sm90.cu's grouped launch spills them)
+template <int V, bool WARM = true> DEV void pd_commit_t(const Args a) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
@@ -960,7 +961,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
   __shared__ uint32_t ys[48], lk[8], un[26];
   __shared__ int last;
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
-  constexpr bool PAIR = (V & PD_PAIR) != 0, LATE = (V & PD_LATE) != 0;
+  constexpr bool PAIR = (V & PD_PAIR) != 0, LATE = (V & PD_LATE) != 0, CALLS = LATE && WARM;
   static_assert(!LATE || PAIR, "PD_LATE's helpers are warps 1-3, which PD_PAIR's 2 cw + 2 warps always have");
   static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
 #ifdef PD_PDL
@@ -1048,13 +1049,15 @@ template <int V> DEV void pd_commit_t(const Args a) {
       pd_serve<V>(warp - cw);
     }
   } else if (LATE) {                                // warming runs (split): the seed chain's copy and the fold's rounds
-    if (split && cw == 1 && warp == c1) {           // pair 1's buffer is idle at cw = 1, so its pair runs the seed chain
-      pd_row_seed_call<V>(a.p[3], a.p[4], a.p[12], sb, unit, &PD_LABELS[0][0], index, r, xr, false);
-      pd_pstop();
-    } else if (split && cw == 1 && warp == p1) {
-      pd_serve<V>(1);
+    if constexpr (CALLS) {
+      if (split && cw == 1 && warp == c1) {         // pair 1's buffer is idle at cw = 1, so its pair runs the seed chain
+        pd_row_seed_call<V>(a.p[3], a.p[4], a.p[12], sb, unit, &PD_LABELS[0][0], index, r, xr, false);
+        pd_pstop();
+      } else if (split && cw == 1 && warp == p1) {
+        pd_serve<V>(1);
+      }
+      if (split && warp == (cw == 1 ? c1 : sw)) pd_fold_rounds_call(RS_Q_HEADS + 8 * s, 1, kw, xr, true);
     }
-    if (split && warp == (cw == 1 ? c1 : sw)) pd_fold_rounds_call(RS_Q_HEADS + 8 * s, 1, kw, xr, true);
   } else if (warp < sw) {                           // the row's segments
     if (tid < s) {
       uint64_t st[8], w[16];
@@ -1085,9 +1088,12 @@ template <int V> DEV void pd_commit_t(const Args a) {
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
   if (warp == 0) {                                  // the row digest (kw its schedules), into xr
     uint64_t st[8];
-    if (split) pd_fold_rounds_call(RS_Q_HEADS + 8 * s, s / 2 + 1, kw, xr, false); else pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    const bool called = CALLS && split;
+    if (called) pd_fold_rounds_call(RS_Q_HEADS + 8 * s, s / 2 + 1, kw, xr, false);
+    else if (split) pd_fold_rounds(RS_Q_HEADS + 8 * s, s / 2 + 1, st, kw);
+    else pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
     if (lane == 0) {
-      if (!split) {
+      if (!called) {
 #pragma unroll
         for (int q = 0; q < 8; q++) xr[q] = st[q];
       }
@@ -1127,7 +1133,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
       }
     } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
       if (warp == c1) {
-        if constexpr (LATE) pd_row_seed_call<V>(a.p[3], a.p[4], a.p[12], sb, un, lab, index, r, xr, lane == 0);
+        if constexpr (CALLS) pd_row_seed_call<V>(a.p[3], a.p[4], a.p[12], sb, un, lab, index, r, xr, lane == 0);
         else pd_row_seed<V, 1>(a.p[3], a.p[4], a.p[12], sb, un, lab, index, r, xr, lane == 0);
         if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
