@@ -166,7 +166,8 @@ theorem ksLin2_steps_staged (nextE : Msg → List Msg → List Coin → Claims.O
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro L Bd D bL hrb hP hRT
-  refine ksLin2_steps_parts nextE b L (heldWhole_layoutBTops fin) wE join final w hB untr hrb ?_ hRT
+  refine ksLin2_steps_parts nextE b L (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl)
+    (heldWhole_layoutBTops fin) wE join final w hB untr hrb ?_ hRT
   intro shape hsh
   obtain rfl := List.mem_singleton.1 hsh
   obtain ⟨hF, chk, hPC, hPO, hD⟩ := hP _ hsh

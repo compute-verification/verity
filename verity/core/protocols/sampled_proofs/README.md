@@ -113,7 +113,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn units. The vLLM integration
-  commits serving rows with the registration and served domains of `one_stage` (`verity_vllm.commit.serving_rows`, in the
+  commits serving rows with the registration and served domains of `one_stage` (`verity.ml.windows.rows`, in the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 
@@ -148,13 +148,14 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
     challenger's coins (or a sampler) under the expanded design, with a work draw's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
-  the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
-  served root's commitment domain.
+  the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `window_domain` is a
+  registered root's commitment domain (`verity.ml.commitments.window`'s, which an integration commits under).
 - `draw`: `parse_law` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
   holds the proved units to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
-  and the population programs `population_program` and `mixed_population_program`.
+  and the population programs `population_program` and `mixed_population_program` (`verity.ml.circuits.population`'s,
+  which an integration builds its window's program with).
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
@@ -195,14 +196,14 @@ named with each. A rule leaves this list in the change whose Lean states it.
 
 ### The registration record
 
-`verity/registration/v1` (`one_stage.registration`) is what serving is committed to, fixed before the verifier draws:
+`verity/registration/v1` (`one_stage.registration`) is what a window is committed to, fixed before the verifier draws:
 the program, query and partition digests, the population, the sampling design expanded, the scheme, the roots with their
 leaf counts and domains, the leaf layer, the anchors, the window (provenance only: `served` or `stand-in`) and
 `previous`. Its digest is `SHA-512("verity/registration/v1\0" ‖ canon(record))`, canon being canonical JSON (RFC 8785,
 `verity.ml.circuits.codec.canonical_json`). The verifier checks R1 to R6 (`check`) against its own copies, writes a
 receipt with its own clock, and only then draws, and it holds its own public file to the record (`matches_public`),
 which the Lean guarantee `FailClosed.flock_verify_public_ties` ties to the proved rows. The format, each check, the
-receipt and the served domains (`served_domain`, agreed with vllm-serving-commit) are in `one_stage.registration`'s
+receipt and the window domains (`window_domain`, its tag's bytes still `served-domain`) are in `one_stage.registration`'s
 docstrings.
 
 Pinned by `tests/test_one_stage.py` (the registration, receipt, window, served-domain and R1 tests), and the served

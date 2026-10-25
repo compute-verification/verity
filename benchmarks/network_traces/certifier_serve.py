@@ -189,7 +189,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import replace
 from fractions import Fraction
@@ -981,7 +981,7 @@ async def client(plan: dict, report: dict, deployment: dict, out: Path, link: tu
 
 # The offline check.
 
-def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
+def certified_io(plan: dict, setup: ar.Setup, in_records, out_records, aborted: Collection[str] = ()) -> dict:
     """The certified I/O of a varied run, read from the records' frames alone (the module docstring's "The certified
     I/O"): each request's ingress ordinal (its stream), release and fields (`active.id_request_fields`) from the
     ingress frames, and its response's token ids and frames (canonical position, egress bucket) from the egress id
@@ -991,7 +991,10 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     compact plan each egress frame is a compact cell (`active.compact_record_data`), and the finish is the records'
     too: only the last is marked, a stop on an EOS id, `COMPACT_LAST` alone at `max_tokens` exactly, and no other
     record carries an EOS id. Where a response stops is the server's word here, as an EOS id event's is: only the I/O
-    tie holds it to the ids the model sampled (`active.compact_finish_violations`)."""
+    tie holds it to the ids the model sampled (`active.compact_finish_violations`). `aborted` are the users whose
+    finish in the Commit is a client's abort, which nothing on the link says: one of theirs ends instead short of
+    `max_tokens`, unmarked and on no EOS id (finish `abort`), and its marked finish is refused. `check` reads no Commit,
+    so it gives none."""
     e, i = setup.egress_params, setup.ingress_params
     compact = bool(plan.get("compact"))
     marks: dict[int, list] = defaultdict(list)
@@ -1038,7 +1041,7 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
                 position += 1
     eos, finish = set(plan["varied"]["eos_token_ids"]), Counter()
     for r in requests:
-        out, m = r["output"], r["max_tokens"]
+        out, m, gone = r["output"], r["max_tokens"], r["user"] in aborted
         stops = [k for k, t in enumerate(out) if t in eos]
         ends = marks[r["stream"]]
         if not out:
@@ -1052,14 +1055,19 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
         elif compact and ends[-1] == "stop" and not stops:
             r["finish"] = "a stop on an id that isn't EOS"
         elif compact:
-            short = "a length finish short of max_tokens"
-            r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
+            short, unmarked = "a length finish short of max_tokens", "no finish"
+            if gone:
+                unmarked = "abort" if len(out) < m else "an abort at max_tokens"
+            r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: unmarked}[ends[-1]]
         elif stops and stops[0] != len(out) - 1:
             r["finish"] = "a token after EOS"
         else:
-            r["finish"] = "eos" if stops else "length" if len(out) == m else "short of max_tokens without EOS"
+            r["finish"] = ("eos" if stops else "length" if len(out) == m else "abort" if gone
+                           else "short of max_tokens without EOS")
+        if gone and r["finish"] in ("eos", "length"):
+            r["finish"] = f"a finish {r['finish']} where the Commit's is abort"
         finish[r["finish"]] += 1
-        if r["finish"] not in ("eos", "length"):
+        if r["finish"] not in ("eos", "length", "abort"):
             violations.append([r["stream"], r["finish"]])
     return {"accepted": not violations and bool(requests), "requests": len(requests),
             "tokens": sum(len(r["output"]) for r in requests), "finish": dict(finish), "violations": violations[:20],

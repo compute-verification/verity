@@ -65,7 +65,7 @@ theorem wProofZk_size_le (sh : Shape) (p : Proof) (hcap : ZkView.CapOk sh (sh.sc
       schedPartZk sh.sched sh.hashLen sh.saltLen + 32 * (sh.m - 6) + 32 * (sh.kLog - 6) + 2064 * sh.claims := by
   obtain ⟨cap, params, ⟨r1ab, r1c, rounds, fa, fb, fc⟩, ⟨lr, zp⟩, rs,
     ⟨icap, l0, rcaps, rps, ⟨yr, rowsR, sibR, saltR⟩, msgs, qn, ood, cbn, con⟩⟩ := p
-  obtain ⟨hicap, hl0, hrcs, hrc, hrps, hrp, hyr, hfin, hmsg, hqn, hood, hcbn, hcon⟩ := hlg
+  obtain ⟨hicap, hl0, hrcs, hrc, hrps, hrp, hyr, hfin, hmsg, hqn, hood, hcbn, hcon, -⟩ := hlg
   dsimp only at *
   have ht : ∀ a : F128, a.toBytes.size = 16 := ZkView.toBytes_size
   have hw0 : (ZkView.wLen 0).size = 8 := ZkView.le64_size _
@@ -346,9 +346,9 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
     omega
   obtain ⟨hsalt, hpath, hinner⟩ := inZ_shape (JsonRT.hOf_size h64) _ ω i rep hin.innerCommit _ _ hlen
   rw [← hpi] at hsalt hpath hinner
-  obtain ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13⟩ := hlg'
+  obtain ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14⟩ := hlg'
   have hw := wProofZk_size_le (shapeZk (Setup.ofCircuit st) v.1 e.size) P.proof hcap h1ab h1c hrounds hlr hzp hrs
-    hrs128 ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13⟩
+    hrs128 ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14⟩
   have hl0 := wLevel0_size P.level0
   rw [show P.level0.ybar.size = v.2 by rw [hzl]; exact hyb] at hl0
   have hfile := zkSchedule_file h25 h35 hin.schedule
@@ -364,7 +364,7 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
     change _ ≤ _ + 32 * (st.m - 6) + 32 * (st.c.kLog - 6) + 2064 * (2 + e.size) at hw
     omega
   exact ⟨by rw [hH]; norm_num, by show 1 ≤ v.1.levels.size - 1; omega, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp,
-    hrs, hrs128, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, hsalt, hpath⟩
+    hrs, hrs128, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, hsalt, hpath, g14⟩
 
 /-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) and the mask-rank
 bound; `RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/

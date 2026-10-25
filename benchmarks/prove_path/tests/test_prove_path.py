@@ -8,7 +8,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   one the draw's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the draw passing), so only the proof can refuse it.
+  changed, every check before the draw passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
+  only inside plain's interim scope, one table under a stratified draw (`a5.plain_refusal`).
+* An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
@@ -22,6 +24,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import socket
 import subprocess
 import sys
@@ -31,11 +34,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
@@ -182,7 +186,7 @@ class Listing:
 def test_the_transfer_gates_are_in_the_compilers_registered_digest(monkeypatch):
     """I2's digest covers the templates it lists as holding transfer gates, and `Capped` passes the list and its digest on, so a
     registration under a compiler proving other units whole names another compiler."""
-    monkeypatch.setattr("verity_vllm.predict.score.code_version", lambda: "c0de")
+    monkeypatch.setattr("verity_vllm.program.predict.score.code_version", lambda: "c0de")
     r = SimpleNamespace(phi=SimpleNamespace(to_json=lambda: {"model": "m"}), default_seed=0, cap_bits=PP.CAP_BITS)
     bare, listing = (PP.I2Compiler(r, {}, "/nonexistent", transfer_gates=tg) for tg in ((), ("RoPEHead_v1{D=64}",)))
     assert bare.digest != listing.digest and len(listing.digest) == 128
@@ -236,13 +240,18 @@ def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monke
     assert held["served_programs"] == {"r0": "cc" * 64}
 
 
-def test_the_challengers_coins_need_main():
+def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch):
     run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
            "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", "o"]
-    with pytest.raises(SystemExit):
-        PP.main(["audit", *run, "--challenger", "local"])
-    with pytest.raises(SystemExit):
-        PP.main(["audit", *run, "--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"])
+    gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
+    for refused in (["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
+        with pytest.raises(SystemExit):
+            PP.main(["audit", *run, *refused])
+    got = []
+    monkeypatch.setattr(PP, "audit", lambda a: got.append(a) or 0)
+    assert PP.main(["audit", *run, *gate, "--peer", "vy-nebius-2", "--challenger-key", "key.json", "--gate-key", "id"]) == 0
+    assert (got[0].challenger, got[0].peer, got[0].challenger_key, got[0].gate_key) == \
+        ("gate:research@vy-challenger-1", "vy-nebius-2", "key.json", "id")
 
 
 def test_an_audit_listens_on_ports_no_other_audit_holds():
@@ -385,9 +394,60 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
     assert json.loads((tp["forged"] / "commit.json").read_text())["ranks"]["0"]["forged"] == {"member": 0, "unit": 1}
 
 
+@pytest.mark.slow
+def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
+    """`--plain` covers one table under a stratified draw (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
+    unit, is inside it under stratified:8, and refused before the draw under its own subset:8, drawn outside a stream, with a
+    second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
+    _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
+    plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
+    stratified = replace(mine, law={"law": "stratified", "k": 8})
+    assert A5.plain_refusal(plain, stratified, None) is None
+    m = mine.members[0]
+
+    def window(*members):
+        return SimpleNamespace(members=members, law=stratified.law, population=sum(x.n for x in members), row_tables=())
+
+    cases = [("a plain session's draw is stratified", plain, mine, None),
+             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None, verifier_coins=False), stratified, None),
+             ("the window has 2 members", plain, window(m, replace(m, base=m.n)), None),
+             ("registered reads, shared rows", plain, stratified, {m.key: {"ports": {}}}),
+             ("registered reads, shared rows", plain, window(replace(m, tables=(("x", 1),))), None)]
+    for why, a, w, registered in cases:
+        got = A5.plain_refusal(a, w, registered)
+        assert got is not None and why in got and A5.PLAIN_SCOPE in got, (why, got)
+        assert A5.plain_refusal(argparse.Namespace(**{**vars(a), "plain": False}), w, registered) is None
+    assert A5.plain_refusal(zk, mine, None) is None
+
+
+def _accepted(law: dict, delta: float = 0.5) -> dict:
+    reg = {"population": 8, "partition": "ab" * 64, "program": "cd" * 64}
+    draw = {**law, "population": 8, "units": [0, 2, 5, 7]}
+    return {"accepted": True, "registration": reg, "draw": draw,
+            "wrong_units": AU.wrong_units(reg, draw, delta)}
+
+
+def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_bounds():
+    """An accepted audit's charge terms (README, "What an accepted plain audit means"): λ_δ is `consumers.location_bits` of the
+    audit's profile, β_δ its `harm_bound` with each template's units weighing their committed bits (one weight, the most, where
+    the law's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
+    stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
+    for law, bits in ((stratified, {"T": 40}), ({"law": "subset", "k": 4}, {"T": 40, "U": 24})):
+        rec = _accepted(law)
+        p = AU.profile(rec["registration"], rec["draw"], 0.5)
+        got = PP.charge_terms(rec, bits, 169, 0.5)
+        weight = {"T": 40.0} if law is stratified else 40
+        assert got == {"advice_bits": 169, "delta": 0.5, "wrong_units": rec["wrong_units"], "template_bits": bits,
+                       "location_bits": location_bits(p), "harm_bound": p.harm_bound(weight),
+                       "exfiltration_bound": exfiltration_bound(p, weight)}, law
+        assert got["exfiltration_bound"] == got["harm_bound"] + got["location_bits"] and got["location_bits"] > 0
+    assert PP.charge_terms({**_accepted(stratified), "accepted": False}, {"T": 40}, 169, 0.5) is None
+    assert PP.charge_terms({}, {"T": 40}, 169, 0.5) is None
+
+
 def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):
-    from verity_vllm.predict import steps as ST
-    from verity_vllm.predict.common import Unexpressible
+    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict.common import Unexpressible
 
     calls = []
 
@@ -419,6 +479,144 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
             i2.load(rank, world, [])
     with pytest.raises(ValueError, match="request r1: no Build dir under .* holds I2's Program d1d1"):
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
+
+
+#: integrations/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
+TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
+        "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
+        "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
+STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+
+
+def _request_program(sampling: dict | None = None, **shape):
+    from verity_vllm.program.predict.build import build_program
+    from verity_vllm.program.predict.phi import Phi
+
+    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, workload={"requests": []},
+              target={"compute_capability": [12, 0], "num_sms": 188})
+    return build_program(Phi.from_json({**phi.to_json(), "sampling": sampling or {"kind": "greedy"}}), "request", **shape).program
+
+
+@pytest.fixture(scope="module")
+def requests_of_tiny():
+    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed and splits beside the prompt)
+    and its cached one (a prefix of 16 rows beside the prompt)."""
+    return {"greedy": _request_program(LP=4, T=1), "longer": _request_program(LP=4, T=2),
+            "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
+
+
+def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = None) -> str:
+    """Build dir ``d`` of ``program`` as the Build writes one (`build_instances.write_instances`): its descriptor (``desc``, the
+    program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default); the digest."""
+    import gzip
+
+    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity_vllm.pipeline.build_instances import write_instances
+
+    d.mkdir(parents=True, exist_ok=True)
+    desc = encode_program(program) if desc is None else desc
+    digest = digest or program_digest(desc)
+    with gzip.open(d / "descriptor.json.gz", "wt") as f:
+        json.dump(desc, f)
+    write_instances(str(d), program, digest, None, {})
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": digest}}))
+    return digest
+
+
+def _edit_instances(d: Path, edit) -> None:
+    import gzip
+
+    with gzip.open(d / "instances.json.gz", "rt") as f:
+        inst = json.load(f)
+    edit(inst)
+    with gzip.open(d / "instances.json.gz", "wt") as f:
+        json.dump(inst, f)
+
+
+def _load(root: Path, digest: str):
+    return PP.I2Compiler(registered=None, ingress={}, programs_root=str(root)).load(
+        0, 1, [{"request_id": "r0", "arrive_step": 0, "digest": digest}])
+
+
+def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, requests_of_tiny):
+    """I2's adapter holds each Build dir to the digest I2 compiled (`build_of`) before the window reads its rows: an honest
+    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, splits, prefix,
+    weights)."""
+    for name, program in requests_of_tiny.items():
+        dg = _build(tmp_path / name / "build_request", program)
+        p = _load(tmp_path / name, dg)
+        assert p.digs == {"r0": dg} and len(p.progs["r0"]["rows"]) == len(program.fn.body.nodes), name
+
+
+def test_i2_refuses_a_build_whose_body_was_swapped_under_its_old_digest(tmp_path, requests_of_tiny):
+    """The Build's ``result.json`` (and its instances head) keep the digest I2 compiled, and its body is another Program's:
+    each is refused by name, the descriptor by its recomputed digest, the instances by the descriptor's rows."""
+    from verity.ml.circuits.codec import encode_program, program_digest
+
+    greedy, longer = requests_of_tiny["greedy"], requests_of_tiny["longer"]
+    dg, other = (program_digest(encode_program(p)) for p in (greedy, longer))
+    d = tmp_path / "desc" / "build_request"
+    _build(d, greedy, desc=encode_program(longer), digest=dg)
+    with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))}/descriptor.json.gz is Program {other[:16]}, "
+                                         rf"not I2's {dg[:16]}$"):
+        _load(tmp_path / "desc", dg)
+
+    d = tmp_path / "inst" / "build_request"
+    _build(d, longer, desc=encode_program(greedy), digest=dg)
+    with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))}'s instances.json.gz has {len(longer.fn.body.nodes)} "
+                                         rf"rows, and its descriptor.json.gz {len(greedy.fn.body.nodes)} nodes$"):
+        _load(tmp_path / "inst", dg)
+
+    k = next(k for k, n in enumerate(greedy.fn.body.nodes) if len(n.args) == 2 and n.args[0].refs != n.args[1].refs)
+    for what, edit in (("args", lambda r: r["args"].reverse()), ("spec", lambda r: r.update(spec=r["spec"] + "x")),
+                       ("i", lambda r: r.update(i=r["i"] + 1))):
+        d = tmp_path / what / "build_request"
+        _build(d, greedy)
+        _edit_instances(d, lambda inst: edit(inst["rows"][k]))
+        with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))}'s instances.json.gz row {k} is not its "
+                                             rf"descriptor.json.gz's node {k}: they differ in {what}$"):
+            _load(tmp_path / what, dg)
+
+
+def test_i2_refuses_a_build_that_records_another_digest_or_has_no_descriptor(tmp_path, requests_of_tiny):
+    greedy = requests_of_tiny["greedy"]
+    d = tmp_path / "head" / "build_request"
+    dg = _build(d, greedy)
+    _edit_instances(d, lambda inst: inst.update(digest="ab" * 64))
+    with pytest.raises(ValueError, match=rf"'s instances.json.gz records Program {'ab' * 8}, and its descriptor.json.gz is "
+                                         rf"Program {dg[:16]}$"):
+        _load(tmp_path / "head", dg)
+
+    d = tmp_path / "result" / "build_request"
+    _build(d, greedy)
+    assert PP.build_of(str(d), dg)["instances"]["digest"] == dg
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "ab" * 64}}))
+    with pytest.raises(ValueError, match=rf"'s result.json records Program {'ab' * 8}, and its descriptor.json.gz is Program"):
+        PP.build_of(str(d), dg)
+
+    d = tmp_path / "boolean" / "build_request"
+    _build(d, greedy)
+    _edit_instances(d, lambda inst: inst.update(ir="boolean"))
+    with pytest.raises(ValueError, match="is a Build in IR 'boolean', and I2 compiles word Programs"):
+        _load(tmp_path / "boolean", dg)
+    (d / "descriptor.json.gz").unlink()
+    with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))} has no descriptor.json.gz: its Program's digest "
+                                         rf"can't be recomputed$"):
+        _load(tmp_path / "boolean", dg)
+
+
+def test_a_builds_input_batches_are_its_parameters_as_src_shapes_them():
+    src = 'Derived[X]_v1{SRC={"dict":{"inputs":[[2],[],[0],[2,2]]}}}'
+    assert PP.input_layout({"program_fn": src}, [2, 1, 3, 1, 5, 7]) == [(0, 0), (1, 0), (3, 0), (3, 3), (4, 0), (4, 5)]
+    with pytest.raises(ValueError, match="Input batch 1 runs past parameter 1's 1 leaves"):
+        PP.input_layout({"program_fn": src}, [2, 2, 4])
+    with pytest.raises(ValueError, match="the root's 2 Input batches don't fill the 4 parameters SRC shapes"):
+        PP.input_layout({"program_fn": src}, [2, 1])
+    for pf in ("Derived[X]_v1", 'Derived[X]_v1{SRC={"dict":{}}}', 'Derived[X]_v1{SRC={"dict":{"inputs":[1]}}}'):
+        with pytest.raises(ValueError, match="records no SRC input shapes: not one of I2's Programs"):
+            PP.input_layout({"program_fn": pf}, [1])
+    assert PP.merged([["p", 1, 0, 3], ["p", 1, 3, 5], ["p", 0, 5, 6], ["n", 2, 0, 1], ["n", 2, 2, 3]]) == \
+        [["p", 1, 0, 5], ["p", 0, 5, 6], ["n", 2, 0, 1], ["n", 2, 2, 3]]
 
 
 def test_each_requests_body_is_its_prompt_cap_and_sampling_by_its_i1_id():
@@ -498,7 +696,7 @@ def _serve_request(i: int, prompt: list[int], cap: int, windows: list[int], user
 
 
 #: the server's registered compiler in these tests (`served_identity`'s, from `verity-vllm advice` on the server's tree)
-SERVER = ("verity_vllm.predict.steps.compile_steps", "5e" * 64)
+SERVER = ("verity_vllm.program.predict.steps.compile_steps", "5e" * 64)
 
 
 def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str = SRT.ROWS_SCHEME, published: str | None = None,
@@ -508,7 +706,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
     request Programs as vllm's advice compiler writes them (``manifest.json``);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
-    from verity_vllm.predict import steps as ST
+    from verity_vllm.program.predict import steps as ST
 
     monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
     run, rows = tmp_path / "serve", tmp_path / "rows"
