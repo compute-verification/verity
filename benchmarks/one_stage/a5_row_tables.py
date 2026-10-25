@@ -1,7 +1,7 @@
 """One-stage audit, run A5, on a row-table stand-in: `integrations/vllm/tests/pipeline/test_row_tables.py`'s window (40
 `ScaledMmS8Coordinate_v1{K=64}` units in eight chunks, each of whose ``x`` rows link one of four row tables, one per engine step and linear
 over two engine steps, under the stratified law), its run ``<ROOT>/rank0``, committed as serving commits it
-(`pipeline.serving_rows._read_s8` on the fixture's served values, `commit.serving_rows.commit` under the step roots
+(`pipeline.serving_rows._read_s8` on the fixture's served values, `ml.windows.rows.commit` under the step roots
 serving records before each step's coin, `row_tables.step_roots`) and audited by `a5.audit` as rank 0 of a one-rank
 step on the auditor's challenger's coins, a local session on ``ROOT``: the window's `service.Stream` (its ``row-table``
 Value a tree over roots of row-seg leaves), `tables.check_row_tables` against those step roots before the draw, M0's
