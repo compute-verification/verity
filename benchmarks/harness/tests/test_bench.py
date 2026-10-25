@@ -1073,8 +1073,11 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
 
-        def begin(self, stepped=False):
-            self.stepped = stepped
+        def begin(self, stepped=False, at=None):
+            self.stepped, self.ats = stepped, [*getattr(self, "ats", []), at]
+
+        def epoch_calls(self):
+            return 7
 
         def poison(self):
             pass
@@ -1088,7 +1091,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
     exact = runner._pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
-    assert run.stepped
+    assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
@@ -1267,7 +1270,8 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
                                            "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
-    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
@@ -1299,7 +1303,8 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     preset, eager = runner.arm_execution(arms[-1], preset, eager)
     built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
     assert built["compilation_config"]["cudagraph_mode"] == "FULL_DECODE_ONLY"
-    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():

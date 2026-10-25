@@ -40,7 +40,7 @@ def zk(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -165,7 +165,7 @@ def test_another_table_count_is_refused(zk, tmp_path):
 
 #: one tampered copy per check that catches it (`zk_mutants.py`'s names)
 TAMPERED = ["zk-zc-final-a", "zk-lig-lane-message", "zk-l0-ybar", "zk-l0-missing", "zk-lig-row-extra-lane", "zk-pads-root",
-            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes"]
+            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes", "zk-lig-claim-nonce"]
 
 
 @pytest.mark.slow

@@ -26,6 +26,12 @@
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
 #     audits that warden run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
 #     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
+#     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
+#     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
+#     o_proj and down_proj at H = 2048), beside a drawn rest, on the verifier's own coins (A5_COINS=verifier); tp-gates:altered
+#     moves a bit through rank 1's received partial, and tp-gates:swapped, tp-gates:other-collective, tp-gates:other-request
+#     and tp-gates:own make that port's statement for another read (--made-for); each is to be refused by Lean's registered
+#     reads on rank 1, rank 0 accepted.
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
 #   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~2.5 min of the
@@ -211,6 +217,20 @@ else
       fi
       $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
         "${DRAW[@]}" "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
+        --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
+      grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
+      keep $N
+      continue
+    fi
+    if [ "${e%%:*}" = tp-gates ]; then
+      case $e in tp-gates) REFUSE=();; tp-gates:altered) REFUSE=(--altered);;
+        tp-gates:swapped|tp-gates:other-collective|tp-gates:other-request|tp-gates:own) REFUSE=(--made-for ${e#tp-gates:});;
+        *) echo "STANDIN $e: tp-gates, tp-gates:altered, tp-gates:swapped, tp-gates:other-collective, tp-gates:other-request" \
+             "or tp-gates:own"; exit 3;; esac
+      [ "${A5_COINS:-}" = verifier ] || { echo "STANDIN $e draws both ranks on the verifier's own coins: set A5_COINS=verifier"; exit 3; }
+      N=${e/:/-}; mkdir -p $O/$N
+      $TIME $PY benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --coins verifier \
+        "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --compose-cache ${A5_COMPOSE_CACHE:-$W/compose}/tp-gates \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
       keep $N

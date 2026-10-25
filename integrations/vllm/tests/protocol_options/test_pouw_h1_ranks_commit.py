@@ -230,8 +230,9 @@ def test_a_moes_expert_calls_on_both_ranks_are_in_their_steps_a_tables_and_the_c
     """A MoE at TP 2: each rank's routed expert sites (no modules, `int8_experts.ExpertSite`) are named by their rank in
     the window (``…experts.0.down@tp1``) and the rank's tap ships what its Commit acquired at them under those names, so
     each step's AROW of the experts' K = I is both ranks' downs, rank 0's then rank 1's, an idle expert's zero rows
-    included; core's ROOTS1 steps tie the window with the expert calls in it."""
-    holder, _ = _window(monkeypatch, moe=True)
+    included; core's ROOTS1 steps tie the window with the expert calls in it. Each rank's release takes its Commit's
+    wrapper off an expert's ``apply`` before H1's beneath it, so neither stays on."""
+    holder, workers = _window(monkeypatch, moe=True)
     run, tap = holder.run, holder.run.served.tap
     assert [run.modules[w] for w in range(7, 14)] == ["model.layers.0@tp1", *(f"{MOE}.{e}.{p}@tp1" for e in range(EXPERTS)
                                                                              for p in X.PROJECTIONS)]
@@ -249,6 +250,8 @@ def test_a_moes_expert_calls_on_both_ranks_are_in_their_steps_a_tables_and_the_c
     core = _verdict(holder)
     assert core["tied"] and core["commit_values"] == 3 * STEPS, core
     assert _reasons(run) == {None}
+    sites = [m.quant_method for w in workers for m in w.layers if isinstance(m, X.ExpertSite)]
+    assert len(sites) == 12 and not any({"apply", "observe", "zy_rows"} & set(vars(q)) for q in sites)
 
 
 def test_a_zero_on_one_expert_call_on_rank_1_is_refused_at_arow(monkeypatch):

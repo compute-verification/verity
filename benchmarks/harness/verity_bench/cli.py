@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, served_table
+from verity_bench import breakdown, jobs, served_table
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -135,6 +135,15 @@ def _served_table(args: Any) -> int:
     return 0
 
 
+def _breakdown(args: Any) -> int:
+    doc = breakdown.from_results(args.results) if args.results else breakdown.build(local_only=args.local_only)
+    if args.json:
+        print(json.dumps(doc, indent=1, sort_keys=True))
+    else:
+        print(breakdown.render(doc), end="")
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
     commands = parser.add_subparsers(dest="command", required=True, metavar="BACKEND")
@@ -166,11 +175,19 @@ def _parser() -> argparse.ArgumentParser:
     table.add_argument("--out", type=Path, default=None, help="also write the merged result here")
     table.set_defaults(run=_table, command_parser=table)
 
-    served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's newest results")
+    served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's runs of record")
     served.add_argument("--json", action="store_true", help="the rows as JSON, not markdown")
     served.add_argument("--local-only", action="store_true",
                         help="read this machine's catalog alone, not the store's remote")
     served.set_defaults(run=_served_table, command_parser=served)
+
+    split = commands.add_parser("breakdown", help="where the bandwidth audit's time goes, by span, from its breakdown spec")
+    split.add_argument("results", type=Path, nargs="*",
+                       help="result files (benchmark.json) to read instead of the store's newest passing runs")
+    split.add_argument("--json", action="store_true", help="the breakdown as JSON, not markdown")
+    split.add_argument("--local-only", action="store_true",
+                       help="read this machine's catalog alone, not the store's remote")
+    split.set_defaults(run=_breakdown, command_parser=split)
 
     point = commands.add_parser("_vllm-point", help=argparse.SUPPRESS)
     point.add_argument("--spec", required=True)
