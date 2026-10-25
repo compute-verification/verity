@@ -80,8 +80,11 @@ keeps the cache sound: a pass is only reused while everything the tests read is 
 A Python a test starts is guarded like the test, and the failure names the test and the file the process read: declare the
 file, or give the test a stand-in for it. Other programs (bash, git, a Python run with `-I`, `-E` or `-S`, or with a PYTHONPATH
 that replaces the suite's) aren't traced, and nothing fails when they read outside the inputs, so list what they read; a Python
-they start on the suite's PYTHONPATH is traced again. The guard sees opens, not `exists()` or `stat()`, so list a path a test
-only checks the existence of too. Locate files from `__file__`
+they start on the suite's PYTHONPATH is traced again. A test that builds or runs a Lake package (`lake`, or what `lake build`
+makes) lists the package's lakefile, and its suite goes in `AFTER_LEAN` (`tools/verity/check/suites.py`), which `check` runs
+after its lean-build step: Lake builds a package's path requirements in their own `.lake`, so most builds write the verifier's
+(`tools/verity/check/tests/test_after_lean.py` holds the two together). The guard sees opens, not `exists()` or `stat()`, so
+list a path a test only checks the existence of too. Locate files from `__file__`
 (`Path(__file__).parent / "fixtures"`), never from the working directory. Never lean on another suite's side effects, such as
 a `sys.path` entry another test file added: every suite runs alone.
 
