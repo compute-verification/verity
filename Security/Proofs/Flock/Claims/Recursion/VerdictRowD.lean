@@ -24,7 +24,7 @@ namespace RecDeploy.Rows
 open Flock
 open FlockVBridge.Family (CapsAt rows_conss decoded_cons)
 open Flock.RecAlgebra (verifierRows decoded Opened consAt Info Lin)
-open FlockSoundness.Refine (openAt capAt shapeOf)
+open FlockSoundness.Refine (openAt shapeOf)
 open FlockSoundness.Discharge.Recursion (HClass)
 open RecDeploy.OpenedPlain (QueryOpens LevelShaped opened_plain_of levelShaped_of_decode saltLen_plain)
 
@@ -48,7 +48,7 @@ theorem consOf_at {sh : Shape} {sch : Flock.Schedule} {p : Proof} {rounds : Arra
       have hp : y.start = cs.start := by simpa using Array.find?_some hf
       obtain ⟨-, hey, -⟩ := FlockVBridge.Family.Conss.conss_mem E hy
       have hyc : y = cs := by rw [← hey, hp, he]
-      rw [hyc]
+      rw [hf, hyc]
   unfold consOf
   rw [hv]
   simp only [hfind]
@@ -67,7 +67,7 @@ theorem capsAt_of_decode {st : Setup} {sch : Flock.Schedule} {n : ℕ} {bytes : 
       p.ligerito.recursiveCaps[i].size = 2 ^ (sch.levels.getD (i + 1) default).cap ∧
         ∀ e ∈ p.ligerito.recursiveCaps[i], e.size = st.merkle.digestLen := hs.rcapsEach
   intro ℓ hℓ
-  unfold capAt
+  unfold FlockSoundness.Refine.capAt
   split
   · rename_i h0
     subst h0
