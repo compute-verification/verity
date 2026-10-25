@@ -11277,11 +11277,11 @@
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the deployed receipts (4096-byte blocks of 128 sectors, 16 sign rows, SHA-512 tags) and rank 12, with at most Q + P candidate seeds and Q receipt-hash queries for Q = F·C the hashes the prover can try over the session, C the node's SHA-512 compressions and F the outside-compute factor: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512), timing.sketch_failure(C, P, 16, N, outside=F), under SketchHashRandom (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.SpareCapacityAtDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1W1, at W1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (Layout.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted, once proved, carries an accepted sampled audit to RAcc delta, which is the restatement path.",
    "Flock.SecurityProofs.RecursiveSoundExec": "frozen (world-unlisted,scope): RecursiveSound at the compiled inner protocol the verifier of record runs (innerAt), with InnerSound proved (the compile lemma in fork form, an inner fork its fourth disjunct) and no A3; beside VBridge, the one listed premise it takes, which candidate 3 does not give in full, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
@@ -18408,7 +18408,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.Barrier.Defs": {
@@ -20458,7 +20462,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.DeviceFp4ChainOnly": {
@@ -20947,7 +20955,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
-    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Fp4Chain": {
@@ -21909,7 +21921,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.Skip": {
@@ -22598,7 +22614,11 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.PearlC.W1Stop": {
@@ -32118,11 +32138,7 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutChainOnly": {
@@ -32156,11 +32172,7 @@
     "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192",
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut"
    ]
   },
   "Models.Pouw.Assumptions.PearlC.TTOutRowSeed": {
@@ -32276,13 +32288,13 @@
    "guarantees": ["Pouw.SecurityProofs.Barrier.Generic"]
   },
   "Models.Pouw.Guarantees.Deadline": {
-   "digest": "e79145f5fee4b2ec8f89a049051ddf3e5640603df74f696dda584fc52ced4d09",
+   "digest": "886d1f2fc50cc7b4ac8032a8dcf41b2e729e526b14a35a937dc440acbead5384",
    "definitions": {
     "Pouw.Guarantees.PearlCSampledByDeadline": "3a86f2ea9e2f778fce619faebcdbfa13b544082c767b89e03b4db16763ec141e",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "acf0c465c4ba8e09344972583d14a9d31b8b15bd6eee04ce28738c3080fd26c7",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "499e71472679b027802333f39822ecd66ca0afdf0bbfbc9e8f39e8323bb3a63b",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "cb100deb8f0fb464079bee549a4e86a3cb7566e8a3d5d9ecd34d69a151dffbe9",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "3c51cce69f00c1502d090052146702472addd3a576cb5bdbeb87404b868d2e35",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "3f70c46b5861bc4e01c517eb6b28edcf43427225f5c420d895c5ad226615d3af",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "95c105727416f34f21f35592835a40ff61c621592fad46625ae8e6795c06e9d5",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "4e47effc6fa3fd2c1776dedee01818ccc18c4bb400c91eb2e85b5a3e32874737",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "f069a8337c449466ab80a4757ba762f544e43a24a4c0773b330b1d6aa4b29c56",
     "Pouw.Guarantees.SpareCapacityAtDeadline": "fce79a1b3a99f37d1c77ca7e75afdd39bcf01d5aca010d24d79196206e28fd4b",
     "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "3788462f2fdf84cd3f392455f2a420582c649e83cbe274c773123fee66e690df"
    },
