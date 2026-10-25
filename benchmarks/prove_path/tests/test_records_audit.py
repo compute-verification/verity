@@ -287,6 +287,22 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
 
 
+def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "sx")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    got = RA.committed_activations(w)
+    assert got["ok"] and got["detail"]["values"]["x"] == {"root": mine["x"]["root"], "leaves": 2, "words": 2}
+    assert RA.committed_activations({"run": RUN}) is None
+    elsewhere = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad, code in (({**w, "run": "cd" * 64}, "domains"), ({**w, "activations": {**w["activations"], "program": "other"}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {**mine, "x": elsewhere}}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {}}}, "activations"),
+                      ({**w, "activations": {"program": "test/model"}}, "activations")):
+        v = RA.committed_activations(bad)
+        assert not v["ok"] and code in v["codes"], (bad, v)
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables

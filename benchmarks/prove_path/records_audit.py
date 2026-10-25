@@ -32,6 +32,12 @@ registered reads open every row of its read ports against the pinned root at the
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
 leave the free inputs: `declared_count` counts them registered.
 
+A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
+loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
+the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
+the window's run root (`committed_activations`), and reports their roots. The circuit reads none of them, so they take
+nothing from the free inputs.
+
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
@@ -277,6 +283,25 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     return {str(v): dict(e) for v, e in values.items()}
 
 
+def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The per-window values the registration's window commits (``activations``), each refused unless it names its value
+    and a root and its domain binds the window's run root (a root committed in another window opens under none of this
+    window's domains): -> {ok, codes, detail}, ``detail["values"]`` each value's root and shape; None for a window that
+    commits none."""
+    if "activations" not in w:
+        return None
+    try:
+        program, values = w["activations"]["program"], dict(w["activations"]["values"])
+        other = [v for v, e in values.items() if e.get("value") != v or not isinstance(e.get("root"), str) or e.get("domain")
+                 != REG.domain(program, v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                               window=w.get("run")).domain_id.hex()]
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
+        return _verdict({"activations": False}, {"why": f"{type(e).__name__}: {e}"})
+    return _verdict({"activations": bool(values), "domains": not other},
+                    {"values": {v: {k: e.get(k) for k in ("root", "leaves", "words")} for v, e in values.items()},
+                     "other_domains": other})
+
+
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
     """What the audit refuses before any draw about the records: a registration naming another circuit or another run root,
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
@@ -445,6 +470,9 @@ def audit(a: argparse.Namespace) -> int:
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
         row["registered"] = {"pins": {v: e["root"] for v, e in pins.items()}, "members": len(reads)}
+    acts = committed_activations(w)
+    if acts is not None:
+        row["activations"] = acts
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
     if a.challenger:
@@ -472,12 +500,14 @@ def audit(a: argparse.Namespace) -> int:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
     if a.challenger:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
+    row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
+                                     "activations": None if acts is None else acts["ok"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
                                                                           "bound") if k in row["leak"]},
                                      **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
