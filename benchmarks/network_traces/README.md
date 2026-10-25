@@ -70,8 +70,11 @@ windows, the advice profile, a certifier key of H = 10). Neither is of record.
       was refused at window 0 by its advised counts.
     - Cost per window on 21 cores: a proving session of 128–149 s and a Lean verify of about 104 s.
     - No witness piece was found in what the verifier received.
-    - The driver still failed, on its control: the prover's own `prover-instances.bin` holds 57 of the 337 pieces the
-      scan looks for, so the scan isn't shown to find a leak in this unit's layout.
+    - The driver still failed, on its control: the prover's own `prover-instances.bin` held 57 of the 337 pieces the
+      scan looks for, and lacked 8 the control expects there, each head's zero-padded last chunk (`head egress 0
+      @2208` …). The expectation was wrong, not the file: an advised head (157 + L + 4T bytes, 2,214 at T = 512) is a
+      field of the `wit` row, followed there by its salt, so no instance holds that chunk. N2's control now expects a
+      head's pieces but that one (`leak_scan.public_pieces`'s `fields`); the head's last 16 bytes still cover its tail.
 
 **The theorem.** The run instantiates `NetTiming.Guarantees.PeriodLeakAccepted` (#4326, proved as
 `NetTiming.SecurityProofs.PeriodLeakAccepted`), with `Claims.Sampling.KS`, `Claims.Flock.ListWithin` and
