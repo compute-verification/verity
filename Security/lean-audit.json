@@ -2372,7 +2372,7 @@
     "Definitions.Pous",
     "Definitions.Accounting"
    ],
-   "except": ["Definitions.Accounting.Bandwidth.Game"],
+   "except": ["Definitions.Accounting.Bandwidth.Game", "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted"],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
   },
   "Definitions.Accounting.Guarantees": {
@@ -2459,6 +2459,11 @@
    "imports": ["Mathlib", "Definitions.Flock"],
    "except": [],
    "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
+   "imports": ["Definitions.Accounting.JointPeriod", "Definitions.NetworkCertifier.Period"],
+   "except": [],
+   "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod) and the network certifier's window good event (Definitions.NetworkCertifier.Period), and imports no assumption, guarantee or proof"
   }
  },
  "reads_exempt": {
@@ -10439,6 +10444,9 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
+  },
+  "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
+   "owner": "@lean"
   }
  },
  "shape": {
@@ -11497,7 +11505,8 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
    "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
-   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes SampledLeakAccepted's statement (NetTiming.sampledLeak_reg at SampledAuditAccepted, with Claims.Sampling.KS at each deployment) with the tap's read-back (tap_cells_read), over the tap's code (tapCode: the warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the tap's code, not runs of the network check's code or of a compiled warden program, and it counts the secrets whose every window meets its good event (WindowGood, which holds that the audit's trace carries the tap's record, Carries, as RAcc's conclusion does), with each window's failure bounded on its own and no union over the period's live coins yet."
+   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes SampledLeakAccepted's statement (NetTiming.sampledLeak_reg at SampledAuditAccepted, with Claims.Sampling.KS at each deployment) with the tap's read-back (tap_cells_read), over the tap's code (tapCode: the warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the tap's code, not runs of the network check's code or of a compiled warden program, and it counts the secrets whose every window meets its good event (WindowGood, which holds that the audit's trace carries the tap's record, Carries, as RAcc's conclusion does), with each window's failure bounded on its own and no union over the period's live coins yet.",
+   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
