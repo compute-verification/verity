@@ -49,8 +49,8 @@ from verity.core.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
 )
-from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.coins import CoinCommitment
+from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD
@@ -182,7 +182,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
            "replay": "batch" if fast else "scalar"}
     try:
         PD.manifest_schema(man, recorded)
-        why = CR.passes_distinct([man])
+        why = passes_distinct([man])
         if why is not None:
             out["refused"] = list(why)
             raise ValueError(": ".join(why))

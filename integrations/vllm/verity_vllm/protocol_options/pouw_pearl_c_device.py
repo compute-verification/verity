@@ -667,8 +667,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
         commitment (also in `commits` and `details["passes"]`)."""
         import torch
         cur, K = self.cur, self.kernel
-        out: dict[str, Any] = {"units": len(cur.matmuls), "base": cur.base, "tiles": cur.tiles, "hashing": self.hashing,
-                               "schedule": self.schedule.name}
+        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing,
+                               "schedule": self.schedule.name} | ({"base": cur.base} if cur.matmuls else {})
         if self.hashing and cur.matmuls:
             self.join_sides()
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
