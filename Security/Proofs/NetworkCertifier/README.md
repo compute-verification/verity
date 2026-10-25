@@ -262,6 +262,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each window's audit
   fails `RLeak` with at most `KSLinOn`'s probability. Its hypotheses are `Claims.Sampling.KS`, `Claims.Flock.ListWithin`
   and `trusted-host`; the union over the period's live coins and the registration's binding are not yet stated.
+  `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
+  locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
