@@ -521,17 +521,18 @@ def consulted_facts(vllm_config) -> dict:
     `env_consulted` = variables the builder sets AND the pinned vLLM's `envs` module defines (so vLLM reads them);
     `env_ignored`   = variables set in the process that this vLLM pin does NOT define (e.g. `VLLM_ATTENTION_BACKEND`, dead in d9105ea80)
     — never reported as declared facts. The target facts themselves (capability, SM count, BI switch) live in `target.declared/applied`."""
-    import os
+    from verity_vllm import settings
     facts: dict = {}
     try:
         import vllm.envs as envs
         defined = set(getattr(envs, "environment_variables", {}) or {})
     except Exception:  # noqa: BLE001
         defined = set()
-    facts["env_consulted"] = {k: os.environ.get(k) for k in _ENV_SET_BY_BUILDER if k in defined and k in os.environ}
-    facts["env_ignored"] = {k: {"value": os.environ.get(k), "reason": "not defined in this vLLM pin's `vllm.envs`; never read"}
-                            for k in _ENV_SET_BY_BUILDER if k not in defined and k in os.environ and k.startswith("VLLM_")}
-    facts["env_set_not_vllm"] = {k: os.environ.get(k) for k in _ENV_SET_BY_BUILDER if k not in defined and k in os.environ and not k.startswith("VLLM_")}
+    env = {k: settings.raw(k) for k in _ENV_SET_BY_BUILDER if settings.is_set(k)}
+    facts["env_consulted"] = {k: v for k, v in env.items() if k in defined}
+    facts["env_ignored"] = {k: {"value": v, "reason": "not defined in this vLLM pin's `vllm.envs`; never read"}
+                            for k, v in env.items() if k not in defined and k.startswith("VLLM_")}
+    facts["env_set_not_vllm"] = {k: v for k, v in env.items() if k not in defined and not k.startswith("VLLM_")}
     try:
         facts["model_dtype"] = str(vllm_config.model_config.dtype)
         facts["enforce_eager"] = bool(vllm_config.model_config.enforce_eager)

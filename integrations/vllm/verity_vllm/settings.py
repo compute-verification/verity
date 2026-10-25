@@ -206,6 +206,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request legs; empty, min(cpu_count, 8)"),
     S("MATCH_COMPACT", not_zero, True, VALUE, "the match holds operands as run progressions; 0, as runs (the representation's A/B)"),
+    S("STOCH_DECLARED_CHRONOLOGY_S", one, False, VALUE, "1: a workload Program composes components derived under stoch's "
+      "experimental per-event S schedule (ruling M-0571 (3)), which it otherwise refuses"),
     S("X09_PROFILE_OUT", str, None, DEBUG, "the file X-09's decomposition writes its phase profile to; unset or blank, no profile"),
     S("X09_FORCE_DAG", str, None, VALUE, "1 runs X-09's DAG diagnostic even when the sequence criterion held, adding its fields to "
       "the record (diagnostic only, never on a row of record)"),
@@ -231,15 +233,26 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build sets its own default"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
     S("HF_HOME", str, None, WHERE, "Hugging Face's cache root; unset, ~/.cache/huggingface"),
+    S("HF_HUB_OFFLINE", str, None, WHERE, "1: Hugging Face reads only its cache (`engine.env.EXPORT` and an engine's pins set it); a "
+      "Build records it"),
     S("MAX_JOBS", str, None, VALUE, "parallel compile jobs of torch's extension builds; a tap build sets its own default"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
+    S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
+      "a Build records it"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
+    S("VLLM_ATTENTION_BACKEND", str, None, VALUE, "vLLM's attention backend, which the pinned vLLM no longer defines: a Build "
+      "records it as ignored"),
     S("VLLM_BATCH_INVARIANT", str, None, VALUE, "vLLM's batch-invariant kernels, 1 as an engine profile's env sets it; the replay's "
       "dependencies record it"),
     S("VLLM_DISABLE_COMPILE_CACHE", str, None, VALUE, "1: vLLM compiles afresh instead of loading its compile cache; the compiled "
       "records say which"),
+    S("VLLM_LOGGING_LEVEL", str, None, DEBUG, "vLLM's log level (`engine.env.EXPORT` sets WARNING); a Build records it"),
+    S("VLLM_USE_DEEP_GEMM", str, None, VALUE, "vLLM's DeepGEMM kernels for block-scaled FP8 (the target profile's `fp8_block_gemm` "
+      "sets it); a Build records it"),
+    S("VLLM_USE_LAYERNAME", str, None, VALUE, "vLLM's layer-name custom ops, read when vLLM is imported (`engine.env.EXPORT` sets 0); "
+      "a Build records it"),
 )
 del S
 

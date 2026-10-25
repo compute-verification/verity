@@ -180,3 +180,48 @@ def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.Mo
            "inductor": [gk["inductor_cache_dir"], gk["per_process_cache_dir"]],
            "hub": [str(engine.dense_generic.hf_snapshot("org/m", "abc")), engine.fold_compare.hf_safetensors_glob("org/m")]}
     assert _digest(doc) == digest, doc
+
+
+@pytest.fixture(scope="module")
+def build_target():
+    pytest.importorskip("torch")
+    from verity_vllm.program.frontend import export_compat, vllm_meta
+
+    return export_compat, vllm_meta
+
+
+_BUILD_VARS = ("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "HF_HUB_OFFLINE", "VLLM_LOGGING_LEVEL", "TOKENIZERS_PARALLELISM",
+               "VLLM_ATTENTION_BACKEND", "VLLM_USE_DEEP_GEMM", "CUDA_VISIBLE_DEVICES")
+
+
+@pytest.mark.parametrize(("values", "digest"), [
+    ({}, "4be0a8acddaeaa879c13009a998f19d6"),
+    ({"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_LAYERNAME": "0", "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "WARNING",
+      "TOKENIZERS_PARALLELISM": "false", "VLLM_ATTENTION_BACKEND": "TRITON_ATTN", "VLLM_USE_DEEP_GEMM": "0", "CUDA_VISIBLE_DEVICES": "0,1"},
+     "8b88316c51537deda318b282d9873e03"),
+    (dict.fromkeys(_BUILD_VARS, ""), "92678ab9dfe7c37a7ae9002006956c51"),
+    ({"VLLM_BATCH_INVARIANT": " 1", "VLLM_ATTENTION_BACKEND": "", "TOKENIZERS_PARALLELISM": "true", "CUDA_VISIBLE_DEVICES": " "},
+     "b41e0b68c73454c37d4cc0cbd7cf4e5e"),
+])
+def test_a_builds_target_facts_take_the_environment_as_before(build_target, env: pytest.MonkeyPatch, values: dict[str, str],
+                                                              digest: str) -> None:
+    """The Build's target facts the environment fills: the variables it set that the pinned vLLM consults, ignores or doesn't
+    own (`vllm_meta.consulted_facts`), and the host's CUDA visibility (`export_compat.host_facts`).  vLLM's ``envs``, the host's
+    name and CUDA are faked."""
+    import socket
+
+    import torch
+
+    export_compat, vllm_meta = build_target
+    for k, v in values.items():
+        env.setenv(k, v)
+    envs = types.ModuleType("vllm.envs")
+    envs.environment_variables = dict.fromkeys(("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "VLLM_LOGGING_LEVEL", "VLLM_USE_DEEP_GEMM"))
+    vllm = types.ModuleType("vllm")
+    vllm.envs = envs
+    for name, mod in {"vllm": vllm, "vllm.envs": envs}.items():
+        env.setitem(sys.modules, name, mod)
+    env.setattr(socket, "gethostname", lambda: "host-a")
+    env.setattr(torch.cuda, "is_available", lambda: False)
+    doc = {"consulted": vllm_meta.consulted_facts(types.SimpleNamespace()), "host": export_compat.host_facts()}
+    assert _digest(doc) == digest, doc
