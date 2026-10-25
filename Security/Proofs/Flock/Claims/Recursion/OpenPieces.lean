@@ -16,11 +16,11 @@ level's cap. `OpenedPlain.opened_plain_of` reduces that to one fact per query (`
   off the opened messages and the position `posAt` reads off the coins.
 * `climb_of_node`, `openOuts_plain`: a level copy's climb is at hm96-sha512 (`LevelOuts`), whose node is `plain`'s, so
   it is the climb at `plain`.
-* `openPieces_computes`: at a part whose V\* statement is a level (`.recOpen`), `PartAccepts` gives every piece `ownQ`
-  gives the part, from two hypotheses: the layout fact `hcopy` (`OpenCopy`: the piece's copy is a copy of the
-  statement at the level's lanes and depth, reading the piece's opened row and siblings) and the registration ties
-  `htie` (`OpenTie`: the position bits the copy reads are the low bits of `posAt`'s position, `RecCoins.checkOpen`'s
-  `dirs`, and its climb's top is the cap's entry there, `checkOpenTops`).
+* `openPieces_computes`: at a part whose V\* statement is a level (`.recOpen`, or R's `.recOpenStacked`),
+  `PartAccepts` gives every piece `ownQ` gives the part, from two hypotheses: the layout fact `hcopy` (`OpenCopy`: the
+  piece's copy is a copy of the statement at the level's lanes and depth, reading the piece's opened row and siblings)
+  and the registration ties `htie` (`OpenTie`: the position bits the copy reads are the low bits of `posAt`'s position,
+  `RecCoins.checkOpen`'s `dirs`, and its climb's top is the cap's entry there, `checkOpenTops`).
 * `bits_of_dirsRow`: the `dirs` tie at the registered `dirsRow` words gives `OpenTie`'s bits.
 -/
 
@@ -105,16 +105,17 @@ theorem bits_of_dirsRow {idx pos H : ℕ} (hH : H ≤ 32)
   fun k hk => (h k hk).trans (dirsRow_testBit hH hk)
 
 /-- **The `rec-open` pieces' share at a level part**: where part `s`'s V\* statement at `x`'s inner shape is a level
-(`.recOpen`), `PartAccepts` gives, through every copy's climb (`partAccepts_staged`, `levelCopies`), every piece
-`ownQ` gives the part, at the position the coins give (`posAt`), wherever the layout places the piece at one of the
-statement's copies reading its opened row and siblings (`hcopy`, `OpenCopy`) and the copy's position bits and top are
-the registered ones (`htie`, `OpenTie`). -/
+(`.recOpen`, or one of R's, `.recOpenStacked`), `PartAccepts` gives, through every copy's climb (`partAccepts_staged`,
+`levelCopies`, `stackedCopies`), every piece `ownQ` gives the part, at the position the coins give (`posAt`), wherever
+the layout places the piece at one of the statement's copies reading its opened row and siblings (`hcopy`,
+`OpenCopy`) and the copy's position bits and top are the registered ones (`htie`, `OpenTie`). -/
 theorem openPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {ms : List Msg}
     (h : PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt s x c ms)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
-    {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
+    {lv LANES HH n : ℕ}
+    (hsv : ss[s]? = some (.recOpen lv LANES HH n) ∨ ss[s]? = some (.recOpenStacked lv LANES HH n))
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (pieces : Msg → List OpenPiece) (ownQ : Msg → OpenPiece → Option ℕ)
     (sideAt : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
@@ -143,8 +144,12 @@ theorem openPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
   cases hr'
   rw [hss] at hss'
   cases hss'
-  rw [hsv] at hsv'
-  cases hsv'
+  have hlev : ∀ t (ht : t < p.sts.size) (o g u : ℕ), o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) →
+      g < p.sts[t].c.g → u < p.sts[t].c.upv →
+      _root_.Flock.Readable.LevelOuts (_root_.Flock.Readable.copyOf p t ht w o g u) LANES HH := by
+    rcases hsv with hsv | hsv <;> rw [hsv] at hsv' <;> cases hsv'
+    · exact fun t ht o g u ho hg hu => _root_.Flock.Readable.levelCopies ht ho hg hu hcp
+    · exact fun t ht o g u ho hg hu => _root_.Flock.Readable.stackedCopies ht ho hg hu hcp
   have hRR : L.RowsRead x s w ms := by
     obtain ⟨-, -, -, hRR⟩ := hA
     exact hRR
@@ -152,7 +157,7 @@ theorem openPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
   obtain ⟨ht, hob, hgb, hub, hcq⟩ := hcopy xO w p hx hRR q hq ho
   obtain ⟨hLA, hHH, hrow, hsib⟩ := hcq os last hf hl
   obtain ⟨hbits, htop⟩ := htie xO w p hx hA hT hc hs q hq ho ht os last hf hl
-  have hout := (_root_.Flock.Readable.levelCopies ht hob hgb hub hcp).1
+  have hout := (hlev q.key.1 ht q.key.2.1 q.key.2.2.1 q.key.2.2.2 hob hgb hub).1
   obtain ⟨hrs, -, -, -, hsl, -⟩ := _root_.Flock.Readable.openIns_reads
     (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) LANES HH
   exact queryOpens_of_outs (openOuts_plain hout) hrow.symm hsib (by rw [hrs, hLA]) (by rw [hsl, hHH]) hbits htop
