@@ -949,17 +949,19 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
   }
   // CS: set st's blocks i = r st + e (pass i's, i = 0 the coins' block), lane's e and column (32 / r of them a warp);
-  // generic, so only CS's calls instantiate it (WarpSmemX has no nm)
-  const auto cs_hash = [&](auto st) {
-    const u32 cl = 5 - js.lr, e = lane >> cl, col = (js.rank << cl) + (lane & ((1u << cl) - 1)), i = (st << js.lr) + e;
-    u64 s[8];
-    noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + col) * cb + (i == 0 ? chunks : i - 1), s);
-    if (i <= chunks) {
-      u32* d = js.buf[((st & 1) << js.lr) + e][col];
+  // its body under CS, since #3889's Sm (WarpSmemX, JcSmem) have no nm
+  const auto cs_hash = [&](u32 st) {
+    if constexpr (CS) {
+      const u32 cl = 5 - js.lr, e = lane >> cl, col = (js.rank << cl) + (lane & ((1u << cl) - 1)), i = (st << js.lr) + e;
+      u64 s[8];
+      noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + col) * cb + (i == 0 ? chunks : i - 1), s);
+      if (i <= chunks) {
+        u32* d = js.buf[((st & 1) << js.lr) + e][col];
 #pragma unroll
-      for (int j = 0; j < 8; ++j) {
-        d[2 * j] = (u32)(s[j] >> 32);
-        d[2 * j + 1] = (u32)s[j];
+        for (int j = 0; j < 8; ++j) {
+          d[2 * j] = (u32)(s[j] >> 32);
+          d[2 * j + 1] = (u32)s[j];
+        }
       }
     }
   };
