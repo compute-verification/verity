@@ -41,6 +41,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import ROW_ID_PATTERN, row_tokens
+
 MiB = 1 << 20
 GiB = 1 << 30
 SCHEMA = "verity/admission-plan/v1"
@@ -668,13 +670,13 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
         for name in ("commit.log", "launcher.log", "row.log"):
             p = os.path.join(attempt_dir, name)
             if os.path.exists(p):
-                m = re.search(r"workloads/([\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+)\.json", Path(p).read_text(errors="replace"))
+                m = re.search(rf"workloads/({ROW_ID_PATTERN})\.json", Path(p).read_text(errors="replace"))
                 if m:
                     row = m.group(1)
                     break
     model, requests, K = "llama32-1b", 1, 1152
     if row:
-        parts = row.split("__")
+        parts = row_tokens(row)
         model = parts[0]
         for p in parts:
             if re.fullmatch(r"b\d+", p):
@@ -1010,7 +1012,7 @@ ADMISSION_SCHEMA = "verity-sweep/admission/v1"
 
 def model_key_for_row(row_id: str) -> str:
     """`<model>__<dtype>__<device>__...` -> MODELS key (`-padded` variants share the base model's coefficients)."""
-    key = row_id.split("__", 1)[0]
+    key = row_tokens(row_id)[0]
     if key not in MODELS and key.endswith("-padded"):
         key = key[: -len("-padded")]
     return key
