@@ -14,8 +14,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity_vllm.commit import serving_rows as CS
-from verity_vllm.commit import wiring as WI
+from verity.ml.windows import rows as CS
+from verity.ml.windows import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import serving_rows as SRW
