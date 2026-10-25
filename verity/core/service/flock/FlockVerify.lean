@@ -843,8 +843,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- other check, until a soundness theorem reads `Circuit.tmpl`
   let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
   let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
-    -- `FailClosed.ScopeP` is the check without --registered F, which at the public outputs --plain-tables admits
-    -- changes nothing
+    -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
     else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
