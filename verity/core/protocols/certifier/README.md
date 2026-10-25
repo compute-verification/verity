@@ -51,13 +51,15 @@ A spec-level reference for network accounting's timing channel:
   unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row read as the warden's registered row, the port's
   rows by `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
   `IoTieRoute`, `IoTieMatch`);
-- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
-  cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
-  its ordinal to its place in the cut, which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is built from. It
-  has the reference, the verifier's per-window statements, chained from window 0 by each window's carry-out
-  (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
-  `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
-  prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the warden's own ingress (`serve`): one unit a
+  registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
+  (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a cell of CERT-VARLEN's id
+  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
+  hold each request's prompt_len to the advice's and which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is
+  built from. It has the reference, the lanes the verifier computes from the advice and the warden's release
+  (`lanes`, `Release`), and the unit's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
+  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
+  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
@@ -176,11 +178,12 @@ A spec-level reference for network accounting's timing channel:
   pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
   certificates;
 - the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
-  proved as `NetworkIngressTieWindow` (one gate naming its pinned circuit digest, `io_request.circuit-check.json`, and
-  a zero pad to whole u16 words) on the cells the warden committed and registered, decided by the verifier of record
-  on its own statement from the advice, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the
-  stream's registrations from the stream's outcomes of record alone; `Ties`, the tie and its stream as the
-  `LinkWindows.ties` the advised link reads. A size class no sidecar pins has no accepted proof.
+  units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
+  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
+  (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
+  release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
+  the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
+  advised link reads. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

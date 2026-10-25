@@ -86,7 +86,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
-            c.admitted = t
+            c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
             for frame in W.Warden._egress(warden, c, t):
@@ -665,8 +665,8 @@ def test_the_port_circuit_is_its_reference():
 def test_the_bucket_circuit_is_its_reference():
     """`IoTieBucket` on each honest bucket row and on one wrong in its port's root or its content: what the parts'
     tests can't reach is the wiring of the registered row's bits into the cells, and of the opened rows into both the
-    port's reads and the content's entries. `NetworkRowsRoot` (the ingress's, which recomputes its rows' root) on
-    three rows and another root. Building the hm96 and frame-v3 gadgets' Boolean bodies takes most of its time."""
+    port's reads and the content's entries. Building the hm96 and frame-v3 gadgets' Boolean bodies takes most of its
+    time."""
     inst = commit(SMALL, small(), 0)
     other = commit(SMALL, small(), 0, seed=b"other")
     wrong = with_cells(inst, _cell_tampers(inst)["a wrong id"])
@@ -674,14 +674,6 @@ def test_the_bucket_circuit_is_its_reference():
     cases = [(inst, t) for t in range(SMALL.T)] + [(replace(inst, port_root=other.port_root), 1), (wrong, t_wrong)]
     want = [int(IT.bucket_reference(i, t)) for i, t in cases]
     assert want == [1, 1, 1, 0, 0]
-    rows = [bytes([i]) * 128 for i in range(3)]
-    salts = [IT.fake_salt(b"r", i) for i in range(3)]
-    dom = IT.domain(_h(b"r"), 3)
-    root = IT.rows_root(dom.domain_id, rows, salts)
-    d = HC._digest_bits
-    rargs = [[b for r in rows for b in HC._bytes_bits(r)], [b for s in salts for b in d(s)], d(root), d(dom.domain_id)]
-    assert _eval(bind(IT.NetworkRowsRoot, N_BITS=1024, COUNT=3),
-                 *[[x, y] for x, y in zip(rargs, [*rargs[:2], d(other.port_root), rargs[3]])]) == [1, 0]
     args = [IT.bucket_arguments(i, t, IT.switches(i, t)) for i, t in cases]
     fn = bind(IT.IoTieBucket, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S, DS=SMALL.DS)
     assert _eval(fn, *[list(col) for col in zip(*args)]) == want
