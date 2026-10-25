@@ -35,7 +35,7 @@ Two kinds of committed run:
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
-        [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local --main FILE]
+        [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] [--challenger local --main FILE]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
 
@@ -50,7 +50,11 @@ Two kinds of committed run:
   draw's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the draw and Lean refused the outcome
-  (`forged_row`).
+  (`forged_row`). ``--plain``: the sessions are plain C-Flock, not `--zk` (a5's ``--plain``: a stratified draw over a window of
+  one member, no registered reads or shared rows, Lean `verify --coins os --stratified K`, no firewall), and the summary
+  names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
+  (``charge``, `charge_terms`): ``advice_bits``, ``delta``, ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ)
+  and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest names the tree's code (`source_identity.code_identity`:
   ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's. Where the model's
@@ -100,7 +104,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
@@ -124,6 +129,9 @@ SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
 PORTS = range(10000, 32000)
+#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
+PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
+                 "C); the statement reads no registered values and no shared rows")
 
 
 @dataclass(frozen=True)
@@ -825,6 +833,31 @@ def per_unit(s: dict) -> dict[str, dict]:
     return out
 
 
+def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
+    """The bits one unit of each of the window's templates commits (`partition._template_bits`), by template."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    return {m.template: P._template_bits(SRW.template(m.template).fn if m.schemas else sets[m.template][1]) for m in mine.members}
+
+
+def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
+    """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
+    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
+    (``location_bits``, `consumers.location_bits`); β_δ, the faulty units' committed bits (``harm_bound``: the profile's
+    `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
+    templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
+    (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
+    if not record.get("accepted"):
+        return None
+    p = AU.profile(record["registration"], record["draw"], delta)
+    law = p.strata()
+    weights: float | dict[str, float] = max(bits.values())
+    if law is not None and {s.name for s in law.strata} <= set(bits):
+        weights = {s.name: float(bits[s.name]) for s in law.strata}
+    return {"advice_bits": advice_bits, "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
+            "location_bits": location_bits(p), "harm_bound": p.harm_bound(weights), "exfiltration_bound": exfiltration_bound(p, weights)}
+
+
 def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
     """Rank ``r``'s audit (`rank_audit`). On the challenger's coins, a rank that ends without its draw says so, so the run root's
     one session closes once every other rank has drawn."""
@@ -852,11 +885,14 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         more = {**more, **serve_negatives(serve_window(str(a.serve_run), int(a.window)), compiler, bound, bytes(rr.run.run_root).hex(),
                                           rr.store.commit_scheme)}
         check = lambda w: with_serve(src(w, mine, held), sv)
-    s, ok = A5.audit(a, A5.template_sets(Path(a.template_sets)), out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
+    sets = A5.template_sets(Path(a.template_sets))
+    s, ok = A5.audit(a, sets, out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
                      {"rank": r, "tp": held.get("tp"), "binding": bound, "requests": requests, "verifier_window_s": window_s,
                       **({"serve": sv} if sv else {})}, more, rank=r)
+    record = json.loads((out / "audit.json").read_text()) if (out / "audit.json").is_file() else {}
     row = {"ok": ok, "seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "per_unit": per_unit(s),
-           **({"serve": sv} if sv else {}),
+           "charge": charge_terms(record, template_bits(mine, sets), bound["advice"]["bits"], a.delta),
+           **({"serve": sv} if sv else {}), **({"plain": s["plain"]} if "plain" in s else {}),
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
     if s.get("draw") is not None:
@@ -913,7 +949,8 @@ def audit(a: argparse.Namespace) -> int:
                      "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
                      **({"i2": i2_against_record(a, requests)} if single(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
-                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {}}
+                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
+                     **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
     if a.challenger:
         manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main)
     try:
@@ -935,8 +972,12 @@ def audit(a: argparse.Namespace) -> int:
              | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
              | ({"forged": s["forged"]} if a.forged else {"accepted": (s.get("audit") or {}).get("accepted"),
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
+             | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("location_bits", "harm_bound", "exfiltration_bound")}
+                | {"wrong_units_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
              for r, s in summary["ranks"].items()}
     print("PROVE-PATH " + json.dumps({"run_root" if single(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],
+                                      "proof": "plain" if a.plain else "zk", **({"plain": summary["plain"]} if a.plain else {}),
+                                      "advice_bits": bound["advice"]["bits"], "delta": a.delta,
                                       "coins": summary["coins"]["source"], "transfer_gates": summary["transfer_gates"],
                                       **({"i2_equal": summary["i2"]["equal"]} if single(a) else {}),
                                       **({"serve": {k: summary["serve"][k] for k in ("window", "ok", "codes")}} if served(a) else {}),
@@ -1042,6 +1083,8 @@ def main(argv: list[str] | None = None) -> int:
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
+    p.add_argument("--plain", action="store_true", help="plain C-Flock sessions, not --zk (a5's --plain): the partition's law "
+                   "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", choices=["local"], help="draw each window on the auditor's challenger's coins, the run root's one "
                    "session (a5_coins; local: a development session on this machine), not the verifier's own")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
