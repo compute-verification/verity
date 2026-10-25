@@ -29,7 +29,7 @@ open Flock
 open FlockDeploy (Coin FinalP)
 open FlockVBridge.AccChain (Openings UnitSums CoefsAre ConsAre ReadsEnds levelLanes accHolds_of_units)
 open Flock.RecAlgebra (verifierRows consAt)
-open FlockVBridge.Family (combOf roundsOf)
+open FlockVBridge.Family (combOf)
 open FlockSoundness.Refine (openAt)
 open FlockSoundness.Discharge.Recursion (HClass)
 
@@ -95,10 +95,12 @@ theorem consAre (hG : D.RowG cls acc i) (p0 : ℕ)
     rw [Array.find?_isSome]
     exact ⟨c₀, Array.mem_toList_iff.1 hc₀, by simp [(Prod.mk.inj hs₀).1]⟩
   obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 hsome
-  have hv' : verifierRows (D.sh cls i) (roundsOf (D.files cls i) r) (D.files cls i).extras
-      (combOf (D.sh cls i) (D.files cls i) (roundsOf (D.files cls i) r)) = .ok (v, info, kappa) := hv
-  show consOf (D.sh cls i) (D.files cls i).sch ((D.files cls i).proof r) (roundsOf (D.files cls i) r)
-      (D.files cls i).extras (combOf (D.sh cls i) (D.files cls i) (roundsOf (D.files cls i) r)) ℓ l =
+  have hv' : verifierRows (D.sh cls i) (FlockVBridge.Family.roundsOf (D.files cls i) r) (D.files cls i).extras
+      (combOf (D.sh cls i) (D.files cls i) (FlockVBridge.Family.roundsOf (D.files cls i) r)) =
+        .ok (v, info, kappa) := hv
+  show consOf (D.sh cls i) (D.files cls i).sch ((D.files cls i).proof r)
+      (FlockVBridge.Family.roundsOf (D.files cls i) r) (D.files cls i).extras
+      (combOf (D.sh cls i) (D.files cls i) (FlockVBridge.Family.roundsOf (D.files cls i) r)) ℓ l =
     consAt (openAt ((D.files cls i).proof r).ligerito ((D.files cls i).sch.levels.size - 1) ℓ).1
       ((D.files cls i).sch.levels.getD ℓ default).q (D.alphaAt cls acc i r ℓ) l
   have ha : D.alphaAt cls acc i r ℓ = c.alpha := by
