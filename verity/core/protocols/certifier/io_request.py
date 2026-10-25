@@ -107,24 +107,30 @@ STATE = 32 + 32 + 1 + 32 + 32 + 1 + 1
 class Layout(NamedTuple):
     """An id request's frame-0 layout at frame size B: `room` payload bytes a frame, the head's bytes up to the first
     prompt field (`head`, the zero request's), the variable spans in it, and `start`, the first prompt field's
-    offset. Payload offsets count from the frame's payload, whose first 4 bytes in frame 0 are LENGTH."""
+    offset. Payload offsets count from the frame's payload, whose first `lead` bytes in frame 0 are LENGTH
+    (`request_frames`'), or none on the warden's cells (lead 0), where the content-length gives the request's
+    length."""
 
     room: int
     head: bytes
     spans: tuple[tuple[int, int, str], ...]
     start: int
+    lead: int = LENGTH.size
 
 
-def layout(B: int) -> Layout:
-    """`Layout` at frame size B. Raises `ValueError` where the head and one prompt field don't fit frame 0 unmoved."""
+def layout(B: int, lead: int = LENGTH.size) -> Layout:
+    """`Layout` at frame size B, the request `lead` bytes into frame 0's payload (`active.id_request`'s `lead`: 4 or
+    0). Raises `ValueError` where the head and one prompt field don't fit frame 0 unmoved."""
+    if lead not in (0, LENGTH.size):
+        raise ValueError(f"an id request is 0 or {LENGTH.size} bytes into its first frame, not {lead!r}")
     room = B - HEADER.size
     try:
-        zero = id_request(model="", user="", prompt=[0], max_tokens=0, frame_bytes=B)
+        zero = id_request(model="", user="", prompt=[0], max_tokens=0, frame_bytes=B, lead=lead)
     except ValueError as e:
         raise ValueError(f"a {B}-byte frame has no room for an id request: {e}") from None
-    payload = LENGTH.pack(len(zero)) + zero
-    spans = [(0, LENGTH.size, "length"), (LENGTH.size + len(ID_REQUEST_HEAD), ID_DIGITS, "content-length")]
-    at = LENGTH.size + BODY_AT
+    payload = (LENGTH.pack(len(zero)) if lead else b"") + zero
+    spans = [(0, lead, "length"), (lead + len(ID_REQUEST_HEAD), ID_DIGITS, "content-length")]
+    at = lead + BODY_AT
     for key, width, kind in FIELDS:
         if payload[at:at + len(key)] != key:
             raise ValueError(f"at {B}-byte frames an id request's head doesn't fit frame 0 unmoved")
@@ -135,7 +141,7 @@ def layout(B: int) -> Layout:
     start = payload.index(b',"prompt":[') + len(b',"prompt":')
     if start + ID_FIELD_BYTES > room or payload[start:start + 1] != b"[":
         raise ValueError(f"at {B}-byte frames an id request's first prompt field isn't in frame 0")
-    return Layout(room, payload[:start], tuple(spans), start)
+    return Layout(room, payload[:start], tuple(spans), start, lead)
 
 
 def _u32(field: bytes) -> bool:
@@ -174,7 +180,6 @@ def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | 
     if len(payload) != lay.room:
         return None
     if first:
-        length = LENGTH.unpack(payload[:LENGTH.size])[0]
         for i, (a, b) in enumerate(zip(payload[:lay.start], lay.head)):
             if a != b and not any(o <= i < o + w for o, w, _ in lay.spans):
                 return None
@@ -182,9 +187,12 @@ def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | 
             if not CHECK[kind](payload[o:o + w]):
                 return None
         cl = payload[lay.spans[1][0]:lay.spans[1][0] + ID_DIGITS]
-        if not _u32(cl) or int(cl) != length - BODY_AT:
+        if not _u32(cl) or int(cl) + BODY_AT >= 1 << 32:
             return None
-        left, at, base = length, lay.start, LENGTH.size
+        length = LENGTH.unpack(payload[:LENGTH.size])[0] if lay.lead else int(cl) + BODY_AT
+        if int(cl) != length - BODY_AT:
+            return None
+        left, at, base = length, lay.start, lay.lead
     else:
         length, at, base = None, 0, 0
     if left <= 0:
@@ -587,19 +595,24 @@ _SPANS = {"u32": _u32_ok, "ratio": _ratio_ok, "name": _name_ok}
 
 
 def _reading(C, ch: _Chars, zero: Sequence, lay: Layout, first: bool, L: Sequence) -> tuple:
-    """One reading of a request frame's payload: a first frame's (`first`, L its LENGTH) or a continuation's (L the
-    bytes left): (ok, ended, the bytes left after it, its prompt fields)."""
+    """One reading of a request frame's payload: a first frame's (`first`, L its LENGTH, ignored at lead 0, where the
+    content-length gives it) or a continuation's (L the bytes left): (ok, ended, the bytes left after it, its prompt
+    fields, the request's bytes left before it: L, or at lead 0 a first frame's content-length plus the head)."""
     room = lay.room
-    s0, base = (lay.start, LENGTH.size) if first else (0, 0)
+    s0, base = (lay.start, lay.lead) if first else (0, 0)
     avail = room - base
     oks = []
     if first:
         free = {i for o, w, _ in lay.spans for i in range(o, o + w)}
-        oks += [ch.eq(i, lay.head[i]) for i in range(LENGTH.size, lay.start) if i not in free]
+        oks += [ch.eq(i, lay.head[i]) for i in range(lay.lead, lay.start) if i not in free]
         o = lay.spans[1][0]
         cl_ok, cl = IT._digits(C, ch.data[o:o + ID_DIGITS])
         body = add(C, cl, const_bits(BODY_AT, 32), width=32, carry_out=True)
-        oks += cl_ok + [body[32].inv(), _eq(C, body[:32], L)]
+        oks += cl_ok + [body[32].inv()]
+        if lay.lead:
+            oks.append(_eq(C, body[:32], L))
+        else:
+            L = body[:32]
         for o, _, kind in lay.spans[2:]:
             oks += _SPANS[kind](C, ch, o)
     K, g = divmod(room - s0, ID_FIELD_BYTES)
@@ -636,7 +649,7 @@ def _reading(C, ch: _Chars, zero: Sequence, lay: Layout, first: bool, L: Sequenc
             if k >> j & 1:
                 bit = bit ^ e[k]
         count.append(bit ^ last.inv() if K >> j & 1 else bit)
-    return ok, last, rest, count
+    return ok, last, rest, count, L
 
 
 def _sig_frame(S):
@@ -654,8 +667,8 @@ def _build_frame(C, S, *e):
     header = HEADER.pack(DATA, CANONICAL_STREAM, room)
     head = and_reduce(C, [HC._same(cell[i][b], header[i] >> b & 1) for i in range(H) for b in range(8)])
     length = [cell[H + 3 - j // 8][j % 8] for j in range(32)]
-    f_ok, f_end, f_rest, f_count = _reading(C, ch, zero, lay, True, length)
-    c_ok, c_end, c_rest, c_count = _reading(C, ch, zero, lay, False, left)
+    f_ok, f_end, f_rest, f_count, _ = _reading(C, ch, zero, lay, True, length)
+    c_ok, c_end, c_rest, c_count, _ = _reading(C, ch, zero, lay, False, left)
     start = and_reduce(C, [b.inv() for b in left])
     ok, ended = mux(C, start, [f_ok, f_end], [c_ok, c_end])
     return [[pad, C.AND(head, ok), start, ended, *mux(C, start, f_rest, c_rest), *mux(C, start, f_count, c_count)]]
