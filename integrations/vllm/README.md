@@ -130,9 +130,12 @@ replay's coverage reads it), `query_checks.py` (the sampled replay's reconciliat
 `served_tokens.py` (the driver's served tokens, `capture/tokens.json`, as GM-01's chronology check and the padded conversion,
 `commit/padding_steps.py`, read them), `declared_stop.py` (the workload Program's declared stop rule and LAG, as the same two read
 them), `workload.py` (the workload, `workloads/<row>.json` and a run's copy of it, v2 and the older v1, as the stochastic replay
-reads it) and `global_match.py` (GM-01's Match result, `global_match.json`, as the executed prefix's link to the Match account reads
-it).  The newer records (`workload.py`, `global_match.py`) also refuse a field no writer writes (`fields.UnknownField`) and `dump`
-the JSON their writers write; `tests/lint/test_typed_records.py` ratchets the untyped reads they replace.
+reads it), `global_match.py` (GM-01's Match result, `global_match.json`, as the executed prefix's link to the Match account reads
+it), `build_summary.py` (the Build's `build_summary.json` in its TP1, TP and R19 TP2 layouts, as the verdict reads the Build's
+correspondence digest from it) and `commit_run.py` (the Commit record, a line of `commit/runs.jsonl`, as the verdict reads it).  The
+newer records (`workload.py`, `global_match.py`, `build_summary.py`, `commit_run.py`) also refuse a field no writer writes
+(`fields.UnknownField`) and `dump` the JSON their writers write; `tests/lint/test_typed_records.py` ratchets the untyped reads they
+replace.
 Never: an import of anything else in `verity_vllm`.
 
 **`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
