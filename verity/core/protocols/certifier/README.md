@@ -85,14 +85,19 @@ A spec-level reference for network accounting's timing channel:
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
   evaluator from `verity`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
-  draw under the run root as an hm96 row registration, a window's row the slice's ``srv`` row. `leaf_ok` holds a unit's
-  ``srv`` b‖c to its registered leaf, as the advice's ``adv`` row is held. It takes the advice registration's hm96 rows
-  from `verity`;
-- the served rows' tie (`served_tie`): `ServedRowsTie_v1`, a Boolean Definition with `check` its reference, holds a
+  draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
+  the slice's ``srv`` row). `leaf_ok` holds a unit's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
+  and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
+  hm96 rows from `verity`;
+- the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a
   window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
   then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
   unit is proved, and its port, selection and cost are its docstring. It takes the circuits, their evaluator and the
   hm96 leaves from `verity`;
+- the served rows held to their Programs (`served_statics`): `ServedStaticsTie_v1`, a Boolean Definition with `check`
+  its reference, holds each block's registered served rows, read through the Lean verifier's registered reads, to the
+  RoPE statics of the Programs its steps ran, with no row hashed but the block's
+  ([protocol/served-statics.md](protocol/served-statics.md)). It takes the circuits and their evaluator from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of

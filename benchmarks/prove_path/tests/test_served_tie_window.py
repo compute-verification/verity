@@ -41,3 +41,26 @@ def test_real_window_cases_on_a_small_window():
     assert run.passed and all(c["circuit_matches"] for c in run.cases.values())
     assert run.cases["id"]["circuit"] == ST.ACCEPT
     assert run.edits == {"prefill": [0, 0, [0, 1, 0, 0, 5]], "decode": [1, 0, [0, 1, 1, 5, 1]], "other_row": [1, 2, 1, 4, 1]}
+
+
+def test_a_run_sealed_before_the_async_and_cache_statics_reads_them_as_0():
+    """A seal's record from before AS, EW and the cache's statics, its engine async or not, reads them as 0, which
+    `compile_slice.step_statics` needs; a record that has them keeps its own."""
+    old = {"R": 8, "W": 1, "A": 1, "M": 8, "T": 2048, "L": 512, "B": 16, "H": 0, "CH": 1, "WM": 0, "FULL": 1, "PC": 0,
+           "NB": 101626, "IW": 16, "Q": 1, "D": 1, "P": 256, "K": 1}
+    S = STW.statics_of(SimpleNamespace(priv={"statics": old}))
+    assert CS.step_statics(S).AS == 0 and S.EW == 0 and (S.CN, S.CTW, S.CU) == (0, 0, 0)
+    assert all(hasattr(S, k) for k in CS.STATICS)
+    S = STW.statics_of(SimpleNamespace(priv={"statics": {**old, "AS": 1, "EW": 3, "CN": 2}}))
+    assert (S.AS, S.EW, S.CN) == (1, 3, 2)
+
+
+def test_the_programs_statics_are_the_ports_positions():
+    """`statics_held`: the Programs the rows describe are the positions each step's port committed, and a row moved one
+    on, or a step's rows in another order, are not."""
+    St = SimpleNamespace(**ST.statics(SimpleNamespace(R=2, P=7, IW=6, L=4096, T=256)))
+    steps = _steps(St, WINDOW, SEQS)
+    assert STW.statics_held(list(WINDOW), steps)
+    moved = [WINDOW[0], ((0, 1, 1, 6, 1), WINDOW[1][1]), WINDOW[2]]
+    assert not STW.statics_held(moved, steps)
+    assert not STW.statics_held(list(WINDOW), _steps(St, [tuple(reversed(WINDOW[0])), *WINDOW[1:]], SEQS))

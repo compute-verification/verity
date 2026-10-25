@@ -2536,6 +2536,8 @@ and seven lemmas, and three more proved lemmas:
   ([protocol/compile-slice.md](protocol/compile-slice.md));
 - **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
   passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
+- **`test_network_certifier_served_statics.py`:** the served rows held to their Programs' statics, a registered row a
+  block ([protocol/served-statics.md](protocol/served-statics.md));
 - **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;

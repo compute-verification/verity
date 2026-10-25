@@ -23,11 +23,11 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   is proved and its verdict is ``ACCEPT``. The positions chunks are bound natively, opened under the run root
   (``bindings``): the Commit's leaves are its position-leaf digests under its hiding rule, not row leaves, so their b‖c is
   not yet a proof row's.
-  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece: one of at least
-  ``DISTINCT`` byte values found anywhere, or one of fewer (positions, a few switch bits and zeros) found in every
-  repetition's proof stream. The streams hold small integers and zeros at fixed offsets of their own format, valued
-  afresh in each repetition, so a low-entropy piece found in only some repetitions, which prove one witness, is reported
-  as ``structured``.
+  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, any witness
+  piece found in what the verifier received (`classify`), whatever row it is from. The one exemption, ``structured``: a
+  piece of fewer than ``DISTINCT`` byte values (positions, switches, zeros) found only at fields of the proof streams' own
+  format, offsets where every repetition's stream holds small integers and zeros, valued afresh in each, and not in every
+  repetition. A low-entropy piece found in one repetition at an offset where another holds proof data is ``leaked``.
 """
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -333,13 +334,71 @@ def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, held
 
 
-def classify(received: dict, blobs: dict[str, bytes]) -> tuple[list[str], dict[str, int]]:
+def _stream(name: str) -> tuple[str, int] | None:
+    """A repetition's proof stream, ``S.repK.bin``, as (S, K)."""
+    m = re.fullmatch(r"(.*)\.rep(\d+)\.bin", name)
+    return (m[1], int(m[2])) if m else None
+
+
+def _field(streams: list[bytes], at: int, n: int) -> bool:
+    """Whether the n bytes at offset `at` are a field of the proof stream's own format, valued afresh in each repetition:
+    two or more repetitions' streams of one length, each holding fewer than ``DISTINCT`` byte values there, not the same
+    ones in all."""
+    if len(streams) < 2 or len({len(s) for s in streams}) != 1 or at + n > len(streams[0]):
+        return False
+    ws = [s[at:at + n] for s in streams]
+    return all(len(set(w)) < DISTINCT for w in ws) and len(set(ws)) > 1
+
+
+def _offsets(data: bytes, piece: bytes) -> list[int]:
+    out, at = [], data.find(piece) if piece else -1
+    while at >= 0:
+        out.append(at)
+        at = data.find(piece, at + 1)
+    return out
+
+
+def placements(received: dict, blobs: dict[str, bytes], vdir: Path | None) -> dict[str, list[tuple[str, int | None, bool]]]:
+    """Where each found piece of fewer than ``DISTINCT`` byte values is in what the verifier received: per file it is
+    found in, each raw offset (None: none, a hex form only) and whether that offset is a `_field` of its stream."""
+    files, out = received["files"], {}
+    data: dict[str, bytes] = {}
+
+    def read(f: str) -> bytes:
+        if f not in data:
+            data[f] = (vdir / f).read_bytes() if vdir is not None and (vdir / f).is_file() else b""
+        return data[f]
+
+    for k in received["verifier_found"]:
+        piece = blobs[k]
+        if len(set(piece)) >= DISTINCT:
+            continue
+        rows = []
+        for f, rec in files.items():
+            if k not in rec.get("found", {}):
+                continue
+            s, b = _stream(f), read(f)
+            group = [read(g) for g in files if s and _stream(g) and _stream(g)[0] == s[0]]
+            rows += [(f, at, s is not None and _field(group, at, len(piece))) for at in _offsets(b, piece)] or [(f, None, False)]
+        out[k] = rows
+    return out
+
+
+def classify(received: dict, blobs: dict[str, bytes], vdir: Path | None = None) -> tuple[list[str], dict[str, int]]:
     """`a8.received`'s found pieces as the ``leaked`` ones, which fail a statement, and the ``structured`` rest with their
-    distinct byte values (the module's docstring)."""
-    files = received["files"]
-    reps = [f for f in files if ".rep" in f and f.endswith(".bin")]
-    leaked = [k for k in received["verifier_found"] if len(set(blobs[k])) >= DISTINCT
-              or (len(reps) > 1 and all(k in files[f]["found"] for f in reps))]
+    distinct byte values. Every piece is witness, whichever row it is from. A piece is ``structured`` only when it has
+    fewer than ``DISTINCT`` byte values and every place it is found is a `_field` of a repetition's proof stream (read
+    from ``vdir``, what the verifier received), and it isn't found in every repetition of that stream. Anywhere else (another
+    file, a stream offset another repetition holds proof data at, or where ``vdir`` doesn't show it), it is ``leaked``, so
+    a switch or a position leaked into one repetition fails its statement (REDTEAM phase 16, finding 1)."""
+    files, placed = received["files"], placements(received, blobs, vdir)
+    leaked = []
+    for k in received["verifier_found"]:
+        reps = {_stream(f)[0]: [g for g in files if _stream(g) and _stream(g)[0] == _stream(f)[0]]
+                for f, _at, _ok in placed.get(k, []) if _stream(f)}
+        every = any(all(k in files[g].get("found", {}) for g in gs) for gs in reps.values())
+        if k not in placed or not all(ok for _f, _at, ok in placed[k]) or every:
+            leaked.append(k)
     return leaked, {k: len(set(blobs[k])) for k in received["verifier_found"] if k not in leaked}
 
 
@@ -412,7 +471,9 @@ def prove(a) -> int:
         blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
-        res["received"]["leaked"], res["received"]["structured"] = classify(res["received"], blobs)
+        vdir = out / name / "verifier"
+        res["received"]["leaked"], res["received"]["structured"] = classify(res["received"], blobs, vdir)
+        res["received"]["placed"] = placements(res["received"], blobs, vdir)
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": m["meta"]["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"]}
         want = ["accept" if u.kind in expect else "reject" for u in units]
