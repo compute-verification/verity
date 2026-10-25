@@ -2395,12 +2395,13 @@
   "Definitions.Accounting.Bandwidth": {
    "imports": [
     "Mathlib",
+    "Definitions.Core.Adversary",
     "Definitions.Pous.Game.Prob",
     "Definitions.Accounting.Confidence",
     "Definitions.Accounting.Bandwidth"
    ],
    "except": [],
-   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence); its device is an instance of core's adversary (Definitions.Core.Adversary)"
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "imports": [
