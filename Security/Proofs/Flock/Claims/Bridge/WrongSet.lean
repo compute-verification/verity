@@ -26,7 +26,7 @@ namespace FlockSoundness.Discharge.ZkLink.WrongSet
 open Game Model Accounting Audit ZkSession
 open Claims.Sampling (Prog Stmt Wit Commitment Faulty faulty)
 
-variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
+variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] {mPts : ℕ}
 variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
@@ -56,7 +56,6 @@ def Binds (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (s : Stmt) (w :
 
 variable {A P planZ tab vb}
 
-omit [Fintype K] [DecidableEq K] in
 /-- **A unit right on the registration has its slot not faulty**, at the interior that is the circuit's evaluation. -/
 theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Stmt}
     {Pc : Claims.Sampling.Partition} {w : Wit} {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} {v : ℕ}
@@ -77,7 +76,6 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Commitment
     obtain ⟨hio, hw⟩ := hbind op (fun g hg => (hop g hg).1) g hg hc hB
     rw [hw, (hop (φ g) hio).2]
 
-omit [Fintype K] [DecidableEq K] in
 /-- **At most as many slots are faulty as game units are wrong on the registration**: every slot is some unit's
 (`slot`), and at each unit its slot's replay unit lowers to it (`Lowers`) and the witness's openings agree with the
 registration's (`Binds`). -/
