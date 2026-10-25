@@ -13,6 +13,10 @@ from verity_vllm.check.commit_rules import _d, _first, _int, _is_row_procedure, 
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult
 from verity_vllm.query.manifest.format import is_token_select
+from verity_vllm.records.fields import RecordError
+from verity_vllm.records.query_checks import QueryChecks
+
+QUERY_CHECKS = "the sampled replay's population.query_checks"
 
 _POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves (rev-cb M-0751 (b))
 # [R16 rev F-r16-07 / M-0068; report M-0059 (2)] which by-name classes form (B) CAN cover: form (B) compares the Match record's dispatcher-level
@@ -108,7 +112,8 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     reconciliation itself fails: a VU whose address is not a required identity, a required identity no Program row produces, a block height
     that disagrees, a rank set that disagrees, a required family with no stated mechanism.  A replay record WITHOUT a manifest to
     reconcile against (`query_checks.ok` None) carries a note naming that; a record predating the fields is graded as before (no note --
-    the rows of record before R17-3 keep their text).  The grade rules above stand either way."""
+    the rows of record before R17-3 keep their text).  A `query_checks` block missing a field its writers all write FAILs, naming the
+    field (`records.query_checks`).  The grade rules above stand either way."""
     if not isinstance(sr, dict):
         return None, None
     pop = sr.get("population") if isinstance(sr.get("population"), dict) else {}
@@ -121,51 +126,62 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     if isinstance(cc, dict) and cc.get("agree") is False:
         return None, ("required manifest engines DISAGREE (R17 task 3 cross-check: the traversal of record and the inventory beside it must agree "
                       f"row for row for one release) -- {str(cc.get('why') or cc)[:300]}")
-    if chk.get("ok") is False:
+    try:
+        c = QueryChecks.of(chk, QUERY_CHECKS)
+    except RecordError as e:
+        return None, f"C2 population reconciliation refused, nothing graded ({e})"
+    if c.ok is False:
         parts = []
-        refused = chk.get("manifest_refused")
-        if isinstance(refused, dict):
-            parts.append(f"required manifest refused, nothing reconciled ({refused.get('why')})")
-        for k in ("vus_outside_query", "identities_without_rows", "rows_disagree"):
-            c = chk.get(k) or {}
-            if int(c.get("n") or 0) > 0:
-                first = (c.get("first") or [{}])[0]
-                parts.append(f"{k} x{c['n']} (first {first.get('request_id')} step {first.get('step')} {first.get('op_path')}/{first.get('member')})")
-        rk = chk.get("ranks") or {}
-        if rk.get("equal") is False:
-            parts.append(f"ranks replay {rk.get('replay')} != manifest {rk.get('manifest')}")
-        if chk.get("accounted") is False:
+        if c.manifest_refused is not None:
+            parts.append(f"required manifest refused, nothing reconciled ({c.manifest_refused.get('why')})")
+        for k, f in (("vus_outside_query", c.vus_outside_query), ("identities_without_rows", c.identities_without_rows), ("rows_disagree", c.rows_disagree)):
+            if f.n > 0:
+                first = f.first[0] if f.first else {}
+                parts.append(f"{k} x{f.n} (first {first.get('request_id')} step {first.get('step')} {first.get('op_path')}/{first.get('member')})")
+        if c.ranks.equal is False:
+            parts.append(f"ranks replay {c.ranks.replay} != manifest {c.ranks.manifest}")
+        if c.accounted is False:
             parts.append("reached + uncovered != |Q(P)|")
-        if chk.get("unstated_families"):
-            parts.append(f"required families with no stated mechanism {chk['unstated_families']}")
-        if chk.get("missing_acquisition_families"):
-            parts.append(f"required families with NO acquisition mechanism {chk['missing_acquisition_families']}")
+        if c.unstated_families:
+            parts.append(f"required families with no stated mechanism {c.unstated_families}")
+        if c.missing_acquisition_families:
+            parts.append(f"required families with NO acquisition mechanism {c.missing_acquisition_families}")
         # [R17-26/27, F-moe-r17-05, R4 c2] the newer checks are named too -- never 'see population.query_checks' for a check that has a name
-        ep = chk.get("executed_prefix_rule") or {}
-        if ep.get("faults"):
-            parts.append(f"executed-prefix rule faults x{len(ep['faults'])} (first {str(ep['faults'][0])[:160]})")
-        for k, label in (("evaluated_past_stop", "identities evaluated PAST a request's executed prefix"),
-                         ("manifest_cut_before_classification", "manifest cut before the not-executed classification")):
-            c = ep.get(k) or {}
-            if int(c.get("n") or 0) > 0:
-                parts.append(f"{label} x{c['n']} (first {str((c.get('first') or [''])[0])[:160]})")
-        ua = chk.get("identities_unreachable_by_alias") or {}
-        if int(ua.get("n") or 0) > 0:                                            # [F-r17b-38] the CAUSE of outside + without-rows, named first
-            f0 = (ua.get("first") or [{}])[0]
-            parts.insert(0, f"identities unreachable by alias x{ua['n']} (invocation >= 1 with no op_path_aliases entry; table has "
-                            f"{ua.get('alias_entries')} entries; first {f0.get('op_path')} invocation {f0.get('invocation')} rank {f0.get('rank')}; F-r17b-38)")
-        cd = chk.get("controller_rows_disagree") or {}
-        if int(cd.get("n") or 0) > 0:
-            f0 = (cd.get("first") or [{}])[0]
+        ep = c.executed_prefix_rule
+        if ep is not None and ep.faults:
+            parts.append(f"executed-prefix rule faults x{len(ep.faults)} (first {str(ep.faults[0])[:160]})")
+        if ep is not None:
+            for label, f in (("identities evaluated PAST a request's executed prefix", ep.evaluated_past_stop),
+                             ("manifest cut before the not-executed classification", ep.manifest_cut_before_classification)):
+                if f.n > 0:
+                    parts.append(f"{label} x{f.n} (first {str(f.first[0] if f.first else '')[:160]})")
+        ua = c.identities_unreachable_by_alias
+        if ua is not None and ua.n > 0:                                          # [F-r17b-38] the CAUSE of outside + without-rows, named first
+            f0 = ua.first[0] if ua.first else {}
+            parts.insert(0, f"identities unreachable by alias x{ua.n} (invocation >= 1 with no op_path_aliases entry; table has "
+                            f"{ua.alias_entries} entries; first {f0.get('op_path')} invocation {f0.get('invocation')} rank {f0.get('rank')}; F-r17b-38)")
+        cd = c.controller_rows_disagree
+        if cd is not None and cd.n > 0:
+            f0 = cd.first[0] if cd.first else {}
             parts.append(f"controller rows: header {f0.get('header_rows')} != request Programs' sum {f0.get('program_rows_sum')} "
                          f"{f0.get('program_rows_by_request')} (F-r17b-36 scope: sum over request Programs)")
         return None, ("C2 population does not reconcile with Q(P) (R17-3): the replay's enumeration of the Program rows and the required manifest "
                       f"disagree on what the Program produces -- {'; '.join(parts) or 'see population.query_checks'}")
     scope = str(pop.get("scope") or "")
     qid = qt.get("query_id") or "Q_module (pre-R17-10 header)"                   # [R17-10] the query of record, by id, on every PASS
-    if chk.get("ok") is None:
+    if c.ok is None:
         return f"C2 population scope: {scope} -- NOT reconciled against Q(P) (no required manifest supplied to the replay); the reach is the replay's own count", None
     return f"C2 population scope (R17-3; query of record {qid}): {scope}", None
+
+
+def _query_checks(sr: dict) -> QueryChecks | None:
+    """The replay's `population.query_checks` as its record; None when the record carries none, or one `_query_population_scope`
+    refuses (that refusal is the FAIL)."""
+    chk = _d(sr.get("population")).get("query_checks")
+    try:
+        return QueryChecks.of(chk, QUERY_CHECKS) if isinstance(chk, dict) else None
+    except RecordError:
+        return None
 
 
 def _faulted_prefix_facts(sr: dict) -> list[dict]:
@@ -173,15 +189,16 @@ def _faulted_prefix_facts(sr: dict) -> list[dict]:
     was called with) of each request the replay's executed-prefix rule faulted, in the rule's order.  A fault's cause is read from these
     fields -- `account_missing` (a Match account leg not beside the Commit, the fault named first), `linked` -- never from its text."""
     facts = _d(_d(sr.get("executed_prefix_of_record")).get("facts_of_record"))
-    rule = _d(_d(_d(sr.get("population")).get("query_checks")).get("executed_prefix_rule"))
-    return [_d(facts.get(str(f.get("request_id")))) for f in rule.get("faults") or [] if isinstance(f, dict)]
+    c = _query_checks(sr)
+    rule = c.executed_prefix_rule if c is not None else None
+    return [_d(facts.get(str(f.get("request_id")))) for f in (rule.faults if rule is not None else ())]
 
 
 def _scope_fail_account_missing(sr: dict) -> bool:
     """`_query_population_scope`'s FAIL is a missing input: the reconciliation's FAIL (not the engine cross-check's) whose first
     executed-prefix fault is a request missing a Match account leg."""
-    pop, pf = _d(sr.get("population")), _faulted_prefix_facts(sr)
-    return (_d(pop.get("query_checks")).get("ok") is False and _d(_d(pop.get("query_total")).get("cross_check")).get("agree") is not False
+    pop, c, pf = _d(sr.get("population")), _query_checks(sr), _faulted_prefix_facts(sr)
+    return (c is not None and c.ok is False and _d(_d(pop.get("query_total")).get("cross_check")).get("agree") is not False
             and bool(pf) and bool(pf[0].get("account_missing")))
 
 
@@ -386,13 +403,13 @@ def _replay_scope(sr: dict | None) -> dict[str, Any]:
     pop = _d(sr.get("population"))
     picks = _d(smp.get("picks_by_request_step"))
     positions = sum(len(_d(v)) for v in picks.values()) if picks else None
-    qt = _d(pop.get("query_total"))
+    qt, qc = _d(pop.get("query_total")), _query_checks(sr)
     return {"result": sr.get("result"), "grade": sr.get("grade"), "sample_size": smp.get("evaluated"), "picked": smp.get("picked"), "equal": smp.get("equal"),
             "mismatch_n": smp.get("mismatch_n", sr.get("mismatch_n")), "not_evaluated_n": smp.get("not_evaluated_n"), "per_stratum": smp.get("per_stratum"),
             "positions": positions, "requests": len(picks) if picks else (len(pop.get("requests") or []) if isinstance(pop.get("requests"), (list, dict)) else None),
             "strata": len(sr.get("strata") or []) or sr.get("strata_n") or pop.get("strata_n"), "strata_unevaluated": len(sr.get("strata_unevaluated") or []),
             "population_vus": pop.get("vus"), "population_by_family": pop.get("by_family"), "not_evaluable": pop.get("not_evaluable") or None,
-            "query_total": qt.get("identities") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": _d(pop.get("query_checks")).get("ok")}
+            "query_total": qt.get("identities") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": qc.ok if qc is not None else None}
 
 
 def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:

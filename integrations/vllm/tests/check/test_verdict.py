@@ -38,11 +38,18 @@ CLASSES = {"input_token_ids": {"how": "bound-as-leaf", "tensors": 4}, "instance_
            "fa2_hidden_m1_stream": {"how": "bound-as-leaf", "tensors": 64}}
 
 
+def _checks(faults: list | None = None, **kw) -> dict:
+    """`population.query_checks` as the replay's coverage writes it over a reconciled Q(P), with `kw` over it."""
+    rule = {"applied": True, "faults": faults or [], **{k: {"n": 0, "first": []} for k in ("evaluated_past_stop", "manifest_cut_before_classification")}}
+    return {"ok": True, **{k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "rows_disagree")},
+            "ranks": {"replay": [0], "manifest": [0], "equal": True}, "accounted": True, "unstated_families": [], "executed_prefix_rule": rule} | kw
+
+
 def _sr(**kw) -> dict:
     return {"result": True, "grade": "complete", "why": None, "strata_unevaluated": [],
             "sample": {"per_stratum": 2, "seed": SEED_ROOT, "seed_source": ROOT_FORM, "picked": 407, "evaluated": 407, "equal": 407, "mismatch_n": 0, "not_evaluated_n": 0},
             "population": {"vus": 57678, "not_evaluable": {}, "not_evaluable_by_family": {},
-                           "query_total": {"identities": 57678}, "query_checks": {"ok": True, "executed_prefix_rule": {"applied": True, "faults": []}}}, **kw}
+                           "query_total": {"identities": 57678}, "query_checks": _checks()}, **kw}
 
 
 def _epr(ok: bool = True) -> dict:
@@ -218,7 +225,7 @@ def _mutations():
     c = b(); c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}; yield "boundary linkage", c, True
     c = b(); c["sampled_replay"]["result"] = False; c["sampled_replay"]["why"] = "a VU differs"; yield "replay mismatch", c, True
     c = b(); c["sampled_replay"]["sample"]["seed"] = 12345; c["oracle_compare"] = {"result": True, "complete": False}; yield "prover-chosen seed, no form (B)", c, True
-    c = b(); c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "vus_outside_query": {"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]}}
+    c = b(); c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
     yield "population scope", c, True
     c = b(); del c["weights_pin"]; yield "weights unpinned", c, True
     c = b(); c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}; yield "required class undeclared", c, True
@@ -308,7 +315,7 @@ def test_account_missing_is_insufficient_evidence_not_fail():
              "and re-run the Commit; not a verdict on the Program)")
     c["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=True, problems=["tokens.json: not beside the Commit"])
     c["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 6, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
-    c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "executed_prefix_rule": {"applied": True, "faults": [{"request_id": "r0", "faults": [fault]}]}}
+    c["sampled_replay"]["population"]["query_checks"] = _checks([{"request_id": "r0", "faults": [fault]}], ok=False)
     (ok, why), out, checks = _both(c)
     assert ok is False and "executed-prefix rule faults" in why            # v1: a named FAIL through the replay's population scope
     by = {c_.name: c_ for c_ in checks}
