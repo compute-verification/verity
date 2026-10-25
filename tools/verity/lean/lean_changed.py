@@ -685,7 +685,7 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
            "validation": {"status": "passed" if rc == 0 else "failed", "checker": "tools/verity/lean/lean_changed.py --records",
                           "detail": f"{ran}, without the kernel replay or the tests: not a Lean verdict, and no merge accepts "
                                     "it"},
-           "artifacts": [] if rel.startswith("..") else [rel]}
+           "artifacts": [] if rel.startswith("..") or not out.exists() else [rel]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")

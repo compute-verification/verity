@@ -412,7 +412,7 @@ def test_a_package_whose_records_passed_on_the_same_inputs_runs_nothing(reuse, t
     out = capsys.readouterr().out
     assert "lean-records: c: reused, nothing built: its records passed on the same Lean inputs" in out
     doc = json.loads((run / "result.json").read_text())
-    assert doc["kind"] == LC.FAST_KIND and doc["workload_fingerprint"]["path"] == "reused"
+    assert doc["kind"] == LC.FAST_KIND and doc["workload_fingerprint"]["path"] == "reused" and doc["artifacts"] == []
     assert doc["validation"]["detail"].startswith("nothing ran") and "not a Lean verdict" in doc["validation"]["detail"]
     monkeypatch.delenv("RESEARCH_RUN_DIR")
 
