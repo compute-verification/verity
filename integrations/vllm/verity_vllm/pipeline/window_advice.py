@@ -29,6 +29,7 @@ so every window has one encoding, and `decode` refuses any other string, a versi
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
@@ -49,6 +50,37 @@ SCHEMA = "verity-vllm/window-advice/v1"
 VERSION = 1
 
 
+def _int(name: str, value: Any, least: int = 0) -> None:
+    if type(value) is not int or not least <= value < I1.LIMIT:
+        raise MalformedAdvice(f"{name} must be an int in [{least}, 2^63), not {value!r}")
+
+
+def _seq(name: str, value: Any, kind: type) -> tuple:
+    if isinstance(value, (str, bytes)) or not hasattr(value, "__iter__"):
+        raise MalformedAdvice(f"{name} must be a sequence of {kind.__name__}, not {type(value).__name__}")
+    items = tuple(value)
+    for x in items:
+        if type(x) is not kind:
+            raise MalformedAdvice(f"{name} holds a {type(x).__name__}, not a {kind.__name__}")
+    return items
+
+
+def _cover(runs: list[list[int]], lo: int, hi: int) -> None:
+    """Add [lo, hi) to sorted, disjoint, non-adjacent runs."""
+    i = 0
+    while i < len(runs) and runs[i][1] < lo:
+        i += 1
+    j = i
+    while j < len(runs) and runs[j][0] <= hi:
+        lo, hi = min(lo, runs[j][0]), max(hi, runs[j][1])
+        j += 1
+    runs[i:j] = [[lo, hi]]
+
+
+def _covered(runs: list[list[int]], lo: int, hi: int) -> bool:
+    return any(a <= lo and hi <= b for a, b in runs)
+
+
 @dataclass(frozen=True, slots=True)
 class Carried:
     """A carried request's state at the window's open: its admission's prefix-cache hit ``C``, ``computed`` where its next row
@@ -61,16 +93,16 @@ class Carried:
     made: tuple[tuple[int, int], ...] = ()
 
     def __post_init__(self) -> None:
-        I1._int("a carried request's C", self.C)
-        I1._int("a carried request's computed", self.computed)
-        I1._int("a carried request's kept", self.kept)
-        made = tuple(tuple(x) for x in I1._tuple("made", self.made, tuple))
+        _int("a carried request's C", self.C)
+        _int("a carried request's computed", self.computed)
+        _int("a carried request's kept", self.kept)
+        made = tuple(tuple(x) for x in _seq("made", self.made, tuple))
         object.__setattr__(self, "made", made)
         for x in made:
             if len(x) != 2:
                 raise MalformedAdvice(f"a run of made positions is (lo, hi), not {x!r}")
-            I1._int("a run's lo", x[0])
-            I1._int("a run's hi", x[1], x[0] + 1)
+            _int("a run's lo", x[0])
+            _int("a run's hi", x[1], x[0] + 1)
         if any(a[1] >= b[0] for a, b in zip(made, made[1:])):
             raise MalformedAdvice(f"made runs {made} aren't disjoint, non-adjacent and in order")
 
@@ -139,7 +171,7 @@ def _replay(carried: tuple[Carried, ...], requests: tuple[RequestAdvice, ...], s
                 raise MalformedAdvice(f"{where}: kind {row.kind!r}, where n {row.n} at {row.start} of a {req.prompt_len}-token "
                                       f"prompt is {kind!r}")
             computed[r] = end
-            I1._cover(made[r], row.start, end)
+            _cover(made[r], row.start, end)
             if end == known[r] and kept[r] < req.output_len:
                 outputs.append(Output(s, j, r, kept[r]))
                 kept[r] += 1
@@ -148,7 +180,7 @@ def _replay(carried: tuple[Carried, ...], requests: tuple[RequestAdvice, ...], s
         for j, row in enumerate(step.rows):
             at = 0
             for src in row.sources:
-                if src.request >= len(first) or not I1._covered(made[src.request], at, at + src.n):
+                if src.request >= len(first) or not _covered(made[src.request], at, at + src.n):
                     raise MalformedAdvice(f"step {s} row {j}: request {src.request} computed no KV at positions {at} … "
                                           f"{at + src.n - 1} by this step")
                 if src.request == row.request and not row.preempted:
@@ -172,12 +204,12 @@ class Advice:
     carried: tuple[Carried, ...] = ()
 
     def __post_init__(self) -> None:
-        requests = I1._tuple("requests", self.requests, RequestAdvice)
-        steps = I1._tuple("steps", self.steps, StepAdvice)
-        release = I1._tuple("release", self.release, int)
-        carried = I1._tuple("carried", self.carried, Carried)
+        requests = _seq("requests", self.requests, RequestAdvice)
+        steps = _seq("steps", self.steps, StepAdvice)
+        release = _seq("release", self.release, int)
+        carried = _seq("carried", self.carried, Carried)
         for b in release:
-            I1._int("a release bucket", b)
+            _int("a release bucket", b)
         object.__setattr__(self, "requests", requests)
         object.__setattr__(self, "steps", steps)
         object.__setattr__(self, "release", release)
@@ -236,10 +268,72 @@ def follows(last: Advice, advice: Advice) -> None:
         raise MalformedAdvice(f"request {must[0]!r} ends the last window with outputs still to keep, and this window doesn't carry it")
 
 
-def _widths(advice: Advice) -> I1._Widths:
-    w = I1._widths(advice)
-    lens = [x for c in advice.carried for x in (c.C, c.computed, c.kept, *(y for run in c.made for y in run))]
-    return w._replace(len=max(w.len, max(lens, default=0).bit_length()))
+class _Widths(NamedTuple):
+    req: int
+    len: int
+    rel: int
+    src: int
+
+
+def _widths(advice: Advice) -> _Widths:
+    """The least widths that hold the window's values: I1 v0's, with the carried state among the lengths."""
+    lens = [x for q in advice.requests for x in (q.prompt_len, q.output_len)]
+    lens += [x for st in advice.steps for row in st.rows for x in (row.start, row.n, row.cache_hit, *(s.n for s in row.sources))]
+    lens += [x for c in advice.carried for x in (c.C, c.computed, c.kept, *(y for run in c.made for y in run))]
+    src = max((len(row.sources) - 1 for st in advice.steps for row in st.rows if row.cache_hit), default=0)
+    return _Widths(max(len(advice.requests) - 1, 0).bit_length(), max(lens, default=0).bit_length(),
+                   max(advice.release, default=0).bit_length(), src.bit_length())
+
+
+class _Writer:
+    def __init__(self) -> None:
+        self.out, self.acc, self.held, self.bits = bytearray(), 0, 0, 0
+
+    def put(self, value: int, width: int) -> None:
+        if value >> width:
+            raise AssertionError(f"{value} doesn't fit {width} bits")
+        self.acc = (self.acc << width) | value
+        self.held += width
+        self.bits += width
+        while self.held >= 8:
+            self.held -= 8
+            self.out.append(self.acc >> self.held)
+            self.acc &= (1 << self.held) - 1
+
+    def uvar(self, value: int) -> None:
+        self.put(value.bit_length(), WIDTH_BITS)
+        self.put(value, value.bit_length())
+
+    def finish(self) -> bytes:
+        if self.held:
+            self.out.append(self.acc << (8 - self.held))
+        return bytes(self.out)
+
+
+class _Reader:
+    def __init__(self, data: bytes) -> None:
+        self.data, self.pos, self.size = data, 0, 8 * len(data)
+
+    def left(self) -> int:
+        return self.size - self.pos
+
+    def get(self, width: int) -> int:
+        if width == 0:
+            return 0
+        end = self.pos + width
+        if end > self.size:
+            raise MalformedAdvice(f"truncated: a {width}-bit field at bit {self.pos} of {self.size}")
+        lo, hi = self.pos >> 3, (end + 7) >> 3
+        value = (int.from_bytes(self.data[lo:hi], "big") >> (8 * hi - end)) & ((1 << width) - 1)
+        self.pos = end
+        return value
+
+    def uvar(self) -> int:
+        width = self.get(WIDTH_BITS)
+        value = self.get(width)
+        if value.bit_length() != width:
+            raise MalformedAdvice(f"a {width}-bit length-prefixed field holds {value}: its width isn't its bit length")
+        return value
 
 
 class _Layout(NamedTuple):
@@ -251,11 +345,9 @@ class _Layout(NamedTuple):
 
 
 def _layout(advice: Advice) -> _Layout:
-    if not advice.version:
-        lay = I1._layout(advice.i1())
-        return _Layout(lay.data, lay.header, lay.requests, lay.steps, lay.release)
+    """A version 1 window's bit string and each part's length in bits."""
     w = _widths(advice)
-    out = I1._Writer()
+    out = _Writer()
     out.put(VERSION, 8)
     out.uvar(len(advice.carried))
     out.uvar(len(advice.requests))
@@ -308,7 +400,7 @@ def encode(advice: Advice) -> bytes:
     """The window's canonical bit string: I1 v0's for a version 0 window."""
     if type(advice) is not Advice:
         raise MalformedAdvice(f"encode takes a window Advice, not a {type(advice).__name__}")
-    return _layout(advice).data
+    return _layout(advice).data if advice.version else I1.encode(advice.i1())
 
 
 def decode(data: bytes) -> Advice:
@@ -316,7 +408,7 @@ def decode(data: bytes) -> Advice:
     if not isinstance(data, (bytes, bytearray)):
         raise MalformedAdvice(f"decode takes bytes, not a {type(data).__name__}")
     data = bytes(data)
-    rd = I1._Reader(data)
+    rd = _Reader(data)
     version = rd.get(8)
     if version == I1.VERSION:
         a = I1.decode(data)
@@ -370,6 +462,8 @@ def decode(data: bytes) -> Advice:
 
 def total_bits(advice: Advice) -> int:
     """The window's length in bits, its padding left out."""
+    if not advice.version:
+        return I1.total_bits(advice.i1())
     lay = _layout(advice)
     return lay.header + sum(lay.requests) + sum(lay.steps) + lay.release * len(advice.release)
 
@@ -379,7 +473,7 @@ def bits_by_window(advice: Advice, T: int) -> dict[int, int]:
     rule, `advice.bits_by_window`; the carried state goes with the header). The values sum to `total_bits`."""
     if not advice.version:
         return I1.bits_by_window(advice.i1(), T)
-    I1._int("T", T, 1)
+    _int("T", T, 1)
     lay = _layout(advice)
     replay = _replay(advice.carried, advice.requests, advice.steps)
     charge: dict[int, int] = {}
@@ -424,27 +518,39 @@ def to_json(advice: Advice) -> dict:
             "release": list(advice.release)}
 
 
+def _keys(doc: Any, keys: tuple[str, ...], what: str) -> Mapping:
+    if not isinstance(doc, Mapping) or set(doc) != set(keys):
+        raise MalformedAdvice(f"{what} must be an object with exactly {sorted(keys)}, not {doc!r:.200}")
+    return doc
+
+
+def _list(doc: Any, what: str) -> list:
+    if not isinstance(doc, list):
+        raise MalformedAdvice(f"{what} must be a list, not {type(doc).__name__}")
+    return doc
+
+
 def from_json(doc: Any) -> Advice:
     """The window `to_json` wrote; refuses any other key or shape."""
     if isinstance(doc, dict) and doc.get("schema") == I1.SCHEMA:
         a = I1.from_json(doc)
         return Advice(a.requests, a.steps, a.release)
-    d = I1._keys(doc, ("schema", "carried", "requests", "steps", "release"), "window advice")
+    d = _keys(doc, ("schema", "carried", "requests", "steps", "release"), "window advice")
     if d["schema"] != SCHEMA:
         raise MalformedAdvice(f"schema {d['schema']!r}, not {SCHEMA!r} or {I1.SCHEMA!r}")
-    carried = tuple(Carried(**{**I1._keys(c, ("C", "computed", "kept", "made"), "a carried request"),
-                               "made": tuple(tuple(x) for x in I1._list(c["made"], "made"))}) for c in I1._list(d["carried"], "carried"))
-    requests = tuple(RequestAdvice(**I1._keys(q, ("id", "prompt_len", "output_len", "finish"), "a request"))
-                     for q in I1._list(d["requests"], "requests"))
+    carried = tuple(Carried(**{**_keys(c, ("C", "computed", "kept", "made"), "a carried request"),
+                               "made": tuple(tuple(x) for x in _list(c["made"], "made"))}) for c in _list(d["carried"], "carried"))
+    requests = tuple(RequestAdvice(**_keys(q, ("id", "prompt_len", "output_len", "finish"), "a request"))
+                     for q in _list(d["requests"], "requests"))
     steps = []
-    for st in I1._list(d["steps"], "steps"):
+    for st in _list(d["steps"], "steps"):
         rows = []
-        for r in I1._list(I1._keys(st, ("rows",), "a step")["rows"], "rows"):
-            r = I1._keys(r, ("request", "kind", "start", "n", "cache_hit", "preempted", "sources"), "a row")
-            sources = tuple(Source(**I1._keys(s, ("request", "n"), "a source")) for s in I1._list(r["sources"], "sources"))
+        for r in _list(_keys(st, ("rows",), "a step")["rows"], "rows"):
+            r = _keys(r, ("request", "kind", "start", "n", "cache_hit", "preempted", "sources"), "a row")
+            sources = tuple(Source(**_keys(s, ("request", "n"), "a source")) for s in _list(r["sources"], "sources"))
             rows.append(Row(r["request"], r["kind"], r["start"], r["n"], r["cache_hit"], r["preempted"], sources))
         steps.append(StepAdvice(tuple(rows)))
-    advice = Advice(requests, tuple(steps), tuple(I1._list(d["release"], "release")), carried)
+    advice = Advice(requests, tuple(steps), tuple(_list(d["release"], "release")), carried)
     if not advice.version:
         raise MalformedAdvice(f"a window that carries nothing in or out is I1 v0's ({I1.SCHEMA!r})")
     return advice
