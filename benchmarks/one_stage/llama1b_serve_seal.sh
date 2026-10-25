@@ -12,7 +12,8 @@
 #     gpu-lease 1 --wait --mem-gb 256 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
 # Windows are sealed off the engine loop and close at WINDOW_GB committed; the server refuses to start, and later stops taking
 # requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each window and at
-# any stop.
+# any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8) and MAX_NUM_BATCHED_TOKENS (2048) are serve-openai's
+# --seal-hold-gb, --seal-warm-gb, --max-num-seqs and --max-num-batched-tokens.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -55,6 +56,8 @@ fi
   --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "${DISK_FLOOR_GB:-300}" \
+  --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
+  ${MAX_NUM_BATCHED_TOKENS:+--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"} \
   --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
