@@ -209,7 +209,16 @@
    "pad-nonvanishing": {
     "about": "Assumptions.PadNonvanishing (zero knowledge): X_L + κ ≠ 0 on the level-0 domain, since Ŵ_cols(ω_q) is bit cols of q",
     "mentions": ["AdditiveNTT.normalizedW", "Polynomial.eval"],
-    "ack": ["AdditiveNTT.computableNormalizedWValuesArray_getD", "AdditiveNTT.evalNormalizedWAt_eq_normalizedW", "AdditiveNTT.eval_normalizedW_succ_at_beta_prev", "AdditiveNTT.evaluationPointω_eq_twiddleFactor_of_div_2", "AdditiveNTT.get_sDomain_basis", "AdditiveNTT.normalizedW_is_additive", "AdditiveNTT.normalizedWᵢ_eval_βᵢ_eq_1", "AdditiveNTT.normalizedWᵢ_vanishing"]
+    "ack": [
+     "AdditiveNTT.computableNormalizedWValuesArray_getD",
+     "AdditiveNTT.evalNormalizedWAt_eq_normalizedW",
+     "AdditiveNTT.eval_normalizedW_succ_at_beta_prev",
+     "AdditiveNTT.evaluationPointω_eq_twiddleFactor_of_div_2",
+     "AdditiveNTT.get_sDomain_basis",
+     "AdditiveNTT.normalizedW_is_additive",
+     "AdditiveNTT.normalizedWᵢ_eval_βᵢ_eq_1",
+     "AdditiveNTT.normalizedWᵢ_vanishing"
+    ]
    },
    "hm-row-computes": {
     "about": "HmRowComputes (circuit/hm96-sha512-row): the sha512x3 and hm96 slots compute SHA-512 and hm96's commit string, the value binding's circuit side (phase 2i)",
@@ -229,6 +238,11 @@
    "A4-prf-sha512": {
     "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
     "mentions": ["PRFScheme.prfAdvantage"],
+    "ack": []
+   },
+   "live-verifier-custody-exec": {
+    "about": "Assumptions.RecordCustodyExec and RecordCustodyExecH (live-verifier): the record flock-verify verify reads without --zk is the one the verifier's coin server wrote for the live session, and its draw file proves the drawn units with the outcome's link points (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
    }
   },
