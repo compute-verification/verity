@@ -637,6 +637,9 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         rmsnorm-triton:M     RMSNormTriton_v5{N=H,EPS} (`prune`'s rewrite of RMSNormTriton_v1)
         embedding:M[:V]      Embedding_v1{V,H}
         token-select:M[:V]   TokenSelect_v4{V} (`prune`'s rewrite of TokenSelect_v1)
+        token-select-chunk:M[:C]    TokenSelectChunk_v2{C}, a V-chunk of TokenSelect_v4 (C-Flock's ``token-select-chunk``)
+        token-select-combine:M[:V]  TokenSelectCombine_v2{V,C}, TokenSelect_v4's combine (``token-select-combine``), its
+                                    partials the chunks' own of a stand-in logits row
         rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
     """
     from verity.ml.circuits.defs import bind
@@ -668,6 +671,23 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         return bind(b1.Embedding, V=V, H=H), emb
     if fam == "token-select":
         return bind(DF.TokenSelectV4, V=V), lambda rng, n: {"logits": _gen(rng, n, V, 3.0)}
+    if fam == "token-select-chunk":
+        C = a or DF.CHUNK
+        return bind(DF.TokenSelectChunkV2, C=C), lambda rng, n: {"x": _gen(rng, n, C, 3.0)}
+    if fam == "token-select-combine":
+        from verity.ml.circuits.evaluation import evaluate_batch
+
+        C = DF.CHUNK
+        if V % C:
+            raise SystemExit(f"{shape}: V = {V} is no whole number of {C}-logit chunks")
+
+        def combine(rng, n):
+            logits = _gen(rng, n, V, 3.0)
+            part = np.asarray(evaluate_batch(bind(DF.TokenSelectChunkV2, C=C), logits.reshape(-1, C).astype(np.uint64)))
+            idx = part[:, 1].astype(np.uint32).reshape(n, -1)
+            return {"x0": logits[:, :1], "best": part[:, 0].astype(np.uint16).reshape(n, -1),
+                    "idx": np.stack([idx & 0xFFFF, idx >> 16], axis=2).reshape(n, -1).astype(np.uint16)}
+        return bind(DF.TokenSelectCombineV2, V=V, C=C), combine
     if fam == "rope":
         heads = a or L["NH"]
 
@@ -677,7 +697,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
             return {"x": _gen(rng, n, heads * D), "cs": bf16(np.concatenate([np.cos(ang), np.sin(ang)], axis=1))}
         return bind(b1.RoPE, NHEADS=heads, D=D), rope
     raise SystemExit(f"{shape}: no served family {fam!r} (gemm, attention, rmsnorm-fused, rmsnorm-triton, embedding, "
-                     f"token-select, rope)")
+                     f"token-select, token-select-chunk, token-select-combine, rope)")
 
 
 _LOWERINGS: dict = {}

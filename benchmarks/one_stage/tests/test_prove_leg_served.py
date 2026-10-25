@@ -38,6 +38,8 @@ def test_units_for_is_the_fewest_units_stage_admits(k_log, per_block):
     ("rmsnorm-triton:8b", f"RMSNormTriton_v5{{N=4096,{EPS}}}"),
     ("embedding:1b:8", "Embedding_v1{V=8,H=2048}"),
     ("token-select:1b:200", "TokenSelect_v4{V=200}"),
+    ("token-select-chunk:1b", "TokenSelectChunk_v2{C=64}"),
+    ("token-select-combine:1b:256", "TokenSelectCombine_v2{V=256,C=64}"),
     ("rope:1b:8", "RoPE_v1{NHEADS=8,D=64}"),
 ])
 def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(shape, want):
@@ -51,6 +53,19 @@ def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(
     params, _ret = fn.signature()
     assert {nm: v.shape for nm, v in values.items()} == {nm: (2, sum(t.leaf_widths()) // 16) for nm, t in params}
     assert all(v.dtype == np.uint16 for v in values.values())
+
+
+def test_the_combines_partials_are_its_logits_rows_chunks():
+    """The combine's stand-in is a logits row's: x0 its first logit, each chunk's partial its largest logit and that logit's
+    first index in the chunk (the rows are finite, so `TokenSelectChunk_v2` is the first argmax)."""
+    _fn, gen = L.served("token-select-combine:1b:256")
+    v = gen(np.random.default_rng(0), 3)
+    logits = L._gen(np.random.default_rng(0), 3, 256, 3.0)
+    f = (logits.astype(np.uint32) << 16).view(np.float32).reshape(3, 4, 64)
+    idx = v["idx"].reshape(3, 4, 2).astype(np.uint32)
+    assert (v["x0"] == logits[:, :1]).all()
+    assert ((idx[..., 0] | idx[..., 1] << 16) == f.argmax(-1)).all()
+    assert (v["best"] == np.take_along_axis(logits.reshape(3, 4, 64), f.argmax(-1)[..., None], -1)[..., 0]).all()
 
 
 def test_an_unknown_family_is_refused_by_name():
