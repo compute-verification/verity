@@ -72,7 +72,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   `throughArg` and `carry` keep the gates they read at every fuel (`specs`, `specs_of`) wherever the callees' summaries
   hold `RetOk`, a composite's return has as many leaves as its type, a primitive returns one leaf, a scan's output is
   `ScanOut`'s, the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims), and so do the steps
-  open here (`OpenSteps`): a batch of a composite's piece past its one-run case (`BatchRest`) and `carry` one step up
+  open here (`OpenSteps`): a batch of a composite's piece of one row past its one-run case (`BatchRest`; one of more
+  rows is read row by row, `down_batch_rows`) and `carry` one step up
   (`CarrySpec`); in a Definition's body, wherever
   its references (`Resolve.BodyOk`), its callees' summaries (`RetOk`), the decoder's facts its private `composite`
   sets (`Decoded`, `ScanOut`) and `OpenSteps` do (`specs_decoded`).
@@ -2972,6 +2973,50 @@ theorem down_batch0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tg
   intro h
   cases h
 
+/-- A batch of a composite's piece of more than one row past its one-run case, read row by row. -/
+theorem down_batch_rows (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
+    (ha : affineOf c k node q = none) (hr : q.rows > 1) :
+    Desc.down c (fuel + 1) q = byRows c fuel q := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht, hff]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((c.P.defs[node.fn]!).prim = true) by simp [hp])]
+  rw [if_neg (show ¬ (((c.P.defs[node.fn]!).outLeaves == 0) = true) by simpa using hL)]
+  unfold affineOf at ha
+  dsimp only at ha
+  rcases hC : ((c.memo[node.fn]!).ret.segs.size == 1 && (c.memo[node.fn]!).ret.segs[0]!.reps ≤ 1 &&
+      (c.memo[node.fn]!).ret.segs[0]!.ps.size == 1) with _ | _ <;>
+    simp only [hC, Bool.false_eq_true, ite_false, ite_true] at ha
+  · rw [if_neg (by simp), if_pos hr]
+    delta byRows Desc.down
+    rfl
+  · rw [if_pos rfl]
+    cases hT : ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).tgt with
+    | ref b i =>
+      dsimp only
+      rw [if_pos hr]
+      delta byRows Desc.down
+      rfl
+    | gate w =>
+      simp only [hT] at ha
+      dsimp only
+      rcases hC2 : (((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).rows ≤ 1 &&
+          ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).len == (c.P.defs[node.fn]!).outLeaves &&
+          ((c.P.defs[node.fn]!).outLeaves == 1 || ((c.P.defs[node.fn]!).gates : Int) ==
+            ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).stride)) with _ | _ <;>
+        simp only [hC2, Bool.false_eq_true, ite_false, ite_true] at ha
+      · rw [if_neg (by simp), if_pos hr]
+        delta byRows Desc.down
+        rfl
+      · cases ha
+
 /-- `down` with no fuel left refuses. -/
 theorem down_zero (c : Desc.Ctx) (q : Piece) (x : Array Seg) : Desc.down c 0 q ≠ .ok x := by
   delta Desc.down
@@ -5345,32 +5390,35 @@ theorem batchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
   omega
 
 
-/-- **Open: a batch of a composite's piece past its one-run case**, one step up: row by row, whole members as copies
+/-- **Open: a batch of a composite's piece of one row past its one-run case**, one step up: whole members as copies
 of one member's return (of gates, or of leaves of arguments the members share, resolved once), one run of a mapped
 argument through `throughPS`, a stride of whole members as copies of one member's leaf, or member by member and
 position by position. -/
 def BatchRest (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.flat = q →
-    affineOf c k node q = none → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
+    affineOf c k node q = none → ¬ q.rows > 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     Desc.down c (fuel + 1) q = .ok segs → Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc))
 
-/-- **A batch of a composite's piece**, in its one-run case or past it. -/
-theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hAff : BatchAffine c sc)
-    (hRest : BatchRest c sc fuel) : BatchSpec c sc fuel := by
+/-- **A batch of a composite's piece**, in its one-run case, of more than one row (row by row), or past them. -/
+theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hD : DownSpec c sc fuel)
+    (hAff : BatchAffine c sc) (hRest : BatchRest c sc fuel) : BatchSpec c sc fuel := by
   intro q segs k node ht hn hform hp h0 hff hq hf h
   by_cases hL : (c.P.defs[node.fn]!).outLeaves = 0
   · exact absurd h (down_batch0 c fuel q ht hff hn hform hp hL h0 segs)
   rcases ha : affineOf c k node q with _ | p
-  · exact hRest q segs k node ht hn hform hp hL h0 hff ha hq hf h
+  · by_cases hr : q.rows > 1
+    · rw [down_batch_rows c fuel q ht hff hn hform hp hL h0 ha hr] at h
+      exact byRows_agree c sc fuel hD q hq hf h
+    exact hRest q segs k node ht hn hform hp hL h0 hff ha hr hq hf h
   · rw [down_batch_affine c fuel q ht hff hn hform hp hL h0 ha] at h
     simp only [Except.ok.injEq] at h
     subst h
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
 /-- **Open: `down`'s steps past what is proved here**, each one step up from the specs at its fuel: a batch of a
-composite's piece past its one-run case (`BatchRest`) and `carry` (`CarrySpec`), which follows a scan's carry back
-through its iterations. -/
+composite's piece of one row past its one-run case (`BatchRest`) and `carry` (`CarrySpec`), which follows a scan's
+carry back through its iterations. -/
 def OpenSteps (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
   (∀ fuel, DownSpec c sc fuel → CalleeSpec c sc fuel → BatchRest c sc fuel) ∧
     (∀ fuel, CalleeSpec c sc fuel → ThroughSpec c sc fuel → CarrySpec c sc (fuel + 1))
@@ -5390,7 +5438,7 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
     (hO : OpenSteps c sc) :
     ∀ fuel, DownSpec c sc fuel ∧ CalleeSpec c sc fuel ∧ ThroughSpec c sc fuel ∧ CarrySpec c sc fuel :=
   specs c sc hd hB hP1 hA hL0 hR
-    (fun fuel hD hC => batchSpec_of c sc fuel (batchAffine c sc hd hR hOL) (hO.1 fuel hD hC))
+    (fun fuel hD hC => batchSpec_of c sc fuel hD (batchAffine c sc hd hR hOL) (hO.1 fuel hD hC))
     (fun fuel hC hK => scanSpec_of c sc hd hB hSO fuel hC hK) hO.2
 
 
