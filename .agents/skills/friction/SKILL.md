@@ -146,7 +146,8 @@ Protocols and claims:
 - (12 Oct) Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
-  assumption), claims 0.15% over a 10-minute horizon with every window at most 1%, and never changes the model's logits.
+  assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
+  model's logits.
 - (18 Oct, ASK-16) PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
   knowledge soundness keeps the collision form.
