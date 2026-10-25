@@ -44,6 +44,7 @@ from fractions import Fraction
 from typing import Any
 
 from . import pooled
+from .audit import RECEIPT_LIMIT
 
 TIME_HELD, LINK_CHARGED = "time-held", "link-charged"
 FORMS = (TIME_HELD, LINK_CHARGED)
@@ -457,7 +458,9 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
     and its times and reads `seen[t]`'s, and window t's receipts and draws are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
     the session's `samples` s, as the verifier's draw does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
-    windows are the record's draws (`draws_of`), each refused unless it drew min(s, U) of its U receipts."""
+    windows are the record's draws (`draws_of`), each refused unless it drew min(s, U) of its U receipts and has fewer
+    than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's draw reads at most
+    2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a draw's windows' receipts need not be."""
     ws = record["windows"]
     if len(seen) != len(ws):
         raise Refused(f"the auditor saw {len(seen)} windows, not the record's {len(ws)}")
@@ -472,6 +475,9 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
         for c, (u, d) in enumerate(windows):
             if d != min(samples, u):
                 raise Refused(f"draw {c} drew {d} of its {u} receipts, not min({samples}, {u})")
+        for c, (u, _) in enumerate(windows):
+            if u >= RECEIPT_LIMIT:
+                raise Refused(f"draw {c} has {u} receipts, not fewer than 2^64")
     return [Group(x.released_ns, x.last_ns, len(w["lengths"]), x.least, x.weights, x.hbm, x.host)
             for w, x in zip(ws, seen)], windows
 

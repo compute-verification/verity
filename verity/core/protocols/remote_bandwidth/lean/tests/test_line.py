@@ -377,6 +377,27 @@ def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
     assert line.record_run_json(r) == {"refused": why} and D.replay(record_port(), r, server) == refused(why)
 
 
+def test_a_draw_of_two_to_the_64_receipts_is_refused(server) -> None:
+    """Drawn four windows a coin, a draw whose windows' receipts, each below 2^64 as `receive` holds a window's, sum to
+    2^64 or more is refused, the Lean's and line.py's word for word: the memory model's draw reads at most 2^64 − 1
+    (`Properties.RemoteAudit.Line.receiptMax`). One receipt fewer, the draw is read."""
+    v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
+    r = recorded(v, 37)
+    r["record"]["groups_per_coin"] = 4
+    for t, w in enumerate(r["record"]["windows"]):
+        w["drawn"] = 37 if t % 4 == 0 else 0
+    big = r["record"]["windows"][4:8]
+    for w in big[:2]:
+        w["lengths"][0] = (1 << 63) - N
+    u = sum(sum(w["lengths"]) for w in big)
+    assert u >= 1 << 64 and all(sum(w["lengths"]) < 1 << 64 for w in big)
+    why = f"draw 1 has {u} receipts, not fewer than 2^64"
+    assert line.record_run_json(r) == {"refused": why} and D.replay(record_port(), r, server) == refused(why)
+    big[0]["lengths"][0] -= u - (1 << 64) + 1
+    out = line.record_run_json(r)
+    assert "refused" not in out and D.replay(record_port(), r, server) == ("output", D.canonical(out))
+
+
 def short_seen(r: dict) -> None:
     r["seen"].pop()
 
