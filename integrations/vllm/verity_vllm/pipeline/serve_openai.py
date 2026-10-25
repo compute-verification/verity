@@ -655,12 +655,8 @@ def main(opts: Options) -> int:
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
-<<<<<<< HEAD
               "served_rows_statics": windows.served if windows is not None else None,
-              "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None,
-=======
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
->>>>>>> origin/cursor/vllm-seal-offloop-4822
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
