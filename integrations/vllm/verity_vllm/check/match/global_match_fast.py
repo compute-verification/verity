@@ -655,8 +655,9 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
                     try:
                         with open(path, "wb") as f:
                             pickle.dump({"ok": False, "error": repr(e)[:2000], "trace": traceback.format_exc()[-4000:]}, f)
-                    except BaseException:  # noqa: BLE001
-                        pass
+                    except BaseException as werr:  # noqa: BLE001 - the parent names the leg from its missing result
+                        os.write(2, f"global_match_fast: leg worker {os.getpid()} raised {e!r:.500} and could not write it to {path}: "
+                                    f"{werr!r:.500}\n".encode())
                 finally:
                     os._exit(code)
             children.append((pid, path, idxs))
