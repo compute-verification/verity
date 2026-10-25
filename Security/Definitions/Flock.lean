@@ -11,6 +11,8 @@ import Definitions.Flock.Merkle
 import Definitions.Flock.Circuit
 import Definitions.Flock.Rewinding
 import Definitions.Flock.Accounting.Fast100
+import Definitions.Flock.Game.Expect
+import Definitions.Flock.Game.Interleave
 
 /-!
 # C-Flock's definitions
