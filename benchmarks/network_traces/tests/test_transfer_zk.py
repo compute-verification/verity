@@ -43,7 +43,7 @@ def test_the_certified_pins_leave_no_free_input(at):
     assert v.free == 0 and v.free_unpinned == UNITS * 16 * (64 + 2 + 64 + 2)
     assert {p: v.ports[p]["root"] for p in tz.PORTS} == {p: at.transfers[tz.VALUES[p][0]].root.hex() for p in tz.PORTS}
     forged = tz.verifier(at, tz.presented("forged", at))
-    assert forged.pins == v.pins and forged.heads["response"].root == at.forged.root != at.transfers["response"].root
+    assert forged.pins == v.pins and tz.head(forged.heads, "o0").root == at.forged.root != at.transfers["response"].root
 
 
 def test_the_verifier_refuses_a_response_root_that_isnt_certified_for_its_link_window(at):

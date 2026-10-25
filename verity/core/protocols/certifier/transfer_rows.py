@@ -32,7 +32,10 @@ cells digest and the record digest of a link-window are under other tags, so non
 
 **The kinds** (`KINDS`) and their directions: ``load`` (ingress: the registered parameters' leaves the load connection
 carries, once a server session), ``request`` (ingress), ``response`` (egress), and ``wire`` (a value one server sends
-another: its egress on the sender's uplink and its ingress on the receiver's, two values under two certifiers). This
+another: its egress on the sender's uplink and its ingress on the receiver's, one value under two certifiers). The
+receiver's certifier commits the rows it saw under the sender's certifier's salts, handed it with the rows by whoever
+relays them (``salts``), so the two roots are one exactly when the rows that arrived are the rows that left under those
+salts, which the verifier holds them to (`blocks.certified`), and the root is as hiding as the sender's. This
 workload's rows (`request_rows`, `response_rows`): slot j's request is row j, its length and then its prompt's NP bytes,
 one u16 each; byte k of slot j's response is row j·O + k, one u16, byte | present << 8.
 
