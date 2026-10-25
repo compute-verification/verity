@@ -7,8 +7,8 @@
 #
 # Outside any lease: the ship unpacked into a scratch directory and held to its MANIFEST.sha256, and the card recorded.  Under
 # one lease of at most 30 minutes: run.py, the identity check, every case of check/ and the diagnostic timing.  Every step's
-# exit code is in $OUT/rc.txt; exits non-zero if any failed.  (The card's canary of sm90.mma.m16n8k16.bf16 is its own run:
-# benchmarks/tc_probe/tc_probe.py --canary, from the ship's tc_probe/ library.)
+# exit code is in $OUT/rc.txt; exits non-zero if any failed.  The ship must arrive as inputs/ship.tar: --send keeps the
+# file's name.  (The card's canary of sm90.mma.m16n8k16.bf16 is its own run, benchmarks/tc_probe's.)
 # VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default /workspace/cp/venv312, else /workspace/jobs/venv312);
 # ATTN_EXPECT the card's name prefix (default "NVIDIA H200"); GPU_LEASE_WHO the lease's holder (default kernels).
 set -uo pipefail

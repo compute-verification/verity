@@ -9,13 +9,14 @@ causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a
 - `attn_bf16.cu`: the kernels, and how each word's chain is fixed (one warp per 16 x 8 tile, no split-K, no atomics, and
   per-query zeroing of V in the block where the tile's queries stop at different keys). The `_h8` kernels put 8 query
   heads that share a KV head in a tile's columns, so a decode step reads each key and value once for 8 heads.
-- `build.sh`: on a CPU node, both cubins (`-fmad=false`, no FTZ or fast-math), `sass_gate.py` on each, the tc_probe
-  canary's library, and `fixture.py`'s check.
+- `build.sh`: on a CPU node, both cubins (`-fmad=false`, no FTZ or fast-math), `sass_gate.py` on each, and
+  `fixture.py`'s check.
 - `fixture.py`: the cases and the buffers the kernels must leave, from the Definition's twin, held to its reference
   evaluator on a sample; the H200 model's whole decode step as per-sequence digests over `gen.py`'s inputs.
 - `run.py`: on the card, the identity check, every case under 0xA5 poison in each tiling at three launch shapes, a
   no-launch control that must fail, and diagnostic timing against SDPA and torch's matmuls at the model's decode step.
-- `session.sh`: the card's part as one run from the build's ship, under `gpu-lease 1`: the canary first, then `run.py`.
+- `session.sh`: the card's part as one run from the build's ship (sent as `ship.tar`), `run.py` under `gpu-lease 1`. The
+  card's canary is `benchmarks/tc_probe`'s own run.
 
 ```text
 research run --on auto --project verity --source . --cwd source --cpus 16 --mem-gb 48 -- \

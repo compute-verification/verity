@@ -4,8 +4,6 @@
 #                     so the same bytes from any directory), each refused unless ptxas reports no warning, spill or stack frame
 #                     and the SASS's only floating-point instructions are HMMA.16816.F32.BF16 and the cvt (sass_gate.py)
 #   sass.<arch>.json, ptxas.<arch>.txt   registers and HMMA, F2FP and local-memory counts per kernel; ptxas's report
-#   tc_probe/         the canary's probe library for CANARY (default sm90.mma.m16n8k16.bf16; tc_probe.py --compile-only
-#                     --sass-check) and the H100 capture of BF16 specials it replays (tc-hopper-2026-09-07)
 #   check/            fixture.py's cases: inputs and the buffers the kernels must leave, and FULL's digests (needs verity)
 #   run.py, gen.py, session.sh, toolchain.txt (nvcc --version and the nvcc command lines), source.txt (the verity commit),
 #   MANIFEST.sha256
@@ -18,7 +16,6 @@ if [ -z "${CUDA:-}" ]; then
   for c in /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && CUDA=$c && break; done
 fi
 CUDA=${CUDA:-/usr/local/cuda}; OUT=${1:-/tmp/attn-bf16-ship}; shift || true
-CANARY=${CANARY:-sm90.mma.m16n8k16.bf16}
 [ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }
 "$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"
@@ -34,15 +31,8 @@ for ARCH in sm_90a sm_120a; do
 done
 [ -n "${CUBIN_ONLY:-}" ] && exit 0
 cd "$ROOT"
-PATH="$CUDA/bin:$PATH" env -u RESEARCH_RUN_ID uv run python benchmarks/tc_probe/tc_probe.py --instruction "$CANARY" --compile-only \
-  --sass-check --out "$OUT/tc_probe"
-if uv run research data fetch-fixtures verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07; then
-  cp verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz "$OUT/tc_probe/"
-else
-  echo "no tc-hopper-2026-09-07 capture: the session runs the canary alone" >&2
-fi
 uv run python benchmarks/torch_gpu/attn_bf16/fixture.py "$OUT/check" "$@"
 cp "$HERE/run.py" "$HERE/gen.py" "$HERE/session.sh" "$OUT/"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/attn_bf16 benchmarks/tc_probe verity; } > "$OUT/source.txt"
+{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/attn_bf16 verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"
