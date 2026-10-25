@@ -91,7 +91,7 @@ print(json.dumps({"window": int(k), "row_dir": str(w), "bundle": str(w / "commit
                   "commit_scheme": v.get("commit_scheme"), "manifest_sha256": v["replay_deferred"]["bundles"][0]["manifest_sha256"],
                   "registration": str(d / "advice" / f"w{k}" / "registration.json"), "programs": len(m.get("requests") or {}),
                   "builds": sorted(p.name for p in w.glob("build_request*")),
-                  "ctx_served_rows": {key: srw.get(key) for key in ("schema", "root", "count", "digests", "statics", "error") if key in srw} or srw,
+                  "ctx_served_rows": {key: srw.get(key) for key in ("schema", "binding", "root", "count", "n_bits", "statics", "error") if key in srw} or srw,
                   "ctx_step_input_port": sw.get("step_input_port"), "port_layout": (line.get("sealed") or {}).get("port_layout")}))
 EOF
   "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/identities.txt"
