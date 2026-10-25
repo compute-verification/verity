@@ -11,8 +11,9 @@ declared before the run predicts.  This command writes it from what the run reco
 
 and refuses a run whose two records disagree (a prompt or output length, a request the trace never saw), a row whose first
 position isn't where the request's last row ended (`continuity`: no position is computed twice and none is skipped, except
-from a prefix-cache hit at first scheduling or at a resume from preemption), and a finish advice v0 can't say (a stop string,
-an abort).  A cache hit's KV `sources` are the runs of earlier-computed positions whose requests share the hit's tokens, read
+from a prefix-cache hit at first scheduling or at a resume from preemption), a finish the advice can't say (a stop string; an
+abort outside a Commit window), and a row after an abort's step.  A cache hit's KV `sources` are the runs of earlier-computed
+positions whose requests share the hit's tokens, read
 from the Commit record's token ids.  Each kept output's `release` bucket is the bucket of width `--tau` seconds, counted from
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
@@ -36,7 +37,8 @@ A `verity-vllm serve-openai` run (its ``advice_trace.jsonl``, the server's sched
 close, and its ``requests.jsonl``, whose ``user`` names each request) gets one advice a closed Commit window (`windows_of`), each
 under ``w<k>/`` with its registration naming the window's Commit (run id and run root), listed in ``windows.json``; a window still
 open is left for a later call, and a window the advice refuses is named there.  A window's advice is `window_advice`'s: I1 v0
-with the requests it carries across its open and close, since a window closes after ``window_steps`` steps whatever is running.
+with the requests it carries across its open and close, since a window closes after ``window_steps`` steps whatever is running,
+and the requests its clients abort (the trace's outside finish, ``abort``, after the step in flight).
 The windows are read in order, each opening with the state the last one left (`Left`: where each unfinished request's next
 row continues, its kept outputs and the KV it computed), so a request that runs on into the next window is held there to the
 position it reached, and its record (lengths and finish) is the Commit record's.
@@ -94,16 +96,17 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
-    """A trace finish as I1's: a stop with no stop reason (the model's EOS) or an int one (a stop token id) is `eos`."""
+    """A trace finish as the advice's: a stop with no stop reason (the model's EOS) or an int one (a stop token id) is `eos`, and
+    a client's abort `abort` (`window_advice`'s only)."""
     if rec is None:
         raise ValueError(f"request {rid} never finished")
     reason, why = rec["reason"], rec.get("stop_reason")
     if reason == "stop" and (why is None or isinstance(why, int)):
         return "eos"
-    if reason == "length":
-        return "length"
-    raise ValueError(f"request {rid} finished by {reason}{f' ({why!r})' if why is not None else ''}, which advice v0 can't say "
-                     f"(its finishes are {', '.join(I1.FINISHES)})")
+    if reason in ("length", "abort"):
+        return reason
+    raise ValueError(f"request {rid} finished by {reason}{f' ({why!r})' if why is not None else ''}, which the advice can't say "
+                     f"(its finishes are {', '.join(WA.FINISHES)})")
 
 
 def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
@@ -187,7 +190,7 @@ class Left:
     """A request a Commit window leaves to the next (`window_advice.close`): its trace state at the close (its finish's step
     counted from the next window's first), its record and its advice state, and whether the next window must carry it."""
     q: _Req
-    record: I1.RequestAdvice
+    record: WA.RequestAdvice
     state: WA.Carried
     must: bool
 
@@ -230,8 +233,9 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             q = reqs.get(rid)
             if q is None:
                 raise ValueError(f"step {s}: request {rid} has a row but never arrived")
-            if q.finish is not None and q.finish["at"] < s - 1:
-                raise ValueError(f"step {s}: request {rid} has a row {s - q.finish['at']} steps after it finished")
+            if q.finish is not None and q.finish["at"] < s - (0 if q.finish.get("outside") else 1):
+                raise ValueError(f"step {s}: request {rid} has a row {s - q.finish['at']} steps after it finished"
+                                 + (f" ({q.finish['reason']} after step {q.finish['at']}, outside the scheduler)" if q.finish.get("outside") else ""))
             start, n, hit, resume = int(start), int(n), 0, rid in st["resumed"]
             if q.index is None:
                 hit = int(st["cache_hit"].get(rid, 0))
@@ -287,13 +291,17 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             raise ValueError(f"request {q.rid}: the trace emitted {q.emitted} tokens, the Commit record holds {total}")
         if q.finish is not None or not window:
             finish = finish_of(q.rid, q.finish)
+            if finish == "abort" and not window:
+                raise ValueError(f"request {q.rid} finished by abort, which a whole session's advice (I1 v0) can't say; a served "
+                                 f"Commit window's (window_advice) can")
         elif rec is not None or was is None:
-            finish = finish_of(q.rid, rec and rec.get("finish"))      # it finishes in a later window: the Commit record's finish
+            # it finishes in a later window: the Commit record's finish, or the abort the trace records after this window
+            finish = finish_of(q.rid, (rec and rec.get("finish")) or outside.get(q.rid))
         else:
             finish = was.finish
         if was is not None and (user, total, finish) != (was.id, was.output_len, was.finish):
             raise ValueError(f"request {q.rid} is carried in as {was}, and its Commit record says {user!r}, {total} outputs, {finish}")
-        advice_reqs.append(I1.RequestAdvice(user, q.prompt_len, total, finish))
+        advice_reqs.append(WA.RequestAdvice(user, q.prompt_len, total, finish))
     if io is not None and (extra := sorted(set(io) - set(reqs))):
         raise ValueError(f"the Commit record holds {len(extra)} requests the trace never saw: {extra[:3]}")
     i1_steps = tuple(I1.StepAdvice(tuple(
@@ -316,7 +324,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     rule = {"rule": "engine clock", "tau_s": tau} if clocked else {"rule": "step index"}
     try:
         if not window:
-            I1.Advice(tuple(advice_reqs), i1_steps, tuple(release))
+            I1.Advice(tuple(q.i1() for q in advice_reqs), i1_steps, tuple(release))
         a = WA.Advice(tuple(advice_reqs), i1_steps, tuple(release), tuple(x.state for x in carried))
     except I1.MalformedAdvice as e:
         raise ValueError(f"I1 refuses the advice: {e}") from e
@@ -414,7 +422,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
-    ones before it too.  A window whose advice is refused (a finish advice v0 can't say, a trace the Commit record contradicts)
+    ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
     is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.
     ``out/windows.json`` (public) lists each window's registration."""
     if io is None:
