@@ -5,6 +5,8 @@ setting can change:
 
 * ``value`` (`VALUE`): what is computed or committed.  `record` carries every value setting in force, and the value families
   (`FAMILIES`), so a value setting can't stay out of a run's record.  A setting is ``value`` unless it is one of the other two.
+  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value.  A credential is a
+  setting declared ``secret``, or any variable whose name holds one of `SECRET_WORDS`, declared or not.
 * ``where`` (`WHERE`): only where and how long things run: paths, devices, hosts, interpreters, run ids and liveness bounds.
 * ``debug`` (`DEBUG`): diagnostics that change nothing a run computes: dumps, traces, profiles, injected delays.
 
@@ -106,6 +108,8 @@ class Setting:
     doc: str
     #: an empty string is a value (``CUDA_VISIBLE_DEVICES=""`` hides every device), not unset
     empty: bool = False
+    #: a credential, whatever its name says: `record` names it and never holds its value
+    secret: bool = False
 
 
 def _declare(*settings: Setting) -> dict[str, Setting]:
@@ -242,6 +246,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
+    S("VLLM_API_KEY", str, None, VALUE, "the key vLLM's OpenAI-compatible server asks of its clients (its family's role): a "
+      "credential, which a record names and never holds", secret=True),
     S("VLLM_ATTENTION_BACKEND", str, None, VALUE, "vLLM's attention backend, which the pinned vLLM no longer defines: a Build "
       "records it as ignored"),
     S("VLLM_BATCH_INVARIANT", str, None, VALUE, "vLLM's batch-invariant kernels, 1 as an engine profile's env sets it; the replay's "
@@ -360,11 +366,23 @@ def role_of(name: str) -> str | None:
     return next((r for p, r in FAMILIES.items() if name.startswith(p)), None)
 
 
+#: A variable whose name holds one of these anywhere is a credential, declared or not (``VLLM_API_KEY``, ``HF_TOKEN``).
+SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+#: What `record` holds in place of a credential's value.
+REDACTED = "<redacted>"
+
+
+def is_secret(name: str) -> bool:
+    """A credential: declared ``secret``, or its name holds one of `SECRET_WORDS`."""
+    s = SETTINGS.get(name)
+    return bool(s and s.secret) or any(w in name.upper() for w in SECRET_WORDS)
+
+
 def record(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """The value settings in force: every ``value`` variable that is set, as the environment holds it, with the digest
-    (SHA-512 of the canonical JSON of ``values``)."""
+    """The value settings in force: every ``value`` variable that is set, as the environment holds it (a credential by name,
+    `REDACTED` in place of its value: `is_secret`), with the digest (SHA-512 of the canonical JSON of ``values``)."""
     env = os.environ if environ is None else environ
-    values = {k: env[k] for k in sorted(env) if role_of(k) == VALUE}
+    values = {k: REDACTED if is_secret(k) else env[k] for k in sorted(env) if role_of(k) == VALUE}
     blob = json.dumps(values, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     return {"schema": RECORD_SCHEMA, "values": values, "digest": hashlib.sha512(blob).hexdigest()}
 
