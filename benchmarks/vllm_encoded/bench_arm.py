@@ -180,8 +180,8 @@ class _Installed:
 
         from benchmarks.kv_filler import green
 
-        so = ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve()))
-        self.green, self.step_stream, self.new_stream = green.partition(SimpleNamespace(so=so), torch, fill_sms)
+        self.green_lib = SimpleNamespace(so=ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve())))
+        self.green, self.step_stream, self.new_stream = green.partition(self.green_lib, torch, fill_sms)
         import stack as S   # benchmarks.vllm_encoded.serve put HERE first; the install imports this module
 
         if Path(S.__file__).resolve().parent != HERE:
@@ -199,8 +199,8 @@ class _Installed:
         if self.green is not None:
             from benchmarks.kv_filler import green
 
-            lib = SimpleNamespace(so=ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve())))
-            self.green["spread"] = green.spread_checks(lib, torch, self.step_stream, self.new_stream, self.green)
+            self.green["spread"] = green.spread_checks(self.green_lib, torch, self.step_stream, self.new_stream,
+                                                       self.green)
         if self.use_topup:
             runner = get_model_runner(target.engine.vllm)
             tensors = []

@@ -63,12 +63,13 @@ def spread_checks(tu, torch, step, new_stream, rec: dict) -> dict:
     ``device_graph`` is a graph captured on a stream of the device's context and replayed on the step's (vLLM's
     capture without `partition`'s): recorded, not required."""
     n = 4 * rec["device_sms"]
+    tu.so.sq_smid.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ulonglong, ctypes.c_void_p]
 
     def sms(s, captured=None) -> int:
         out = torch.full((n,), -1, dtype=torch.int32, device="cuda")
+        torch.cuda.synchronize()
         if captured is not None:
             g = torch.cuda.CUDAGraph()
-            torch.cuda.synchronize()
             with torch.cuda.stream(captured):
                 g.capture_begin()
                 tu.so.sq_smid(out.data_ptr(), n, 20000, captured.cuda_stream)
