@@ -157,9 +157,10 @@ S8 is 1 per MAC, from the data sheet; those runs did not measure it. NVIDIA's RT
 whitepaper v1.1, Appendix A, Table 4 (the RTX PRO 6000 Blackwell Workstation Edition, the same 188-SM GB202; the source
 `benchmarks/census/hardware.json` cites for `rtx-pro-6000-server/e4m3`) gives "Peak INT8 Tensor TOPS" 1007.6 dense,
 equal to "Peak FP8 Tensor TFLOPS with FP32 Accumulate" 1007.6. The Server Edition's product page and data sheet give no
-INT8 figure. Census run `r20261015-062626-f65b` measured IMMA.16832 at 1,023.6 MACs per SM per clock, against
-QMMA.16832's 1,023.8 (`verity.ml.circuits.silicon.instructions`, `sm120.mma.m16n8k32.s8`), and `Pouw.TileBound.price`
-has int8 at 1 from the assessor's locked-clock runs `r20260930-060338-26b9` and `r20260930-062627-063a`. -/
+INT8 figure. Census run `r20261015-062626-f65b` measured the wrapping form (`m16n8k32.row.col.s32.s8.s8.s32`) at
+1,023.7 MACs per SM per clock at 16 warps, against E4M3's 1,023.8 (`f32.e4m3.e4m3.f32`, 16 warps); the `.satfinite`
+form's rate is not measured. `Pouw.TileBound.price` has int8 at 1 from the assessor's locked-clock runs
+`r20260930-060338-26b9` and `r20260930-062627-063a`. -/
 def W1Prices.sm120 (sha fetch : ℚ) : W1Prices where
   mac := fun | .e4m3 => 1 | .bf16 => 2 | .e2m1 => 1 / 2 | .s8 => 1
   fp32 := 8
