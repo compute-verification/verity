@@ -241,7 +241,8 @@ theorem replay_fold_w (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byte
     {t t' : Flock.Transcript} {rp : Zk.Replayed} (h : Zk.replay st lay p root t = .ok (rp, t')) :
     ∃ combv : Array F128,
       st.fold.folded (coinAt t (3 + (st.m - 6))) (coinAt t (4 + (st.m - 6))) (skipWeights (coinAt t 2))
-          ((rhoOf st.m t).extract 0 (st.kLog - 6)) (tsOf st.m st.kLog t) = .ok combv ∧ combv.size = 64 := by
+          ((rhoOf st.m t).extract 0 (st.kLog - 6)) (tsOf st.m st.kLog t) = .ok combv ∧ combv.size = 64 ∧
+      ∀ i < 5 + (st.m - 6) + (st.kLog - 6), (t.rounds[t.k + i]!).n ≠ 0 := by
   unfold Zk.replay at h
   dsimp only at h
   obtain ⟨t₁, k₁, h⟩ := label_bind h
@@ -250,17 +251,17 @@ theorem replay_fold_w (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byte
   obtain ⟨t₄, k₄, h⟩ := label_bind h
   obtain ⟨t₅, k₅, h⟩ := label_bind h
   obtain ⟨t₆, k₆, h⟩ := absorbBytes_bind h
-  obtain ⟨-, -, t₇, r₇, kk₇, h⟩ := sampleVec_bind (by decide) h
-  obtain ⟨-, -, t₈, r₈, kk₈, h⟩ := sampleVec_bind (by omega) h
+  obtain ⟨-, n₀, t₇, r₇, kk₇, h⟩ := sampleVec_bind (by decide) h
+  obtain ⟨-, n₁, t₈, r₈, kk₈, h⟩ := sampleVec_bind (by omega) h
   obtain ⟨t₉, k₉, h⟩ := absorbSlice_bind h
   obtain ⟨t₁₀, k₁₀, h⟩ := absorbSlice_bind h
-  obtain ⟨-, -, t₁₁, r₁₁, kk₁₁, h⟩ := sample_bind h
+  obtain ⟨-, n₂, t₁₁, r₁₁, kk₁₁, h⟩ := sample_bind h
   obtain ⟨s, t₁₂, hloop, h⟩ := bind_ok h
   obtain ⟨t₁₃, k₁₃, h⟩ := absorbF_bind h
   obtain ⟨t₁₄, k₁₄, h⟩ := absorbF_bind h
   obtain ⟨t₁₅, k₁₅, h⟩ := label_bind h
-  obtain ⟨-, -, t₁₆, r₁₆, kk₁₆, h⟩ := sample_bind h
-  obtain ⟨-, -, t₁₇, r₁₇, kk₁₇, h⟩ := sample_bind h
+  obtain ⟨-, nα, t₁₆, r₁₆, kk₁₆, h⟩ := sample_bind h
+  obtain ⟨-, nβ, t₁₇, r₁₇, kk₁₇, h⟩ := sample_bind h
   obtain ⟨s', t₁₈, hloop', h⟩ := bind_ok h
   rcases hf : st.fold.folded ((t₁₅.rounds[t₁₅.k]!).coins.getD 0 0) ((t₁₆.rounds[t₁₆.k]!).coins.getD 0 0)
       (skipWeights ((t₁₀.rounds[t₁₀.k]!).coins.getD 0 0)) (s.2.extract 0 (st.kLog - 6)) s'.2 with err | v
@@ -271,7 +272,7 @@ theorem replay_fold_w (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byte
   simp only [pure_bind] at h
   obtain ⟨hw, -⟩ := check_bind h
   rw [forIn_range_eq] at hloop hloop'
-  obtain ⟨-, -, -, hs⟩ := ZkExec.forIn_push _ (fun i st' tt b tt' hb => by
+  obtain ⟨-, -, nl, hs⟩ := ZkExec.forIn_push _ (fun i st' tt b tt' hb => by
       obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
       obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
       obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
@@ -281,7 +282,7 @@ theorem replay_fold_w (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byte
       refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
       rw [← e1, ← e2]
       exact ⟨_, rfl⟩) (st.m - 6) 0 _ t₁₁ t₁₂ s hloop
-  obtain ⟨-, -, -, hs'⟩ := ZkExec.forIn_push _ (fun i st' tt b tt' hb => by
+  obtain ⟨-, -, nl', hs'⟩ := ZkExec.forIn_push _ (fun i st' tt b tt' hb => by
       obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
       obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
       obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
@@ -332,7 +333,100 @@ theorem replay_fold_w (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byte
     refine Array.ext (by simp [tsOf, hs'sz]) fun i h₁ h₂ => ?_
     rw [← getElem!_pos s'.2 i h₁, htsg i (by omega)]
     simp [tsOf]
+  have hnz : ∀ i < 5 + (st.m - 6) + (st.kLog - 6), (t.rounds[t.k + i]!).n ≠ 0 := by
+    intro i hi
+    by_cases i0 : i = 0
+    · subst i0
+      rw [Nat.add_zero, ← hr₆, ← hk₆, n₀]
+      decide
+    by_cases i1 : i = 1
+    · subst i1
+      rw [← hr₆, ← r₇, ← hk₆, ← kk₇, n₁]
+      omega
+    by_cases i2 : i = 2
+    · subst i2
+      rw [← hr₁₀, ← hk₁₀, n₂]
+      decide
+    by_cases i3 : i < 3 + (st.m - 6)
+    · rw [show t.k + i = t₁₁.k + (i - 3) by omega, ← hr₁₁, nl (i - 3) (by omega)]
+      decide
+    by_cases i4 : i = 3 + (st.m - 6)
+    · subst i4
+      rw [show t.k + (3 + (st.m - 6)) = t₁₅.k by omega, ← hr₁₅, nα]
+      decide
+    by_cases i5 : i = 4 + (st.m - 6)
+    · subst i5
+      rw [show t.k + (4 + (st.m - 6)) = t₁₆.k by omega, ← hr₁₆, nβ]
+      decide
+    rw [show t.k + i = t₁₇.k + (i - (5 + (st.m - 6))) by omega, ← hr₁₇, nl' _ (by omega)]
+    decide
   rw [hz, hα, hβ, hrho, hts] at hf
-  exact ⟨v, hf, by simpa using hw⟩
+  exact ⟨v, hf, by simpa using hw, hnz⟩
 
 end FlockSoundness.Discharge.Composed.Lincheck
+
+namespace FlockComplete.CutFree
+
+open Flock Transcript Replay
+
+/-- **A returned replay's fold at coins from `L`**: on rounds whose round `j` is answered by `coin (L + j)`, a returned
+replay's fold at the lincheck's `α`, `β`, the skip weights at `z`, `ρ[.. k_log − 6]` and the round coins, read at the
+coins from `L`, returned a vector of width `64`: `replay_cut_ok`'s `hL`. -/
+theorem replay_fold_coins (coin : ℕ → ℕ → F128) {L : ℕ} {R : Array Round} (hR : RankAt.CoinsAt coin L R)
+    {st : Setup} (hm : 14 ≤ st.m) (hkk : st.kLog = st.fold.kLog) (lay : Zk.PadLayout) (p : Proof) (root d : ByteArray)
+    {rp : Zk.Replayed} {t' : Transcript} (h : (Zk.replay st lay p root).run (Transcript.init R d) = .ok (rp, t')) :
+    ∃ comb, st.fold.folded ((lcCoins coin (L + 3 + (st.m - 6)) (st.fold.kLog - 6)).ca 0)
+      ((lcCoins coin (L + 3 + (st.m - 6)) (st.fold.kLog - 6)).cb 0) (skipWeights (zcCoins coin L).z)
+      ((pushes (zcCoins coin L).ρ (st.m - 6)).extract 0 (st.fold.kLog - 6))
+      (pushes (lcCoins coin (L + 3 + (st.m - 6)) (st.fold.kLog - 6)).τ (st.fold.kLog - 6)) = .ok comb ∧
+        comb.size = 64 := by
+  obtain ⟨comb, hf, hw, hnz⟩ := FlockSoundness.Discharge.Composed.Lincheck.replay_fold_w st lay p root hm h
+  have hc : ∀ i < 5 + (st.m - 6) + (st.kLog - 6),
+      FlockSoundness.Discharge.Composed.Lincheck.coinAt (Transcript.init R d) i = coin (L + i) 0 := by
+    intro i hi
+    have hn := hnz i hi
+    change (R[0 + i]!).n ≠ 0 at hn
+    show (R[0 + i]!).coins.getD 0 0 = _
+    rw [Nat.zero_add] at hn ⊢
+    by_cases hi' : i < R.size
+    · obtain ⟨hpos, hcs⟩ := hR i hi'
+      rw [hcs]
+      simp [Array.getD, hpos]
+    · rw [getElem!_neg R i hi'] at hn
+      exact absurd rfl hn
+  have hz : (zcCoins coin L).z = FlockSoundness.Discharge.Composed.Lincheck.coinAt (Transcript.init R d) 2 :=
+    (hc 2 (by omega)).symm
+  have hα : (lcCoins coin (L + 3 + (st.m - 6)) (st.fold.kLog - 6)).ca 0 =
+      FlockSoundness.Discharge.Composed.Lincheck.coinAt (Transcript.init R d) (3 + (st.m - 6)) := by
+    rw [hc _ (by omega)]
+    show coin (L + 3 + (st.m - 6)) 0 = _
+    rw [Nat.add_assoc]
+  have hβ : (lcCoins coin (L + 3 + (st.m - 6)) (st.fold.kLog - 6)).cb 0 =
+      FlockSoundness.Discharge.Composed.Lincheck.coinAt (Transcript.init R d) (4 + (st.m - 6)) := by
+    rw [hc _ (by omega)]
+    show coin (L + 3 + (st.m - 6) + 1) 0 = _
+    congr 1
+    omega
+  have hρ : pushes (zcCoins coin L).ρ (st.m - 6) =
+      FlockSoundness.Discharge.Composed.Lincheck.rhoOf st.m (Transcript.init R d) := by
+    refine Array.ext (by rw [pushes_size]; simp [FlockSoundness.Discharge.Composed.Lincheck.rhoOf]) fun i h₁ h₂ => ?_
+    rw [pushes_size] at h₁
+    rw [← getElem!_pos _ i (by rw [pushes_size]; exact h₁), pushes_get _ _ i h₁]
+    simp only [FlockSoundness.Discharge.Composed.Lincheck.rhoOf, Array.getElem_ofFn]
+    rw [hc (3 + i) (by omega)]
+    show coin (L + 3 + i) 0 = _
+    rw [Nat.add_assoc]
+  have hts : pushes (lcCoins coin (L + 3 + (st.m - 6)) (st.kLog - 6)).τ (st.kLog - 6) =
+      FlockSoundness.Discharge.Composed.Lincheck.tsOf st.m st.kLog (Transcript.init R d) := by
+    refine Array.ext (by rw [pushes_size]; simp [FlockSoundness.Discharge.Composed.Lincheck.tsOf]) fun i h₁ h₂ => ?_
+    rw [pushes_size] at h₁
+    rw [← getElem!_pos _ i (by rw [pushes_size]; exact h₁), pushes_get _ _ i h₁]
+    simp only [FlockSoundness.Discharge.Composed.Lincheck.tsOf, Array.getElem_ofFn]
+    rw [hc (5 + (st.m - 6) + i) (by omega)]
+    show coin (L + 3 + (st.m - 6) + 2 + i) 0 = _
+    congr 1
+    omega
+  rw [hz, hα, hβ, hρ, ← hkk, hts]
+  exact ⟨comb, hf, hw⟩
+
+end FlockComplete.CutFree
