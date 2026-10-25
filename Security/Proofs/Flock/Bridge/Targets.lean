@@ -6,7 +6,7 @@ import Proofs.Flock.Bridge.Statement
 Each is a `def … : Prop` over `Bridge.Defs`, so a proof plugs into `SampledKSLive` as stated:
 
 * `FaultyRightTarget` (M1's core): a unit whose committed wires each carry, in some opening of their registered commit
-  string, their value in the evaluation on `X`'s inputs (`RightRegZ`'s second conjunct) is not faulty in `witOf X`
+  string, their value in the evaluation on `xv`'s inputs (`RightRegZ`'s second conjunct) is not faulty in `witOf xv`
   under `commitOf`. So `faulty ⊆ wrongRegZ`.
 * `PartRusTarget`: `partOf P` has `n` slots.
 * `PaTarget` (M4): `designOf kd`'s `P_a` on `partOf P` is the subset miss `C(n − |B|, kd)/C(n, kd)`.
@@ -19,17 +19,16 @@ Each is a `def … : Prop` over `Bridge.Defs`, so a proof plugs into `SampledKSL
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit
 
 /-- **M1's core**: a unit whose committed wires each carry, in some opening of their registered commit string, their
-value in `C`'s evaluation on `X`'s inputs is not faulty in `witOf C X` under `commitOf`. -/
+value in `C`'s evaluation on `xv`'s inputs is not faulty in `witOf C xv` under `commitOf`. -/
 def FaultyRightTarget : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type} (pos : Fin C.N → Pos)
-    (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) (Xr : Fin C.N → Bool)
+    (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) (xv : Fin C.N → Bool)
     (u : Fin n),
-    (∃ op : Pos → Opn, ∀ g ∈ P.io u, com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g) →
+    (∃ op : Pos → Opn, ∀ g ∈ P.io u, com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval xv g) →
     ∀ (H : Claims.Msg → Claims.Msg) (kd : ℕ) (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg),
-      u.val ∉ Claims.Sampling.faulty H (commitOf pos bit val com cs) (stmtOf P kd desc q roots) (partOf P) (witOf C Xr)
+      u.val ∉ Claims.Sampling.faulty H (commitOf pos bit val com cs) (stmtOf P kd desc q roots) (partOf P) (witOf C xv)
 
 /-- `partOf P` has one slot per unit. -/
 def PartRusTarget : Prop :=
@@ -64,11 +63,11 @@ def RelDeployTarget : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (D : Claims.Sampling.Deploy Coin Col T) {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (desc : Claims.Msg)
     (q : Claims.Sampling.Query) (roots : List Claims.Msg) {Pos Val Opn Com : Type} (pos : Fin C.N → Pos)
-    (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) (Xr : Fin C.N → Bool)
+    (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) (xv : Fin C.N → Bool)
     (H : Claims.Msg → Claims.Msg) (δ : ℝ) (x : Claims.Msg),
     D.parse x = some (stmtOf P kd desc q roots) → D.partition (stmtOf P kd desc q roots) = some (partOf P) →
     CommitRefines D.commit (commitOf pos bit val com cs) H roots →
-    ¬ Claims.Sampling.RelS H (commitOf pos bit val com cs) δ (stmtOf P kd desc q roots) (partOf P) (witOf C Xr) →
-    ¬ Claims.Sampling.R H D.commit D.parse D.partition δ x (witOf C Xr)
+    ¬ Claims.Sampling.RelS H (commitOf pos bit val com cs) δ (stmtOf P kd desc q roots) (partOf P) (witOf C xv) →
+    ¬ Claims.Sampling.R H D.commit D.parse D.partition δ x (witOf C xv)
 
 end Flock.Bridge
