@@ -86,6 +86,118 @@ when:
 
 So beyond the advice, an accepted audit leaks the faulty units' committed bits, and the faulty set is in M_δ.
 
+## What an accepted plain audit means
+
+A plain audit is the audit above with every session verified by `flock-verify verify` without `--zk` (Daniel, 24 Oct: a
+plain path beside ZK whose guarantee is soundness alone; #4016). Every name below is on `main` at 169118abc1, at the file
+and line given.
+
+**The property it is to have.** `NetTiming.Guarantees.SampledAuditAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean:34`) at a plain deployment: a sampling record `D`
+(`Claims.Sampling.Deploy`) whose sessions are C-Flock's plain verifier, `D.flock = FlockDeploy.deployPlain rel`. The
+statement is `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAccepted H D L K S lay k`. `KSAccepted`
+(`Security/Definitions/NetworkCertifier/SampledAudit.lean:158`) says that at every statement `x` in scope (`ScopeAcc`: the
+sampling scope, and the layout fits the program), every δ ≥ 0, every decoder within Flock's radius (`ListWithin`) and every
+prover, Pr[acc ∧ ¬RAcc δ] ≤ κ(δ) + √(γ·Pr[B]) + Pr[B_ext] = δ + ε_ks + ε_bind. Its symbols:
+- acc: the sampled verifier `D.V` accepts `x`, each drawn unit's session among its rounds.
+- P_a(B): the design's probability that the draw misses every unit of B (`Design.Pa`,
+  `Security/Definitions/Claims/Sampling.lean:334`). M_δ = {B : P_a(B) > δ} (`Design.M`, line 337). The faulty set
+  (`faulty`, line 387) is the replay units whose committed values no interior makes correct.
+- `RAcc δ` (`Security/Definitions/NetworkCertifier/SampledAudit.lean:135`) has three parts:
+  - the faulty set is in M_δ (`RelS`);
+  - it holds no unit of a class drawn `all` (the transfer-gate units, N2's head checks);
+  - some advice (a, free), with `free` holding values only at the faulty units' committed gates (`FaultyGate`), makes
+    `Accepted (circuitProgram C lay k) op k o (a, free)` (`Security/Definitions/NetworkCertifier/Run.lean:103`) hold for
+    every observation sequence `o` and operator `op` that the trace's transfer gates carry (`Carries`), with every status
+    complete (`Covered`). `Accepted` means that at each step t < k the recorded egress rows are the circuit Program's on
+    the ingress up to t and the advice.
+- ε_ks = κ(δ) − δ + √(γ·Pr[B]) (`κ`, `γ`, `Security/Definitions/Claims/Sampling.lean:731`, `:735`):
+  - κ(δ) = c²(δ + κ_F) + (1 + c)(2k/K + e^(−k/8));
+  - κ_F = 4·ε_table + 2^(−m′) + 2k′/K′ + e^(−k′/8) is Flock's error at the units' sessions;
+  - γ = c⁴·16·(√(2kC) + k)², where c = 2^(2^−40), k is the verifier's rounds and C the sessions' weight.
+- Pr[B] and ε_bind = Pr[B_ext] (`Bext`, line 627) are the probabilities that the fork of two runs sharing a commitment,
+  and the extractor's own openings, find a SHA-512 collision. These are collision events in the run, not an assumption.
+  SHA-512's collision resistance is what makes them small.
+
+**The leak bound that follows.** `NetTiming.Guarantees.EncardAccSeqsSampledLe`
+(`Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean:42`) is proved by `NetTiming.encard_accSeqsSampled_le`
+(`Security/Proofs/NetworkCertifier/SampledCharge.lean:296`). Take a layout that fits the program over n steps, inputs
+besides the ingress ranging over `As` with |As| ≤ 2^c, and each faulty set `RAcc δ` allows (`faultySets`) committing at
+most β bits (`faultyBits`). Then the observation sequences of length n with jitter class below D (here D is the jitter
+count, not the deployment) that are accepted with such a set number at most 2^c · #faultySets(δ) · 2^β · D^n. Composed
+with the property, the egress carries at most c + log₂ #faultySets(δ) + β + n·log₂ D bits, except with probability
+δ + ε_ks + ε_bind. At δ ≥ miss(1) the only allowed faulty set is empty, and the bound is c + n·log₂ D.
+
+**What is proved, and how it falls short.** No theorem on `main` says the above of a plain audit, or of a ZK one.
+1. `SampledAuditAccepted` is stated, not proved (PRF-144). The lock freezes it as `unstated` and holds its text through
+   `NetTiming.SecurityProofs.SampledAuditAcceptedStated` (`Security/Proofs/NetworkCertifier/SampledAudit.lean:7`, `rfl`).
+2. Its one hypothesis, `Claims.Sampling.KS`, is proved only where the sessions are the masked verifier.
+   `sampling_assembled` (`Security/Proofs/Flock/Claims/Sampling/Assembled.lean:92`) fixes `D.flock = deployZk rel` and the
+   trace type `ZkTrace`. It takes the sampled verifier's run facts as hypotheses (`DrawFixed`, `SessionRuns`,
+   `InnerNumbers`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`, `OpenCallsLe`,
+   `UniversalIs`), and completeness and ZK besides; its Flock KS is proved with no premise (`FlockDeploy.KS.zk_KS_untrim`,
+   `Security/Proofs/Flock/Claims/KS/ZkExtend.lean:452`). It has no `deployPlain` form.
+   - The plain Flock KS is proved with no premise at the trimmed record (`FlockDeploy.KS.plain_KS`,
+     `Security/Proofs/Flock/Claims/KS/PlainLeafKS.lean:392`). Sampling reads the untrimmed record, which a trimmed KS
+     does not give (`Flock.TrimBridge.hole_agree`, `Security/Proofs/Flock/Claims/KS/TrimBridge.lean:120`). The untrimmed
+     plain form (`plain_KS_sha512`, `Security/Proofs/Flock/Claims/KS/Width.lean:316`) still takes one table and the table
+     bound as hypotheses.
+3. The leak bound counts sequences, not runs of the audit. Its composition with `SampledAuditAccepted` is in its
+   docstring; no theorem states it, and it also needs the run's inputs to be among `As`, which `RAcc` doesn't bound.
+4. What is proved about a plain session is `flock_verify_sound`'s plain conjunct
+   (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean:1705`: `SoundExec`, line 129, at public outputs and
+   `SoundExecH`, line 549, at hidden; at 2^−205 a table, `flock_verify_sound_205`,
+   `Security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean:700`). It bounds the probability that `flock-verify
+   verify` accepts without `--zk` while at least K of the session statement's proof units are wrong: the stratified law's
+   miss(K), plus the tables' and links' knowledge terms. Its statement takes these premises inside: A3, the record's custody
+   (`RecordsLive`, `DrawOk`) and SHA-512 at the prover's own finders (`TableCRL`, `LinkCRL`, with the link term ⊤ when
+   `LinkCRL` fails). The lock freezes it as `hash,world-unlisted`. It is per session and says nothing of `Accepted`.
+
+So tonight an accepted plain audit gives item 4 at each session it proves, and nothing yet about the egress.
+
+| Link | Lean name, `main` | Status |
+|---|---|---|
+| a plain session is sound | `FlockSoundness.Discharge.FailClosed.flock_verify_sound`, plain conjunct (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean:1705`) | proved; premises A3, `RecordsLive`, `DrawOk`, `TableCRL`, `LinkCRL` inside; one table, stratified draw |
+| Flock KS at the plain record | `FlockDeploy.KS.plain_KS` (`Security/Proofs/Flock/Claims/KS/PlainLeafKS.lean:392`) | proved, no premise, trimmed record only; not in the lock |
+| Flock's claims at the plain record | `FlockDeploy.Assembled.flock_plain_assembled` (`Security/Proofs/Flock/Claims/Assembled.lean:158`) | proved, with KS and completeness as hypotheses |
+| sampling's KS | `Claims.Sampling.sampling_assembled` (`Security/Proofs/Flock/Claims/Sampling/Assembled.lean:92`) | proved at `deployZk` only, under the run hypotheses in item 2; no plain form on `main` or on any pushed branch |
+| the audit implies `Accepted` | `NetTiming.Guarantees.SampledAuditAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean:34`) | stated only (PRF-144) |
+| the sampled leak count | `NetTiming.Guarantees.EncardAccSeqsSampledLe` (`Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean:42`) | proved, on its own; does not read `SampledAuditAccepted` |
+| acceptance, then the leak bound | none | docstring only |
+| FINTAU: `τ` from the views is the session's | `Claims.ZKServer.Loop.FinRepTau` (`Security/Proofs/Flock/SessionLoop/FinRepFinal.lean:192`) | stated; its proof `Loop.finRepTau` is in #3977, open, not landed. ZK session loop: no plain link reads it, and it gives no plain form of sampling's KS |
+
+The named assumptions. Lock entries are keys of `assumptions` in `Security/lean-audit.json`.
+
+| Assumption | Lean name | Lock entry | Read by |
+|---|---|---|---|
+| SHA-512 collision resistance | `FlockSoundness.Assumptions.SHA512CRStrict`, `SHA512CRExpected` (`Security/Proofs/Flock/Soundness/Assumptions.lean:58`, `:83`); `Claims.StrictBirthday`, `Claims.ExpectedCR` (`Security/Definitions/Claims.lean:313`, `:322`) | `Security/lean-audit.json:914`, `:910`, `:785`, `:765` | `flock_verify_sound`, through `TableCRL` (`Security/Proofs/Flock/Soundness/Discharge/Exec/StrictCRL.lean:228`) and `LinkCRL` (`Security/Proofs/Flock/Soundness/Discharge/Exec/FlockLinkL.lean:565`). Sampling's KS and `SampledAuditAccepted` take none: their bound carries the collision events |
+| A3 | `FlockSoundness.Assumptions.UniformRandomBytes` (`Security/Proofs/Flock/Soundness/Assumptions.lean:113`) | `Security/lean-audit.json:918` | `flock_verify_sound` (`hA3`, the stratified draw's bytes) |
+| record custody | without `--zk`, none named: `RecordsLive`, `DrawOk` (`Security/Proofs/Flock/Soundness/Discharge/DecodeZL/Statements.lean:95`, `:106`) are premises; under `--zk`, `Zk.RecordCustodyZKJ` (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean:48`) | ZK only: `Security/lean-audit.json:926` | `flock_verify_sound` |
+| `trusted-nebius-host` | `Verity.Assumptions.TrustedNebiusHost` (`Security/Models/Core/Assumptions.lean:50`) | `Security/lean-audit.json:1748` | the warden's guarantees (`Security/Models/NetworkCertifier/Guarantees/Warden.lean`). No link here: it is why `Carries`, a condition inside `RAcc`, holds of the real run |
+| W2 | `NetTiming.Regenerates` (`Security/Models/NetworkCertifier/Assumptions.lean:28`) | `Security/lean-audit.json:1313` | wire bounds `EncardDecodableWithinLeCompiled*` (`Security/Models/NetworkCertifier/Guarantees/AdviceString.lean:51`, `:69`, and their V1 forms) and the ingress bounds (`Security/Models/NetworkCertifier/Guarantees.lean:202`–`274`); no link here |
+| W3, W5, W6 | `NetTiming.Padded`, `UntimedStatus`, `FailClosed` (same file, `:33`, `:50`, `:59`) | none | no guarantee |
+| W4 | `NetTiming.Packed`, `Allocated` (same file, `:37`, `:44`) | `Security/lean-audit.json:1309`, `:1277` | the ingress bounds; no link here |
+| J | `NetTiming.JitterBounded` (same file, `:66`) | `Security/lean-audit.json:1297` | the wire and ingress bounds; no link here |
+| `CompilerDeterministic`, `CompilerPrecommitted` | `NetTiming.*` (`Security/Models/NetworkCertifier/Assumptions/AdviceString.lean:26`, `:31`) | `Security/lean-audit.json:1285`, `:1289` | the wire bounds, which hold at exact acceptance only; no link here |
+| `BitsCount` | `NetTiming.BitsCount` (same file, `:21`) | `Security/lean-audit.json:1281` | the wire bounds, `EncardAccSeqsWithinLeConstantRate`, the warden's. The sampled count takes \|As\| ≤ 2^c as a premise instead |
+
+The wire bounds are the leak bounds that would carry the sampled count from what the transfer gates carry to what a
+decoder reads off the wire. No sampled form of them exists yet.
+
+**What an accepted plain audit does not establish tonight.**
+- More than one table a session: `ProvedScope.statementRules` (`verity/core/service/flock/Flock/ProvedScope.lean:192`)
+  refuses it without `--zk`.
+- Any draw but the stratified law: `ProvedScope.lawWhy` (line 278) refuses a subset draw without `--zk`, at any table
+  count. a5 writes each member's session draw as `subset` (`benchmarks/one_stage/a5.py:580`), so a plain session drawn
+  that way is refused. The plain path needs a stratified draw file per session.
+- Registered reads: without `--zk`, `flock-verify verify --registered F` checks only what `verify` does
+  (`FlockVerifyAcceptsR false` is `Verifies`, `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean:66`), and a
+  shared-row public file is refused (`ProvedScope.sharedRowsOk`, line 222). Hidden outputs are covered at one table
+  (`SoundExecH`).
+- `Accepted`, `RAcc` and the leak bound: PRF-144 is open, sampling's KS has no plain form, and the composition is stated
+  nowhere (items 1 to 3).
+- Zero knowledge: the plain conjunct has no view claim.
+
 ## The compile unit (the target; not built)
 
 This is the spec for whoever builds the unit (circuits' COMPILER, or a new worker). It closes the named gap: the advice is never
