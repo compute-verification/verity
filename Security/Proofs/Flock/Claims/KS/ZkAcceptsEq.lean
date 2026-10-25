@@ -11,9 +11,11 @@ verifier reads both draws through one normal form, two equivalent draws are one:
   returns is normal (`DrawNorm.normal`), and two equivalent normal draws are equal (`DrawNorm.eq_of_equiv`,
   `DrawNorm.eq_of_rel`).
 * `recordDraw_eq_of_checks`: where `Deploy.V`'s checks pass and both the record's draw and the statement's are normal,
-  the record's draw is the statement's as a value (the `hdraw` of `Custody.accepts_of_decide`).
+  the record's draw is the statement's as a value (`hdraw`).
 * `liveAcceptsZK_of_run_norm`: an accepted run of `V true` against SHA-512 is `AcceptsZK`, and so `LiveAcceptsZK` at
   every outcome carrying the last message's transcript, wherever the verifier reads every draw as `norm` of a value.
+* `flockNorm`, `liveAcceptsZK_of_run_rebuilt`: the verifier's rebuild `Flock.norm` is such a normal form, and it reads
+  both draws through it, so the last holds with no premise on the draw.
 
 `idem` is a field, not a consequence of `congr`: a rebuild that inserts an object's fields in its tree's order into an
 empty map can change the shape of a tree whose order is not the keys' order, and rebuilding the result (now in key order)
@@ -83,5 +85,26 @@ theorem liveAcceptsZK_of_run_norm (N : DrawNorm) {n : ℕ} {Reg : Type} {Ω : Ty
   have hA := (Claims.Bridge.Custody.acceptsAt_of_decide (J := 0) (mPts := 0) hact hacc hd (Nat.zero_le _)).1
   have hZ := (acceptsAt_iff_acceptsZK (hdraw.trans hd)).1 hA
   exact ⟨s, f, hins, hZ, fun _ _ => hZ⟩
+
+/-- **The verifier's rebuild is a normal form of draws** (`Flock.norm`: `JsonNorm.norm_congr`, `JsonNorm.norm_norm`). -/
+def flockNorm : DrawNorm where
+  norm := Flock.norm
+  congr h := FlockDeploy.norm_congr _ _ h
+  idem := FlockDeploy.norm_norm
+
+/-- **An accepted run of `V true` is flock-verify `--zk`'s acceptance, with no premise on the draw**: against SHA-512,
+the run decided at the statement's inputs `s`, and `verify --zk` accepts the last message's record and proof files `f`
+at `s.read.I` (`AcceptsZK`), so `LiveAcceptsZK` holds at every outcome carrying that transcript. The verifier rebuilds
+every draw it reads (`flockNorm`; the record's, `Custody.recordDraw_norm`, and the statement's,
+`Custody.insOf_draw_norm`), so the record's draw is the statement's as a value. -/
+theorem liveAcceptsZK_of_run_rebuilt {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
+    ∃ (s : Ins) (f : Final), insOf true x = some s ∧
+      ZkExec.AcceptsZK s.read.I (⟨f.record, f.proofs⟩ : Exec.Transcript) ∧
+      ∀ (R : Reg) (S : Finset (Fin n)),
+        ZkExec.LiveAcceptsZK s.read.I (R, S, (⟨f.record, f.proofs⟩ : Exec.Transcript)) :=
+  liveAcceptsZK_of_run_norm flockNorm
+    (fun _ d hd => ⟨d, (Claims.Bridge.Custody.recordDraw_norm hd).symm⟩)
+    (fun _ d hs hd => ⟨d, (Claims.Bridge.Custody.insOf_draw_norm hs hd).symm⟩) h
 
 end FlockDeploy.KS
