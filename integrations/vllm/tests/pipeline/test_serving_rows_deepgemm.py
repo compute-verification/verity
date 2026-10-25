@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity_flock.class_statement import UnitStager
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 
+from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.program.kernels import deepgemm_twins as DT
 from verity_vllm.program.registry import boolean_deepgemm as BDG
@@ -128,6 +130,32 @@ def test_the_parts_cover_the_row_s_outputs_and_compute_them(row):
     assert qs[:, :K].tolist() == want[0].tolist() and qs[:, K:].tolist() == want[1].tolist()
     (y,) = ev(gemm(1), leaves(dg["rows"], mg.rows, tg.packed))
     assert y.reshape(-1).tolist() == x["out"].tolist()
+
+
+def test_a_window_s_caps_make_both_parts_chunks_of_the_stager_s_bit_rows(row):
+    """With the partition file's ``chunk_cap`` naming them, the quantisation (``part``) and the GEMM's coordinates (``coord``) are
+    each chunks on `UnitStager`'s bit rows, which a5 composes from the template alone; a part that is no chunk needs an input set
+    there.  The chunks read the word-row members' words, and each chunk's outputs are its Definition's."""
+    x = row()
+    tq, tg = SRW.template(descriptor_id(quant(True))), SRW.template(descriptor_id(gemm(1, True)))
+    rows, _defs, counts = SRW.member_rows({"r0": {}}, [tq.id, tg.id])
+    whole = SRW.members([tq.id, tg.id], rows, counts)
+    caps = {tq.id: 1, tg.id: 64}
+    assert SRW.chunked(tq.id, caps) and SRW.chunked(tg.id, caps) and not SRW.chunked(tq.id, {tg.id: 64})
+    ms = SRW.members([tq.id, tg.id], rows, counts, caps)
+    assert [(m.template, m.base, m.n) for m in ms] == [(tq.id, 0, 1)] + [(tg.id, 1 + lo, min(64, N - lo)) for lo in range(0, N, 64)]
+    assert all(m.name and m.schemas for m in ms)
+    got = SRW.read_all(ms, rows, x["store"], None)
+    for w, tp, rs, chunks in ((whole[0], tq, rows[0], got[:1]), (whole[1], tg, rows[1], got[1:])):
+        data, _entries = SRW.read(w, rs, x["store"], None)
+        for g in range(len(w.rows)):
+            assert np.array_equal(np.concatenate([c["rows"][f"in{g}"] for c, _e in chunks]), data["rows"][f"in{g}"])
+        for j, (p, _w) in enumerate(w.outs):
+            assert np.array_equal(np.concatenate([c["outs"][f"o{j}"] for c, _e in chunks]), data["outs"][p])
+        st = object.__new__(UnitStager)     # reference_check reads only these: the circuit needn't be composed
+        st.definition, st.name, st.public_inputs, st.in_rows = tp.fn, "deepgemm-part-chunk-test", {}, CR.unit_rows(tp)[0]
+        for c, _e in chunks:
+            st.reference_check(c["rows"], c["outs"])
 
 
 def test_the_gemm_s_own_rows_are_its_coordinates(row):

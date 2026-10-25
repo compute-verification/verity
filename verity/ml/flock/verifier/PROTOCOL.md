@@ -145,7 +145,8 @@ The record is UTF-8 JSON. The verifier reads only the fields below; it ignores e
 Every writer emits the record in its canonical text: Lean's `Json.compress` of it (keys in code-point order, no
 whitespace, Lean's string escapes and number printing), which `live/src/record_text.rs` (`canonical_json`) and
 `verity_flock.record_text` (`session_text`) write, both held to Lean's output by `live/src/record_text_vectors.json`. The
-agreement job re-renders the stored vectors that predate it (`verifier/ci.py`).
+agreement job re-renders the stored vectors that predate it (`verifier/ci.py`). The verifier refuses a record in any
+other text (S0), so one session has exactly one record.
 
 | field | type | meaning |
 |---|---|---|
@@ -193,6 +194,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 
 | id | check | condition it enforces |
 |---|---|---|
+| S0 | the record's text is `Json.compress` of what it parses to (§5.1), checked after every other check (intended divergence D20, §17.1) | one record per session: two accepted texts that parse alike are the same text |
 | S1 | `kind = "flock-live-session/v1"` and `aborted = null` | the session completed |
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
@@ -1923,6 +1925,12 @@ expectation):
 - **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
   (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
   exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
+- **D20:** a record not in its canonical text (S0, §5.1). Upstream parses the record with serde and accepts any text of
+  it; the spec refuses (`S0: the record is not in its canonical text …`, `Flock.RecordText.check`), for D17's reason at
+  the record: the recursion binds a session's record, so a session has one accepted text
+  (`Flock.RecordText.check_inj`). No vector exercises it: S0 is the Lean verifier's last check, and every set the
+  agreement job mutates is refused ahead of it (D12's form refusal, and `NO_PROGRAM` without `--program`), so its
+  sessions are compared as accepted. `Flock.Test.RecordText` runs the non-canonical forms on `RecordText.check`.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
