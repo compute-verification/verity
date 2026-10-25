@@ -32,16 +32,16 @@ noncomputable def splitEquiv {K : Type} (tag : Fin N → T) (htag : Function.Inj
   left_inv f := by
     funext t
     by_cases h : ∃ j, tag j = t
-    · simp only [dif_pos h]
+    · simp only [h, ↓reduceDIte]
       exact congrArg f h.choose_spec
-    · simp only [dif_neg h]
+    · simp only [h, ↓reduceDIte]
   right_inv y := by
     refine Prod.ext (funext fun j => ?_) (funext fun t => ?_)
     · have h : ∃ j', tag j' = tag j := ⟨j, rfl⟩
-      simp only [dif_pos h]
+      simp only [h, ↓reduceDIte]
       exact congrArg y.1 (htag h.choose_spec)
     · have h : ¬ ∃ j, tag j = t.1 := fun ⟨j, hj⟩ => t.2 j hj
-      simp only [dif_neg h]
+      simp only [h, ↓reduceDIte]
 
 /-- The store's oracle beside other coins `Z`, as the other tags' key pairs beside the snapshot's primitive and `Z`. -/
 noncomputable def oracleEquiv {w p : ℕ} [NeZero p] (tag : Fin N → T) (htag : Function.Injective tag) (Z : Type) :
@@ -61,6 +61,7 @@ noncomputable def oracleEquiv {w p : ℕ} [NeZero p] (tag : Fin N → T) (htag :
     change ((fun t : Rest tag => (splitEquiv tag htag).symm (ω.2, e) t.1),
       ((ω.1, fun j => (splitEquiv tag htag).symm (ω.2, e) (tag j)), z)) = (e, (ω, z))
     rw [h1, h2]
+    rfl
 
 theorem pr_false_eq_zero {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
   classical
@@ -72,7 +73,7 @@ theorem pr_snap_le {w p : ℕ} [NeZero p] [Fintype T] [DecidableEq T] {Z : Type}
     (tag : Fin N → T) (htag : Function.Injective tag) (F : RestKeys tag w p → (ringRO N w p).Ω × Z → Prop)
     (c : ℝ≥0∞) (h : ∀ e, pr (F e) ≤ c) :
     pr (fun y : Oracle w p T × Z => F (rest tag y.1) (snap tag y.1, y.2)) ≤ c := by
-  haveI : Nonempty (Fin p) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne p)⟩⟩
+  have : Nonempty (Fin p) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne p)⟩⟩
   calc pr (fun y : Oracle w p T × Z => F (rest tag y.1) (snap tag y.1, y.2))
       = pr (fun x : RestKeys tag w p × ((ringRO N w p).Ω × Z) => F x.1 x.2) :=
         PousThm1ii.pr_equiv (oracleEquiv tag htag Z) (fun x => F x.1 x.2)
@@ -115,7 +116,7 @@ theorem P2ContentAbsorbs : Pous.Guarantees.P2ContentAbsorbs := by
 /-- **An audit window of the mutable store, from P2's per-round floor** (`Pous.Guarantees.ObligationOfRoundSecure`). -/
 theorem ObligationOfRoundSecure : Pous.Guarantees.ObligationOfRoundSecure := by
   intro p ε₀ D Q L h N _ h1 h2 T _ _ tag htag Sz k W A₁ A₂
-  haveI : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
+  have : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
   exact Pous.Mutable.SecurityProofs.pr_snap_le tag htag
     (fun e (x : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
       varPassesOn _ k k (W e) (A₁ e) (A₂ e) x) _
@@ -125,7 +126,7 @@ theorem ObligationOfRoundSecure : Pous.Guarantees.ObligationOfRoundSecure := by
 (`Pous.Guarantees.ObligationOfCommitted`). -/
 theorem ObligationOfCommitted : Pous.Guarantees.ObligationOfCommitted := by
   intro p ε₀ D Q L h N _ h1 h2 T _ _ tag htag π W hW Sz k A₁ A₂
-  haveI : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
+  have : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
   refine Pous.Mutable.SecurityProofs.pr_snap_le tag htag
     (fun e (x : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
       varPassesOn _ k k (W e x.1) (A₁ e) (A₂ e) x) _ fun e => ?_
