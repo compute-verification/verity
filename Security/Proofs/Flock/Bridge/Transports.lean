@@ -1,4 +1,4 @@
-import Proofs.Flock.Bridge.Statement
+import Proofs.Flock.Bridge.Canon
 import Proofs.Flock.Claims.Bridge.Transports
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
@@ -189,12 +189,13 @@ theorem hm96Pair_spec_salt (r y r' y' : List UInt8) (hy : y ≠ y') (h : H512 (h
   by_cases hr : r = r'
   · subst hr
     unfold Collides hm96Pair
-    split_ifs with ho hy'
-    · exact absurd hy' hy
-    · have hcs : K512.leafPrefix ++ commitString r y = K512.leafPrefix ++ commitString r y' := ho
+    by_cases ho : hm96Input r y = hm96Input r y'
+    · simp only [ho, hy, ↓reduceIte]
+      have hcs : K512.leafPrefix ++ commitString r y = K512.leafPrefix ++ commitString r y' := ho
       exact ⟨fun e => hy (List.append_cancel_left e),
         enc512.dig_inj (commitString_split (List.append_cancel_left hcs)).2⟩
-    · exact ⟨ho, h⟩
+    · simp only [ho, ↓reduceIte]
+      exact ⟨ho, h⟩
   · exact hm96Pair_spec r y r' y' hr h
 
 /-- **An opening the deployed check passes carries a full path**: `64 · log2ceil nl` bytes after its salt. -/
@@ -382,12 +383,12 @@ theorem vbOf_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
   have he' := he.trans (vbOf_cs_row h R)
   rcases p with ⟨u', q'⟩ | g'
   · rw [vbOf_com_inl] at he'
-    simp only [Prod.mk.injEq, Sum.inl.injEq] at he'
-    obtain ⟨⟨rfl, rfl⟩, hl⟩ := he'
+    obtain ⟨h1, hl⟩ := Prod.mk.inj he'
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj h1)
     exact hl
   · have h1 := congrArg Prod.fst he'
     rw [vbOf_com_fst] at h1
-    exact absurd h1 (by simp)
+    cases h1
 
 /-- **The deployed layout's rows** at a C-Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
 circuit file. -/
