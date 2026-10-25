@@ -91,7 +91,7 @@ theorem rootsOf_getD (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) {q : �
 
 theorem one_le_log2ceil {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
   unfold Flock.log2ceil
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   omega
 
 /-- **What port `q`'s root hashes last**: the frame of its tree's top node; with one leaf, that leaf's frame; with
@@ -117,21 +117,18 @@ theorem root_top (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) :
   rw [TopRoot.root_eq, leaves_size]
   rcases Nat.lt_or_ge nl 2 with hlt | h2
   · interval_cases nl
-    · first
-        | rfl
-        | simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.hash_frame,
-            getElem!_def]
-    · first
-        | rfl
-        | simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.leafAs_eq,
-            getElem!_def]
+    · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.hash_frame,
+        getElem!_def]
+    · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.leafAs_eq,
+        getElem!_def]
   · obtain ⟨k, hk⟩ : ∃ k, Flock.log2ceil nl = k + 1 := ⟨Flock.log2ceil nl - 1, by have := one_le_log2ceil h2; omega⟩
     have hk' : Flock.log2ceil nl - 1 = k := by omega
     have hsz : 0 < (TopRoot.lev (domOf c q) (leaves c pub nl q) k).size / 2 := by
       rw [TopRoot.lev_size _ _ _ (by rw [leaves_size]; omega), leaves_size, hk, show k + 1 - k = 1 by omega]
       decide
     rw [hk, TopRoot.lev, TopRoot.next_get _ _ _ hsz]
-    simp only [topIn, if_neg (show nl ≠ 0 by omega), if_neg (show nl ≠ 1 by omega), hk', Nat.mul_zero, Nat.zero_add]
+    simp only [topIn, ite_eq_right (show nl ≠ 0 by omega), ite_eq_right (show nl ≠ 1 by omega), hk', Nat.mul_zero,
+      Nat.zero_add]
 
 /-- **Two top frames over different domains differ.** -/
 theorem topIn_ne {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hd : domOf c q' ≠ domOf c q) :
@@ -273,28 +270,31 @@ theorem fixes_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (h : r
   simp only [decide_eq_true_eq, not_and, not_not] at this
   exact this he
 
-theorem pr_unit {p : Unit → Prop} : Claims.Pr p = if p () then 1 else 0 := by
-  classical
-  unfold Claims.Pr
-  by_cases h : p ()
-  · rw [if_pos h, Finset.filter_true_of_mem fun x _ => by cases x; exact h]
-    simp
-  · rw [if_neg h, Finset.filter_false_of_mem fun x _ => by cases x; exact h]
-    simp
+theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
+    (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by
+  have hc : (Fintype.card F.S : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
+  unfold Claims.Finder.Pr Claims.Pr
+  simp [h, hc]
+
+theorem finderPr_zero {H : Msg → Msg} {F : Claims.Finder}
+    (h : ∀ s, ¬ ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 0 := by
+  unfold Claims.Finder.Pr Claims.Pr
+  simp [h]
 
 theorem ex_cost (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
     Claims.Ex (fun s => ((rootsFinder c pub nl).cost s : ℝ)) = rootsCost c nl := by
-  simp [Claims.Ex, rootsFinder]
+  have hc : (Fintype.card (rootsFinder c pub nl).S : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
+  unfold Claims.Ex
+  change (∑ _s : (rootsFinder c pub nl).S, (rootsCost c nl : ℝ)) / _ = _
+  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm, mul_div_assoc, div_self hc, mul_one]
 
 /-- **A registration whose roots expose a collision has `ecr/sha-512`'s term at least 1** at the roots finder, at
 any budget of at least its calls. -/
 theorem one_le_ecrBound {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc : rootsColl c pub nl ≠ none) {q : ℝ}
     (hq : (rootsCost c nl : ℝ) ≤ q) : 1 ≤ Claims.ecrBound sha512Msg (rootsFinder c pub nl) q := by
   obtain ⟨⟨x, y⟩, hxy⟩ := Option.ne_none_iff_exists'.mp hc
-  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 1 := by
-    unfold Claims.Finder.Pr
-    rw [pr_unit]
-    exact if_pos ⟨x, y, hxy, rootsColl_collides hxy⟩
+  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 1 :=
+    finderPr_one fun _ => ⟨x, y, hxy, rootsColl_collides hxy⟩
   unfold Claims.ecrBound
   split_ifs with h
   · rw [ENNReal.one_le_ofReal]
@@ -309,14 +309,10 @@ finder. -/
 theorem ecrBound_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc : rootsColl c pub nl = none) :
     Claims.ecrBound sha512Msg (rootsFinder c pub nl) (rootsCost c nl) =
       ENNReal.ofReal ((rootsCost c nl : ℝ) / 2 ^ (256 : ℝ)) := by
-  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 0 := by
-    unfold Claims.Finder.Pr
-    rw [pr_unit]
-    refine if_neg ?_
-    rintro ⟨u, v, he, -⟩
-    exact Option.some_ne_none _ (he.symm.trans hc)
+  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 0 :=
+    finderPr_zero fun _ ⟨_, _, he, _⟩ => Option.some_ne_none _ (he.symm.trans hc)
   unfold Claims.ecrBound
-  rw [if_pos]
+  rw [ite_eq_left]
   refine ⟨?_, (ex_cost c pub nl).le⟩
   unfold Claims.ExpectedCR
   rw [hPr, ex_cost]
