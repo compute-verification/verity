@@ -79,8 +79,9 @@ class RankRun(PH.H1Run):
     def _close_rounds(self, through: int) -> None:
         return None
 
-    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> PH.Call:
-        call = super()._call(s, w, a, s_a, weight, weight_scale, records)
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None,
+              zy: Any = None) -> PH.Call:
+        call = super()._call(s, w, a, s_a, weight, weight_scale, records, zy)
         if self.ship and self.commit:
             new = weight is not None and self._held.get(w) is not weight
             if new:
