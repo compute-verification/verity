@@ -243,7 +243,7 @@ theorem leaf_misshaped_dep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N �
     Collides (hm96Pair (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y
       (SamplingDeploy.row (placeOf C rows) (bitsOf d) o) (saltOf o)) := by
   have hp := placeOf_eq hr hpl
-  refine hm96Pair_spec _ _ _ _ (Ne.symm (SamplingDeploy.row_ne_misshaped (placeOf C rows) (bitsOf d) o ?_ ?_ ?_)) h
+  refine hm96Pair_spec _ _ _ _ (Ne.symm (SamplingDeploy.row_ne_misshaped (place := placeOf C rows) (bits := bitsOf d) (o := o) ?_ ?_ ?_)) h
   · rw [hp]; exact h16
   · rw [hp]; exact hW
   · rw [hp]; exact hv
