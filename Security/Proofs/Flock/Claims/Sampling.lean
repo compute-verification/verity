@@ -38,7 +38,8 @@ by `k` (`Sampling.Raise`); the deployed draw's miss bound and `DrawLaw` from it 
 unit's gates computing its netlist (`Sampling.Universal`); the block's claims assembled, with what remains as hypotheses
 (`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
 deployed record (`Sampling.Deployed`); its zero knowledge by sequential composition of the masked sessions' at the
-masked deployed record, the route of record (`Sampling.Seq`), and, the earlier route, from a committed-coin protocol given the leaf layer (`Sampling.ZK`), at the sampled masked protocol with every coin
+masked deployed record, the route of record (`Sampling.Seq`), and, the earlier route,
+from a committed-coin protocol given the leaf layer (`Sampling.ZK`), at the sampled masked protocol with every coin
 committed at `Hello` (`Sampling.Committed`), and at the sessions' tables, with the simulator its models give
 (`Sampling.Tables`); and the
 deployed record's reference prover and its completeness from Flock's (`Sampling.Reference`). -/
