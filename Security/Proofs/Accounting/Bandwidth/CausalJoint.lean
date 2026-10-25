@@ -20,7 +20,7 @@ every `z`, and `Interface.observe_eq` replays each `z`'s run. `audit_joint` is t
 `splits_of_links_joint` is `Causal.splits_of_links` for such a strategy, with passive memory and the oracle as a
 location over the pair `(store, z)`; `audit_links_joint` is `audit_joint` from the links, and `audit_capacity_joint`
 its capacity form (`n ≤ βm T − cert_bw`): the guarantees `Bandwidth.Guarantees.Mbw` and `MbwCapacity`
-(`Security/Models/Accounting/Guarantees/Bandwidth/Causal.lean`).
+(`Security/Definitions/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
 
 namespace Bandwidth

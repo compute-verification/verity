@@ -18,7 +18,7 @@
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
 # with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
 # state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json and syncs next), and `drive.sh merge
-# ARGS` runs `research merge ARGS` (a pure move's `--push`). All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
+# ARGS` runs `research merge ARGS` (a pure move's `--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
 # the verity-drive App move main and next (23 Oct), and `research` refuses those pushes anywhere else.
 # Log: /data/drive/drive.log
 DIR=/data/drive
@@ -32,12 +32,18 @@ TICK=/root/drive-tick.lock
 export PATH=$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
   RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp
 mkdir -p "$TMPDIR"
+# origin's main in $REPO: `research merge` refuses any checkout but branch main (CI-169), the tick and `queue` take a detached one
+checkout() {
+  git -C "$REPO" fetch -q origin main || return 1
+  if [ "$1" = merge ]; then git -C "$REPO" checkout -q -f -B main FETCH_HEAD
+  else git -C "$REPO" checkout -q -f --detach FETCH_HEAD; fi
+}
 locked() {
   exec 8> "$TICK"; flock 8
   set -a; . $CONF/r2.env; . $CONF/relay.env; set +a
   [ -n "${RESEARCH_AGENT_URL:-}" ] || RESEARCH_AGENT_URL=$(cat $DIR/agent-url 2>/dev/null); export RESEARCH_AGENT_URL
   GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
-  git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
+  checkout "$1" || exit 1
   cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
 }
 tick() { locked queue drive --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
