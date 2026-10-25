@@ -14,6 +14,12 @@ every machine of a census deployment, the pooled total first and the per-window 
   - Per window (beside it): `IntegrityPeriod` (#4358) at `δ/T` a window, the exact hypergeometric threshold.
   - Proved: each window's verdict, by the Lean verifier of record. Scaled: the number of windows, and that every window
     is audited as the run's are. The run doesn't compute `ε_ks` or `δ_link`, so each figure names that term.
+  - Space, bandwidth and communication pool from the run's own answers over the same `T`, when their legs report.
+    Space is a count: PoUS's shortness reads each window's own coins, so the period certifies at least `T − M + 1`
+    windows at each δ, by `pooledShort`'s Chernoff form at `p` the windows' `eps` (#4418, given `FixedBefore`; #4413).
+    Bandwidth fails with probability `T · eps`, not `eps`. Communication pays each window's own terms of the
+    certifier's itemized K every window and the faulty units once, `⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))` bits
+    (`HorizonLeakAccepted`, #4367, conditional on its per-window inputs until they are discharged).
   - `python -m verity_all_protocols.monitoring A/reports.jsonl B/reports.jsonl` pools windows run on several machines.
 - `verity_all_protocols/table.py`: the protocols (`TABLE`) and the one leg interface. A leg is
   `legs/<component>.py` defining `leg(period_dir, node, out) -> dict`. `period_dir` is the window's loop records (the
@@ -34,7 +40,8 @@ every machine of a census deployment, the pooled total first and the per-window 
   on the legs' cases. Bandwidth is not an onsite component yet: a rejection there rejects, but its acceptance completes
   nothing.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and one
-  `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports.
+  `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports, and
+  `--session-jobs S` (default 16) runs S of each audit's drawn members' proof sessions at once (`a5 --session-jobs`).
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
   aren't its model's. `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits
   it with `verity_torch_loop.pouw_audit` before the legs.
