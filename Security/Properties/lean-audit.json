@@ -8109,13 +8109,13 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "93a0eb00727c16c9d334da6721161c6d3412f5a88b61f1771b82554744b5a72c",
+   "digest": "f36189abd2f3ed314e8f04fc8676b5ea72448a34edaf1d54378db27efbd693de",
    "definitions": {
     "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
     "Properties.RemoteAudit.Line.HeldAt": "069a74d91e7fe3ad77f199f4f9967298c6eaeddaa9ff54415a5fe5aa20254a36",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "d773295bf9c84fdee85926473d5e69c66a854ec20e017c64ada6cfa6d0a95933",
-    "Properties.RemoteAudit.Line.LineHeldIdentity": "e44364c1507660533146dceca8e1d51bdb45b293c073661803cff3043a3f75b3",
+    "Properties.RemoteAudit.Line.LineHeld": "69fe3bec2cf654e5a79d48d33f7b9f662ace66fdf183f38156b31a591ac3f59b",
+    "Properties.RemoteAudit.Line.LineHeldIdentity": "b7ab7915d4996f2fa295399527360131a4b841f758997ad41e640be351d56c64",
     "Properties.RemoteAudit.Line.StretchBound": "81d15d41252aa8d919aeb78bacb4b616b3eadb2ce5f86146d0fad010ac89cc97"
    },
    "guarantees": [
@@ -8136,7 +8136,7 @@
    ]
   },
   "Properties.RemoteAudit.Line.Record": {
-   "digest": "db0eb09bf7dd7a6cb8e8b37313a48fc27271032028fc951201521888462bfba9",
+   "digest": "832d422a7db6b7dda4305009a712a7febf348c9d09f1082d8ab87a6a3c54fe67",
    "definitions": {
     "Properties.RemoteAudit.Line.Node": "7c8ed13e4fa414c6c71e8d70e1381a1414c0ae5d757060a768296b29bcf7652e",
     "Properties.RemoteAudit.Line.Node.blockBytes": "f524d416457d24d143e21fc21c677bc42d3e688063d80b20b2964a5998ad2701",
@@ -8173,8 +8173,10 @@
     "Properties.RemoteAudit.Line.firstPass": "bf9a98a4c7254d3528dbcdf163f01f5d13f40bf9dafdd41a19e82ae33849cc7b",
     "Properties.RemoteAudit.Line.lineOf": "a14631e1e937019c0c21cb575af46e7d8a0e50aa7165a6da3d2221ddf99b631b",
     "Properties.RemoteAudit.Line.ofRecord": "dc7ce4c6429bd2df4b286ede4e1c0a8263bd26e97252746a43cb75544eb01d45",
+    "Properties.RemoteAudit.Line.played": "7e8162e42e5d5e40d2239b8d56434ee98caec9c6b266fdcfc4cbabc2f08e9687",
     "Properties.RemoteAudit.Line.reachStep": "ff950b491731a3b6d65a8af5ba5b1875dd463e9bb27a764a94e43cb9facfd746",
     "Properties.RemoteAudit.Line.receiptMax": "1507ed9d46115e7a1dd249ed140bb32f7f1e8eac179bbbaf164ffbd9b2076b03",
+    "Properties.RemoteAudit.Line.recordCommitted": "e86e77764ad0a90d5986f5a7acdc58e94079bcb6e5ff6e30ac6344108e76b72c",
     "Properties.RemoteAudit.Line.recordDraw": "55131d6badd3036a5870e176929b3324316d13e871da8686d3729770e222b1fd",
     "Properties.RemoteAudit.Line.recordPace": "1316e56cadcaa8849c67b093609407a0feaf4bc4a574736c2a27d058028c4cf4",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
