@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""R13 lane hopper: build the FA3 (hopper/) forward of the pinned vllm-flash-attn (506341a1) as a standalone torch extension --
+"""Build the FA3 (hopper/) forward of the pinned vllm-flash-attn (506341a1) as a standalone torch extension --
 the M1 hidden-value tap `verity_fa3_matReq.so` (VERITY_TAP=3, VERITY_MAT_SRC=59) or an untapped control (VERITY_TAP=0).
 
 Mirrors the flags of the pinned CMake build of `_vllm_fa3_C` (CMakeLists.txt: -O3 --use_fast_math --expt-relaxed-constexpr
