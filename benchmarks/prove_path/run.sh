@@ -33,6 +33,10 @@
 #     (records_audit.py --circuit), and once with its schedule committed
 #     as advice under its compiler (verity_torch_loop.compile, run by the audit as a command: --opening, --compilers); each
 #     tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--requests, --steps).
+#     PP_TORCH_LOOP_REGISTERED=1: the loop's weights committed once before it runs (serve.py --commit-weights), the circuit
+#     reading them as registered values (--registered) and each audit holding them to the pin (records_audit.py
+#     --registered), plus an arm serving other weights under the registered salts (--tamper-weights), which Lean's
+#     registered reads must refuse.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -226,9 +230,15 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}
   TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
   export PYTHONPATH=$REPO/integrations/torch_loop
+  REGC= REGA=()
+  if [ -n "${PP_TORCH_LOOP_REGISTERED:-}" ]; then   # the weights committed once, before any run: the opening is the prover's, the pin the verifier's
+    $PY -m verity_torch_loop.serve --commit-weights $W/weights-opening.json --pin $O/torch-loop-weights-pin.json \
+      | tee $O/torch-loop-weights.json || exit 8
+    TL="$TL --registered --weights $W/weights-opening.json" REGC=--registered REGA=(--registered $O/torch-loop-weights-pin.json)
+  fi
   # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
   # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
-  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP \
+  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP $REGC \
     > $O/torch-loop-compilers.json || exit 8
   loop() {  # NAME [--compiled] [--tamper]: the torch loop's window, audited from its records alone against the circuit
             # registered before it ran, or (--compiled) against its compiler's output on its committed schedule. Each arm is
@@ -237,6 +247,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
     for x in "$@"; do
       case $x in
         --tamper) forged=--forged; serve+=(--tamper);;
+        --tamper-weights) forged=--forged; serve+=(--tamper-weights);;
         --compiled) serve+=(--opening $W/$name-opening.json)
                     held=(--opening $W/$name-opening.json --compilers $O/torch-loop-compilers.json);;
       esac
@@ -251,7 +262,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
     local run; run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/serve.json) || return 1
     mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
     $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW "${held[@]}" \
-      --run $run ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --run $run ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" "${REGA[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
     local rc=$?
     grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
@@ -260,6 +271,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   }
   loop torch-loop || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-tampered --tamper || rc=1
+  [ "${PP_ONLY:-}" = honest ] || [ -z "${PP_TORCH_LOOP_REGISTERED:-}" ] || loop torch-loop-other-weights --tamper-weights || rc=1
   loop torch-loop-compiled --compiled || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
 else
