@@ -652,6 +652,50 @@ def test_a_module_an_earlier_target_imported_is_held_by_every_check_that_imports
     assert _run(root)["hits"] == []
 
 
+#: body reads under nested recordings: which of SynTop and the SynSub its body calls each recording noted
+BODY_READS = """
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root))
+from circuit_check import cache as CC
+from verity.ml.circuits.defs import bind
+
+CC.trace(root)
+from syn import top
+
+top_, sub = (sp := bind(top.SynTop)), sp.body.nodes[0].fn
+names = lambda fr: sorted(n for n, d in (("top", top_), ("sub", sub)) if id(d) in fr.defs)
+got = {}
+with CC.recording() as a:
+    for _ in range(3):
+        top_.body
+    with CC.recording(merge=False) as b:
+        sub.body
+        sub.body
+    got["b"], got["a then"] = names(b), names(a)
+    sub.body
+    got["a"] = names(a)
+with CC.recording() as c:
+    top_.body
+    with CC.recording() as d:
+        top_.body
+    got["c"], got["d"] = names(c), names(d)
+print(json.dumps(got))
+"""
+
+
+def test_a_body_read_is_noted_in_every_recording_that_reads_it(tmp_path):
+    """A check's layout walks read a specialization's body millions of times, so the tracer notes a read once in the recording
+    it happens in rather than on every read; a read in any other recording (a nested one, its encloser once it ends, a later
+    one) is noted there again, however often the body was read before."""
+    root = _tree(tmp_path)
+    r = subprocess.run([sys.executable, "-c", BODY_READS, str(root)], capture_output=True, text=True, cwd=REPO, check=True)
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == {"b": ["sub"], "a then": ["top"], "a": ["sub", "top"],
+                                                             "c": ["top"], "d": ["top"]}
+
+
 def _bindings(root: Path, *extra: str, families: tuple[str, ...] = ()) -> None:
     """Run the catalog's bindings ``extra`` beside the core and model ones, and keep ``families`` too."""
     _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model)]',

@@ -196,6 +196,8 @@ class Frame:
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
 _FRAMES: list[Frame] = [Frame()]
+#: bumped each time a recording opens or closes: a specialization whose body was last read at another count is noted again
+_EPOCH = [0]
 #: what was read and run while each module was first imported (after `trace`), by module name
 _MODULES: dict[str, Frame] = {}
 #: what each binding unit read and ran while it made its roots
@@ -485,12 +487,14 @@ def recording(merge: bool = True) -> Iterator[Frame]:
         yield fr
         return
     _FRAMES.append(fr)
+    _EPOCH[0] += 1
     if _TOOL:
         sys.monitoring.restart_events()
     try:
         yield fr
     finally:
         _FRAMES.pop()
+        _EPOCH[0] += 1
         if merge and len(_FRAMES) > 1:
             _FRAMES[-1].merge(fr)
 
@@ -613,11 +617,17 @@ def _instrument() -> None:
     for cls in (D.PrimitiveDefinition, D.CompositeDefinition, D.SpecializedDefinition):
         marking(cls)
     get = D.SpecializedDefinition.body.fget
+    D.SpecializedDefinition._circuit_check_read = -1
 
     def body(self):
+        # the layout's walks read a body millions of times a check: noted once under each innermost recording
+        if self._circuit_check_read == _EPOCH[0] and (b := self._body) is not None:
+            return b
         if len(_FRAMES) > 1:
             _FRAMES[-1].defs.setdefault(id(self), self)
-        return get(self)
+        b = get(self)
+        self._circuit_check_read = _EPOCH[0]
+        return b
 
     D.SpecializedDefinition.body = property(body)
     sig = D.SpecializedDefinition.signature
