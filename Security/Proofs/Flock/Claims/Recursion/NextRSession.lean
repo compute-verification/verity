@@ -112,6 +112,7 @@ theorem sessionP_repRuns (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
       rw [getElem!_pos cms i (by simp at hsz₂; omega)]
       exact this
   · rintro k ⟨i, rp, name⟩ ⟨ss, ps⟩ l res l' hk ⟨h₂, h₅⟩ e
+    dsimp only at h₂ h₅
     obtain ⟨hk', hkv⟩ := Array.getElem?_eq_some_iff.1 hk
     rw [repStreams_getElem spec hk'] at hkv
     simp only [Prod.mk.injEq] at hkv
@@ -131,7 +132,7 @@ theorem sessionP_repRuns (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
     rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | rfl
     · rw [push_getElem!_lt _ _ (by omega)]
       exact h₅ j hj
-    · refine ⟨extras, (pf, tr'), l₁, l₂, by simpa [ptsOf] using hex, e2, ?_⟩
+    · refine ⟨extras, (pf, tr'), _, l₂, by simpa [ptsOf] using hex, e2, ?_⟩
       rw [← h₂, push_getElem!_size]
 
 end FlockComplete.JsonRT
