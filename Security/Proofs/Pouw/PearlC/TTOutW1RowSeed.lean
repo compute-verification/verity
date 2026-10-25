@@ -53,6 +53,31 @@ theorem rowOfRow_splitLayout {L : Layout} {v : ℕ} (hv : v < rowsOf L) : rowOfR
 theorem rowIdx_splitLayout (L : Layout) (v i : ℕ) : rowIdx (splitLayout L) v i = v + i := by
   rw [rowIdx, rowOffset_splitLayout]
 
+theorem splitWorkload_layout (U : Workload) : (splitWorkload U).layout = splitLayout U.layout := rfl
+
+theorem splitLayout_N (L : Layout) : (splitLayout L).N = rowsOf L := rfl
+
+theorem splitLayout_m (L : Layout) (v : ℕ) : ((splitLayout L).shape v).m = 1 := rfl
+
+theorem splitLayout_k (L : Layout) (v : ℕ) : ((splitLayout L).shape v).k = (L.shape (unitOfRow L v)).k := rfl
+
+/-- Split unit `v`'s row 0 is the global row `v` of its unit's row. -/
+theorem rowIdx_split_eq (L : Layout) (v : ℕ) :
+    rowIdx (splitLayout L) v 0 = rowIdx L (unitOfRow L v) (rowOfRow L v) := by
+  rw [rowIdx_splitLayout, Nat.add_zero, rowIdx_unitOfRow]
+
+theorem actAt_split (L : Layout) (v l : ℕ) :
+    W1.actAt (splitLayout L) v 0 l = W1.actAt L (unitOfRow L v) (rowOfRow L v) l := by
+  unfold W1.actAt; rw [rowIdx_split_eq]
+
+theorem ticketAt_split (L : Layout) (v j : ℕ) :
+    W1.ticketAt (splitLayout L) v 0 j = W1.ticketAt L (unitOfRow L v) (rowOfRow L v) j := by
+  unfold W1.ticketAt; rw [rowIdx_split_eq]
+
+theorem usefulAt_split (L : Layout) (v j : ℕ) :
+    W1.usefulAt (splitLayout L) v 0 j = W1.usefulAt L (unitOfRow L v) (rowOfRow L v) j := by
+  unfold W1.usefulAt; rw [rowIdx_split_eq]
+
 theorem rowCodes_zero (M : Codes) (i l : ℕ) : rowCodes M i 0 l = M i l := rfl
 
 theorem rowCodes_ne (M : Codes) (i : ℕ) {i' : ℕ} (h : i' ≠ 0) (l : ℕ) : rowCodes M i i' l = 0 := by
@@ -70,22 +95,32 @@ are 0. -/
 def splitAct (L : Layout) (act : ℕ → Codes) : ℕ → Codes :=
   fun v i' l => if i' = 0 then act (unitOfRow L v) (rowOfRow L v) l else 0
 
+theorem splitAct_zero (L : Layout) (act : ℕ → Codes) (v l : ℕ) :
+    splitAct L act v 0 l = act (unitOfRow L v) (rowOfRow L v) l := by
+  show (if (0 : ℕ) = 0 then act (unitOfRow L v) (rowOfRow L v) l else 0) = _
+  exact ite_eq_left rfl
+
+theorem splitAct_ne (L : Layout) (act : ℕ → Codes) (v : ℕ) {i' : ℕ} (h : i' ≠ 0) (l : ℕ) :
+    splitAct L act v i' l = 0 := by
+  show (if i' = 0 then act (unitOfRow L v) (rowOfRow L v) l else 0) = 0
+  exact ite_eq_right h
+
 /-- **The split run starts from the original's memory.** A declared global row holds the same activation row on both
 layouts, and the rest of memory doesn't read the layout's units. -/
 theorem init_split (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) :
     W1.init salt (splitProg pr U.layout) (splitWorkload U) (splitAct U.layout act) σ = W1.init salt pr U act σ := by
-  have h4 : ∀ g l : ℕ, (if g < rowsOf (splitLayout U.layout) then
-        W1.w32 (splitAct U.layout act (unitOfRow (splitLayout U.layout) g) (rowOfRow (splitLayout U.layout) g) l)
+  have h4 : ∀ g l : ℕ, (if g < rowsOf (splitWorkload U).layout then
+        W1.w32 (splitAct U.layout act (unitOfRow (splitWorkload U).layout g) (rowOfRow (splitWorkload U).layout g) l)
       else 0) = (if g < rowsOf U.layout then W1.w32 (act (unitOfRow U.layout g) (rowOfRow U.layout g) l) else 0) := by
     intro g l
-    rw [rowsOf_splitLayout]
+    rw [splitWorkload_layout, rowsOf_splitLayout]
     by_cases hg : g < rowsOf U.layout
-    · rw [ite_eq_left hg, ite_eq_left hg, unitOfRow_splitLayout hg, rowOfRow_splitLayout hg]
-      exact congrArg W1.w32 (ite_eq_left rfl)
+    · rw [ite_eq_left hg, ite_eq_left hg, unitOfRow_splitLayout hg, rowOfRow_splitLayout hg, splitAct_zero]
     · rw [ite_eq_right hg, ite_eq_right hg]
   funext a
-  simp only [W1.init, splitProg, splitWorkload]
+  simp only [W1.init]
   rw [h4]
+  exact rfl
 
 /-- **The split run is the original run:** the same code from the same memory. -/
 theorem final_split (dv : W1.W1Device) (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) :
@@ -109,65 +144,37 @@ rows. -/
 theorem readout_split (U : Workload) (act : ℕ → Codes) (M : W1.Mem) :
     W1.readout (splitWorkload U) (splitAct U.layout act) M = splitTranscript U.layout (W1.readout U act M) := by
   funext v
+  simp only [W1.readout, splitTranscript]
+  rw [splitWorkload_layout, splitLayout_N, splitLayout_m, splitLayout_k]
   by_cases hv : v < rowsOf U.layout
   · have hi := rowOfRow_lt hv
-    have hidx := rowIdx_unitOfRow U.layout v
-    have hv' : v < (splitWorkload U).layout.N := hv
     have hu := unitOfRow_lt hv
-    simp only [W1.readout, splitTranscript]
-    rw [ite_eq_left hv', ite_eq_left hv, ite_eq_left hu, Option.map_some]
+    rw [ite_eq_left hv, ite_eq_left hv, ite_eq_left hu, Option.map_some]
     refine congrArg some ?_
-    show Commit.mk _ _ _ = Commit.mk (rowCodes _ (rowOfRow U.layout v)) (rowCodes _ (rowOfRow U.layout v))
-      (rowCodes _ (rowOfRow U.layout v))
+    dsimp only [rowCommit]
     congr 1
     · funext i' l
       by_cases h0 : i' = 0
       · subst h0
-        rw [rowCodes_zero]
-        show (if 0 < 1 ∧ l < (U.layout.shape (unitOfRow U.layout v)).k then
-            M (4, Nat.pair (rowIdx (splitLayout U.layout) v 0) l) else splitAct U.layout act v 0 l) =
-          (if rowOfRow U.layout v < (U.layout.shape (unitOfRow U.layout v)).m ∧
-              l < (U.layout.shape (unitOfRow U.layout v)).k then
-            M (4, Nat.pair (rowIdx U.layout (unitOfRow U.layout v) (rowOfRow U.layout v)) l)
-          else act (unitOfRow U.layout v) (rowOfRow U.layout v) l)
-        rw [rowIdx_splitLayout, hidx, Nat.add_zero]
+        rw [rowCodes_zero, actAt_split]
         by_cases hl : l < (U.layout.shape (unitOfRow U.layout v)).k
         · rw [ite_eq_left (And.intro Nat.one_pos hl), ite_eq_left (And.intro hi hl)]
-        · rw [ite_eq_right (not_and_of_not_right _ hl), ite_eq_right (not_and_of_not_right _ hl)]
-          exact ite_eq_left rfl
+        · rw [ite_eq_right (not_and_of_not_right _ hl), ite_eq_right (not_and_of_not_right _ hl), splitAct_zero]
       · have h1 : ¬ i' < 1 := by omega
-        rw [rowCodes_ne _ _ h0]
-        show (if i' < 1 ∧ l < (U.layout.shape (unitOfRow U.layout v)).k then
-            M (W1.actAt (splitWorkload U).layout v i' l) else splitAct U.layout act v i' l) = 0
-        rw [ite_eq_right (not_and_of_not_left _ h1)]
-        exact ite_eq_right h0
+        rw [rowCodes_ne _ _ h0, ite_eq_right (not_and_of_not_left _ h1), splitAct_ne _ _ _ h0]
     · funext i' j
       by_cases h0 : i' = 0
       · subst h0
-        rw [rowCodes_zero]
-        show (if 0 < 1 then M (6, Nat.pair (rowIdx (splitLayout U.layout) v 0) j) else 0) =
-          (if rowOfRow U.layout v < (U.layout.shape (unitOfRow U.layout v)).m then
-            M (6, Nat.pair (rowIdx U.layout (unitOfRow U.layout v) (rowOfRow U.layout v)) j) else 0)
-        rw [rowIdx_splitLayout, hidx, Nat.add_zero, ite_eq_left Nat.one_pos, ite_eq_left hi]
+        rw [rowCodes_zero, ticketAt_split, ite_eq_left Nat.one_pos, ite_eq_left hi]
       · have h1 : ¬ i' < 1 := by omega
-        rw [rowCodes_ne _ _ h0]
-        show (if i' < 1 then M (W1.ticketAt (splitWorkload U).layout v i' j) else 0) = 0
-        rw [ite_eq_right h1]
+        rw [rowCodes_ne _ _ h0, ite_eq_right h1]
     · funext i' j
       by_cases h0 : i' = 0
       · subst h0
-        rw [rowCodes_zero]
-        show (if 0 < 1 then M (7, Nat.pair (rowIdx (splitLayout U.layout) v 0) j) else 0) =
-          (if rowOfRow U.layout v < (U.layout.shape (unitOfRow U.layout v)).m then
-            M (7, Nat.pair (rowIdx U.layout (unitOfRow U.layout v) (rowOfRow U.layout v)) j) else 0)
-        rw [rowIdx_splitLayout, hidx, Nat.add_zero, ite_eq_left Nat.one_pos, ite_eq_left hi]
+        rw [rowCodes_zero, usefulAt_split, ite_eq_left Nat.one_pos, ite_eq_left hi]
       · have h1 : ¬ i' < 1 := by omega
-        rw [rowCodes_ne _ _ h0]
-        show (if i' < 1 then M (W1.usefulAt (splitWorkload U).layout v i' j) else 0) = 0
-        rw [ite_eq_right h1]
-  · have hv' : ¬ v < (splitWorkload U).layout.N := hv
-    simp only [W1.readout, splitTranscript]
-    rw [ite_eq_right hv', ite_eq_right hv]
+        rw [rowCodes_ne _ _ h0, ite_eq_right h1]
+  · rw [ite_eq_right hv, ite_eq_right hv]
 
 /-- **W1 priced is closed under splitting rows into units (C3)**, for every device and salt encoding: the split
 program is the original's text at the original layout, its activations each split unit's row, and its run is the
@@ -179,12 +186,12 @@ theorem w1Priced_splitClosed (dv : W1.W1Device) (salt : S → List ℕ) :
   · show W1.readout (splitWorkload U) (splitAct U.layout act)
         (W1.final dv (salt s) (splitProg prog U.layout) (splitWorkload U) (splitAct U.layout act) σ).mem =
       splitTranscript U.layout (W1.readout U act (W1.final dv (salt s) prog U act σ).mem)
-    rw [final_split, readout_split]
+    rw [final_split dv (salt s) prog U act σ, readout_split U act]
   · refine le_of_eq ?_
     show (((W1.final dv (salt s) (splitProg prog U.layout) (splitWorkload U) (splitAct U.layout act) σ).cost +
         dv.prices.fetch * W1.w1Read dv (salt s) (splitProg prog U.layout) (splitWorkload U) (splitAct U.layout act) σ :
           ℚ) : ℝ) =
       (((W1.final dv (salt s) prog U act σ).cost + dv.prices.fetch * W1.w1Read dv (salt s) prog U act σ : ℚ) : ℝ)
-    rw [final_split, w1Read_split]
+    rw [final_split dv (salt s) prog U act σ, w1Read_split dv (salt s) prog U act σ]
 
 end Pouw.PearlC.TTOutW1RowSeed

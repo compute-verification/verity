@@ -266,12 +266,17 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
       exact hwt
     · obtain rfl : i = 0 := Nat.lt_one_iff.1 hi
       obtain rfl : j = 0 := Nat.lt_one_iff.1 hj
-      exact ⟨(congrArg wordQ (ite_eq_left Nat.one_pos)).trans
-          ((congrArg wordQ (guess_ticket dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
-            ((wordQ_w32 t).trans ht)),
-        (congrArg wordQ (ite_eq_left Nat.one_pos)).trans
-          ((congrArg wordQ (guess_useful dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
-            ((wordQ_w32 y).trans hy))⟩
+      refine ⟨?_, ?_⟩
+      · show wordQ (if 0 < ((oneUnit k w).layout.shape 0).m then
+            (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem
+              (W1.ticketAt (oneUnit k w).layout 0 0 0) else 0) = _
+        rw [ite_eq_left hi, guess_ticket dv (salt s) t y (oneUnit k w) (fun _ => a) [], wordQ_w32]
+        exact ht
+      · show wordQ (if 0 < ((oneUnit k w).layout.shape 0).m then
+            (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem
+              (W1.usefulAt (oneUnit k w).layout 0 0 0) else 0) = _
+        rw [ite_eq_left hi, guess_useful dv (salt s) t y (oneUnit k w) (fun _ => a) [], wordQ_w32]
+        exact hy
   have hK : correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) =
       {0} := by
     ext u
