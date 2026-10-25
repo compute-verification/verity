@@ -108,7 +108,8 @@ At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. A smaller c
 `SampledAuditAccepted` to pin the registered input gates to the registration. That is option A, a claim for Daniel that
 proofs is filing; TODO(proofs): link its Asks page. Until A is proved, the page states the larger c.
 
-**The charge terms the run prints** (`summary.json` of `prove_path.py audit`):
+**The charge terms the run prints** (`summary.json` of `prove_path.py audit`; with #4047, each rank's
+`ranks.<r>.charge` holds `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
 - c, as the statement stands, is the circuit's non-ingress input bits, which the run doesn't print yet.
   TODO(network-accounting): 2a's count. Under option A, c is `advice.bits`, the registration's `window.advice.bits`: the
   I1 advice's length, which `prove_path.py advice` prints as `bits`. Over several windows, `BitsCount` charges their sum.
@@ -116,10 +117,9 @@ proofs is filing; TODO(proofs): link its Asks page. Until A is proved, the page 
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
-- `consumers.exfiltration_bound` gives β_δ + λ_δ. β_δ is the profile's `harm_bound`, weighted by each template's committed
-  bits (`_template_bits` in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `consumers.location_bits`:
-  log2 of the at most Σ_{j ≤ bound} C(n, j) faulty sets. prove_path doesn't print either yet. TODO(PROVE-PATH): their
-  field names.
+- β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
+  in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  log2 of the at most Σ_{j ≤ bound} C(n, j) faulty sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
 **The `--zk` chain (2a)**, on main at 169118abc1. "Shared" marks a link the plain chain uses as it is. proofs has the
@@ -162,6 +162,9 @@ none: their bounds carry the collision events.
   are the premises `RecordsLive` and `DrawOk` (`Security/Proofs/Flock/Soundness/Discharge/DecodeZL/Statements.lean`),
   which the lock doesn't name. REROWS moves `RecordsLive`, and `PlainLiveAcc` while it stays a hypothesis, into an
   Assumptions module and lists them, by 12:00Z 25 Oct. TODO(REROWS): their names.
+- Not yet sorted: lean's scan found 40 Prop-valued definitions under `trees.except` that locked statements take without a
+  lock entry. REROWS sorts them by 22:00Z 25 Oct into conclusions, named premises, form conditions and well-formedness. A
+  form condition the compiled verifier doesn't check is a gap for this page, not a lock entry.
 
 No link above reads the rest. `TrustedNebiusHost` is why `Carries` holds of the real run, and the wire and advice
 assumptions enter through the wire bounds, which have no sampled form yet.
