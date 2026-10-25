@@ -58,6 +58,15 @@ refuses advice: the load's bounds, ReplayStep_v1's ok and each step's head bound
 tokens in ``wired``, a lookup's hit within KL units, units within CU, counts within the widths, the calls' oks) and
 each state row's free count equal to its pool row's hashless and queued blocks.
 
+**Cost** (`size`). The demonstration units are 76,011 ANDs (`demo`) and 82,715 (`demo_async`), against
+CompileSlice_v2's 83,092 and 91,785: dropping the witness checks saves more than the computed derivations add there. On
+corpus-smallkv's first seven steps (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12, DA 7) the unit is
+12,477,467 ANDs against CompileSlice_v2's 7,984,682, and is its reference on the honest advice (its served rows the
+fixture's), one step fewer and each decision flipped (run r20261025-081855-e60d). There a step makes W + A = 3
+read-only lookups of KL = 25 units (168,368 ANDs each) and as many computes with a KC = 16-unit window (227,862 each,
+masked by admission), where CompileSlice_v2's witness named the R admitted rows, and R + W + A threshold searches
+(1,440 each).
+
 **The window** starts from the empty engine and pool, as CompileSlice_v1's and v2's slices do; a 2a-class window, whose
 requests start and end inside it, is one. A chained window would read the last window's ``cout`` as a registered
 input, with the tokens of requests it carries.
