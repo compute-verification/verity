@@ -24,7 +24,8 @@ from outside the store while the stretch's reads are served:
 W is the pooled bound of the session's record (`pooled.bound`, the Lean's `RemoteAudit.Pooled`: its windows' receipts
 and draws at δ), so the line reads it from the record's windows, never from a float another module computed.  The
 line of record reads its groups' passes, its windows and its registered blocks off the Lean verifier's record of the
-session (`line_of_record`, the Lean's `lineOfRecord`), and each group's times and reads beside it (`Seen`).
+session (`line_of_record`, the Lean's `lineOfRecordAt` at the record's `groups_per_coin` g, `lineOfRecord` at g = 1),
+and each group's times and reads beside it (`Seen`).
 
 Each kind is credited its mean blocks a pass less those, in bytes, and at least 0: weights (in HBM), HBM, and filler
 (HBM less the weights, and the host tier).  A reading's line is its worst stretch by weights credited, the first on a
@@ -410,7 +411,7 @@ def run_json(j: Mapping) -> dict:
         return {"refused": str(e)}
 
 
-# --- the line read off the Lean verifier's record (`RemoteAudit.Line.lineOfRecord`, the Difftest's `line_record`) ---
+# --- the line read off the Lean verifier's record (`RemoteAudit.Line.lineOfRecordAt`, the Difftest's `line_record`) ---
 
 SEEN = ("released_ns", "last_ns", "least", "weights", "hbm", "host")
 
