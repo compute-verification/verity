@@ -38,7 +38,8 @@ theorem rules_of_inScope {rel : Parsed → Relation} {p : Parsed}
   exact ⟨h1, h2, h3, by simpa only [LeafOk] using h4, h5, h6⟩
 
 theorem sharedRowsOk_iff (t : Tags) (zk reg : Bool) :
-    ProvedScope.sharedRowsOk t zk reg = true ↔ zk = true ∧ t.hiddenOutputs = true ∧ reg = true := by
+    ProvedScope.sharedRowsOk t zk reg = true ↔
+      t.hiddenOutputs = true ∧ reg = true ∧ t.merkleLeaf = "hm96-sha512/v1" := by
   simp [ProvedScope.sharedRowsOk, and_assoc]
 
 /-- The wire condition and `scopeOk` (`scopeOkI` with hidden outputs) are the unit's form, or with hidden outputs the
