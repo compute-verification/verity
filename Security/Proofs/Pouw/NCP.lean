@@ -1,4 +1,4 @@
-import Models.Pouw.Guarantees.NCP
+import Definitions.Pouw.Guarantees.NCP
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.NCP.RelationWitness
@@ -10,12 +10,14 @@ import Proofs.Pouw.NCP.RouteUWordProofs
 
 One theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G` per guarantee, which is the theorem in
 `Pouw.NCP.Proofs`, `Pouw.NCP.GameProofs`, `Pouw.NCP.RelationWitness`, `Pouw.NCP.RouteUProofs` and
-`Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name.
+`Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name. `GammaFromTTNCP_U`'s statement keeps its
+source's namespace, `Pouw.NCP.RouteU`.
 -/
 
 namespace Pouw.SecurityProofs.NCP
 
 theorem TTNCPUIff : Pouw.Guarantees.NCP.TTNCPUIff := Pouw.NCP.RouteUProofs.ttncpUIff
+theorem GammaFromTTNCP_U : Pouw.NCP.RouteU.GammaFromTTNCP_U := Pouw.NCP.RouteUProofs.gammaFromTTNCP_U
 theorem GammaFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1 := Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1
 theorem GammaFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2 := Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2
 theorem TTNCPUWitness : Pouw.Guarantees.NCP.TTNCPUWitness := Pouw.NCP.RouteUProofs.ttncpUWitness

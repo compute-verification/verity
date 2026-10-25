@@ -7,7 +7,8 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 ``LAYER`` places every module in the layer of its top-level package (longest prefix wins).  The order, top to bottom,
 is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
-``core``, and ``target_family`` (bound for ``config.py``) sits in ``config``.  ``engine.hooks``, the one owner of
+``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
+sits in ``pipeline``.  ``engine.hooks``, the one owner of
 runtime patches, and ``engine.env``, the one writer of vLLM's env pins, import nothing from the package and sit in
 ``core`` so every layer may call them.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
@@ -31,20 +32,23 @@ LAYER = {
     "verity_vllm.check": "check|properties",
     "verity_vllm.properties": "check|properties",
     "verity_vllm.acquire": "acquire",
-    "verity_vllm.protocol_options": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
+    "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
-    "verity_vllm.store": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
+    "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
-    "verity_vllm.collectives": "collectives",
+    "verity_vllm.program.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
+    "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
+    "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
+    "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm
 }
 
 #: The property harnesses.
@@ -55,7 +59,8 @@ VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
     "check.replay", "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
-VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_rules", "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
+VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
+                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
 
 
 def layer_of(module: str) -> str:

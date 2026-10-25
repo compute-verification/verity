@@ -1,6 +1,6 @@
 import Properties.Pouw.Credit
-import Properties.Proofs.Pouw
-import Properties.Proofs.Pouw.Strata
+import Proofs.Properties.Pouw
+import Proofs.Properties.Pouw.Strata
 import Proofs.Flock.Soundness.ExecStratified
 import Proofs.Flock.Soundness.Audit.Work
 import Proofs.Flock.VBridge.Full
@@ -25,7 +25,7 @@ namespace Properties.Pouw.Credit.SecurityProofs
 
 open Lean (Json toJson)
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
-open Properties.Pouw.Strata (unitWork callStart)
+open Properties.Pouw.Strata (unitWork)
 open scoped ENNReal NNReal
 
 /-- Stratum `s`'s local indices whose units are in `B`. -/
@@ -337,43 +337,22 @@ theorem sum_range_list (g : ℕ → ℕ) : ∀ n, ∑ i ∈ Finset.range n, g i 
     rw [Finset.sum_range_succ, List.range_succ, List.map_append, List.sum_append, sum_range_list g n]
     simp
 
-/-- `EstablishedSound` from the tiling: the credited and total work `established` passes `epsAt` are the strata's. -/
+/-- `EstablishedSound` from the tiling: the total work `established` passes `epsAt` is the strata's, and its credited
+work is `creditedWork`. -/
 theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : EstablishedSound := by
-  intro layout ss K strata got e hss hlaw hest B hB
-  obtain ⟨hcover, -, -, htotal, -⟩ := htile layout ss hss
+  intro layout ss K strata got served e hss hlaw hest B hB
+  obtain ⟨-, -, -, htotal, -⟩ := htile layout ss hss
   have hok := Properties.Pouw.Strata.established_ok hest
-  have hcall : ∀ i (hi : i < (PouwCheck.Credit.callWork layout).length),
-      ∑ u ∈ Finset.Ico (callStart layout i) (callStart layout (i + 1)), unitWork ss u =
-        ((PouwCheck.Credit.callWork layout).getD i (0, 0)).1 *
-          ((PouwCheck.Credit.callWork layout).getD i (0, 0)).2 := by
-    intro i hi
-    have hw : ∀ u ∈ Finset.Ico (callStart layout i) (callStart layout (i + 1)),
-        unitWork ss u = ((PouwCheck.Credit.callWork layout).getD i (0, 0)).2 := by
-      intro u hu
-      obtain ⟨h1, h2⟩ := Finset.mem_Ico.1 hu
-      obtain ⟨hex, hall⟩ := hcover i hi u h1 h2
-      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
-      exact Properties.Pouw.Strata.unitWork_eq hex hall
-    rw [Finset.sum_congr rfl hw, Finset.sum_const, Nat.card_Ico, smul_eq_mul,
-      Properties.Pouw.Strata.callStart_succ layout i hi, Nat.add_sub_cancel_left]
-  have key : ∀ f : ℕ → ℕ, (∀ i < (PouwCheck.Credit.callWork layout).length,
-      (i ∈ got → f i = ((PouwCheck.Credit.callWork layout).getD i (0, 0)).1 *
-        ((PouwCheck.Credit.callWork layout).getD i (0, 0)).2) ∧ (i ∉ got → f i = 0)) →
-      ((List.range (PouwCheck.Credit.callWork layout).length).map f).sum = creditedWork ss layout got := by
-    intro f hf
-    rw [← sum_range_list f, creditedWork, Finset.sum_filter]
-    refine Finset.sum_congr rfl fun i hi => ?_
-    rw [Finset.mem_range] at hi
-    by_cases hg : i ∈ got
-    · rw [ite_eq_left hg, hcall i hi, (hf i hi).1 hg]
-    · rw [ite_eq_right hg, (hf i hi).2 hg]
+  have key : ((List.range (PouwCheck.Credit.servedWork layout served).length).map fun i =>
+      if i ∈ got then ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).1 *
+        ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).2 else 0).sum =
+      creditedWork layout got served := by
+    rw [← sum_range_list, creditedWork, Finset.sum_filter]
   rw [key, ← htotal] at hok
-  · exact epsAtSound layout ss K strata PouwCheck.Credit.DELTA e (creditedWork ss layout got) hss hlaw hok B hB
-  · intro i _
-    exact ⟨fun hg => by simp [hg], fun hg => by simp [hg]⟩
+  exact epsAtSound layout ss K strata PouwCheck.Credit.DELTA e (creditedWork layout got served) hss hlaw hok B hB
 
 /-- **The ε a credit reports is established** (`EstablishedSound`): `strata` tiles the window's units
-(`Properties.Pouw.Strata.strataTile`), so the credited and total work `established` passes `epsAt` are the strata's. -/
+(`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
 end Properties.Pouw.Credit.SecurityProofs

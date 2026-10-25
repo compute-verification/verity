@@ -38,7 +38,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*",
            "/etc/systemd/system.control/*/*"]
 
-# the auditor host for proofs' challenger service (INF-154, INF-162; us-north1, trusted-nebius-host): it runs the challenger as
+# the auditor host for proofs' challenger service (INF-154, INF-162; us-north1, trusted-host): it runs the challenger as
 # `auditor` from infra's pinned tree through vy-challenger-gate and takes no `research run` (/etc/vy/auditor), and no cluster pool
 # or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift skips it
 # (`admin`) and infra's lead reads it with `research deploy drift --on vy-challenger-1` from a machine holding vy-admin's key.
@@ -48,7 +48,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*"]
 
-# the auditor host for the remote bandwidth audit's verifier (INF-179; uk-south2, trusted-nebius-host, as vy-challenger-1): it runs
+# the auditor host for the remote bandwidth audit's verifier (INF-179; uk-south2, trusted-host, as vy-challenger-1): it runs
 # the verifier as `auditor` from infra's pinned tree through vy-verifier-gate and takes no `research run` (/etc/vy/auditor), and no
 # cluster pool or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift
 # skips it (`admin`), as on vy-challenger-1.
@@ -67,6 +67,11 @@ managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-
 [nodes.vy-nebius-cpu-3]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*"]
+
+# node 3 (24 Oct, landing capacity): two train slots, set by hand; only its peers file is deploy's so far
+[nodes.vy-nebius-3]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/etc/vy/peers"]
 
 # n1's replacement (INF-57): cpu-d3 VMs of cpu-1's or cpu-2's shape, each one train slot and research runs at nice 19 beside it
 # (vy-direct-nice); cpu-4 also holds the Lean slots, lean's cache publisher, the merge mirror and the custody tree (node 2's relay,
@@ -161,14 +166,14 @@ nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
 # ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin); cpu-1's
-# authorized_keys takes the vy-cluster key from n1, n2, cpu-2 and cpu-3 only (from="10.80.0.18,10.80.0.42,10.80.0.140,10.80.0.193");
-# cpu-2 and cpu-3 (train slots since 17 Oct, INF-49) get theirs by hand until they are deploy.toml nodes (INF-40); cpu-4 and
-# cpu-5 by n1_replacement.sh's L3, taking it from every node's public egress address
+# authorized_keys takes the vy-cluster key from n1, n3, n2, cpu-2 and cpu-3 only (from="10.80.0.18,10.80.0.1,10.80.0.42,10.80.0.140,
+# 10.80.0.193"); cpu-2 and cpu-3 (train slots since 17 Oct, INF-49) get theirs by hand until they are deploy.toml nodes (INF-40);
+# cpu-4 and cpu-5 by n1_replacement.sh's L3, taking it from every node's public egress address
 
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]  # a oneshot each minute (vy-slot-only.timer on cpu-1, vy-direct-nice.timer on node 1) reads it fresh: nothing to restart
@@ -352,19 +357,19 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-monitoring/oom_order.py"
 src = "tools/research/src/research/pods/nebius/oom_order.py"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-oom-order.service"
 src = "tools/research/src/research/pods/nebius/vy-oom-order.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-oom-order.timer"
 src = "tools/research/src/research/pods/nebius/vy-oom-order.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 

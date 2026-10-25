@@ -13,10 +13,10 @@ open Lean
 never axioms (Verity's policy), so this list does not grow. -/
 def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 
-/-- The statements a submission may prove: the frozen statements of `Security/Models/Pous/Guarantees.lean` and the files
-under `Security/Models/Pous/Guarantees/`, and five of the lemmas of `Security/Proofs/Pous/Statements.lean`, `KFloor` and
-`Theorem1ii` (`check.sh`'s controls) and the open `A2LemmaAM1`, `A5RabinGcd` and `A7Params`. Each must also be a
-`Prop`-valued definition in `Pous.Guarantees` of the trusted environment. -/
+/-- The statements a submission may prove: the frozen statements of `Security/Definitions/Pous/Guarantees.lean` and the files
+under `Security/Definitions/Pous/Guarantees/`, and six of the lemmas of `Security/Proofs/Pous/Statements.lean`, `KFloor` and
+`Theorem1ii` (`check.sh`'s controls) and the open `A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`. Each must also be
+a `Prop`-valued definition in `Pous.Guarantees` of the trusted environment. -/
 def pinnedTargets : List Name := [
   `Pous.Guarantees.KFloor,
   `Pous.Guarantees.Theorem1ii,

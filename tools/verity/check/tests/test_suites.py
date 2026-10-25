@@ -408,6 +408,58 @@ def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_
     assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
 
 
+def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
+    """(machine repository, shipped tree, main, HEAD) as `research run` ships a commit (remote._git_ship_script): a `clone --shared`
+    of the machine's bare repository detached at the commit, here one whose repository had no `main` when it was shipped."""
+    work = tmp_path / "work"
+    work.mkdir()
+    _workspace(work)
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "main")
+    main = _git(work, "rev-parse", "HEAD")
+    (work / "a" / "tests" / "test_a.py").write_text("def test_a():\n    assert 1\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "the branch moves a")
+    head = _git(work, "rev-parse", "HEAD")
+    bare = tmp_path / "verity.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(work, "push", "-q", str(bare), f"{head}:refs/research/ship")
+    tree = tmp_path / "src" / head
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    return bare, tree, main, head
+
+
+def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_the_fix(tmp_path, monkeypatch, capsys):
+    """proofs, 25 Oct (NCILIVE, WIRES): the pre-mark `--changed origin/main` in a shipped tree with no origin/main exited 128 in
+    `git diff` and ran no suite, ~50 min each. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
+    clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
+    bare, tree, main, head = _shipped(tmp_path)
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+        S.changed_base("origin/main")
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.changed_base(main) == S.changed_base(main[:12]) == main
+    assert S.main(["--list", "--changed", main]) == 0
+    assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
+
+    _git(tmp_path / "work", "push", "-q", str(bare), f"{main}:refs/heads/main")     # a later launcher pushed its origin/main
+    assert S.changed_base("origin/main") == main and _git(tree, "rev-parse", "origin/main") == main
+    assert S.main(["--list", "--changed", "origin/main"]) == 0 and "touches 1: a" in capsys.readouterr().out
+
+    clone = tmp_path / "scratch" / "r1" / "tree"                                    # `research run --cwd clone`
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(tree), str(clone))
+    _git(clone, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    S = _suites(monkeypatch, clone)
+    assert S.changed_base("origin/main") == main
+
+    _git(tree, "remote", "remove", "origin")                     # no remote (its tracking refs go with it): only the named fix
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved, match=r"has no commit origin/main \(a tree"):
+        S.changed_base("origin/main")
+    assert S.changed_base(main) == main
+
+
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
     """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
     then lets it read Markdown (test_guard.py holds the others to reading none)."""
@@ -799,6 +851,25 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     (custody / "store.toml").write_text("[remote]\n")
     (custody / "cred.json").write_text("{}")
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "WANT_C": str(custody.resolve()), "WANT_R": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
+    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
+    each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 192)
+    assert [S.threads_per_process(j) for j in (1, 32, 192, 400, 0)] == [192, 6, 1, 1, 192]
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n"
+                                 "    got = {os.environ.get(v) for v in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS', "
+                                 "'NUMEXPR_NUM_THREADS')}\n"
+                                 "    assert got == {os.environ['WANT']} if os.environ['WANT'] else len(got) == 1 and int(got.pop()) >= 1\n"})
+    for var in S.THREAD_VARS:
+        monkeypatch.delenv(var, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": ""})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "3", **{v: "3" for v in S.THREAD_VARS}})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
@@ -1375,6 +1446,47 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     (lib / "maybe.txt").write_text("now it's here\n")
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_the_cache(tmp_path):
+    """Two test modules read `lib` through one `lru_cache`d helper, so only the first to call it opens the files: the second's
+    pass must still miss when a file only it checks changes (verity-vllm's lint and `tests/lint/_ratchet.py`). Each module's
+    traced pass is kept on its run's read set, every process's and every module's together, so the cache can't hide a read."""
+    import shutil
+
+    root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / ".gitignore").write_text("__pycache__/\n")
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
+    lib.mkdir()
+    (lib / "pyproject.toml").write_text('[project]\nname = "lib"\n')
+    for name, text in {"first.txt": "1\n", "second.txt": "2\n", "unread.py": "X = 1\n"}.items():
+        (lib / name).write_text(text)
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
+                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n')
+    for name, text in {"_scan.py": "import functools, pathlib\n\nLIB = pathlib.Path(__file__).resolve().parents[2] / 'lib'\n\n\n"
+                                   "@functools.lru_cache(maxsize=None)\ndef values():\n"
+                                   "    return {p.name: p.read_text() for p in sorted(LIB.glob('*.txt'))}\n",
+                       "test_first.py": "from _scan import values\n\ndef test_first():\n    assert values()['first.txt'] == '1\\n'\n",
+                       "test_second.py": "from _scan import values\n\ndef test_second():\n    assert values()['second.txt'] == '2\\n'\n"}.items():
+        (root / "pkg" / "tests" / name).write_text(text)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "2 per-test passes kept" in p.stdout, p.stdout
+    (lib / "unread.py").write_text("X = 2\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "traced: every file its run read" in p.stdout, p.stdout
+
+    (lib / "second.txt").write_text("changed\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode != 0 and "tests/test_second.py::test_second" not in _reused(tmp_path), p.stdout
+    assert "FAILED tests/test_second.py::test_second" in (tmp_path / "logs" / "pkg.log").read_text()
 
 
 def test_a_suite_that_is_not_parallel_reuses_its_whole_traced_pass_until_a_file_its_run_read_changes(tmp_path):

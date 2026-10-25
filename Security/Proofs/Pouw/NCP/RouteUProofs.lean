@@ -1,8 +1,8 @@
-import Models.Pouw.Assumptions.NCP.RouteUGame
+import Definitions.Pouw.Assumptions.NCP.RouteUGame
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.NCP.ChainProofs
-import Models.Pouw.Guarantees.NCP
+import Definitions.Pouw.Guarantees.NCP
 
 /-!
 # NCP's checked values on route U: proofs
@@ -378,31 +378,31 @@ theorem wrefU_le (f : ℕ) {n₀ : ℕ} (hn₀ : 0 < n₀) {sh : Shape} (hn : n�
 
 /-- **`G_γ` from TT_NCP_U.** -/
 theorem gammaFromTTNCP_U : GammaFromTTNCP_U := by
-  intro Q R S _ _ _ _ CM P β f D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
+  intro Q R S _ _ _ _ CM P β f D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
   have hΩ : (0 : ℝ) < 1 + f / (3 * n₀) := by positivity
-  refine GameProofs.gammaFromTTNCP Q R S CM (P.toProtocolU β) D γ₀ (1 + f / (3 * n₀)) ε hγ₀ hΩ
-    (fun U hU u hu => ?_) hTT
+  refine GameProofs.gammaFromTTNCP Q R S CM (P.toProtocolU β) P.d D γ₀ (1 + f / (3 * n₀)) ε hγ₀ hΩ
+    (fun U hU u hu => ?_) hside hTT
   show ((P.Wref U.layout u : ℕ) : ℝ) ≤ _
   rw [hW, wrefU]
   exact wrefU_le f hn₀ (hn U hU u hu)
 
 /-- **`G_γ` from TT_NCP_U at ncp-v1.** -/
 theorem gammaFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1 := by
-  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
+  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
   have e : (1 : ℝ) + ((24 : ℕ) : ℝ) / (3 * n₀) = 1 + 8 / n₀ := by
     have : (0 : ℝ) < n₀ := by exact_mod_cast hn₀
     field_simp
     push_cast
     ring
   rw [← e]
-  exact gammaFromTTNCP_U Q R S CM P 128 24 D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
+  exact gammaFromTTNCP_U Q R S CM P 128 24 D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
 
 /-- **`G_γ` from TT_NCP_U at C2.** -/
 theorem gammaFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2 := by
-  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
+  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
   have e : (1 : ℝ) + ((20 : ℕ) : ℝ) / (3 * n₀) = 1 + 20 / (3 * n₀) := by norm_num
   rw [← e]
-  exact gammaFromTTNCP_U Q R S CM P 129 20 D γ₀ n₀ ε hγ₀ hn₀ hW hn hTT
+  exact gammaFromTTNCP_U Q R S CM P 129 20 D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
 
 section Honest
 
@@ -447,7 +447,7 @@ end Honest
 /-- **TT_NCP_U's satisfiability witness.** -/
 theorem ttncpUWitness : Pouw.Guarantees.NCP.TTNCPUWitness := by
   intro Q R _ _ _ P β c γ₀ h0 h1 hc hW
-  refine ⟨GameProofs.ttncp_outputPriced3 _ _ h0 h1, fun U act _ s => honestProgU P β U act s, fun U hU act _ H s =>
+  refine ⟨GameProofs.ttncp_outputPriced3 _ _ _ h0 h1, fun U act _ s => honestProgU P β U act s, fun U hU act _ H s =>
     ⟨eval_honestProgU P β H U act s, ?_, calls_honestProgU P β H U act s hc⟩⟩
   refine (GameProofs.outputPriced3_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
   exact_mod_cast hW U hU u (Finset.mem_range.1 hu)

@@ -45,8 +45,8 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject|ready|judge [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `main` fast-forwarded to
-                                                 # the newest commit on it with a passing check (research/queue.py)
+  research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `main`
+                                                 # fast-forwarded to its reviewed prefix, checked after landing (research/queue.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -1033,7 +1033,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
     if remote.flag_value(harness_opts, "--timeout") is None:
         harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
-    ns.cpus = ns.max_min = ns.mem_gb = ns.question = ns.disk_gb = None     # the slot's cores and mem= are the run's
+    ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
+    ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (INF-228: a 40-GB slot held a suite to 2 workers)
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     return harness_opts

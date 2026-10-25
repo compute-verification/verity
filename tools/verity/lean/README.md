@@ -4,7 +4,7 @@ One audit for every Lake package (`python tools/verity/lean/check.py --all --bui
 changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
 records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
-toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
+toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
@@ -64,7 +64,12 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
-- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes. A rule with `"sealed": true` is
+  a layer of its own: its modules answer only to the rules at or under it, and another rule reaches it only by listing
+  a prefix at or under it, never through a shorter one that holds it (an area's `Guarantees` under the area's
+  vocabulary);
+- the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
+  definitions or properties tree imports one;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -178,6 +183,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "dependency_unchecked": {"Dep.Loader": "why the package imports a dependency module that names a kernel bypass"},
  "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
  "reads_exempt": {"Pkg.Exe": "why a guarantee may read these definitions though they are not spec"},
+ "trees": {"definitions": ["Pkg.Model"], "properties": ["Pkg.Properties"], "proofs": ["Pkg.Proofs"],
+           "except": {"Pkg.Proofs.Old": "why a statement may read it until its definitions move"}},
  "guarantees": {"Pkg.main_theorem": {"owner": "@lane"}}
 }
 ~~~
@@ -193,7 +200,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
-  closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
+  closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
+  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner.
+  In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
+  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`, the one
+  its `reads` record holds, so
   a changed assumption fails under its own name; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
@@ -254,7 +265,17 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
   nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
   package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
-  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`.
+  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
+  the proofs tree (the trees check judges those).
+- **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
+  each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
+  and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
+  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
+  (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
+  statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
+  off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
+  ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
+  excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
 - **Heartbeat overrides are listed, never refused** (Daniel, 2026-10-09). Each `set_option maxHeartbeats N` (and

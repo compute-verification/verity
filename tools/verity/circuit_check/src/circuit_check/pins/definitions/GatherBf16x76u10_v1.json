@@ -1,7 +1,8 @@
 {
  "definitions": {
   "GatherBf16x76u10_v1": {
-   "and": 1296
+   "and": 1296,
+   "type": "1893bc8fc175b38ded24f007bbea1e1a5ff0cf39c1731677f9d26809f369db80f09d2df60b34fe24f1513557a1b25206395579b29e7b0e8e0415a9695f471925"
   }
  }
 }

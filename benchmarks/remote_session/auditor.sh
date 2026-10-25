@@ -1,34 +1,44 @@
 #!/usr/bin/env bash
 # The analysis of record for a gate run: auditor_line.py's credited line over the verifier run RUN, its dir on this
-# machine (vy-nebius-1), copied to scratch with any files the node evicted to the store restored
-# (run-files.evicted.json: only verifier.json and the challenger's files, the line's inputs; hence --store-read).
+# machine (the one with the lane's gate key, vy-nebius-cpu-5), copied to scratch with any files the node evicted to the
+# store restored (run-files.evicted.json: only verifier.json and the challenger's files, the line's inputs; hence
+# --store-read).
 # PERIOD and PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit. Through the
 # lane's gate key it reads the ledger (`ledger`), a head beside each session's, and the challenger host's pins log
 # (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
 # zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`, CMP-74): a pin off
 # that line, or no list when the fetch fails, likewise credits zero. Writes $OUT/auditor_line.json and $OUT/credit.md,
-# each session's four checks and the line. RUN may instead be a host run's directory as vy-auditor-1 ships it
-# (`vy-verifier-gate fetch`, out/ beside request.json): the sessions' challenger peer is the record's (verifier.json's,
-# else request.json's --challenger-peer), and PEER overrides it.
+# each session's checks and the line, which the Lean verifier computes (`line_by` lean: auditor_line.py builds
+# remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
+# a host run's directory as vy-auditor-1 ships it (`vy-verifier-gate fetch`, out/ beside request.json): the sessions'
+# challenger peer is the record's (verifier.json's, else request.json's --challenger-peer), and PEER overrides it.
+# LOCKDOWN, if set, is infra's record of the provider's lockdown of the gate node (auditor_line.py --lockdown).
 #
-#   research run --queue --on vy-nebius-1 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
+#   research run --queue --on vy-nebius-cpu-5 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
 #     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \
 #     -- bash benchmarks/remote_session/auditor.sh
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 GATE=${GATE:-research@204.12.178.84}
-KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
+KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
 [ ! -f "$RUN/request.json" ] || cp "$RUN/request.json" "$S/"
 : > "$OUT/fetch.log"
-if [ -f "$RUN/run-files.evicted.json" ]; then
+# the eviction record is RUN's own, or its run's when RUN is a host dir inside one (a fire's out/host/V), with paths
+# under that run's dir
+R=$(cd "$RUN" && pwd)
+EV=$R
+until [ -f "$EV/run-files.evicted.json" ] || [ -f "$EV/job.json" ] || [ "$EV" = / ]; do EV=$(dirname "$EV"); done
+if [ -f "$EV/run-files.evicted.json" ]; then
+  P=${R#"$EV"}; P=${P#/}; P=${P:+$P/}
   art=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['artifact'])" \
-    "$RUN/run-files.evicted.json")
-  uv run research data fetch "$art" --to "$S" --path 'out/verifier.json' --path 'out/challenger/*' \
+    "$EV/run-files.evicted.json")
+  uv run research data fetch "$art" --to "$S/restore" --path "${P}out/verifier.json" --path "${P}out/challenger/*" \
     > "$OUT/restore.log" 2>&1
-  echo "restore $art rc $?" >> "$OUT/fetch.log"
+  echo "restore $art ${P:-./} rc $?" >> "$OUT/fetch.log"
+  [ ! -d "$S/restore/${P}out" ] || cp -a "$S/restore/${P}out/." "$S/out/"
 fi
 gate() { ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$KEY" "$GATE" "$@"; }
 gate ledger > "$OUT/ledger.jsonl"
@@ -58,7 +68,7 @@ else
 fi
 uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
   --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
-  "${MAIN[@]}" \
+  "${MAIN[@]}" ${LOCKDOWN:+--lockdown "$LOCKDOWN"} \
   --table "$OUT/credit.md" > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md"

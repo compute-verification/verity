@@ -2096,6 +2096,12 @@ fn eq256(r: &[flock_field::F256]) -> Vec<flock_field::F256> {
 /// each rep's pair of extra lanes (`[0, 1]`; `[0, 0]` reads a session whose reps share rep 0's pair).
 fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
     -> Result<[Vec<F128>; 2], String> {
+    session_relations_q(st, inst, proofs, coins, points, pairs).map(|(r, _)| r)
+}
+
+/// `session_relations`, with the level-1 positions each rep opened and the number both opened.
+fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
+    -> Result<([Vec<F128>; 2], [usize; 3]), String> {
     use flock_core::pcs::ligerito::zk::{lane_codeword, pad_codeword};
     use flock_field::F256;
     let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config()?;
@@ -2174,7 +2180,7 @@ fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[V
             .flat_map(|j| (app(n, F256::new(r0[2 * j], r0[2 * j + 1])) + F256::new(r1[2 * j], r1[2 * j + 1])).coordinates())
             .collect::<Vec<_>>()
     }).collect();
-    Ok([level0, level1])
+    Ok(([level0, level1], [q1[0].len(), q1[1].len(), common.len()]))
 }
 
 /// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
@@ -4369,8 +4375,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "zk_session_relations_vary_with_the_seed" {
         // red-team-m1-zk F1: under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
         // when the reps share level 0's extra lanes and their padding (a prover folding rep 0's pair in both reps, which the
-        // verifier rejects); with a pair per rep they differ in every word
-        let rel = |shared_pair: bool| -> Result<[Vec<F128>; 2], String> {
+        // verifier rejects); with a pair per rep they differ in every word. The level-1 functional exists only at the
+        // positions both reps open at level 1, which the coins draw for each rep independently: on some statements
+        // (RMSNormTriton_v5 at N 2048, under each of 16 tapes) the reps share none, and there is no level-1 relation to leak.
+        // So level 1 is checked at every shared position, and each rep must have opened level-1 positions: an empty level-1
+        // functional is then a disjoint draw, never a record that lost its queries
+        let rel = |shared_pair: bool| -> Result<([Vec<F128>; 2], [usize; 3]), String> {
             let s0 = Arc::new(Mutex::new(server(st, inst)));
             fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
             let plan = Plan { gpu, zk_shared_pair: shared_pair, ..Plan::default() };
@@ -4380,20 +4390,31 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             }
             let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
             let coins: Vec<Vec<F128>> = (0..2).map(|r| record_coins(&rec, &rep_stream(TABLE, r))).collect();
-            session_relations(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
+            session_relations_q(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
         };
-        let equal = |shared_pair: bool| -> Result<(Vec<usize>, Vec<usize>), String> {
-            let (a, b) = (rel(shared_pair)?, rel(shared_pair)?);
-            Ok(((0..2).map(|k| a[k].iter().zip(&b[k]).filter(|(x, y)| x == y).count()).collect(), a.iter().map(|x| x.len()).collect()))
-        };
-        return match (equal(false), equal(true)) {
-            (Ok((eq, len)), Ok((eq_shared, len_shared))) => {
-                let pass = (0..2).all(|k| len[k] > 0 && eq[k] == 0 && eq_shared[k] == len_shared[k]);
-                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair",
+        let sessions = (|| Ok::<_, String>([rel(false)?, rel(false)?, rel(true)?, rel(true)?]))();
+        return match sessions {
+            Ok([(a, qa), (b, qb), (sa, qsa), (sb, qsb)]) => {
+                let words_equal = |x: &[Vec<F128>; 2], y: &[Vec<F128>; 2]| -> Vec<usize> {
+                    (0..2).map(|k| x[k].iter().zip(&y[k]).filter(|(u, w)| u == w).count()).collect()
+                };
+                let (eq, eq_shared) = (words_equal(&a, &b), words_equal(&sa, &sb));
+                let (len, len_shared): (Vec<usize>, Vec<usize>) = ((0..2).map(|k| a[k].len()).collect(), (0..2).map(|k| sa[k].len()).collect());
+                let lengths_agree = (0..2).all(|k| b[k].len() == len[k] && sb[k].len() == len_shared[k]);
+                // the coins alone draw the positions: one tape, the same positions in both sessions of each kind
+                let same_draws = qa == qb && qsa == qsb;
+                let level1_read = [(&a, qa), (&b, qb), (&sa, qsa), (&sb, qsb)].iter()
+                    .all(|(r, q)| q[0] > 0 && q[1] > 0 && (q[2] == 0 || !r[1].is_empty()));
+                let pass = lengths_agree && same_draws && level1_read
+                    && len[0] > 0 && eq[0] == 0 && len_shared[0] > 0 && eq_shared[0] == len_shared[0]
+                    && eq[1] == 0 && eq_shared[1] == len_shared[1];
+                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair; level 1 at every level-1 position both reps opened",
                        "pass": pass, "f256_values": [len[0] / 2, len[1] / 2], "f128_words_equal": eq, "shared_pair_words_equal": eq_shared,
-                       "shared_pair_words": len_shared})
+                       "shared_pair_words": len_shared, "level1_positions": [qa[0], qa[1]], "level1_shared_positions": qa[2],
+                       "shared_pair_level1_shared_positions": qsa[2], "lengths_agree": lengths_agree, "same_draws": same_draws,
+                       "level1_read": level1_read})
             }
-            (Err(e), _) | (_, Err(e)) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
+            Err(e) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
         };
     }
     if name.starts_with("tables_") || name == "zk_tables_share_no_randomness" {
@@ -5619,7 +5640,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }

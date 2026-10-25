@@ -48,7 +48,7 @@ def _program(counts=COUNTS, window=WINDOW):
 def _ports(counts=COUNTS) -> dict:
     part = P.partition(_program(counts), QUERY)
     n = sum(counts.values())
-    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
+    return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 

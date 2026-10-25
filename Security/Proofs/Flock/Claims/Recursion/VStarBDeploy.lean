@@ -260,10 +260,11 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
     (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope { b with rd := L.readers }) I L shape)
     (hSt : Claims.Recursion.VStarB.StagedB H (deployRec I.V ivScope { b with rd := L.readers }) I L shape shows cmt)
     (hChk : ∀ s, Claims.Recursion.VStarB.PartChecksB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
-      shows chk s)
+      shows cmt chk s)
     (hOpen : ∀ s, Claims.Recursion.VStarB.PartOpensB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
       shows cmt s)
     (hDec : Claims.Recursion.VStarB.DecompB H (deployRec I.V ivScope { b with rd := L.readers }) I.V L shape chk)
+    (hRows : L.ReadsRows H)
     (hRRP : ReadersRunPlayed H I.V { b with rd := L.readers } DO) :
     Claims.Recursion.VStarAccepts H (deployRec I.V ivScope { b with rd := L.readers }) I DO shape := by
   intro x st hst hf Ω P ω r hacc ws ho htrue
@@ -329,7 +330,7 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
     rcases hChk s x st hst hf _ ws[s] (ho.2 s hsw) hts with hck | hck
     swap
     · exact absurd hck (hpc' s hsw)
-    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_)
+    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_) ?_ ?_
     · have hi1 : i + 1 < L.rounds x := by
         by_contra hne
         have hil : i = I.V.k (xIOf x) - 1 := by omega
@@ -350,6 +351,9 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
+    · intro i hi1 _ _
+      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
@@ -441,7 +445,7 @@ def KSBoundRouteStaged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
         (∀ decI, Claims.Recursion.VStarB.StagedB FlockDeploy.sha512 D (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
           L shape shows cmt) ∧
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -452,7 +456,8 @@ def KSBoundRouteStaged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock
 /-- **`KSBoundRouteStaged`**, proved as `ksBoundRoute_of_bridge` is, at the bridge (`bridge_bdDeployed`), with
 `vstarAccepts_bound_staged` for `vstarAccepts_bound` and `RunPairs` at `decCoin` (`runPairs_deployRec`). -/
 theorem ksBoundRouteStaged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) : KSBoundRouteStaged rel relO b L := by
+    (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRouteStaged rel relO b L := by
   intro nextE colsE wE join rowIn final w Bd D bL hP1 hBinds hWC hLB hF hshapes hT hL hRRP decI hdec
   let I := Claims.Recursion.Inner.ofFlock Bd.deploy decI
   let ivScope := (FlockDeploy.deployPlain rel).scopeCheck
@@ -464,7 +469,7 @@ theorem ksBoundRouteStaged (rel relO : _root_.Flock.Readable.Parsed → _root_.F
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSt, hCk, hOp, hDc⟩ := hshapes shape hs
     exact vstarAccepts_bound_staged FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape FlockDeploy.decCoin chk
-      shows cmt hplay (runPairs_deployRec FlockDeploy.sha512 I ivScope bL) (hHe decI) (hSt decI) hCk hOp hDc hRRP
+      shows cmt hplay (runPairs_deployRec FlockDeploy.sha512 I ivScope bL) (hHe decI) (hSt decI) hCk hOp hDc hRows hRRP
   have hA := innerAcceptsColl_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hT
     (hacc _ (by simp)) (hacc _ (by simp)) (hacc _ (by simp))
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
@@ -495,7 +500,7 @@ reads it back at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`). What 
 `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB`, for some inner check `chk`, the two parts' facts only at staged
 statements, where the setup's refusals hold. -/
 theorem ksBoundRoute_deployed_parts (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (untr : TrReader) :
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (untr : TrReader) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -509,7 +514,7 @@ theorem ksBoundRoute_deployed_parts (rel relO : _root_.Flock.Readable.Parsed →
         ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape
-            (showsPart untr b) chk s) ∧
+            (showsPart untr b) (cmtTr untr) chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape
             (showsPart untr b) (cmtTr untr) s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -518,7 +523,7 @@ theorem ksBoundRoute_deployed_parts (rel relO : _root_.Flock.Readable.Parsed →
       ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
       KSBoundDeployed rel relO b L nextE colsE wE join rowIn final w := by
   intro nextE colsE wE join rowIn final w Bd D bL hrb hP1 hBinds hWC hLB hF hparts hT hL hRRP
-  refine ksBoundRouteStaged rel relO b L nextE colsE wE join rowIn final w hP1 hBinds hWC hLB hF ?_ hT hL hRRP
+  refine ksBoundRouteStaged rel relO b L hRows nextE colsE wE join rowIn final w hP1 hBinds hWC hLB hF ?_ hT hL hRRP
   intro shape hs
   obtain ⟨chk, hHe, hCk, hOp, hDc⟩ := hparts shape hs
   exact ⟨chk, showsPart untr b, cmtTr untr, hHe,

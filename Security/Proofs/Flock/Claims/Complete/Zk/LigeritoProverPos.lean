@@ -60,8 +60,8 @@ theorem lsilent_sendMsg (m : F256 × F256) : LSilent (sendMsg m : LP PS Unit) :=
 
 theorem lsilent_powB (nonce : ℕ → ℕ → UInt64) : LSilent (powP nonce 2 : LP PS Unit) := by
   intro st t l a st' t' l' h
-  exact (ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push (nonce 2 st.cbn.size) }),
-    ap (pN (nonce 2 st.cbn.size)) t), l) = _ from h)).2.2.2.symm
+  exact (ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push 0 }),
+    ap (pN 0) t), l) = _ from h)).2.2.2.symm
 
 theorem lpure_go_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
     (h : (((Pure.pure b : LP PS β).run st).run t).go l = (.ok ((b', st'), t'), l')) : b = b' ∧ l = l' :=

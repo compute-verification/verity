@@ -1,13 +1,16 @@
 {
  "pieces": {
   "And2_v1": {
-   "and": 1
+   "and": 1,
+   "type": "8e47d8cd9768498638703b36a64d7d91075d9e9df6c953535c6d430aeb1583d4e55fedc651d172339e138820d0124162e633ff547b39b7afa3f33fcbbf3ec376"
   },
   "Not_v1": {
-   "and": 0
+   "and": 0,
+   "type": "214e21bea584bffb3e036758a28caa85da5a2a2aaba8960fec76fd1a1ffafa8bd2a4cd4e189d9a3c9f32ea87906a7f6e7a61f29bdcd39a208f63ddd051c4a5fd"
   },
   "Xor2_v1": {
-   "and": 0
+   "and": 0,
+   "type": "8c002280674a2e1f6ba6cbaf7962238132d20dc10f8d29543244f05e45dd867b9426e2ac3e818463002ae082ab2600307b6a04b9f61f2a6cf4211d0894925d9f"
   }
  }
 }

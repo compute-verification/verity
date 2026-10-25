@@ -1,11 +1,18 @@
+import RemoteAudit.Pooled
+import RemoteAudit.Session
+
 /-!
 # The memory line held over time
 
-`line.py`'s line, the line of record a gate run publishes: the conclusions of
+The line of record a gate run publishes (the verifier process's `line_record` request, which `auditor_line.py` holds to
+`line.py`'s): the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
-rationals, every refusal the Python's word for word. `line.py`'s docstring has the form; `tests/test_line.py` holds the
-two together through `RemoteAudit.Difftest`'s `line`. Code: Lean core only.
+`Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
+rationals, every refusal the Python's word for word. `lineOfRecord` reads the session's groups, its windows and its
+registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
+(`Seen`); `line` takes them given. The wrong receipts W are the pooled bound of the record's windows
+(`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). `line.py`'s docstring has the form; `tests/test_line.py`
+holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core only.
 -/
 
 namespace RemoteAudit.Line
@@ -119,7 +126,7 @@ def stretches (gs : Array Group) (per N b chip : Nat) (W : Rat) (c : Charge) : E
   let e : Array Nat := (Array.range G).map fun g => if g + 1 < G then max gs[g]!.lastNs s[g + 1]! else gs[g]!.lastNs
   let L : Array Nat := (Array.range G).map fun g => e[g]! - s[g]!
   let gap : Array Nat := (Array.range G).map fun g => if g + 1 < G then s[g + 1]! - s[g]! else L[g]!
-  let S : Rat := (chip : Rat) / (b : Rat)
+  let S : Rat := ((chip + b - 1) / b : Nat)
   let mut out : Array Stretch := #[]
   for m in [0:G / per - 1] do
     let lo := m * per
@@ -164,20 +171,119 @@ structure Form where
   charge : Charge
   stretches : Array Stretch
 
-/-- A session's line in both forms, time-held then link-charged, against `nodeBytes` of node memory. -/
+/-- A session's line in both forms, time-held then link-charged, against `nodeBytes` of node memory, with at most
+`wrong` of its receipts wrong. -/
 structure Line where
   nodeBytes : Nat
   forms : Array Form
+  wrong : Rat
 
 /-- The session's line on a node of `rates`, `nodeBytes` of memory and `chipBytes` of on-chip storage, with at most
-`wrong` of its receipts wrong; or why it has none. -/
-def line (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : Nat) (wrong : Rat) (rates : Rates) :
-    Except String Line := do
-  check gs per blocks blockBytes nodeBytes wrong rates
+W of its receipts wrong, the pooled bound of its record's `windows` (each window's receipts and draws) at `δ`; or why
+it has none. -/
+def line (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : Nat) (windows : Array (Nat × Nat)) (δ : Rat)
+    (rates : Rates) : Except String Line := do
+  let W := (← Pooled.pooled windows δ).wrong
+  check gs per blocks blockBytes nodeBytes W rates
   let (t, l) := charges rates blockBytes
-  let ts ← stretches gs per blocks blockBytes chipBytes wrong t
-  let ls ← stretches gs per blocks blockBytes chipBytes wrong l
-  pure ⟨nodeBytes, #[⟨"time-held", t, ts⟩, ⟨"link-charged", l, ls⟩]⟩
+  let ts ← stretches gs per blocks blockBytes chipBytes W t
+  let ls ← stretches gs per blocks blockBytes chipBytes W l
+  pure ⟨nodeBytes, #[⟨"time-held", t, ts⟩, ⟨"link-charged", l, ls⟩], W⟩
+
+/-- What the auditor saw of one window beside the Lean verifier's record of it: its coin's release and its last root's
+arrival (ns, on one clock), the registered blocks its least pass read, and the registered blocks its passes read in
+all, by kind. -/
+structure Seen where
+  releasedNs : Nat
+  lastNs : Nat
+  least : Nat
+  weights : Nat
+  hbm : Nat
+  host : Nat
+  deriving Inhabited
+
+deriving instance Inhabited for Session.WindowSummary
+
+/-- `U`, a window's receipts in the record: its passes' lengths summed. -/
+def receipts (w : Session.WindowSummary) : Nat := w.lengths.toList.sum
+
+/-- Why a record drawn more than one window a coin (`groups_per_coin`, `Shared`) has no line: the line reads each
+window's own draw, `min(s, U_t)` of its receipts, and such a window holds its share of its draw's. -/
+def SHARED : String :=
+  "a record drawn more than one window a coin (groups_per_coin) has no line: the line reads each window's own draw"
+
+/-- The groups and windows the line reads of an accepted session's record `sm` (`Session.State.summary`) and what the
+auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
+the auditor's, and window `t`'s receipts and draws are the record's, `(Σ lengths_t, drawn_t)`. Refused unless the
+auditor saw each of the record's windows and each window drew `min(s, U_t)` of its receipts at the session's `samples`
+`s`, as the verifier's draw does (`Session.draws`). -/
+def ofSummary (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
+    Except String (Array Group × Array (Nat × Nat)) :=
+  if seen.size ≠ sm.windows.size then
+    .error s!"the auditor saw {seen.size} windows, not the record's {sm.windows.size}"
+  else match sm.windows.findIdx? fun w => w.drawn != min samples (receipts w) with
+    | some t =>
+      .error (s!"window {t} drew {sm.windows[t]!.drawn} of its {receipts sm.windows[t]!} receipts, not "
+        ++ s!"min({samples}, {receipts sm.windows[t]!})")
+    | none =>
+      .ok ((Array.range sm.windows.size).map fun t =>
+          ({ releasedNs := seen[t]!.releasedNs, lastNs := seen[t]!.lastNs, passes := sm.windows[t]!.lengths.size,
+             least := seen[t]!.least, weights := seen[t]!.weights, hbm := seen[t]!.hbm,
+             host := seen[t]!.host } : Group),
+        sm.windows.map fun w => (receipts w, w.drawn))
+
+/-- The line of an accepted session's record `sm` on a node of `rates`, `nodeBytes` of memory and `chipBytes` of on-chip
+storage, at the session's `samples`: `line` at the record's groups and windows (`ofSummary`) and its registered blocks
+(`Summary.blocks`, the registration the session ran on), with W the pooled bound of those windows at `δ`; or why it
+has none. -/
+def lineOfRecord (sm : Session.Summary) (samples : Nat) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat)
+    (δ : Rat) (rates : Rates) : Except String Line :=
+  match ofSummary sm samples seen with
+  | .ok (gs, ws) => line gs per sm.blocks blockBytes chipBytes nodeBytes ws δ rates
+  | .error why => .error why
+
+/-- A window's last root's arrival in the record: its last pass's, or its coin's release when it has none (as
+`verifier.paced_groups` reads a window seen). -/
+def lastNs (w : Session.WindowSummary) : Nat := w.arrivedNs.back?.getD w.releasedNs
+
+/-- Why the times `seen` aren't the record's own, or none: the first window whose coin's release or last root's arrival
+seen isn't the one `sm` records (`releasedNs`, `lastNs`). -/
+def timesOff (sm : Session.Summary) (seen : Array Seen) : Option String :=
+  (List.range (min seen.size sm.windows.size)).findSome? fun t =>
+    let s := seen[t]!
+    let w := sm.windows[t]!
+    if s.releasedNs == w.releasedNs && s.lastNs == lastNs w then none
+    else some (s!"window {t} was seen released at {s.releasedNs} and last at {s.lastNs}, not at the record's "
+      ++ s!"{w.releasedNs} and {lastNs w}")
+
+/-- `lineOfRecord` with the times seen held to the record's where they are on its clock (`onRecord`): refused, after
+`ofSummary`'s refusals, where they differ (`timesOff`). Off it they are another clock's, the challenger's release log,
+which the record doesn't hold, and this is `lineOfRecord`. -/
+def lineOfRecordOn (onRecord : Bool) (sm : Session.Summary) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  match ofSummary sm samples seen, (if onRecord then timesOff sm seen else none) with
+  | .ok _, some why => .error why
+  | _, _ => lineOfRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+
+/-- The record `Session.run` makes of a session from `s` over `events`, none where the run fails or doesn't accept
+(`Session.State.summary`): `LineHeld`'s `Record.summary`. -/
+def summaryOfRun (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=
+  match Session.run s events with
+  | .ok (_, s') => s'.summary
+  | .error _ => none
+
+/-- `lineOfRecordOn` of a record, or `lineOf`'s refusal where there is none. -/
+def lineOfSummary? (onRecord : Bool) (sm? : Option Session.Summary) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  match sm? with
+  | some sm => lineOfRecordOn onRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+  | none => .error "the Lean verifier gave the session no record"
+
+/-- The line of a session run from `s` over `events`, as `LineHeld`'s `lineOf` reads a record: `lineOfRecordOn` of the
+run's own record (`summaryOfRun`), or why it has none. -/
+def lineOfRun (onRecord : Bool) (s : Session.State) (events : Array Session.Event) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  lineOfSummary? onRecord (summaryOfRun s events) samples seen per blockBytes chipBytes nodeBytes δ rates
 
 private def digits? (s : String) : Option Nat :=
   if !s.isEmpty && s.all Char.isDigit then s.toNat? else none

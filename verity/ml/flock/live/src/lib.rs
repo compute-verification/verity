@@ -37,6 +37,7 @@ pub mod firewall;
 pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
+pub mod record_text;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;
@@ -81,9 +82,10 @@ pub const KIND_SLICE: u8 = 0x02;
 pub const LABEL_MIXED: &[u8] = b"flock-mixed-v1";
 pub const LABEL_R1CS: &[u8] = b"flock-r1cs-v0";
 
-/// Every thread's stack, the prover's and the verifier's: Rust's 2 MiB default overflows on a large statement's proof
-/// (`RMSNormCudaVector8_v1{BLOCK=256}`, PRF-141).
-pub const THREAD_STACK: usize = 64 << 20;
+/// Every thread's stack, the prover's and the verifier's, ours and Flock's (its pools and their helper threads, patched to
+/// `flock_core::THREAD_STACK`): Rust's 2 MiB default overflows on a large statement's proof
+/// (`RMSNormCudaVector8_v1{BLOCK=256}`, PRF-141; `SiluMul_v2{I=1536}` at m=27, PRF-146).
+pub const THREAD_STACK: usize = flock_core::THREAD_STACK;
 
 /// Rayon's global pool on [`THREAD_STACK`] stacks. First thing in a binary's `main`, before any parallel iterator builds the
 /// pool with the default stack; a second call does nothing.
@@ -99,7 +101,7 @@ pub fn spawn<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> std::
 /// `Scope::spawn` on a [`THREAD_STACK`] stack.
 pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f: impl FnOnce() -> T + Send + 's)
                                           -> std::thread::ScopedJoinHandle<'s, T> {
-    std::thread::Builder::new().stack_size(THREAD_STACK).spawn_scoped(sc, f).expect("a thread")
+    flock_core::spawn_scoped(sc, f)
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -984,8 +986,8 @@ pub struct LiveChallenger {
     pending: Vec<u8>,
     rounds: u64,
     forks: AtomicU32,
-    /// The value `grind_pow` returns and absorbs. Live coins need no grinding; a nonzero value models a prover that
-    /// chooses its nonce (negative 4): the coin that follows is drawn by the verifier regardless.
+    /// The value `grind_pow` returns and absorbs: `0`, the only nonce the verifier accepts (R4). Live coins need no
+    /// grinding; a nonzero value models a prover that chooses its nonce (negative 4), which the verifier refuses.
     pub pow_nonce: u64,
     pub tamper: Option<Tamper>,
     deferred: Vec<u8>,
@@ -2392,10 +2394,11 @@ impl Challenger for ReplayChallenger {
         unreachable!("the verifier's challenger never grinds")
     }
 
-    /// R4: the nonce is a message like any other (bound by the round digest); the coin does not depend on it.
+    /// R4: the nonce is a message like any other (bound by the round digest), and must be `0`: the coin does not depend on
+    /// it, so the verifier refuses every other nonce, as the Lean verifier's decoder does (D21).
     fn verify_pow(&mut self, nonce: u64, _bits: u32) -> bool {
         self.observe_bytes(&nonce.to_le_bytes());
-        true
+        nonce == 0
     }
 
     fn fork(&mut self, label: &'static [u8]) -> Self {
@@ -2576,5 +2579,30 @@ mod thread_stack_tests {
     fn a_spawned_thread_takes_a_recursion_past_the_default_stack() {
         assert_eq!(super::spawn(|| deep(16 << 10)).join().unwrap(), 16 << 10);
         assert_eq!(std::thread::scope(|sc| super::spawn_scoped(sc, || deep(16 << 10)).join().unwrap()), 16 << 10);
+    }
+
+    /// Flock's own threads: `run_hetero_chunks`' and `run_hetero_chunks_stateful`'s two helper threads beside the calling
+    /// pool (here one on `THREAD_STACK`, as `init_threads` builds the global one), and the all-core pool. A chunk on a pool
+    /// worker waits until a helper has run one, so a helper always takes the recursion.
+    #[test]
+    fn flocks_helpers_and_pools_take_a_recursion_past_the_default_stack() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(4).stack_size(super::THREAD_STACK).build().unwrap();
+        let chunk = |helped: &AtomicBool| {
+            let d = deep(16 << 10);
+            if rayon::current_thread_index().is_none() {
+                helped.store(true, Ordering::Release);
+            }
+            while !helped.load(Ordering::Acquire) {
+                std::thread::yield_now();
+            }
+            d
+        };
+        let helped = AtomicBool::new(false);
+        pool.install(|| flock_core::run_hetero_chunks(64, |_| assert_eq!(chunk(&helped), 16 << 10)));
+        let helped = AtomicBool::new(false);
+        let states = pool.install(|| flock_core::run_hetero_chunks_stateful(64, || 0usize, |s, _| *s += chunk(&helped)));
+        assert_eq!(states.iter().sum::<usize>(), 64 * (16 << 10));
+        assert_eq!(flock_core::all_core_pool().install(|| deep(16 << 10)), 16 << 10);
     }
 }

@@ -114,6 +114,12 @@ def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
                                      "the built ♭, the cheater priced at every known fold, counted ones included"))
 
 
+def test_the_honest_clock_says_which_form_is_proved() -> None:
+    clock = get("honest-clock")
+    assert (clock.kind, clock.standing, clock.label) == ("assumption", "standard", "Honest clock")
+    assert "Accounting.SecurityProofs.Actual.honestClock" in clock.name and "the Pearl-C form is not proved" in clock.name
+
+
 def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
     """RT4-LOGIC-25: no served path verifies with --registered; -27: the window's law also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
@@ -121,7 +127,7 @@ def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> N
     assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
                                         "no served path meets it"))
     law = get("accounting-ts-window-law").name
-    assert all(s in law for s in ("five facts", "coin tree", "trusted-nebius-host", "Under full checking",
+    assert all(s in law for s in ("five facts", "coin tree", "trusted-host", "Under full checking",
                                   "serve --zk --operator loopback", "doesn't meet the fifth fact"))
 
 
@@ -158,11 +164,11 @@ def test_the_registrant_premise_is_a_model_of_the_provers_covered() -> None:
 
 
 def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
-    e = get("trusted-nebius-host")
+    e = get("trusted-host")
     assert (e.kind, e.standing) == ("assumption", "standard")
-    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
-                      "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
-                      "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+    assert e.name == ("The auditor's device runs its stated code, timing included, on a host the prover doesn't control, "
+                      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier "
+                      "state")
 
 
 def test_the_latency_ceiling_is_a_measured_device_claim() -> None:

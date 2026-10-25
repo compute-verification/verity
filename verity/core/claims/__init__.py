@@ -119,7 +119,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Models/Accounting/Guarantees/Bandwidth.lean): the
+    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Definitions/Accounting/Guarantees/Bandwidth.lean): the
     # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
     # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
     # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
@@ -151,7 +151,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("bandwidth-instantiation", "assumption",
           "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
           "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
-    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Models/Accounting/Guarantees/RateAudit.lean): the
+    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Definitions/Accounting/Guarantees/RateAudit.lean): the
     # bandwidth device with a certified stream on its side link and rebuilds paid in compute
     Entry("rate-device", "model",
           "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
@@ -167,7 +167,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
     # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
     # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
-    # (Security/Models/Accounting/Assumptions/RateAudit.lean)
+    # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
           "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
@@ -193,7 +193,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
     # a live coin drawn after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
-    # (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # (Security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
     # encoding, and each coin keys a block apart (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
@@ -212,12 +212,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedHost` (Security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
-    Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
-          "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
-          "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
+    Entry("trusted-host", "assumption",
+          "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
+          "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
+          "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
@@ -236,13 +236,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
-    # session per audit cites trusted-nebius-host as network-accounting widens it
+    # session per audit cites trusted-host as network-accounting widens it
     # (pending network-accounting's widening, Daniel decision 2)
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
           "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
           "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
-          "trusted-nebius-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
+          "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
     # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
@@ -270,9 +270,20 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
-    # EPS1's tensor–scalar model (Security/Models/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
+    # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
+    # and its sm_120 instances) read the verifier's clock in the cost model
+    Entry("honest-clock", "assumption",
+          "Honest clock: the cost behind a transcript the verifier receives by the deadline is spent after the salt's "
+          "release and by the deadline, so the prover's computation stopped at the deadline outputs every transcript "
+          "received by then at no more cost than the run spent in that window and no more oracle calls than its online "
+          "phase. It fails if a transcript computed after the deadline can be stamped as received by it (a clock the "
+          "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
+          "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
+          "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
-    # (Security/Models/Accounting/Assumptions/Stages.lean)
+    # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
           "Measured facets are ceilings for the stated device on the measured vector its statement names (sm_120 RTX "
           "PRO 6000: VF3s-16, the measured headline's (I1)): on every run the counts and cycles are nonnegative and the "
@@ -314,7 +325,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
@@ -427,7 +438,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
           "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
           "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
-          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-nebius-host). "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-host). "
           "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
           "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
           "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
@@ -472,7 +483,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Models/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
@@ -488,7 +499,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-nebius-host), whose operating system's random bytes are the "
+          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
 )}
 

@@ -535,6 +535,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-1")
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "6b3d704c8" * 4 + "abcd")
     monkeypatch.chdir(tmp_path)
     real, tickets = SLOT.join, []
 
@@ -552,7 +553,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     with pytest.raises(Exec) as e:
         SLOT.main(["--by", "lander", "--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
-    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "by": "lander"}
+    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "commit": "6b3d704c8" * 4 + "abcd", "by": "lander"}
     who = tmp_path / "check-a.who"
     assert tickets == [me] and json.loads(who.read_text()) == me and stat.S_IMODE(who.stat().st_mode) == 0o664
     assert sorted(p.name for p in tmp_path.iterdir()) == ["check-a.lock", "check-a.who", SLOT.LINE, "slots"]
@@ -713,8 +714,28 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* eyeball review.*research run --on vy-nebius-cpu-K"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
+
+
+def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_only_when_there_is_none(tmp_path, monkeypatch):
+    """CI-164: n2's and cpu-1's default pools are all only=trains, and the refusal sent a lane check to another machine though
+    each has a lane pool beside it (`gpu/slots`, `research/slots`)."""
+    (tmp_path / "slots").write_text("d 0 only=trains\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
+    with pytest.raises(SystemExit) as e:
+        SLOT.main(["--", "check.py"], now=lambda: NOW)
+    assert "a lane check runs on another machine" in str(e.value) and "research run --on vy-nebius-cpu-K" in str(e.value)
+    for name, text in (("gpu", "g 1\n"), ("trains", "t 2 only=trains\n"), ("gpu.bak-20261024", "b 2\n")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "slots").write_text(text)
+    with pytest.raises(SystemExit) as e:
+        SLOT.main(["--", "check.py"], now=lambda: NOW)
+    msg = str(e.value)
+    assert f"CHECK_SLOTS={tmp_path / 'gpu' / 'slots'} python3 tools/verity/check/slot.py" in msg
+    assert "another machine" not in msg and "trains/slots" not in msg and ".bak-" not in msg
+    assert "research run --on vy-nebius-cpu-K" in msg
 
 
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):

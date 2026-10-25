@@ -10,7 +10,7 @@ import Mathlib.NumberTheory.LegendreSymbol.Basic
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.NormNum.Basic
 import Mathlib.Tactic.Ring
-import Models.Accounting.Guarantees.Gates
+import Definitions.Accounting.Guarantees.Gates
 
 /-!
 # The circuit model's window and lower bounds, proved
@@ -853,8 +853,8 @@ lemma budgeted_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.wi
   · cases b <;> simp [Finset.sum_ite_eq, hw]
 
 theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
-  intro F k B E εnum εden ι W caps A m x words out H hP hR hci hnd hlt hcw
-  have h := H W m x words out hR hci hnd hlt hcw
+  intro F k B E εnum εden ι W caps A m x words out H hε hk hp hp4 hP hR hci hnd hlt hcw
+  have h := H hε hk hp hp4 W m x words out hR hci hnd hlt hcw
   obtain ⟨hwin, hcap, -⟩ := hP
   have hb : (budgeted W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
     rw [budgeted_eq W A hwin]
@@ -876,13 +876,76 @@ theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
   exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
 theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
-  intro F k B E εnum εden q H hn
+  intro F k B E εnum εden q H hε hk hp hp4 hn
   unfold encodeCost
   refine le_iInf₂ fun c hc => ?_
   obtain ⟨ι, C, m, x, words, out, hlen, hnd, hlt, hR, hrb, hci, hcw, rfl⟩ := hc
-  have h := H C m x words out hR hci hnd hlt hcw
+  have h := H hε hk hp hp4 C m x words out hR hci hnd hlt hcw
   rw [hrb, zero_mul, add_zero, hlen] at h
   exact_mod_cast Nat.le_of_mul_le_mul_right h (by omega)
+
+/-! ## `EncodeChainHardness`'s floor
+
+`2^n − c` with `n ≥ 68` and `c ≡ 1 mod 4`, `c ≤ 2^66`, is inside it, p1024 among them. Outside it the conjecture
+claims nothing, so the red team's counterexamples (art:6bf31146fd1239ee0a07b05eae88f827c9b31948128a6d4a4c58c4b96d0a124e)
+no longer refute it: at `ε = 0`, at `k = 0` and at a field narrower than a byte it holds, and the one-draw circuit
+behind its `ε = 0` counterexample is right on more than `ε` of the draws at no `ε` and field the floor admits. -/
+
+/-- A field `2^n − c` with `n ≥ 68`, `c ≡ 1 mod 4` and `c ≤ 2^66` is inside `EncodeChainHardness`'s floor on `p`. -/
+theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c ≤ 2 ^ 66) :
+    2 ^ 66 ≤ 2 ^ n - c ∧ (2 ^ n - c) % 4 = 3 := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
+  have hM : (2 : ℕ) ^ 66 ≤ 2 ^ m := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have h4 : (2 : ℕ) ^ 2 = 4 := by norm_num
+  rw [pow_add 2 m 2, h4]
+  obtain ⟨N, hNe⟩ : ∃ N, (2 : ℕ) ^ m = N := ⟨_, rfl⟩
+  obtain ⟨M, hMe⟩ : ∃ M, (2 : ℕ) ^ 66 = M := ⟨_, rfl⟩
+  rw [hNe, hMe] at hM ⊢
+  rw [hMe] at hc'
+  omega
+
+/-- p1024 is inside `EncodeChainHardness`'s floor on `p`: `2^66 ≤ p` and `p ≡ 3 mod 4`. -/
+theorem p1024_floor : 2 ^ 66 ≤ p1024.p ∧ p1024.p % 4 = 3 := by
+  unfold Field.p
+  exact floor_of_pow_sub p1024.n p1024.c (by show 68 ≤ 1024; norm_num) (by show 105 % 4 = 1; norm_num)
+    (by show 105 ≤ 2 ^ 66; norm_num)
+
+/-- At `ε = 0` it holds: the floor excludes the red team's `encodeChainHardness_false_eps0`. -/
+example (F : Field) (k B E εden : ℕ) (hden : 0 < εden) : EncodeChainHardness F k B E 0 εden := by
+  intro hε
+  rw [Nat.mul_zero] at hε
+  exact absurd hden (by omega)
+
+/-- At a field narrower than a byte it holds: the floor excludes `encodeChainHardness_false_toy`. -/
+example (k B E εnum εden : ℕ) : EncodeChainHardness ⟨2, 0⟩ k B E εnum εden := by
+  intro _ _ hp
+  exact absurd hp (by norm_num [Field.p])
+
+/-- At `k = 0`, where the encoding is the registered payload word, it holds. -/
+example (F : Field) (B E εnum εden : ℕ) : EncodeChainHardness F 0 B E εnum εden := by
+  intro _ hk
+  exact absurd hk (lt_irrefl 0)
+
+/-- Inside the floor one draw is never more than `ε` of the draws, so the circuit behind
+`encodeChainHardness_false_eps0`, right on one draw, computes no word at any `ε` and field the floor admits. -/
+example (F : Field) (k εnum εden : ℕ) (d : Draw k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
+    (hp : 2 ^ 66 ≤ F.p) : ¬ MoreThan (draws F k) {d} εnum εden := by
+  intro h
+  unfold MoreThan at h
+  rw [Finset.card_singleton, Nat.mul_one] at h
+  have hp2 : 2 ≤ F.p := le_trans (by norm_num) hp
+  have hc : F.p ≤ (draws F k).card := by
+    simp only [draws, Finset.card_product, Fintype.card_piFinset, Finset.card_range, Finset.prod_const,
+      Finset.card_univ, Fintype.card_fin, Nat.card_Ico]
+    have h1 : 1 ≤ 2 ^ F.n * (F.p - 1) := Nat.mul_pos (Nat.two_pow_pos _) (by omega)
+    calc F.p ≤ F.p ^ k := Nat.le_self_pow hk.ne' _
+      _ = F.p ^ k * 1 := (Nat.mul_one _).symm
+      _ ≤ _ := Nat.mul_le_mul_left _ h1
+  have h3 : 2 ^ 64 * εnum ≤ εnum * (draws F k).card :=
+    calc 2 ^ 64 * εnum ≤ 2 ^ 66 * εnum := Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by norm_num))
+      _ ≤ (draws F k).card * εnum := Nat.mul_le_mul_right _ (hp.trans hc)
+      _ = εnum * (draws F k).card := Nat.mul_comm _ _
+  exact lt_irrefl _ (h.trans_le (hε.trans h3))
 
 /-! ## The fooling bound in units -/
 

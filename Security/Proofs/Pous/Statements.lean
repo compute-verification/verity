@@ -1,18 +1,18 @@
-import Models.Pous.Guarantees
+import Definitions.Pous.Guarantees
 
 /-!
 # PoUS's lemmas, stated
 
 The statements of PoUS's analysis that are math rather than claims: reductions over any scheme or ideal model, counting,
 pebbling and number theory, numeric certificates, the continuous audit's completeness (`ContinuousComplete`), and the
-refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation. Each is proved as `Pous.SecurityProofs.X`
-(`Security/Proofs/Pous.lean`) except `A2LemmaAM1`, `A5RabinGcd` and `A7Params`, which are open
-(`Security/Proofs/Pous/Targets.lean`), and `InvExPostFactoTwoLayer`, which is false. They keep their names in
-`Pous.Guarantees`, beside the frozen statements of `Security/Models/Pous/Guarantees.lean`. "Pinned as drafted" means
-the binders and conclusion are the draft's, verbatim.
+refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation, and Track A's `M1Meets`, a `Meets` in model M1 that
+is no claim about PoUS's scheme. Each is proved as `Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except
+`A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open, and `InvExPostFactoTwoLayer`, which is false.
+They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Definitions/Pous/Guarantees.lean`.
+"Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 
 This module states and proves nothing else, and imports no proof: `grade.sh` grades `KFloor` and `Theorem1ii` (its
-controls) and the three open statements against it, and a submission may import it.
+controls) and the four open statements against it, and a submission may import it.
 -/
 
 namespace Pous.Guarantees
@@ -184,6 +184,20 @@ def A7Params : Prop :=
     A7Row logHistGammaM1 (2 ^ 28) ⌊(18 / 19 : ℚ) * (2056 * 2 ^ 28)⌋₊ (2 ^ 34) 142 ∧
     A7Row logHistGammaM2 (2 ^ 28) ⌊(18 / 19 : ℚ) * (2056 * 2 ^ 28)⌋₊ (2 ^ 20) 175 ∧
     A7Row logHistGammaM2 (2 ^ 28) ⌊(18 / 19 : ℚ) * (2056 * 2 ^ 28)⌋₊ (2 ^ 34) 238
+
+/-- **`m1_meets`, conditional on Conjecture B1′** (sms5 review; red team). In the ideal permutation model M1, the
+scheme with `2^28` blocks of 2048 bits meets the requirement: 117 sequential challenges, `2^20` queries per answer,
+any depth, `ε = 2^-128`. It follows from A2, A3′ and A7′'s first row. B1′ is a hypothesis so that the claim cannot
+be read as one about RW–SMS; in M1 it follows from A2 and A3′.
+
+**It does not transfer to the real RW–SMS scheme at `λ = 128`** (sms5 F1): a 2048-bit `N` factors in about
+`2^112 < 2^128` preprocessing, after which two root extractions answer any challenge within the deadline.
+
+Open, and not a claim: Track A's scheme is not PoUS's, whose `Meets` is the band's (`BandMultiMeetsFamily`). -/
+def M1Meets : Prop :=
+  ∀ D : ℕ,
+    Assumptions.B1Prime (m1 (2 ^ 28) 2048) (2 ^ 2048) ((m1 (2 ^ 28) 2048).stateBound Params.ρ) D (2 ^ 20) 117 →
+    Meets (m1 (2 ^ 28) 2048) .sequential D (2 ^ 20) 117 Params.εMax
 
 /-! ## Track B -/
 
@@ -475,7 +489,7 @@ rules: it reveals the next index only after the last round closed, rejects an an
 every answer past `Δ` as a miss, with every rejected or wrong one. `PerAnswer` takes no hypothesis about them, and
 holds at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
 (`Security/Definitions/Pous/Model/Continuous.lean`); `ContinuousAudit`, the frozen statement it gives, is in
-`Security/Models/Pous/Guarantees.lean`.
+`Security/Definitions/Pous/Guarantees.lean`.
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -597,7 +611,7 @@ def ContinuousTimeAverage : Prop :=
 /-! ## Proved results cited outside the package
 
 The types of seven theorems that the protocol's documents and code cite, written out so that each citation names a
-statement (three more, about schemes, are frozen in `Security/Models/Pous/Guarantees.lean`). Each is proved in
+statement (three more, about schemes, are frozen in `Security/Definitions/Pous/Guarantees.lean`). Each is proved in
 `Pous.SecurityProofs` under its own name, from the theorem its docstring names. -/
 
 open DRG Labelling in
@@ -672,7 +686,7 @@ open ColumnGame in
 def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
-/-! ## Secure erasure (`Security/Models/Pous/Guarantees/SecureErasure.lean`'s game) -/
+/-! ## Secure erasure (`Security/Definitions/Pous/Guarantees/SecureErasure.lean`'s game) -/
 
 open Pous.Digest in
 /-- **The digest is almost universal.** Two different lists of `R` blocks of `W` words over a finite field `F` have the

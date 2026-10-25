@@ -26,7 +26,8 @@ wrapping modulo 2^32), from the same probe run.  Each tensor-core step is bound 
 (`census.silicon_step`: `.silicon`), whose operand format is its census facet `tc:<precision>`.
 The two s8 steps are also the H200's (sm_90a: `wgmma` m64nNk32 and `mma.sync` m16n8k32) and the B200's (sm_100a: `tcgen05.mma`
 kind::i8 and `mma.sync` m16n8k32) at the same formats: one function on every card (`integer.HOPPER_SM90_S8_K32`,
-`integer.BLACKWELL_SM100_S8_K32`), so a circuit over them names no architecture.
+`integer.BLACKWELL_SM100_S8_K32`), so a circuit over them names no architecture (`gemm.s8_gemm`: `gemm.GEMM_SM90_S8` is the
+H200's binding, this step).
 """
 from __future__ import annotations
 
