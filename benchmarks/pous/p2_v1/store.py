@@ -3,7 +3,12 @@
 decode a kernel's `decode_layer` matches byte for byte.
 
     store.py layout [--out store-layout.json]
-    store.py toy [--out store-toy] [--width 64] [--layers 2] [--per-segment 12] [--workers N]
+    store.py toy [--out store-toy] [--width 64] [--layers 2] [--ff 64] [--per-segment 11] [--workers N]
+    store.py toy --plain [--out store-toy]
+
+`toy` writes the toy fixture (`store-toy/`): `toy.json`, `spot.json` and `c-star.bin`, which are tracked, and `w.bin`
+and `staging.bin`, which are not (each is pinned by its digest in `toy.json`). `toy --plain` writes those two in under a
+second with no encoding.
 
 **Layout.** The tensors, all s8 `[N, K]` row-major as `ScaledMmS8Coordinate` reads them, in this order: for each layer
 `l`, `model.layers.{l}.self_attn.qkv_proj.weight` (rows: the query heads, then K, then V), `...self_attn.o_proj.weight`,
@@ -104,8 +109,8 @@ class Shape:
 MQA16K = Shape("mqa16k-int8", 16_384, 52, 256, 1, 64, 65_536, 256)
 
 
-def toy_shape(width: int = 64, layers: int = 2) -> Shape:
-    return Shape(f"toy-mqa-d{width}", width, layers, width // 64, 1, 64, 4 * width, 256)
+def toy_shape(width: int = 64, layers: int = 2, ff: int = 64) -> Shape:
+    return Shape(f"toy-mqa-d{width}", width, layers, width // 64, 1, 64, ff, 256)
 
 
 @dataclass(frozen=True)
@@ -177,6 +182,14 @@ def build(shape: Shape, blocks_per_segment: int = PER_SEGMENT) -> Store:
     return Store(shape, layout, tuple(tensors))
 
 
+def toy_store(doc: dict | None = None) -> Store:
+    """The store `toy.json` describes (the tracked one by default)."""
+    doc = json.loads((TOY_DIR / "toy.json").read_text()) if doc is None else doc
+    model = doc["layout"]["model"]
+    shape = Shape(**{k: model[k] for k in Shape.__dataclass_fields__})
+    return build(shape, doc["layout"]["params"]["blocks_per_segment"])
+
+
 def _ref(params: P2Params) -> reference.Params:
     return reference.Params(params.w, params.c0, params.payload_bytes, params.blocks_per_segment, params.segments)
 
@@ -233,9 +246,28 @@ def patch(c_star: bytes, block: int, c: bytes) -> bytes:
     return c_star[:len(c) * block] + c + c_star[len(c) * (block + 1):]
 
 
+def staging_of(store: Store, w: bytes, layer: int) -> bytes:
+    """Layer `layer`'s staging buffer from the plaintext `W`: what `decode_layer` must give."""
+    out = bytearray(store.staging_bytes(layer))
+    for t in store.layer(layer):
+        out[t.staging_offset:t.staging_offset + t.size] = w[t.offset:t.offset + t.size]
+    return bytes(out)
+
+
 def toy_tensors(store: Store) -> dict[str, bytes]:
     """The toy's weights: each tensor's bytes from a SHA-512 counter stream under its name."""
     return {t.name: stream(TOY_W, t.name.encode(), t.size) for t in store.tensors}
+
+
+def toy_plain(store: Store) -> dict[str, bytes]:
+    """The toy's `w.bin` (W) and `staging.bin` (every layer's staging buffer, in layer order), from the generator alone."""
+    w = store.layout.pack(toy_tensors(store))
+    return {"w.bin": w, "staging.bin": b"".join(staging_of(store, w, l) for l in sorted({t.layer for t in store.tensors}))}
+
+
+def spot_payload(i: int, used: int, payload_bytes: int) -> bytes:
+    """A spot vector's payload: `used` bytes of a SHA-512 counter stream under its index, then zeros."""
+    return stream(TOY_W + b"spot", i.to_bytes(8, "big"), used) + bytes(payload_bytes - used)
 
 
 def _encode_segment(args: tuple[P2Params, bytes, int, bytes]) -> list[bytes]:
@@ -256,42 +288,55 @@ def _sha(data: bytes) -> str:
 
 
 def _dump(doc: dict) -> str:
-    return json.dumps(doc, indent=1, ensure_ascii=False) + "\n"
+    """JSON with an object's keys one a line and a table's rows one a line, each row compact."""
+    def fmt(v, ind: int) -> str:
+        pad = " " * ind
+        if isinstance(v, dict) and v:
+            return "{\n" + ",\n".join(f"{pad} {json.dumps(k)}: {fmt(x, ind + 1)}" for k, x in v.items()) + f"\n{pad}}}"
+        if isinstance(v, list) and v and all(isinstance(x, (dict, list)) for x in v):
+            return "[\n" + ",\n".join(f"{pad} {fmt(x, ind + 1) if isinstance(x, dict) else json.dumps(x, ensure_ascii=False)}"
+                                     for x in v) + f"\n{pad}]"
+        return json.dumps(v, ensure_ascii=False)
+    return fmt(doc, 0) + "\n"
 
 
 def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> dict[str, bytes]:
-    """The toy fixture's files: the store at `shape`, its `W`, salt, `C*`, every layer's staging buffer and the spot
-    vectors at the real store's indices, plus negative blocks; encoded by the registered codec in a process pool."""
+    """The toy fixture's files: `toy.json` (the store at `shape`, its salt, root, digests and negative blocks),
+    `spot.json` (blocks at the real store's indices under the toy's salt), `c-star.bin`, and `toy_plain`'s two; encoded
+    by the registered codec in a process pool, and every file checked against the reference decode before it is written."""
     store = build(shape, blocks_per_segment)
     params = store.params
-    w = store.layout.pack(toy_tensors(store))
+    plain = toy_plain(store)
+    w, staging = plain["w.bin"], plain["staging.bin"]
     commitment = setup.commit(params, w)
     salt = setup.draw_salt(TOY_SOURCE, commitment)
     prefix = expand_prefix(params, salt)
     real = build(MQA16K).params
     real_prefix = expand_prefix(real, salt)
     spots = _spots(build(MQA16K), salt)
-    seg = params.segment_bytes
+    seg, pb = params.segment_bytes, params.payload_bytes
     padded = store.layer(0)[0]
     last = padded.first_block + padded.blocks - 1
-    bad_payload = bytearray(w[params.payload_bytes * last:params.payload_bytes * (last + 1)])
+    bad_payload = bytearray(w[pb * last:pb * (last + 1)])
     bad_payload[-1] ^= 1
     with ProcessPoolExecutor(workers) as pool:
         segments = pool.map(_encode_segment, [(params, salt, s, w[s * seg:(s + 1) * seg]) for s in range(params.segments)])
-        blocks = pool.map(_encode_block, [(real, real_prefix, sp["i"], bytes.fromhex(sp["m"])) for sp in spots]
+        blocks = pool.map(_encode_block, [(real, real_prefix, sp["i"], spot_payload(sp["i"], sp["used"], pb)) for sp in spots]
                           + [(params, prefix, last, bytes(bad_payload))])
         segments, blocks = list(segments), list(blocks)
     c_star = b"".join(b for blocks_s in segments for b in blocks_s)
     for sp, c in zip(spots, blocks):
-        if decode_block(real, real_prefix, sp["i"], c) != bytes.fromhex(sp["m"]):
+        if _sha(decode_block(real, real_prefix, sp["i"], c)) != sp["m_sha512"]:
             raise RuntimeError(f"spot vector {sp['id']!r} doesn't decode back")
         sp["c"] = c.hex()
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt, segments)
-    staging, layers = b"", []
+    layers, start = [], 0
     for l in sorted({t.layer for t in store.tensors}):
         buf = decode_layer(store, c_star, salt, l)
-        layers.append([l, len(staging), len(buf), _sha(buf)])
-        staging += buf
+        if buf != staging[start:start + len(buf)]:
+            raise RuntimeError(f"layer {l} doesn't decode to its tensors")
+        layers.append([l, start, len(buf), _sha(buf)])
+        start += len(buf)
     nb = params.block_bytes
     flipped = bytearray(c_star[nb * 8:nb * 9])
     flipped[1000] ^= 1
@@ -310,8 +355,7 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
            "staging": layers, "negatives": negatives}
     spot = {"schema": SPOT_SCHEMA, "params": real.manifest(), "salt": salt.hex(), "prefix": real_prefix.hex(),
             "vectors": spots}
-    return {"toy.json": _dump(doc).encode(), "spot.json": _dump(spot).encode(), "w.bin": w, "c-star.bin": c_star,
-            "staging.bin": staging}
+    return {"toy.json": _dump(doc).encode(), "spot.json": _dump(spot).encode(), "c-star.bin": c_star} | plain
 
 
 def _spots(real: Store, salt: bytes) -> list[dict]:
@@ -323,15 +367,14 @@ def _spots(real: Store, salt: bytes) -> list[dict]:
     picks = [("w-first", qkv, qkv.first_block), ("qkv0-last", qkv, qkv.first_block + qkv.blocks - 1),
              ("down51-first", down, down.first_block), ("head-last", head, head.first_block + head.blocks - 1),
              ("w-last", None, params.blocks - 1)]
-    out = []
+    out, nb = [], params.block_bytes
     for name, t, i in picks:
         used = 0 if t is None else min(pb, t.offset + t.size - pb * i)
         s, v = divmod(i, params.blocks_per_segment)
         k, tw, attempt = reference.keys_after(prefix, ref, s, v)
-        m = stream(TOY_W + b"spot", i.to_bytes(8, "big"), used) + bytes(pb - used)
         out.append({"id": name, "i": i, "s": s, "v": v, "tensor": None if t is None else t.name, "used": used,
-                    "K": k.to_bytes(params.block_bytes, "big").hex(), "t": tw.to_bytes(params.block_bytes, "big").hex(),
-                    "t_attempt": attempt, "m": m.hex()})
+                    "K_sha512": _sha(k.to_bytes(nb, "big")), "t_sha512": _sha(tw.to_bytes(nb, "big")),
+                    "t_attempt": attempt, "m_sha512": _sha(spot_payload(i, used, pb))})
     return out
 
 
@@ -342,9 +385,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     lay.add_argument("--out", type=Path, default=LAYOUT_JSON)
     tp = sub.add_parser("toy", help="the toy fixture: W, salt, C*, staging, spot vectors")
     tp.add_argument("--out", type=Path, default=TOY_DIR)
+    tp.add_argument("--plain", action="store_true", help="only w.bin and staging.bin, for the tracked toy.json; no encoding")
     tp.add_argument("--width", type=int, default=64)
     tp.add_argument("--layers", type=int, default=2)
-    tp.add_argument("--per-segment", type=int, default=12)
+    tp.add_argument("--ff", type=int, default=64)
+    tp.add_argument("--per-segment", type=int, default=11)
     tp.add_argument("--workers", type=int, default=os.cpu_count())
     args = ap.parse_args(argv)
     if args.cmd == "layout":
@@ -352,7 +397,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(args.out)
         return 0
     args.out.mkdir(parents=True, exist_ok=True)
-    for name, data in toy(toy_shape(args.width, args.layers), args.per_segment, args.workers).items():
+    if args.plain:
+        files = toy_plain(toy_store())
+    else:
+        files = toy(toy_shape(args.width, args.layers, args.ff), args.per_segment, args.workers)
+    for name, data in files.items():
         (args.out / name).write_bytes(data)
         print(args.out / name, len(data))
     return 0

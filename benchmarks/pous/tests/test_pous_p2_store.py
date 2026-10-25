@@ -1,7 +1,8 @@
 """The encoded weights store (`p2_v1/store.py`, CMP-95 item 2): the real store's layout JSON and the toy fixture
-(`p2_v1/store-toy/`) regenerate as tracked; the toy's `C*` decodes, layer by layer, to its `W`'s tensors by
-`reference.decode`, by the registered codec and by `layout.decode_tensor`, passes the public-encoder setup with the pinned
-root, and refuses each negative block with its flag; the spot vectors decode at the real store's indices."""
+(`p2_v1/store-toy/`) regenerate as tracked, `W` and the staging buffers by their pinned digests; the toy's `C*` decodes,
+layer by layer, to its `W`'s tensors by `reference.decode`, by the registered codec and by `layout.decode_tensor`,
+passes the public-encoder setup with the pinned root, and refuses each negative block with its flag; the spot vectors
+decode at the real store's indices."""
 from __future__ import annotations
 
 import hashlib
@@ -26,10 +27,10 @@ from verity.core.protocols.pous.verifier import VerifierKey  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
 SPOT = json.loads((S.TOY_DIR / "spot.json").read_text())
-W = (S.TOY_DIR / "w.bin").read_bytes()
 C_STAR = (S.TOY_DIR / "c-star.bin").read_bytes()
-STAGING = (S.TOY_DIR / "staging.bin").read_bytes()
-STORE = S.build(S.toy_shape(), TOY["layout"]["params"]["blocks_per_segment"])
+STORE = S.toy_store(TOY)
+PLAIN = S.toy_plain(STORE)
+W, STAGING = PLAIN["w.bin"], PLAIN["staging.bin"]
 SALT = bytes.fromhex(TOY["salt"])
 NB = STORE.params.block_bytes
 
@@ -66,9 +67,12 @@ def test_real_layout():
 
 
 def test_toy_regenerates():
-    """The toy's W, commitment, salt and key prefix from the generator's code; its files by their pinned hashes."""
-    assert TOY["layout"] == json.loads(S._dump(STORE.to_json()))
-    assert W == STORE.layout.pack(S.toy_tensors(STORE))
+    """The toy's W, commitment, salt and key prefix from the generator's code, the default toy's; its files by their
+    pinned hashes."""
+    assert TOY["layout"] == json.loads(S._dump(S.build(S.toy_shape(), 11).to_json()))
+    assert {t.layer for t in STORE.tensors} == {0, 1, 2} and STORE.layer(2)[0].name == "lm_head.weight"
+    straddles = [t.name for t in STORE.tensors if len(STORE.layout.segments(t.name)) > 1]
+    assert straddles == ["model.layers.0.mlp.down_proj.weight"] and STORE.layer(1)[0].first_block % 11
     commitment = setup.commit(STORE.params, W)
     assert commitment.hex() == TOY["commitment"]
     assert setup.draw_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
@@ -119,12 +123,14 @@ def test_spot_vectors():
     prefix = expand_prefix(real, salt)
     assert prefix.hex() == SPOT["prefix"]
     ref = reference.Params(real.w, real.c0, real.payload_bytes, real.blocks_per_segment, real.segments)
+    sha = lambda b: hashlib.sha512(b).hexdigest()  # noqa: E731
+    assert [v["id"] for v in SPOT["vectors"]] == ["w-first", "qkv0-last", "down51-first", "head-last", "w-last"]
     for v in SPOT["vectors"]:
         assert divmod(v["i"], real.blocks_per_segment) == (v["s"], v["v"])
         k, t, attempt = reference.keys_after(prefix, ref, v["s"], v["v"])
-        assert (k.to_bytes(NB, "big").hex(), t.to_bytes(NB, "big").hex(), attempt) == (v["K"], v["t"], v["t_attempt"])
+        assert (sha(k.to_bytes(NB, "big")), sha(t.to_bytes(NB, "big")), attempt) == (v["K_sha512"], v["t_sha512"], v["t_attempt"])
         m = S.decode_block(real, prefix, v["i"], bytes.fromhex(v["c"]))
-        assert m.hex() == v["m"] and not any(m[v["used"]:])
+        assert m == S.spot_payload(v["i"], v["used"], real.payload_bytes) and sha(m) == v["m_sha512"]
 
 
 @pytest.mark.slow
