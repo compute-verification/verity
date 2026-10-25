@@ -147,7 +147,7 @@ def measured(lab: str) -> tuple[int, int, str]:
         k = FIRST_BLOCKS[1][1] if v == 1 else FIRST_BLOCKS[hi][1]
         return ands, k, "#4263 (r20261025-123346-091b)" + ("" if v in FIRST_BLOCKS else ": interpolated, k_log the next measured")
     if fam == FEED:
-        return 0, 22, "unmeasured (a 32-bit compare, select and add): k_log the floor the smallest measured units take"
+        return 30 if s["FIRST"] else 62, 22, "circuit-check r20261025-174007-faec; k_log unmeasured, the floor the smallest units take"
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
 
 
