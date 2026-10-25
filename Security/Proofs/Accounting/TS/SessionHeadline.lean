@@ -1,5 +1,5 @@
 import Proofs.Accounting.TS.SessionProofSound
-import Proofs.Accounting.TS.Session.Headline
+import Proofs.Accounting.TS.Session.Guarantees.Headline
 import Proofs.Accounting.Headline.Sm120
 import Proofs.Accounting.Headline.Sm120Measured
 
