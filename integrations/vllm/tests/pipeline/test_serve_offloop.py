@@ -1,0 +1,310 @@
+"""serve-openai's windows sealed off the engine loop (`serve_seal.Sealer` over `serve_seal.freeze`), bounded on disk
+(`serve_seal.DiskFloor`), and its records copied into the run's ``$OUT`` (`serve_commit.Mirror`). CPU only."""
+from __future__ import annotations
+
+import copy
+import json
+import shutil
+import threading
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+from verity_vllm.commit.committer import pinned_pool as PP
+from verity_vllm.commit.served_record import served_rows
+from verity_vllm.config import UsageError
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_seal as ss
+from verity_vllm.pipeline.serve_admit import Admission, Delta
+
+torch = pytest.importorskip("torch")
+
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records  # noqa: E402
+
+A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
+B = {0: [("model.embed_tokens", bytes(255 - i for i in range(256)) * 2)], 1: [("runner.sampler", b"\x09\x08\x07\x06")]}
+ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2)], 1: [("runner-a", 0, 1, 3, 3)]}
+NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
+
+
+@pytest.fixture
+def host_blocks(monkeypatch):
+    """The pinned pool's blocks as plain host tensors (no CUDA), and the bundle's seal time fixed."""
+    from verity_vllm.pipeline import replay_bundle as RB
+
+    def block(n: int, _exact: bool, _threads: int, _times: Any = None) -> tuple[Any, Any, str]:
+        b = torch.zeros(n, dtype=torch.uint8)
+        return b, b, "test"
+
+    monkeypatch.setattr(PP, "_pinned_block", block)
+    monkeypatch.setattr(RB.time, "strftime", lambda *_a: "2026-10-25T00:00:00Z")
+
+
+def _commit(com: Any, steps: dict[int, list[tuple[str, bytes]]]) -> Any:
+    """``steps`` committed as `opened.commit_steps` commits them, its retained blocks and levels then moved into slices of the
+    committer's pinned pool, where the windowed collector's D2H copies put them."""
+    from verity_vllm.commit.committer.native_host import TensorMeta
+
+    C = com.chunk
+    for s in sorted(steps):
+        metas, buf = [], bytearray()
+        for i, (name, raw) in enumerate(steps[s]):
+            off, n = len(buf), len(raw)
+            m = TensorMeta(i, name, "uint8", (n,), n, C, off // C, -(-(off + n) // C) - off // C)
+            m.dev_off = off
+            metas.append(m)
+            buf += raw + b"\0" * ((-n) % 4)
+        com.commit_block_offline(s, bytes(buf), metas)
+    rc = com.finalize()
+    for s, (blk, used) in list(com._gpu_blocks.items()):
+        v = com.pool.take(blk.numel())
+        v.copy_(blk)
+        com._gpu_blocks[s] = (v, used)
+        levels = []
+        for lv in com._gpu_levels[s]:
+            p = com.pool.take(lv.numel() * lv.element_size()).view(lv.dtype).view(lv.shape)
+            p.copy_(lv)
+            levels.append(p)
+        com._gpu_levels[s] = levels
+    return rc
+
+
+def _window_a() -> tuple[Any, Any, dict[str, Any]]:
+    from tests.check.opened import committer
+    from verity_vllm.commit import step_rows
+
+    com = committer(commit_scheme=step_rows.NAME)
+    com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
+    rc = _commit(com, A)
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    leds = {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
+    kw = dict(rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs, request_rows=rows,
+              tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t", code="c0de",
+              engine_of_record={"vllm": "test"})
+    return com, rc, kw
+
+
+def _files(d: Path) -> dict[str, bytes]:
+    return {p.relative_to(d).as_posix(): p.read_bytes() for p in sorted(d.rglob("*")) if p.is_file()}
+
+
+def _sealed_after_the_next_window(d: Path, view_of: Any) -> tuple[dict[str, bytes], dict[str, Any], dict[str, Any], list[str]]:
+    """Window A sealed on the loop into ``d``, then sealed again into ``d`` from ``view_of(committer)`` taken at A's close, on
+    the sealer's thread, once the committer has been reset and has committed window B (its values in the pool's blocks, its salt
+    keys in the committer's key map): what the first seal wrote, what each returned, and the sealer's errors."""
+    com, rc, kw = _window_a()
+    inline = ss.seal_window(com, rc, d, **kw)
+    on_loop = _files(d)
+    shutil.rmtree(d)
+    view, extras = view_of(com), ss.extras_of(com, rc)
+    com.reset()
+    _commit(com, B)
+    got: dict[str, Any] = {}
+    sealer = ss.Sealer(1 << 40)
+    sealer.submit(lambda _waited: got.update(s=ss.seal_window(view, rc, d, **kw, extras=extras)), 1)
+    sealer.close()
+    return on_loop, inline, got.get("s"), sealer.errors
+
+
+def test_a_window_sealed_off_the_loop_writes_the_bytes_an_inline_seal_writes(tmp_path, host_blocks):
+    d = tmp_path / "windows" / "w5"
+    on_loop, inline, off, errors = _sealed_after_the_next_window(d, ss.freeze)
+    assert not errors and _files(d) == on_loop, "the same files, byte for byte: store, salts, levels, binding map, context, manifest"
+    assert off["manifest_sha256"] == inline["manifest_sha256"] and off["binding_map_digest"] == inline["binding_map_digest"]
+    assert off["bytes"] == inline["bytes"] and "error" not in off
+
+
+def test_without_its_own_state_and_lent_blocks_the_next_window_changes_what_a_seal_writes(tmp_path, host_blocks):
+    """The control: a plain copy of the committer at the close shares its salt-key map and gives its blocks back at the reset,
+    so window B's keys and values land in what A's seal reads."""
+    d = tmp_path / "windows" / "w5"
+    on_loop, _inline, _off, errors = _sealed_after_the_next_window(d, copy.copy)
+    got = _files(d)
+    assert not errors and got.keys() == on_loop.keys() and got != on_loop
+    assert any(got[k] != on_loop[k] for k in got if k.startswith("commit/replay_bundle_p0/store/"))
+
+
+def test_lent_blocks_come_back_free_at_the_reset_after_their_restore(host_blocks):
+    pool = PP.PinnedPool(1 << 10, exact=False, populate_threads=0)
+    a = pool.take(100)
+    a.fill_(7)
+    lent = pool.lend()
+    assert len(lent) == 1 and pool.in_use == [] and pool.cur is None
+    pool.reset()
+    b = pool.take(100)
+    b.fill_(9)
+    assert int(a[0]) == 7 and len(pool.all) == 2, "the next run's takes come from a block of its own"
+    pool.restore(lent)
+    assert lent[0] not in pool.free, "free only from the next reset"
+    pool.reset()
+    assert any(f is lent[0] for f in pool.free) and len(pool.free) == 2
+
+
+def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
+    first, go, done = threading.Event(), threading.Event(), threading.Event()
+    sealer = ss.Sealer(15, clock=lambda: (go.set(), 0.0)[1] if first.is_set() else 0.0)
+    held: list[int] = []
+    sealer.submit(lambda _w: go.wait(), 10)
+    first.set()
+
+    def second() -> None:
+        sealer.submit(lambda _w: done.wait(), 10)
+        held.append(sealer.held)
+
+    t = threading.Thread(target=second)
+    t.start()
+    t.join()
+    assert held == [10], "the second window was queued once the first one's seal had ended"
+    assert sealer.submit(lambda _w: None, 0) == 0.0, "a window with nothing to seal never waits"
+    done.set()
+    sealer.close()
+    assert sealer.held == 0 and not sealer.errors
+
+
+def test_a_failed_seal_is_its_windows_and_the_next_one_still_runs():
+    ran: list[int] = []
+
+    def bad(_w: float) -> None:
+        raise RuntimeError("disk")
+
+    sealer = ss.Sealer(1 << 20)
+    sealer.submit(bad, 1)
+    sealer.submit(lambda _w: ran.append(1), 1)
+    sealer.close()
+    assert ran == [1] and sealer.errors == ["RuntimeError: disk"]
+
+
+# ---------------------------------------------------------------------------------------------------------------- serving
+
+class Counted(Committer):
+    """The stand-in committer with its absorbed steps' byte counts, as `serve_seal.committed_bytes` reads them."""
+
+    def reset(self) -> None:
+        super().reset()
+        self._done: dict[int, Any] = {}
+
+    def _commit(self, step: int, name: str, values: list[int], dtype: str) -> None:
+        super()._commit(step, name, values, dtype)
+        self._done[step] = SimpleNamespace(n_bytes=sum(m.nbytes for m in self._layouts[step]))
+
+
+class Sealed(Serving):
+    """`Serving` with every window sealed by ``seal`` (in place of `seal_window`), off the loop on ``sealer``."""
+
+    def __init__(self, out: Path, *, sealer: Any, mirror: Any = None, disk: Any = None, window_bytes: int | None = None,
+                 window_steps: int = 64) -> None:
+        super().__init__(out, window_steps=window_steps)
+        w = self.windows
+        w.com = Counted(self.runner)
+        w.seal, w.sealer, w.mirror, w.disk, w.window_bytes, w.on_floor = {"label": "t"}, sealer, mirror, disk, window_bytes, self.loop.drain
+
+
+def _body(i: int, n: int = 3) -> dict[str, Any]:
+    return dict(CERTIFIER_BODY, prompt=[128000, 10 + i, 20 + i], max_tokens=n, min_tokens=n)
+
+
+def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monkeypatch):
+    held, seen = threading.Event(), []
+
+    def seal(com: Any, rc: Any, d: Path, **kw: Any) -> dict[str, Any]:
+        seen.append((kw["rec"]["window"], sorted(com._layouts), sorted({r[0] for rows in served_rows(com).values() for r in rows})))
+        if kw["rec"]["window"] == 0:
+            held.wait()
+        return {"row_dir": str(d), "requests": [q["request_id"] for q in kw["reqs"]]}
+
+    monkeypatch.setattr(sc, "seal_window", seal)
+    sealer = ss.Sealer(1 << 40)
+    out = tmp_path / "serve"
+    out.mkdir()
+    mirror = sc.Mirror(out, tmp_path / "OUT")
+    with Sealed(out, sealer=sealer, mirror=mirror) as s:
+        raws = [s.post("/v1/completions", _body(i))[1] for i in range(3)]
+        assert all(events(r)[-1] == "[DONE]" for r in raws), "every request served while window 0's seal is held"
+    wins = records(out, "windows.jsonl")
+    assert [w["window"] for w in wins] == [0, 1, 2] and all(w["seal"] == {"row_dir": str(out / "windows" / f"w{w['window']}"),
+                                                                      "off_loop": True} for w in wins)
+    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", "requests.jsonl")) == 3
+    assert not s.windows.summary()["passed"] and s.windows.summary()["seals"]["awaiting"] == 3
+    held.set()
+    sealer.close()
+    seals = records(out, "seals.jsonl")
+    assert [x["window"] for x in seals] == [0, 1, 2] and all(x["run_root"] == wins[0]["run_root"] for x in seals)
+    for (w, steps, rows), win in zip(seen, wins, strict=True):
+        assert w == win["window"] and steps == list(range(win["steps"])), "each seal reads its own window's steps"
+        assert len(rows) == 1 and rows[0].startswith(win["requests"][0] + "-"), "and its own window's rows"
+    reqs = {r["http_id"]: r for r in records(out, "requests.jsonl")}
+    assert len(reqs) == 3 and all(r["check"]["passed"] for r in reqs.values())
+    assert s.windows.summary()["passed"] and s.windows.summary()["seals"]["sealed"] == 3
+    assert records(tmp_path / "OUT", "seals.jsonl") == seals and (tmp_path / "OUT" / "windows.jsonl").read_bytes() == (out / "windows.jsonl").read_bytes()
+
+
+def test_a_window_closes_once_its_steps_have_committed_window_bytes(tmp_path):
+    s = Sealed(tmp_path, sealer=None, window_bytes=1)
+    s.windows.seal = None
+    with s:
+        s.post("/v1/completions", _body(0, n=4))
+    wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
+    assert [w["steps"] for w in wins] == [1, 1, 1, 1]
+
+
+def test_below_the_disk_floor_a_window_is_not_sealed_and_the_server_stops_cleanly(tmp_path, monkeypatch):
+    monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("a window under the floor is sealed"))
+    disk = ss.DiskFloor(tmp_path, 1000, usage=lambda _p: SimpleNamespace(free=1001))
+    sealer = ss.Sealer(1 << 40)
+    s = Sealed(tmp_path, sealer=sealer, disk=disk)
+    with s:
+        status, raw = s.post("/v1/completions", _body(0))
+        s.engine_thread.join()
+        assert status == 200 and events(raw)[-1] == "[DONE]", "the request in flight is served whole"
+    sealer.close()
+    w0 = records(tmp_path, "windows.jsonl")[0]
+    assert "not sealed" in w0["seal"]["error"] and w0["seal"]["disk"]["floor_gb"] == 0.0 and not w0["passed"]
+    assert s.loop.draining == w0["seal"]["error"] and s.windows.floor_hit["window"] == 0
+    assert not s.windows.summary()["passed"] and records(tmp_path, "requests.jsonl")[0]["check"]["passed"]
+
+
+def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
+    got: list[Delta] = []
+    loop = so.EngineLoop(Engine(Runner()))
+    loop.drain("the disk floor")
+    loop.submit(Admission("cmpl-1", "cmpl-1-0", [1, 2], {"max_tokens": 2, "seed": 0}, got.append, {}))
+    loop.run()
+    assert [d.error for d in got] == ["the endpoint is stopping: the disk floor"] and loop.steps == 0
+
+
+def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
+    base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300"]
+    opts = cli.parse("serve-openai", base, environ={})
+    with pytest.raises(UsageError, match="disk floor .*--disk-floor-gb"):
+        so.preflight(opts, which=lambda _: "/v/bin/ninja", usage=lambda _p: SimpleNamespace(free=309 * ss.GB))
+    so.preflight(opts, which=lambda _: "/v/bin/ninja", usage=lambda _p: SimpleNamespace(free=310 * ss.GB))
+    assert so.disk_floor_of(opts).path == tmp_path.resolve(), "the nearest directory --out is on"
+    no_floor = cli.parse("serve-openai", [*base, "--disk-floor-gb", "0"], environ={})
+    assert so.disk_floor_of(no_floor) is None
+    assert ss.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=10) is None
+    assert ss.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=11)["free_gb"] == 0.0
+
+
+def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
+    src, dst = tmp_path / "serve", tmp_path / "OUT"
+    src.mkdir()
+    (src / "requests.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
+    (src / "serve.json").write_text("{}")
+    m = sc.Mirror(src, dst)
+    m()
+    assert (dst / "requests.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
+    with open(src / "requests.jsonl", "ab") as f:
+        f.write(b'2}\n{"c": 3}\n')
+    m()
+    assert (dst / "requests.jsonl").read_bytes() == (src / "requests.jsonl").read_bytes()
+    (src / "requests.jsonl").write_bytes(b'{"d": 4}\n')
+    m()
+    assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
+    assert so.records_mirror(src, str(src)) is None and so.records_mirror(src, None) is None
+    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()

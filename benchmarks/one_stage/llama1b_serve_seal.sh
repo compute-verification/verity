@@ -6,14 +6,18 @@
 # idle), `verity-vllm advice` per closed window under a registered cap (--cap), then each window's request Programs and
 # manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
-# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB (default 60) free.
+# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under STOP_FLOOR_GB (default 60) free.
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
 # varied requests (network-accounting's traffic, `tools/serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
 # admission order (VLLM-98), else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
-#     gpu-lease 1 --wait --mem-gb 64 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+#     gpu-lease 1 --wait --mem-gb 256 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+# Windows are sealed off the engine loop and close at WINDOW_GB (32) committed; the server refuses to start, and later stops
+# taking requests, below DISK_FLOOR_GB (300) free on the serve dir's filesystem, and copies its records into $OUT after each
+# window and at any stop. GATE=N (GATE_S=600, GATE_TIMEOUT=60): before the bursts, certifier-rehearse's load, N varied requests
+# of exactly 64 tokens over GATE_S seconds with a GATE_TIMEOUT client timeout, summarized in $OUT/gate.json once sealed.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -55,9 +59,12 @@ fi
 
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
-  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" > "$OUT/serve.log" 2>&1 &
+  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" --window-gb "${WINDOW_GB:-32}" \
+  --disk-floor-gb "${DISK_FLOOR_GB:-300}" --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
+stop() { kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; cp "$D/summary.json" "$OUT/" 2>/dev/null; exit 143; }
+trap stop TERM INT
 for _ in $(seq 1 600); do
   grep -q "SERVE-OPENAI listening" "$OUT/serve.log" && break
   kill -0 "$SRV" 2>/dev/null || { tail -40 "$OUT/serve.log"; echo "SERVER EXITED before listening"; exit 10; }
@@ -146,37 +153,90 @@ with urllib.request.urlopen(rq, timeout=300) as r:
     resp = json.loads(r.read())
 ch = resp["choices"][0]
 n_out = len(ch.get("token_ids") or [])
-rec, line = {}, {}
-for _ in range(120):
-    if (d / "requests.jsonl").exists():
-        rec = next((r for r in map(json.loads, (d / "requests.jsonl").read_text().splitlines()) if r.get("user") == "long-smoke"), {})
+rec, line, seal = {}, {}, {}
+jl = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.exists() else []
+for _ in range(600):
+    rec = next((r for r in jl(d / "requests.jsonl") if r.get("user") == "long-smoke"), {})
     if rec and rec.get("windows"):
         w = rec["windows"][-1]
-        line = next((x for x in map(json.loads, (d / "windows.jsonl").read_text().splitlines()) if x["window"] == w), {})
-        if line:
+        line = next((x for x in jl(d / "windows.jsonl") if x["window"] == w), {})
+        seal = next((x for x in jl(d / "seals.jsonl") if x["window"] == w), {})
+        if line and (seal or "error" in (line.get("seal") or {})):
             break
     time.sleep(1)
-ok = n_out == 64 and len(rec.get("prompt_ids") or []) == P and bool(line.get("passed")) and bool((line.get("sealed") or {}).get("row_dir"))
+ok = n_out == 64 and len(rec.get("prompt_ids") or []) == P and bool(line.get("passed")) and bool(seal.get("row_dir")) and "error" not in seal
 print(json.dumps({"max_model_len": L, "prompt": P, "new": n_out, "finish": ch.get("finish_reason"), "windows": rec.get("windows"),
-                  "check": rec.get("check"), "window_passed": line.get("passed"), "sealed": (line.get("sealed") or {}).get("row_dir"),
-                  "port_layout": (line.get("sealed") or {}).get("port_layout"), "ok": ok}))
+                  "check": rec.get("check"), "window_passed": line.get("passed"), "close_s": (line.get("seconds") or {}).get("close"),
+                  "sealed": seal.get("row_dir"), "seal_s": seal.get("seal_s"), "bytes": seal.get("bytes"), "error": seal.get("error"),
+                  "port_layout": seal.get("port_layout"), "ok": ok}))
 sys.exit(0 if ok else 1)
 EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
 fi
 
+if [ "${GATE:-0}" -gt 0 ]; then   # certifier-rehearse's load: GATE varied requests of exactly 64 tokens over GATE_S (600) s, 60 s timeout
+  run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)"); rel=(); [ "$ADMIT" = release-order ] && rel=(--release "$run")
+  "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --varied "$GATE" --rate "$("$PY" -c "print($GATE / ${GATE_S:-600})")" \
+    --prompt-range "${GATE_PROMPTS:-16:1024}" --max-tokens 64 --exact-tokens --timeout "${GATE_TIMEOUT:-60}" "${rel[@]}" \
+    --seed "${GATE_SEED:-7}" --out "$D/gate.jsonl" > "$OUT/gate.log" 2>&1
+  echo "$(date -u +%H:%M:%SZ) gate load ($run) rc=$?" | tee -a "$OUT/steps.txt"
+  cp "$D/gate.jsonl" "$OUT/"
+  "$PY" - "$D" "${GATE_TIMEOUT:-60}" <<'EOF' | tee "$OUT/gate.json"
+import json, shutil, sys, time
+from pathlib import Path
+d, timeout = Path(sys.argv[1]), float(sys.argv[2])
+jl = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.exists() else []
+sent = jl(d / "gate.jsonl")
+users = {q["user"] for q in sent}
+for _ in range(900):                       # each request's record lands at its window's close, its window's seal after
+    recs = {r["user"]: r for r in jl(d / "requests.jsonl") if r.get("user") in users}
+    wins = {w for r in recs.values() for w in r.get("windows") or []}
+    lines = {x["window"]: x for x in jl(d / "windows.jsonl")}
+    seals = {x["window"]: x for x in jl(d / "seals.jsonl")}
+    if len(recs) == len(users) and all(w in seals or "error" in (lines.get(w, {}).get("seal") or {}) for w in wins):
+        break
+    time.sleep(1)
+lat = sorted(q["latency_s"] for q in sent if q.get("latency_s") is not None)
+errs = [{"user": q["user"], "error": (q["response"] or {}).get("error")} for q in sent if "error" in (q["response"] or {})]
+ours = [seals[w] for w in sorted(wins) if w in seals]
+print(json.dumps({"sent": len(sent), "ok": len(sent) - len(errs), "errors": errs[:20], "over_timeout": sum(t > timeout for t in lat),
+                  "latency_s": {"p50": lat[len(lat) // 2] if lat else None, "p99": lat[int(len(lat) * .99)] if lat else None,
+                                "max": lat[-1] if lat else None},
+                  "recorded": len(recs), "checks_failed": sorted(u for u, r in recs.items() if not (r.get("check") or {}).get("passed")),
+                  "windows": sorted(wins), "windows_failed": sorted(w for w in wins if not lines.get(w, {}).get("passed")),
+                  "sealed": sum(1 for s in ours if "error" not in s), "seal_errors": [s.get("error") for s in ours if "error" in s],
+                  "sealed_gb": round(sum(int(s.get("bytes") or 0) for s in ours) / 1e9, 1),
+                  "committed_gb": round(sum(int(lines[w].get("committed_bytes") or 0) for w in wins if w in lines) / 1e9, 1),
+                  "seal_s_max": max((s.get("seal_s") or 0 for s in ours), default=0),
+                  "seal_wait_s_max": max((s.get("seal_wait_s") or 0 for s in ours), default=0),
+                  "close_s_max": max(((lines[w].get("seconds") or {}).get("close") or 0 for w in wins if w in lines), default=0),
+                  "disk_free_gb": round(shutil.disk_usage(d).free / 1e9, 1)}))
+EOF
+fi
+
 "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
 sleep 5
-for _ in $(seq 1 120); do                                   # the load's windows' advice, before they compile
+sealed() { "$PY" -c "import json,sys; [print(x['window']) for x in map(json.loads, open(sys.argv[1])) if 'error' not in x]" "$D/seals.jsonl" 2>/dev/null; }
+unsealed() { "$PY" - "$D" <<'EOF'
+import json, sys
+from pathlib import Path
+d = Path(sys.argv[1])
+jl = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.exists() else []
+done = {x["window"] for x in jl(d / "seals.jsonl")}
+print(sum(1 for w in jl(d / "windows.jsonl") if "row_dir" in (w.get("seal") or {}) and w["window"] not in done))
+EOF
+}
+for _ in $(seq 1 120); do                                   # the load's windows' advice and seals, before they compile
   pending=0; for k in $(closed); do [ -f "$D/advice/.w$k/windows.json" ] || pending=1; done
+  [ "$(unsealed)" = 0 ] || pending=1
   [ "$pending" = 0 ] && break; sleep 5
 done
 cp "$D/windows.jsonl" "$D/requests.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
 WS=$("$PY" -c "import json,sys; print(' '.join(sorted(json.load(open('$D/advice/windows.json'))['windows'], key=int)))" 2>/dev/null)
 FIRST=${WINDOW:-5}
 for k in $FIRST $WS; do
-  [ -d "$D/windows/w$k" ] || continue
+  sealed | grep -qx "$k" || continue
   [ -f "$D/windows/w$k/manifest.json" ] && continue
   "$PY" tools/advice_compile.py "$D" --window "$k" > "$OUT/compile_w$k.log" 2>&1
   rc=$?
@@ -194,14 +254,14 @@ w = d / "windows" / f"w{k}"
 v = json.loads((w / "commit" / "verdict.json").read_text())
 m = json.loads((w / "manifest.json").read_text()) if (w / "manifest.json").exists() else {}
 sw = DR.of_record(v["replay_deferred"]["bundles"][0]["path"], str(w)).ctx["served_window"]
-line = next((json.loads(x) for x in (d / "windows.jsonl").read_text().splitlines() if json.loads(x).get("window") == int(k)), {})
+line = next((json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if json.loads(x).get("window") == int(k)), {})
 srw = sw.get("served_rows") or {}
 print(json.dumps({"window": int(k), "row_dir": str(w), "bundle": str(w / "commit" / "replay_bundle_p0"), "run_root": v.get("run_root"),
                   "commit_scheme": v.get("commit_scheme"), "manifest_sha256": v["replay_deferred"]["bundles"][0]["manifest_sha256"],
                   "registration": str(d / "advice" / f"w{k}" / "registration.json"), "programs": len(m.get("requests") or {}),
                   "builds": sorted(p.name for p in w.glob("build_request*")),
                   "ctx_served_rows": {key: srw.get(key) for key in ("schema", "root", "count", "digests", "statics", "error") if key in srw} or srw,
-                  "ctx_step_input_port": sw.get("step_input_port"), "port_layout": (line.get("sealed") or {}).get("port_layout")}))
+                  "ctx_step_input_port": sw.get("step_input_port"), "port_layout": line.get("port_layout")}))
 EOF
   "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/identities.txt"
 import json, sys
@@ -250,14 +310,15 @@ fi
 echo "READY $D" | tee -a "$OUT/steps.txt"
 
 end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((end + 86400))   # UNTIL past midnight
-floor=$((${DISK_FLOOR_GB:-60} * 1048576))
+floor=$((${STOP_FLOOR_GB:-60} * 1048576))
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do
-  [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ] && { echo "$(date -u +%H:%M:%SZ) DISK FLOOR: under ${DISK_FLOOR_GB:-60} GB free on $ROOT" | tee -a "$OUT/steps.txt"; break; }
+  [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ] && { echo "$(date -u +%H:%M:%SZ) DISK FLOOR: under ${STOP_FLOOR_GB:-60} GB free on $ROOT" | tee -a "$OUT/steps.txt"; break; }
   sleep 30
 done
+trap - TERM INT
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
 wait "$ADV"
-cp "$D/summary.json" "$D/windows.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
+cp "$D/summary.json" "$D/windows.jsonl" "$D/seals.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
 "$PY" tools/admit_rows_check.py "$D" --json "$OUT/admit_rows_final.json" > "$OUT/admit_rows_final.txt" 2>&1; tail -1 "$OUT/admit_rows_final.txt"
 tail -3 "$OUT/serve.log"
 exit $rc
