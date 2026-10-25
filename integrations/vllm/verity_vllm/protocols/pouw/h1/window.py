@@ -12,9 +12,10 @@ install holds the same reserve answer, for a session reserved with its salt coin
 the gate open S on its salt epoch's root R = `salt.epoch_open_root` of the weights' root W and the epoch's number k
 over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. ncp-v2's `session` is
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
-(`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the root its session was opened on (serve.py's ``--root``,
-RT4-INT-24), H1's R. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine the prover
-doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
+(`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
+root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted
+(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R``
+on its own 127.0.0.1.
 """
 from __future__ import annotations
 
