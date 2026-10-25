@@ -2260,7 +2260,7 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
       ((P.defs[node.fn]!).body.params[i]!).2.leaves = 0)
     (hlo : ∀ i < node.args.size, ∀ m < node.members, ∀ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves,
       (node.form = .scan → i = 0 → m = 0) → upIdx node i m j < (node.args[i]!).seq.count)
-    (htile : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+    (htile : node.members ≠ 0 → ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
       ∃ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves, upIdx node i m j = t)
     (hgw : ∀ w p, (Tgt.gate w, p) ∈ psPos (memo[node.fn]!).ret → p.toNat < (P.defs[node.fn]!).gates)
     (hu0 : node.form = .scan → ∀ j, Width.inIvs (((memo[node.fn]!).used[0]?.getD #[]).toList) j →
@@ -2298,7 +2298,7 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
   refine compSet_of P memo hL hk hg hp hend hloc hgood hU (fun i j hij => by have := (hused i j hij).1; omega)
     (fun i hi a => ?_) (fun a => ?_) a
   · exact argSet_of (ctxOf P memo sc.d) sc rfl hD hn (hA i hi) (hR i hi) hm0 (hok i hi) (hlv i hi)
-      (fun j hj => (hused i j hj).2) (hL0 i hi) (hlo i hi) (htile i hi)
+      (fun j hj => (hused i j hj).2) (hL0 i hi) (hlo i hi) (htile hm0 i hi)
       (fun m j hB => hsucc m hB.1 i j hB.2.2) a
   · by_cases hs : node.form = .scan ∧ 2 ≤ node.n
     · have hsc : (node.form == .scan && decide (node.n ≥ 2)) = true := by
