@@ -740,10 +740,12 @@ def served_member(shape: str, seed: int) -> tuple[Member, dict]:
     return Member(name, tp.fn, rows, out_rows, values), info
 
 
-def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int) -> dict:
+def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
+         lower_refused: bool = False) -> dict:
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
     `served_member`'s units, through `prove_units` and, with ``negs``, `negatives` at that draw. A shape whose rows alone
-    pass C-Flock's block, or whose estimate passes ``max_ands``, is recorded and not lowered."""
+    pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered, its blocker C-Flock's own
+    refusal), nor one whose estimate passes ``max_ands``."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -758,12 +760,22 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             if c["refused_block"]:
                 rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")
-            elif c["est_ands"] > max_ands:
-                rec["blocker"] = f"not lowered here: estimated {c['est_ands']} ANDs past this run's {max_ands}"
-            if tools is None or "blocker" in rec:
+            if c["est_ands"] > max_ands:
+                rec["blocker"] = rec.get("blocker") or f"not lowered here: estimated {c['est_ands']} ANDs past this run's {max_ands}"
+            elif c["refused_block"] and lower_refused:
+                rec["lowered_refused"] = True
+            if tools is None or ("blocker" in rec and not rec.get("lowered_refused")):
                 continue
             with reuse_lowerings():
-                m, info = served_member(shape, seed)
+                try:
+                    m, info = served_member(shape, seed)
+                except ValueError as ex:
+                    if "needs a block of" not in str(ex):
+                        raise
+                    rec["blocker"] = "; ".join(x for x in (rec.get("blocker"), f"C-Flock's stager refused it: {ex}") if x)
+                    log(f"{shape}: {rec['blocker']}")
+                    continue
+                rec.pop("blocker", None)
                 rec.update(info)
                 if info["k_log"] + 3 > a7.M_MAX:
                     rec["blocker"] = f"k_log {info['k_log']}: m = k_log + 3 is past {a7.M_MAX} (flock-circuit's --zk shape)"
@@ -812,6 +824,8 @@ def main(argv=None) -> int:
     d.add_argument("--shape", action="append", required=True, help="family:model[:arg] (`served`); repeatable")
     d.add_argument("--negatives", action="store_true")
     d.add_argument("--census", action="store_true", help="size each shape only: no lowering, no proof")
+    d.add_argument("--lower-refused", action="store_true",
+                   help="lower a shape the census finds past C-Flock's block, for the stager's own refusal")
     d.add_argument("--seed", type=int, default=20261025)
     d.add_argument("--mem-gb", type=int, default=64, help="the job's memory: a shape estimated past mem / 700 B an AND isn't lowered")
     a = ap.parse_args(argv)
@@ -820,7 +834,7 @@ def main(argv=None) -> int:
         if not a.census and not (a.bin and a.lean):
             ap.error("defs: --bin and --lean, or --census")
         tools = None if a.census else Tools(a.bin, a.lean, a.firewall)
-        summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700)
+        summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused)
         ok = all("error" not in r for r in summary.values()) if a.census else all(defs_ok(r) for r in summary.values())
         log("done: " + ("ok" if ok else "FAILED") + " " + json.dumps({k: ("blocker" if "blocker" in r else "error" if "error" in r
                                                                         else "sized" if a.census else defs_ok(r))
