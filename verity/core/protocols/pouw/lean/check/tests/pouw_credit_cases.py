@@ -649,10 +649,10 @@ def _n(k: int) -> int:
 
 
 def _unit_fn(k: int, r: int, c: int, j10r: bool = False) -> str:
-    """K's unit id in the descriptor: the tile's (J10-R's v5 when `j10r`), wrapped in `h1zy.PouwH1TileZyChunks_v1` at a
-    chunked K."""
+    """K's unit id in the descriptor: the tile's (J10-R's v5 when `j10r`), wrapped at a chunked K in
+    `h1zy.PouwH1TileZyChunks_v1`, or its v2 over J10-R (`h1zy.unit_chunks`)."""
     tile, n = f"H1Tile_v{5 if j10r else 1}{{K={k},R={r},C={c}}}", _n(k)
-    return tile if n == 1 else f"PouwH1TileZyChunks_v1{{UNIT={tile},CHUNKS={n}}}"
+    return tile if n == 1 else f"PouwH1TileZyChunks_v{2 if j10r else 1}{{UNIT={tile},CHUNKS={n}}}"
 
 
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> dict:
@@ -660,8 +660,8 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
     template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`.
-    At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile,
-    as `h1window.program` wraps it."""
+    At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile
+    (v2 over a J10-R one), as `h1window.program` wraps it."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
     units = {k: {"fn": _unit_fn(k, r, c, j10r)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}

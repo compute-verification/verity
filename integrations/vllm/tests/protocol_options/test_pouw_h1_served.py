@@ -28,8 +28,10 @@ from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
+from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
@@ -87,8 +89,22 @@ StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _bod
                                           ret={"receipt": Out(sink=True)}))
 
 
-def _unit(tile=TILE):
-    return lambda k: bind(StandIn, K=k, R=tile[0], C=tile[1])
+def _j10r_sig(S):
+    params, ret = _sig(S)
+    return params + (("call", SD.POS_BITS), ("blocks", Array(2, SD.POS_BITS))), ret
+
+
+def _j10r_body(B, S, a, b, zy, salt, position, roots, call, blocks):
+    return _body(B, S, a, b, zy, salt, position, roots)
+
+
+#: the stand-in under J10-R: `h1window.TILE_PARAMS_J10R`, its call and blocks typed as `h1tile.PouwH1Tile5`'s
+StandInJ10R = CompositeDefinition("H1ServedTestTileJ10R", 0, ("K", "R", "C"), _j10r_sig, _j10r_body, register=False,
+                                  ports=StandIn.ports)
+
+
+def _unit(tile=TILE, defn=StandIn):
+    return lambda k: bind(defn, K=k, R=tile[0], C=tile[1])
 
 
 def _codes(rng, n, k):
@@ -101,24 +117,25 @@ def _weights(seed: int = 0, shapes=SHAPES):
     return [(_codes(rng, n, k), torch.rand(n, 1, generator=g) + 0.5) for n, k in shapes]
 
 
-def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS):
+def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS, defn=StandIn):
     """The period's `Weights` over `ws`, registered under the declared Program's digest with `WKEY`."""
-    circuit = P.program_digest(SV.declared(shapes, modules, T, STEPS, TILE, blocks, unit=_unit()))
+    circuit = P.program_digest(SV.declared(shapes, modules, T, STEPS, TILE, blocks, unit=_unit(defn=defn)))
     return SV.register_weights(circuit, shapes, {w: (c.numpy(), s.numpy().reshape(-1)) for w, (c, s) in enumerate(ws)},
                                WKEY)
 
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
             served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
-            order=None):
+            order=None, defn=StandIn):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
     `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
-    empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Returns the run, each linear's weight and scales,
-    and each served call's (a, s_a, z, y) by its index, z its exact product and y its served y."""
+    empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Its units are ``defn``'s (`StandInJ10R` for a
+    J10-R window). Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index,
+    z its exact product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
-                   served=SV.Served(tile, _unit(tile), blocks, window=served_key or key, weights=weights,
+                   served=SV.Served(tile, _unit(tile, defn), blocks, window=served_key or key, weights=weights,
                                     receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
     got = {}
@@ -913,12 +930,13 @@ def test_the_served_paths_chunk_leaves_are_kernels_vectors(case):
     assert (reg.domain.domain_id.hex(), reg.root.hex()) == (domain, root)
 
 
-def _llama(ws=None, edit=None):
-    """`LLAMA`'s window over its period's weights (`_period`), down_proj's served codes ``edit`` of them when given."""
+def _llama(ws=None, edit=None, defn=StandIn):
+    """`LLAMA`'s window over its period's weights (`_period`), down_proj's served codes ``edit`` of them when given, its
+    units ``defn``'s."""
     ws = _weights(0, LLAMA["shapes"]) if ws is None else ws
-    period = _period(ws, **LLAMA)
+    period = _period(ws, defn=defn, **LLAMA)
     served = ws if edit is None else [ws[0], edit(ws[1])]
-    run, _ws, got = _window(W1, ws=served, weights=period, **LLAMA)
+    run, _ws, got = _window(W1, ws=served, weights=period, defn=defn, **LLAMA)
     return run, ws, got, period
 
 
@@ -962,11 +980,67 @@ def _last_chunk_code(w):
     return codes, w[1]
 
 
-def test_a_chunked_window_serving_a_code_off_its_periods_weights_is_refused():
+@pytest.mark.parametrize("defn", [StandIn, StandInJ10R], ids=["v1", "j10r"])
+def test_a_chunked_window_serving_a_code_off_its_periods_weights_is_refused(defn):
     """`Weights.matches` at n = 4 reads down_proj's rows from leaf n·lo: one code in a row's last chunk other than the
-    period's refuses the window at the call that completes K = 14336, and `trees` says why."""
-    run, _ws, _got, _period_w = _llama(edit=_last_chunk_code)
+    period's refuses the window, v1's or J10-R's, at the call that completes K = 14336, and `trees` says why."""
+    run, _ws, _got, _period_w = _llama(edit=_last_chunk_code, defn=defn)
     assert any("linears [1]' codes or s_w are not their rows of the period's registered h1/b/14336" in r
                for r in run.served.refused), run.served.refused
     with pytest.raises(ValueError, match="trees were refused"):
         SV.trees(run)
+
+
+def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties_it():
+    """J10-R over chunk rows: `LLAMA`'s window over J10-R units (`StandInJ10R`, as `h1zy.PouwH1TileZyChunks_v2` presents
+    J10-R's tile at a chunked K) has down_proj at K = 14336 in 4 chunk rows a row, and credit reads it as J10-R (`shape_of`'s
+    ``j10r``, n = 4). Each call's ``--registered`` file is the one credit builds from the descriptor, its 4 R A chunk
+    ports included, and its public rows hold each unit's call and blocks at the call's whole K (`core_check.j10r_blocks`
+    of K = 14336, one noise stream a call): a public table at a chunk's K (3584) has another root and opens none of
+    credit's rows. Core's credit ties the window (`_a_link`, `_weights` at the period's root) and refuses ``b/14336``
+    registered as whole rows."""
+    real = HW._chunked(14336, HW.tile_unit(14336, TILE, HT.PouwH1Tile5))
+    assert real.defn is Z.PouwH1TileZyChunks2 and real.bindings["CHUNKS"] == 4
+    got, want = dict(_unit(defn=StandInJ10R)(14336).signature()[0]), dict(real.signature()[0])
+    assert list(got) == list(want) == list(HW.TILE_PARAMS_J10R)
+    assert all(got[p] == want[p] for p in ("a", "b", "zy", "call", "blocks"))
+    run, _ws, _got, period = _llama(defn=StandInJ10R)
+    served, pre = run.served, SV.PREFIX
+    assert not served.refused and HW.is_j10r(served.program)
+    raw = SV.descriptor(served.program)
+    (layout, why), program, shape = CR.layout_of(raw), hashlib.sha512(raw).hexdigest(), CR.shape_of(raw)
+    assert why is None and program == served.program_digest
+    assert {k: (t["j10r"], t["n"]) for k, t in shape["tiles"].items()} == {4096: (True, 1), 14336: (True, 4)}
+    roots = {}
+    for e in served.entries():
+        roots.setdefault(e["value"], []).append(e["root"])
+    files = SV.register(run).files
+    for c, (u0, n) in enumerate(HW.call_units(served.program)):
+        k, cols = run.calls[c].k, run.calls[c].n // TILE[1]
+        mine, why = CR.registered_file(program, layout, shape, c, roots, served.root, served.steps, run._salt.hex())
+        assert why is None and files[c] == mine, why
+        blocks = [CC.j10r_blocks(T, k, TILE, t // cols, t % cols) for t in range(n)]
+        assert HW.call_blocks(served.program, c) == blocks
+        ab = (served.registered[served.a_table(c)].root, served.registered[pre + f"b/{k}"].root)
+        pub, r = mine["ports"][CR.PUB_PORT], served.registered[pre + f"pub@{c}"]
+        assert pub["known"]["rows"] == [list(row) for row in r.rows] == [
+            CC.public_words(run._salt, u0 + t, ab, (u0, blocks[t])) for t in range(n)]
+        if k == 14336:
+            assert {f"a_k14336_{i}" for i in range(4 * TILE[0])} <= set(mine["ports"])
+            chunk = [CC.public_words(run._salt, u0 + t, ab, (u0, CC.j10r_blocks(T, k // 4, TILE, t // cols, t % cols)))
+                     for t in range(n)]
+            assert chunk != pub["known"]["rows"]
+            off = NR.commit(program, r.value, np.array(chunk, np.uint16), run._key, 0, True, b"".join(r.salts),
+                            window=served.root)
+            assert off.root.hex() != pub["root"]
+            assert not any(G.verify_read(r.domain, bytes.fromhex(pub["root"]), t, off.bcs[t], off.path(t), SV.V2)
+                           for t in range(n))
+    assert CR._a_link(run.round_log, served.entries(), len(run.calls), CR.table_rows(layout, STEPS, pre)) is None
+    requests, session = hashlib.sha512(b"requests").digest(), "llama-session"
+    window = {"root": PS.window_open_root(period.root(), requests, session).hex()}
+    assert CR._weights(window, layout, served.entries(), requests.hex(), session, served.program_digest, pre) == (
+        period.root(), None)
+    whole = [e if e["value"] != pre + "b/14336" else {**e, "leaves": 32, "words": Wt.b_words(14336)}
+             for e in served.entries()]
+    assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
+        "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
