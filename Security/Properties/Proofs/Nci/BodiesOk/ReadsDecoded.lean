@@ -1,5 +1,5 @@
 import Properties.Proofs.Nci.BodiesOk.ForReads
-import Properties.Proofs.Nci.ReadsOneNode
+import Properties.Proofs.Nci.ReadsSet
 
 /-!
 # `ReadsExact.Decoded`, `ReadsExact.RetParts`, `ReadsExact.ScanOut` and `ReadsExact.RootFacts`, proved
