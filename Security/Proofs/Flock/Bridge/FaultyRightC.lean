@@ -1,15 +1,17 @@
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.Bridge.Deployed
+import Proofs.Flock.Bridge.Canon
 
 /-!
-# A unit right on its shaped openings is not faulty
+# A unit right on its canonical openings is not faulty
 
-`faultyRightC`, the shaped form of `FaultyRightTarget` (`Bridge.Targets`): `shaped g v` is any predicate on the value
-of an opening at wire `g` (the bridge's: RowShaped at the port's row/v2 width). A unit `u` whose committed wires each
-carry, in some shaped opening of their registered commit string, their value in `C`'s evaluation on `Xr`'s inputs
-(`RightRegZc`'s second conjunct), and each of whose shaped registered openings opens its wire's position under `Cm` and
-`roots`, is not faulty in `witDep C Cm H roots Xr`. It reads the transport only at the right openings, so with
-`shaped := fun _ _ => True` it is `FaultyRightTarget`.
+`faultyRightC`, the canonical form of `FaultyRightTarget` (`Bridge.Targets`), proves `FaultyRightTargetC`
+(`Bridge.Canon`). `canon g v` is any predicate on the value of an opening at wire `g`; the bridge's is `canonRow`: the
+wire has a row, and the value is RowShaped at its row/v2 width. A unit `u` is not faulty in `witDep C Cm H roots Xr`
+when its committed wires each carry, in some canonical opening of their registered commit string, their value in `C`'s
+evaluation on `Xr`'s inputs (`RightRegZc`'s second conjunct), and each of its canonical registered openings opens its
+wire's position under `Cm` and `roots`. It reads the transport only at the right openings, so at
+`canon := fun _ _ => True` it is `FaultyRightTarget`.
 
 * `reads_lower_args`: a lowered gate reads the positions of its wire's arguments, or a row's AND its own two XORs.
 * `need_posOf`: every gate of `need` that the unit reads from outside or commits is the position of a wire in `P.io u`
@@ -175,14 +177,14 @@ theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
   rw [posOf_injective (hg'p.symm.trans hpo.1)] at hg'v
   rw [hg'v]
 
-/-- **A unit right on its shaped openings is not faulty** (`FaultyRightTarget` at shaped openings). -/
+/-- **A unit right on its canonical openings is not faulty** (`FaultyRightTarget` at canonical openings). -/
 theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (shaped : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
+    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (u : Fin n)
     (hright : ∃ op : Pos → Opn, ∀ g ∈ P.io u,
-      com (op (pos g)) = cs (pos g) ∧ shaped g (val (op (pos g))) ∧ bit (val (op (pos g))) g = C.eval Xr g)
-    (htr : ∀ g ∈ P.io u, ∀ o : Opn, com o = cs (pos g) → shaped g (val o) →
+      com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g ∧ canon g (val (op (pos g))))
+    (htr : ∀ g ∈ P.io u, ∀ o : Opn, com o = cs (pos g) → canon g (val o) →
       ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true)
     (kd : ℕ) (desc : Claims.Msg) (q : Query) :
     u.val ∉ faulty H Cm (stmtOf P kd desc q roots) (partOf P) (witDep C Cm H roots Xr) := by
@@ -190,7 +192,7 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
   have hval : ∀ a ∈ P.io u,
       (witDep C Cm H roots Xr).val H Cm (stmtOf P kd desc q roots) (posOf C a) = some (C.eval Xr a) := by
     intro a ha
-    obtain ⟨h1, h2, h3⟩ := hop a ha
+    obtain ⟨h1, h3, h2⟩ := hop a ha
     obtain ⟨d, hd⟩ := htr a ha _ h1 h2
     exact witDep_val _ rfl a ⟨d, h3 ▸ hd⟩
   intro hmem
@@ -220,5 +222,10 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
     subst hpu
     obtain ⟨w, -⟩ := mem_unitGates.1 hg
     exact absurd ⟨w⟩ hN
+
+/-- **`FaultyRightTargetC`**, at any `canon` (`Bridge.Canon`): `faultyRightC`. -/
+theorem faultyRightTargetC : FaultyRightTargetC :=
+  fun P pos bit val com cs canon H Cm roots Xr u hright htr kd desc q =>
+    faultyRightC P pos bit val com cs canon H Cm roots Xr u hright htr kd desc q
 
 end Flock.Bridge
