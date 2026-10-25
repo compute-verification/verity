@@ -26,6 +26,11 @@ def canonOpenH {N W : ℕ} (rows : Fin N → Option RowAt) (g : Fin N) (v : Floc
     (y : List UInt8) : Prop :=
   rows g = none ∨ canonOpen rows g v y
 
+/-- A witness's bytes at `N` addresses are `N` bytes. -/
+theorem bytesAt_length {m N : ℕ} (z) (a : Fin N → Fin 8 → Fin (2 ^ m)) :
+    (FlockSoundness.Binding.bytesAt (m := m) z a).length = N := by
+  simp [FlockSoundness.Binding.bytesAt]
+
 end Flock.Bridge
 
 namespace Flock.Guarantees
@@ -73,10 +78,10 @@ theorem _root_.Flock.Bridge.openingsCanonH : Bridge.OpeningsCanonTargetH := by
   obtain ⟨b, hb⟩ : ∃ b, vb.val (vb.opening S R u M (Sum.inl (u', q))) =
       (Discharge.Layout.widthOf (Finset.univ.sup (Discharge.Layout.portRowW D.unroll) + 1)
         (Discharge.Layout.portRowW D.unroll q), Discharge.Layout.padBits b) := ⟨_, rfl⟩
-  obtain ⟨f, hf⟩ : ∃ f : Fin 192 → UInt8, (vb.opening S R u M (Sum.inl (u', q))).2.2 = List.ofFn f := ⟨_, rfl⟩
-  rw [hpos, hb, hf]
-  refine Or.inr ⟨⟨⟨q.val, u'.val, Discharge.Layout.portRowW D.unroll q, k.val⟩, by simp [rows, hx], ?_⟩,
-    by simp [Bridge.saltLen]⟩
+  have hlen : (vb.opening S R u M (Sum.inl (u', q))).2.2.length = Bridge.saltLen :=
+    Bridge.bytesAt_length _ _
+  rw [hpos, hb]
+  refine Or.inr ⟨⟨⟨q.val, u'.val, Discharge.Layout.portRowW D.unroll q, k.val⟩, by simp [rows, hx], ?_⟩, hlen⟩
   exact Bridge.rowShaped_rowOf rfl ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) b
 
 /-- **At a wire with a row, a drawn unit's opening is canonical** (`canonOpen`), at `OpeningsCanonTargetH`'s session. -/
