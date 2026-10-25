@@ -145,6 +145,7 @@ import Proofs.Flock.Claims.ZK.FinishStopAt
 import Proofs.Flock.Claims.ZK.FinishSwSrc
 import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishSwMk
+import Proofs.Flock.Claims.ZK.FinishSwMkAny
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FinishSwLigE
@@ -696,6 +697,9 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   index (`Masked.valsFw`: the passed values below `zp 64`, level 0's opening's from there on), that is `repCut_fw`'s
   `hmk` below `zp 64` (**`Masked.swSrcE_hmk`**) and the opening's values plus the pads up to `h_ab`
   (**`Masked.swSrcE_l0`**).
+* `FinishSwMkAny`: the same masked values with no rows: the shifted view adds `v - vals` to the pad, so rep `r`'s
+  masked value is the passed value plus the session's pad whether or not the rows hold
+  (**`Masked.swSrcE_masked_pad_any`**).
 * `FinishSwFrame`: those at the firewall's own request. Where the passed values are the request's, its draws the
   release's frame draws on the tape, and the session's tape has the pads of the tape of those draws (`tapeOfDraws`), the
   session's pads are the request's below `h_ab` (`Masked.pads_frame`), so the masked values below `zp 64` are the
