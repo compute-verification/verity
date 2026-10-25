@@ -85,7 +85,7 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
     refine ENNReal.ofReal_le_ofReal ((prod_min_add_le (fun i => r ^ f i ω) e (fun i => pow_nonneg hr0 _)
       (fun i => pow_le_one₀ hr0 hr1) he).trans ?_)
     rw [Finset.prod_pow_eq_pow_sum]
-    exact add_le_add_right (pow_le_pow_of_le_one hr0 hr1 hF) _
+    exact add_le_add (pow_le_pow_of_le_one hr0 hr1 hF) le_rfl
   have hmono : prCoin (fun ω : Fin m → Ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤
       ENNReal.ofReal (r ^ F + ∑ i, e i) :=
     (prCoin_mono (q := fun ω : Fin m → Ω => (∀ t, A t ω (ω t)) ∧
