@@ -12,7 +12,7 @@ at a time, in four records:
 3. **The values** (:class:`Window`): each unit's values as computed (`Window.record`: one array per parameter and one per
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
-   served-domain rule (`Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
+   window-domain rule (`verity.ml.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
    the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.registration``).
 4. **On a draw, the openings**: a drawn member's private rows and salts as C-Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the firewall.
@@ -25,7 +25,7 @@ never from the integration's code. A unit's rows are its Definition's bit rows: 
 bit concatenation of its leaves, then one output row ``o<j>`` per return field, zero-padded to whole u16 words: C-Flock's
 `UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone.
 
-That the circuit computes what the integration served is completeness, never proved: the verifier accepts a window exactly
+That the circuit computes what the integration ran is completeness, never proved: the verifier accepts a window exactly
 when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`Window.mismatches` is
 the integration's own check before it commits).
 """
@@ -252,7 +252,7 @@ def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable
 
 
 @dataclass(frozen=True)
-class _Batch:
+class _Recorded:
     inputs: list[np.ndarray]
     outputs: list[np.ndarray]
     words: list[np.ndarray]      # every port's (n, words) u16, parameters then return fields
@@ -272,7 +272,7 @@ class Window:
     cap: int
     advice: Mapping[str, Any] | None = None
     window: CS.Window = field(init=False)
-    _batches: dict[str, list[_Batch]] = field(init=False, default_factory=dict)
+    _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         program, query = self.circuit.program()
@@ -282,7 +282,7 @@ class Window:
 
     def count(self, tid: str) -> int:
         """Template ``tid``'s units recorded so far."""
-        return sum(b.n for b in self._batches.get(tid, ()))
+        return sum(b.n for b in self._recorded.get(tid, ()))
 
     def record(self, template: Any, inputs: Sequence[Any], outputs: Sequence[Any], label: Any = None) -> range:
         """``template``'s next units: ``inputs`` one array per parameter, ``outputs`` one per return field (module docstring),
@@ -298,7 +298,7 @@ class Window:
         json.dumps(label)
         values = [np.ascontiguousarray(a) for a in [*inputs, *outputs]]
         ws = [words(a, w, n, c) for a, w, (_, c) in zip(values, lay.widths, lay.rows + lay.outs)]
-        self._batches.setdefault(tid, []).append(_Batch(values[:len(inputs)], values[len(inputs):], ws, label, n))
+        self._recorded.setdefault(tid, []).append(_Recorded(values[:len(inputs)], values[len(inputs):], ws, label, n))
         return range(at, at + n)
 
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
@@ -308,7 +308,7 @@ class Window:
         for fn, _n in self.circuit.templates:
             tid, bad, at = descriptor_id(fn), [], 0
             leaves = [len(f.leaf_widths()) for f in _fields(fn.signature()[1])]
-            for b in self._batches.get(tid, ()):
+            for b in self._recorded.get(tid, ()):
                 want = np.asarray(evaluate_batch(fn, *b.inputs, kernel=kernel)).reshape(b.n, -1).astype(np.uint64)
                 got = np.concatenate([o.view(f"u{o.dtype.itemsize}").reshape(b.n, -1).astype(np.uint64) for o in b.outputs], axis=1)
                 if got.shape != want.shape or want.shape[1] != sum(leaves):
@@ -329,7 +329,7 @@ class Window:
         base = self._bases()
         data = []
         for m in self.window.members:
-            lay, got = layout(self.circuit.template(m.template)), self._batches[m.template]
+            lay, got = layout(self.circuit.template(m.template)), self._recorded[m.template]
             ports = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
             lo = m.base - base[m.template]
             data.append({"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
@@ -343,7 +343,7 @@ class Window:
         """``index.json``: per member, each recorded run of its units with its label, ``[lo, hi, label]`` over global indices."""
         spans: dict[str, list[tuple[int, int, Any]]] = {}
         for tid, lo in self._bases().items():
-            for b in self._batches.get(tid, ()):
+            for b in self._recorded.get(tid, ()):
                 spans.setdefault(tid, []).append((lo, lo + b.n, b.label))
                 lo += b.n
         return {"format": LABELS, "run": self.run,
