@@ -24,7 +24,8 @@ in rows of w words is L/w rows, the certifier's commitment. ``t`` is each row's 
 (row r's ``base + Σ d[k]·step[k]``, d: r's digits in ``radix``), null for the load, which crosses once a server session,
 in the link-window ``window`` names; a request's, response's or wire's window is the server-time block's.
 
-**The check** (`check`), declaration by declaration, never unit by unit, before any coin:
+**The check** (`check`), declaration by declaration, before any coin; the one count over rows is an out value's (a byte
+a row, the size of the commitment the certifier makes of it row by row), never over units:
 
 - the servers each a new name on a new uplink (one network certifier an uplink), their units together a partition of
   every template's units ("all": the one server's);
@@ -32,7 +33,8 @@ in the link-window ``window`` names; a request's, response's or wire's window is
   within the server-time block's T steps and over its rows;
 - an ``in`` transfer's value a registered parameter read by its server's units alone, each read a whole row of it (base
   and steps multiples of the reader row's w words, one w), a table over it the whole value; an ``out`` transfer's writes
-  its server's units' output rows, each a whole row of the value, no output row written twice;
+  its server's units' output rows, each a whole row of the value, every row of the value written by exactly one unit,
+  and no output row written twice;
 - a server's boundary rows are exactly its transfers' rows: no ``ingress`` declaration (a server's ingress is a
   certified read), no registered read of a parameter no transfer brings in, no wire between two servers' units (a value
   one server sends another is a wire transfer, the sender's ``out`` and the receiver's ``in``), a request's and a
@@ -48,6 +50,7 @@ or a registration naming no transfer, is refused, so a root is pinned only from 
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -238,6 +241,32 @@ def _disjoint(rects: Sequence[tuple[tuple[str, str], int, int, int, int]], what:
             live.append(x)
 
 
+def _once(writes: Sequence[Pattern], words: int, rows: int, what: str) -> None:
+    """Refuse an out value of ``rows`` rows of ``words`` words a row of which no write fills or two fill: a byte a row,
+    each write's sources marked one strided slice at a time along its widest digit (sources in the value's leaves,
+    `check`'s bounds)."""
+    seen = bytearray(rows)
+    for g in writes:
+        k = max(range(len(g.radix)), key=g.radix.__getitem__)
+        r, s = g.radix[k], g.step[k] // words
+        outer = [(g.radix[i], g.step[i] // words) for i in range(len(g.radix)) if i != k]
+        for d in itertools.product(*(range(n) for n, _s in outer)):
+            a = g.base // words + sum(x * st for x, (_n, st) in zip(d, outer))
+            if s == 0 and r > 1:
+                raise ValueError(f"{what}: write {g.doc()} writes its row {a} from {r} units; an out value's every row is "
+                                 "written by exactly one unit")
+            lo = a + min(0, s * (r - 1))
+            cells = slice(lo, lo + abs(s) * (r - 1) + 1, abs(s) or 1)
+            if 1 in seen[cells]:
+                row = lo + seen[cells].index(1) * (abs(s) or 1)
+                raise ValueError(f"{what}: its row {row} is written twice; an out value's every row is written by exactly "
+                                 "one unit")
+            seen[cells] = b"\x01" * r
+    if 0 in seen:
+        raise ValueError(f"{what}: its row {seen.index(0)} of {rows} is written by no unit; an out value's every row is "
+                         "written by exactly one unit")
+
+
 def _steps(t: Any, rows: int, steps: int, what: str) -> Mapping[str, Any]:
     if not (isinstance(t, Mapping) and set(t) == {"base", "radix", "step"} and type(t["base"]) is int
             and isinstance(t["radix"], list) and isinstance(t["step"], list) and t["radix"] and len(t["radix"]) == len(t["step"])
@@ -368,6 +397,8 @@ def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Bl
             raise ValueError(f"{what}: its reads are rows of {sorted(widths)} words, and its {leaves} leaves; a value is "
                              "rows of one width")
         words = next(iter(widths))
+        if direction is Direction.EGRESS:
+            _once(gates, words, leaves // words, what)
         if kind == "load" and d["t"] is not None:
             raise ValueError(f"{what}: a load crosses once a server session, at no step of the window: its t is null")
         t = None if kind == "load" else _steps(d["t"], leaves // words, st["steps"], what)

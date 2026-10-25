@@ -198,6 +198,7 @@ def test_refuses_an_uncovered_external_row(tiny):
         BK.check(record(half), blocks(), lays)
     b = blocks()
     b["transfers"][3]["writes"][0]["radix"] = [S * O - 1]
+    b["transfers"][3]["leaves"], b["transfers"][3]["t"] = S * O - 1, {"base": 1, "radix": [S * O - 1], "step": [0]}
     with pytest.raises(ValueError, match=f"external port {CAST}/o0: 1 of its {S * O} unit rows are no transfer's"):
         BK.check(doc, b, lays)
     more = circuit(external=(f"{DOT}/a", f"{CAST}/o0", f"{DOT}/o0"))
@@ -240,7 +241,7 @@ def edit(b: dict, path: tuple, value) -> dict:
     (("transfers", 2, "dir"), "out", "an out transfer's leaves and writes"),
     (("transfers", 3, "kind"), "wire", "a wire's rows are never the circuit's external ports"),
     (("transfers", 3, "writes", 0, "base"), 1, "isn't whole rows of 1 words among the value's 4 leaves"),
-    (("transfers", 3, "leaves"), S * O + 1, "its t is over its 5 rows"),
+    (("transfers", 3, "t"), {"base": 1, "radix": [S * O + 1], "step": [0]}, "its t is over its 4 rows"),
     (("transfers", 3, "server"), "s9", "no server of the circuit's"),
     (("transfers", 1, "value"), "w", "a transfer is of a new value"),
     (("format",), "verity/blocks/v0", "verity/blocks/v1 object"),
@@ -258,3 +259,33 @@ def test_refuses_a_read_that_is_not_whole_rows_of_the_value():
         IF.Read(DOT, "acc", "bias", 0, (S * O,), 0, (0,)))))
     with pytest.raises(ValueError, match="'w': read .* isn't whole rows of 16 words"):
         BK.check(record(c), blocks(), layouts(c))
+
+
+def write(at: int, radix: list, base: int, step: list) -> dict:
+    """A write of the cast's output rows into the response."""
+    return {"writer": CAST, "out": "o0", "at": at, "radix": radix, "base": base, "step": step}
+
+
+@pytest.mark.parametrize("writes,leaves,why", [
+    ([write(0, [S * O], 0, [0])], S * O, "writes its row 0 from 4 units"),
+    ([write(0, [2], 0, [1]), write(2, [2], 1, [1])], S * O, "its row 1 is written twice"),
+    ([write(0, [S, O], 0, [1, 1])], S * O, "its row 1 is written twice"),
+    ([write(0, [S * O], 0, [1])], S * O + 1, "its row 4 of 5 is written by no unit"),
+])
+def test_refuses_an_out_value_row_written_by_no_unit_or_two(tiny, writes, leaves, why):
+    _c, doc, lays = tiny
+    b = edit(edit(blocks(), ("transfers", 3, "writes"), writes), ("transfers", 3, "leaves"), leaves)
+    with pytest.raises(ValueError, match=f"'response': .*{why}; an out value's every row is written by exactly one unit"):
+        BK.check(doc, b, lays)
+
+
+@pytest.mark.parametrize("writes", [
+    [write(0, [S * O], S * O - 1, [-1])],
+    [write(0, [S * O, 1], 0, [1, 7])],
+    [write(0, [O, S], 0, [1, O])],
+    [write(2, [2], 0, [1]), write(0, [2], 2, [1])],
+])
+def test_an_out_value_written_once_in_any_order(tiny, writes):
+    _c, doc, lays = tiny
+    response = BK.check(doc, edit(blocks(), ("transfers", 3, "writes"), writes), lays).transfers[3]
+    assert (response.value, response.rows, len(response.gates)) == ("response", S * O, len(writes))
