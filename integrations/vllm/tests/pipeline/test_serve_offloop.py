@@ -281,6 +281,18 @@ def test_a_window_closes_once_its_steps_have_committed_window_bytes(tmp_path):
     assert [w["steps"] for w in wins] == [1, 1, 1, 1]
 
 
+def test_a_close_says_where_its_time_went(tmp_path):
+    ticks = iter(range(1 << 20))
+    s = Sealed(tmp_path, sealer=None, window_bytes=1)
+    s.windows.seal, s.windows.clock = None, lambda: float(next(ticks))
+    with s:
+        s.post("/v1/completions", _body(0, n=2))
+    wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
+    assert wins and all(list(w["close_phases_s"]) == ["finalize", "readback", "record", "step_trace", "requests"]
+                        and min(w["close_phases_s"].values()) >= 1 and sum(w["close_phases_s"].values()) == w["seconds"]["close"]
+                        for w in wins), [(w["close_phases_s"], w["seconds"]) for w in wins]
+
+
 def test_a_size_bound_crossed_inside_a_step_closes_its_window_at_the_step_boundary(tmp_path):
     """The window's bytes pass ``window_bytes`` between a step's input ids and its sampled ids: the window closes only before
     the next step, so each step's schedule (between its window's marks, as `advice.windows_of` reads them), its committed
