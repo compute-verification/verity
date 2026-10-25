@@ -42,7 +42,10 @@ side streams and every CUDA graph's capture are on the rest, whose count the dev
 the stack's grids, and the attention's splits with them). The gate fails unless every stream of the step's ran within
 its SMs (`partition.spread`) and every run's current stream was the step's. Set F for the token control too (the
 environment does both): the splits change the attention's rounding, so a partitioned audit is gated against a
-partitioned plain run.
+partitioned plain run. F rounds up to the driver's smallest partition, 8 SMs on the RTX PRO 6000. The default stays 0
+because no F measured wins at both batches (note:20261024T2340Z-report-topup-part): F = 8 cuts the audit's TPOT 5–7%
+at b8 but its top-up reads 12–13% less there, and F = 16 reads more at both but costs b32 2–3%, the prefill's KV encode
+running on 172 SMs.
 
 **Credit.** The arm's gate carries `credit`: `credited` is true only for a credited id with the top-up on, the top-up
 having read bytes in every measured run, and spans off; `refused` lists why not. A credited id refused fails its gate,
