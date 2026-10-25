@@ -10,7 +10,8 @@ answer of PoUS's component of onsite Verity (`verity/pous/p2/v4/run`, `PousCheck
 4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), draws its `k` indices
    from `coins` under a session id the auditor designates from them, and runs its timed session against the prover's
    answers (`prover`, by default the honest one that holds `C*`), signed under `signer`;
-5. the verifier judges the run (`run.check_at`) and answers in the core interface's canonical form (`answer`).
+5. the verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
+   `run.check_at`, and answers in the core interface's canonical form (`answer`); the case carries setup's own inputs.
 
 What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
 at `eps = δ + 2^eps_log2` when P2's one certificate covers the point, else 0 and 0 with the profile naming each gap. The
@@ -42,6 +43,7 @@ from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
 from . import memory_challenger as mc
+from . import protocol as pous_protocol
 from . import run as R
 from . import setup
 from .schemes import p2 as P2
@@ -100,19 +102,43 @@ def point_json(point: R.Point) -> dict[str, Any]:
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
-         session: R.Session) -> dict[str, Any]:
-    """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`)."""
+         session: R.Session, setup_of: Mapping[str, Any]) -> dict[str, Any]:
+    """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
+    evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
-    evidence = {"digests": digests.hex(), "session": session.to_json()}
+    evidence = {"digests": digests.hex(), "session": session.to_json(),
+                "setup": {"commitment": setup_of["commitment"], "evidence": setup_of["evidence"]}}
     return {"commitment": canonical_json_bytes(published.to_json()).hex(),
             "evidence": canonical_json_bytes(evidence).hex(), "params": params}
 
 
+SetupInputs = tuple[bytes, bytes, Sequence[Sequence[bytes]]]
+"""The setup's own inputs (`PousCheck.RunProtocol.SetupEvidence`): the server's commitment to `W`, the verifier's salt,
+and `C*` segment by segment."""
+
+
+def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
+    """`PousCheck.RunProtocol.tie`: setup accepts `C*` against the commitment and salt at the point's parameters (the
+    public-encoder path, `protocol.verifier_key`) and publishes exactly `published`, the run's commitment; else raises
+    `run.Refused`."""
+    commitment, salt, store = inputs
+    q = point.params
+    try:
+        vk = pous_protocol.verifier_key(P2.P2(q), commitment, salt, mode=pous_protocol.PUBLIC, encoded=store)
+    except ValueError as e:
+        raise R.Refused(f"setup: {e}") from None
+    if R.Setup(q.blocks, commitment, vk.root, salt) != published:
+        raise R.Refused("the run's commitment is not what its setup published")
+
+
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
-           digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL) -> dict[str, Any]:
-    """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `run.check_at`, then `certify`."""
+           digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL, *,
+           setup_inputs: SetupInputs) -> dict[str, Any]:
+    """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
+    `run.check_at`, then `certify`."""
     digest = hashlib.sha512(canonical_json_bytes(published.to_json())).hexdigest()
     try:
+        tie(point, published, setup_inputs)
         R.check_at(point, schemes, trusted, published, digests, session, session_id)
     except R.Refused as e:
         return {"commitment": digest, "profile": None, "protocol": protocol, "public": None, "reason": str(e),
@@ -126,6 +152,33 @@ def setup_case(q: P2.P2Params, commitment: bytes, salt: bytes, encoded: Sequence
     u32 = lambda n: n.to_bytes(4, "big")  # noqa: E731
     evidence = u32(len(encoded)) + b"".join(u32(len(seg)) + b"".join(u32(len(b)) + b for b in seg) for seg in encoded)
     return {"commitment": (commitment + salt).hex(), "evidence": evidence.hex(), "params": q.manifest()}
+
+
+def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
+    """The setup's own inputs from its case's `commitment` and `evidence`, read as `SetupProtocol`'s decoders read them
+    (each count at most a quarter of the bytes left, nothing after the last segment); `ValueError` on bytes they refuse."""
+    c, b = bytes.fromhex(setup_of["commitment"]), bytes.fromhex(setup_of["evidence"])
+    if len(c) < 64:
+        raise ValueError(f"the commitment to W is 64 bytes, then the salt; {len(c)} bytes is too short")
+    pos = 0
+
+    def take(n: int) -> bytes:
+        nonlocal pos
+        if pos + n > len(b):
+            raise ValueError(f"C* is truncated at byte {pos}")
+        pos += n
+        return b[pos - n:pos]
+
+    def count() -> int:
+        n = int.from_bytes(take(4), "big")
+        if 4 * n > len(b) - pos:
+            raise ValueError(f"a count {n} exceeds the bytes left")
+        return n
+
+    store = [[take(int.from_bytes(take(4), "big")) for _ in range(count())] for _ in range(count())]
+    if pos != len(b):
+        raise ValueError(f"{len(b) - pos} bytes follow the last segment")
+    return c[:64], c[64:], store
 
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
@@ -189,8 +242,10 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer, log: mc.Ses
     signed = challenger.run(prover(blocks))
     session = R.Session(signed, challenger.commitment, challenger.openings())
     trusted = (signer.public_key,) if trusted is None else tuple(trusted)
-    return Period(answer(point, schemes, trusted, published, digests, session, session_id, protocol),
-                  case(point, session_id, trusted, published, digests, session), setup_case(q, commitment, salt, encoded))
+    of = setup_case(q, commitment, salt, encoded)
+    return Period(answer(point, schemes, trusted, published, digests, session, session_id, protocol,
+                         setup_inputs=(commitment, salt, encoded)),
+                  case(point, session_id, trusted, published, digests, session, of), of)
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
@@ -267,5 +322,5 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["PROTOCOL", "Period", "Prover", "answer", "case", "certify", "challenger", "gaps", "honest", "leg", "point_for",
-           "profile", "records", "run", "serve", "setup_case"]
+__all__ = ["PROTOCOL", "Period", "Prover", "SetupInputs", "answer", "case", "certify", "challenger", "gaps", "honest", "leg",
+           "point_for", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "tie"]
