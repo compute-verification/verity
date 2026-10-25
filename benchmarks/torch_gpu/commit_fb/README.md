@@ -28,7 +28,9 @@ KCOMMIT's fixture for CMP-95 item 3 wasn't posted when this was written, so the 
 ## What it commits
 
 - **Rows and leaves.** Each unit output (`op_path`) is one table, and each of its rows is one sequence's output, committed
-  as `row_table.s8_row`: the codes, then the scale. Each row is one `hm96-sha512/row-seg/v1` hiding leaf.
+  as `row_table.s8_row`: the codes, then the scale. Each row is one `hm96-sha512/row-seg/v1` hiding leaf. These are not the
+  `row/v2` rows (u16 words) that the drawn-unit replay bundle and C-Flock's row ports read. A prover that opens these
+  leaves reads row-seg/v1.
 - **Trees.** A table's leaves form a `frame-v3-sha512` tree under `row_table.table_domain`. The segment's root is the tree
   over its tables' roots (`row_table.step_tree`).
 - **Salts.** Salts come from ChaCha20 under the run's row key, with the segment as nonce
