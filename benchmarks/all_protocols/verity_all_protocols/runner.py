@@ -165,7 +165,8 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
 
 def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
     """PoUW's audit of the window's H1 window (``verity_torch_loop.pouw_audit``, ALLP-H1LOOP's), before the legs: it writes
-    ``<window>/pouw/answer.json``, which PoUW's leg reads. -> its rc and ``POUW`` line."""
+    ``<window>/pouw/answer.json``, which PoUW's leg reads; its proving tree stays in scratch, and only its ``pouw.json`` and
+    log are kept in ``out``. -> its rc and ``POUW`` line."""
     p = json.loads((period_dir / PERIOD).read_text())
     t = p["tools"]
     out.mkdir(parents=True, exist_ok=True)
@@ -174,6 +175,9 @@ def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
             "--firewall", t["flock-firewall"], "--out", str(period_dir.parent / f"{period_dir.name}-pouw"),
             *(["--forged"] if p.get("prover_env") else [])]
     r = _python("verity_torch_loop.pouw_audit", argv, out / "pouw-audit")
+    kept = period_dir.parent / f"{period_dir.name}-pouw" / "pouw.json"
+    if kept.exists():
+        shutil.copy(kept, out / "pouw.json")
     lines = [x for x in (out / "pouw-audit.log").read_text().splitlines() if x.startswith("POUW ")]
     return {"rc": r.returncode, "line": json.loads(lines[-1].split(" ", 1)[1]) if lines else None}
 

@@ -219,6 +219,10 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
     def python(module, argv, log=None):
         calls.append((module, list(argv)))
         log.with_suffix(".log").write_text('POUW {"verdict": "accept", "W": 262144}\n')
+        tree = Path(argv[argv.index("--out") + 1])
+        tree.mkdir(parents=True, exist_ok=True)
+        (tree / "pouw.json").write_text('{"verdict": "accept"}')
+        (tree / "rows.bin").write_bytes(b"prover's")
         return Namespace(returncode=0)
 
     d = period(tmp_path)
@@ -237,6 +241,8 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
     assert argv[argv.index("--circuit") + 1] == "77" * 64 and argv[argv.index("--window") + 1] == str(d / "pouw")
     assert "--forged" not in argv
     assert r["pouw_audit"] == {"rc": 0, "line": {"verdict": "accept", "W": 262144}}
+    kept = sorted(f.name for f in (tmp_path / "out").rglob("*") if f.is_file())
+    assert "pouw.json" in kept and "rows.bin" not in kept
 
 
 @pytest.mark.slow
