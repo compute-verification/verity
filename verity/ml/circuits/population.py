@@ -56,31 +56,33 @@ def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]
 
 
 def _instance_ports(template: SpecializedDefinition) -> Callable[[Any], Ports] | None:
-    """The ports of `template`'s population, for a template whose ports take a coin or a position (a salted tile, PoUW's
-    `PouwH1Tile`): each instance's coin and position leaves keep their kind, and each instance's sinks stay sinks, so the
-    port rules follow every instance's coin into its seed. None for any other template, whose population declares no ports
-    (its id and digest unchanged)."""
+    """The ports of `template`'s population, for a unit (a template that takes a coin or a position and returns a sink, a
+    salted tile such as PoUW's `PouwH1Tile`): each instance's coin and position leaves keep their kind and each instance's
+    sinks stay sinks, so the population is a unit too. None for any other template, whose population declares no ports
+    (its id and digest unchanged); a seed's population (no sink) is so refused, since only PoUW's `seeds.py` mints seeds
+    (`tests/test_seed_ports.py`)."""
     pt = port_types(template)
+    if pt is None:
+        return None
     params, ret = template.signature()
     kinds = [(name, len(t.leaf_widths()), [(lo, hi, p.kind) for lo, hi, p, _w in rs if p.kind in ("coin", "position")])
-             for (name, t), rs in zip(params, pt.params)] if pt is not None else []
+             for (name, t), rs in zip(params, pt.params)]
     kinds = [(name, w, rs) for name, w, rs in kinds if rs]
-    if not kinds:
-        return None
     sinks, w_ret = [(lo, hi) for lo, hi, o, _w in pt.ret if o.sink], len(ret.leaf_widths())
+    if not kinds or not sinks:
+        return None
 
     def ports(S: Any) -> Ports:
         return Ports(params={name: Leaves(tuple((i * w + lo, i * w + hi, In(kind=k)) for i in range(S.N) for lo, hi, k in rs))
                              for name, w, rs in kinds},
-                     ret=Leaves(tuple((i * w_ret + lo, i * w_ret + hi, Out(sink=True)) for i in range(S.N) for lo, hi in sinks))
-                     if sinks else None)
+                     ret=Leaves(tuple((i * w_ret + lo, i * w_ret + hi, Out(sink=True)) for i in range(S.N) for lo, hi in sinks)))
     return ports
 
 
 def population_program(template: SpecializedDefinition, n: int, *, version: int = 1) -> Program:
     """`TemplateInstances_v1{template, N=n}`: `n` independent instances of `template` as one batch, every parameter an array
     over instances; `template` is its descriptor id. Instance i of the batch is instance i of the input set it is built for.
-    A template taking a coin or a position declares them per instance (`_instance_ports`). `version=0` builds
+    A unit's population declares its coins, positions and sinks per instance (`_instance_ports`). `version=0` builds
     `TemplateInstances_v0{N=n}` (`POPULATION_VERSIONS`)."""
     if n < 1:
         raise ValueError("a population has at least one instance")
