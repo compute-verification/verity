@@ -61,6 +61,10 @@ The service keeps no database. What it has routed is what it posted in Slack, wh
 best effort): the cache is regional and may drop a value at any time, so a cold cache reads as unknown, never as down.
 
 - `last_success_at`: when a delivery or a cron last finished.
+- `last_done_at`: when the consumer last finished a message (no cron writes it), and `last_enqueued_at`: when the app
+  last published an event. An enqueued time after the done time means events wait. The watchdog rings @comms when that
+  has lasted 10 minutes, at most hourly (`crons.stall`): from 19 to 23 Oct production consumed nothing while
+  `last_success_at`, which the crons keep fresh, looked healthy.
 - `oldest_unprocessed_age_s`: the age now of the oldest unrouted post reconciliation found on its last run (0 when it
   found none); unknown once that finding is 30 minutes old.
 - `dead_letter_count` and `dead_letter_since`: dead letters counted since `since`. The client can't count a topic's

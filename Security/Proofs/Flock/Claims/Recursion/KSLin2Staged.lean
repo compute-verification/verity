@@ -133,8 +133,67 @@ theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flo
       (FlockDeploy.deployPlain rel).scopeCheck bL untr L shape (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hCk, hOp, hDc⟩
 
-/-- **`KSLin2` at the deployed relation and caps with V\*'s staging discharged**: `ksLin2_deployed_parts` at
-`Flock.Readable.relation` and `CpDep`, with `KSFlockLin` at `DE` from `plain_KSFlockLin_DE`. -/
+/-- **What `ksLin2_route_staged` reads of the bound record's steps `nextE`**, at the deployed relation, columns, rows'
+digest input and caps `CpDep`: `KSFlockLin` at `DE`, (P4) modulo what `E*` reads (`LastBindsEC`), `LastCoinFree` and
+`StepsLogFree`, at SHA-512. `Binds` holds at every `nextE` (`binds_deployed`). It holds at the deployed plain
+verifier's steps (`stepsBase_V`). -/
+def StepsBase (nextE : Msg → List Msg → List Coin → Claims.OC Out) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) : Prop :=
+  Claims.Recursion.KSFlockLin FlockDeploy.sha512
+      (bdDeployed _root_.Flock.Readable.relation nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols
+        wE join rowInDeployed final w).DE FlockDeploy.KS.CpDep ∧
+    (bdDeployed _root_.Flock.Readable.relation nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols
+      wE join rowInDeployed final w).LastBindsEC FlockDeploy.sha512 ∧
+    (bdDeployed _root_.Flock.Readable.relation nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols
+      wE join rowInDeployed final w).LastCoinFree FlockDeploy.sha512 ∧
+    (bdDeployed _root_.Flock.Readable.relation nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols
+      wE join rowInDeployed final w).StepsLogFree FlockDeploy.sha512
+
+/-- **`StepsBase` at the deployed plain verifier's steps**, from the decoder's canonicity and the calls half. -/
+theorem stepsBase_V (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (hC : CanonicalProofFiles) (hK : PlainCallsBindOrSlack FlockDeploy.sha512) :
+    StepsBase (FlockDeploy.V false).next wE join final w :=
+  ⟨plain_KSFlockLin_DE wE, lastBindsEC_deployed_sha512 _ wE join final w hC hK,
+    lastCoinFree_deployed _ _ wE join rowInDeployed final w FlockDeploy.sha512,
+    stepsLogFree_deployed _ _ wE join rowInDeployed final w FlockDeploy.sha512⟩
+
+/-- **`KSLin2` at the deployed relation and caps with V\*'s staging discharged, at any steps `nextE` meeting
+`StepsBase`**: `ksLin2_route_staged` at the staging read by `untr`. -/
+theorem ksLin2_steps_parts (nextE : Msg → List Msg → List Coin → Claims.OC Out) (b : Brings)
+    (L : Claims.Recursion.VStarB.LayoutB) (hHW : L.HeldWhole) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (hB : StepsBase nextE wE join final w)
+    (untr : TrReader) :
+    let Bd := bdDeployed _root_.Flock.Readable.relation nextE
+      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
+    let bL : Brings := { b with rd := L.readers }
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    (∀ shape ∈ [Claims.Recursion.Form.Dense],
+      ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
+        (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
+        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsPart untr b) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsPart untr b) (cmtTr untr) s) ∧
+        Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
+    ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro Bd D bL hrb hparts hT
+  obtain ⟨hKS, hEC, hCF, hL⟩ := hB
+  refine ksLin2_route_staged _root_.Flock.Readable.relation _root_.Flock.Readable.relation b L hHW
+    FlockDeploy.KS.CpDep nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join
+    rowInDeployed final w hKS (binds_deployed _ _ _ wE join final w) hEC hCF FlockDeploy.KS.zk_KS_outer ?_ hT hL
+  intro shape hs
+  obtain ⟨chk, hHe, hCk, hOp, hDc⟩ := hparts shape hs
+  exact ⟨chk, showsPart untr b, cmtTr untr, hHe,
+    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
+      (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck bL untr L shape
+      (fun x st hst _ => hrb x st hst trivial) (hHe decI),
+    hCk, hOp, hDc⟩
+
+/-- **`KSLin2` at the deployed relation and caps with V\*'s staging discharged**: `ksLin2_steps_parts` at the
+deployed plain verifier's steps (`stepsBase_V`). -/
 theorem ksLin2_deployed_plain_parts (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hHW : L.HeldWhole)
     (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -154,8 +213,7 @@ theorem ksLin2_deployed_plain_parts (b : Brings) (L : Claims.Recursion.VStarB.La
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
-      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := fun hrb =>
-  ksLin2_deployed_parts _root_.Flock.Readable.relation b L hHW FlockDeploy.KS.CpDep wE join final w hC hK untr hrb
-    (plain_KSFlockLin_DE wE)
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
+  ksLin2_steps_parts _ b L hHW wE join final w (stepsBase_V wE join final w hC hK) untr
 
 end RecDeploy

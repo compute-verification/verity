@@ -249,3 +249,25 @@ def test_a_deferred_record_from_before_the_post_landing_run_still_finishes_under
     h.tick()
     assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
     assert not h.q.load_state()["drive"]["deferred"]
+
+
+def test_a_tick_launches_its_trains_before_the_post_landing_run(world, monkeypatch, tmp_path):
+    """24 Oct 00:5x-01:07Z: the post-landing run's launch, which waits for the run to register, held the tick's train launches
+    behind it for about 15 min."""
+    h = Postland(world, monkeypatch, tmp_path)
+    h.d.train_size = 1
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.land_deferred()                                                   # r-post-0 checks #1's landing
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    before = set(h.run_state)
+    h.tick()                                                            # #2's check
+    (rid,) = [r for r in h.run_state if r not in before and not r.startswith("r-post-")]
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    h.passed("r-post-0")
+    h.evidence = [h.evidence[0], _steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x not in DEFER})]
+    order = []
+    plain_train, plain_post = h.d.launch, h.d.launch_postland
+    h.d.launch = lambda *a: order.append("train") or plain_train(*a)
+    h.d.launch_postland = lambda *a: order.append("post") or plain_post(*a)
+    said = h.tick()
+    assert order[:1] == ["train"] and "post" in order, (order, said)

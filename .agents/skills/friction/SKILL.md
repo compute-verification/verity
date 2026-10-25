@@ -119,6 +119,12 @@ What an agent may change:
 - (2 Oct) An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
   census's dense datasheet peak for its dtype, to one significant digit.
 
+Landing:
+
+- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the whole
+  check before a landing. A PR that changes a `lean-audit.json` lock keeps its Lean check first, and reviewers are agents ci
+  staffs, never the PR's owner. Drive does it with `land = "review"` (AGENTS.md "Checking and merging").
+
 Protocols and claims:
 
 - (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs

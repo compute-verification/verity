@@ -60,13 +60,16 @@ python tools/verity/lean/check.py PKG  once, before pushing
 - **The fast path** gives your records, and the `--update` printout Daniel's DM carries, without a build of your own:
 
   ~~~text
-  research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
+  research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
     python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  It takes a slot of the node's `build` pool (a node whose slot file lists none refuses, exit 2), rebuilds only what
-  changed in that slot's tree, waits for another run's hold on a shared tree, and audits without the kernel replay. The
-  record is in `lean-audit/audit-*/` (with `review.txt` when it changed); commit it. It then checks every package whose
+  On a node whose slot file has a `build` pool it takes one of its slots, rebuilds only what changed in that slot's tree,
+  waits for another run's hold on a shared tree, and audits without the kernel replay. Where the slot file lists no `build`
+  pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold), it takes the `--dev-cache` path instead:
+  `check.py --dev-cache --build --no-replay` on the run's clone, its build restored from the published cache (Security:
+  about 40 minutes); it prints which path it took. Don't wrap it in `slot.py`: the pool's runner takes the check slot. The
+  record is in `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`); commit it. It then checks every package whose
   guarantees read PKG's build (`lean-audit/requirer-<path>/`); when one fails, run `--records --update` on it too. Its
   result is `lean-fast/v1`, which no merge check accepts.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3

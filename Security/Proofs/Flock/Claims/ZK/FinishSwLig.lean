@@ -179,8 +179,8 @@ theorem swSrcE_ligHyp_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (
     (hB : B j r = FlockComplete.LigLock.l0Clear coin p0 sch t b (layE x j) extra rp)
     (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
     (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
-    (htape : (UE.tapeZk τ).h j.val r.val =
-      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val)
+    (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
+      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
