@@ -129,6 +129,13 @@ A spec-level reference for network accounting's timing channel:
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
+  whose unit ℓ·T + t holds bucket t of egress link ℓ (its frame and presence output rows, N2's encoder) and of ingress
+  link ℓ (its frame parameter row, the warden's registered row), the same gates whatever the load, so arrival steps and
+  prompt lengths stay private (`NetTiming.Layout`). `refusal` is the verifier's check before it draws that the layout
+  fits the circuit (`NetTiming.Layout.Fits`) at the record's grain, which contains the gate grain's, held to
+  `prog_fits`, `Layout.Fits` itself on a flattened program. No served window fits structurally, so it refuses every one
+  until proofs' semantic causality lands;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
