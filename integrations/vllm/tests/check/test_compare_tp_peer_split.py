@@ -88,7 +88,7 @@ def test_a_peers_run_over_adjacent_fields_compares_as_one_peer_read_per_field(ra
 def test_the_request_projection_splits_its_own_peers_run_alike(compact):
     """GM-01 compares each request's Projection of the fold with the request's Program: the same split through `Projection._src(P)`."""
     A, F = rank_program(3, compact=compact), rank_fold(3, compact=compact)
-    proj = BD.Projection(F, "r0", list(range(len(F.inst))), TOK, WTS, seed_node=None, peer_node=PEERS)
+    proj = BD.Projection(F, "r0", list(range(len(F.inst))), TOK, WTS, peer_node=PEERS)
     assert proj.canon(_ar(proj)) == F.canon(_ar(F))
     res = C.compare_steps(A, proj)
     assert res["totals"]["operands_different"] == 0 and res["canonical_sha256"]["equal"]

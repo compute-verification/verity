@@ -115,6 +115,7 @@
     {"file": "verity_vllm/check/match/decomp_profile.py", "kind": "environ", "symbol": "_profile_on", "detail": "os.environ.get"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "environ", "symbol": "decompose", "detail": "os.environ"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "environ", "symbol": "decompose", "detail": "os.environ.get"},
+    {"file": "verity_vllm/check/match/projection.py", "kind": "seed-default", "symbol": "Projection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/observe/chunks.py", "kind": "broad-except", "symbol": "Collector.on_step", "detail": "except Exception"},
     {"file": "verity_vllm/observe/chunks.py", "kind": "broad-except", "symbol": "scheduler_of", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "broad-except", "symbol": "_view", "detail": "except Exception"},
