@@ -51,6 +51,9 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                audit gives that count (AdviceIn, freeInputs, AsReg, RLeak)
 ../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean  trusted: the leak bound under a sampled audit, and what
                                an accepted one establishes (SampledLeakAccepted)
+../../Definitions/NetworkCertifier/TapRows.lean  trusted: the tap's rows: its registration at the transfer gates
+                               (tapVal, TapOpens), the leak relation at them (RLeakTap) and the collision finder
+                               against its openings (Btap)
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a period of sampled audits: a statement registered as a
                                window's (SameRegistration) and a window's good event (WindowGood)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the wardens over a period of sampled
@@ -87,6 +90,10 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
+TapRows.lean    the leak bound at the tap's rows: the sampling relation at a trace that agrees with the
+                                         tap's openings gives the leak relation at them (rLeakTap_of_r, through the
+                                         trace filled in with the tap's values), and a disagreement is a collision
+                                         (tapColl_of_disagree); sampledLeak_tap
 Period.lean     the leak through the wardens over a period: each good window's observations are among
                                          AccSeqsSampled at its registration (mem_accSeqsSampled_of_windowGood), and the
                                          secrets the wardens' views decode to, counted over the windows
@@ -257,19 +264,20 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
   `Claims.Sampling.KS` are named assumptions in the lock.
-- **The leak through the wardens over a period** (`Period.lean`): `PeriodLeakAccepted` composes
-  `SampledLeakAccepted`, at `SampledAuditAccepted`'s proof, with `EncardWardenViewsLe`, so the warden bound's content
-  term comes from the audits: over a period's windows, each registered as a statement, the secrets of a covert sender
-  whose every window meets its good event (`WindowGood`) number at most
+- **The leak through the wardens over a period** (`Period.lean`): `PeriodLeakAccepted` composes the leak bound at
+  the tap's rows (`TapRows.lean`'s `sampledLeak_tap`) with `EncardWardenViewsLe`, so the warden bound's content term
+  comes from the audits: over a period's windows, each registered as a statement, where the tap registers the
+  certifier's observations at the transfer gates (`TapOpens`, its openings under the statement's roots), the secrets of
+  a covert sender whose every window meets its good event (`WindowGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each window's audit
-  fails `RLeak` with at most `KSLinOn`'s probability. Its named assumptions are `Claims.Sampling.KS`,
-  `Claims.Flock.ListWithin`, `trusted-host` and `warden-certifier-egress` (`NetTiming.WardenCertifierEgress`: the
-  data reaching the wardens is the certifier's observations framed into cells, a tie between two auditor devices).
-  That the audits' extracted traces carry the certifier's rows at their transfer gates (`Carries`) is part of
-  `WindowGood`, beside `Covered`, as both are conditions inside `RAcc`'s conclusion: the audit's registered reads of
-  the certifier's rows, opened against its signed root, tie them. The rows are not pinned, so the count still charges
-  them through the Program. The union over the period's live coins, the registration's binding and the rows' tie are
-  not yet stated.
+  fails the leak relation at the tap's rows (`RLeakTap`) with probability at most `δ + ε_ks + ε_bind + Pr[B_tap]`.
+  Every unit outside the faulty set is correct, so the extracted trace opens every transfer gate there, at the tap's
+  value unless the two openings collide (`B_tap`, under `Commitment.Binds`); filled in with the tap's values, it carries
+  the tap's records, and the faulty units' gates are the advice the count already charges, so the count is unchanged.
+  Its named assumptions are `Claims.Sampling.KS`, `Commitment.Binds`, `Claims.Flock.ListWithin`, `trusted-host` and
+  `warden-certifier-egress` (`NetTiming.WardenCertifierEgress`: the data reaching the wardens is the certifier's
+  observations framed into cells, a tie between two auditor devices). The union over the period's live coins and the
+  registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
 

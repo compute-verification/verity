@@ -138,6 +138,15 @@ theorem traceVal_fill {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ → Bool}
   · simp [fill, hr]
   · simp [fill, hr, hag b hr]
 
+theorem traceVal_fill_of {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ}
+    (hc : ∀ b, C.gates[g]? = some (.const b) → tv g = b) (hag : ∀ b, ref g = some b → b = tv g) :
+    traceVal C (fill ref tv) g = tv g := by
+  by_cases hk : ∃ b, C.gates[g]? = some (.const b)
+  · obtain ⟨b, hb⟩ := hk
+    rw [traceVal, read_const hb, hc b hb]
+    rfl
+  · exact traceVal_fill (fun b h => hk ⟨b, h⟩) hag
+
 theorem rowOf_congr {S : ℕ} {val val' : ℕ → Bool} {p : Fin S → ℕ × List ℕ} {σ : Fin S}
     (h : ∀ g ∈ slotGates (p σ), val g = val' g) : rowOf val p σ = rowOf val' p σ := by
   simp only [rowOf]
@@ -155,7 +164,7 @@ theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : Commitment Bool} {lay
   refine ⟨ho, fun ℓ => ?_, ?_⟩
   · rw [hrows ℓ]
     funext σ
-    exact rowOf_congr fun g hg => (traceVal_fill (hE ℓ σ g hg).1 (hag g (hE ℓ σ g hg).2)).symm
+    exact rowOf_congr fun g hg => (traceVal_fill_of (hE ℓ σ g hg).1 (hag g (hE ℓ σ g hg).2)).symm
   · rw [hop]
     refine List.map_congr_left fun g hg => (traceVal_fill (fun b h => ?_) (hag g (hI g hg))).symm
     rw [hfit.2.1 t ht g hg] at h

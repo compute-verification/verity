@@ -17,8 +17,8 @@ the tap it carries the tap's records there; a faulty unit's committed gates are 
 (`2^β` over `faultySets`). The leak relation at the tap's rows (`RLeakTap`) is `RLeak` with the observations it counts
 picked out by the tap's registration rather than by the trace's transfer gates.
 
-The transfer gates the tap registers at are gates the trace commits: an egress gate is no constant, which is public and
-committed by nobody (an ingress gate is an input, `Layout.Fits`).
+A constant gate is committed by nobody, and every trace holds the program's constant there, so at an egress gate the
+program holds constant the tap's record must be that constant (an ingress gate is an input, `Layout.Fits`).
 -/
 
 namespace NetTiming
@@ -30,15 +30,16 @@ def tapVal (ops : List (Opening Bool)) (g : ℕ) : Bool :=
   ((ops.find? fun o => o.pos == g).map (·.val)).getD false
 
 /-- **The tap registers the records `o`** at the transfer gates of the statement `s` over the horizon `k`, at the
-operator `op`: each of its openings `ops` passes under the statement's roots; before `k`, every egress gate is one the
-program commits (no constant) and every egress and ingress gate has an opening; and each step's record exists, its egress
-rows are the rows the openings hold at the egress gates, and the operator's move on the records before it is the ingress
-they hold at the ingress gates. -/
+operator `op`: each of its openings `ops` passes under the statement's roots; before `k`, every egress and ingress gate
+has an opening, and at an egress gate the program holds constant the opening holds that constant; and each step's
+record exists, its egress rows are the rows the openings hold at the egress gates, and the operator's move on the
+records before it is the ingress they hold at the ingress gates. -/
 def TapOpens {L K S : ℕ} (H : Msg → Msg) (Cm : Commitment Bool) (lay : Layout L S) (k : ℕ)
     (op : ℕ → List (Obs L K S) → List Bool) (s : Stmt) (ops : List (Opening Bool)) (o : List (Obs L K S)) : Prop :=
   (∀ q ∈ ops, Cm.Opens H s.roots q = true) ∧
     ∀ t (_ : t < k),
-      (∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), (∀ b, s.prog.gates[g]? ≠ some (.const b)) ∧ ∃ q ∈ ops, q.pos = g) ∧
+      (∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ),
+        (∀ b, s.prog.gates[g]? = some (.const b) → tapVal ops g = b) ∧ ∃ q ∈ ops, q.pos = g) ∧
       (∀ g ∈ lay.ingress t, ∃ q ∈ ops, q.pos = g) ∧
       ∃ h : t < o.length, (∀ ℓ, o[t].rows ℓ = rowOf (tapVal ops) (lay.egress t ℓ)) ∧
         op t (o.take t) = (lay.ingress t).map (tapVal ops)
