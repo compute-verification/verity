@@ -1292,7 +1292,7 @@ def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_id
     late = got["late"]
     assert late["verdict"] == "refused" and late["failing"] == {-1: ["content"]}
     assert 0 < late["unplaced"] == tokens - late["id_events"] and runs["late"]["events"] == tokens
-    assert all(negatives.tie_ok(s, got[s]) for s in ("honest", "token", "drop"))
+    assert all(negatives.tie_ok(s, got[s]) for s in ("honest", "token", "extra", "drop"))
 
 
 def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells_root(varied, negatives, tmp_path):

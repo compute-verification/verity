@@ -97,6 +97,12 @@ def u64 : M UInt64 := do
   set { r with pos := r.pos + 8 }
   return u64OfLE r.data r.pos
 
+/-- A grinding nonce: `0`, the only one a prover sends under live coins (R4); any other is refused. -/
+def nonce0 (what : String) : M UInt64 := do
+  let n ← u64
+  if n != 0 then throw s!"{what} ≠ 0 (R4)"
+  pure n
+
 def f128 : M F128 := do
   let lo ← u64
   let hi ← u64
