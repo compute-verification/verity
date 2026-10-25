@@ -190,6 +190,7 @@ import Proofs.Flock.Soundness.Discharge.ZkCoins
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit
 import Proofs.Flock.Soundness.Discharge.ZkHidden
 import Proofs.Flock.Soundness.Discharge.Composed
+import Proofs.Flock.Soundness.Discharge.PlainJ
 import Proofs.Flock.Soundness.Discharge.ZkReg
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin
 import Proofs.Flock.Soundness.Discharge.FailClosed

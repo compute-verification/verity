@@ -272,6 +272,35 @@ theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) 
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
 
+/-- What `--plain-tables` refuses of a statement: hidden outputs (the plain proof at several tables reads public outputs)
+and more than `Tags.MAX_TABLES` tables, what `Stmt.setupTables` sets up. -/
+def plainTablesWhy (tags : Tags) (count : Nat) : Option String :=
+  if tags.hiddenOutputs then some s!"{tags.name}, a statement with hidden outputs under --plain-tables"
+  else if count ≤ Tags.MAX_TABLES then none
+  else some s!"{count} tables in a session under --plain-tables, more than {Tags.MAX_TABLES}"
+
+/-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
+session of public outputs at any number of tables up to `Tags.MAX_TABLES`, and otherwise every condition `check` puts on
+a one-table plain session. The one-table plain form keeps `check` without the flag. -/
+def checkP (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
+    (publicInputs registered : Bool) : Except String Unit :=
+  match plainTablesWhy tags count with
+  | some why => .error (refusal why)
+  | none => check tags false circuitFile publicFile tables 1 publicInputs registered
+
+/-- `checkP` on its circuit as `circuitOf` returns it (`checkP_eq`). -/
+def checkPOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat)
+    (publicInputs registered : Bool) : Except String Unit :=
+  match plainTablesWhy tags count with
+  | some why => .error (refusal why)
+  | none => checkOf parsed tags false publicFile 1 publicInputs registered
+
+theorem checkP_eq (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
+    (count : Nat) (publicInputs registered : Bool) :
+    checkP tags circuitFile publicFile tables count publicInputs registered
+      = checkPOf (circuitOf tags circuitFile tables) tags publicFile count publicInputs registered :=
+  rfl
+
 /-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
 `--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset
 draw without `--zk` are outside them. -/
@@ -290,6 +319,24 @@ def drawLaw (zk : Bool) : Option Lean.Json → Except String Unit
   | some j => match Draw.UnitDraw.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
     | .ok d => match lawWhy zk d with
+      | some why => .error s!"refused: {why}: no soundness claim draws by this law"
+      | none => .ok ()
+
+/-- The draw laws `--plain-tables`' claim draws by: the subset law alone (the live subset draw). -/
+def lawWhyP (d : Draw.UnitDraw) : Option String :=
+  match d.law with
+  | .subset _ => none
+  | .stratified .. => some "a stratified draw under --plain-tables"
+  | .bernoulli .. => some "a bernoulli draw"
+  | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
+
+/-- **`drawLaw` under `--plain-tables`**: the session's draw is a subset draw (`lawWhyP`); a session without a draw, or
+whose draw does not parse, is refused as `drawLaw` refuses it. -/
+def drawLawP : Option Lean.Json → Except String Unit
+  | none => drawLaw false none
+  | some j => match Draw.UnitDraw.ofJson j with
+    | .error e => .error s!"refused: a draw that does not parse ({e})"
+    | .ok d => match lawWhyP d with
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
 

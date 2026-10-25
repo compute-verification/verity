@@ -23,7 +23,9 @@ feed, under hidden outputs, in the general form `Layout.scopeGenH` (`Checks.scop
 check runs: the executable's `ProvedScope.scopeOkI` is `Layout.scopeOkI` (`scopeOkI_eq`). The
 unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
 `FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form, and so is the registered one
-(`FailClosed.ZkRegistered`) over `VerifiesZKR`.
+(`FailClosed.ZkRegistered`) over `VerifiesZKR`. Under `--plain-tables` the check is `ProvedScope.checkP` (`ScopeP`,
+`VerifiesP`): it refuses hidden outputs and more than `Tags.MAX_TABLES` tables, and is otherwise the check at one table
+(`ScopeP.checks`).
 
 `Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
 registered.isSome` argument for argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s,
@@ -38,7 +40,8 @@ session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLa
 `verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK` without `--registered` and `VerifiesZKR` with it;
 without `--zk` the check is the same either way). `verifyCmd` refuses more, which only shrinks the
 event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
-without `--zk`), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
+without `--zk` or `--plain-tables`; under `--plain-tables`, every law but the subset law,
+`ProvedScope.drawLawP`), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only under `--zk` at hidden outputs, where `VerifiesZKR` models the registered check), a coin-tree
 key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
@@ -465,6 +468,67 @@ theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
   rcases (check_ok h).1.2.2.2.2 with h' | h'
   · cases h'
   · exact h'
+
+/-- **`flock-verify verify --plain-tables`'s statement check** (no `--zk`, without the verifier's own registered reads,
+which change nothing without `--zk`): `ProvedScope.checkP`, which refuses hidden outputs and more than
+`Tags.MAX_TABLES` tables and is otherwise the check at one table. -/
+def ScopeP (I : Inputs) : Prop :=
+  ProvedScope.checkP I.tags I.circuitFile I.publicFile I.tables I.count false false = .ok ()
+
+/-- **What `flock-verify verify --plain-tables` accepts**: the setup and verdict `Accepts` models, and its statement
+check. -/
+def VerifiesP (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ ScopeP I
+
+namespace ScopeP
+
+variable {I : Inputs} (h : ScopeP I)
+include h
+
+theorem why : ProvedScope.plainTablesWhy I.tags I.count = none := by
+  unfold ScopeP ProvedScope.checkP at h
+  cases hw : ProvedScope.plainTablesWhy I.tags I.count with
+  | none => rfl
+  | some w => simp [hw] at h
+
+/-- **The check at one table**: `checkP` passes only where `check` passes the statement at one table. The circuit and
+public file it reads are the session's (`circ` and `pubOf` read neither the count nor anything else of `I`). -/
+theorem checks : Checks I.tags false { I with count := 1 } false := by
+  have hw := h.why
+  unfold ScopeP ProvedScope.checkP at h
+  rw [hw] at h
+  exact h
+
+theorem hidden : I.tags.hiddenOutputs = false := by
+  have hw := h.why
+  unfold ProvedScope.plainTablesWhy at hw
+  cases hh : I.tags.hiddenOutputs
+  · rfl
+  · simp [hh] at hw
+
+theorem count : I.count ≤ Tags.MAX_TABLES := by
+  have hw := h.why
+  unfold ProvedScope.plainTablesWhy at hw
+  by_contra hc
+  simp [hc] at hw
+
+theorem typed : I.tags.typed = false := Checks.typed h.checks
+
+theorem parse : HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse h.checks h.hidden
+
+theorem load : HmRow.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.load h.checks h.hidden
+
+theorem built : Built (circS I).unit := Checks.built h.checks
+
+theorem tables : (pubS I).tables = none := Checks.tables_none h.checks rfl
+
+theorem scope : Layout.scopeOk (circS I) = true := Checks.scope h.checks h.hidden
+
+/-- The tags the plain claim at `J` tables reads: public outputs, retained rounds, `hm96-sha512/v1` leaves. -/
+theorem tagsOk : I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧
+    I.tags.merkleLeaf = "hm96-sha512/v1" :=
+  ⟨h.hidden, Checks.retainRounds h.checks, Checks.merkleLeaf_hm96 h.checks (Or.inr h.hidden)⟩
+
+end ScopeP
 
 /-! ## A bound under the statement check -/
 

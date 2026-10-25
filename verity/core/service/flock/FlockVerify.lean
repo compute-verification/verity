@@ -735,7 +735,8 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`), and under `--rec-inner` so is a session of more
+work draw, whatever flags it holds, or a subset draw without `--zk` or `--plain-tables`; under `--plain-tables` every
+draw but a subset draw, `ProvedScope.drawLawP`), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
@@ -750,9 +751,12 @@ none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`
 `--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
 deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1), so each rep is decoded from the file then
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
-refused where the other is pinned. Not with `--zk`. -/
+refused where the other is pinned. Not with `--zk`.
+`--plain-tables`: the plain path past one table (`ProvedScope.checkP`, §16.15): a plain session of public outputs at up to
+`Tags.MAX_TABLES` tables, at a subset draw, which `flock_verify_sound`'s plain multi-table claim covers. Without it a plain
+session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
@@ -764,6 +768,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let zk := args.contains "--zk"
+  let plainTables := args.contains "--plain-tables"
+  if zk && plainTables then
+    IO.eprintln "verify --zk: --plain-tables is the plain path's (without --zk)"; return 2
   if zk && (argOf args "--coins").isSome then
     IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
   if zk && tags.upstreamPlain then
@@ -843,7 +850,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- other check, until a soundness theorem reads `Circuit.tmpl`
   let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
   let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
+    else if plainTables then ProvedScope.checkPOf parsed tags pubB count publicInputs.isSome registered.isSome
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
+  let drawLaw := if plainTables then ProvedScope.drawLawP else ProvedScope.drawLaw zk
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         Registered.checkProgram program registered.isSome
@@ -865,7 +874,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then drawLaw draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind programDigest
@@ -913,7 +922,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
-      if draw.isNone then ProvedScope.drawLaw zk draw
+      if draw.isNone then drawLaw draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
