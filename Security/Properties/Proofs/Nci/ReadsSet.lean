@@ -2516,4 +2516,371 @@ theorem summarize_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
     simp only [Width.inIvs, List.not_mem_nil, false_and, exists_false, false_iff, not_and]
     intro h1; omega
 
+/-! ## A node's parameter reads, in `used` -/
+
+/-- `summarize` reads every node of the body. -/
+theorem summarize_reads (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) :
+    ∀ k < (P.defs[d]!).body.nodes.size, ∃ rs, Desc.nodeReads (ctxOf P memo d) k = .ok rs := by
+  unfold Desc.summarize at h
+  extract_lets defn body c ret0 acc0 at h
+  rw [if_neg (by simp [defn, hp])] at h
+  obtain ⟨ret, -, h⟩ := Walk.except_bind_ok h
+  obtain ⟨acc, hacc, -⟩ := Walk.except_bind_ok h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hacc
+  have := forIn_range_idx (fun t (_ : Array (Array Piece)) => ∀ k < t, ∃ rs, Desc.nodeReads c k = .ok rs) _
+    body.nodes.size ?_ body.nodes.size 0 acc0 acc (by simp) (fun k hk => absurd hk (Nat.not_lt_zero _))
+    (by simpa using hacc)
+  · rw [Nat.zero_add] at this
+    exact this
+  · intro t r y ht hI hy
+    obtain ⟨rs, hrs, hy⟩ := Walk.except_bind_ok hy
+    obtain ⟨r', -, hy⟩ := Walk.except_bind_ok hy
+    simp only [Except.ok.injEq] at hy
+    refine ⟨r', hy.symm, fun k hk => ?_⟩
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
+    · exact hI k hk
+    · exact ⟨rs, hrs⟩
+
+/-- **A parameter position a node reads is a leaf `summarize`'s `used` names**, the segments the node's read splits
+naming positions at or past 0, of a copy at least, and of more than one only of gates or of copies all alike. -/
+theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) {k : Nat}
+    (hk : k < (P.defs[d]!).body.nodes.size) {node : Flock.Program.Node} (hn : (ctxOf P memo d).node k = .ok node)
+    (hout : ∀ g, ((∃ i, FromDown (ctxOf P memo d) k i g) ∨ FromRows (ctxOf P memo d) k node g ∨
+      FromCarry (ctxOf P memo d) k node g) → (∀ x ∈ segPos g, 0 ≤ x.2) ∧ RepsOk g)
+    {i : Nat} {p : Int} (hx : (Tgt.ref true i, p) ∈ nodePos (ctxOf P memo d) node k)
+    (hi : i < (P.defs[d]!).body.params.size) :
+    Width.inIvs ((s.used[i]?.getD #[]).toList) p.toNat := by
+  obtain ⟨rs, hrs⟩ := summarize_reads P memo d s h hp k hk
+  obtain ⟨out, hin, hpos, hfrom⟩ : ∃ out : Array Seg,
+      (∀ g ∈ (out.flatMap Seg.split).toList, ∀ q, g.ps[0]? = some q → (∀ w, q.tgt ≠ .gate w) → g ∈ rs.toList) ∧
+      segsPos out = nodePos (ctxOf P memo d) node k ∧
+      ∀ g ∈ out, (∃ i, FromDown (ctxOf P memo d) k i g) ∨ FromRows (ctxOf P memo d) k node g ∨
+        FromCarry (ctxOf P memo d) k node g := by
+    by_cases hpr : ((ctxOf P memo d).P.defs[node.fn]!).prim = true
+    · obtain ⟨out, e, hp', hf⟩ := nodeReads_prim _ k node hn hpr rs hrs
+      refine ⟨out, fun g hg _ _ _ => by rw [e]; exact hg, ?_, fun g hg => .inl (hf g hg)⟩
+      rw [hp']
+      unfold nodePos
+      rw [if_pos hpr]
+    · have hpr' : ((ctxOf P memo d).P.defs[node.fn]!).prim = false := by simpa using hpr
+      have := nodeReads_comp _ k node hn hpr' rs hrs
+      by_cases hm : node.members = 0
+      · exfalso
+        unfold nodePos at hx
+        rw [if_neg hpr, if_pos hm] at hx
+        cases hx
+      · rw [if_neg hm] at this
+        obtain ⟨out, e, hp', hf⟩ := this
+        refine ⟨out, fun g hg q hq hgate => ?_, ?_, hf⟩
+        · rw [e, Array.toList_filter, List.mem_filter]
+          refine ⟨hg, ?_⟩
+          unfold keep
+          rw [hq]
+          dsimp only
+          cases ht : q.tgt with
+          | gate w => exact absurd ht (hgate w)
+          | ref b i => rfl
+        · rw [hp']
+          unfold nodePos
+          rw [if_neg hpr, if_neg hm]
+  rw [← hpos] at hx
+  obtain ⟨g0, hg0, hx0⟩ := List.mem_flatMap.1 hx
+  obtain ⟨hnn, hrep⟩ := hout g0 (hfrom g0 (Array.mem_toList_iff.1 hg0))
+  obtain ⟨g, hg, hxg⟩ := (mem_segPos_split g0 _).2 hx0
+  have hgo : g ∈ (out.flatMap Seg.split).toList := by
+    rw [Array.toList_flatMap]
+    exact List.mem_flatMap.2 ⟨g0, hg0, hg⟩
+  obtain ⟨q, hq, rfl⟩ : ∃ q ∈ g0.ps.toList, g = Seg.one q := by
+    revert hg hxg
+    unfold Desc.Seg.split
+    dsimp only
+    split
+    · rename_i h1
+      intro hg _
+      simp only [Array.toList_map, List.mem_map] at hg
+      obtain ⟨q, hq, rfl⟩ := hg
+      refine ⟨q, ?_, rfl⟩
+      unfold Desc.Seg.alike at hq
+      split at hq <;> exact hq
+    · rename_i h1
+      intro hg hxg
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
+      subst hg
+      exfalso
+      have hal : Seg.alike g0 = g0 := by
+        unfold Desc.Seg.alike
+        split
+        · rename_i h2
+          exfalso
+          apply h1
+          unfold Desc.Seg.alike
+          rw [if_pos h2]
+          rfl
+        · rfl
+      rw [hal] at h1 hxg
+      have hr1 : g0.reps > 1 := by
+        have := hrep.1
+        simp only [beq_iff_eq] at h1
+        omega
+      rcases hrep.2 hr1 with hgt | hsh
+      · obtain ⟨q, hq, ht⟩ := segPos_tgt hxg
+        obtain ⟨w, hw⟩ := hgt q hq
+        rw [hw] at ht
+        cases ht
+      · unfold Desc.Seg.alike at hal
+        rw [if_pos (by simp [hr1, hsh])] at hal
+        have := congrArg Seg.reps hal
+        simp only at this
+        omega
+  rw [segPos_one] at hxg
+  have htgt : q.tgt = .ref true i := (mem_pos_tgt hxg).symm
+  have hp0 : 0 ≤ p := hnn _ hx0
+  unfold pos at hxg
+  simp only [List.mem_flatMap, List.mem_range, List.mem_map, Prod.mk.injEq] at hxg
+  obtain ⟨r, hr, t, ht, -, hpe⟩ := hxg
+  have hnn' : ∀ e ∈ Width.elems q, 0 ≤ e := by
+    intro e he
+    obtain ⟨r', hr', t', ht', rfl⟩ := Width.mem_elems.1 he
+    have hmem : (q.tgt, q.base + (r' : Int) * q.rowStride + (t' : Int) * q.stride) ∈ segPos (Seg.one q) := by
+      rw [segPos_one]
+      unfold pos
+      simp only [List.mem_flatMap, List.mem_range, List.mem_map]
+      exact ⟨r', by omega, t', ht', rfl⟩
+    exact hnn _ ((mem_segPos_split g0 _).1 ⟨_, hg, hmem⟩)
+  refine (summarize_used P memo d s h hp i p.toNat).2 ⟨hi, k, hk, rs, hrs, Seg.one q,
+    hin _ hgo q (by simp [Seg.one]) (fun w hw => by rw [hw] at htgt; cases htgt), by simp [Seg.one], q,
+    by simp [Seg.one], htgt, (Width.pis_spec q hnn' p.toNat).2 ⟨r, by omega, t, ht, by omega⟩⟩
+
+/-! ## `UsedExact` from the body's nodes -/
+
+theorem locR_finds {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops : Array Nat} (h : LocR P sc g ops) :
+    ∃ k, FindsAt P sc.d (g - sc.off) k := by
+  cases h with
+  | prim hf _ _ => exact ⟨_, hf⟩
+  | comp hf _ _ => exact ⟨_, hf⟩
+
+theorem findsAt_bounds {P : Prog} {d x k : Nat} (h : FindsAt P d x k) :
+    k < (P.defs[d]!).body.nodes.size ∧ (P.defs[d]!).body.offsets[k]! ≤ x ∧ x < (P.defs[d]!).body.offsets[k + 1]! := by
+  obtain ⟨hk, hp⟩ := DescAgree.find?_range_some h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+  exact ⟨hk, hp⟩
+
+theorem ctx_node (P : Prog) (memo : Array Desc.Summary) (d : Nat) {k : Nat} (hk : k < (P.defs[d]!).body.nodes.size) :
+    (ctxOf P memo d).node k = .ok ((P.defs[d]!).body.nodes[k]!) := by
+  unfold Desc.Ctx.node
+  change (match (P.defs[d]!).body.nodes[k]? with | some n => pure n | none => throw "program") = _
+  rw [Array.getElem?_eq_getElem hk, getElem!_pos _ k hk]
+  rfl
+
+theorem laid_le {P : Prog} {d : Nat} (hL : Laid P d) {a b : Nat} (hab : a ≤ b)
+    (hb : b ≤ (P.defs[d]!).body.nodes.size) : (P.defs[d]!).body.offsets[a]! ≤ (P.defs[d]!).body.offsets[b]! := by
+  induction b, hab using Nat.le_induction with
+  | base => exact le_refl _
+  | succ b hab ih =>
+    rw [hL b (by omega)]
+    exact Nat.le_trans (ih (by omega)) (Nat.le_add_right _ _)
+
+/-- **What an activation's gates read outside it is a leaf `used` names** (`UsedExact`'s first part), wherever each
+node reads outside itself what its positions name there, and the segments its read splits name positions at or past 0,
+no node's output, parameters in range and the body's gates, of a copy at least and of more than one only of gates or
+of copies all alike. -/
+theorem usedExact_a (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (sc : Flock.Program.Scope)
+    (h : Desc.summarize P memo sc.d = .ok s) (hp : (P.defs[sc.d]!).prim = false) (hL : Laid P sc.d)
+    (hlast : (P.defs[sc.d]!).body.offsets[(P.defs[sc.d]!).body.nodes.size]! = (P.defs[sc.d]!).gates)
+    (hN : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node → ∀ a,
+      (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a) →
+        ∃ x ∈ nodePos (ctxOf P memo sc.d) node k, den P sc x = .ok a)
+    (hout : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node → ∀ g,
+      ((∃ i, FromDown (ctxOf P memo sc.d) k i g) ∨ FromRows (ctxOf P memo sc.d) k node g ∨
+        FromCarry (ctxOf P memo sc.d) k node g) →
+      (∀ x ∈ segPos g, 0 ≤ x.2) ∧ RepsOk g)
+    (hpos : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node →
+      ∀ x ∈ nodePos (ctxOf P memo sc.d) node k, (∀ k', x.1 ≠ .ref false k') ∧
+        (∀ i, x.1 = .ref true i → i < (P.defs[sc.d]!).body.params.size) ∧
+        (∀ w, x.1 = .gate w → x.2 < ((P.defs[sc.d]!).gates : Int))) :
+    ∀ g ops a, sc.off ≤ g → g < sc.off + (P.defs[sc.d]!).gates → LocR P sc g ops → a ∈ ops →
+      ¬ (sc.off ≤ a ∧ a < sc.off + (P.defs[sc.d]!).gates) →
+      ∃ i j, Width.inIvs ((s.used[i]?.getD #[]).toList) j ∧ Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a := by
+  intro g ops a hg1 _ hgl ha hout'
+  obtain ⟨k, hf⟩ := locR_finds hgl
+  obtain ⟨hk, hb1, hb2⟩ := findsAt_bounds hf
+  have hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates := by
+    rw [← hlast]
+    exact laid_le hL (by omega) (le_refl _)
+  have hn := ctx_node P memo sc.d hk
+  obtain ⟨x, hx, hden⟩ := hN k hk _ hn a
+    ⟨⟨g, ⟨by omega, by omega⟩, ops, hgl, ha⟩, fun ⟨h1, h2⟩ => hout' ⟨by omega, by omega⟩⟩
+  obtain ⟨hnf, hpi, hgw⟩ := hpos k hk _ hn x hx
+  obtain ⟨t, p⟩ := x
+  cases t with
+  | gate w =>
+    exfalso
+    have hpw := hgw w rfl
+    simp only [den] at hden
+    split at hden
+    · cases hden
+    · injection hden with e
+      exact hout' ⟨by omega, by omega⟩
+  | ref b i =>
+    cases b with
+    | false => exact absurd rfl (hnf i)
+    | true =>
+      simp only [den] at hden
+      split at hden
+      · cases hden
+      · rename_i hp0
+        exact ⟨i, p.toNat, paramPos_used P memo sc.d s h hp hk hn (hout k hk _ hn) hx (hpi i rfl), hden⟩
+
+/-- The segments a node's read splits: every read is one of them, each whose first piece names no gate is a read, and
+they name the node's positions. -/
+theorem nodeReads_out (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node) {rs : Array Seg}
+    (hrs : Desc.nodeReads c k = .ok rs) :
+    ∃ out : Array Seg, (∀ g ∈ rs.toList, g ∈ (out.flatMap Seg.split).toList) ∧
+      (∀ g ∈ (out.flatMap Seg.split).toList, ∀ q, g.ps[0]? = some q → (∀ w, q.tgt ≠ .gate w) → g ∈ rs.toList) ∧
+      segsPos out = nodePos c node k ∧
+      ∀ g ∈ out, (∃ i, FromDown c k i g) ∨ FromRows c k node g ∨ FromCarry c k node g := by
+  by_cases hpr : (c.P.defs[node.fn]!).prim = true
+  · obtain ⟨out, e, hp', hf⟩ := nodeReads_prim _ k node hn hpr rs hrs
+    refine ⟨out, fun g hg => by rw [e] at hg; exact hg, fun g hg _ _ _ => by rw [e]; exact hg, ?_,
+      fun g hg => .inl (hf g hg)⟩
+    rw [hp']
+    unfold nodePos
+    rw [if_pos hpr]
+  · have hpr' : (c.P.defs[node.fn]!).prim = false := by simpa using hpr
+    have := nodeReads_comp _ k node hn hpr' rs hrs
+    by_cases hm : node.members = 0
+    · rw [if_pos hm] at this
+      subst this
+      refine ⟨#[], fun g hg => by simp at hg, fun g hg => by simp at hg, ?_, fun g hg => by simp at hg⟩
+      unfold nodePos
+      rw [if_neg hpr, if_pos hm, segsPos_empty]
+    · rw [if_neg hm] at this
+      obtain ⟨out, e, hp', hf⟩ := this
+      refine ⟨out, fun g hg => ?_, fun g hg q hq hgate => ?_, ?_, hf⟩
+      · rw [e, Array.toList_filter, List.mem_filter] at hg
+        exact hg.1
+      · rw [e, Array.toList_filter, List.mem_filter]
+        refine ⟨hg, ?_⟩
+        unfold keep
+        rw [hq]
+        dsimp only
+        cases ht : q.tgt with
+        | gate w => exact absurd ht (hgate w)
+        | ref b i => rfl
+      · rw [hp']
+        unfold nodePos
+        rw [if_neg hpr, if_neg hm]
+
+/-- A read of one copy that `Seg.split` makes is one piece of the segment. -/
+theorem split_one {s g : Seg} (hr : s.reps ≠ 0) (hg : g ∈ (Seg.split s).toList) (h1 : g.reps ≤ 1) :
+    ∃ q ∈ s.ps.toList, g = Seg.one q := by
+  revert hg
+  unfold Desc.Seg.split
+  dsimp only
+  split
+  · intro hg
+    simp only [Array.toList_map, List.mem_map] at hg
+    obtain ⟨q, hq, rfl⟩ := hg
+    refine ⟨q, ?_, rfl⟩
+    unfold Desc.Seg.alike at hq
+    split at hq <;> exact hq
+  · rename_i hne
+    intro hg
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
+    subst hg
+    exfalso
+    have hal : Seg.alike s = s := by
+      unfold Desc.Seg.alike
+      split
+      · rename_i hc
+        exfalso
+        apply hne
+        unfold Desc.Seg.alike
+        rw [if_pos hc]
+        rfl
+      · rfl
+    rw [hal] at h1 hne
+    simp only [beq_iff_eq] at hne
+    omega
+
+/-- **A leaf `used` names is a parameter position a node reads**, the segments its read splits naming positions at or
+past 0, of pieces of positive count, of a copy at least. -/
+theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false)
+    (hout : ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (ctxOf P memo d).node k = .ok node → ∀ g,
+      ((∃ i, FromDown (ctxOf P memo d) k i g) ∨ FromRows (ctxOf P memo d) k node g ∨
+        FromCarry (ctxOf P memo d) k node g) →
+      (∀ x ∈ segPos g, 0 ≤ x.2) ∧ g.reps ≠ 0 ∧ ∀ q ∈ g.ps.toList, 0 < q.count)
+    {i j : Nat} (hij : Width.inIvs ((s.used[i]?.getD #[]).toList) j) :
+    ∃ k < (P.defs[d]!).body.nodes.size, ∃ node, (ctxOf P memo d).node k = .ok node ∧
+      (Tgt.ref true i, (j : Int)) ∈ nodePos (ctxOf P memo d) node k := by
+  obtain ⟨-, k, hk, rs, hrs, g, hg, hg1, q, hq, htgt, x', hx', hj⟩ := (summarize_used P memo d s h hp i j).1 hij
+  have hn := ctx_node P memo d hk
+  refine ⟨k, hk, _, hn, ?_⟩
+  obtain ⟨out, hsub, -, hpos, hfrom⟩ := nodeReads_out _ k _ hn hrs
+  have hgo := hsub g hg
+  rw [Array.toList_flatMap, List.mem_flatMap] at hgo
+  obtain ⟨s0, hs0, hgs⟩ := hgo
+  obtain ⟨hnn, hr0, hcnt⟩ := hout k hk _ hn s0 (hfrom s0 (Array.mem_toList_iff.1 hs0))
+  obtain ⟨q0, hq0, rfl⟩ := split_one hr0 hgs hg1
+  have e : q = q0 := by simpa [Seg.one] using hq
+  subst e
+  have hsub' : ∀ y ∈ pos q, y ∈ segPos s0 := fun y hy =>
+    (mem_segPos_split s0 y).1 ⟨_, hgs, by rw [segPos_one]; exact hy⟩
+  have hrow : 1 ≤ q.rows := by
+    have := hcnt q hq0
+    unfold Desc.Piece.count at this
+    rcases Nat.eq_zero_or_pos q.rows with h0 | h0
+    · rw [h0, Nat.zero_mul] at this; omega
+    · exact h0
+  have hnn' : ∀ e ∈ Width.elems q, 0 ≤ e := by
+    intro e he
+    obtain ⟨r', hr', t', ht', rfl⟩ := Width.mem_elems.1 he
+    refine hnn _ (hsub' (q.tgt, _) ?_)
+    unfold pos
+    simp only [List.mem_flatMap, List.mem_range, List.mem_map]
+    exact ⟨r', by omega, t', ht', rfl⟩
+  obtain ⟨r, hr, t, ht, hje⟩ := (Width.pis_spec q hnn' j).1 ⟨x', hx', hj⟩
+  rw [← hpos]
+  unfold segsPos
+  refine List.mem_flatMap.2 ⟨s0, hs0, hsub' _ ?_⟩
+  unfold pos
+  simp only [List.mem_flatMap, List.mem_range, List.mem_map]
+  exact ⟨r, by omega, t, ht, by rw [htgt, hje]⟩
+
+/-- **Each leaf `used` names is read by a gate of the activation** (`UsedExact`'s second part), wherever each node
+reads outside itself what its positions name there, its parameter positions resolve, a parameter resolves before the
+activation, and the segments its read splits name positions at or past 0, of pieces of positive count, of a copy at
+least. -/
+theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (sc : Flock.Program.Scope)
+    (h : Desc.summarize P memo sc.d = .ok s) (hp : (P.defs[sc.d]!).prim = false) (hL : Laid P sc.d)
+    (hlast : (P.defs[sc.d]!).body.offsets[(P.defs[sc.d]!).body.nodes.size]! = (P.defs[sc.d]!).gates)
+    (hN : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node → ∀ a,
+      ((∃ x ∈ nodePos (ctxOf P memo sc.d) node k, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) →
+        NodeReadsAt P sc k a)
+    (hS : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node →
+      ∀ i (p : Int), (Tgt.ref true i, p) ∈ nodePos (ctxOf P memo sc.d) node k → ∃ a, den P sc (.ref true i, p) = .ok a)
+    (hout : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node → ∀ g,
+      ((∃ i, FromDown (ctxOf P memo sc.d) k i g) ∨ FromRows (ctxOf P memo sc.d) k node g ∨
+        FromCarry (ctxOf P memo sc.d) k node g) →
+      (∀ x ∈ segPos g, 0 ≤ x.2) ∧ g.reps ≠ 0 ∧ ∀ q ∈ g.ps.toList, 0 < q.count)
+    (hlt : ∀ i j a, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a → a < sc.off) :
+    ∀ i j, Width.inIvs ((s.used[i]?.getD #[]).toList) j →
+      ∃ g, sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates ∧ ∃ ops, LocR P sc g ops ∧
+        ∃ a ∈ ops, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a := by
+  intro i j hij
+  obtain ⟨k, hk, node, hn, hx⟩ := used_nodePos P memo sc.d s h hp hout hij
+  obtain ⟨a, ha⟩ := hS k hk node hn i j hx
+  have hr : Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a := by
+    simp only [den] at ha
+    rwa [if_neg (by omega), Int.toNat_natCast] at ha
+  have hlo := hlt i j a hr
+  obtain ⟨g, ⟨hg1, hg2⟩, ops, hgl, hag⟩ := hN k hk node hn a ⟨⟨_, hx, ha⟩, fun ⟨h1, _⟩ => by omega⟩
+  have hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates := by
+    rw [← hlast]
+    exact laid_le hL (by omega) (le_refl _)
+  exact ⟨g, by omega, by omega, ops, hgl, a, hag, hr⟩
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
