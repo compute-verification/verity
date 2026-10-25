@@ -3755,6 +3755,17 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
   },
+  "Definitions.Accounting.Assumptions.Compose": {
+   "digest": "4147348f4bb13c83c3ef1984bd78be5a0aeed4c7a2dd9012054e219915ed9ae6",
+   "definitions": {
+    "Accounting.Assumptions.Compose.GuessLuckAt": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
+   },
+   "guarantees": [
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
+   ]
+  },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
    "digest": "aa61381a6870692a0cb93298f0b695b764f8b55851309f9f214f6a1d47a9deae",
    "definitions": {
@@ -3801,6 +3812,19 @@
     "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    },
    "guarantees": ["Properties.RemoteAudit.steered_of_checked"]
+  },
+  "Definitions.Accounting.Assumptions.TS": {
+   "digest": "24930e88103be1ff9183987e67aefff79a0b0624d2f016528771aeb4da4c4140",
+   "definitions": {
+    "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
+    "Accounting.Assumptions.TS.ReceiptLuckAt": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
+    "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
+   },
+   "guarantees": [
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
+   ]
   },
   "Definitions.Accounting.Compose": {
    "digest": "9a3f02bc88dab00e5517d02dffd8f4345eee75b327ae6507a934ec05c1824a82",
@@ -6707,30 +6731,6 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
-   ]
-  },
-  "Models.Accounting.Assumptions.Compose": {
-   "digest": "4147348f4bb13c83c3ef1984bd78be5a0aeed4c7a2dd9012054e219915ed9ae6",
-   "definitions": {
-    "Accounting.Assumptions.Compose.GuessLuckAt": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
-   },
-   "guarantees": [
-    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
-    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
-    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
-   ]
-  },
-  "Models.Accounting.Assumptions.TS": {
-   "digest": "24930e88103be1ff9183987e67aefff79a0b0624d2f016528771aeb4da4c4140",
-   "definitions": {
-    "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
-    "Accounting.Assumptions.TS.ReceiptLuckAt": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
-    "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
-   },
-   "guarantees": [
-    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
-    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
-    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "NciCheck.Baseline": {
