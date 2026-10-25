@@ -8,7 +8,8 @@
 #      LEG_KS (the stand-in's K values, "128,256")  LEG_NEGATIVES=0 (honest only)  LEG_FIREWALL=0 (prove without it)
 #      LEG_REGISTERED=1 (the registered-weights stand-in at the first K, verified with --registered)
 #      LEG_DEFS="gemm:1b:2048 rope:1b ..." (vLLM's served Definitions, prove_leg.py defs, in place of the stand-in)
-#      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)
+#      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)  LEG_LOWER_REFUSED=1 (with LEG_DEFS: lower a shape the census
+#      refuses, for C-Flock's own refusal)
 # Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts.
 set -uo pipefail
@@ -33,9 +34,10 @@ NEG=--negatives; [ "${LEG_NEGATIVES:-1}" = 0 ] && NEG=
 if [ -n "${LEG_DEFS:-}" ]; then
   SHAPES=(); for s in $LEG_DEFS; do SHAPES+=(--shape "$s"); done
   CENSUS=; [ "${LEG_CENSUS:-0}" = 1 ] && CENSUS=--census
-  log "leg: served Definitions ${LEG_DEFS}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}${CENSUS:+, census only}"
+  LR=; [ "${LEG_LOWER_REFUSED:-0}" = 1 ] && LR=--lower-refused
+  log "leg: served Definitions ${LEG_DEFS}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}${CENSUS:+, census only}${LR:+, $LR}"
   "$PY" benchmarks/one_stage/prove_leg.py defs --bin "$BIN" --lean "$LEAN" ${FW:+--firewall "$FW"} --out "$W/leg" \
-    "${SHAPES[@]}" --mem-gb "$HZ_MEM_GB" $NEG $CENSUS 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
+    "${SHAPES[@]}" --mem-gb "$HZ_MEM_GB" $NEG $CENSUS $LR 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
 else
   log "leg: stand-in, n ${LEG_N:-4}, ks ${LEG_KS:-128,256}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}"
