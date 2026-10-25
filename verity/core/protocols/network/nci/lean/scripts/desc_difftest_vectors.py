@@ -15,7 +15,8 @@ across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
-`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
+`NciCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
+value, read or not, then `difftest_vectors.pinned()`'s two (θ every
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
@@ -225,12 +226,56 @@ def walks() -> list[dict]:
     return out
 
 
+def empty(kind: str) -> str:
+    """A declaration whose root holds a scan of no iterations: its carry a value no gate reads (`unread`), one passed
+    to a Call whose callee reads none of it (`passed`), or one a primitive reads (`read`); or its carry empty (`bare`).
+    `Flock.Program.resolve` can't resolve the carry, and `NciCheck.Desc` refuses the first three (`resolvable`) and
+    gives a verdict on the fourth."""
+    w = 8
+    op = vectors.prim((w, w), w)
+    carry = Tuple() if kind == "bare" else Value(w)
+    Step = bind(CompositeDefinition(f"NciEmptyStep{kind.capitalize()}", 1, (),
+                                    lambda S: ((("c", carry),), Tuple(carry, Tuple())),
+                                    lambda B, S, c: tuple_of(c, tuple_of()), register=False))
+    Skip = bind(CompositeDefinition("NciEmptySkip", 1, (), lambda S: ((("c", Value(w)), ("x", Value(w))), Value(w)),
+                                    lambda B, S, c, x: B.call(op, x, x), register=False))
+
+    def body(B, S, x):
+        s = B.scan(Step, tuple_of() if kind == "bare" else x, n=0)
+        if kind == "passed":
+            return B.call(Skip, s[0], x)
+        return B.call(op, s[0], x) if kind == "read" else B.call(op, x, x)
+    fn = bind(CompositeDefinition(f"NciEmpty{kind.capitalize()}", 1, (), lambda S: ((("x", Value(w)),), Value(w)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+EMPTIES = ("unread", "passed", "read", "bare")
+
+
+def empties() -> list[dict]:
+    """Instances on `empty`'s declarations, θ their registered inputs (none) and the Call in IU 0: three refused
+    (`program`) and one given a verdict."""
+    out = []
+    for kind in EMPTIES:
+        text = empty(kind)
+        inp, reg, spans = reference.root_nodes(text)
+        out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
+                    "owner": ["input" if inp[k] else 0 for k in range(len(inp))], "gamma": spans[-1][1],
+                    "alpha": [16, 1]})
+    return out
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, `walks()` and `empties()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
     first_walk = first_decoy + len(decoys())
+    first_empty = first_walk + len(walks())
+    if seed >= first_empty:
+        return {"instance": empties()[seed - first_empty], "shape": "empty", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed >= first_walk:
         return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
                 "malformed": None}
@@ -326,8 +371,9 @@ NAMES = ("instances", "expanded", "python")
 
 def total() -> int:
     """How many instances the audit's data has: the random ones, every fixture's, the decoys,
-    `difftest_vectors.pinned()`'s and the walks."""
-    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
+    `difftest_vectors.pinned()`'s, the walks and the empties."""
+    return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
+            + len(empties()))
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

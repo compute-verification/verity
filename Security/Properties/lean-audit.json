@@ -18,7 +18,13 @@
   "Properties.Nci.Baseline",
   "Properties.Proofs.Nci.BaselineSteps",
   "Properties.Proofs.Nci.Baseline",
+  "Properties.Proofs.Nci.BodiesOk",
+  "Properties.Proofs.Nci.OperandsResolve",
+  "Properties.Proofs.Nci.Agrees",
   "Properties.NciDesc",
+  "Properties.NciDesc.Verdict",
+  "Properties.NciDesc.Cover",
+  "Properties.Proofs.Nci.DescVerdict",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
   "Properties.Pous",
@@ -265,13 +271,16 @@
     "Mathlib",
     "Definitions.Core",
     "Definitions.Nci",
+    "Models.Nci.Assumptions.Baseline",
+    "Models.Nci.Assumptions.Cover",
     "NciCheck.Check",
+    "NciCheck.Baseline",
     "NciCheck.Desc",
     "Properties.Nci",
     "Properties.NciDesc"
    ],
    "except": [],
-   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Models.Nci.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.CertifierDevice": {
@@ -2964,11 +2973,18 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from three open statements: OperandsResolve (Properties.Proofs.Nci.Walk) and BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), from which operandsEarlier_of proves OperandsEarlier and gatesLocated_of GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and ReadsExact (Desc.analyze's reads per root node are the unrolled operands outside it), from which novelExact_of proves NovelExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
+   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_readsExact (Properties.Proofs.Nci.Agrees) proves it from ReadsExact (Properties.Proofs.Nci.Novel: Desc.analyze's reads per root node are the unrolled operands outside it), the one open statement: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from OperandsResolve (Properties.Proofs.Nci.Walk), BodiesOk and ReadsExact, bodiesOk (Properties.Proofs.Nci.BodiesOk) proves BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), operandsResolve_of (Properties.Proofs.Nci.OperandsResolve) proves OperandsResolve from it, and novelExact_of proves NovelExact from ReadsExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "NciCheck.Properties.DescReports": "unstated: descReports_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Reports, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescWitnesses": "unstated: descWitnesses_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Witnesses, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottles": "unstated: descThrottles_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Throttles (Proofs.Nci.Verdict, so descThrottles_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottlesDark": "unstated: descThrottlesDark_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDark (Proofs.Nci.Verdict, so descThrottlesDark_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottlesSlots": "unstated: descThrottlesSlots_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and ThrottlesSlots (Proofs.Nci.Verdict, so descThrottlesSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottlesDarkSlots": "unstated: descThrottlesDarkSlots_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDarkSlots (Proofs.Nci.Verdict, so descThrottlesDarkSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.CheckedCoverTraining": "unstated: checkedCoverTraining_of_descAgrees (Proofs.Nci.Cover.Checked) proves it from DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -6326,7 +6342,7 @@
    ]
   },
   "NciCheck.Desc": {
-   "digest": "5758797300cbab2eaac39af049c0fc5ee71bf8e1edea48897c48fdb34e4841f5",
+   "digest": "dff056ec940b0a14a7914dfeb683aa1a4fbfc7da924fd050f5700d4d44aeef95",
    "definitions": {
     "NciCheck.Desc.Chain": "c56251016e6ab9c082b7fcec3000e638afb07e0cb4e002fb2fe64b469d9f836c",
     "NciCheck.Desc.Chain.at": "158fc743edceeb48e0afad687e2f4bdbfbfb1dd740c53b5f068ed59a3481b927",
@@ -6456,6 +6472,7 @@
     "NciCheck.Desc.ofSeq": "fd54f7d2dec50a4d40145bc5da5cfb9c942f938f1f023ce0449ab0802331b4b6",
     "NciCheck.Desc.ownerStep": "b247cfb93a8d6803a811254ae52d476cbfcf2a82113c6f8551731f1fd9befc83",
     "NciCheck.Desc.reached": "9b353be85fc68f150b007ce70da623c1943373c9e73d61a57f113b46b1e3aba6",
+    "NciCheck.Desc.resolvable": "0dda23a2b49c7f1d504ab1508fbe25ee1955dbab5b525d82e7c2c9c2d09acd66",
     "NciCheck.Desc.retAt": "e8d8a4bbc339bc115592ab103264462c92e8c8ce3c09593a166bd916f53c9655",
     "NciCheck.Desc.rootLaidOut": "b1902101d4cde10a5b199931558c9e1a5fde5dea774e32e031fe955fd529d4dc",
     "NciCheck.Desc.shiftGates": "14320918e6ee17e7433a2aeea55ed33320243459d2b944fbe3718cf0b6d9aba6",
@@ -6469,7 +6486,7 @@
     "NciCheck.Desc.throughPS": "d0011ba4cf88ddb0b79e5f6ba18d6b99065c1fd7ab82af39d1a8b79529ff4963",
     "NciCheck.Desc.walkAtMost": "3a7a02fe16ac01d705876c9972e138069890ef1c630a111e4b2df1b3c67790f7",
     "NciCheck.Desc.walkBound": "a9ad0f30e30cd9a9dbc37cd48dfba1de1610bab347ef6525fdaa40141376bbe7",
-    "NciCheck.Desc.walkable": "626588493d929df1ba49a8fc5c1fbb7bc2af0371a093fafab5d99d82c700aa2e",
+    "NciCheck.Desc.walkable": "9844cfcf9a4ddbc632a2e48a7e44db1b807af2ef16261284921b8ac233e4f9a1",
     "NciCheck.Desc.widthIn": "b1ad339e819a283eb749f0740c582df78ecc2d18a2827bd3fbf4dde78c5b9948"
    },
    "guarantees": ["NciCheck.Properties.SecurityProofs.BaselineProvenance"]
