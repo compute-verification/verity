@@ -10982,6 +10982,60 @@ theorem downW_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt
     rw [← hg] at hp hret
     exact locW_prim c.P hmono hk hp hret hx
 
+/-- A batch of a primitive's piece names its members' gates, of the primitive's width, in a laid-out body: its
+positions at or past 0 and within the node's output, of no more leaves than members. -/
+theorem downW_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = true) {w : Nat} (hret : (c.P.defs[node.fn]!).ret = .value w)
+    (hg1 : (c.P.defs[node.fn]!).gates = 1)
+    (hoff : ∀ k' < c.body.nodes.size, c.body.offsets[k' + 1]! =
+      c.body.offsets[k']! + (c.body.nodes[k']!).members * (c.P.defs[(c.body.nodes[k']!).fn]!).gates)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hF : ∀ x ∈ pos q, Fits c x) (hout : node.out.leaves ≤ node.members)
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  have hk := node_lt hn
+  have hg := node_get hn
+  rw [down_batchPrim c fuel q ht hff hn hform hp hret] at h
+  injection h with h
+  subst h
+  split
+  · intro s hs
+    simp at hs
+  · intro s hs
+    have e : s = Seg.one { q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base } := by
+      simpa using hs
+    subst e
+    intro w' p hx
+    rw [segPos_one] at hx
+    unfold pos at hx
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq, Tgt.gate.injEq] at hx
+    obtain ⟨r, hr, t, htl, rfl, rfl⟩ := hx
+    have hmem : (q.tgt, q.base + (r : Int) * q.rowStride + (t : Int) * q.stride) ∈ pos q := by
+      unfold pos
+      simp only [List.mem_flatMap, List.mem_map, List.mem_range]
+      exact ⟨r, hr, t, htl, rfl⟩
+    have h0 := hq _ hmem
+    have h1 := hF _ hmem k ht
+    rw [hg] at h1
+    obtain ⟨n, hn'⟩ := Int.eq_ofNat_of_zero_le h0
+    have hpn : (c.body.offsets[k]! : Int) + q.base + (r : Int) * q.rowStride + (t : Int) * q.stride =
+        ((c.body.offsets[k]! + n : Nat) : Int) := by
+      push_cast
+      simp only at hn'
+      linarith
+    rw [hpn, Int.toNat_natCast]
+    have hlt : n < node.members := by
+      have : (n : Int) < node.out.leaves := by simp only at hn' h1; rw [← hn']; exact h1
+      omega
+    have hmono : ∀ k' < (c.P.defs[c.d]!).body.nodes.size,
+        (c.P.defs[c.d]!).body.offsets[k']! ≤ (c.P.defs[c.d]!).body.offsets[k' + 1]! := fun k' hk' => by
+      have := hoff k' hk'
+      exact this ▸ Nat.le_add_right _ _
+    have hx : c.body.offsets[k]! ≤ c.body.offsets[k]! + n ∧ c.body.offsets[k]! + n < c.body.offsets[k + 1]! := by
+      rw [hoff k hk, hg, hg1]
+      omega
+    rw [← hg] at hp hret
+    exact locW_prim c.P hmono hk hp hret hx
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
