@@ -4,7 +4,8 @@ window's declared sync signed), refuses the window of a record whose signature i
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
-window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s."""
+window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
+warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve."""
 
 from __future__ import annotations
 
@@ -188,6 +189,31 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
+
+
+def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
+    import math
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
+    doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
+    assert doc["widths"] == {"NS": 149_520, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["terms"]["b"] == 154_352 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
+    week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
+    lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
+    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
+    assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
+        5 * (154_352 + math.log2(lw * 64 + 1)))
+    with pytest.raises(SystemExit, match="drew 16 of 64"):
+        cr.leak(run, {"draw": {"honest": 16}})
+    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
+    with pytest.raises(ValueError, match="lanes = 4"):
+        cr.leak(run)
 
 
 def test_subset_bound():
