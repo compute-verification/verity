@@ -49,6 +49,18 @@ theorem verifies_of_R {I : Inputs} {own : Array Flock.Registered.Port} {t : Exec
     (hh : I.tags.hiddenOutputs = false) : Verifies I t :=
   ⟨PlainReg.accepts_of_R h.1, h.2.scope hh⟩
 
+/-- **What `flock-verify verify --plain-tables --registered F` accepts** (no `--zk`), `own` F's ports: the setup,
+registered check and verdict `PlainReg.AcceptsR` models, and the `--plain-tables` statement check with the verifier's
+registered reads (`ScopePR`). -/
+def VerifiesPR (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
+  PlainReg.AcceptsR I own t ∧ ScopePR I
+
+/-- **At public outputs, `--plain-tables --registered F` accepts no more than `--plain-tables`**: the registered check
+only refuses more, and the statement check is the same (`ScopePR.scopeP`). -/
+theorem verifiesP_of_R {I : Inputs} {own : Array Flock.Registered.Port} {t : Exec.Transcript} (h : VerifiesPR I own t)
+    (hh : I.tags.hiddenOutputs = false) : VerifiesP I t :=
+  ⟨PlainReg.accepts_of_R h.1, h.2.scopeP hh⟩
+
 section Hidden
 
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec FlockSoundness.Discharge.DecodeZL

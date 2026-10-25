@@ -504,10 +504,9 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     -- the law (the live subset draw) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
-    (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
+    -- the coin server's record of the live session and its draw at each of the law's draws (`live-verifier`)
+    (hCust : Assumptions.RecordCustodyExecHJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr
+      (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planPHJ (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K : ℕ)
@@ -518,7 +517,7 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     (hCR : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
           ((rsPHJ dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf)).binding
             (rsPHJ_computes dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf)))
@@ -526,14 +525,14 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     (hKS : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         ∀ ω j, TableCRL execArith H512 enc512 leaf512
           (planPHJ dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
           (batchStratL H512 enc512 leaf512 (planPHJ dj x₀) (cont σ ω)) qF qS),
     prob (fun o => VerifiesP I o.2.2 ∧ ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
@@ -544,7 +543,7 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
       ⨆ hs : ScopeP I,
         (let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
@@ -568,10 +567,9 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's draw at each of the law's draws
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
-    (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
+    -- the coin server's record of the live session and its draw at each of the law's draws (`live-verifier`)
+    (hCust : Assumptions.RecordCustodyExecHJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr
+      (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planPHJ (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K : ℕ)
@@ -582,7 +580,7 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (hCR : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
           ((rsPHJ dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf)).binding
             (rsPHJ_computes dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf)))
@@ -590,14 +588,14 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (hKS : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         ∀ ω j, TableCRL execArith H512 enc512 leaf512
           (planPHJ dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
           (batchStratL H512 enc512 leaf512 (planPHJ dj x₀) (cont σ ω)) qF qS),
     prob (fun o => VerifiesP I o.2.2 ∧ ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
@@ -608,7 +606,7 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
       ⨆ hs : ScopeP I,
         (let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         (Law.subset n kd hkd).miss K + η +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
@@ -619,10 +617,10 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
 theorem soundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
     SoundExecHJU I hh hf := by
   refine ⟨fun _ h => h.2.program, ?_⟩
-  intro n mPts Reg dj S₀ d₀ x₀ wr dg N kd hkd Ω _ _ Lb src hA3 hDraw hRec k Rw M hk hRw hM ρ hρ hr t' ht' K τ qF qS hCR hKS
+  intro n mPts Reg dj S₀ d₀ x₀ wr dg N kd hkd Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr t' ht' K τ qF qS hCR hKS
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact plain_session_soundHJ I hs.typed dj x₀ wr dg N (hs.parseH hh) hs.built (hs.loadH hh) (hs.scopeH hf) kd hkd
-    Lb src hA3 hDraw (hs.tagsOkH hh) hRec hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
+    Lb src hA3 hCust.2 (hs.tagsOkH hh) hCust.1 hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
 
 set_option linter.unusedVariables false in
 /-- The claim under `--plain-tables` at hidden outputs, the law the live subset draw, where the wires feed the unit or the
@@ -639,10 +637,9 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     -- the law (the live subset draw) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
-    (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
+    -- the coin server's record of the live session and its draw at each of the law's draws (`live-verifier`)
+    (hCust : Assumptions.RecordCustodyExecHJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr
+      (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planPHJ (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K : ℕ)
@@ -653,7 +650,7 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     (hCR : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         LinkCRL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
           ((rsPHJI dj x₀ hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf))
               (hs.loadH hh) hs.built (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1
@@ -665,14 +662,14 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     (hKS : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         ∀ ω j, TableCRL execArith H512 enc512 leaf512
           (planPHJ dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
           (batchStratL H512 enc512 leaf512 (planPHJ dj x₀) (cont σ ω)) qF qS),
     prob (fun o => VerifiesP I o.2.2 ∧ ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
@@ -687,7 +684,7 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
       ⨆ hs : ScopeP I,
         (let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
@@ -715,10 +712,9 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
-    -- the coin server's draw at each of the law's draws
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the coin server's record of the live session
-    (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
+    -- the coin server's record of the live session and its draw at each of the law's draws (`live-verifier`)
+    (hCust : Assumptions.RecordCustodyExecHJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr
+      (Law.execOS (n := n) src (.subset kd) n))
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planPHJ (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K : ℕ)
@@ -729,7 +725,7 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (hCR : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         LinkCRL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
           ((rsPHJI dj x₀ hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf))
               (hs.loadH hh) hs.built (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1
@@ -741,14 +737,14 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (hKS : ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         ∀ ω j, TableCRL execArith H512 enc512 leaf512
           (planPHJ dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
           (batchStratL H512 enc512 leaf512 (planPHJ dj x₀) (cont σ ω)) qF qS),
     prob (fun o => VerifiesP I o.2.2 ∧ ∀ hs : ScopeP I,
         let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
@@ -763,7 +759,7 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
       ⨆ hs : ScopeP I,
         (let σ := simAuditJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) dg
           (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hRec hDraw) τ
+          (decodesOnPHJ_exec dj x₀ hs.typed (hs.parseH hh) _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ
         (Law.subset n kd hkd).miss K + η +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
@@ -778,12 +774,12 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
 theorem soundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
     SoundExecHJG I hh hf := by
   refine ⟨fun _ h => h.2.program, ?_⟩
-  intro n mPts Reg dj S₀ d₀ x₀ wr dg N kd hkd Ω _ _ Lb src hA3 hDraw hRec k Rw M hk hRw hM ρ hρ hr t' ht' K τ qF qS hCR hKS
+  intro n mPts Reg dj S₀ d₀ x₀ wr dg N kd hkd Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr t' ht' K τ qF qS hCR hKS
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact plain_session_soundHJI I hs.typed dj x₀ wr dg N (hs.parseH hh)
     (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) (hs.loadH hh) hs.built
     (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1 (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2 kd hkd
-    Lb src hA3 hDraw (hs.tagsOkH hh) hRec hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
+    Lb src hA3 hCust.2 (hs.tagsOkH hh) hCust.1 hk hRw hM hρ hr ht' K τ (hCR hs) (hKS hs)
 
 /-- The claim under `--plain-tables` at hidden outputs, the law the live subset draw: `SoundExecHJU` where the wires
 feed neither the unit nor the outputs, `SoundExecHJG` where they feed either. -/

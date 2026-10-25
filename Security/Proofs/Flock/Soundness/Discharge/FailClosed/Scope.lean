@@ -571,6 +571,72 @@ theorem tagsOk (hh : I.tags.hiddenOutputs = false) : I.tags.hiddenOutputs = fals
 
 end ScopeP
 
+/-- **`flock-verify verify --plain-tables --registered F`'s statement check** (no `--zk`), with the verifier's own
+registered reads: `ProvedScope.checkP` as in `ScopeP`, whose check at one table is the one with the registered reads,
+which also passes a shared-row public file of a statement with hidden outputs. -/
+def ScopePR (I : Inputs) : Prop :=
+  ProvedScope.checkP I.tags I.circuitFile I.publicFile I.tables I.count I.program false true = .ok ()
+
+namespace ScopePR
+
+variable {I : Inputs} (h : ScopePR I)
+include h
+
+theorem why : ProvedScope.plainTablesWhy I.tags I.count = none := (ProvedScope.checkP_ok h).1
+
+/-- **The check at one table, with the verifier's registered reads.** -/
+theorem checks : Checks I.tags false { I with count := 1 } true := (ProvedScope.checkP_ok h).2.1
+
+theorem typed : I.tags.typed = false := Checks.typed h.checks
+
+theorem retainRounds : I.tags.retainRounds = true := Checks.retainRounds h.checks
+
+/-- **`hm96-sha512/v1` leaves** at hidden outputs, by `plainTablesWhy`, as `ScopeP.merkleLeaf`. -/
+theorem merkleLeaf (hh : I.tags.hiddenOutputs = true) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
+  have hw := h.why
+  unfold ProvedScope.plainTablesWhy at hw
+  by_contra hl
+  simp [hh, hl] at hw
+
+theorem parseH (hh : I.tags.hiddenOutputs = true) : HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) :=
+  Checks.parseH (I := { I with count := 1 }) h.checks hh
+
+theorem loadH (hh : I.tags.hiddenOutputs = true) : HmOut.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) :=
+  Checks.loadH (I := { I with count := 1 }) h.checks hh
+
+theorem built : Built (circS I).unit := Checks.built (I := { I with count := 1 }) h.checks
+
+theorem scopeH (hf : ProvedScope.wiresFeed (circS I) = false) : Layout.scopeOkH (circS I) = true :=
+  Checks.scopeH (I := { I with count := 1 }) h.checks hf
+
+theorem scopeGen (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
+    Layout.scopeGenH (circS I) = true :=
+  Checks.scopeGen (I := { I with count := 1 }) h.checks hh hf
+
+/-- **The verifier's own program is the circuit's** (`ProgramOfCircuit`), as `ScopeP.program`. -/
+theorem program : ProgramOfCircuit I := by
+  obtain ⟨-, -, hp⟩ := ProvedScope.checkP_ok h
+  obtain ⟨c, hc, hw⟩ := ProvedScope.programP_ok hp
+  have hpc : ProvedScope.circuitOf I.tags I.circuitFile I.tables = .ok (circS I) :=
+    Checks.circuit_ok (I := { I with count := 1 }) h.checks
+  rw [hpc] at hc
+  injection hc with hc
+  subst hc
+  exact ProvedScope.programWhyP_none hw
+
+/-- **At public outputs the check with the verifier's registered reads is the one without them** (`sharedRowsOk` needs
+hidden outputs), as `ScopeR.scope`. -/
+theorem scopeP (hh : I.tags.hiddenOutputs = false) : ScopeP I := by
+  have hs : ProvedScope.sharedRowsOk I.tags false true = ProvedScope.sharedRowsOk I.tags false false := by
+    simp [ProvedScope.sharedRowsOk, hh]
+  unfold ScopeP
+  unfold ScopePR ProvedScope.checkP ProvedScope.check at h
+  unfold ProvedScope.checkP ProvedScope.check
+  rw [← hs]
+  exact h
+
+end ScopePR
+
 theorem ScopeR.typed {I : Inputs} (h : ScopeR I) : I.tags.typed = false := Checks.typed h
 
 theorem ScopeR.retainRounds {I : Inputs} (h : ScopeR I) : I.tags.retainRounds = true := Checks.retainRounds h
