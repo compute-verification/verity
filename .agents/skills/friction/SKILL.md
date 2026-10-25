@@ -123,6 +123,14 @@ What an agent may change:
 - (2 Oct) An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
   census's dense datasheet peak for its dtype, to one significant digit.
 
+Keys and access:
+
+- (25 Oct) The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
+  so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
+- (25 Oct) Workers open and edit their own lane's PRs with `research pr open|edit`, through a GitHub App on the control
+  pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head branch
+  isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+
 Landing:
 
 - (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the whole
