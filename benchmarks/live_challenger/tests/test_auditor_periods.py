@@ -348,7 +348,7 @@ def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwis
 
 @pytest.mark.parametrize("files", [
     "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
-    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}',
+    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}', '{"lives": "' + "2b" * 64 + '"}',
     '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
 ])
 def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
@@ -357,6 +357,7 @@ def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
     assert rc == 3 and "--circuit-files" in out["refused"]
     assert A.read_ledger(host.ledger) == []
     assert len(A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 65)}))) == 64
+    assert A.circuit_files_of(json.dumps({"k64": "2b" * 64, "live": "1a" * 64})) == {"k64": "2b" * 64, "live": "1a" * 64}
     with pytest.raises(A.Refused, match="1 to 64 distinct K"):
         A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 66)}))
 
