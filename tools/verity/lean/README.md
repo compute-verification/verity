@@ -2,8 +2,8 @@
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages whose inputs
 changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
-packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
-records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
+packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
+records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
@@ -37,6 +37,13 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
+
+A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `warm` pool) it runs
+`lean_changed.py --try FILE` on this checkout, its uncommitted edits included, which takes one of the node's `build` Lean slots and
+that slot's tree, the one `--records` keeps warm, syncs the closure of the package that owns FILE and its dependencies there, runs
+`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`, and prints Lean's output with the
+run's wall time, exiting with lean's status. It never runs this audit and never writes a record: `--records PKG --update` is for the
+lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
