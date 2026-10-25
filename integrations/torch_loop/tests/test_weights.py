@@ -58,6 +58,10 @@ def test_stream_and_write(tmp_path):
     out = tmp_path / "w.bin"
     W.write(W.TINY, SEED, out, workers=2, chunk_bytes=4096)
     assert out.read_bytes() == whole
+    m = W.manifest(W.TINY, SEED, digests=True, workers=2)
+    assert m == W.manifest(W.TINY, SEED, digests=True)
+    assert [t["sha256"] for t in m["tensors"]] == [hashlib.sha256(W.tensor_bytes(W.TINY, SEED, t.name)).hexdigest()
+                                                   for t in W.tensors(W.TINY)]
 
 
 def test_root_is_core_commit():

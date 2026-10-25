@@ -383,17 +383,37 @@ def registration_digest(shape: Shape, seed: bytes, roots: dict[str, bytes]) -> s
                                                  "values": entries(shape, seed, roots)}).hex()
 
 
-def manifest(shape: Shape, seed: bytes | None = None, *, digests: bool = False) -> dict[str, Any]:
+def _sha_task(args: tuple) -> tuple[str, str]:
+    shape, seed, name = args
+    return name, tensor_sha256(shape, seed, name)
+
+
+def manifest(shape: Shape, seed: bytes | None = None, *, digests: bool = False, workers: int = 1,
+             progress: Any = None) -> dict[str, Any]:
     """The tensor list: each tensor's name, kind, dtype, shape, stream offset and bytes, registered row words and rows,
-    and with `digests` the SHA-256 of its bytes (generated whole: minutes per GiB on one core)."""
+    and with `digests` the SHA-256 of its bytes (each tensor generated whole by one of `workers` processes, the largest
+    first: about 15 s per GiB on one core)."""
+    sha: dict[str, str] = {}
+    if digests:
+        if seed is None:
+            raise ValueError("a manifest's digests need the seed")
+        plan = [(shape, seed, t.name) for t in sorted(tensors(shape), key=lambda t: -t.nbytes)]
+        pool = multiprocessing.get_context("fork").Pool(workers) if workers > 1 else None
+        try:
+            it = pool.imap_unordered(_sha_task, plan, chunksize=1) if pool is not None else map(_sha_task, plan)
+            for done, (name, d) in enumerate(it, 1):
+                sha[name] = d
+                if progress is not None:
+                    progress(done, len(plan))
+        finally:
+            if pool is not None:
+                pool.close()
+                pool.join()
     rows = []
     for t in tensors(shape):
         r = {"name": t.name, "kind": t.kind, "dtype": t.dtype, "shape": t.shape, "offset": t.offset, "nbytes": t.nbytes,
-             "words": t.words, "leaves": t.leaves, **({"exponent": t.exponent} if t.kind == "scale" else {})}
-        if digests:
-            if seed is None:
-                raise ValueError("a manifest's digests need the seed")
-            r["sha256"] = tensor_sha256(shape, seed, t.name)
+             "words": t.words, "leaves": t.leaves, **({"exponent": t.exponent} if t.kind == "scale" else {}),
+             **({"sha256": sha[t.name]} if digests else {})}
         rows.append(r)
     return {"format": MANIFEST, "generator": FORMAT, "shape": asdict(shape), "stream_bytes": stream_bytes(shape),
             **({"program": program(shape, seed)} if seed is not None else {}), "tensors": rows}
@@ -446,6 +466,9 @@ def write(shape: Shape, seed: bytes, path: str | Path, *, workers: int = 1, star
     return done
 
 
+#: the H200 demo's seed (compute-accounting, 25 Oct 23:33Z): public, so its weights are reproducible; the demo's salt key is
+#: the prover's, drawn from the OS at registration
+DEMO_SEED = b"verity/cmp92/h200/weights/v1"
 #: the fixture's public seed and dummy salt key: test values, never the demo's
 TEST_SEED = b"verity/seeded-weights/test-seed"
 TEST_SALT_KEY = hashlib.sha512(b"not-a-secret: the seeded weights' test salt key").digest()[:32]
@@ -538,7 +561,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.seed is None:
         ap.error("--seed is required")
     if a.cmd == "manifest":
-        Path(a.out).write_text(dumps(manifest(a.shape, a.seed, digests=a.digests)))
+        Path(a.out).write_text(dumps(manifest(a.shape, a.seed, digests=a.digests, workers=a.workers, progress=say)))
     elif a.cmd == "write":
         write(a.shape, a.seed, a.out, workers=a.workers, start=a.start, stop=a.stop, progress=say)
     else:
