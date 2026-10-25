@@ -12,7 +12,8 @@ are what the verdict's decoder checks of every record it returns (`DecAt.decode`
 * **S12 makes its rounds well formed and none of its coin rounds empty** (`DecAt.roundsWF`, `DecAt.noEmpty`): every
   decoded round has `1 ≤ n` and exactly `n` coins (`decodeJWith_rounds`).
 
-The fourth, `framed` (the rounds hold the rep's frames), is about the record's values, not its form.
+The fourth, `framed` (the rounds hold the rep's frames), is about the record's values, not its form: it holds where
+each round retained its chunk's bytes and counts its chunk's closing squeeze (`framedAt_of_rounds`).
 -/
 
 namespace RecDeploy.Rows
@@ -87,6 +88,23 @@ theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} 
     simp only [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem] at h11
     obtain ⟨i, r, w⟩ := x
     exact find_of_any (h11.2 _ (Array.mem_toList_iff.1 hx))
+
+/-! ## Frames from the rounds' values -/
+
+open FlockSoundness.Refine (Frame encs Retains) in
+open FlockSoundness.Discharge.Exec (chunks) in
+open FlockVBridge.Family (FramedAt sqCount) in
+/-- **The rounds hold the frames** where round `k` retained chunk `k`'s bytes and counts its closing squeeze's coins. -/
+theorem framedAt_of_rounds {rs : Array Round} {fs : List Frame}
+    (hb : ∀ k < (chunks fs).1.length, (rs[k]!).bytes = some ⟨(encs ((chunks fs).1.getD k [])).toArray⟩)
+    (hn : ∀ k < (chunks fs).1.length, (rs[k]!).n = sqCount ((chunks fs).1.getD k [])) :
+    FramedAt rs 0 fs := by
+  intro k hk
+  rw [Nat.zero_add]
+  refine ⟨?_, hn k hk⟩
+  unfold Retains
+  rw [hb k hk]
+  simp
 
 /-! ## Row B's form at a decision -/
 
