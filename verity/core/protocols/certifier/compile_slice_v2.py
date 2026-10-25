@@ -310,6 +310,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
     tau = list(tau) + [0] * (R - len(tau))
     overstate, made_up = overstate or {}, made_up or {}
     calls: list[tuple[str, C2.Op]] = []
+    looked: list[int] = []
     lim = 1 << Z.HW
 
     def units(rid: int) -> tuple[tuple[int, ...], ...]:
@@ -330,6 +331,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
             hit[c], ev[c] = _longest(Y, cur, us, x["ntok"], KL)
         _need(hit[c] < KL and ev[c] < lim, f"candidate {c}'s hit {hit[c]} past KL = {KL} units, or its count past HW")
         K = min(x["ntok"], (1 << Z.LW) - 1)
+        looked.append(c)
         call("take" if take else "lookup", C2.Op(slot=slot, r=x["id"], units=us[:KL], admit=True, take=take, K=K,
                                                  wh=hit[c], ev=ev[c]))
 
@@ -374,7 +376,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
                 compute(i, r["id"], t.needs[i], target, KC)
         elif s is not None and s["cand"] is not None:
             compute(p, s["id"], s["cand"]["new"], min(s["comp"] + s["n"], s["P"] + s["out"]) // B, KC)
-    left = [x["c"] for x in t.cands if x["reach"] and not x["admit"]]
+    left = [x["c"] for x in t.cands if x["reach"] and not x["admit"] and (x["c"] < W or inp.bits[x["c"] - W])]
     if left:
         lookup(left[0], 0, False)
     for p in range(R):
@@ -397,5 +399,5 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
                   for x in cur.table)
     spfx = tuple(cur.spfx[p] for p in keep) + (N,) * (R - len(keep))
     nfl = tuple(int(t.update[p]["sampled"]) for p in keep) + (0,) * (R - len(keep)) if S.AS else ()
-    return SimpleNamespace(pool=Pool(replace(cur, table=table, spfx=spfx), nfl), calls=calls, hit=tuple(hit),
-                           ev=tuple(ev), ret=tuple(ret), tau=tuple(tau))
+    return SimpleNamespace(pool=Pool(replace(cur, table=table, spfx=spfx), nfl), calls=calls, looked=tuple(looked),
+                           hit=tuple(hit), ev=tuple(ev), ret=tuple(ret), tau=tuple(tau))
