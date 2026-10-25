@@ -135,14 +135,14 @@ def registered() -> list[Registered]:
     return list(_REGISTERED.values())
 
 
-def check(key: str, kernel: str, n: int = 6) -> list[str]:
+def check(key: str, kernel: str, generator: Callable[[int], np.random.Generator], n: int = 6) -> list[str]:
     """Why kernel `kernel` of `key` is not its Definition, [] when it is: core `self_check` against the reference on `n` seeded
-    instances of each of its check specialisations (`check_targets`, drawn by a generator seeded by the pair), each of which it
-    must claim, and not decline every instance of."""
+    instances of each of its check specialisations (`check_targets`, drawn by the caller's ``generator`` over a seed of the
+    pair), each of which it must claim, and not decline every instance of."""
     reg = _REGISTERED.get((key, kernel))
     if reg is None:
         return [f"no {kernel} kernel registered for {key}"]
-    targets = reg.check_targets(np.random.default_rng(zlib.crc32(f"{key}/{kernel}".encode())))
+    targets = reg.check_targets(generator(zlib.crc32(f"{key}/{kernel}".encode())))
     if not targets:
         return [f"{key}: no check specialisations"]
     out = []

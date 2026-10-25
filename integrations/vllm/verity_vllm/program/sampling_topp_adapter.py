@@ -1,4 +1,4 @@
-"""[R15 stoch] Differential-test adapter (gate G4, `verity_vllm.properties.admission`) for `GumbelTopPTokenSelect_v1{V,S}(logits, top_p, seed,
+"""Differential-test adapter (gate G4, `verity_vllm.properties.admission`) for `GumbelTopPTokenSelect_v1{V,S}(logits, top_p, seed,
 pos, temp)` — temperature + top-p (split pipeline) + seeded Gumbel select — against the pinned production chain of vLLM d9105ea80's
 `Sampler.sample` for a request with top_p < 1 and no top-k / penalties / logit bias / min_p:
 
