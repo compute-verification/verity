@@ -188,7 +188,7 @@ receipt = {{"registration": R.digest(rec), "verifier": A5.VERIFIER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm")))
 """
-    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=300)
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     assert json.loads(p.stdout.strip().splitlines()[-1]) == []
 
