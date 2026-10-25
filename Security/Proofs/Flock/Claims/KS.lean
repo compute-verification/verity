@@ -361,7 +361,8 @@ SHA-512 leaves and the later entries (`PlainLeafDecK`: `FlockDeploy.KS.plain_hde
 `FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`) and the level-0 clashes
 (`PlainClash0K`, `PlainLeafClashK`: `FlockDeploy.KS.plain_clash₀AtK`, `FlockDeploy.KS.plain_clash₀HUAtK`,
 `FlockDeploy.KS.plain_laterClashHUAtK`). The acceptance lemmas the plain
-decoders read hold at a draw value by their proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
+decoders read hold at a draw value by their proofs, through `keep` and at `keep := id`
+(`PlainDrawAccK`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyDK`; `PlainDrawAcc`:
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
 `FlockDeploy.KS.plain_hdecHAt`), and the plain table bound at a statement holds from a simulator at that verdict, with
