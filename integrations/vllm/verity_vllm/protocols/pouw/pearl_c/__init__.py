@@ -40,7 +40,7 @@ torch's current stream, in the device's primary context:
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.  A pass's state and its end
-  are `pouw_pearl_c_passes`'s.
+  are `ends`'s (`PassEnds`).
 
 The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
 the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`, the index numbered across the epoch: `pouw_pass.call_index`)

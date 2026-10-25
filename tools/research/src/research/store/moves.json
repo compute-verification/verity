@@ -1408,7 +1408,6 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_lanes.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_passes.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
@@ -1425,6 +1424,12 @@
         "integrations/vllm/tests/store/int8_store_gpu.py": "integrations/vllm/tests/engine/int8_store_gpu.py",
         "integrations/vllm/tests/predict/": "integrations/vllm/tests/program/predict/",
         "integrations/vllm/tests/collectives/": "integrations/vllm/tests/engine/collectives/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
       }
     }
   ]
