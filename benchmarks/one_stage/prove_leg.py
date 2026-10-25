@@ -129,6 +129,9 @@ def free_port() -> int:
 
 # --- staging ----------------------------------------------------------------------------------------------------------
 
+#: `stage`'s bound stagers by unit and partition inside `reuse_lowerings`, else None
+_STAGERS: dict | None = None
+
 def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of the first output word of each instance in ``m.forge`` flipped before the set is
     committed (`forged_proofs.stage_case`): its rows and ``b || c`` agree with the outputs it commits, so only the proof
@@ -168,7 +171,15 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 
     t0 = time.time()
     sd = out / f"stage-{m.name}"
-    st = CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, circuit=sd / "circuit.txt", bind=bound)
+    key = json.dumps([m.defn.id, m.name, m.rows, m.out_rows, bound], sort_keys=True)
+    st = _STAGERS.get(key) if _STAGERS is not None else None
+    if st is None:
+        st = CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, circuit=sd / "circuit.txt", bind=bound)
+        if _STAGERS is not None:
+            _STAGERS[key] = st
+    else:
+        sd.mkdir(parents=True, exist_ok=True)
+        (sd / "circuit.txt").write_text(st.text)
     lower_s = round(time.time() - t0, 1)
     k_log = st.meta["k_log"]
     nbl = max(3, (-(-m.n // st.meta["vus_per_block"]) - 1).bit_length())
@@ -664,10 +675,13 @@ _LOWERINGS: dict = {}
 
 @contextlib.contextmanager
 def reuse_lowerings():
-    """`class_statement.unit_lowering` once per unit while inside: the honest leg and its negatives restage the same unit
-    under other partitions, and `circuit.compose` only reads the lowering it is given."""
+    """`class_statement.unit_lowering` once per unit, and `stage`'s bound `UnitStager` once per unit and partition, while
+    inside: the honest leg and its negatives restage the same unit, mostly under the same partition, and neither
+    `circuit.compose` nor `UnitStager.stage` changes the lowering or the stager it is given."""
+    global _STAGERS
     from verity_flock import class_statement as CS
 
+    _STAGERS = {}
     lower = CS.unit_lowering
 
     def memo(definition, name, in_rows, *rest, **kw):
@@ -682,6 +696,7 @@ def reuse_lowerings():
     finally:
         CS.unit_lowering = lower
         _LOWERINGS.clear()
+        _STAGERS = None
         gc.collect()
 
 
