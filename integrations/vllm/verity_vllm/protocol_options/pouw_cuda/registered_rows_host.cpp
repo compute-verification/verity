@@ -17,3 +17,10 @@ extern "C" int rr_commit_host(const Table* t, const uint64_t* hm, const uint64_t
     for (uint32_t j = 0; j < (t->W >> l); ++j) node(*t, l, j, levels);
   return 0;
 }
+
+// The ``p->n`` public salts from position ``p->first`` into ``out`` (n x 24 words); 0, or 1 for a malformed head.
+extern "C" int rr_public_salts_host(const Pub* p, uint64_t* out) {
+  if (p->n == 0 || p->len > 8 * PUB_WORDS) return 1;
+  for (uint32_t i = 0; i < p->n; ++i) public_salt(*p, p->first + i, out + 24 * (size_t)i);
+  return 0;
+}

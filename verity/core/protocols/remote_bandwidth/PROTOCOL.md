@@ -865,7 +865,9 @@ commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z
 (`post_seed`), the blocks the session appended and released (`appended`, `released`), the lifetime cap \(L\) it held
 the appended blocks to (`lifetime`, §4), the chain \(a\) over its appends in the order received (`appends`, §4's
 `a_(t,i)` after the last append, null without one: a hash over hiding roots and their indices, which the memory-map
-unit's verdict is on, §8), and the session's span. The
+unit's verdict is on, §8), the receipts each draw requested (`samples`, the session's \(s\): a draw of \(U\) receipts
+drew \(\min(s, U)\), and the memory line's δ charges the draw's rejection at \(s\) a draw, one draw a window unless
+`groups_per_coin` draws several from one coin), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
@@ -968,10 +970,11 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
   (`ledger.hiding`), plus the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\)
-  (`ledger.rejection`, over every window's draws): the ledger's parts (`ledger.DELTA_PARTS`), the horizon's profile
-  and slack and then these three. `LineHeld`'s error also carries the windows' PRF advantages,
-  \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names them by their claim
-  (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
+  (`ledger.rejection`), at the receipts each draw requested, \(k_t\) the record's `samples`, not the
+  \(\min(k_t, U_t)\) it drew: a draw that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is.
+  These are the ledger's parts (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these three.
+  `LineHeld`'s error also carries the windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no
+  numeric value: the ledger names them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
   Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
   outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
@@ -979,11 +982,14 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
   takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
   computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is conditional on it (`auditor_line.json`'s
-  `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
-  node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
-  credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
-  of the boundary links over its span show other ingress.
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
+  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
+  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
+  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
+  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
+  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
+  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
+  conditional on `ProviderLockdown` (`trusted-nebius-host`), which names what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
