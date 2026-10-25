@@ -20,8 +20,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   its callee's `used` names, as the rows its members read (`Desc.memberRows`) or member by member, then a scan's
   carries (`Desc.carriesRead`), kept by `keep` (`nodeReads_comp`), each read piece by piece through `down` (`readPos`,
   `downPos`, `argPos`, `carryPos`), every segment one `down` gives a piece of an argument (`FromDown`) or of the rows
-  (`FromRows`), or `carriesRead` gives (`FromCarry`); `Seg.alike` reads a copy of leaves once, naming the same
-  positions (`mem_segPos_alike`, `alike_count`, `segGood_alike`) and kept as its segment is (`keep_alike`);
+  (`FromRows`), or `carriesRead` gives (`FromCarry`); `Seg.split` reads copies all alike once and one copy piece by
+  piece, naming the same positions (`mem_segPos_alike`, `mem_segPos_split`);
 * `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
 * `Array.qsort` by a key sorts by it (`qsort_sorted`), so `Desc.Ivs.norm` keeps exactly its intervals' leaves
   (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
@@ -94,8 +94,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
-open: `RootSegs`, that every segment `down` or `carriesRead` gives a root node names gates of one root node with their
-widths, and `RootSet`, that the positions the node reads (`rootRead`) name exactly the gates outside the node that its
+open: `RootSegs`, that every read `Seg.split` makes of a segment `down` or `carriesRead` gives a root node names gates
+of one root node with their widths, and `RootSet`, that the positions the node reads (`rootRead`) name exactly the gates outside the node that its
 gates read; a composite's segment `keep` keeps is then one outside the node (`keep_iff`).
 -/
 
@@ -519,6 +519,11 @@ theorem copy_length (s : Seg) (m : Nat) : (posAll (s.copy m)).length = (posAll s
 
 theorem copy_zero (s : Seg) : posAll (s.copy 0) = posAll s.ps := by
   rw [copy_pos, show ((0 : Nat) : Int) * s.shift = 0 by simp, shiftPos_zero, List.map_id]
+
+theorem segPos_one_rep {s : Seg} (h : s.reps = 1) : segPos s = posAll s.ps := by
+  unfold segPos
+  rw [h, List.range_one, List.flatMap_singleton, copy_pos]
+  simp [shiftPos_zero]
 
 theorem copy_copy (s : Seg) (lo m : Nat) :
     posAll (Desc.shiftGates ((m : Int) * s.shift) (s.copy lo)) = posAll (s.copy (lo + m)) := by
@@ -1939,11 +1944,11 @@ theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (o
 theorem range'_size (n : Nat) : List.range' 0 ((n - 0 + 1 - 1) / 1) = List.range n := by
   rw [List.range_eq_range']; congr 1; omega
 
-/-- **A primitive's node reads its arguments whole**, unless it is a batch of no members, each segment from `down`;
-copies alike are one (`Seg.alike`). -/
+/-- **A primitive's node reads its arguments whole**, unless it is a batch of no members, each segment from `down`, as
+reads (`Seg.split`: copies alike as one, one copy piece by piece). -/
 theorem nodeReads_prim (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = true) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
-    ∃ out : Array Seg, rs = out.map Seg.alike ∧
+    ∃ out : Array Seg, rs = out.flatMap Seg.split ∧
       segsPos out = (if (node.form == .batch && node.n == 0) = true then [] else
         (List.range node.args.size).flatMap fun i => readPos c k i #[(0, (c.arg k i).count)]) ∧
       ∀ s ∈ out, ∃ i, FromDown c k i s := by
@@ -2008,12 +2013,13 @@ def carryPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) : List (Tgt ×
     | .error _ => []
   else []
 
-/-- **A composite's node reads its arguments where its callee reads its parameters**, and a scan's carries, keeping the
-segments that don't start in the node, copies alike as one (`Seg.alike`); each segment from `down` or `carriesRead`. -/
+/-- **A composite's node reads its arguments where its callee reads its parameters**, and a scan's carries, as reads
+(`Seg.split`: copies alike as one, one copy piece by piece), keeping those that don't start in the node; each segment
+from `down` or `carriesRead`. -/
 theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = false) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
     if node.members = 0 then rs = #[] else
-      ∃ out : Array Seg, rs = (out.filter (keep c k)).map Seg.alike ∧
+      ∃ out : Array Seg, rs = (out.flatMap Seg.split).filter (keep c k) ∧
         segsPos out = (List.range node.args.size).flatMap (argPos c k node) ++ carryPos c k node ∧
         ∀ s ∈ out, (∃ i, FromDown c k i s) ∨ FromRows c k node s ∨ FromCarry c k node s := by
   unfold Desc.nodeReads at h
@@ -2126,9 +2132,10 @@ theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
 /-! ## `RootReads` from the segments `down` gives at the root and the positions read
 
 `nodeReads` gives each root node's segments from `down` and a scan's carries (`nodeReads_prim`, `nodeReads_comp`), so
-`RootReads` holds wherever two smaller statements do (`rootReads_of`): `RootSegs`, that each such segment names gates of
-one root node with their widths, and `RootSet`, that the positions read name exactly the gates outside the node that
-its gates read. A composite's segment `keep` keeps is then one outside the node (`keep_iff`). -/
+`RootReads` holds wherever two smaller statements do (`rootReads_of`): `RootSegs`, that each read `Seg.split` makes of
+such a segment names gates of one root node with their widths, and `RootSet`, that the positions read name exactly the
+gates outside the node that its gates read. A composite's read `keep` keeps is then one outside the node (`keep_iff`).
+-/
 
 /-- A segment as `RootReads` speaks of it: of no count, it names no positions; else its pieces have positive count and
 it names gates `a` of one root node, each of width `c.w[a]`. -/
@@ -2146,10 +2153,10 @@ def rootRead (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) 
   else if node.members = 0 then []
   else (List.range node.args.size).flatMap (argPos (rootCtx P memo) k node) ++ carryPos (rootCtx P memo) k node
 
-/-- **Open: the segments `down` gives at the root.** On a Program `Desc.evaluate` reads, with its summaries `memo` and
-`circuitOf`'s circuit `c`: for root node `k`, whose segments (`Desc.nodeReads`) have pieces naming gates only, every
-segment `down` gives a piece of one of its arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of
-its scan's carries, is `SegGood`. -/
+/-- **Open: the segments `down` gives at the root, as reads.** On a Program `Desc.evaluate` reads, with its summaries
+`memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments (`Desc.nodeReads`) have pieces naming gates only,
+every read `Seg.split` makes of a segment `down` gives a piece of one of its arguments (or one `Desc.memberRows` gives),
+or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. -/
 def RootSegs : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -2157,7 +2164,7 @@ def RootSegs : Prop :=
     ∀ k < nodeCount P, ∀ node rs, (rootCtx P memo).node k = .ok node → Desc.nodeReads (rootCtx P memo) k = .ok rs →
       (∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w) →
       ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
-        FromCarry (rootCtx P memo) k node s) → SegGood P c s
+        FromCarry (rootCtx P memo) k node s) → ∀ g ∈ (Seg.split s).toList, SegGood P c g
 
 /-- **Open: the positions a root node reads.** With `RootSegs`' premises: the gates the positions root node `k` reads
 name (`rootRead`), outside the node where its callee is a composite, are exactly the gates outside the node that its
@@ -2223,12 +2230,6 @@ theorem keep_iff (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hl : Desc
     exact hb'
   exact ⟨fun h ha => h (hu a a0 hak' ha0k ha), fun h ha => h (hu a0 a ha0k hak' ha)⟩
 
-theorem alike_ps (s : Seg) : (Seg.alike s).ps = s.ps := by
-  unfold Desc.Seg.alike; split <;> rfl
-
-theorem keep_alike (c : Desc.Ctx) (k : Nat) (s : Seg) : keep c k (Seg.alike s) = keep c k s := by
-  unfold keep; rw [alike_ps]
-
 /-- Copies alike as one name what the copies name. -/
 theorem mem_segPos_alike (s : Seg) (x : Tgt × Int) : x ∈ segPos (Seg.alike s) ↔ x ∈ segPos s := by
   unfold Desc.Seg.alike
@@ -2240,23 +2241,22 @@ theorem mem_segPos_alike (s : Seg) (x : Tgt × Int) : x ∈ segPos (Seg.alike s)
     exact ⟨fun ⟨_, _, hx⟩ => ⟨0, by omega, hx⟩, fun ⟨_, _, hx⟩ => ⟨0, by omega, hx⟩⟩
   · rfl
 
-theorem alike_count (s : Seg) : (Seg.alike s).count = 0 ↔ s.count = 0 := by
-  unfold Desc.Seg.alike Desc.Seg.count
+/-- The reads `Seg.split` makes of a segment name what it names. -/
+theorem mem_segPos_split (s : Seg) (x : Tgt × Int) :
+    (∃ g ∈ (Seg.split s).toList, x ∈ segPos g) ↔ x ∈ segPos s := by
+  rw [← mem_segPos_alike s x]
+  unfold Desc.Seg.split
+  dsimp only
   split
   · rename_i h
-    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-    simp only [Nat.mul_eq_zero]
-    omega
-  · rfl
-
-theorem segGood_alike {P : Prog} {c : Circuit} {s : Seg} (h : SegGood P c s) : SegGood P c (Seg.alike s) := by
-  refine ⟨fun h0 => ?_, fun h0 => ?_⟩
-  · have e := h.1 ((alike_count s).1 h0)
-    refine List.eq_nil_iff_forall_not_mem.2 fun x hx => ?_
-    rw [mem_segPos_alike, e] at hx
-    exact List.not_mem_nil hx
-  · obtain ⟨hp, k', hk', hx⟩ := h.2 fun h' => h0 ((alike_count s).2 h')
-    exact ⟨by rw [alike_ps]; exact hp, k', hk', fun x hx' => hx x ((mem_segPos_alike s x).1 hx')⟩
+    rw [segPos_one_rep (beq_iff_eq.1 h)]
+    simp only [Array.toList_map, List.mem_map, posAll, List.mem_flatMap]
+    constructor
+    · rintro ⟨g, ⟨q, hq, rfl⟩, hx⟩
+      exact ⟨q, hq, by rwa [segPos_one] at hx⟩
+    · rintro ⟨q, hq, hx⟩
+      exact ⟨Seg.one q, ⟨q, hq, rfl⟩, by rwa [segPos_one]⟩
+  · simp
 
 /-- **`RootReads` from `RootSegs` and `RootSet`.** -/
 theorem rootReads_of (hS : RootSegs) (hE : RootSet) : RootReads := by
@@ -2279,46 +2279,48 @@ theorem rootReads_of (hS : RootSegs) (hE : RootSet) : RootReads := by
       simp
     · rw [if_neg hm0] at hcomp
       obtain ⟨out, rfl, hpos, hsrc⟩ := hcomp
-      have hgood : ∀ s ∈ out, SegGood P c s := fun s hs => hS' s (hsrc s hs)
+      have hgood : ∀ s ∈ out, ∀ g ∈ (Seg.split s).toList, SegGood P c g := fun s hs => hS' s (hsrc s hs)
       have hR : rootRead P memo node k = segsPos out := by
         rw [rootRead, if_neg (by rw [hp]; decide), if_neg hm0, hpos]
-      refine ⟨fun s hs => ?_, fun a => ?_⟩
-      · obtain ⟨s', hs', rfl⟩ := Array.mem_map.1 hs
-        exact segGood_alike (hgood s' (Array.mem_filter.1 hs').1)
+      refine ⟨fun g hg => ?_, fun a => ?_⟩
+      · obtain ⟨s, hs, hgs⟩ := Array.mem_flatMap.1 (Array.mem_filter.1 hg).1
+        exact hgood s hs g (Array.mem_toList_iff.2 hgs)
       rw [hR]
       constructor
-      · rintro ⟨s, hs, hc0, w, hw⟩
-        obtain ⟨s', hs', rfl⟩ := Array.mem_map.1 hs
-        obtain ⟨hso, hkeep⟩ := Array.mem_filter.1 hs'
-        have hc0' : s'.count ≠ 0 := fun h0 => hc0 ((alike_count s').2 h0)
-        have hw' := (mem_segPos_alike s' _).1 hw
-        exact ⟨⟨w, List.mem_flatMap.2 ⟨s', Array.mem_toList_iff.2 hso, hw'⟩⟩,
-          fun _ => (keep_iff P memo c hl hk (hgood s' hso) hc0' hw').1 hkeep⟩
+      · rintro ⟨g, hg, hc0, w, hw⟩
+        obtain ⟨hg1, hkeep⟩ := Array.mem_filter.1 hg
+        obtain ⟨s, hs, hgs⟩ := Array.mem_flatMap.1 hg1
+        have hgd := hgood s hs g (Array.mem_toList_iff.2 hgs)
+        exact ⟨⟨w, List.mem_flatMap.2 ⟨s, Array.mem_toList_iff.2 hs,
+            (mem_segPos_split s _).1 ⟨g, Array.mem_toList_iff.2 hgs, hw⟩⟩⟩,
+          fun _ => (keep_iff P memo c hl hk hgd hc0 hw).1 hkeep⟩
       · rintro ⟨⟨w, hw⟩, hout⟩
         obtain ⟨s, hs, hw⟩ := List.mem_flatMap.1 hw
         have hso := Array.mem_toList_iff.1 hs
-        have hc0 : s.count ≠ 0 := fun h0 => by rw [(hgood s hso).1 h0] at hw; simp at hw
-        refine ⟨Seg.alike s, Array.mem_map.2 ⟨s, Array.mem_filter.2 ⟨hso,
-          (keep_iff P memo c hl hk (hgood s hso) hc0 hw).2 (hout rfl)⟩, rfl⟩,
-          fun h0 => hc0 ((alike_count s).1 h0), w, (mem_segPos_alike s _).2 hw⟩
+        obtain ⟨g, hgs, hwg⟩ := (mem_segPos_split s _).2 hw
+        have hgd := hgood s hso g hgs
+        have hc0 : g.count ≠ 0 := fun h0 => by rw [hgd.1 h0] at hwg; simp at hwg
+        exact ⟨g, Array.mem_filter.2 ⟨Array.mem_flatMap.2 ⟨s, hso, Array.mem_toList_iff.1 hgs⟩,
+          (keep_iff P memo c hl hk hgd hc0 hwg).2 (hout rfl)⟩, hc0, w, hwg⟩
   · obtain ⟨out, rfl, hpos, hsrc⟩ := nodeReads_prim (rootCtx P memo) k node hn hp rs hrs
-    have hgood : ∀ s ∈ out, SegGood P c s := fun s hs => hS' s (Or.inl (hsrc s hs))
+    have hgood : ∀ s ∈ out, ∀ g ∈ (Seg.split s).toList, SegGood P c g := fun s hs => hS' s (Or.inl (hsrc s hs))
     have hR : rootRead P memo node k = segsPos out := by rw [rootRead, if_pos hp, hpos]
-    refine ⟨fun s hs => ?_, fun a => ?_⟩
-    · obtain ⟨s', hs', rfl⟩ := Array.mem_map.1 hs
-      exact segGood_alike (hgood s' hs')
+    refine ⟨fun g hg => ?_, fun a => ?_⟩
+    · obtain ⟨s, hs, hgs⟩ := Array.mem_flatMap.1 hg
+      exact hgood s hs g (Array.mem_toList_iff.2 hgs)
     rw [hR]
     constructor
-    · rintro ⟨s, hs, -, w, hw⟩
-      obtain ⟨s', hs', rfl⟩ := Array.mem_map.1 hs
-      exact ⟨⟨w, List.mem_flatMap.2 ⟨s', Array.mem_toList_iff.2 hs', (mem_segPos_alike s' _).1 hw⟩⟩,
-        fun h => absurd h (by simp)⟩
+    · rintro ⟨g, hg, -, w, hw⟩
+      obtain ⟨s, hs, hgs⟩ := Array.mem_flatMap.1 hg
+      exact ⟨⟨w, List.mem_flatMap.2 ⟨s, Array.mem_toList_iff.2 hs,
+          (mem_segPos_split s _).1 ⟨g, Array.mem_toList_iff.2 hgs, hw⟩⟩⟩, fun h => absurd h (by simp)⟩
     · rintro ⟨⟨w, hw⟩, -⟩
       obtain ⟨s, hs, hw⟩ := List.mem_flatMap.1 hw
-      have hs' := Array.mem_toList_iff.1 hs
-      refine ⟨Seg.alike s, Array.mem_map.2 ⟨s, hs', rfl⟩, fun h0 => ?_, w, (mem_segPos_alike s _).2 hw⟩
-      rw [(hgood s hs').1 ((alike_count s).1 h0)] at hw
-      simp at hw
+      have hso := Array.mem_toList_iff.1 hs
+      obtain ⟨g, hgs, hwg⟩ := (mem_segPos_split s _).2 hw
+      refine ⟨g, Array.mem_flatMap.2 ⟨s, hso, Array.mem_toList_iff.1 hgs⟩, fun h0 => ?_, w, hwg⟩
+      rw [(hgood s hso g hgs).1 h0] at hwg
+      simp at hwg
 
 
 /-! ## A gate's operands
@@ -4097,11 +4099,6 @@ theorem psSlice_tgt (s : PS) (lo hi : Nat) (g : Seg) (hg : g ∈ (s.slice lo hi)
     cases hq
   rw [getElem!_pos _ i hlt] at hq
   exact ⟨_, Array.getElem_mem_toList hlt, q, hq, e⟩
-
-theorem segPos_one_rep {s : Seg} (h : s.reps = 1) : segPos s = posAll s.ps := by
-  unfold segPos
-  rw [h, List.range_one, List.flatMap_singleton, copy_pos]
-  simp [shiftPos_zero]
 
 /-- Definition `f`'s summarized return (`memo`'s entry), read in any activation of `f`: segments as `PS.of` makes them,
 positions at or past 0 naming `f`'s gates or its parameters' leaves in range, a segment of more than one copy gates
