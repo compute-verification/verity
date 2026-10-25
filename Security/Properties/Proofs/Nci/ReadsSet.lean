@@ -2888,4 +2888,130 @@ theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (s
     exact laid_le hL (by omega) (le_refl _)
   exact ⟨g, by omega, by omega, ops, hgl, a, hag, hr⟩
 
+/-! ## `UsedExact` of every reached Definition, callees first -/
+
+theorem usedExact_congr {P : Prog} {m m' : Array Desc.Summary} {f : Nat} (e : m[f]! = m'[f]!)
+    (h : UsedExact P m f) : UsedExact P m' f := by
+  unfold UsedExact at h ⊢
+  rw [← e]
+  exact h
+
+theorem retOk_congr {P : Prog} {m m' : Array Desc.Summary} {f : Nat} (e : m[f]! = m'[f]!)
+    (h : RetOk P m f) : RetOk P m' f := by
+  unfold RetOk at h ⊢
+  rw [← e]
+  exact h
+
+/-- **`memoOf` summarizes each reached Definition but the root over the summaries before it.** -/
+theorem memoOf_prefix (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo) :
+    ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root →
+      ∃ r : Array Desc.Summary, r.size = f ∧ (∀ f' < f, r[f']! = memo[f']!) ∧
+        Desc.summarize P r f = .ok memo[f]! := by
+  unfold memoOf at h
+  extract_lets seen memo0 at h
+  have h' := ok_bind_pure h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h'
+  have := forIn_range_idx (fun t (r : Array Desc.Summary) => r.size = t ∧
+      ∀ f < t, (Desc.reached P)[f]! = true → f ≠ P.root →
+        ∃ r' : Array Desc.Summary, r'.size = f ∧ (∀ f' < f, r'[f']! = r[f']!) ∧ Desc.summarize P r' f = .ok r[f]!)
+    _ P.defs.size ?_ P.defs.size 0 memo0 memo
+    (by simp) ⟨rfl, fun f hf => absurd hf (Nat.not_lt_zero _)⟩ (by simpa using h')
+  · exact fun f hf => this.2 f (by simpa using hf)
+  intro t r y htP ⟨hsz, hI⟩ hy
+  obtain ⟨v, rfl, hv⟩ : ∃ v, y = .yield (r.push v) ∧
+      ((seen[t]! = true ∧ ¬t = P.root) → Desc.summarize P r t = .ok v) := by
+    split at hy
+    · rcases hs : Desc.summarize P r t with e | v
+      · rw [hs] at hy; cases hy
+      · rw [hs] at hy
+        change Except.ok (ForInStep.yield (r.push v)) = Except.ok y at hy
+        injection hy with hy
+        exact ⟨v, hy.symm, fun _ => rfl⟩
+    · rename_i hc
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      exact ⟨default, hy.symm, fun h => absurd h hc⟩
+  have hget : ∀ f' < t, (r.push v)[f']! = r[f']! := fun f' hf' => by
+    rw [getElem!_pos (r.push v) f' (by simp; omega), Array.getElem_push_lt (by omega), ← getElem!_pos r f' (by omega)]
+  refine ⟨_, rfl, by simp [hsz], fun f hf hrf hfr => ?_⟩
+  rcases Nat.lt_succ_iff_lt_or_eq.1 hf with hf | rfl
+  · obtain ⟨r', h1, h2, h3⟩ := hI f hf hrf hfr
+    exact ⟨r', h1, fun f' hf' => (h2 f' hf').trans (hget f' (by omega)).symm, by rw [hget f hf]; exact h3⟩
+  · refine ⟨r, hsz, fun f' hf' => (hget f' (by omega)).symm, ?_⟩
+    subst hsz
+    rw [getElem!_pos (r.push v) r.size (by simp), Array.getElem_push_eq]
+    exact hv ⟨hrf, hfr⟩
+
+/-- **`UsedExact` of every reached composite Definition but the root**, callees first: wherever it holds of each one
+summarized over the summaries before it (`memoOf_prefix`) once it holds there of its composite callees. -/
+theorem memoOf_usedExact (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
+    (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
+    (hnr : ∀ d < P.defs.size, (Desc.reached P)[d]! = true →
+      ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
+    (hStep : ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → (P.defs[f]!).prim = false →
+      ∀ r : Array Desc.Summary, r.size = f → (∀ f' < f, r[f']! = memo[f']!) →
+      Desc.summarize P r f = .ok memo[f]! →
+      (∀ k < (P.defs[f]!).body.nodes.size, (P.defs[((P.defs[f]!).body.nodes[k]!).fn]!).prim = false →
+        UsedExact P r ((P.defs[f]!).body.nodes[k]!).fn) →
+      UsedExact P memo f) :
+    ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → (P.defs[f]!).prim = false →
+      UsedExact P memo f := by
+  intro f
+  induction f using Nat.strong_induction_on with
+  | _ f ih =>
+    intro hf hrf hfr hp
+    obtain ⟨r, hsz, hpre, hs⟩ := memoOf_prefix P memo h f hf hrf hfr
+    refine hStep f hf hrf hfr hp r hsz hpre hs fun k hk hpk => ?_
+    have hlt := hcf f hf k hk
+    exact usedExact_congr (hpre _ hlt).symm (ih _ hlt (by omega) (reached_closed P hcf f hrf hp k hk)
+      (hnr f hf hrf k hk) hpk)
+
+/-- A segment a node's read splits is one `down` (or `Desc.memberRows`, or `Desc.carriesRead`) gives. -/
+theorem nodePos_seg (P : Prog) (r : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P r d = .ok s) (hp : (P.defs[d]!).prim = false) {k : Nat}
+    (hk : k < (P.defs[d]!).body.nodes.size) {node : Flock.Program.Node} (hn : (ctxOf P r d).node k = .ok node)
+    {x : Tgt × Int} (hx : x ∈ nodePos (ctxOf P r d) node k) :
+    ∃ g, ((∃ i, FromDown (ctxOf P r d) k i g) ∨ FromRows (ctxOf P r d) k node g ∨ FromCarry (ctxOf P r d) k node g) ∧
+      x ∈ segPos g := by
+  obtain ⟨rs, hrs⟩ := summarize_reads P r d s h hp k hk
+  obtain ⟨out, -, -, hpos, hfrom⟩ := nodeReads_out _ k node hn hrs
+  rw [← hpos] at hx
+  obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx
+  exact ⟨g, hfrom g (Array.mem_toList_iff.1 hg), hxg⟩
+
+/-- **`UsedExact` of a composite Definition from its body's nodes**: summarized over `r`, wherever `NodeSet` holds of
+each node over `r`, the segments their reads split are as `down` gives them (`ShapeOk`, `RepsOk`), the gate positions
+they name are the body's, and a parameter resolves before every activation resolution reaches. -/
+theorem usedExact_of (P : Prog) (r memo : Array Desc.Summary) (f : Nat)
+    (h : Desc.summarize P r f = .ok memo[f]!) (hp : (P.defs[f]!).prim = false) (hL : Laid P f)
+    (hlast : (P.defs[f]!).body.offsets[(P.defs[f]!).body.nodes.size]! = (P.defs[f]!).gates)
+    (hN : ∀ k < (P.defs[f]!).body.nodes.size, NodeSet P r f k)
+    (hsh : ∀ k < (P.defs[f]!).body.nodes.size, ∀ node, (ctxOf P r f).node k = .ok node → ∀ g,
+      ((∃ i, FromDown (ctxOf P r f) k i g) ∨ FromRows (ctxOf P r f) k node g ∨ FromCarry (ctxOf P r f) k node g) →
+      ShapeOk P f g ∧ RepsOk g)
+    (hgw : ∀ k < (P.defs[f]!).body.nodes.size, ∀ node, (ctxOf P r f).node k = .ok node →
+      ∀ w (p : Int), (Tgt.gate w, p) ∈ nodePos (ctxOf P r f) node k → p < ((P.defs[f]!).gates : Int))
+    (hlt : ∀ sc : Flock.Program.Scope, sc.d = f → Resolve.Good P sc →
+      ∀ i j a, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a → a < sc.off) :
+    UsedExact P memo f := by
+  intro sc hd hgood hloc
+  subst hd
+  have hNS := fun k hk node hn => hN k hk sc rfl hgood hloc node hn
+  refine ⟨usedExact_a P r memo[sc.d]! sc h hp hL hlast
+    (fun k hk node hn a ha => ((hNS k hk node hn).1 a).2 ha |>.1)
+    (fun k hk node hn g hg => ⟨fun x hx => ((hsh k hk node hn g hg).1.2.1 x hx).1, (hsh k hk node hn g hg).2⟩)
+    (fun k hk node hn x hx => ?_),
+    usedExact_b P r memo[sc.d]! sc h hp hL hlast
+    (fun k hk node hn a ha => (((hNS k hk node hn).1 a).1 ha).1)
+    (fun k hk node hn => (hNS k hk node hn).2)
+    (fun k hk node hn g hg => ⟨fun x hx => ((hsh k hk node hn g hg).1.2.1 x hx).1,
+      by have := (hsh k hk node hn g hg).1.2.2.2; omega, (hsh k hk node hn g hg).1.2.2.1⟩)
+    (hlt sc rfl hgood)⟩
+  obtain ⟨g, hg, hxg⟩ := nodePos_seg P r sc.d _ h hp hk hn hx
+  obtain ⟨-, hnf, hpi⟩ := (hsh k hk node hn g hg).1.2.1 x hxg
+  refine ⟨hnf, fun i hi => (hpi i hi).1, fun w hw => ?_⟩
+  obtain ⟨t, p⟩ := x
+  simp only at hw
+  subst hw
+  exact hgw k hk node hn w p hx
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
