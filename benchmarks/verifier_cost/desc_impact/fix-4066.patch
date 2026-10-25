@@ -1,0 +1,186 @@
+diff --git a/verity/core/protocols/network/nci/lean/NciCheck/Desc.lean b/verity/core/protocols/network/nci/lean/NciCheck/Desc.lean
+index f8026bc4f2..b5719bcae7 100644
+--- a/verity/core/protocols/network/nci/lean/NciCheck/Desc.lean
++++ b/verity/core/protocols/network/nci/lean/NciCheck/Desc.lean
+@@ -37,8 +37,10 @@ computed in the decoder's order (callees first) and shared by every activation:
+ 
+ A body's references are resolved through its nodes' outputs with the callees' `ret`: a batch whose members' returns
+ make one run maps any piece by one affine map, whole members of any other batch become one segment of copies, and a
+-pass-through goes back through the node's arguments. Per IU, its reads are those segments with the IU's own nodes and θ's
+-taken out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
++pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
++one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
++are one copy of pieces of as many nodes (`Seg.split`). Per IU, its reads are those with the IU's own nodes and θ's taken
++out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
+ counted as copies times one copy's width.
+ 
+ Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
+@@ -209,6 +211,13 @@ def Seg.count (s : Seg) : Nat := s.reps * s.len
+ /-- `s` as a set of gates and leaves: copies all alike (`shift = 0`) as one. -/
+ def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with reps := 1 } else s
+ 
++/-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
++pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
++read is kept, and its IU found, by its first piece. -/
++def Seg.split (s : Seg) : Array Seg :=
++  let s := s.alike
++  if s.reps == 1 then s.ps.map .one else #[s]
++
+ def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
+   ps.map fun q => match q.tgt with
+     | .gate _ => { q with base := q.base + δ }
+@@ -742,7 +751,8 @@ def carriesRead (c : Ctx) (k : Nat) (used : Ivs) : Except String (Array Seg) :=
+ /-- What node `k`'s gates read outside the node, resolved in the body: every argument of a primitive (or of a batch of one
+ with members); for a composite callee, the positions its `used` names, all members at once (`memberRows`, else member by
+ member) unless every member reads its whole argument; and for a scan, an iteration's carry read from the one before it,
+-through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read. -/
++through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read, and one
++copy's pieces each a read (`Seg.split`). -/
+ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
+   let node ← c.node k
+   let callee := c.P.defs[node.fn]!
+@@ -758,7 +768,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
+   if callee.prim then
+     if node.form == .batch && node.n == 0 then return #[]
+     for i in [0:node.args.size] do out := out ++ (← resolve i (whole i))
+-    return out.map Seg.alike
++    return out.flatMap Seg.split
+   if node.members == 0 then return #[]
+   let used := (c.memo[node.fn]!).used
+   for i in [0:node.args.size] do
+@@ -781,12 +791,12 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
+   if node.form == .scan && node.n ≥ 2 then out := out ++ (← carriesRead c k (used[0]?.getD #[]))
+   let lo : Int := c.body.offsets[k]!
+   let hi : Int := c.body.offsets[k + 1]!
+-  -- a segment's gates are one node's
+-  return (out.filter fun s => match s.ps[0]? with
++  -- a read's gates are one node's
++  return (out.flatMap Seg.split).filter fun s => match s.ps[0]? with
+     | some q => match q.tgt with
+       | .gate _ => !(lo ≤ q.base && q.base < hi)
+       | _ => true
+-    | none => false).map Seg.alike
++    | none => false
+ 
+ /-- Definition `d`'s summary, its callees' in `memo`. -/
+ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do
+diff --git a/verity/core/protocols/network/nci/lean/lean-audit.json b/verity/core/protocols/network/nci/lean/lean-audit.json
+index c1ae813429..60d93172ee 100644
+--- a/verity/core/protocols/network/nci/lean/lean-audit.json
++++ b/verity/core/protocols/network/nci/lean/lean-audit.json
+@@ -9,17 +9,17 @@
+  },
+  "runs": {
+   "NciCheck.DescDifftestMain": {
+-   "why": "3,658 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, and 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
++   "why": "3,670 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, and 12 on whole members of a batch returning leaves of two arguments they share, each another node's, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+    "args": [
+     "{desc_difftest/instances.jsonl}",
+     "{desc_difftest/expanded.jsonl}",
+     "{desc_difftest/python.jsonl}",
+-    "3658"
++    "3670"
+    ],
+    "data": {
+-    "desc_difftest/expanded.jsonl": "2c7095c72510098d6500cfddb2b344408d9f1b1a8a49bc003b3c470126ce1102",
+-    "desc_difftest/instances.jsonl": "a74e847c5496abd9acd931bc9f6e6bdf44dd745dfe8ff86d71a82357dfc715aa",
+-    "desc_difftest/python.jsonl": "2905caf60da672551533de861ae83f5e116b0c3ff8d6ce7ba98e3847c0e24eeb"
++    "desc_difftest/expanded.jsonl": "88305af735270126f3aa42adf5b56345ee82a5f8fa2a41e78d4cdc2966f1657a",
++    "desc_difftest/instances.jsonl": "675a7fca69276d3b5b0395f31586c1a31fc42f0148fc5f9baf934be8802b4918",
++    "desc_difftest/python.jsonl": "647ba23dae05df384c5078f10ac34bf31a872533cd516514974415dfb4c63b72"
+    },
+    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
+   },
+diff --git a/verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py b/verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py
+index 374af7e0d1..9fd9d68919 100644
+--- a/verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py
++++ b/verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py
+@@ -15,7 +15,8 @@ across its arrays' rows (`transposed`), then each distinct descriptor
+ the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
+ composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
+ (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
+-`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
++`NciCheck.Desc.walkBound`'s limit, then twelve on whole members of a batch returning leaves of two arguments they share,
++each another node's (`shared`), then `difftest_vectors.pinned()`'s two (θ every
+ input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
+ where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
+ its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
+@@ -225,12 +226,66 @@ def walks() -> list[dict]:
+     return out
+ 
+ 
++def shared_decl(reader: str, order: tuple[str, ...]) -> str:
++    """A declaration whose root batches a composite over two members, each returning its shared parameters `a` and `b`
++    (in `order`), the outputs of two Calls `A` and `B` on registered inputs, and a gate (a primitive, `reader =
++    "primitive"`; a composite's, `"composite"`; or a primitive reading a composite that makes the batch, `"wrapped"`)
++    reading every member's return: one copy of pieces of both Calls."""
++    w, n, L = 8, 2, len(order)
++    op = vectors.prim((w, w), w)
++    total = vectors.summing(L * n, w, w)
++    tag = f"{reader}{''.join(order)}"
++    ret = Tuple(*[Value(w)] * L)
++    F = bind(CompositeDefinition(f"NciShared{tag}", 1, (), lambda S: ((("a", Value(w)), ("b", Value(w)),
++                                                                       ("x", Value(w))), ret),
++                                 lambda B, S, a, b, x: tuple_of(*[{"a": a, "b": b}[o] for o in order]), register=False))
++    G = bind(CompositeDefinition(f"NciSharedBatch{tag}", 1, (), lambda S: ((("a", Value(w)), ("b", Value(w)),
++                                                                            ("x", Array(n, Value(w)))), Array(n, ret)),
++                                 lambda B, S, a, b, x: B.batch(F, a, b, x, axes=(None, None, 0)), register=False))
++    R = bind(CompositeDefinition(f"NciSharedRead{tag}", 1, (), lambda S: ((("v", Array(L * n, Value(w))),), Value(w)),
++                                 lambda B, S, v: B.call(total, v), register=False))
++
++    def body(B, S, y, z, x):
++        a, b = B.call(op, y, y), B.call(op, z, z)
++        k = B.call(G, a, b, x) if reader == "wrapped" else B.batch(F, a, b, x, axes=(None, None, 0))
++        r = k.refs
++        v = Coll(Array(L * n, Value(w)), Affine(r.space, r.idx, r.base, L * n))
++        return B.call(R, v) if reader == "composite" else B.call(total, v)
++    fn = bind(CompositeDefinition(f"NciSharedDecl{tag}", 1, (), lambda S: ((("y", Value(w)), ("z", Value(w)),
++                                                                            ("x", Array(n, Value(w)))), Value(w)),
++                                  body, register=False))
++    return codec.canonical_json(codec.encode_program(Program(fn, registered=("y", "z")))).decode()
++
++
++def shared() -> list[dict]:
++    """Instances on `shared_decl`'s declarations, θ the registered inputs and α 1: the reading gate in `A`'s IU and `B`
++    in another, and the other way round. A read is one node's gates, so `B`'s gates are novel to the first IU however
++    the copy's pieces are ordered, and `A`'s not to the second."""
++    out = []
++    for reader in ("primitive", "composite", "wrapped"):
++        for order in (("a", "b"), ("b", "b", "a")):
++            text = shared_decl(reader, order)
++            inp, reg, spans = reference.root_nodes(text)
++            calls = [k for k in range(len(inp)) if not inp[k] and spans[k][1] > spans[k][0]]
++            for other in calls[:2]:
++                owner = ["input" if inp[k] or spans[k][1] == spans[k][0] else 0 for k in range(len(inp))]
++                owner[other] = 1
++                out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
++                            "owner": owner, "gamma": spans[-1][1], "alpha": [1, 1]})
++    return out
++
++
+ def instance(seed: int) -> dict:
+     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
+-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
++    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`, then
++    `shared()`."""
+     rng = random.Random(seed)
+     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
+     first_walk = first_decoy + len(decoys())
++    first_shared = first_walk + len(walks())
++    if seed >= first_shared:
++        return {"instance": shared()[seed - first_shared], "shape": "shared", "theta_kind": None, "division": None,
++                "malformed": None}
+     if seed >= first_walk:
+         return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
+                 "malformed": None}
+@@ -326,8 +381,8 @@ NAMES = ("instances", "expanded", "python")
+ 
+ def total() -> int:
+     """How many instances the audit's data has: the random ones, every fixture's, the decoys,
+-    `difftest_vectors.pinned()`'s and the walks."""
+-    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
++    `difftest_vectors.pinned()`'s, the walks and the shared members'."""
++    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks()) + len(shared())
+ 
+ 
+ def write(out: Path, count: int | None = None) -> dict[str, Path]:
