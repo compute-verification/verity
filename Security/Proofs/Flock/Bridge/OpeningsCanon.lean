@@ -200,7 +200,7 @@ theorem _root_.Flock.Bridge.openingsCanon_const
       (Discharge.Layout.outsOf D.unroll hU n) S R u hu c (by rw [hc, h2]; exact Finset.mem_singleton_self _) _ hz
     rw [← hc]
     unfold UnitPlace.decode
-    rw [IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz), hzero]
+    rw [FlockSoundness.Audit.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz), hzero]
     rfl
 
 /-- **`OpeningsCanonTarget` holds**: at the constant and the zero by `openingsCanon_const`; at any other committed wire
@@ -215,7 +215,7 @@ theorem _root_.Flock.Bridge.openingsCanon : Bridge.OpeningsCanonTarget := by
     have hk' : Bridge.constsOf D.unroll hU n g = none := hk
     simp only [Bridge.constsOf] at hk'
     split_ifs at hk' with h1 h2
-    refine FlockSoundness.Discharge.HiddenExec.rowOfH_ne_none_of_io
+    refine FlockSoundness.Discharge.HiddenExec.rowOfH_ne_none_of_io (R := R)
       (sitesShHJ_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope) (Discharge.Layout.outsOf D.unroll hU n)
       (Discharge.Layout.scopeOkH_spec hU hscope).2.1
       (FlockSoundness.Discharge.HiddenExec.rowsFit_of_scopeH (FlockSoundness.Discharge.ZkBind.zkTyped ht)
