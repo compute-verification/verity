@@ -62,10 +62,9 @@ ALLOWED = {
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
-    # trees, draws from the verifier's secret, and records its openings as an integrity profile.  A KV pass's plan of
-    # 10^5 runs is checked and encoded in numpy (`ml.kernels.plans`), which a protocol can't import itself.  Its coins
-    # are the proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness", "core.protocols.profile",
+    # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
+    # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
@@ -123,7 +122,7 @@ CORE_ML_EDGES = {
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness"},
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},

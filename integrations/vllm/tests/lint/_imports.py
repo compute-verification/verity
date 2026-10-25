@@ -8,7 +8,8 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 ``LAYER`` places every module in the layer of its top-level package (longest prefix wins).  The order, top to bottom,
 is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
-``core``, and ``target_family`` (bound for ``config.py``) sits in ``config``.  ``engine.hooks``, the one owner of
+``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
+sits in ``pipeline``.  ``engine.hooks``, the one owner of
 runtime patches, and ``engine.env``, the one writer of vLLM's env pins, import nothing from the package and sit in
 ``core`` so every layer may call them.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
@@ -41,6 +42,7 @@ LAYER = {
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
     "verity.ml.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
+    "verity_vllm.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
     "verity_vllm.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py

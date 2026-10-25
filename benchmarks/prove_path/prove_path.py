@@ -36,7 +36,7 @@ Two kinds of committed run:
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local --main FILE]
-    prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
@@ -53,7 +53,10 @@ Two kinds of committed run:
   (`forged_row`).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest names the tree's code (`source_identity.code_identity`:
-  ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's.
+  ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's. Where the model's
+  compiler of record lists transfer gates (`GATES_OF_RECORD`), the inner compiler is the server's listing them
+  (`I2Compiler.digest`), the name and digest ``verity-vllm advice --compiler-name N --compiler-digest D`` then registers the
+  window's advice under.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 
@@ -63,9 +66,13 @@ every byte string: the requests, or a `ValueError` naming why, the same one on e
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
 covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then draws every unit of theirs beside K of the rest
-(`serving_rows.work_table_of`), and the stream registers with that work table. Until COMPILER lists the I/O shell's units, the
-run names a stand-in template, at TP1 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's
-`transfer_gate_negatives` and the registration under the compiler listing none (`more_negatives`).
+(`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
+server's registered name and digest (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
+A served window's list is its model's compiler of record's (`GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
+whatever ``--transfer-gate`` says (`served_gates`: a list other than the record's is refused), so the verifier holds a
+registration to that list and no other. Until COMPILER lists the I/O shell's units, the run names a stand-in template, at TP1
+``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
+the compiler listing none and under it less each one gate (`more_negatives`).
 
 **Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local --main FILE`` on the
 auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is read;
@@ -109,6 +116,9 @@ LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/predict/fixtures/
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
+#: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
+#: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
+GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``, #3619)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
@@ -153,7 +163,7 @@ class I2Compiler:
     Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
     I2 lists the I/O shell's own. Its digest names I2's code (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them,
     so a node's ignored build outputs don't move it), φ, the default seed, ℓ and that list; a served window's I2 is named as the
-    server registered it instead (``registered_digest``, `served_identity`)."""
+    server registered it instead (``registered_digest``, `served_identity`), with that list beside it where it lists any."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -165,12 +175,16 @@ class I2Compiler:
 
     @functools.cached_property
     def digest(self) -> str:
+        gates = sorted(self.transfer_gates)
         if self.registered_digest is not None:
-            return self.registered_digest
+            if not gates:
+                return self.registered_digest
+            return hashlib.sha512(canonical_json({"name": self.name, "registered": self.registered_digest,
+                                                  "transfer_gates": gates})).hexdigest()
         r = self.registered
         return hashlib.sha512(canonical_json({"name": self.name, "code": code_identity(), "phi": r.phi.to_json(),
                                               "default_seed": r.default_seed, "cap_bits": r.cap_bits,
-                                              "transfer_gates": sorted(self.transfer_gates)})).hexdigest()
+                                              "transfer_gates": gates})).hexdigest()
 
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
@@ -344,15 +358,27 @@ def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target:
     return Registered.of(phi_of_serve(serve, hf_config, target), int(serve.get("default_seed") or 0), cap_bits)
 
 
+def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[str, ...]:
+    """The transfer gates a served window's compiler lists: its model's compiler of record's (`GATES_OF_RECORD`, none for a
+    model it has no line for). ``given`` (``--transfer-gate``) may only restate them: any other list is refused, so neither side
+    builds a served compiler listing another."""
+    model, pinned = str(serve.get("model")), GATES_OF_RECORD.get(str(serve.get("model")), ())
+    if given and sorted(set(map(str, given))) != sorted(pinned):
+        raise ValueError(f"--transfer-gate {sorted(set(map(str, given)))}: {model}'s compiler of record lists {list(pinned)} "
+                         "(prove_path.GATES_OF_RECORD), and a served window's compiler lists those and no others")
+    return pinned
+
+
 def i2_of_serve(run: str, window: int, row_dir: str, hf_config: str | None, target: str | None,
-                cap_bits: int = CAP_BITS) -> I2Compiler:
+                cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = ()) -> I2Compiler:
     """I2 over a served window: φ of the served engine (`phi_of_serve`), the server's default seed, the bodies the window's
     requests brought (`serve_ingress`), each Program's body from the Build's files under the row dir, named as the server
-    registers it (`served_identity`)."""
+    registers it (`served_identity`), listing its model's transfer gates of record (`served_gates`, which ``transfer_gates``
+    may only restate)."""
     serve = json.loads((Path(run) / "serve.json").read_text())
     name, digest = served_identity()
     return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)), str(row_dir),
-                      name=name, registered_digest=digest)
+                      name=name, transfer_gates=served_gates(serve, transfer_gates), registered_digest=digest)
 
 
 @functools.lru_cache(maxsize=1)
@@ -378,10 +404,7 @@ def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, trans
 def compiler_of_args(a: argparse.Namespace) -> Capped:
     gates = getattr(a, "transfer_gate", None) or ()
     if served(a):
-        if gates:
-            raise ValueError("--transfer-gate: a served window's compiler is the one the server registered, and its transfer "
-                             "gates are the ones it lists, not the audit's")
-        return Capped(i2_of_serve(a.serve_run, a.window, a.row_dir, a.hf_config, a.target, a.cap_bits), a.cap_bits)
+        return Capped(i2_of_serve(a.serve_run, a.window, a.row_dir, a.hf_config, a.target, a.cap_bits, gates), a.cap_bits)
     if single(a):
         return Capped(i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits, gates), a.cap_bits)
     return compiler_of(a.tp_commit, a.build_root, a.cap_bits, gates)
@@ -706,7 +729,8 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
     """What the verifier refuses before any draw about the advice: a registration naming another compiler or another advice root,
     the advice's opening under another salt (which opens no registered root), a registration binding no compiler or advice (a
     window over Programs of record passed off as the advice's), one whose compiler names another cap ℓ, one under the compiler
-    listing no transfer gates (where it lists some: a window sampling them, as another compiler's), and another rank's."""
+    listing no transfer gates and one under it less each one gate (where it lists some: a window sampling them, as another
+    compiler's), and another rank's."""
     src = source_of(a)
     w = json.loads((served / "registration.json").read_text())["window"]
     cases = {f"registration-naming-another-{key} (source)": {**w, key: {**(w.get(key) or {}), fld: "00" * 64}}
@@ -718,6 +742,10 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
         bare = Capped(replace(compiler.inner, transfer_gates=()), compiler.cap_bits)
         cases["registration-under-the-compiler-listing-no-transfer-gates (source)"] = {**w, "compiler": {"name": CAPPED,
                                                                                                          "digest": bare.digest}}
+    for g in compiler.transfer_gates:
+        less = Capped(replace(compiler.inner, transfer_gates=tuple(t for t in compiler.transfer_gates if t != g)), compiler.cap_bits)
+        cases[f"registration-under-the-compiler-less-the-gate-{g} (source)"] = {**w, "compiler": {"name": CAPPED,
+                                                                                                  "digest": less.digest}}
     theirs = served.parent / f"rank{(r + 1) % world}" / "registration.json"
     if world > 1 and theirs.exists():
         cases["registration-of-another-rank (source)"] = json.loads(theirs.read_text())["window"]
@@ -917,13 +945,19 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if summary["ok"] else 1
 
 
-def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int) -> dict[str, Any]:
-    """A served run's registered compiler, `Capped` over the server's (`served_identity`): the name and digest its windows'
-    bindings must carry, ℓ and the compiler it wraps, and the φ and default seed I2 compiles each window's Programs under."""
+def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int,
+                 transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+    """A served run's registered compiler, `Capped` over the server's (`served_identity`) listing its model's transfer gates of
+    record (`served_gates`, which ``transfer_gates`` may only restate): the name and digest its windows' bindings must carry, ℓ
+    and the compiler it wraps (``inner``, what `verity-vllm advice --compiler-name --compiler-digest` takes), the server's own,
+    and the φ and default seed I2 compiles each window's Programs under."""
     name, digest = served_identity()
-    c = Capped(SimpleNamespace(name=name, digest=digest), cap_bits)
-    reg = registered_of_serve(json.loads((Path(serve_run) / "serve.json").read_text()), hf_config, target, cap_bits)
-    return {"name": c.name, "digest": c.digest, "cap_bits": c.cap_bits, "inner": {"name": name, "digest": digest},
+    serve = json.loads((Path(serve_run) / "serve.json").read_text())
+    reg = registered_of_serve(serve, hf_config, target, cap_bits)
+    inner = I2Compiler(reg, {}, "", name=name, transfer_gates=served_gates(serve, transfer_gates), registered_digest=digest)
+    c = Capped(inner, cap_bits)
+    return {"name": c.name, "digest": c.digest, "cap_bits": c.cap_bits, "inner": {"name": name, "digest": inner.digest},
+            "served": {"name": name, "digest": digest}, "transfer_gates": list(inner.transfer_gates),
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
@@ -988,7 +1022,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--ranks", default=None, help="comma-separated (default every rank)")
         p.add_argument("--jobs", type=int, default=1, help="ranks at once, each in its own process")
         p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
-                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work:K)")
+                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work:K). A "
+                       "served window's are its model's of record (GATES_OF_RECORD), which this may only restate")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
     p.add_argument("--advice", help="the advice's file: I1's canonical encoding (the prover's, private); a served window's is the "
@@ -1013,6 +1048,8 @@ def main(argv: list[str] | None = None) -> int:
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     p.add_argument("--serve-run", required=True)
+    p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
+                   "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
         p.add_argument(flag, required=True)
@@ -1022,7 +1059,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["compiler"].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
-        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits), sort_keys=True))
+        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
         return 0
     if a.cmd == "serve-standin":
         print(json.dumps(serve_standin(a), sort_keys=True))

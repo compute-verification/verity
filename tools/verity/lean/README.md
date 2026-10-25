@@ -4,7 +4,7 @@ One audit for every Lake package (`python tools/verity/lean/check.py --all --bui
 changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
 records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
-toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
+toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
@@ -64,7 +64,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
-- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes. A rule with `"sealed": true` is
+  a layer of its own: its modules answer only to the rules at or under it, and another rule reaches it only by listing
+  a prefix at or under it, never through a shorter one that holds it (an area's `Guarantees` under the area's
+  vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root

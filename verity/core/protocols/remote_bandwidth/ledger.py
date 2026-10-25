@@ -20,7 +20,10 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
   v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
-pass) plus, under sketch-sha512, `timing.sketch_failure` over the session: the statements' δc and δs."""
+pass) plus the coin commitment's hiding terms (`hiding`), plus, under sketch-sha512, `timing.sketch_failure` over the
+session, plus the draw's rejection (`rejection`): the statements' δc and δs, and `LineHeld`'s Σ_t hide_t and
+Σ_t k_t/2^64.  `LineHeld`'s error also carries the windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ
+here."""
 from __future__ import annotations
 
 import math
@@ -35,6 +38,14 @@ from . import audit, receipts, timing
 SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
 FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
+REJECTION_LOG2 = 64
+"""The draw's rejection a draw, in bits: a draw below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
+`Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
+DELTA_PARTS = ("profile", "slack", "hiding", "sketch", "rejection")
+"""The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
+PRF_CLAIM = "prf/sha-512"
+"""The claim that prices `LineHeld`'s Σ_t Adv(prf t), one oracle-access distinguisher a window reading its k_t first
+blocks: a term with no numeric value, so it is named beside δ and in no part of it."""
 
 
 def _rate(x: object, what: str) -> float:
@@ -48,8 +59,9 @@ class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
     on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), its SHA-512
-    compressions a second (the sketch's term), and the read ceilings of its own disks and of its boundary links
-    (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
+    compressions a second and the outside-compute factor F over them (the sketch's term, `timing.SKETCH_OUTSIDE`: the
+    prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
+    its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
@@ -69,6 +81,7 @@ class Node:
     link_burst_bytes: float = 0.0
     gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
     host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
+    sketch_outside: int = timing.SKETCH_OUTSIDE
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
@@ -76,6 +89,8 @@ class Node:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
+        if type(self.sketch_outside) is not int or self.sketch_outside < 1:
+            raise ValueError("sketch_outside, the outside-compute factor F, is a positive integer")
         for name in ("sha512_per_s", "disk_bytes_per_s", "link_bytes_per_s", "rebuild_burst_bytes",
                      "disk_burst_bytes", "link_burst_bytes"):
             _rate(getattr(self, name), name)
@@ -87,7 +102,7 @@ class Node:
     @classmethod
     def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
-               link_burst_bytes: float | None = None) -> Node:
+               link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
         a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
@@ -98,7 +113,7 @@ class Node:
         link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
                    timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S)
+                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
@@ -112,17 +127,36 @@ class Node:
                 "host_write_bytes_per_s": self.host_write_bytes_per_s, "link_burst_bytes": self.link_burst_bytes,
                 "link_bytes_per_s": self.link_bytes_per_s, "read_bytes_per_s": self.read_bytes_per_s,
                 "rebuild_burst_bytes": self.rebuild_burst_bytes, "sha512_per_s": self.sha512_per_s,
-                "spec_bytes_per_s": self.spec_bytes_per_s, "squarings_per_s": dict(self.squarings_per_s)}
+                "sketch_outside": self.sketch_outside, "spec_bytes_per_s": self.spec_bytes_per_s,
+                "squarings_per_s": dict(self.squarings_per_s)}
 
 
 def sketch(record: audit.Record, node: Node) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
-    compression the node could make over the span a guess or a key (`timing.sketch_failure`); 0 for another receipt
-    kind."""
+    compression the prover could make over the span a guess or a key: Q = F·C, C the node's over the span and F its
+    `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind."""
     if record.receipt != receipts.SKETCH_SHA512:
         return 0.0
-    compressions = math.ceil(node.sha512_per_s * record.span_ns / 1e9)
-    return float(timing.sketch_failure(compressions, record.passes, record.rows, blocks=record.blocks))
+    return float(timing.sketch_failure(compressions(record, node), record.passes, record.rows, blocks=record.blocks,
+                                       outside=node.sketch_outside))
+
+
+def hiding(record: audit.Record) -> float:
+    """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
+    `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
+    committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
+    `common-reference-string`, `hash-derived-key`)."""
+    return hiding_over(len(record.windows))
+
+
+def hiding_over(windows: int) -> float:
+    """`hiding` over a session of `windows` windows."""
+    return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(windows, key_failure_log2=64)
+
+
+def compressions(record: audit.Record, node: Node) -> int:
+    """C, the node's SHA-512 compressions over the record's span, at its stated rate."""
+    return math.ceil(node.sha512_per_s * record.span_ns / 1e9)
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -280,17 +314,33 @@ def _paced(record: audit.Record) -> str | None:
     return None
 
 
+def rejection(record: audit.Record) -> float:
+    """The draw's rejection, `LineHeld`'s Σ_t k_t/2^64: the chance some window's draw rejects a first word, below
+    2^-`REJECTION_LOG2` a draw, over every window's draws (`profile.drawn`, min(k_t, U_t): k_t in a window of more
+    receipts than draws, and U_t, at most k_t, in one that opens all of them).  Exact: the draws are an integer."""
+    return sum(w.profile.drawn["receipt"] for w in record.windows) * 2.0 ** -REJECTION_LOG2
+
+
+def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
+    """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its five parts: the
+    windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
+    (`hiding`), SketchBound's δs (`sketch`) and the draw's rejection (`rejection`)."""
+    return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
+            "hiding": hiding(record), "sketch": sketch(record, node), "rejection": rejection(record)}
+
+
 def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + sketch(record, node)
+    delta = record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + sketch(record, node)
     S = -(-node.chip_bytes // b)
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
     X_link = X + node.link_bytes_per_s / b / 1e9
     Br, Bd, Bl = node.rebuild_burst_bytes / b, node.disk_burst_bytes / b, node.link_burst_bytes / b
     planned = sum(sum(w.credited(False)) for w in record.windows)
+    delta += rejection(record)
     snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + (Br + Bd)) - P * S) / P)
     if (why := _paced(record)) is not None:
         return snapshot, Line(TIME_HELD, N, b, delta, refused=why), Line(LINK_CHARGED, N, b, delta, refused=why)

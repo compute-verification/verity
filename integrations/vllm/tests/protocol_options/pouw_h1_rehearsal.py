@@ -12,9 +12,10 @@ DIR``, DIR ``--checkpoint``); on vy-challenger-1 that registration is infra's. I
 circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
 lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
 the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --model MODEL
---circuit-files FILES``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
-open's ``draw_k``, and FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
-against, `credit.committed_files`), reserves the window's session (``reserve --peer PEER --scheme S --families
+--circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
+open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
+against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
+window's served rows to, `credit.committed_length`), reserves the window's session (``reserve --peer PEER --scheme S --families
 F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --model MODEL --circuit DIGEST --challenger AT --session RESERVE --gate GATE`` (the window's b/<K> salted with the key the
@@ -177,16 +178,25 @@ def declared_draw_k(layers: int = 32) -> int:
     return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
 
 
+def fill_length() -> dict:
+    """The fixed length `pouw_h1.FILL` serves (``--length``, `credit.LENGTH_FIELD`): each of its requests' public
+    max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    return {"max_tokens": [PH.FILL.max_tokens] * PH.FILL.slots, "stop": "fixed"}
+
+
 def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str | None,
                      circuit_files: dict[str, str]) -> list[str]:
     """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its draw K,
     the served tables' rows T (``--rows``, `pouw_h1.FILL`'s), its model when it serves the registered weights
-    (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), and
-    each stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``)."""
+    (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), each
+    stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``) and the fixed length
+    its window serves (``--length``, `fill_length`)."""
     from verity_vllm.protocol_options import pouw_h1 as PH
     return ["period-open", "--name", name, "--cap", str(cap), "--circuit", circuit, "--draw-k", str(draw_k),
             "--rows", str(PH.FILL.rows), *(["--model", model] if model else []),
-            "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":"))]
+            "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":")),
+            "--length", json.dumps(fill_length(), sort_keys=True, separators=(",", ":"))]
 
 
 class Gate:

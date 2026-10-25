@@ -285,7 +285,17 @@ def test_runpod_lines_near_their_cap_and_a_short_runway_are_anomalies(tmp_path):
     assert sorted(f.key for f in rep.findings) == ["spend|runpod|runway", "spend|runpod|vy-dc-"], "vy-cpu-'s line has expired"
     hours = (T0 - month) / 3600
     assert f"this month about {W.usd(10 + 3 + 0.25 * hours)} ($13.00 of guarded pods" in rep.lines[0]
-    assert "floor in 20 h* at $0.25/h" in next(f.text for f in rep.findings if f.key == "spend|runpod|runway")
+    assert "the top-up failed*, and the balance reaches the guard's $25.00 floor in 20 h at $0.25/h" in next(
+        f.text for f in rep.findings if f.key == "spend|runpod|runway")
+
+
+def test_a_short_runway_above_the_auto_top_up_is_not_an_anomaly(tmp_path):
+    (tmp_path / "budgets.toml").write_text(BUDGETS)
+    (tmp_path / "guard.json").write_text(json.dumps({"balance": 125.0, "rate_now": 42.0, "budgets": {"balance_floor": 25}}))
+    (tmp_path / "watch.log").write_text("16:41Z ACCOUNT $125.76 at $42.83/h, runway 2.9h; lane pods $0.00/h (0)\n")
+    rep = W.Report()
+    W.spend_runpod(ctx(config(tmp_path), {}, T0), rep, tomllib.loads(BUDGETS)["budgets"])
+    assert not rep.findings, "RunPod tops the balance up at $100, so 2 h of runway at $125 is no failure"
 
 
 def test_a_nebius_vm_on_no_line_past_its_line_or_over_a_daily_cap_is_an_anomaly(tmp_path):
