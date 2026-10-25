@@ -30,7 +30,11 @@ theorem pr_proved_le {X Ω : Type} [Fintype X] [Fintype Ω] (acc : X → Ω → 
   have hN0 : (Fintype.card X : ℝ≥0∞) ≠ 0 := by simp
   have hNt : (Fintype.card X : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
   have hx : ∀ x, ((Finset.univ.filter fun c => acc x c ∧ ¬ clear x).card : ℝ≥0∞) ≤ εp * Fintype.card Ω :=
-    fun x => (ENNReal.div_le_iff hK0 hKt).1 (h x)
+    fun x => by
+      have h' := h x
+      unfold pr at h'
+      rw [ENNReal.div_le_iff hK0 hKt] at h'
+      convert h'
   have hsplit : (Finset.univ.filter fun y : X × Ω => acc y.1 y.2 ∧ ¬ clear y.1).card =
       ∑ x, (Finset.univ.filter fun c => acc x c ∧ ¬ clear x).card := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
@@ -55,12 +59,18 @@ theorem pr_proved_le {X Ω : Type} [Fintype X] [Fintype Ω] (acc : X → Ω → 
         Fintype.card X * (εp * Fintype.card Ω) := by
     refine (Nat.cast_le.2 ((Finset.card_le_card hsub).trans (Finset.card_union_le _ _))).trans ?_
     rw [Nat.cast_add, Finset.card_product, Finset.card_univ, Nat.cast_mul]
-    exact add_le_add_left h2 _
+    exact add_le_add le_rfl h2
+  have hc : ∀ a : ℝ≥0∞, a / Fintype.card X * (Fintype.card X * Fintype.card Ω) = a * Fintype.card Ω :=
+    fun a => by rw [← mul_assoc, ENNReal.div_mul_cancel hN0 hNt]
+  have hfin : ((Finset.univ.filter fun y : X × Ω => acc y.1 y.2 ∧ bad y.1).card : ℝ≥0∞) ≤
+      ((Finset.univ.filter fun x => clear x ∧ bad x).card / (Fintype.card X : ℝ≥0∞) + εp) *
+        ((Fintype.card X : ℝ≥0∞) * Fintype.card Ω) := by
+    refine hA.trans (le_of_eq ?_)
+    rw [add_mul, hc]
+    ring
   unfold pr
   rw [Fintype.card_prod, Nat.cast_mul, ENNReal.div_le_iff (mul_ne_zero hN0 hK0) (ENNReal.mul_ne_top hNt hKt)]
-  refine hA.trans (le_of_eq ?_)
-  rw [add_mul, ← mul_assoc, ENNReal.div_mul_cancel hN0 hNt]
-  ring
+  convert hfin
 
 /-- **`Pous.Guarantees.ContinuousAuditProved`**: `pr_proved_le` at the memory challenger's verdict and the shortfall,
 with `continuous_audit` bounding the clear verdict's part. -/
@@ -73,6 +83,6 @@ theorem continuous_audit_proved : Pous.Guarantees.ContinuousAuditProved := by
     (⨅ θ : Set.Ioi (0 : ℝ), ((θ : ℝ) * f + Real.log (1 / βe)) / (1 - Real.exp (-(θ : ℝ)))) <
       (rs.map fun r => max (contFreed sch r.held - epsProof sch β) 0).sum
   exact (pr_proved_le acc _ bad εp hp).trans
-    (add_le_add_right (continuous_audit sch D Q D_late Q_late β n π hinc W mach arr f βe hβe) _)
+    (add_le_add (continuous_audit sch D Q D_late Q_late β n π hinc W mach arr f βe hβe) le_rfl)
 
 end PousContinuous
