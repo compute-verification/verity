@@ -1564,7 +1564,8 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit, verdict
 flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are `compile_slice`'s docstring. Its step
 rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
-registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused. Its charge is
+registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused; at G < P, the served rows'
+blocks, its P / G rows (`CompileSliceBlocks_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
 chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, the proof of record at vLLM 8eb1's engine class (w212, 857,866 ANDs), `--zk` through

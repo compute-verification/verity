@@ -88,6 +88,27 @@ def test_two_windows_and_an_idle_tail(x):
         assert SR.leaf_ok(rec, RUN_ROOT, w, served.bc(w), served.registration.open(w).path)
 
 
+def test_the_slices_block_rows_are_the_registered_leaves(x):
+    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: unit w's
+    row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the registered
+    rows in ``srv0`` … are refused at ``rows``, as at G = P."""
+    G = 1
+    st = CS.with_block(x.st, G)
+    S = SimpleNamespace(**st)
+    served = SR.register(x.S, x.session, RUN_ROOT, G=G)
+    rec, reg = served.record(), served.registration
+    honest = CS.case(S, x.sl, BOOK, served=x.session[0])
+    names = CS.srv_names(S)
+    assert rec["G"] == G and rec["count"] == len(names) == x.S.P
+    for j, r in enumerate(names):
+        i = SR.leaf(x.S, rec, 0, j)
+        assert i == j and reg.rows[i] == SR._row(honest.rows[r])[0]
+        assert SR.leaf_ok(rec, RUN_ROOT, i, served.bc(i), reg.open(i).path)
+        assert not SR.leaf_ok(rec, RUN_ROOT, (i + 1) % len(names), served.bc(i), reg.open(i).path)
+    held = CS.case(S, CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps, x.sl.tokens), BOOK, served=x.session[0])
+    assert honest.verdict == CS.ACCEPT and held.verdict == CS.ACCEPT & ~ROWS
+
+
 def test_the_record_is_public_only(x):
     text = json.dumps(x.record)
     private = [*x.served.registration.salts, *x.served.registration.rows]

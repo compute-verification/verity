@@ -2,8 +2,13 @@
 PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to end before the
 chain splits it into one unit a step.
 
-    CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, CN, CTW, CU}
+    CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
         (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
+    CompileSliceBlocks_v1{R, …, CU, G}
+        (pub, adv, cert, srv0, …, srv{P/G − 1}, cin, cout, wit) -> verdict[16]
+
+The second is the first with its served rows in P / G rows of G steps (G < P), as the served rows' registration commits a
+window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so its template id doesn't name G.
 
 **The rows**, each a field list (elements least significant bit first) zero-padded to whole 16-bit words:
 - ``pub``, the public input: the declared charge ``c`` (`arith_encode.CW` bits) and the registered book's tables
@@ -15,7 +20,9 @@ chain splits it into one unit a step.
   the certified record's commitment (its b‖c);
 - ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
   each step's rows at the runner's batch positions), a row the verifier holds by its b‖c to the window's row of the
-  served rows' registration (`served_rows`), committed on the Commit side before the draw;
+  served rows' registration (`served_rows`), committed on the Commit side before the draw. At G < P they are P / G
+  rows ``srv0`` … (`srv_rows`), row j steps [j·G, (j + 1)·G) and held to window w's leaf w·(P / G) + j
+  (`served_rows.leaf`); step u is checked against row u // G;
 - ``cin`` and ``cout``, the charge's carry-in and carry-out (`charge_chain.encode`'s 96 bits): the window's reads of
   rows 0 and 1 of its `charge_chain.VALUE` value, which the verifier holds by their b‖c to the session's carry chain
   (`charge_chain.check_chain`);
@@ -94,7 +101,9 @@ P, K (`replay_chain.Shape`), and the cache's CN entries, CTW a token id's width 
 class. Without prefix caching (PC = 0) the engine caches nothing and ReplayStep_v1 reads no hits, so the slice has no
 table, hits or tokens (``cert`` is the arrivals, ``wit`` has no ``hit`` or ``cache``), makes no CacheStep_v1 call, and
 ``cache`` is 1; CN, CTW and CU are then 0. A window smaller than the class is padded: empty arrival slots, decisions
-past the count (en 0) and idle steps.
+past the count (en 0) and idle steps. G, the steps a ``srv`` row holds, is public and the served rows' registration's
+(`served_rows.Served.record`); P unless given (`statics`, `with_block`), it divides P, and the statics hold it only
+below P. The served bits and the unit's ANDs are the same at every G: a block's row is its steps' bits, padded to words.
 
 **Cost** (`size`): the cache calls dominate where there is a cache. A unit walked costs about CN·(2·(B·CTW + EW) + 2·IW)
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
@@ -124,9 +133,12 @@ from verity.core.protocols.certifier import replay_chain as RC, replay_step as R
 from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "CN", "CTW", "CU")
+#: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceBlocks`), G < P
+BLOCK_STATICS = STATICS + ("G",)
 CW = AE.CW
 FLAGS = ("load", "steps", "code", "charge", "rows", "cache")
 ACCEPT = (1 << len(FLAGS)) - 1
+#: the rows at G = P (`row_names` at any G)
 ROWS = ("pub", "adv", "cert", "srv", "cin", "cout", "wit")
 ROW_FIELDS = ("row_valid", "row_id", "row_kind", "row_start", "row_n")
 WORD = 16
@@ -140,6 +152,25 @@ def step_statics(S) -> SimpleNamespace:
     return SimpleNamespace(**{k: getattr(S, k) for k in RS.STATICS})
 
 
+def block(S) -> int:
+    """G, the steps a ``srv`` row holds: P unless the statics give it, and dividing P."""
+    G = getattr(S, "G", S.P)
+    if not (isinstance(G, int) and 1 <= G <= S.P and S.P % G == 0):
+        raise ValueError(f"a ``srv`` row is G steps, G dividing P = {S.P}, not G = {G!r}")
+    return G
+
+
+def srv_names(S) -> tuple[str, ...]:
+    """The ``srv`` rows: ``srv`` at G = P, else ``srv0`` … ``srv{P/G − 1}``, row j steps [j·G, (j + 1)·G)."""
+    U = S.P // block(S)
+    return ("srv",) if U == 1 else tuple(f"srv{j}" for j in range(U))
+
+
+def row_names(S) -> tuple[str, ...]:
+    """The unit's rows in order: `ROWS`, with ``srv`` the P / G rows of `srv_names`."""
+    return ROWS[:3] + srv_names(S) + ROWS[4:]
+
+
 def fields(S) -> dict[str, list[tuple[str, int, int]]]:
     if not S.PC and (S.CN or S.CTW or S.CU):
         raise ValueError(f"statics {dict(S.__dict__)}: without prefix caching CN, CTW and CU are 0")
@@ -149,7 +180,7 @@ def fields(S) -> dict[str, list[tuple[str, int, int]]]:
     return {"pub": [("c", 1, CW)] + CC.book_fields(S.D),
             "adv": [("dec", S.D, 1), ("count", 1, Z.DW), ("steps", 1, Z.PW)],
             "cert": RC.arrival_fields(Sc) + ([("tok", S.K * S.CU * S.B, S.CTW)] if S.PC else []),
-            "srv": [("rows", S.P, step_row_bits(S))],
+            **{r: [("rows", block(S), step_row_bits(S))] for r in srv_names(S)},
             "cin": [("carry", 1, CC.ROW_BITS)],
             "cout": [("carry", 1, CC.ROW_BITS)],
             "wit": [("state", S.P + 1, RC.width(Sc)), ("window", 1, RC.window_width(Sc)),
@@ -158,7 +189,12 @@ def fields(S) -> dict[str, list[tuple[str, int, int]]]:
 
 
 def row_bits(S) -> dict[str, int]:
-    return {r: WORD * -(-RC._bits_of(fs) // WORD) for r, fs in fields(S).items()}
+    return {r: _words_of(RC._bits_of(fs)) for r, fs in fields(S).items()}
+
+
+def _words_of(n: int) -> int:
+    """`n` bits zero-padded to whole words."""
+    return WORD * -(-n // WORD)
 
 
 def step_row_bits(S) -> int:
@@ -216,11 +252,13 @@ def _build_map(C, S, rep: Sequence, srv: Sequence, m: Sequence[Sequence]) -> lis
     return bad
 
 
-def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
+def _build(C, S, *ins):
     Sc, St = chain(S), step_statics(S)
     ZS = RS.widths(St)
     F = fields(S)
-    p, a, c, v, ci, co, w = (RC._split(x, F[r]) for x, r in zip((pub, adv, cert, srv, cin, cout, wit), ROWS))
+    split = {r: RC._split(x, F[r]) for x, r in zip(ins, row_names(S))}
+    p, a, c, ci, co, w = (split[r] for r in ("pub", "adv", "cert", "cin", "cout", "wit"))
+    served = [e for r in srv_names(S) for e in split[r]["rows"]]
     states, win = w["state"], w["window"][0]
     load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.Window(), Sc)),
                              RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
@@ -259,7 +297,7 @@ def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
         steps_ok.append(ok[0])
         mine = [C.AND(act, x) for name in ROW_FIELDS for e in out[name] for x in e]
         if S.AS:
-            mism += _build_map(C, S, _by_slot(S, mine), _by_slot(S, v["rows"][u]), w["map"][u * S.R:(u + 1) * S.R])
+            mism += _build_map(C, S, _by_slot(S, mine), _by_slot(S, served[u]), w["map"][u * S.R:(u + 1) * S.R])
         else:
             rows += mine
         if S.PC:
@@ -274,7 +312,7 @@ def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
     code_ok, charged = CC.build_link(C, S.D, book, ci["carry"][0], co["carry"][0], en, [e[0] for e in a["dec"]])
     charge_ok = RC._lt(C, p["c"][0], charged).inv()
 
-    rows_ok = RC._zero(C, mism) if S.AS else RC._eq(C, rows, [x for e in v["rows"] for x in e])
+    rows_ok = RC._zero(C, mism) if S.AS else RC._eq(C, rows, [x for e in served for x in e])
 
     flags = [load_ok, and_reduce(C, steps_ok), code_ok, charge_ok, rows_ok, and_reduce(C, cache_ok)]
     return [flags + [ZERO] * (16 - len(flags))]
@@ -282,26 +320,48 @@ def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
 
 def _sig(S):
     bits = row_bits(S)
-    return tuple((r, Array(bits[r], BIT)) for r in ROWS), Array(16, BIT)
+    return tuple((r, Array(bits[r], BIT)) for r in row_names(S)), Array(16, BIT)
 
 
-CompileSlice = _part(
-    "CompileSlice", STATICS, _sig, _build,
-    "a slice of the compile unit, one window whole: ReplayLoad, then per step ReplayStep_v1 and ReplayAdvance on the "
-    "same arrival and decision wires, CacheStep_v1's calls on the same wires and the certified tokens checking the hits "
-    "ReplayStep_v1 reads, the committed decisions charged by ChargeLink_v1 from the window's carry-in to its carry-out "
-    "and held to the declared charge, and the step rows held to the committed served rows (verdict bits load, steps, "
-    "code, charge, rows, cache)")
+_DOC = ("a slice of the compile unit, one window whole: ReplayLoad, then per step ReplayStep_v1 and ReplayAdvance on the "
+        "same arrival and decision wires, CacheStep_v1's calls on the same wires and the certified tokens checking the "
+        "hits ReplayStep_v1 reads, the committed decisions charged by ChargeLink_v1 from the window's carry-in to its "
+        "carry-out and held to the declared charge, and the step rows held to the committed served rows (verdict bits "
+        "load, steps, code, charge, rows, cache)")
+CompileSlice = _part("CompileSlice", STATICS, _sig, _build, _DOC)
 CompileSlice.build = _build  # type: ignore[attr-defined]
+CompileSliceBlocks = _part("CompileSliceBlocks", BLOCK_STATICS, _sig, _build,
+                           _DOC + "; its served rows are P / G rows of G steps each, step u held to row u // G")
+CompileSliceBlocks.build = _build  # type: ignore[attr-defined]
+
+
+def _refuse_blocks(b: dict) -> str | None:
+    if "G" in b and "P" in b and (not 1 <= b["G"] < b["P"] or b["P"] % b["G"]):
+        return f"G = {b['G']} isn't a proper divisor of P = {b['P']} (at G = P the unit is CompileSlice_v1)"
+    return None
+
+
+CompileSliceBlocks.refuse = _refuse_blocks
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, CN: int = 0, CTW: int = 0,
-            CU: int = 0) -> dict:
-    return {**RS.statics(R, W, A, engine, IW), "Q": Q, "D": D, "P": P, "K": K, "CN": CN, "CTW": CTW, "CU": CU}
+            CU: int = 0, G: int | None = None) -> dict:
+    """The slice's statics; G, the steps a ``srv`` row holds, is P unless given, and is in them only below P."""
+    st = {**RS.statics(R, W, A, engine, IW), "Q": Q, "D": D, "P": P, "K": K, "CN": CN, "CTW": CTW, "CU": CU}
+    return with_block(st, G)
+
+
+def with_block(st: dict, G: int | None) -> dict:
+    """`st` with its ``srv`` rows G steps each (`block`): G dropped at G = P (None: P), so the unit is CompileSlice_v1."""
+    st = {k: v for k, v in st.items() if k != "G"}
+    G = st["P"] if G is None else G
+    block(SimpleNamespace(**st, G=G))
+    return st if G == st["P"] else {**st, "G": G}
 
 
 def unit(**st):
-    return bind(CompileSlice, **st)
+    """The unit at statics `st`: CompileSlice_v1 at G = P (`st` without G), else CompileSliceBlocks_v1{…, G}."""
+    return bind(CompileSliceBlocks if "G" in st else CompileSlice, **st)
 
 
 #: a synthetic engine small enough to trace and to prove in about a minute: 4-token blocks, 16 tokens a step
@@ -384,12 +444,34 @@ def rows_bits(S, rows: Sequence[tuple[int, int, int, int, int]] | None) -> list[
     return out
 
 
-def srv_row(S, steps: Sequence) -> list[int]:
-    """The ``srv`` row of a window's step rows: each step's `rows_bits` in turn (P steps, idle ones zero, None)."""
+def _steps_bits(S, steps: Sequence) -> list[list[int]]:
     if len(steps) > S.P:
         raise ValueError(f"a window of {len(steps)} steps is over P = {S.P}")
-    bits = [b for s in list(steps) + [None] * (S.P - len(steps)) for b in rows_bits(S, s)]
-    return bits + [0] * (row_bits(S)["srv"] - len(bits))
+    return [rows_bits(S, s) for s in list(steps) + [None] * (S.P - len(steps))]
+
+
+def srv_row(S, steps: Sequence) -> list[int]:
+    """The rows of a window's steps whole: each step's `rows_bits` in turn (P steps, idle ones zero, None), zero-padded to
+    whole words; at G = P the ``srv`` row."""
+    bits = [b for s in _steps_bits(S, steps) for b in s]
+    return bits + [0] * (_words_of(len(bits)) - len(bits))
+
+
+def srv_rows(S, steps: Sequence) -> dict[str, list[int]]:
+    """The ``srv`` rows of a window's step rows (`srv_names`): row j steps [j·G, (j + 1)·G) of `srv_row`'s, zero-padded
+    to whole words, as `served_rows.block_bits` registers block j."""
+    G, per = block(S), _steps_bits(S, steps)
+    out = {}
+    for j, r in enumerate(srv_names(S)):
+        bits = [b for s in per[j * G:(j + 1) * G] for b in s]
+        out[r] = bits + [0] * (_words_of(len(bits)) - len(bits))
+    return out
+
+
+def _served(S, rows: dict) -> list[int]:
+    """The served steps' bits a unit's ``srv`` rows hold, in step order (each row's fields, its padding dropped)."""
+    F = fields(S)
+    return [int(b) for r in srv_names(S) for b in rows[r][:RC._bits_of(F[r])]]
 
 
 def slot_map(S, rows: Sequence[tuple] | None, served: Sequence[tuple] | None) -> list[list[int]]:
@@ -414,16 +496,15 @@ def _mapped(S, rows: Sequence[tuple] | None, m: Sequence[Sequence[int]]) -> tupl
     return tuple((b, *by[s][1:]) for b, r in enumerate(m) for s in range(S.R) if r[s])
 
 
-def _rows_ok(S, out_rows: Sequence, srv: Sequence[int], maps: Sequence | None) -> bool:
-    """``rows``: the active steps' rows are ``srv``'s, slot for slot at AS = 0, and at AS = 1 at the batch positions the
-    witnessed map gives them (`_mapped`)."""
-    n = RC._bits_of(fields(S)["srv"])
+def _rows_ok(S, out_rows: Sequence, served: Sequence[int], maps: Sequence | None) -> bool:
+    """``rows``: the active steps' rows are the served ones (`_served`: step u's in ``srv`` row u // G), slot for slot at
+    AS = 0, and at AS = 1 at the batch positions the witnessed map gives them (`_mapped`)."""
     if S.AS:
         out_rows = [_mapped(S, r, [[int(x) for x in maps[u * S.R + b]] for b in range(S.R)])
                     for u, r in enumerate(out_rows)]
         if None in out_rows:
             return False
-    return srv_row(S, out_rows)[:n] == [int(b) for b in srv[:n]]
+    return [b for s in _steps_bits(S, out_rows) for b in s] == list(served)
 
 
 def _bits(v: int, w: int) -> list[int]:
@@ -593,7 +674,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
             got = CST.scan_step(S, held, _state(Sc, cur), inp, out, toks)
             cache_ok &= got is not None and CST.encode_cache(S, got.cache) == crow[u + 1]
         out_rows.append(out.rows)
-    flags.update(steps=steps_ok, rows=_rows_ok(S, out_rows, rows["srv"], w.get("map")), cache=cache_ok)
+    flags.update(steps=steps_ok, rows=_rows_ok(S, out_rows, _served(S, rows), w.get("map")), cache=cache_ok)
     return {f: flags[f] for f in FLAGS}
 
 
@@ -639,7 +720,7 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
     width = row_bits(S)
     rows = {"pub": _pack(S, "pub", {"c": [length if charge is None else charge], **CC.book_values(cb)}),
             "adv": _pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
-            "srv": srv_row(S, served),
+            **srv_rows(S, served),
             "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
     cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
@@ -658,7 +739,7 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
         mine, theirs = (list(x) + [None] * (S.P - len(x)) for x in (sc.steps, served))
         wit += [b for u in range(S.P) for r in (maps or {}).get(u, slot_map(S, mine[u], theirs[u])) for b in r]
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
-    assert all(len(rows[r]) == width[r] for r in ROWS)
+    assert set(rows) == set(width) and all(len(rows[r]) == width[r] for r in width)
     flags = check(S, rows)
     return Case(rows, verdict(flags), flags, tuple(sc.steps), tuple(sc.asks), length, cout, tuple(sc.hits))
 
@@ -692,14 +773,14 @@ def words(bits: Sequence[int]) -> list[int]:
 
 def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
     """The unit's verdict word on each case, in one evaluation."""
-    args = [[c.rows[r] for c in cases] for r in ROWS]
+    args = [[c.rows[r] for c in cases] for r in row_names(SimpleNamespace(**st))]
     out = evaluate_bits(unit(**st), *args).reshape(len(cases), -1).tolist()
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
 @lru_cache(maxsize=None)
 def _counted(key: tuple) -> dict[str, int]:
-    S = SimpleNamespace(**dict(zip(STATICS, key)))
+    S = SimpleNamespace(**dict(key))
     C = Circuit(cse=True)
     ins = [C.input(name, sum(BL.elements(t))) for name, t in _sig(S)[0]]
     C.output("verdict", _build(C, S, *ins)[0])
@@ -709,4 +790,5 @@ def _counted(key: tuple) -> dict[str, int]:
 def size(**st) -> dict[str, int]:
     """The unit's ANDs and its rows' widths at statics `st`."""
     S = SimpleNamespace(**st)
-    return {"ands": _counted(tuple(st[k] for k in STATICS))["ands"], **{f"{r}_bits": b for r, b in row_bits(S).items()}}
+    key = tuple((k, st[k]) for k in BLOCK_STATICS if k in st)
+    return {"ands": _counted(key)["ands"], **{f"{r}_bits": b for r, b in row_bits(S).items()}}

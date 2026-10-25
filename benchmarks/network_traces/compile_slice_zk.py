@@ -3,7 +3,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
 (`n2_zk.py`: its stager, firewall and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--slice demo|corpus|w212] [--points 1] [--kinds K,...] [--dry]
+      [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
@@ -37,12 +37,14 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   ``srv`` (``sixpass``) and with its own (``sixpass-own``). The rest are honest, enough of them that the statement fits
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
-  partition's digest) before the draw: the served rows, but ``table``'s, which are the schedule its server served
-  (its own rows, the hit taken), so its ``cache`` check alone refuses it. Every unit's ``srv`` row is its window's but
-  ``sixpass-own``'s, which is its own run's.
+  partition's digest) before the draw, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
+  G < P the unit is `compile_slice.CompileSliceBlocks_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
+  which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
+  Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
   ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
-  to the registered root), its ``srv`` row is row i of the served rows' registration (`served_rows.leaf_ok`), its
+  to the registered root), its ``srv`` row j is leaf i·(P / G) + j of the served rows' registration
+  (`served_rows.leaf`, `served_rows.leaf_ok`), its
   ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
   `a7.opens` recomputes it), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
   (`charge_chain.check_chain` on the earlier windows' openings and the unit's two).
@@ -116,19 +118,20 @@ def log(msg: str) -> None:
     print(f"CSZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
-def load(name: str) -> SimpleNamespace:
-    """The slice ``name``: its statics, its inputs, the served rows (the demo's and the corpus's the replay's, w212's
-    the seal's), the carry-out its ``carry`` forges and the carry-in its ``restart`` charges from. Its honest carry-in
-    is set by `chain`."""
+def load(name: str, G: int | None = None) -> SimpleNamespace:
+    """The slice ``name``, its ``srv`` rows G steps each (P unless given): its statics, its inputs, the served rows (the
+    demo's and the corpus's the replay's, w212's the seal's), the carry-out its ``carry`` forges and the carry-in its
+    ``restart`` charges from. Its honest carry-in is set by `chain`."""
     if name == "demo":
         st, sl = CS.demo()
+        st = CS.with_block(st, G)
         S = SimpleNamespace(**st)
         return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=list(CS.case(S, sl, BOOK).steps),
                                forged=AE.first_carry(BOOK), restart=ZERO)
     fx = json.loads((W212 if name == "w212" else FIXTURE).read_text())
     cached = {k: fx[k] for k in ("CN", "CTW", "CU") if k in fx}
     st = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
-                    **cached)
+                    G=G, **cached)
     S = SimpleNamespace(**st)
     sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"],
                   tuple(map(tuple, fx.get("tokens", ()))))
@@ -276,7 +279,7 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
         c = CS.case(x.S, sl, BOOK, **kw)
         out.append(SimpleNamespace(kind=kind, case=c, charge=kw.get("charge", c.length),
                                    registered=list(c.steps) if kind == "table" else x.rows,
-                                   words={r: CS.words(c.rows[r]) for r in CS.ROWS}, chained=kind != "restart"))
+                                   words={r: CS.words(c.rows[r]) for r in CS.row_names(x.S)}, chained=kind != "restart"))
     return out
 
 
@@ -284,7 +287,7 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder."""
     defn = CS.unit(**x.st)
     bits = CS.row_bits(x.S)
-    rows = [(r, M.V2, bits[r], [r]) for r in CS.ROWS]
+    rows = [(r, M.V2, bits[r], [r]) for r in CS.row_names(x.S)]
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
@@ -313,6 +316,11 @@ def certified(M, port, words: list[int], salt: bytes) -> bytes:
     return M.CS.FC._commit_strings([port], {port.name: M.np.asarray([words], dtype=M.np.uint16)}, {port.name: [salt]})[port.name][0]
 
 
+def srv_leaves(S, record: dict, i: int) -> list[tuple[str, int]]:
+    """Unit i's ``srv`` rows, each with the served rows' leaf it is held to (`served_rows.leaf`: window i's block j)."""
+    return [(r, SR.leaf(S, record, i, j)) for j, r in enumerate(CS.srv_names(S))]
+
+
 def advice_leaf_ok(reg: ADV.Registration, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
     """The verifier's check of unit i's ``adv`` row: its leaf from the proof's b‖c, walked to the registered root."""
     d = ADV.domain(binding, n)
@@ -328,7 +336,7 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
     if not 25 <= k_log + nbl <= M.a7.M_MAX:
         raise SystemExit(f"m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
-    data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r in CS.ROWS}
+    data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r in CS.row_names(sg.S)}
     set_name = f"{st.iset.name}-slice"
     got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
@@ -406,7 +414,8 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
                   and a7.opens(port_["pub"], CS.pub(sg.S, u.charge, BOOK), m["salts"]["pub"][i], bcs[i]["pub"])
                   and a7.opens(port_["o0"], [word], m["salts"]["o0"][i], bcs[i]["o0"]))
         adv_ok = advice_leaf_ok(binds["advice"], binds["binding"], n, i, bcs[i]["adv"], binds["n_bits"])
-        srv_ok = SR.leaf_ok(record, binds["run_root"], i, bcs[i]["srv"], served.registration.open(i).path)
+        srv_ok = all(SR.leaf_ok(record, binds["run_root"], k, bcs[i][r], served.registration.open(k).path)
+                     for r, k in srv_leaves(sg.S, record, i))
         cert_ok = bcs[i]["cert"] == binds["certified"]
         why = CC.check_chain(earlier + [[bcs[i]["cin"], bcs[i]["cout"]]], binds["program"], BOOK)
         bound = adv_ok and srv_ok and cert_ok and why is None
@@ -429,7 +438,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         "advice_root": binds["advice"].root.hex(), "certified": binds["certified"].hex(),
         "paths": [[s.hex() for s in binds["advice"].open(i).path] for i in range(n)],
         "served": record, "run_root": binds["run_root"].hex(),
-        "served_paths": [[s.hex() for s in served.registration.open(i).path] for i in range(n)],
+        "served_paths": [[s.hex() for s in served.registration.open(k).path] for k in range(record["count"])],
         "book": BOOK, "program": binds["program"], "carry_chain": [[bc.hex() for bc in w] for w in earlier]}, indent=1))
     proofs = (live or {}).get("proof_bytes") or []
     return {**res, "accepted": bool(result.get("accepted")), "units": rows,
@@ -451,16 +460,17 @@ def _public_cin(u: SimpleNamespace, chain_: SimpleNamespace) -> bool:
     return chain_.public and u.chained
 
 
-def blobs_of(units: list[SimpleNamespace], salts: dict, chain_: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: each unit's ``wit`` and ``srv`` rows as the instance file holds
-    them (u16 little-endian) and its ``adv``, ``cert``, ``srv``, ``cout``, ``wit`` and (but the public priors')
-    ``cin`` salts; the rows are what the control holds."""
+def blobs_of(units: list[SimpleNamespace], salts: dict, chain_: SimpleNamespace,
+             srv: tuple[str, ...] = ("srv",)) -> tuple[dict[str, bytes], set[str]]:
+    """The witness pieces the verifier must not receive: each unit's ``wit`` and ``srv`` rows (`srv`, its rows' names) as
+    the instance file holds them (u16 little-endian) and its ``adv``, ``cert``, ``srv``, ``cout``, ``wit`` and (but the
+    public priors') ``cin`` salts; the rows are what the control holds."""
     blobs, held = {}, set()
     for i, u in enumerate(units):
-        for r in ("wit", "srv"):
+        for r in ("wit", *srv):
             blobs[f"{r} {i}"] = _u16(u.words[r])
             held.add(f"{r} {i}")
-        for r in ("adv", "cert", "srv", "wit", "cout") + (() if _public_cin(u, chain_) else ("cin",)):
+        for r in ("adv", "cert", *srv, "wit", "cout") + (() if _public_cin(u, chain_) else ("cin",)):
             blobs[f"{r} salt {i}"] = salts[r][i]
     return blobs, held
 
@@ -512,7 +522,7 @@ def slice_check(x: SimpleNamespace, ch: SimpleNamespace) -> None:
 
 
 def prove(a) -> int:
-    x = load(a.slice)
+    x = load(a.slice, a.g)
     summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S), "slice": {"name": x.name, **dataclasses.asdict(x.sl)},
                      "kinds": a.kinds, "book": BOOK}
     secret = os.urandom(32)
@@ -549,13 +559,16 @@ def prove(a) -> int:
     salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
     SB = M.CS.FC.SALT_BYTES
     cert_salt = os.urandom(SB)
-    salts = {"adv": [os.urandom(SB) for _ in range(n)], "cert": [cert_salt] * n, "srv": [os.urandom(SB) for _ in range(n)],
+    srv = CS.srv_names(x.S)
+    srv_salts = [os.urandom(SB) for _ in range(n * len(srv))]
+    salts = {"adv": [os.urandom(SB) for _ in range(n)], "cert": [cert_salt] * n,
+             **{r: [srv_salts[i * len(srv) + j] for i in range(n)] for j, r in enumerate(srv)},
              "cin": [ch.salt if u.chained else os.urandom(SB) for u in units], "cout": [os.urandom(SB) for _ in range(n)]}
     port_ = {p.name: p for p in sg.st.ports}
     honest = units[0].words
     n_bits = 16 * len(honest["adv"])
     reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
-    served = SR.register(x.S, [u.registered for u in units], binding, salts=salts["srv"])
+    served = SR.register(x.S, [u.registered for u in units], binding, G=CS.block(x.S), salts=srv_salts)
     binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
              "certified": certified(M, port_["cert"], honest["cert"], cert_salt), "chain": ch, "program": program}
     m = stage(M, sg, units, salt_key, salts)
@@ -567,7 +580,7 @@ def prove(a) -> int:
                                                        BitRowLeaf(n_bits).layout().digest(bit_row((u.words["adv"], 16))[0]),
                                                        salts["adv"][i]) for i, u in enumerate(units))
     carry_same = all(bcs[i][r] == CC._opening(u.words[r], salts[r][i]) for i, u in enumerate(units) for r in ("cin", "cout"))
-    srv_same = [bcs[i]["srv"] == served.bc(i) for i in range(n)]
+    srv_same = [all(bcs[i][r] == served.bc(k) for r, k in srv_leaves(x.S, served.record(), i)) for i in range(n)]
     srv_want = [u.kind != "sixpass-own" for u in units]
     chain_want = [u.chained for u in units]
     summary["staged"] = {"n": n, "ands": m["ands"], "unit_nnz": m["unit_nnz"], "stage_s": m["stage_s"], "k_log": m["meta"]["k_log"],
@@ -582,7 +595,8 @@ def prove(a) -> int:
 
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
     res = audit(M, av, sg, m, units, binds, out / "slice", a.port)
-    blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"], ch), (m["dir"] / "circuit.txt").read_bytes())
+    blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"], ch, srv),
+                                           (m["dir"] / "circuit.txt").read_bytes())
     blobs, held, sparse = sparse_pieces(blobs, held)
     vdir, inst = out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin"
     res["received"] = {**M.a8.received(vdir, inst, blobs, held), "public_pieces": public, "sparse_pieces": sparse,
@@ -625,6 +639,8 @@ def main(argv=None) -> int:
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
     p.add_argument("--slice", choices=tuple(REFUSED), default="demo", help="the window the units are of")
+    p.add_argument("--g", type=int, default=None, help="the steps a served row holds, dividing P (P by default: one srv "
+                   "row a unit)")
     p.add_argument("--kinds", default="", help="the units' kinds in order, comma-separated, honest first (its cert row is "
                    "the certified record's); every kind of the slice by default")
     p.add_argument("--dry", action="store_true", help="the slice and the reference only: nothing lowered or proved")
