@@ -10,6 +10,8 @@ window's coins.
 
 namespace Accounting.Rate
 
+open Pous (Bits)
+
 variable {N b h ρ S L q : ℕ}
 
 theorem Device.tags_eq_output (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
@@ -27,6 +29,8 @@ theorem InteractiveDevice.ingress_eq (A : InteractiveDevice N b h ρ S L q) (E :
 end Accounting.Rate
 
 namespace Bandwidth
+
+open Pous (Bits)
 
 variable {N b h S c G q : ℕ}
 

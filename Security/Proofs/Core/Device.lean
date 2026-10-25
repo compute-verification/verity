@@ -1,5 +1,6 @@
 import Definitions.Core.Device
 import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
+import Mathlib.Algebra.Group.Action.Defs
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
