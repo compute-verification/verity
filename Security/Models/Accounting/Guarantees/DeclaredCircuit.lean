@@ -29,14 +29,27 @@ open scoped ENNReal
 
 *The audit.* `StackedSessionConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
 16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window (the 1 s window's count; a longer window's
-audit instantiates `G` by verifying a uniform 2,773 of its draws), and a store per pass made by the append-coin rule
-(`RateSketch.steeredStore`: the blocks of `T` appends of `M` positions, each append's choices `choose c ω a κ_<a` fixed
-before its own coin keys its blocks). Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where `c` is
-the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so the layout
-may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
-(`Accounting.Assumptions.SteeredLayout`). Each append has its own coin, uniform and independent of the others', so a
-re-key, which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
-`joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`).
+audit instantiates `G` by verifying a uniform 2,773 of its draws, and a paced session's when each group draws at least
+2,773), and a store per pass made by the append-coin rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M`
+positions, each append's choices `choose c ω a κ_<a` fixed before its own coin keys its blocks). `P` is fixed before
+the session's coins, and the code holds a window to it only in a paced session (#3786), whose windows are its groups of
+at most `k` passes (the audit refuses a group's root `k + 1`, `order`, in Python and Lean): a paced session reads `G` at
+`P = k`, a group of fewer passes as one padded with passes that hold no tile of `W`
+(note:memory-accounting/20261024T1630Z-report-carrier-life). The code caps no unpaced window's passes yet, so a
+KV-credited session meets `G` when it is paced. Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where
+`c` is the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so
+the layout may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
+(`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; the schedule check is what makes `a`
+small. A layout that is the verifier's plan of a schedule the check accepted at `b ≤ a₀` bits, its steering bits, is
+`SteeredLayout` at `a = a₀ + 1` (`Properties.RemoteAudit.steered_of_checked`, #3828), under the named gap
+`Properties.RemoteAudit.ScheduleLayoutGap`: that the model's layout of a pass is the verifier's positions of the
+session's appends and the plan the pass sent. A layout that follows a coin at a counted schedule is refused
+(`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so `a` does not collapse to `|Y|`. Each
+append has its own coin, uniform and independent of the others', so a re-key, which appends a block again, draws a
+fresh one. Each append's blocks are read within `L` windows of the window `joined x t` it joined
+(`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life of `D = 30` s in whole
+windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`, #3786), with `L_min` 2
+when the prover defers residency and 1 otherwise; a paced session counts its groups at their nominal length.
 
 *The prover system.* Its pass devices are verbatim (`rate-sketch-verbatim`), and they are told their pass's summary:
 `A` has a session for each value of the summary (`RateSketch.SketchSummarySession`), and pass `j` of window `w` runs
@@ -122,9 +135,18 @@ node that registers `R` times pays `δ_G` once a registration.
 
 `G` credits nothing once `γ ≥ 1 − 0.0015`, because a pass's credit is at most its `N` tiles' bits and the event's
 threshold is then negative. The carrier term grows with the carrier's life, `128·L·P·c/E` of the store with `P·N·4096`
-bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T` is short: at the 18 Oct caps
-(c = 0.442 for 8B, 0.0918 for 70B TP8, 61 ms passes) `ε` is 10% at a life of 35 s for 8B and 171 s for 70B, and at
-remote_bandwidth's `LIFETIME` of 60 windows of 60 s it exceeds 100% for both.
+bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T_w` is short: at the 18 Oct caps
+(c = 0.442 for 8B, 0.0918 for 70B TP8, 61 ms passes) `ε` a session is 10% at a life of 35 s for 8B and 171 s for 70B.
+At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
+492 passes as a paced session of 12 groups of `k = 82` a 60 s stretch at `L = 6`). At the stated 60 s window
+`⌊D/T_w⌋ = 0`, so `L = L_min`: 16.25% and 4.16% at `L = 1`, and 31.52% and 7.33% at `L = 2` for a prover that defers
+residency, as the vLLM serving store does (note:memory-accounting/20261024T1630Z-report-carrier-life; the earlier
+60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
+2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
+its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1` (#3924,
+`Accounting.SecurityProofs.DeclaredCircuitWitness`). That witness's schedule is decode's, one token a step a sequence
+with each page's coin back two steps after it completes; a prefill witness is in progress (DCR-WITNESS, branch
+`cursor/ca-dcr-witness-prefill-ea24`).
 
 Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
 most `8·R_L` and its encodes at most `L·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds at
