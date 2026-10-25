@@ -1,6 +1,6 @@
-"""Records a reader fills from the environment, pinned at the bytes they had before the reader moved to `verity_vllm.settings`: the hot
-worker's key (`hot.env_identity`, `hot.so_identity`) and the fast Match's declared configuration (`global_match_fast.config`, on every
-result document's impl block)."""
+"""Records a reader fills from the environment, pinned at their bytes on `main` before the reader moves to `verity_vllm.settings`, so
+the move can't change them: the hot worker's key (`hot.env_identity`, `hot.so_identity`) and the fast Match's declared configuration
+(`global_match_fast.config`, on every result document's impl block)."""
 from __future__ import annotations
 
 import hashlib
