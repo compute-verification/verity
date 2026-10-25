@@ -89,7 +89,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   `ScanOut`) do (`specs_decoded`);
 * so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
   `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), wherever besides those
-  the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`, open), and a
+  the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`,
+  `downShape_decoded`; open only for a batch's shared and stride paths, `BatchShape`), and a
   composite's return is the sequence of its parts and a primitive's none (`RetParts`, the decoder's).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
@@ -8753,6 +8754,30 @@ theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut
     rw [hsegs, Array.empty_append]
     exact hA
 
+/-- **`DownShape` in a decoded Definition's body**, from `downShape_of` with the decoder's facts and `specs_decoded`,
+wherever a batch's segments are `ShapeOk` (`BatchShape`). -/
+theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
+    (hDec : Decoded P) (hB : Resolve.BodyOk P d)
+    (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d))
+    (hBatch : ∀ fuel, DownShapeAt (ctxOf P memo d) fuel → CalleeShape (ctxOf P memo d) fuel →
+      BatchShape (ctxOf P memo d) fuel) :
+    DownShape (ctxOf P memo d) := by
+  refine downShape_of (ctxOf P memo d) (.top d 0 none) rfl hB ?_ ?_ ?_ hR
+    (fun fuel => (specs_decoded P memo hdP hDec hB hR hSO (.top d 0 none) rfl fuel).2.2.1) hBatch
+    (fun fuel hC hK => scanShape_of _ hB hSO fuel hC hK)
+  · intro k i hk hi
+    have := (hDec d hdP).2.2 k hk i hi
+    exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
+  · intro k i hk hi
+    exact ctxOf_argCount P memo d k i hk hi
+  · intro k i e L hdims hL hip
+    change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
+    by_cases hk : k < (P.defs[d]!).body.nodes.size
+    · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+      · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
+      · rw [getElem!_neg _ i hi] at hdims; cases hdims
+    · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
+
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
 decoded Program has them (`BodiesOk.retParts_reads`). -/
@@ -9037,14 +9062,16 @@ theorem reached_closed (P : Prog)
 /-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever every
 Definition's callees are decoded before it and none is the root, and the reached Definitions' references
 (`Resolve.BodyOk`), the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) and, given their callees' summaries, the
-shape of `down`'s segments (`DownShape`) hold. -/
+shape of a batch's segments (`BatchShape`, which gives `DownShape` by `downShape_decoded`) hold. -/
 theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
     (hnr : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
     (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
     (hSO : ∀ m d, ScanOut (ctxOf P m d))
-    (hS : ∀ m d, (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) → DownShape (ctxOf P m d)) :
+    (hBatch : ∀ m, ∀ d < P.defs.size, (Desc.reached P)[d]! = true →
+      (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) →
+      ∀ fuel, DownShapeAt (ctxOf P m d) fuel → CalleeShape (ctxOf P m d) fuel → BatchShape (ctxOf P m d) fuel) :
     ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P memo f := by
   unfold memoOf at h
   extract_lets seen memo0 at h
@@ -9079,7 +9106,8 @@ theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok 
       change (P.defs[f]!).body.nodes[k]! = node at hg
       rw [← hg]
       exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP k hk)
-    refine summarize_retOk P r f v htP hRP (hB f htP hrf) (fun hp => hS r f (hR hp))
+    refine summarize_retOk P r f v htP hRP (hB f htP hrf)
+      (fun hp => downShape_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) (hBatch r f htP hrf (hR hp)))
       (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) sc hsc
         Flock.Steps.FUEL).1) hv (r.push v) ?_
     subst hsz
