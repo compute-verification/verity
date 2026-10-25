@@ -63,5 +63,5 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
     ands, k, src = CZ.measured("AttnBlockFirst_v1{D=64,NVIS=72,BN=128}")
     assert (ands, k) == (round(1_231_456 + (9_075_919 - 1_231_456) * 55 / 111), 26) and "interpolated" in src
     assert CZ.measured("AttnBlockFirst_v1{D=64,NVIS=17,BN=128}")[:2] == (1_231_456, 24)
-    with pytest.raises(ValueError, match="no measured ANDs or k_log for Gemm_v2"):
-        CZ.size({"Gemm_v2{K=4096,N=16}": 1})
+    with pytest.raises(ValueError, match=r"no measured ANDs or k_log at Llama-3.2-1B for Gemm_v2\{K=4096,N=16\}, Foo_v1\{\}"):
+        CZ.size({"Gemm_v2{K=4096,N=16}": 1, "AllGather_v1{WORLD=256,N=16}": 1, "Foo_v1{}": 1})

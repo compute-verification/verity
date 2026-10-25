@@ -1168,10 +1168,13 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     t0 = time.time()
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
     lowered = time.time() - t0
-    one = CZ.project(seen, probe, cls)
+    try:
+        one = CZ.project(seen, probe, cls)
+        sizes = {"program": CZ.size(one), "window": CZ.size(one, programs), "cap": CZ.size(one, cls.slots)}
+    except ValueError as e:
+        raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
     return {"class": asdict(cls), "positions": cls.positions, "programs": programs,
-            "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)},
-            "program": CZ.size(one), "window": CZ.size(one, programs), "cap": CZ.size(one, cls.slots)}
+            "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
 def serve_standin(a: argparse.Namespace) -> dict[str, Any]:

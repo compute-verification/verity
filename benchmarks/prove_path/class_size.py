@@ -127,9 +127,10 @@ MEASURED: dict[str, tuple[int, int, str]] = {
 }
 #: `AttnBlockFirst_v1{D=64,NVIS,BN=128}` as #4263 measured it (r20261025-123346-091b): NVIS -> (ANDs, k_log)
 FIRST_BLOCKS = {1: (96_886, 22), 17: (1_231_456, 24), 128: (9_075_919, 26)}
-#: `AllGather_v1{WORLD,N}`'s k_log where CIR-95 measured it; a copy, no ANDs. Key gathers `{T,64}` (T <= 136) take 27, the
-#: block CIR-95 measured at T = 136, an upper bound below it
+#: `AllGather_v1{WORLD,N}`'s k_log where CIR-95 measured it; a copy, no ANDs. Any other gather of at most `ROWS` rows takes
+#: 27, an upper bound: CIR-95's block at T = 136 for the key gathers, and the most rows a reader holds under 2^27 for the rest
 GATHERS = {(4, 16): 22, (48, 16): 25, (128, 16): 27, (128, 4): 27, (167, 1): 27}
+ROWS = 256
 
 
 def measured(lab: str) -> tuple[int, int, str]:
@@ -137,8 +138,9 @@ def measured(lab: str) -> tuple[int, int, str]:
     if lab in MEASURED:
         return MEASURED[lab]
     fam, s = statics(lab)
-    if fam == GATHER and ((s["WORLD"], s["N"]) in GATHERS or (s["N"] == 64 and 2 <= s["WORLD"] <= 136)):
-        return 0, GATHERS.get((s["WORLD"], s["N"]), 27), "a copy (b1_tp2); k_log CIR-95's"
+    if fam == GATHER and 2 <= s["WORLD"] <= ROWS:
+        return 0, GATHERS.get((s["WORLD"], s["N"]), 27), "a copy (b1_tp2); k_log " + (
+            "CIR-95's" if (s["WORLD"], s["N"]) in GATHERS else "27, an upper bound (CIR-95: a reader holds about 256 rows under 2^27)")
     if fam == "AttnBlockFirst_v1" and (s["D"], s["BN"]) == (64, 128) and 1 <= s["NVIS"] <= 128:
         v, (lo, hi) = s["NVIS"], next((a, b) for a, b in zip(FIRST_BLOCKS, list(FIRST_BLOCKS)[1:]) if s["NVIS"] <= b)
         ands = round(FIRST_BLOCKS[lo][0] + (FIRST_BLOCKS[hi][0] - FIRST_BLOCKS[lo][0]) * max(v - lo, 0) / (hi - lo))
@@ -150,7 +152,16 @@ def measured(lab: str) -> tuple[int, int, str]:
 
 
 def size(units: Mapping[str, int], times: int = 1) -> dict[str, Any]:
-    """``units`` (a census) ``times`` over, priced by `measured`: units, ANDs, m and each template's row."""
+    """``units`` (a census) ``times`` over, priced by `measured`: units, ANDs, m and each template's row; refused naming every
+    template with no measurement."""
+    missing = []
+    for lab in units:
+        try:
+            measured(lab)
+        except ValueError:
+            missing.append(lab)
+    if missing:
+        raise ValueError(f"no measured ANDs or k_log at Llama-3.2-1B for {', '.join(missing)}: add each to MEASURED")
     rows = [(lab, n * times, *measured(lab)) for lab, n in units.items()]
     cells = sum(n << k for _, n, _, k, _ in rows)
     return {"units": sum(n for _, n, *_ in rows), "ands": sum(n * a for _, n, a, _, _ in rows), "m": math.ceil(math.log2(cells)),
