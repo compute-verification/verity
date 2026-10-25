@@ -52,7 +52,7 @@ OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-PARAMS_KEYS = ["audits", "cells", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 DIGEST = re.compile("[0-9a-f]{128}")
 
@@ -63,6 +63,7 @@ DIGEST = re.compile("[0-9a-f]{128}")
 class Params:
     audits: tuple[tuple[int, int], ...]
     cells: tuple[int, ...]
+    first: int
     jitter: int
     link: str
     key: LmsKey
@@ -144,6 +145,7 @@ def params(j) -> Params:
         _exactly(a, ["free", "steps"], "an audit")
         audits.append((_nat(a["free"], "an audit"), _nat(a["steps"], "an audit")))
     cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
+    first = _nat(j["first"], "first")
     jitter = _nat(j["jitter"], "jitter")
     if jitter < 1:
         raise D.Reject("jitter: the observations' jitter bound is at least 1")
@@ -169,7 +171,7 @@ def params(j) -> Params:
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
-    return Params(tuple(audits), cells, jitter, link, LmsKey(lp, key), session, program, sync_set, windows)
+    return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows)
 
 
 def registration_digest(record: dict) -> bytes:
@@ -318,7 +320,8 @@ def public(p: Params, facts: list[Facts]) -> dict:
     cells = sum(clog2(cap + 1) for cap in p.cells)
     schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in audits)
-    return {"K": K, "audits": audits, "cells": cells, "schedules": schedules, "windows": p.windows}
+    eps = str(sum((f.delta for f in facts), Fraction(0)))
+    return {"K": K, "audits": audits, "cells": cells, "eps": eps, "schedules": schedules, "windows": p.windows}
 
 
 def check(p: Params, c: Commitment, e) -> tuple:
@@ -332,9 +335,9 @@ def check(p: Params, c: Commitment, e) -> tuple:
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts = [], []
-    for w, (reg, x) in enumerate(zip(c.windows, windows)):
+    for i, (reg, x) in enumerate(zip(c.windows, windows)):
         try:
-            _window_check(p, w, reg, x)
+            _window_check(p, p.first + i, reg, x)
         except Finding as f:
             findings.append(f)
     for i, (reg, a) in enumerate(zip(c.audits, audits)):
@@ -382,7 +385,7 @@ EXPECT = {
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT,
     "undecided-and-reject": REJECT,
-    "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
+    "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
 }
 MUTATIONS = list(EXPECT)
@@ -431,6 +434,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
+    first = r.choice([0, 0, r.randrange(1, 6)])
     deltas = r.sample(range(4), r.randint(1, 3))
     rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
     t, a = r.randrange(n_windows), r.randrange(max(n_audits, 1))
@@ -441,11 +445,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
 
     window_regs, windows = [], []
-    for w in range(n_windows):
+    for w in range(first, first + n_windows):
         rec = {"format": r.choice(FORMATS), "law": {"k": 1, "law": "subset"}, "partition": f"{link}/{w}",
                "population": 1, "program": program, "protocol": ONE_STAGE, "window": served(w)}
         sync = ClockSync(r.choice(deltas), r.choice(rhos))
-        aimed = w == t
+        aimed = w == first + t
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         elif aimed and m == "provenance":
@@ -529,14 +533,16 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         audit_regs.append(rec)
         audits.append(answer)
 
-    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))],
+    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
                    "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "sync_set": {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]},
                    "windows": n_windows}
     c_json = {"audits": audit_regs, "windows": window_regs}
     e_json = {"audits": audits, "windows": windows}
-    if m == "count-windows":
+    if m == "first":
+        case_params["first"] = first + r.choice([1, -1] if first else [1])
+    elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {"free": 0, "steps": 0}]])
@@ -570,7 +576,7 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"sync_set": p["sync_set"] | {"rhos": [[1, 0]]}}, p | {"sync_set": p["sync_set"] | {"deltas": [1, 1]}},
            p | {"sync_set": p["sync_set"] | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": p["sync_set"] | {"x": 0}},
            p | {"audits": [{"free": 0}]}, p | {"audits": [{"free": -1, "steps": 0}]}, p | {"audits": "x"},
-           p | {"cells": [-1]}, p | {"cells": [True]}]
+           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"}]
     return out
 
 
@@ -659,9 +665,9 @@ def test_a_small_period_reaches_its_verdict(server):
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units drawn subset:3 at δ = 1/10 with at most 4 wrong, 7 cells on one
     connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps (Lean's `#guard`)."""
-    p = Params(((0, 3),), (7, 0), 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
+    p = Params(((0, 3),), (7, 0), 0, 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
     assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
-            out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
+            out["audits"][0]["jitter"], out["K"], out["eps"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3, "1/10")
     assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
     assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
