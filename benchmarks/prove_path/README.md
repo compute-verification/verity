@@ -105,13 +105,15 @@ except with probability δ + ε_ks + ε_bind, an accepted audit's carried sequen
 - n·log2 D, the timing (J's D classes over n steps).
 
 At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. A smaller c, the advice's declared bits, needs
-`SampledAuditAccepted` to pin the registered input gates to the registration. That is option A, a claim for Daniel that
-EVALCOMP filed on 25 Oct; TODO(EVALCOMP): link its Asks page. Until A is proved, the page states the larger c.
+`SampledAuditAccepted` to pin the registered input gates to the registration. That is option A, EVALCOMP's ask on
+#ask-daniel (card ddf12c5c, [its page](https://app.notion.com/p/404399515d9e81d99e61f6534b54b291)), decided
+provisionally as A on 25 Oct. Until A is proved, the page states the larger c.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; with #4047, each rank's
 `ranks.<r>.charge` holds `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
 - c, as the statement stands, is the circuit's non-ingress input bits, which the run doesn't print yet.
-  At 2a, c is #otherInputs = 2^21 (2,097,152 bits), until option A (EVALCOMP's ask, filed 25 Oct) is decided and proved.
+  At 2a, c is #otherInputs = 2^21 (2,097,152 bits), until option A (decided provisionally,
+  card ddf12c5c) is proved.
   Under option A, c is `advice.bits`, the registration's `window.advice.bits`: the
   I1 advice's length, which `prove_path.py advice` prints as `bits`. Over several windows, `BitsCount` charges their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
