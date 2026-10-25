@@ -33,11 +33,11 @@ Where the config comes from (`find_hf_config(role)`, first hit wins; the source 
 from __future__ import annotations
 
 import hashlib
-import os
 import types
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.fold.resolver import Profile
@@ -91,7 +91,7 @@ def _sha256(p: Path) -> str:
 def hf_snapshot(repo: str, revision: str) -> Path:
     """The hub cache's snapshot of `repo` at `revision`: `$HF_HOME/hub/models--<repo>/snapshots/<revision>`, where vLLM's config
     load reads it (HF_HUB_OFFLINE)."""
-    hf_home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
+    hf_home = settings.HF_HOME or str(Path.home() / ".cache" / "huggingface")
     return Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
 
 

@@ -9,6 +9,7 @@ import json
 import os
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
 
 
@@ -138,7 +139,7 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
     import base64
     import glob
 
-    root = os.environ.get("TRITON_CACHE_DIR") or os.path.join(os.path.expanduser("~"), ".triton", "cache")
+    root = settings.TRITON_CACHE_DIR or os.path.join(os.path.expanduser("~"), ".triton", "cache")
     cands = [os.path.join(root, str(h))]                          # Triton <= 3.3: <hex hash>/
     try:                                                           # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
         cands.append(os.path.join(root, base64.b32encode(bytes.fromhex(str(h))).decode().rstrip("=")))
@@ -337,7 +338,7 @@ def loaded_code_objects() -> dict[str, Any]:
                 "binary_kinds": sorted({b.split(":", 1)[0] for b in bins_all}),
                 "module_keys_sha256": _sha(json.dumps(sorted(m["key"] for m in mods))) if mods else None,
                 "kernel_names": sorted(kernels), "per_kernel": kernels, "modules_list": mods,
-                "triton_cache_dir": os.environ.get("TRITON_CACHE_DIR"),
+                "triton_cache_dir": settings.raw("TRITON_CACHE_DIR"),
                 "read_from": "torch._inductor.codecache.PyCodeCache (loaded modules) x CachingAutotuner.fn.src / compile_results[*].kernel + launchers[*].bin "
                              "(triton hash, cubin sha256 from asm or TRITON_CACHE_DIR/<hash>/*.cubin, per-ELF-section sha256, code_sha256 = every section "
                              "except CUBIN_DENY_LIST, code_sha256_normalized + section_detail.path_strings (absolute-path strings in device data decoded), "
@@ -381,11 +382,11 @@ def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[s
     try:
         from verity_vllm.check import kernel_identity as KI
 
-        ind = inductor_dir or os.environ.get("TORCHINDUCTOR_CACHE_DIR") or KI.inductor_cache_dir()
+        ind = inductor_dir or settings.TORCHINDUCTOR_CACHE_DIR or KI.inductor_cache_dir()
         doc = KI.collect(ind, KI.triton_cache_dir())
         gk = dict(doc["summary"])
         gk["inductor_cache_dir"] = ind
-        gk["per_process_cache_dir"] = os.environ.get(_VERITY_INDUCTOR_DIR_MARK) == "1"      # set by prepare_compiled_process_cache / compiled_commit.sh
+        gk["per_process_cache_dir"] = settings.raw(_VERITY_INDUCTOR_DIR_MARK) == "1"      # set by prepare_compiled_process_cache / compiled_commit.sh
         gk["pieces"] = [{"path": w["path"], "norm_sha256": w["norm_sha256"], "call_sha256": w["call_sha256"], "kernels": len(w["kernels"]),
                          "launches": w["launches"], "extern_calls": w["extern_calls"]} for w in doc["wrappers"]]
         gk["kernels"] = doc["kernels"]

@@ -196,7 +196,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_DUMP_DIR", str, None, DEBUG, "the replay dumps the families VERITY_REPLAY_DUMP_FAMILIES names here"),
     S("VERITY_REPLAY_DUMP_FAMILIES", csv, (), DEBUG, "the families the replay dumps, comma-separated; none, every family"),
     S("VERITY_REPLAY_DUMP_MAX", int, 1024, DEBUG, "the most values the replay dumps"),
-    S("VERITY_REPLAY_FORK_GC_FREEZE", flag, True, VALUE, "the replay freezes the GC before it forks its workers"),
+    S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
@@ -226,14 +226,28 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_RELEASE_TAG", str, None, WHERE, "the release a compiled Commit logs"),
     S("VERITY_TREE_COMMIT", str, None, WHERE, "the commit of VERITY_TREE a compiled Commit logs"),
     # ---- other programs' variables the library reads
+    S("CUBLASLT_WORKSPACE_SIZE", str, None, VALUE, "cuBLASLt's workspace in KiB; the replay's dependencies record it"),
+    S("CUBLAS_WORKSPACE_CONFIG", str, None, VALUE, "cuBLAS's workspace configuration, :SIZE:COUNT; the replay's dependencies record it"),
     S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build sets its own default"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
     S("HF_HOME", str, None, WHERE, "Hugging Face's cache root; unset, ~/.cache/huggingface"),
     S("MAX_JOBS", str, None, VALUE, "parallel compile jobs of torch's extension builds; a tap build sets its own default"),
+    S("NCCL_ALGO", str, None, VALUE, "the algorithms NCCL's collectives may use; a TP engine profile records it"),
+    S("NCCL_BUFFSIZE", str, None, VALUE, "NCCL's buffer bytes per channel; a TP engine profile records it"),
+    S("NCCL_LAUNCH_MODE", str, None, VALUE, "how NCCL launches its kernels, PARALLEL or GROUP; a TP engine profile records it"),
+    S("NCCL_MAX_NCHANNELS", str, None, VALUE, "the most channels NCCL uses; a TP engine profile records it"),
+    S("NCCL_MIN_NCHANNELS", str, None, VALUE, "the fewest channels NCCL uses; a TP engine profile records it"),
+    S("NCCL_NTHREADS", str, None, VALUE, "threads per NCCL block; a TP engine profile records it"),
+    S("NCCL_PROTO", str, None, VALUE, "the protocols NCCL's collectives may use; a TP engine profile records it"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
+    S("RUNPOD_POD_ID", str, None, WHERE, "the pod an engine profile names as its host; unset, the node name", empty=True),
+    S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
+    S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_BATCH_INVARIANT", str, None, VALUE, "vLLM's batch-invariant kernels, 1 as an engine profile's env sets it; the replay's "
       "dependencies record it"),
+    S("VLLM_DISABLE_COMPILE_CACHE", str, None, VALUE, "1: vLLM compiles afresh instead of loading its compile cache; the compiled "
+      "records say which"),
 )
 del S
 

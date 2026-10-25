@@ -8,6 +8,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
+import types
 
 import pytest
 
@@ -110,3 +112,70 @@ def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.M
         "fault_skip_copy_at": getattr(nc, "fault_skip_copy_at", None), "skip": sorted(native_host.skip_classes_of_env()),
         "weights_hash": leafhash.mode_from_env()}
     assert _digest(doc) == digest
+
+
+@pytest.fixture(scope="module")
+def engine():
+    pytest.importorskip("torch")
+    from verity_vllm.acquire.sources import compiled_source
+    from verity_vllm.check import fold_compare, kernel_identity
+    from verity_vllm.check.replay import driver
+    from verity_vllm.engine import build, code_identity, engine_profile
+    from verity_vllm.engine.profiles import dense_generic
+
+    return types.SimpleNamespace(compiled_source=compiled_source, fold_compare=fold_compare, kernel_identity=kernel_identity, driver=driver,
+                                 build=build, code_identity=code_identity, engine_profile=engine_profile, dense_generic=dense_generic)
+
+
+_ENGINE_VARS = ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE", "NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS",
+                "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS", "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE", "VLLM_DISABLE_COMPILE_CACHE", "RUNPOD_POD_ID",
+                "TORCHINDUCTOR_CACHE_DIR", "VERITY_INDUCTOR_DIR_PER_PROCESS", "HF_HOME", "VERITY_FAULT")
+
+
+@pytest.mark.parametrize(("values", "digest"), [
+    ({}, "d43ddca387e48b9f037005834832ba17"),
+    ({"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":4096:8", "CUBLASLT_WORKSPACE_SIZE": "0", "NCCL_ALGO": "Ring",
+      "NCCL_PROTO": "Simple", "NCCL_MIN_NCHANNELS": "4", "NCCL_MAX_NCHANNELS": "8", "NCCL_NTHREADS": "512", "NCCL_BUFFSIZE": "4194304",
+      "NCCL_LAUNCH_MODE": "GROUP", "VLLM_DISABLE_COMPILE_CACHE": "1", "RUNPOD_POD_ID": "pod-a", "TORCHINDUCTOR_CACHE_DIR": "/no/inductor",
+      "VERITY_INDUCTOR_DIR_PER_PROCESS": "1", "HF_HOME": "/hf", "VERITY_FAULT": " skip_copy:3 "}, "6cbbab0e6f0be08fca8b082a0bd226cc"),
+    (dict.fromkeys(_ENGINE_VARS, ""), "b32b5b554142c2adc24aa3c97868d7ea"),
+    ({"VLLM_BATCH_INVARIANT": " 1", "VLLM_DISABLE_COMPILE_CACHE": "true", "VERITY_INDUCTOR_DIR_PER_PROCESS": "true", "NCCL_ALGO": " Tree ",
+      "RUNPOD_POD_ID": " p "}, "346629f5207b0967e546ab33645f6704"),
+])
+def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.MonkeyPatch, values: dict[str, str], digest: str) -> None:
+    """The fields of the engine's records that the environment fills: the replay's engine facts, the engine profile's linear backend,
+    NCCL settings and pod, the compilation facts' compile cache, the compiled source's fault, the generated kernels' Inductor
+    directory, and the hub paths.  vLLM, CUDA and nvidia-smi are faked; the rest of each record is the machine's."""
+    import torch
+
+    for k, v in {"HOME": "/h", **values}.items():
+        env.setenv(k, v)
+    ns = types.SimpleNamespace
+    runner = ns(get_model=lambda: ns(named_modules=lambda: []), sampler=None)
+    comm = ns(ca_comm=None, symm_mem_comm=None, qr_comm=None, fi_allreduce_fusion=None, pynccl_comm=None)
+    ps = types.ModuleType("vllm.distributed.parallel_state")
+    ps.get_tp_group = lambda: ns(rank_in_group=0, world_size=2, device_communicator=comm)
+    dist = types.ModuleType("vllm.distributed")
+    dist.parallel_state = ps
+    for name, mod in {"vllm": types.ModuleType("vllm"), "vllm.distributed": dist, "vllm.distributed.parallel_state": ps}.items():
+        env.setitem(sys.modules, name, mod)
+    env.setattr(torch.cuda, "get_device_properties", lambda i: ns(name="F", major=8, minor=9, total_memory=1 << 30, multi_processor_count=8))
+    env.setattr(torch.cuda, "device_count", lambda: 1)
+    env.setattr(engine.engine_profile, "_run", lambda argv: "1")
+    env.setattr(engine.kernel_identity, "inductor_cache_dir", lambda: "/no/torch-default")
+    cc = ns(mode=3, cudagraph_mode=None, cudagraph_capture_sizes=[1], max_cudagraph_capture_size=1, use_inductor_graph_partition=False,
+            backend="inductor", inductor_compile_config={})
+    llm = ns(llm_engine=ns(vllm_config=ns(compilation_config=cc, model_config=ns(enforce_eager=False))))
+    facts = engine.driver.engine_facts_of_record()
+    gk = engine.code_identity.generated_kernels_of_this_process()
+    pod = engine.engine_profile.gpu_info()["pod"]
+    doc = {"facts": [facts[k] for k in ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE")] + [facts["cublas"]["env"]],
+           "linear": engine.engine_profile._backends_of_runner(runner)["linear"],
+           "nccl_env": engine.engine_profile._backends_probe(ns(model_runner=runner))["all_reduce"]["nccl_env"],
+           "pod": "<node>" if pod == os.uname().nodename else pod,
+           "compile_cache": engine.build.compilation_facts(llm)["compile_cache"],
+           "compile_cache_disabled": engine.compiled_source.compile_settings(llm)["compile_cache_disabled"],
+           "fault": engine.compiled_source.CompiledGraphSource().fault,
+           "inductor": [gk["inductor_cache_dir"], gk["per_process_cache_dir"]],
+           "hub": [str(engine.dense_generic.hf_snapshot("org/m", "abc")), engine.fold_compare.hf_safetensors_glob("org/m")]}
+    assert _digest(doc) == digest, doc
