@@ -1,5 +1,5 @@
 import Proofs.NetworkCertifier.Schedule
-import Models.NetworkCertifier.Assumptions.AdviceString
+import Definitions.NetworkCertifier.Assumptions.AdviceString
 import Mathlib.Data.List.Infix
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 

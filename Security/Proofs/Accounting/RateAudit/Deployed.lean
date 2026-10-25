@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditDeployed
+import Definitions.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Session
 
 /-!
