@@ -53,7 +53,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.spans"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "repo-path", "symbol": "NativeHostCommitter._gpu_ext_load", "detail": "_tree"},
     {"file": "verity_vllm/commit/padding_steps.py", "kind": "layer", "symbol": "<module>", "detail": "commit.padding_steps -> check.executed_prefix"},
-    {"file": "verity_vllm/commit/padding_steps.py", "kind": "layer", "symbol": "<module>", "detail": "commit.padding_steps -> check.oracle_compare"},
     {"file": "verity_vllm/correspondence/reader_for_acquire.py", "kind": "layer", "symbol": "<module>", "detail": "correspondence.reader_for_acquire -> observe.runtime_tree"},
     {"file": "verity_vllm/correspondence/resolve.py", "kind": "layer", "symbol": "<module>", "detail": "correspondence.resolve -> check.match.batch_decomp"},
     {"file": "verity_vllm/correspondence/resolve.py", "kind": "layer", "symbol": "<module>", "detail": "correspondence.resolve -> observe.contract"},

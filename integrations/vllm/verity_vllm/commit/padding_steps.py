@@ -35,6 +35,7 @@ from typing import Any, Iterable
 from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
 from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
 from verity_vllm.commit import scheme
+from verity_vllm.commit.opened import ORDINAL_SEP
 from verity_vllm.records.declared_stop import DeclaredStop
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.served_tokens import ServedTokens
@@ -647,8 +648,6 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
     padding tensor beside an executed one of the same name at a mixed step) and checked word for word == bot_word(committed_dtype); (ii) the
     ONE-MECHANISM reconciliation, kept: the Commit's padding classification (entries by family) against the population's inactive bucket by
     family -- equal or a named problem.  Returns the record block (`ok`, the counts, the problems); mutates `sr` in place."""
-    from verity_vllm.check import oracle_compare as _OC
-    ordinal_sep = getattr(_OC, "ORDINAL_SEP", None)                 # moe F-moe-r17-06 (int-8): `<name>#ord<k>` names the k-th meta of a step exactly
     pop = sr.setdefault("population", {}) if isinstance(sr.get("population"), dict) else sr.setdefault("population", {})
     ne = dict(pop.get("not_executed_by_rule") or {})
     n_ne = int(ne.get("identities") or 0)
@@ -673,11 +672,6 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
         holder_f["inactive_by_family"], holder_f["not_executed_by_family"] = holder_f["not_executed_by_family"], {}
     # (i) the word check over every padding entry of the map
     pads = [e for e in bmap.get("entries", []) if e.get("activity") == "bot-by-enablement"]
-    names_at: Counter = Counter()                                         # same-name metas of a step (a mixed step's executed + padding tensor)
-    for e in bmap.get("entries", []):
-        st_e = (e.get("identity") or {}).get("step") if isinstance(e.get("identity"), dict) else None
-        if e.get("name") is not None and isinstance(st_e, int):          # a registered input / weights entry has no per-step name
-            names_at[(int(st_e), str(e["name"]))] += 1
     checked = words = 0
     mismatches: list[dict[str, Any]] = []
     unread: list[dict[str, Any]] = []
@@ -696,12 +690,7 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
         bd["padding_entries"] += 1
         bd["members"].add(str((e.get("identity") or {}).get("output_member") or "?"))
         st = int(e["identity"]["step"])
-        if ordinal_sep is not None:
-            got = committed(st, f"{e['name']}{ordinal_sep}{int(e['tensor_ordinal'])}", 0, int(e["width_bytes"]))
-        elif names_at[(st, str(e["name"]))] == 1:                    # an older reader: the bare name is exact only when it names ONE meta of the step
-            got = committed(st, str(e["name"]), 0, int(e["width_bytes"]))
-        else:
-            got = None                                               # two metas of the name (a mixed step) and no ordinal naming: unread, named
+        got = committed(st, f"{e['name']}{ORDINAL_SEP}{int(e['tensor_ordinal'])}", 0, int(e["width_bytes"]))
         if got is None:
             if len(unread) < max_report:
                 unread.append({"step": e["identity"]["step"], "name": e["name"], "ordinal": e["tensor_ordinal"]})
