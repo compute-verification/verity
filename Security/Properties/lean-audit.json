@@ -61,6 +61,7 @@
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
   "Properties.Proofs.Accounting.Served",
+  "Properties.Accounting.DeclaredCircuit",
   "Properties.RemoteAudit.Line",
   "Properties.Proofs.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
@@ -341,7 +342,7 @@
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": ["Properties.Accounting.Compose", "Properties.Accounting.Served"],
+   "except": ["Properties.Accounting.Compose", "Properties.Accounting.Served", "Properties.Accounting.DeclaredCircuit"],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.SampledProofs.Draw": {
@@ -363,6 +364,11 @@
    ],
    "except": [],
    "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`SampledProofs.Slots.layout`, `SampledProofs.Partition.units`) and the verifier's population draw (`SampledProofs.Draw.drawUnits`, from bytes as `Properties.SampledProofs.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+  },
+  "Properties.Accounting.DeclaredCircuit": {
+   "imports": ["Models.Accounting", "Properties.RemoteAudit.Schedule"],
+   "except": [],
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Models.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Pouw.Credit": {
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
@@ -1936,6 +1942,9 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -2957,7 +2966,8 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by RemoteAudit.Schedule.check's acceptance at the steering cap the session committed before its first coin, at every prefix and every codec and append coins, under the named gap Properties.RemoteAudit.ScheduleLayoutGap (Properties.RemoteAudit.steered_of_checked: the layout steered by the schedule's cap + 1 padded bits), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability, not a property of the check: the check's acceptance is a hypothesis at every coin, not its event's first conjunct, so a prover the check refuses at some coin is outside it (the accepted-coins form needs G's pass bound, RateSketch.pr_badK_pass_le, on the accepted coins only)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
