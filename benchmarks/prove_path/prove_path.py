@@ -17,7 +17,8 @@ Two kinds of committed run:
 * **A single-GPU Commit** (``--bundle DIR --row-dir DIR --workload F``, TP1): one window, ``rank0/``, from the Commit's sealed
   bundle (``<row dir>/commit/replay_bundle_p0``) under its run root. The compiler is `Capped` over `I2Compiler`: I2's
   `predict.steps.compile_steps` on the advice and the requests' bodies, each Program the one I2 compiles, its body read from
-  the Build's files of that digest (`I2Compiler.load`). The window is a stand-in of the record's SHA-512 rows root (`stand_in1`).
+  the Build's files of that digest and held to it (`I2Compiler.load`, `build_of`). The window is a stand-in of the record's
+  SHA-512 rows root (`stand_in1`).
 * **A served window** (``--serve-run DIR --window K --row-dir DIR``, TP1): one closed Commit window of a `verity-vllm
   serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
@@ -159,8 +160,9 @@ class I2Compiler:
     compiles from the advice and each request's body by its I1 id (``ingress``; I2's prompts and sampling are values the request
     brings, never advice), under the registered φ (``registered``: the model, target, engine and ℓ, no workload). `load` reads
     each Program's body from the Build's files of the digest I2 compiled (a ``build_request*/`` under ``programs_root`` whose
-    ``result.json`` names it), refused where no Build dir holds it: the Build's files are the bodies' cache, I2's digests are the
-    Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
+    ``result.json`` names it), refused where no Build dir holds it or its files aren't that Program (`build_of`: its digest
+    recomputed from its descriptor, its rows held to the descriptor's): the Build's files are the bodies' cache, I2's digests
+    are the Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
     I2 lists the I/O shell's own. Its digest names I2's code (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them,
     so a node's ignored build outputs don't move it), φ, the default seed, ℓ and that list; a served window's I2 is named as the
     server registered it instead (``registered_digest``, `served_identity`), with that list beside it where it lists any."""
@@ -203,23 +205,24 @@ class I2Compiler:
 
     def load(self, rank: int, world: int, requests: Any) -> SimpleNamespace:
         """The window's Programs for I2's ``requests`` (`requests`), as `deferred_rows.of_record` holds the Build's: by request id
-        its instances, its dir and its digest, and each request's arrival, its first step in the advice."""
-        from verity_vllm.query.manifest import format as MF
-
+        its instances, its dir and its digest, and each request's arrival, its first step in the advice. Each Build dir is held to
+        I2's digest (`build_of`) before its instances are read, so the rows the window and the audit read are I2's Program's, not
+        the Build's word for it."""
         if (int(rank), int(world)) != (0, 1):
             raise ValueError(f"I2 compiles a single-GPU session: rank {rank} of a world of {world}")
         by = bodies_by_digest(self.programs_root)
-        loaded, digs = {}, {}
+        loaded, digs, held = {}, {}, {}
         for q in requests:
             d = by.get(str(q.get("digest")))
             if d is None:
                 raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program "
                                  f"{str(q.get('digest'))[:16]}")
-            v = MF.load_program(d)
-            got = str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "")
-            if got != q["digest"]:
-                raise ValueError(f"request {q['request_id']}: {d}'s instances are Program {got[:16]}, not I2's {q['digest'][:16]}")
-            loaded[q["request_id"]], digs[q["request_id"]] = v, got
+            if (d, q["digest"]) not in held:
+                try:
+                    held[d, q["digest"]] = build_of(d, q["digest"])
+                except ValueError as e:
+                    raise ValueError(f"request {q['request_id']}: {e}") from None
+            loaded[q["request_id"]], digs[q["request_id"]] = held[d, q["digest"]], q["digest"]
         return SimpleNamespace(progs={k: v["instances"] for k, v in loaded.items()}, dirs={k: v["dir"] for k, v in loaded.items()},
                                digs=digs, arrivals={q["request_id"]: int(q["arrive_step"]) for q in requests})
 
@@ -256,6 +259,110 @@ def bodies_by_digest(programs_root: str) -> dict[str, str]:
         res = json.loads(d.read_text())
         if res.get("ok") and (dig := (res.get("program") or {}).get("digest")):
             out.setdefault(str(dig), str(d.parent))
+    return out
+
+
+def build_of(d: str, digest: str) -> dict[str, Any]:
+    """Build dir ``d``'s Program as `MF.load_program` reads it, held to Program ``digest``, each failure a `ValueError` naming it.
+
+    The digest is recomputed from the Build's body (``descriptor.json.gz``, `codec.program_digest`) and must be ``digest``, and
+    each digest the Build records (``result.json``'s, the instances head's) must be the recomputed one. The rows the window and
+    the audit read (``instances.json.gz``) must be the descriptor's: row k is the root's node k past its Input batches, by spec,
+    form and operand leaves, a read of an Input batch as the parameter leaves it binds. That layout is the program function's
+    binding record's (I2's ``Derived[...]{SRC}``: the shapes of its parameters but the last, the weights, which binds every
+    later Input batch). A word Build only: I2 compiles word Programs. Row names, the head's parameter names and types and its
+    ``supplied``, and the Build's correspondence and ``prefix_cache.json`` stay the Build's: no Program digest covers them."""
+    import gzip
+
+    from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
+    from verity.ml.circuits.program import is_input
+    from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
+    from verity_vllm.program.registry.catalog import load
+    from verity_vllm.query.manifest import format as MF
+
+    p = Path(d) / "descriptor.json.gz"
+    if not p.is_file():
+        raise ValueError(f"{d} has no descriptor.json.gz: its Program's digest can't be recomputed")
+    with gzip.open(p, "rt") as f:
+        desc = json.load(f)
+    got = program_digest(desc)
+    if got != digest:
+        raise ValueError(f"{p} is Program {got[:16]}, not I2's {str(digest)[:16]}")
+    v = MF.load_program(d)
+    inst = v["instances"]
+    for what, rec in (("result.json", ((v["result"] or {}).get("program") or {}).get("digest")), ("instances.json.gz", inst.get("digest"))):
+        if rec != got:
+            raise ValueError(f"{d}'s {what} records Program {str(rec)[:16]}, and its descriptor.json.gz is Program {got[:16]}")
+    if inst.get("ir") is not None:
+        raise ValueError(f"{d}'s instances.json.gz is a Build in IR {inst['ir']!r}, and I2 compiles word Programs")
+    nodes = decode_program(desc, load()[0]).root.body.nodes
+    n_in = next((k for k, n in enumerate(nodes) if not is_input(n.fn)), len(nodes))
+    where = input_layout(desc, [n.n for n in nodes[:n_in]])
+    rows = inst.get("rows") or []
+    if len(rows) != len(nodes) - n_in:
+        raise ValueError(f"{d}'s instances.json.gz has {len(rows)} rows, and its descriptor.json.gz {len(nodes) - n_in} nodes")
+
+    def param(run: Sequence) -> list:
+        sp, i, lo, hi = run
+        if sp != "n":
+            return [sp, i, lo, hi]
+        if i < n_in:
+            j, off = where[i]
+            return ["p", j, off + lo, off + hi]
+        return ["n", i - n_in, lo, hi]
+
+    for k, (r, n) in enumerate(zip(rows, nodes[n_in:])):
+        want = {"i": k, "spec": descriptor_id(n.fn), "form": n.form,
+                "args": [merged(map(param, a)) for a in expanded_file_args([file_items_from_refs(a.refs) for a in n.args])]}
+        try:
+            have = {"i": r.get("i"), "spec": r.get("spec"), "form": r.get("form"), "args": [merged(a) for a in r.get("args") or ()]}
+        except (AttributeError, TypeError, ValueError):
+            have = {}
+        if have != want:
+            bad = ", ".join(x for x in want if have.get(x) != want[x])
+            raise ValueError(f"{d}'s instances.json.gz row {k} is not its descriptor.json.gz's node {k}: they differ in {bad}")
+    return v
+
+
+def input_layout(desc: Mapping[str, Any], sizes: Sequence[int]) -> list[tuple[int, int]]:
+    """Each root Input batch of leaf count ``sizes[m]`` as (parameter, leaf offset): in order, the parameters the program
+    function's ``SRC`` record shapes, then the last parameter, the weights, for every later batch. Refused where the record
+    names no shapes or the batches don't fill them."""
+    import math
+
+    pf = str(desc.get("program_fn") or "")
+    _, sep, rec = pf.partition("{SRC=")
+    try:
+        shapes = json.loads(rec[:-1])["dict"]["inputs"] if sep and rec.endswith("}") else None
+        need = [math.prod(int(x) for x in s) for s in shapes]
+    except (ValueError, KeyError, TypeError):
+        need = None
+    if need is None:
+        raise ValueError(f"the program function {pf[:80]} records no SRC input shapes: not one of I2's Programs")
+    out, j, off = [], 0, 0
+    for m, size in enumerate(sizes):
+        while j < len(need) and need[j] == 0:
+            j += 1
+        out.append((j, off))
+        off += int(size)
+        if j < len(need) and off >= need[j]:
+            if off > need[j]:
+                raise ValueError(f"Input batch {m} runs past parameter {j}'s {need[j]} leaves")
+            j, off = j + 1, 0
+    if any(need[j:]):
+        raise ValueError(f"the root's {len(sizes)} Input batches don't fill the {len(need)} parameters SRC shapes")
+    return out
+
+
+def merged(runs: Iterable[Sequence]) -> list[list]:
+    """Operand runs ``[space, index, lo, hi]`` with each run that continues the one before folded into it: one leaf sequence,
+    one spelling, however the Input batches split a parameter."""
+    out: list[list] = []
+    for sp, i, lo, hi in runs:
+        if out and out[-1][0] == sp and out[-1][1] == i and out[-1][3] == lo:
+            out[-1][3] = hi
+        else:
+            out.append([sp, i, lo, hi])
     return out
 
 

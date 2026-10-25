@@ -164,7 +164,10 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
     row's declared inputs (`score.phi_of`: the row id, the served workload file, refused unless its digest is the record's, and
     the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
     (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
-    A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does. On
+    A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does, and held to
+    that digest (`build_of`): recomputed from its `descriptor.json.gz`, with every recorded digest and every
+    `instances.json.gz` row held to it, so a Build whose body was swapped under its old `result.json` is refused. Row names,
+    parameter names and the correspondence stay the Build's word: no Program digest covers them. On
     Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's `build_request_LP*` digests
     (`commit.json`'s and the audit summary's `i2`).
   - on a served window, the same over φ of the served engine as vllm's advice compiler (#3619) compiles under (`phi_of_serve`:
