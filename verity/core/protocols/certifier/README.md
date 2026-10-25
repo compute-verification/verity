@@ -58,6 +58,7 @@ A spec-level reference for network accounting's timing channel:
   (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
   `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
   prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
+- the capacity counts;
 - the egress encoder (`egress`, N2) on a fake upstream, in no Spec: each egress bucket's row rendered inside the
   window's circuit as the warden's registered row, an output the verifier's registered read
   (`warden_rows.bucket_port`) holds to the warden's signed row. It has the reference (`cell`, `bucket_row`, the map
@@ -65,7 +66,6 @@ A spec-level reference for network accounting's timing channel:
   cells from its private map, routed ids and ready bits; `EgressRoute`: a link-window's ids through `IoTieRoute`'s
   Beneš network; `EgressMap`: one bucket's map from its request slots' streams, admissions and output counts).
   Structural Fits refuses a window holding them until causality is semantic, so they are proved standalone;
-- the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
