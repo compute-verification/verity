@@ -154,7 +154,7 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     run_cls = PPD.PearlCDeviceRun
     saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
     saved += [(run_cls, n, vars(run_cls)[n]) for n in ("_shape", "_pipe", "end", "gemm")]
