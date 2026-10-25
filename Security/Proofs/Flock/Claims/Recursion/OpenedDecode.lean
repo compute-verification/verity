@@ -20,7 +20,7 @@ namespace RecDeploy.OpenedPlain
 
 open Flock Reader
 open FlockSoundness.Discharge.DecodeZL (Yields Post yields_bind yields_pure post_bind post_pure post_ite
-  post_bind_throw post_bind_vec post_bind_vecBytes post_bind_switches post_bind_caps forall₂_range')
+  post_bind_throw post_bind_vec post_bind_vecBytes post_bind_switches post_bind_caps forall₂_range' yields_vecExact)
 open FlockSoundness.Refine (openAt shapeOf)
 
 /-- A loop whose step `i` pushes an element with `P i` returns its start followed by one element per index, in order,
