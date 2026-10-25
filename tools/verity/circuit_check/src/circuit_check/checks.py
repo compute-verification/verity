@@ -1,7 +1,8 @@
 """The checks, over one Definition, one subcircuit (a template bound), or one served row's request Program.
 
-    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
-                     evaluator) on the edge and random vectors of `circuit_check.vectors`: it must be total (a Definition whose
+    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate`, the IR evaluator, a composite's run body by body by
+                     `circuit_check.bodies`; a vLLM Definition's is its registered evaluator) on the edge and random vectors
+                     of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
@@ -59,6 +60,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import is_boolean
 from verity.ml.circuits.defs import PrimitiveDefinition
 
+from . import bodies as BD
 from . import sidecars as SC
 from .vectors import edge_count, flat, instance_args, vectors
 
@@ -153,14 +155,15 @@ def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
 
 
 def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) -> tuple[list[tuple[int, ...] | None], list[dict]]:
-    """The reference's output leaves per instance (None where it raises) and the instances it raised on."""
+    """The reference's output leaves per instance (None where it raises) and the instances it raised on; a composite's
+    reference run body by body (`bodies.evaluate`)."""
     n = arrays[0].shape[0] if arrays else 1
     out: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
     for i in range(n):
         args = instance_args(params, arrays, i)
         try:
-            out.append(tuple(evaluate(t, *args)))
+            out.append(tuple(BD.evaluate(t, *args)))
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
             out.append(None)
             raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
@@ -515,12 +518,22 @@ _UNPINNED_ANDS = 2_000
 
 def _pieces_used(t: Any, pins: dict) -> tuple[Counter, Counter, int]:
     """(pieces used, primitives without a piece, estimated ANDs) of ``t``'s gates that are not constant (a gate whose operands
-    are all constant is evaluated, as `ir_lower.lower_gates` does); the estimate from the piece pins."""
+    are all constant is evaluated, as `ir_lower.lower_gates` does), counted body by body (`bodies.nonconstant`); the
+    estimate from the piece pins."""
     from verity_flock import ir_lower as IL
 
+    used, missing, est = Counter(), Counter(), 0
+    live = BD.nonconstant(t)
+    if live is not None:
+        for pid, k in live.items():
+            if pid in IL.PIECES:
+                used[pid] = k
+                est += k * pins.get("pieces", {}).get(pid, {}).get("and", _UNPINNED_ANDS)
+            else:
+                missing[pid] = k
+        return used, missing, est
     _prog, call = standalone_call(t)
     const: dict[int, bool] = {}
-    used, missing, est = Counter(), Counter(), 0
     for g in call:
         fam = getattr(g.prim, "family", None)
         if fam == "Input":
