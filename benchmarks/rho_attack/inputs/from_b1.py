@@ -2,7 +2,11 @@
 Qwen2.5-1.5B-Instruct, with F (forward crossing), G (backward, so F + G is the cheapest boundary's Ffb_min) and the
 betas each the median over A2's conditions, seeds and steps at that size.
 
-    python3 from_b1.py F_beta.json --out measured_b1.json
+F is B1's Ff_min: per token, the bits to code theta''s decoder-layer output h' (quantized) given theta's h on the same
+tokens, at the cheapest of the model's boundaries. With F_beta_layers.json, `F_layer_mean` is the same code length
+averaged over every boundary (each layer's own input), the median over entries.
+
+    python3 from_b1.py F_beta.json [--layers F_beta_layers.json] --out measured_b1.json
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ LABELS = {272: "A2-34B", 9920: "A2-1.2kB", 78400: "A2-9.8kB", 802816: "A2-100kB"
 EXPLICIT = ("A2-34B", "A2-1.2kB", "A2-9.8kB", "A2-100kB")  # sizes that don't scale with the model
 
 
-def convert(doc: dict) -> dict:
+def convert(doc: dict, layers: dict | None = None) -> dict:
     if doc.get("schema") != "tvi-b1/F_beta/v2":
         raise ValueError(f"expected schema tvi-b1/F_beta/v2, got {doc.get('schema')!r}")
     a2 = [e for e in doc["entries"] if e["fam"] == "A2"]
@@ -45,15 +49,22 @@ def convert(doc: dict) -> dict:
         out["beta_by_S"][label] = {p: betas(at, key, raw) for p, (key, raw) in PRECISIONS.items()}
         if label in EXPLICIT:
             out["S_bits"][label] = s_bits
+        if layers is not None:
+            per = [layers[f"A2_{e['cond'].replace(':', '-')}_step{e['step']}"] for e in at]
+            out.setdefault("F_layer_mean", {})[label] = {
+                p: med([statistics.fmean(x[key]["F_fwd"]) for x in per]) for p, (key, _) in PRECISIONS.items()}
     return out
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("f_beta")
+    ap.add_argument("--layers", help="F_beta_layers.json: adds F_layer_mean")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
-    Path(args.out).write_text(json.dumps(convert(json.loads(Path(args.f_beta).read_text())), indent=1) + "\n")
+    layers = json.loads(Path(args.layers).read_text()) if args.layers else None
+    doc = convert(json.loads(Path(args.f_beta).read_text()), layers)
+    Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0
 
 

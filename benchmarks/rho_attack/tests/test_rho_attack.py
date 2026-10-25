@@ -224,3 +224,15 @@ def test_readout_tables_name_both_bounds(cli_run):
     text = readout.tables(doc)
     assert "bound (beta_v count) | bound (beta_gx count)" in text
     assert "| Kimi K2 | fp8 | 10kB |" in text and "| Kimi K2 | fp8 | 2.5MB |" in text
+
+
+def test_fanout_e_is_the_largest_layer_fanout_and_the_estimate_is_phi_beta_over_kappa_e():
+    import fanout
+
+    k2, v4 = configs.get("kimi-k2"), configs.get("deepseek-v4-pro")
+    assert fanout.e_layers(k2) == 2 * 2048 * 9 + 384 == 37_248
+    assert fanout.e_layers(v4) == 2 * 3072 * 7 + 384
+    assert fanout.fanouts(k2)["attention input (normed residual)"][0] == 1536 + 576
+    kappa = 3 * k2.f / fanout.products(k2)
+    assert fanout.estimate(k2, 0.5, "sft") == pytest.approx(k2.phi() * 0.5 / (kappa * 37_248))
+    assert fanout.frozen_estimate(k2, 0.5, 1, "sft") < fanout.estimate(k2, 0.5, "sft")

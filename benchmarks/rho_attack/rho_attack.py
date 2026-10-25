@@ -445,7 +445,9 @@ def tiling(cfg: Config, S: float, F: float, k: float, c: float, beta: Beta, kn: 
     lay = np.asarray(list(layers))
     for train in passes:
         for m in cfg.maps:
-            groups = [(lay[:1], True), (lay[1:], False)] if cheap_first and m.resid_in else [(lay, False)]
+            # only the attention half reads theta's activations: the first trained layer's MLP input is past its trained attention
+            cheap = cheap_first and m.resid_in and not m.mlp
+            groups = [(lay[:1], True), (lay[1:], False)] if cheap else [(lay, False)]
             for idx, cheap in groups:
                 if len(idx) == 0:
                     continue

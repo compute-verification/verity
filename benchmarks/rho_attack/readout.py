@@ -45,8 +45,9 @@ def ratio(rows: list[dict], bound: str) -> str:
 
 
 def tables(doc: dict) -> str:
-    rows = [r for r in doc["rows"] if r["c_mode"] == "eta1"]
-    curves = [c for c in doc["curves"] if c["c_mode"] == "eta1"]
+    order = lambda x: WORKLOADS.index(x.get("workload", "sft")) if x.get("workload", "sft") in WORKLOADS else 9  # noqa: E731
+    rows = sorted((r for r in doc["rows"] if r["c_mode"] == "eta1"), key=order)
+    curves = sorted((c for c in doc["curves"] if c["c_mode"] == "eta1"), key=order)
     out = ["Full training, matched c (eta = 1), absolute rho; GRPO and SFT as a range (low-high), strategies GRPO / SFT "
            "where they differ.", "",
            "| config | precision | k | bound (beta_v count) | bound (beta_gx count) | cheapest recipe-kept attack "
