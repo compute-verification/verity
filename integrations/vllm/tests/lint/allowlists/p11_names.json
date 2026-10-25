@@ -660,13 +660,6 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension._tp2_binding", "detail": "R1N"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install.observer_rec", "detail": "R1N"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension.tp2_commit_binding_map_dump", "detail": "R1N"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "repo_modules_loaded", "detail": "R1N"},
-    {"file": "verity_vllm/check/match/sampler_geometry.py", "kind": "doc-board-id", "symbol": "top_p_split_count", "detail": "M-nnnn", "count": 2},
-    {"file": "verity_vllm/check/match/sampler_geometry.py", "kind": "doc-round", "symbol": "scheduled_live_counts", "detail": "R1N", "count": 3},
-    {"file": "verity_vllm/check/match/sampler_geometry.py", "kind": "doc-round", "symbol": "top_p_split_count", "detail": "R1N", "count": 2},
-    {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
-    {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-board-id", "symbol": "coverage_of_unreplayable", "detail": "M-nnnn"},
-    {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-lane", "symbol": "collective_family", "detail": "[lane"},
-    {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"}
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "repo_modules_loaded", "detail": "R1N"}
   ]
 }
