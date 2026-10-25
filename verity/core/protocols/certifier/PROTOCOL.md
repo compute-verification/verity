@@ -655,7 +655,9 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     f's slot, and `IoTieIdsKeys` holds each field to the record routed to it, with its ordinal as index and a class
     other than the sink, and gives every other slot the sink. The second sorts the members, each slot (class, 0,
     value), each opened entry (class, 1, its id) and the sink past them, and `IoTieIdsChain` checks the classes
-    non-decreasing, one value a class but the sink, and each class starting with a slot. A Beneš network is a
+    non-decreasing, one value a class but the sink, and each class starting with a slot (`IoTieIdsFirst` on the first
+    member and one batch of `IoTieIdsLink` over each member and its successor, so a binding traces one link; its
+    C-Flock lowering is the flat trace's, AND for AND). A Beneš network is a
     permutation under any switches, so every member is in the order and the switches can only sort. On a link whose
     every bucket row is accepted, every computation of request i's prompt position p, and every KV read in place of
     one, is the id the user sent. Public: IoTieRequest's lanes, the Commit's root and domain id, the steps (the

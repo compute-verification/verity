@@ -6,14 +6,17 @@ bound to nothing, so the model could compute on another prompt of the same lengt
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 
 import numpy as np
 import pytest
 
+from verity.ml.circuits.boolean.forms import and_reduce
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import advice as ADV
+from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_ids as I
 from verity.core.protocols.certifier import io_request as Q
@@ -300,19 +303,22 @@ def test_the_keys_circuit_is_its_reference():
     assert got == want and 40 < sum(w[0] for w in want) < 160
 
 
+def _chain_reference(ms, sink: int) -> int:
+    """1 iff the members (class, kind, value) have classes that don't decrease, one value a class but the sink, and each
+    class but the sink starting with a slot (kind 0)."""
+    if ms[0][0] != sink and ms[0][1]:
+        return 0
+    for (ka, _, va), (kb, kind, vb) in zip(ms, ms[1:]):
+        if kb < ka or (kb == ka != sink and va != vb) or (kb != ka and kb != sink and kind):
+            return 0
+    return 1
+
+
 def test_the_chain_circuit_is_its_reference():
     """`IoTieIdsChain` at 8 members on sorted and unsorted runs: 1 iff the classes don't decrease, a class but the sink
     holds one value, and each class but the sink starts with a slot."""
     CB, D2, sink = 3, 3, 7
-
-    def ref(ms):
-        if ms[0][0] != sink and ms[0][1]:
-            return 0
-        for (ka, _, va), (kb, kind, vb) in zip(ms, ms[1:]):
-            if kb < ka or (kb == ka != sink and va != vb) or (kb != ka and kb != sink and kind):
-                return 0
-        return 1
-
+    ref = lambda ms: _chain_reference(ms, sink)  # noqa: E731
     rng = random.Random(7)
     cases = []
     for _ in range(300):
@@ -330,6 +336,86 @@ def test_the_chain_circuit_is_its_reference():
     args = [[[b for k, kind, v in ms for b in HC._int_bits(k, CB) + [kind] + HC._int_bits(v, 32)] for ms in cases]]
     out = np.asarray(evaluate_bits(bind(I.IoTieIdsChain, CB=CB, D2=D2), *[_bits(a) for a in args]))
     assert [int(b) for b in out.reshape(-1)] == want and 60 < sum(want) < 240
+
+
+def _build_flat_chain(C, S, *ms):
+    """`IoTieIdsChain` as one flat trace, the build the batched one replaced."""
+    def parts(m):
+        return m[:S.CB], m[S.CB], m[S.CB + 1:]
+
+    key, kind, _ = parts(ms[0])
+    oks = [C.AND(kind, and_reduce(C, key).inv()).inv()]
+    for t in range(1, len(ms)):
+        (ka, _, va), (kb, kind, vb) = parts(ms[t - 1]), parts(ms[t])
+        same, sink = IT._eq(C, ka, kb), and_reduce(C, kb)
+        oks += [IT._lt(C, kb, ka).inv(), C.AND(C.AND(same, sink.inv()), IT._eq(C, va, vb).inv()).inv(),
+                C.AND(C.AND(same.inv(), sink.inv()), kind).inv()]
+    return [and_reduce(C, oks)]
+
+
+FLAT_CHAIN = _part("IoTieIdsChainFlat", ("CB", "D2"), I._sig_chain, _build_flat_chain, "IoTieIdsChain's flat trace")
+
+
+def _chain_ands(CB: int, D2: int) -> int:
+    """The first member's CB ANDs, each link's 3CB + 33 and the And's one a link."""
+    return CB + ((1 << D2) - 1) * (3 * CB + 36)
+
+
+def _chains(rng, CB: int, D2: int, count: int) -> list[list[list[int]]]:
+    """Runs of 2^D2 members (class, kind, value): the even ones valid chains (sorted classes, each class but the sink one
+    value and a slot first), the odd ones a valid chain with one member's class, kind or value redrawn."""
+    n, sink = 1 << D2, (1 << CB) - 1
+    out = []
+    for c in range(count):
+        ks = sorted(rng.choice([rng.randrange(sink), sink]) for _ in range(n))
+        vals = {k: rng.randrange(1 << 32) for k in ks}
+        ms = [[k, rng.randrange(2) if k == sink or (t and ks[t - 1] == k) else 0,
+               rng.randrange(1 << 32) if k == sink else vals[k]] for t, k in enumerate(ks)]
+        if c % 2:
+            m = ms[rng.randrange(n)]
+            f = rng.randrange(3)
+            m[f] = rng.randrange(1 << CB) if f == 0 else 1 - m[1] if f == 1 else rng.randrange(1 << 32)
+        out.append(ms)
+    return out
+
+
+def _chain_out(fn, CB: int, chains) -> list[int]:
+    rows = [[b for k, kind, v in ms for b in HC._int_bits(k, CB) + [kind] + HC._int_bits(v, 32)] for ms in chains]
+    return [int(b) for b in np.asarray(evaluate_bits(fn, _bits(rows))).reshape(-1)]
+
+
+def test_the_batched_chain_is_the_flat_one():
+    """`IoTieIdsChain` (`IoTieIdsFirst`, one batch of `IoTieIdsLink` over each member and its successor, one And) against
+    the flat trace it replaced: the same ANDs, and the same outputs as each other and the reference on random runs, at
+    D2 = 1 to 8. At IoTieRequestIds{4096, 16, 1, 512, 6}'s sort (CB = 13, D2 = 14) a binding's body is its three nodes,
+    so a link is traced once, with the flat trace's ANDs, and its outputs are the reference's; the flat trace there is
+    `test_the_batched_chain_is_the_flat_one_at_the_served_sort`'s."""
+    rng, refused = random.Random(11), 0
+    for CB, D2 in ((1, 1), (3, 1), (2, 2), (3, 3), (6, 4), (1, 5), (9, 6), (13, 8)):
+        new, flat = bind(I.IoTieIdsChain, CB=CB, D2=D2), bind(FLAT_CHAIN, CB=CB, D2=D2)
+        assert HC.ands(new) == HC.ands(flat) == _chain_ands(CB, D2)
+        chains = _chains(rng, CB, D2, 16)
+        want = [_chain_reference(ms, (1 << CB) - 1) for ms in chains]
+        assert _chain_out(new, CB, chains) == _chain_out(flat, CB, chains) == want and all(want[0::2])
+        refused += want.count(0)
+    assert refused >= 20
+    deep = bind(I.IoTieIdsChain, CB=13, D2=14)
+    assert [nd.form for nd in deep.body.nodes] == ["call", "batch", "primitive"]
+    assert HC.ands(deep) == _chain_ands(13, 14) == 1_228_738
+    chains = _chains(rng, 13, 14, 4)
+    assert _chain_out(deep, 13, chains) == [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
+
+
+@pytest.mark.skipif(not os.environ.get("VERITY_CERTIFIER_HEAVY"),
+                    reason="the flat trace of 1.2M ANDs, a few GB and minutes: VERITY_CERTIFIER_HEAVY=1")
+def test_the_batched_chain_is_the_flat_one_at_the_served_sort():
+    """`IoTieIdsChain{13, 14}`, IoTieRequestIds{4096, 16, 1, 512, 6}'s, against its flat trace on random runs, valid and
+    with a member redrawn: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
+    rng = random.Random(14)
+    chains = _chains(rng, 13, 14, 8)
+    want = [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
+    assert _chain_out(bind(I.IoTieIdsChain, CB=13, D2=14), 13, chains) == want and all(want[0::2])
+    assert _chain_out(bind(FLAT_CHAIN, CB=13, D2=14), 13, chains) == want
 
 
 @pytest.mark.slow
