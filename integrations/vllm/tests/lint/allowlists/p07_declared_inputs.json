@@ -221,7 +221,6 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_of_runner", "detail": "VLLM_BATCH_INVARIANT"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "seed-default", "symbol": "engine_kwargs", "detail": "seed"},
     {"file": "verity_vllm/engine/int8_ranks.py", "kind": "environ", "symbol": "register", "detail": "os.environ"},
     {"file": "verity_vllm/engine/int8_ranks.py", "kind": "environ", "symbol": "register", "detail": "os.environ.pop"},
     {"file": "verity_vllm/engine/int8_ranks.py", "kind": "environ", "symbol": "register_from_env", "detail": "os.environ.get"},

@@ -112,8 +112,11 @@ REPLAY_EXECS = ("eager", "compiled-nograph")
 
 TP_WORKER_EXTENSION = "verity_vllm.tp.poc_tp_worker.VerityTPWorkerExtension"
 
+#: vLLM's engine seed (`LLM(seed=...)`) for every profile; the manifest records it in `engine_kwargs`.
+ENGINE_SEED = 0
 
-def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int = 0, enforce_eager: bool = False, custom_ops: str | None = None,
+
+def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager: bool = False, custom_ops: str | None = None,
                   replay_exec: str = "eager", max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
     """LLM(...) kwargs. Production: stock defaults (``enforce_eager`` is a declared flag for the
@@ -412,7 +415,7 @@ def build_manifest(
     quantization: str | None = None,
 ) -> dict[str, Any]:
     sw = software_info(wheel_sha256, vllm_commit)
-    kw = {k: v for k, v in engine_kwargs(cp, replay=False, enforce_eager=enforce_eager, custom_ops=custom_ops,
+    kw = {k: v for k, v in engine_kwargs(cp, replay=False, seed=ENGINE_SEED, enforce_eager=enforce_eager, custom_ops=custom_ops,
                                          max_num_batched_tokens=max_num_batched_tokens,
                                          tensor_parallel_size=tensor_parallel_size,
                                          quantization=quantization).items() if k not in ("model", "tokenizer")}
