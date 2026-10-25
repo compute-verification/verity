@@ -200,8 +200,7 @@
   "CircuitRequirement",
   "Definitions.Accounting",
   "Definitions.Claims",
-  "Definitions.Pouw.Basic",
-  "Definitions.Accounting"
+  "Definitions.Pouw.Basic"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -2414,14 +2413,6 @@
     "function": "NetworkCheck.Records.protocol.answer",
     "outcome": "accept"
    },
-   "Properties.NetworkRecords.noGridAcceptsMore": {
-    "function": "NetworkCheck.Records.evaluate",
-    "outcome": "accept"
-   },
-   "Properties.NetworkRecords.noGridMeans": {
-    "function": "NetworkCheck.Records.evaluateNoGrid",
-    "outcome": "accept"
-   },
    "Properties.Pouw.Check.acceptMeans": {
     "function": "PouwCheck.protocol.check",
     "outcome": "accept"
@@ -2864,6 +2855,14 @@
     "function": "PouwCheck.Credit.strata",
     "outcome": "accept"
    },
+   "Properties.NetworkRecords.noGridAcceptsMore": {
+    "function": "NetworkCheck.Records.evaluate",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.noGridMeans": {
+    "function": "NetworkCheck.Records.evaluateNoGrid",
+    "outcome": "accept"
+   },
    "Properties.RemoteAudit.pooledCovers": {
     "function": "RemoteAudit.Pooled.pooled",
     "outcome": "accept"
@@ -2920,22 +2919,6 @@
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
-   "Properties.Pouw.LiveSalt.oneRoot": {
-    "function": "PouwCheck.liveSaltCheck",
-    "outcome": "accept"
-   },
-   "Properties.Pouw.LiveSalt.acceptMeans": {
-    "function": "PouwCheck.liveSaltCheck",
-    "outcome": "accept"
-   },
-   "Properties.Pouw.LiveSalt.epochRootBinding": {
-    "function": "Properties.Pouw.LiveSalt.epochOpenRoot",
-    "outcome": "accept"
-   },
-   "Properties.Pouw.LiveSalt.rowSeedBinding": {
-    "function": "Properties.Pouw.LiveSalt.rowSeed",
-    "outcome": "accept"
-   },
    "Properties.RemoteAudit.liveIsRun": {
     "function": "Properties.RemoteAudit.Live.run",
     "outcome": "accept"
@@ -2967,6 +2950,22 @@
    "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.oneRoot": {
+    "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.epochRootBinding": {
+    "function": "Properties.Pouw.LiveSalt.epochOpenRoot",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.rowSeedBinding": {
+    "function": "Properties.Pouw.LiveSalt.rowSeed",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.acceptMeans": {
+    "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2981,16 +2980,16 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "NciCheck.Properties.DescReports": "unstated: descReports_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and Reports, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
    "NciCheck.Properties.DescWitnesses": "unstated: descWitnesses_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and Witnesses, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
    "NciCheck.Properties.DescThrottles": "unstated: descThrottles_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and Throttles (Proofs.Nci.Verdict, so descThrottles_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
    "NciCheck.Properties.DescThrottlesDark": "unstated: descThrottlesDark_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDark (Proofs.Nci.Verdict, so descThrottlesDark_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
    "NciCheck.Properties.DescThrottlesSlots": "unstated: descThrottlesSlots_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and ThrottlesSlots (Proofs.Nci.Verdict, so descThrottlesSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
    "NciCheck.Properties.DescThrottlesDarkSlots": "unstated: descThrottlesDarkSlots_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDarkSlots (Proofs.Nci.Verdict, so descThrottlesDarkSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.CheckedCoverTraining": "unstated: checkedCoverTraining_of_descAgrees (Proofs.Nci.Cover.Checked) proves it from DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)"
+   "NciCheck.Properties.CheckedCoverTraining": "unstated: checkedCoverTraining_of_descAgrees (Proofs.Nci.Cover.Checked) proves it from DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
+   "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
+   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
