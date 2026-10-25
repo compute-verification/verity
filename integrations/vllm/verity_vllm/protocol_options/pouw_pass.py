@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pouw.schemes.pearl_c import CALL_RANGE
+
 #: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
 MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
@@ -46,6 +48,19 @@ def room(run: Any, tiles: int, rows: int, calls: int) -> Any:
         raise RuntimeError(f"{run.entry}: the pass is over its capacity ({run.capacity} tiles, {calls} calls, "
                            f"{len(run.flag_buf)} screened rows); end it and begin another")
     return p
+
+
+def call_index(run: Any, calls: int = 1) -> int:
+    """The index of ``run``'s next call, numbered across the whole epoch (the install's salt), never per pass: -h3's row
+    seed binds the salt and the index but no pass, so two passes of one salt sharing an index would repeat their seeds and
+    tickets (CMP-84).  The pass's own buffers stay positional (``index - run.cur.base``).  ``RuntimeError`` where ``calls``
+    more calls would reach `pearl_c.CALL_RANGE`, which the verifier refuses."""
+    p = run.cur
+    index = p.base + len(p.matmuls)
+    if index + calls > CALL_RANGE:
+        raise RuntimeError(f"{run.entry}: the epoch is at call {index}, and {calls} more would reach 2^32 calls, the range of "
+                           "-h3's row seed (`pearl_c.CALL_RANGE`); end the epoch: reinstall under a new salt")
+    return index
 
 
 def pass_dir(run: Any) -> str | None:

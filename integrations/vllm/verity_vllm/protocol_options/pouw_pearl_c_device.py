@@ -42,11 +42,12 @@ torch's current stream, in the device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
 The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
-the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), and after a
-call's first step a device-to-device copy from the key table (`_KeyTable`); the records' screen as one fused kernel
-(`screen_into`, Triton, its compiled kernel launched directly after the first launch; `screen` where Triton can't run); A's
-roots copied into a pass buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from
-torch's raw accessor.  The key table and filler bookkeeping hold while no call has run under graphs (`eager_only`).
+the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`) and their upload through a pinned ring (`_Uploads`); the
+records' screen as one fused kernel (`screen_into`, Triton, its compiled kernel launched directly after the first launch;
+`screen` where Triton can't run); A's roots copied into a pass buffer by one driver copy; filler rows zeroed only where an
+earlier call wrote them; the stream from torch's raw accessor.  The filler bookkeeping holds while no call has run under
+graphs (`eager_only`).  A call's keys are never another's: its index is numbered across the epoch (`pouw_pass.call_index`),
+since -h3's row seed binds the salt and the index but no pass, so each pass's indices continue the last's.
 
 The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
 ``deferred`` runs the tile hashing on a side lane beside the next calls, and ``deferred-a`` A's tree there too, where the
@@ -78,7 +79,7 @@ from verity.core.protocols.pouw.serving import (
     hash_format,
 )
 
-from .pouw_pass import pass_dir, room
+from .pouw_pass import call_index, pass_dir, room
 from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
     SIDE_GROUPS,
@@ -95,7 +96,6 @@ from .pouw_pearl_c_host import (
     _constants,
     _Driver,
     _Keys,
-    _KeyTable,
     _Lane,
     _linked,
     _put,
@@ -228,6 +228,7 @@ class _Pass:
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
+    base: int = 0                    # the epoch's calls before the pass: its call at position p has index base + p (`call_index`)
 
 
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
@@ -339,7 +340,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.tree_hash = hash_format(scheme).tree_hash
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.copy = kernel.dev.copy_async if self.device.type == "cuda" else memmove
-        self.key_table = _KeyTable(self.keys, self.uploads, self.device, self.copy)
         self.eager_only = True              # no call has run under graphs, whose replays write rows and keys unseen
         self.fused_screen = self.device.type == "cuda"
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
@@ -370,6 +370,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
+        self._used = 0                       # `epoch_calls` as of the last pass it saw
+        self.repeat_at: int | None = None    # the next pass's first index, once (`begin`'s ``at``)
         self.begin()
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
@@ -587,7 +589,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         sh = self._shape(m16, wt.n, k)
         tiles = self.kernel.run.cdiv(m16, self.kernel.run.TILE) * (wt.n // self.kernel.run.TILE)
         cur = room(self, tiles, m, CALL_CAPACITY)
-        index = len(cur.matmuls)
+        index = call_index(self)
         self.join_before(sh)
         sh.xa[:m].copy_(x2)
         self.eager_only = self.eager_only and not self.graphs
@@ -621,8 +623,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         if self.hashing:
             size = pipe.size["tree_a"]
             if not scattered:
-                self.copy(self.roots_buf.data_ptr() + self.nb * index, sh.buf("tree_a").data_ptr() + size - self.nb, self.nb,
-                          self.stream())
+                self.copy(self.roots_buf.data_ptr() + self.nb * (index - cur.base), sh.buf("tree_a").data_ptr() + size - self.nb,
+                          self.nb, self.stream())
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
@@ -638,14 +640,18 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     # ---- passes -----------------------------------------------------------------------------------------------------
 
     def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
-              stepped: bool = False) -> None:
-        """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
-        when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
-        that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
+              stepped: bool = False, at: int | None = None) -> None:
+        """A new pass: its own transcript under the install's epoch, its call indices continuing past every index the epoch
+        has used (`call_index`), under `schedule` (the last one's when None; a schedule changes only between passes).  With
+        `retain`, the pass writes what the prover opens from into that directory, from poisoned outputs, and its manifest
+        names `run`.  `stepped`: an engine step's end begins it.  `at` (else `repeat_at`, once) numbers the pass from that
+        index instead: a check that repeats an earlier pass's calls to compare their bytes, which shares that pass's indices,
+        so the two are never credited together (`credit.passes_distinct` refuses them)."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
         retain = retain or pass_dir(self)
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
-        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
+        used, at, self.repeat_at = self.epoch_calls(), self.repeat_at if at is None else at, None
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=used if at is None else at)
         if retain and self.hashing:
             self.poison()
 
@@ -668,7 +674,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         commitment (also in `commits` and `details["passes"]`)."""
         import torch
         cur, K = self.cur, self.kernel
-        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing, "schedule": self.schedule.name}
+        self.epoch_calls()
+        out: dict[str, Any] = {"units": len(cur.matmuls), "base": cur.base, "tiles": cur.tiles, "hashing": self.hashing,
+                               "schedule": self.schedule.name}
         if self.hashing and cur.matmuls:
             self.join_sides()
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
@@ -726,8 +734,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                                "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
         matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
-                    "root_a": roots_a[self.nb * u.index:self.nb * (u.index + 1)].hex(), **f}
-                   for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
+                    "root_a": roots_a[self.nb * p:self.nb * (p + 1)].hex(), **f}
+                   for p, (u, r, f) in enumerate(zip(cur.matmuls, cur.records, cur.files))]
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
@@ -740,10 +748,18 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                 "tree_t": _write(d / "tree_t", _bytes(tree)), "hm96_salt_key": self.salt_key.hex()}
         return write_manifest(d, head, weights, matmuls)
 
+    def epoch_calls(self) -> int:
+        """One past the highest call index any pass of the epoch has used (0 before the first call): where the next pass
+        numbers from."""
+        cur = self.cur
+        if cur is not None:
+            self._used = max(self._used, cur.base + len(cur.matmuls))
+        return self._used
+
     def finish(self) -> None:
         if self.cur is not None and self.cur.matmuls:
             self.end()
-            self.cur = _Pass(None)
+            self.cur = _Pass(None, base=self.epoch_calls())
 
 
 class PearlCExecutor:

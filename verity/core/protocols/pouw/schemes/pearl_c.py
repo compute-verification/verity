@@ -161,12 +161,16 @@ def line_key(seed: bytes) -> bytes:
     return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
 
 
+CALL_RANGE = 1 << 32
+"""Call indices of one epoch (one salt) lie below this: `row_seed` packs the index into the high half of a u64."""
+
+
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
     """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
     row's 64-byte SHA-512 digest `leaf` (`row_digest`), H_"seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE)
-    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32.
-    `hash_h3.cuh`'s `s512_seeds` computes it."""
-    if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
+    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32
+    (`CALL_RANGE`). `hash_h3.cuh`'s `s512_seeds` computes it."""
+    if not (0 <= unit < CALL_RANGE and 0 <= row < 1 << 32):
         raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
     return unit_seed_a(salt, leaf, root_b, unit << 32 | row, hashing)
 

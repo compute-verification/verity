@@ -40,6 +40,7 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
@@ -264,7 +265,49 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
     assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_r", "eprime", "form_s5", "words_k", "pa",
                                                                           "gemm_pearlc_d"]
-    assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
+    assert run.end() == {"units": 1, "base": 0, "tiles": 0, "hashing": False, "schedule": "serial"}
+
+
+def test_passes_number_their_calls_across_the_epoch(device_run):
+    """Each pass's calls continue the epoch's indices (`pouw_pass.call_index`), its buffers positional: three calls, then
+    two in the next pass take 3 and 4.  A check that repeats a pass from its index (`begin`'s ``at``) shares its indices,
+    and the pass after continues past every index the epoch has used, never from the repeat's end."""
+    make, _, weights, *_ = device_run
+    run = make()
+    x = torch.randn(16, 1024).to(torch.bfloat16)
+    for w in (0, 1, 0):
+        run.gemm(w, x, weights[w], None)
+    first = run.end_pass()
+    for w in (1, 0):
+        run.gemm(w, x, weights[w], None)
+    assert first["base"] == 0 and [u.index for u in run.cur.matmuls] == [3, 4] and run.cur.base == 3
+    second = run.end_pass()
+    assert second["base"] == 3 and run.epoch_calls() == 5
+    run.begin(at=0)
+    run.gemm(0, x, weights[0], None)
+    assert [u.index for u in run.cur.matmuls] == [0]
+    run.repeat_at = 3
+    run.end_pass()
+    assert run.cur.base == 3 and run.repeat_at is None
+    run.end_pass()
+    assert run.cur.base == 5
+    run.finish()
+    assert run.cur.base == 5
+
+
+def test_the_epochs_call_at_2_to_the_32_is_refused_on_the_device(device_run):
+    """A call whose index would reach `pearl_c.CALL_RANGE` (2^32, the row seed's range) raises before it runs, naming the
+    fix: the epoch ends and the install takes a new salt."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    x = torch.randn(16, 1024).to(torch.bfloat16)
+    run.begin(at=C.CALL_RANGE - 1)
+    run.gemm(0, x, weights[0], None)
+    assert [u.index for u in run.cur.matmuls] == [C.CALL_RANGE - 1]
+    kernel.dev.log.clear()
+    with pytest.raises(RuntimeError, match="2\\^32 calls.*reinstall under a new salt"):
+        run.gemm(1, x, weights[1], None)
+    assert not kernel.dev.log and len(run.cur.matmuls) == 1
 
 
 def test_a_pass_screens_at_most_its_flag_rows(device_run):
@@ -604,9 +647,10 @@ def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
 def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, dev):
     """Plain serving (a model runner, nothing else ending passes) under ``transcript_dir``, three steps: each pass is one
     step's forward over every weight, retained in ``pass-NNNNN`` in the order the passes began (the one the install began
-    first among them), its manifest's commitment the one it published and its calls the step's, its weights' files hard
-    links to the first pass's; the pass left open and empty after the last step writes nothing.  On ``twin`` the hash
-    kernels run, so A's roots are real and differ pass to pass."""
+    first among them), its manifest's commitment the one it published and its calls the step's, numbered on from the last
+    pass's (the epoch's call indices, so the passes together hold each index once), its weights' files hard links to the
+    first pass's; the pass left open and empty after the last step writes nothing.  On ``twin`` the hash kernels run, so
+    A's roots are real and differ pass to pass."""
     rng = np.random.default_rng(23)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
@@ -623,10 +667,14 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
     assert [(p["units"], p["tiles"], p["screened_rows"]) for p in passes] == [(2, 24, 400), (2, 12, 240), (2, 6, 6)]
     assert [Path(p["manifest"]) for p in passes] == [root / f"pass-{i:05d}" / "manifest.json" for i in range(3)]
     assert sorted(d.name for d in root.iterdir()) == [f"pass-{i:05d}" for i in range(3)]
+    mans = []
     for i, (p, step) in enumerate(zip(passes, steps)):
         man = json.loads(Path(p["manifest"]).read_text())
-        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [(j, w, m) for j, (w, m) in enumerate(step)]
+        mans.append(man)
+        assert p["base"] == 2 * i
+        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [(2 * i + j, w, m) for j, (w, m) in enumerate(step)]
         assert man["commitment"] == {"root": p["transcript_root"], "count": p["tiles"]} and sorted(man["weights"]) == ["0", "1"]
+    assert CR.passes_distinct(mans) is None
     for f in ("weights/0.rows.bf16", "weights/0.tree", "weights/1.rows.bf16", "weights/1.tree"):
         stats = [(root / f"pass-{i:05d}" / f).stat() for i in range(3)]
         assert len({s.st_ino for s in stats}) == 1 and stats[0].st_nlink == 3, f
@@ -1817,10 +1865,8 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
 
 # ---- step 1 of the decode plan: the host path, byte for byte the reference's ---------------------------------------
 
-def test_native_keys_are_call_keys_byte_for_byte(monkeypatch):
+def test_native_keys_are_call_keys_byte_for_byte():
     import random
-
-    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
 
     tree_hash = HM96
     rng = random.Random(5)
@@ -1829,13 +1875,7 @@ def test_native_keys_are_call_keys_byte_for_byte(monkeypatch):
         keys = PPD._Keys(F, salt, tree_hash)
         assert keys.native is not None
         for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
-            want = PPD.call_keys(F, salt, root, index, m16, tree_hash)
-            assert keys(root, index, m16) == want and keys(root, index, m16) == want     # the second time, kept
-            assert keys.kept[root, index, m16] == want
-    monkeypatch.setattr(PPH, "KEYS_KEPT", 2)
-    keys = PPD._Keys(F, salt, tree_hash)
-    for index in range(5):
-        assert keys(root, index, 16) == PPD.call_keys(F, salt, root, index, 16, tree_hash) and len(keys.kept) <= 2
+            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16, tree_hash)
     keys.native = None
     assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64, tree_hash)
     with pytest.raises(ValueError, match="don't frame tree hash 'sha256'"):
@@ -1850,22 +1890,6 @@ def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
         ring.put(dst, data)
         assert bytes(dst[:len(data)].tolist()) == data
     assert ring.i == 11 % 4
-
-
-def test_the_key_table_copies_each_calls_keys_from_its_first_upload_and_uploads_past_it():
-    keys = PPD._Keys(F, bytes(range(32)), HM96)
-    copies = []
-
-    def copy(dst, src, n, raw):
-        copies.append(raw)
-        ctypes.memmove(dst, src, n)
-    table = PPD._KeyTable(keys, PPD._Uploads(torch.device("cpu"), slots=4), torch.device("cpu"), copy, slots=2)
-    dst, root = torch.zeros(176, dtype=torch.uint8), bytes(range(64))
-    for w, index, m16, raw in ((0, 0, 16, 5), (0, 0, 16, 5), (1, 3, 32, 5), (0, 0, 16, 6), (2, 1, 16, 5), (1, 3, 32, 5)):
-        dst.fill_(0xA5)
-        table.put(dst, w, root, index, m16, raw, None)
-        assert PPD._bytes(dst[:168]) == PPD.call_keys(F, keys.salt, root, index, m16, HM96)
-    assert copies == [5, 5, 5, 5] and len(table.at) == 2          # stream 6 and the third key uploaded, no copy
 
 
 def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(device_run):
@@ -1883,7 +1907,9 @@ def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(devic
     assert bool((sh.xa[17:] == 0).all())
 
 
-def test_each_calls_a_root_lands_in_the_pass_buffer_and_the_second_steps_keys_come_from_the_table(device_run):
+def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_index(device_run):
+    """Two steps of the same three calls: each call's A root lands at its position in its pass's buffer, and its keys are
+    those of its index in the epoch, so the second step's calls are 3, 4 and 5 and share no keys with the first's."""
     make, _, weights, roots, salt = device_run
     run = make()
     for step in range(2):
@@ -1895,10 +1921,10 @@ def test_each_calls_a_root_lands_in_the_pass_buffer_and_the_second_steps_keys_co
             run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
             size = run._pipe(w, sh)[0].size["tree_a"]
             assert PPD._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPD._bytes(tree[size - 64:size])
-            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], i, 16, run.tree_hash)
+            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], 3 * step + i, 16, run.tree_hash)
+        assert [u.index for u in run.cur.matmuls] == [3 * step, 3 * step + 1, 3 * step + 2]
         run.end_pass()
-        run.key_table.keys = None                                  # the second step hashes nothing
-    assert len(run.key_table.at) == 3
+    assert run.cur.base == run.epoch_calls() == 6
 
 
 def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):
