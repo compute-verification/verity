@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Bridge.BindsColl
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+import Proofs.Flock.C3.RegLevels.ValueTie
 
 /-!
 # The deployed check opens shaped rows only
@@ -87,19 +88,21 @@ theorem packBits_eq_rowBytes {ℓ : ℕ} (f : Fin ℓ → Bool) (h16 : ℓ % 16 
     have ht : 8 * j + t.val < ℓ := by have := t.isLt; omega
     simp only [Fin.val_cast, List.getElem_take, List.getElem_drop, List.getElem_ofFn,
       FlockSoundness.Discharge.Layout.BitVal.get, padBits]
-    rw [dif_pos (show 8 * j + t.val < W by omega), dif_pos ht]
+    simp only [show 8 * j + t.val < W by omega, ht, ↓reduceDIte]
 
 /-- **A deployed opening's row is `rowEncP` of its value**, at a place of `16 w` bits. -/
 theorem row_eq_rowEncP (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) :
     row place bits o = rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf place bits o W) := by
   obtain ⟨hs, hw⟩ := valOf_shaped (bits := bits) h16 hW
   unfold rowEncP
-  rw [ite_cond_eq_true _ _ (eq_true hs), hw]
+  simp only [hs, ↓reduceIte]
+  rw [hw]
   unfold row FlockLevel3.RowV2.enc
   rw [rowBits_eq, List.length_ofFn]
   congr 1
   · unfold FlockSoundness.Discharge.Hidden.rowPre
-    rw [ite_cond_eq_true _ _ rfl, show 16 * ((place o.pos).1 / 16) = (place o.pos).1 by omega]
+    simp only [↓reduceIte]
+    rw [show 16 * ((place o.pos).1 / 16) = (place o.pos).1 by omega]
   · exact packBits_eq_rowBytes _ h16 hW
 
 /-- **A misshaped value's bytes are no deployed opening's row**: a value that isn't `RowShaped` of the place's width. -/
@@ -147,5 +150,72 @@ theorem leaf_misshaped (c : Code) (o : Opening Bool) (h16 : (c.place o.pos).1 % 
       H512 (hm96Input (row c.place c.bits o) (c.salt o))) :
     Collides (hm96Pair (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y (row c.place c.bits o) (c.salt o)) :=
   hm96Pair_spec _ _ _ _ (Ne.symm (row_ne_misshaped h16 hW hv)) h
+
+/-! ## The registered path, at the verifier's own tree -/
+
+/-- **A path's bytes**: the siblings, leaf level first. -/
+def pathMsg (s : List ByteArray) : Msg := (s.map fun b => b.data.toList).flatten
+
+theorem flatten_chunk : ∀ (s : List (List UInt8)) (d : ℕ), (∀ x ∈ s, x.length = 64) → (hd : d < s.length) →
+    (((s.flatten).drop (64 * d)).take 64) = s[d]
+  | [], _, _, hd => absurd hd (by simp)
+  | x :: s, 0, h, _ => by
+    have hx := h x (by simp)
+    simp only [List.flatten_cons, Nat.mul_zero, List.drop_zero, List.getElem_cons_zero]
+    rw [List.take_append_of_le_length (by omega), List.take_of_length_le (by omega)]
+  | x :: s, d + 1, h, hd => by
+    have hx := h x (by simp)
+    have e : List.drop (64 * (d + 1)) (x ++ s.flatten) = List.drop (64 * d) s.flatten := by
+      rw [show 64 * (d + 1) = x.length + 64 * d by rw [hx]; ring]
+      simp
+    simp only [List.flatten_cons, List.getElem_cons_succ]
+    rw [e]
+    exact flatten_chunk s d (fun y hy => h y (by simp [hy])) (by simpa using hd)
+
+theorem pathMsg_length : ∀ s : List ByteArray, (∀ x ∈ s, x.size = 64) → (pathMsg s).length = 64 * s.length
+  | [], _ => rfl
+  | x :: s, h => by
+    have hx := h x (by simp)
+    have ih := pathMsg_length s fun y hy => h y (by simp [hy])
+    unfold pathMsg at ih ⊢
+    simp only [List.map_cons, List.flatten_cons, List.length_append, Array.length_toList, ByteArray.size_data, hx, ih,
+      List.length_cons]
+    ring
+
+theorem sibs_pathMsg (s : List ByteArray) (hs : ∀ x ∈ s, x.size = 64) :
+    Flock.Registered.sibs (bytes (pathMsg s)) s.length = s := by
+  apply List.ext_getElem (by simp [Flock.Registered.sibs])
+  intro d h1 h2
+  have key : ((pathMsg s).drop (64 * d)).take 64 = (s[d]'h2).data.toList := by
+    unfold pathMsg
+    rw [flatten_chunk _ d (fun x hx => by
+        simp only [List.mem_map] at hx
+        obtain ⟨b, hb, rfl⟩ := hx
+        rw [Array.length_toList, ByteArray.size_data, hs b hb]) (by simpa using h2)]
+    simp
+  simp only [Flock.Registered.sibs, List.getElem_map, List.getElem_range]
+  apply ByteArray.ext
+  rw [ByteArray.data_extract, ← Array.toList_inj, Array.toList_extract, List.extract_eq_take_drop,
+    show 64 * d + 64 - 64 * d = 64 by omega]
+  simpa [bytes] using key
+
+/-- **Every leaf of a frame-v3-sha512 tree opens its root** through its siblings in the tree (`climb_sibsV`): a port
+whose root is the tree's over `leaves` opens the payload whose leaf is the `i`-th. -/
+theorem opensLeaf_tree (reg : Flock.Registered.Port) (leaves : Array ByteArray) (hn : leaves.size = reg.leaves)
+    (hw : ∀ x ∈ leaves, x.size = 64) (hroot : Flock.FV3.root reg.domain leaves Flock.Sha512.hash = reg.root) {i : ℕ}
+    (hi : i < reg.leaves) {payload : ByteArray}
+    (hleaf : leaves[i]! = Flock.Registered.leafAs reg.schema reg.domain i payload) :
+    Flock.Registered.opensLeaf reg payload i (bytes (pathMsg (FlockC3.RegLevels.sibsV reg.domain leaves i))) = true := by
+  have hiL : i < leaves.size := hn ▸ hi
+  have hs := FlockC3.RegLevels.sibsV_size reg.domain leaves hw hiL
+  have hl := FlockC3.RegLevels.sibsV_length reg.domain leaves i
+  unfold Flock.Registered.opensLeaf Flock.Registered.climb
+  simp only [Bool.and_eq_true, decide_eq_true_eq]
+  refine ⟨⟨hi, ?_⟩, ?_⟩
+  · rw [size_bytes, pathMsg_length _ hs, hl, hn]
+  · rw [← hn, ← hl, sibs_pathMsg _ hs, ← hleaf, FlockC3.RegLevels.climb_sibsV reg.domain leaves hiL, hroot]
+
+theorem bytes_digBytes (d : Dig) : bytes (digBytes d) = d.1 := by
+  simp [bytes, digBytes, dig_eq]
 
 end SamplingDeploy
