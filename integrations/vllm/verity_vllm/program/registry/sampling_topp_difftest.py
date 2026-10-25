@@ -24,7 +24,6 @@ import numpy as np
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import tuple_of
-from verity_vllm import settings
 from verity_vllm.program.registry.prims import BF16, F32, I32
 from verity_vllm.program.registry.b1 import const
 from verity_vllm.program.registry.sampling import I64, GumbelSelectF32, GumbelTopPTokenSelect, TemperatureScale, TopPMask
@@ -46,7 +45,7 @@ def _f32_bits(x: float) -> int:
 
 
 def _real_rows() -> np.ndarray | None:
-    p = settings.VERITY_REAL_LOGITS
+    p = os.environ.get("VERITY_REAL_LOGITS")
     if not p or not os.path.exists(p):
         return None
     rows = np.load(p)
@@ -62,7 +61,7 @@ def cases(rng, i: int) -> dict:
     if real is not None and i % 4 != 3:                      # three of four cases on real rows when available
         r = i % real.shape[0]
         V = int(real.shape[1])
-        logits = {"shape": [V], "dtype": "bfloat16", "kind": "real", "npy": settings.VERITY_REAL_LOGITS, "row": r}
+        logits = {"shape": [V], "dtype": "bfloat16", "kind": "real", "npy": os.environ["VERITY_REAL_LOGITS"], "row": r}
         edge = False
     else:
         V = VOCABS[0] if i % 8 in (3, 7) else VOCABS[1 + (i % (len(VOCABS) - 1))]

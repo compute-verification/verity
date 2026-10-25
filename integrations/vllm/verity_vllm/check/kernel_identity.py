@@ -30,12 +30,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
 from verity_vllm.config import option
 
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
@@ -57,7 +57,7 @@ def sha256_file(p: Path) -> str:
 
 def inductor_cache_dir() -> str | None:
     """Where this process's Inductor wrappers live (env override or torch's default)."""
-    d = settings.TORCHINDUCTOR_CACHE_DIR
+    d = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
     if d:
         return d
     try:
@@ -69,7 +69,7 @@ def inductor_cache_dir() -> str | None:
 
 
 def triton_cache_dir() -> str | None:
-    return settings.TRITON_CACHE_DIR
+    return os.environ.get("TRITON_CACHE_DIR")
 
 
 _WRAPPER_PATH_LINE = re.compile(r"^# (kernel path|AOT ID|Original path): .*$", re.M)

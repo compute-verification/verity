@@ -23,15 +23,13 @@ import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from verity_vllm import settings
-
 CPP_DIR = Path(__file__).resolve().parent / "cpp"
 CXX_FLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared", "-ffp-contract=off")
 
 
 def cxx() -> str:
     """The C++ compiler the twins build with: ``$CXX``, else ``g++``."""
-    return settings.CXX
+    return os.environ.get("CXX", "g++")
 
 
 def source_digest() -> str:
@@ -47,10 +45,10 @@ def source_digest() -> str:
 def build_dir() -> Path:
     """Where the JIT-built ``lib*.so`` live: ``$VERITY_NUMERICS_BUILD_DIR``, else
     ``${XDG_CACHE_HOME:-~/.cache}/verity/numerics/<source_digest()>/``.  Not created here."""
-    env = settings.VERITY_NUMERICS_BUILD_DIR
+    env = os.environ.get("VERITY_NUMERICS_BUILD_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    cache = Path(settings.XDG_CACHE_HOME or Path.home() / ".cache").expanduser()
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache").expanduser()
     return cache.resolve() / "verity" / "numerics" / source_digest()
 
 

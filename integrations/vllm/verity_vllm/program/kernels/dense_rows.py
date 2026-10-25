@@ -35,7 +35,6 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity_vllm import settings
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 
@@ -283,7 +282,7 @@ def use_threads(n: int | str | None) -> None:
     _THREADS[0] = k if k > 0 else MAX_THREADS
 
 
-use_threads(settings.VERITY_DENSE_THREADS)
+use_threads(os.environ.get("VERITY_DENSE_THREADS"))
 
 
 def threads() -> int:

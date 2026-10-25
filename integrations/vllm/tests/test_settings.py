@@ -12,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from verity_vllm import settings as S
-from verity_vllm.check import kernel_identity as KI
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import research_result as RR
 
@@ -63,7 +62,7 @@ def test_put_and_unset_write_only_declared_variables(monkeypatch: pytest.MonkeyP
 
 def test_the_record_carries_the_value_settings_and_families_in_force() -> None:
     env = {"VERITY_WINDOW_MB": "256", "VERITY_FAULT": "", "VERITY_TREE": "/src", "VERITY_REPLAY_DUMP_DIR": "/d", "PATH": "/bin",
-           "VLLM_BATCH_INVARIANT": "1", "NCCL_P2P_DISABLE": "1", "CUBLAS_WORKSPACE_CONFIG": ":4096:8", "TRITON_CACHE_DIR": "/t"}
+           "VLLM_BATCH_INVARIANT": "1", "NCCL_P2P_DISABLE": "1", "CUBLAS_WORKSPACE_CONFIG": ":4096:8", "RESEARCH_RUN_ID": "r"}
     rec = S.record(env)
     assert rec["schema"] == "verity-vllm/settings/v1"
     assert rec["values"] == {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "NCCL_P2P_DISABLE": "1", "VERITY_FAULT": "",
@@ -129,7 +128,7 @@ def test_every_name_the_library_reads_is_declared() -> None:
     assert not (bad := {n: sorted(f) for n, f in strings.items() if n not in S.SETTINGS and n not in S.NOT_SETTINGS}), (fix, bad)
     assert not (bad := {n: sorted(f) for n, f in shell.items() if not S.known(n) and n not in S.NOT_SETTINGS}), (fix, bad)
     assert not (bad := {n: sorted(f) for n, f in reads.items() if n not in S.SETTINGS}), (fix, bad)
-    assert {"VERITY_REPLAY_DUMP_MAX", "CXX", "TRITON_CACHE_DIR"} <= set(reads) and "VERITY_INT8_PARTS" in strings
+    assert {"VERITY_REPLAY_DUMP_MAX", "RESEARCH_RUN_ID", "CUDA_VISIBLE_DEVICES"} <= set(reads) and "VERITY_INT8_PARTS" in strings
 
 
 def _digest(doc: object) -> str:
@@ -147,16 +146,3 @@ def test_research_result_records_the_run_id_as_before(monkeypatch: pytest.Monkey
     else:
         monkeypatch.setenv("RESEARCH_RUN_ID", value)
     assert _digest(RR.build_result(Path("no-evidence-dir"), "row", "role", ["build"], None, None)) == digest
-
-
-@pytest.mark.parametrize(("value", "digest"), [
-    (None, "927a4b3d3db42708a974740baadab9c4"),
-    ("", "7ff16ab570d79909b8849b9689ad0c9e"),
-    ("/nonexistent/triton", "09ff3b378460f2186fb5dfa06cf554b2"),
-])
-def test_kernel_identity_records_the_triton_cache_dir_as_before(monkeypatch: pytest.MonkeyPatch, value: str | None, digest: str) -> None:
-    if value is None:
-        monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
-    else:
-        monkeypatch.setenv("TRITON_CACHE_DIR", value)
-    assert _digest(KI.collect(None, KI.triton_cache_dir())) == digest

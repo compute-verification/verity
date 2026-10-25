@@ -164,12 +164,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_TREE_COMMIT", str, None, WHERE, "the commit of VERITY_TREE a compiled Commit logs"),
     # ---- other programs' variables the library reads
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
-    S("CXX", str, "g++", WHERE, "the C++ compiler the twins build with", empty=True),
-    S("PY", str, None, WHERE, "the workload interpreter a sweep stage probes (default: config.RunEnv.py's)"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
-    S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's cache directory (unset: torch's default)"),
-    S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's cache directory", empty=True),
-    S("XDG_CACHE_HOME", str, None, WHERE, "the user's cache directory (unset: ~/.cache)"),
 )
 del S
 
