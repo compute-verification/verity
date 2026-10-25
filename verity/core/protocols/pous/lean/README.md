@@ -44,12 +44,22 @@ Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMee
 Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
+Definitions/Pous/P2/Mutable.lean    the mutable store (PoUS as an obligation): one key pair per tag, a window's
+                                    snapshot (`snap`), the other tags' keys (`rest`) and `CommittedBefore`
 Definitions/Pous/Assumptions.lean         trusted, the assumptions: named hypotheses (Lemma A, Conjecture B1′)
 Definitions/Pous/Assumptions/P2.lean      P2's named open step `PrimeP16448`, the primality of its modulus
+Definitions/Pous/Assumptions/Obligation.lean
+                                    `P2RingRoundSecureCommitted`, P2's per-round floor for content committed before
+                                    its key coin (conjectured; claims card 45804207, unlisted until it resolves)
 Definitions/Pous/Guarantees.lean          trusted, the frozen statements: 31, each with its category, the 28
                                     grade.sh grades against and three proved results cited outside the package
 Definitions/Pous/Guarantees/P2.lean       seven frozen statements about the abstract model `m1p` at P2's parameters,
                                     six of which grade.sh grades against; none is about the concrete P2
+Definitions/Pous/Guarantees/Obligation.lean
+                                    the mutable store's audit window: tag freshness (`SnapshotFresh`), a block's
+                                    offset absorbing its content (`P2ContentAbsorbs`), and the window's bound from
+                                    `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from the committed reading
+                                    (`ObligationOfCommitted`), proved in `Proofs/Pous/Obligation.lean`
 Definitions/Pous/Guarantees/SecureErasure.lean
                                     two frozen statements, which grade.sh grades against: secure erasure on the
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
