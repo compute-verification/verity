@@ -26,7 +26,10 @@ names resolve to (`compReads`), each member's activation located as its caller's
 node, what the members' reads of its parameter leaves resolve to, when its positions are those leaves' `upIdx`
 (`readSet`, through `branch_iff`). Its read succeeding (`nodeReads_comp_ok`, `ArgReadOk`), an argument's read names
 exactly its members' reads of the parameter (`argSet`, `ArgB`) wherever its members' leaves tile it, and the node's
-positions what its gates read outside it wherever its carries' read names the later iterations' (`compSet_of`).
+positions what its gates read outside it wherever its carries' read names the later iterations' (`compSet_of`). All
+members at once, `Desc.memberRows` reads per used run the rows `rowsAt` names (`memberRows_rows`), whose indices are
+the members' leaves there (`rowsAt_idx`), each through `throughPS` keeping its references' gates (`throughPS_agree`):
+the same set (`rowsSet`, `argSet_of`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -1047,7 +1050,8 @@ theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD :
     (htile : ∀ t < (node.args[i]!).seq.count, ∃ m < node.members, ∃ j < lv, upIdx node i m j = t)
     (hsucc : ∀ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j →
       ∃ a, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a)
-    (hrows : ∀ ps, Desc.memberRows c node k i ((c.memo[node.fn]!).used[i]?.getD #[]) = .ok (some ps) →
+    (hrows : perMember node i = true → ∀ ps,
+      Desc.memberRows c node k i ((c.memo[node.fn]!).used[i]?.getD #[]) = .ok (some ps) →
       (∀ p ∈ ps.toList, ∃ segs, Desc.down c Flock.Steps.FUEL p = .ok segs) → ∀ a,
       (∃ x ∈ ps.toList.flatMap (downPos c), den c.P sc x = .ok a) ↔
         ∃ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j ∧
@@ -1112,7 +1116,7 @@ theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD :
   split at hok
   · rename_i ps hps
     rw [hps]
-    exact hrows ps hps hok a
+    exact hrows hpm ps hps hok a
   · rename_i hps
     rw [hps]
     simp only [List.mem_flatMap, List.mem_range]
@@ -1141,5 +1145,478 @@ theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD :
       obtain ⟨x, hx, hxa⟩ := (key m hB'.1).2 ⟨m, j, ⟨rfl, hB'⟩, hr⟩
       exact ⟨x, ⟨m, hB'.1, hx⟩, hxa⟩
   · exact absurd hok id
+
+/-! ## All members' reads of a mapped argument at once (`Desc.memberRows`) -/
+
+/-- The pieces of rows `Desc.memberRows` reads argument `i` through for the used run `[lo, hi)`: per row of a batch's
+mapped axis (a scan's `xs` one), one piece of gate-0 positions, a member a row. -/
+def rowsAt (node : Flock.Program.Node) (i lo hi : Nat) : Array Piece :=
+  match node.form, (node.args[i]!).dims with
+  | .scan, _ =>
+    #[{ tgt := .gate 0, base := (lo : Int), stride := 1, len := hi - lo, rows := node.members,
+        rowStride := ((((node.args[i]!).dims.map (·.2)).getD 0 : Nat) : Int) }]
+  | .batch, some (d, L) =>
+    if L == 0 then #[] else
+    (Array.range ((hi + L - 1) / L - lo / L)).filterMap fun q' =>
+      let q := lo / L + q'
+      let (s, e) := (max lo (q * L), min hi ((q + 1) * L))
+      if s < e then some { tgt := .gate 0, base := ((q * d * L + (s - q * L) : Nat) : Int), stride := 1,
+                           len := e - s, rows := node.members, rowStride := (L : Int) } else none
+  | _, _ => #[]
+
+/-- The argument indices a piece of gate-0 positions names. -/
+def idxOf (q : Piece) : List Nat := (pos q).map (·.2.toNat)
+
+theorem mem_idxOf_row {b : Nat} {len rows L : Nat} (t : Nat) :
+    t ∈ idxOf { tgt := .gate 0, base := (b : Int), stride := 1, len := len, rows := rows, rowStride := (L : Int) } ↔
+      ∃ r < rows, ∃ u < len, t = b + r * L + u := by
+  unfold idxOf pos
+  simp only [List.mem_map, List.mem_flatMap, List.mem_range]
+  constructor
+  · rintro ⟨x, ⟨r, hr, u, hu, rfl⟩, rfl⟩
+    exact ⟨r, hr, u, hu, by simp only [Int.mul_one]; omega⟩
+  · rintro ⟨r, hr, u, hu, rfl⟩
+    exact ⟨_, ⟨r, hr, u, hu, rfl⟩, by simp only [Int.mul_one]; omega⟩
+
+theorem rowsAt_nonneg (node : Flock.Program.Node) (i lo hi : Nat) :
+    ∀ q ∈ (rowsAt node i lo hi).toList, ∀ x ∈ pos q, 0 ≤ x.2 := by
+  intro q hq x hx
+  unfold rowsAt at hq
+  split at hq
+  · simp only [List.mem_singleton] at hq
+    subst hq
+    unfold pos at hx
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
+    obtain ⟨r, -, u, -, rfl⟩ := hx
+    dsimp only
+    positivity
+  · split at hq
+    · simp at hq
+    · rw [Array.mem_toList_iff, Array.mem_filterMap] at hq
+      obtain ⟨q', -, hq⟩ := hq
+      dsimp only at hq
+      split at hq
+      · injection hq with hq
+        subst hq
+        unfold pos at hx
+        simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
+        obtain ⟨r, -, u, -, rfl⟩ := hx
+        dsimp only
+        positivity
+      · cases hq
+  · simp at hq
+
+/-- **The rows `Desc.memberRows` reads for the used run `[lo, hi)` name exactly its members' leaves there**, as
+indices `upIdx` into a mapped argument. -/
+theorem rowsAt_idx (node : Flock.Program.Node) (i lo hi : Nat) (hpm : perMember node i = true)
+    (hL0 : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → hi ≤ lo) (t : Nat) :
+    t ∈ (rowsAt node i lo hi).toList.flatMap idxOf ↔
+      ∃ m < node.members, ∃ j, lo ≤ j ∧ j < hi ∧ t = upIdx node i m j := by
+  unfold perMember at hpm
+  unfold rowsAt upIdx
+  cases hf : node.form with
+  | prim => simp [hf] at hpm
+  | call => simp [hf] at hpm
+  | scan =>
+    simp only [hf, Bool.and_eq_true, decide_eq_true_eq] at hpm
+    simp only [List.flatMap, List.map_cons, List.map_nil, List.flatten_cons, List.flatten_nil,
+      List.append_nil, mem_idxOf_row]
+    simp only [if_pos (show i ≠ 0 ∧ i ≤ node.nxs from ⟨by omega, hpm.2⟩)]
+    constructor
+    · rintro ⟨r, hr, u, hu, rfl⟩
+      exact ⟨r, hr, lo + u, by omega, by omega, by ring⟩
+    · rintro ⟨r, hr, j, h1, h2, rfl⟩
+      exact ⟨r, hr, j - lo, by omega, by
+        have : lo + (j - lo) = j := by omega
+        rw [← this]; ring_nf; omega⟩
+  | batch =>
+    simp only [hf] at hpm
+    rcases hd : (node.args[i]!).dims with _ | ⟨d, L⟩
+    · simp [hd] at hpm
+    simp only
+    by_cases hL : L = 0
+    · have := hL0 d L hd hL
+      simp only [hL, beq_self_eq_true, ↓reduceIte, List.flatMap, List.map_nil, List.flatten_nil,
+        List.not_mem_nil, false_iff, not_exists, not_and]
+      intro m _ j h1 h2; omega
+    have hLp : 0 < L := Nat.pos_of_ne_zero hL
+    simp only [beq_iff_eq, hL, ↓reduceIte, List.mem_flatMap, Array.mem_toList_iff, Array.mem_filterMap,
+      Array.mem_range]
+    constructor
+    · rintro ⟨q, ⟨q', hq', hq⟩, ht⟩
+      split at hq
+      · rename_i hse
+        injection hq with hq
+        subst hq
+        rw [mem_idxOf_row] at ht
+        obtain ⟨r, hr, u, hu, rfl⟩ := ht
+        refine ⟨r, hr, max lo ((lo / L + q') * L) + u, by omega, by omega, ?_⟩
+        unfold Resolve.memberIdx
+        rw [hd]
+        dsimp only
+        have hq1 : (lo / L + q') * L ≤ max lo ((lo / L + q') * L) + u := by omega
+        have hq2 : max lo ((lo / L + q') * L) + u < (lo / L + q' + 1) * L := by
+          have := Nat.lt_of_lt_of_le (Nat.lt_of_le_of_lt (Nat.le_refl _) (by omega :
+            max lo ((lo / L + q') * L) + u < min hi ((lo / L + q' + 1) * L))) (Nat.min_le_right _ _)
+          exact this
+        have hdiv : (max lo ((lo / L + q') * L) + u) / L = lo / L + q' := by
+          exact Nat.div_eq_of_lt_le hq1 hq2
+        have hmod : (max lo ((lo / L + q') * L) + u) % L = max lo ((lo / L + q') * L) + u - (lo / L + q') * L := by
+          have := Nat.div_add_mod (max lo ((lo / L + q') * L) + u) L
+          rw [hdiv] at this
+          rw [Nat.mul_comm] at this
+          omega
+        rw [hdiv, hmod]
+        have e1 : (lo / L + q') * d * L = (lo / L + q') * L * d := by ring
+        rw [e1]
+        zify [hq1, Nat.le_max_right lo ((lo / L + q') * L)]
+        ring
+      · cases hq
+    · rintro ⟨r, hr, j, h1, h2, rfl⟩
+      have hjq := Nat.div_add_mod j L
+      have hjm := Nat.mod_lt j hLp
+      have hq0 : lo / L ≤ j / L := Nat.div_le_div_right h1
+      have hq1 : j / L < (hi + L - 1) / L := by
+        rw [Nat.lt_div_iff_mul_lt hLp]
+        have := Nat.div_mul_le_self j L
+        omega
+      have e : lo / L + (j / L - lo / L) = j / L := by omega
+      have hs : max lo (j / L * L) ≤ j := by
+        have := Nat.div_mul_le_self j L; omega
+      have he : j < min hi ((j / L + 1) * L) := by
+        rw [Nat.add_mul, Nat.one_mul]
+        have : j < j / L * L + L := by rw [Nat.mul_comm]; omega
+        omega
+      refine ⟨{ tgt := .gate 0,
+                 base := ((j / L * d * L + (max lo (j / L * L) - j / L * L) : Nat) : Int), stride := 1,
+                 len := min hi ((j / L + 1) * L) - max lo (j / L * L), rows := node.members,
+                 rowStride := (L : Int) }, ⟨j / L - lo / L, by omega, ?_⟩, ?_⟩
+      · simp only [e]
+        rw [if_pos (by omega)]
+      rw [mem_idxOf_row]
+      refine ⟨r, hr, j - max lo (j / L * L), by omega, ?_⟩
+      unfold Resolve.memberIdx
+      rw [hd]
+      dsimp only
+      have hjL : j % L = j - j / L * L := by
+        have := Nat.div_add_mod j L; rw [Nat.mul_comm] at this; omega
+      rw [hjL]
+      have h3 : j / L * L ≤ max lo (j / L * L) := Nat.le_max_right _ _
+      have e1 : j / L * d * L = j / L * L * d := by ring
+      rw [e1]
+      zify [hs, h3, Nat.div_mul_le_self j L]
+      ring
+
+/-- **What `down` keeps of the piece `throughPS` gives of an argument**: the gates the argument's references at the
+piece's indices resolve to, position by position. -/
+theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec c sc Flock.Steps.FUEL) {k i : Nat}
+    (hA : ArgOk c k i)
+    (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t))
+    {q bp : Piece} (hq0 : ∀ x ∈ pos q, 0 ≤ x.2)
+    (hqc : ∀ t ∈ idxOf q, t < ((c.body.nodes[k]!).args[i]!).seq.count)
+    (h : Desc.throughPS (c.arg k i) q = some bp) {segs : Array Seg}
+    (hd : Desc.down c Flock.Steps.FUEL bp = .ok segs) :
+    Agree c.P sc (segsPos segs) ((idxOf q).map fun t =>
+      Flock.Program.resolve c.P sc (((c.body.nodes[k]!).args[i]!).seq.get t)) := by
+  set a := (c.body.nodes[k]!).args[i]! with hadef
+  obtain ⟨hokA, hposA⟩ := hA
+  rw [← hadef] at hposA
+  obtain ⟨s, pa, hsegs, hps, hsr, hpr, hbpe⟩ := throughPS_some h
+  have hpa : pos pa = (List.range a.seq.count).map fun t => refPos (a.seq.get t) := by
+    rw [← hposA, psPos_flat _ hokA (by rw [hsegs]; simpa using hsr)]
+    simp [hsegs, hps, posAll]
+  rw [pos_eq_map] at hpa
+  obtain ⟨hcnt, hpt⟩ := map_range_eq hpa
+  have hpaJ : ∀ J < a.seq.count, (pa.tgt, pa.base + (J : Int) * pa.stride) = refPos (a.seq.get J) := by
+    intro J hJ
+    unfold Desc.Piece.count at hcnt
+    have hr1 : pa.rows = 1 := by
+      rcases Nat.lt_or_ge pa.rows 1 with h | h
+      · rw [show pa.rows = 0 by omega, Nat.zero_mul] at hcnt; omega
+      · omega
+    have hJl : J < pa.len := by rw [hr1, Nat.one_mul] at hcnt; omega
+    rw [← hpt J (by unfold Desc.Piece.count; omega)]
+    simp only [ppt, Prod.mk.injEq, true_and, Nat.div_eq_of_lt hJl, Nat.mod_eq_of_lt hJl]
+    simp
+  have hpb : pos bp = (pos q).map fun y => (pa.tgt, pa.base + y.2 * pa.stride) := by
+    rw [hbpe]
+    unfold pos
+    rw [List.map_flatMap]
+    apply flatMap_congr
+    intro r _
+    rw [List.map_map]
+    apply List.map_congr_left
+    intro t _
+    simp only [Function.comp, Prod.mk.injEq, true_and]
+    ring
+  have hJ : ∀ y ∈ pos q, (pa.tgt, pa.base + y.2 * pa.stride) = refPos (a.seq.get y.2.toNat) ∧
+      y.2.toNat < a.seq.count := by
+    intro y hy
+    have hc := hqc y.2.toNat (List.mem_map.2 ⟨y, hy, rfl⟩)
+    refine ⟨?_, hc⟩
+    rw [← hpaJ _ hc, Int.toNat_of_nonneg (hq0 y hy)]
+  have hxs : ∀ x ∈ pos bp, ∃ J < a.seq.count, x = refPos (a.seq.get J) := by
+    intro x hx
+    rw [hpb] at hx
+    obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hx
+    exact ⟨_, (hJ y hy).2, (hJ y hy).1⟩
+  have hDS := hD _ segs (fun x hx' => by obtain ⟨J, -, rfl⟩ := hxs x hx'; simp [refPos])
+    (fun x hx' k' hk' => by
+      obtain ⟨J, hJ', rfl⟩ := hxs x hx'
+      simp only [refPos, Tgt.ref.injEq] at hk'
+      obtain ⟨hp', rfl⟩ := hk'
+      have := ((hR J hJ').2 hp').2
+      simp only [refPos]
+      exact_mod_cast this) hd
+  rw [hpb, List.map_map] at hDS
+  unfold idxOf
+  rw [List.map_map]
+  convert hDS using 1
+  apply List.map_congr_left
+  intro y hy
+  simp only [Function.comp]
+  rw [(hJ y hy).1, den_refPos]
+
+/-- A loop each of whose steps on an element of `l` goes on keeping `I`, growing its state (`Le`) and doing what
+`R` says of the element, or stops with `D`: ending without `D`, it kept `I`, grew its state, and did `R` of each. -/
+theorem forIn_cover {α σ : Type} (f : α → σ → Except String (ForInStep σ)) (D I : σ → Prop) (Le : σ → σ → Prop)
+    (R : α → σ → Prop) (hrefl : ∀ s, Le s s) (htrans : ∀ s1 s2 s3, Le s1 s2 → Le s2 s3 → Le s1 s3)
+    (hRm : ∀ x s1 s2, R x s1 → Le s1 s2 → R x s2) :
+    ∀ (l : List α) (s out : σ), (∀ x ∈ l, ∀ s y, I s → f x s = .ok y →
+      (∃ s', y = .yield s' ∧ I s' ∧ Le s s' ∧ R x s') ∨ (∃ s', y = .done s' ∧ D s')) →
+      I s → forIn l s f = .ok out → ¬ D out → I out ∧ Le s out ∧ ∀ x ∈ l, R x out
+  | [], s, out, _, hs, h, _ => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨hs, hrefl _, fun x hx => by simp at hx⟩
+  | x :: l, s, out, hf, hs, h, hD => by
+    rw [List.forIn_cons] at h
+    rcases hx : f x s with e | y <;> rw [hx] at h
+    · exact absurd h (by intro h; cases h)
+    rcases hf x List.mem_cons_self s y hs hx with ⟨s', rfl, hs', hle, hr⟩ | ⟨s', rfl, hq⟩
+    · obtain ⟨h1, h2, h3⟩ := forIn_cover f D I Le R hrefl htrans hRm l s' out
+        (fun x hx => hf x (List.mem_cons_of_mem _ hx)) hs' h hD
+      refine ⟨h1, htrans _ _ _ hle h2, fun z hz => ?_⟩
+      rcases List.mem_cons.1 hz with rfl | hz
+      · exact hRm _ _ _ hr h2
+      · exact h3 z hz
+    · change Except.ok s' = Except.ok out at h
+      injection h with h
+      subst h
+      exact absurd hq hD
+
+/-- **What `Desc.memberRows` gives**: for each used run, the pieces `throughPS` gives of its rows (`rowsAt`), and
+nothing else. -/
+theorem memberRows_rows (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (u : Desc.Ivs) {ps : Array Piece}
+    (h : Desc.memberRows c node k i u = .ok (some ps)) :
+    (∀ bp ∈ ps.toList, ∃ p ∈ u.toList, ∃ q ∈ (rowsAt node i p.1 p.2).toList,
+      Desc.throughPS (c.arg k i) q = some bp) ∧
+    (∀ p ∈ u.toList, ∀ q ∈ (rowsAt node i p.1 p.2).toList, ∃ bp ∈ ps.toList,
+      Desc.throughPS (c.arg k i) q = some bp) := by
+  let T : Array Piece → Prop := fun out => ∀ bp ∈ out.toList, ∃ p ∈ u.toList,
+    ∃ q ∈ (rowsAt node i p.1 p.2).toList, Desc.throughPS (c.arg k i) q = some bp
+  let I : Option (Option (Array Piece)) × Array Piece → Prop := fun st => st.1 = none ∧ T st.2
+  let D : Option (Option (Array Piece)) × Array Piece → Prop := fun st => st.1 = some none
+  let Le : Option (Option (Array Piece)) × Array Piece → Option (Option (Array Piece)) × Array Piece → Prop :=
+    fun s1 s2 => ∀ bp ∈ s1.2.toList, bp ∈ s2.2.toList
+  let R : Nat × Nat → Option (Option (Array Piece)) × Array Piece → Prop := fun p st =>
+    ∀ q ∈ (rowsAt node i p.1 p.2).toList, ∃ bp ∈ st.2.toList, Desc.throughPS (c.arg k i) q = some bp
+  have hrefl : ∀ s, Le s s := fun s bp h => h
+  have htrans : ∀ s1 s2 s3, Le s1 s2 → Le s2 s3 → Le s1 s3 := fun _ _ _ h1 h2 bp h => h2 bp (h1 bp h)
+  have hRm : ∀ x s1 s2, R x s1 → Le s1 s2 → R x s2 := by
+    intro x s1 s2 h1 h2 q hq
+    obtain ⟨bp, hb, hbp⟩ := h1 q hq
+    exact ⟨bp, h2 bp hb, hbp⟩
+  have hpush : ∀ (out : Array Piece) bp, (∀ bp' ∈ out.toList, bp' ∈ (out.push bp).toList) ∧ bp ∈ (out.push bp).toList :=
+    fun out bp => ⟨fun bp' h => by simp [h], by simp⟩
+  unfold Desc.memberRows at h
+  extract_lets a out0 at h
+  obtain ⟨st, hst, h⟩ := Walk.except_bind_ok h
+  rw [← Array.forIn_toList] at hst
+  have key := forIn_cover _ D I Le R hrefl htrans hRm u.toList (none, out0) st ?_ ⟨rfl, fun bp hb => by
+    simp [out0] at hb⟩ hst
+  · obtain ⟨r, out⟩ := st
+    by_cases hD : D (r, out)
+    · change r = some none at hD
+      subst hD
+      simp [pure, Except.pure] at h
+    obtain ⟨⟨hr, hT⟩, -, hR⟩ := key hD
+    change r = none at hr
+    subst hr
+    simp only [pure, Except.pure, Except.ok.injEq, Option.some.injEq] at h
+    subst h
+    exact ⟨hT, fun p hp q hq => hR p hp q hq⟩
+  intro x hxu s y hs hf
+  obtain ⟨lo, hi⟩ := x
+  extract_lets r out jp at hf
+  dsimp (config := { zeta := false }) only at hf
+  have hjp : ∀ y, jp (rowsAt node i lo hi) = .ok y →
+      (∃ s', y = .yield s' ∧ I s' ∧ Le s s' ∧ R (lo, hi) s') ∨ (∃ s', y = .done s' ∧ D s') := by
+    intro y hy
+    simp only [jp] at hy
+    obtain ⟨st2, hst2, hy⟩ := Walk.except_bind_ok hy
+    rw [← Array.forIn_toList] at hst2
+    have key2 := forIn_cover _ D I Le (fun q st => ∃ bp ∈ st.2.toList, Desc.throughPS (c.arg k i) q = some bp)
+      hrefl htrans (fun q s1 s2 h1 h2 => by obtain ⟨bp, hb, hbp⟩ := h1; exact ⟨bp, h2 bp hb, hbp⟩)
+      (rowsAt node i lo hi).toList (none, out) st2 ?_ ⟨rfl, hs.2⟩ hst2
+    · obtain ⟨r2, out2⟩ := st2
+      by_cases hD2 : D (r2, out2)
+      · change r2 = some none at hD2
+        subst hD2
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        exact .inr ⟨_, hy.symm, rfl⟩
+      obtain ⟨⟨hr2, hT2⟩, hle2, hR2⟩ := key2 hD2
+      change r2 = none at hr2
+      subst hr2
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      exact .inl ⟨_, hy.symm, ⟨rfl, hT2⟩, hle2, fun q hq => hR2 q hq⟩
+    intro q hq s2 y2 hs2 hf2
+    split at hf2
+    · rename_i bp hbp
+      simp only [pure, Except.pure, Except.ok.injEq] at hf2
+      refine .inl ⟨_, hf2.symm, ⟨rfl, fun bp' hb' => ?_⟩, (hpush _ bp).1, bp, (hpush _ bp).2, hbp⟩
+      rw [Array.toList_push, List.mem_append, List.mem_singleton] at hb'
+      rcases hb' with hb' | rfl
+      · exact hs2.2 bp' hb'
+      · exact ⟨(lo, hi), hxu, q, hq, hbp⟩
+    · simp only [pure, Except.pure, Except.ok.injEq] at hf2
+      exact .inr ⟨_, hf2.symm, rfl⟩
+  split at hf
+  · rename_i hform
+    obtain ⟨rows, hrw, hf⟩ := Walk.except_bind_ok hf
+    simp only [pure, Except.pure, Except.ok.injEq] at hrw
+    subst hrw
+    refine hjp y ?_
+    unfold rowsAt
+    simp only [hform]
+    convert hf
+    show _ = (Option.map (fun x => ((x.2 : Nat) : Int)) (node.args[i]!).dims).getD 0
+    cases (node.args[i]!).dims <;> rfl
+  · rename_i d L hform hdims
+    have hd' : (node.args[i]!).dims = some (d, L) := hdims
+    split at hf
+    · rename_i hL
+      obtain ⟨rows, hrw, hf⟩ := Walk.except_bind_ok hf
+      simp only [pure, Except.pure, Except.ok.injEq] at hrw
+      subst hrw
+      refine hjp y ?_
+      unfold rowsAt
+      simp only [hform, hd', hL, ↓reduceIte]
+      exact hf
+    · rename_i hL
+      have hf := walkAtMost_bind _ _ _ hf
+      obtain ⟨rows, hrw, hf⟩ := Walk.except_bind_ok hf
+      simp only [pure, Except.pure, Except.ok.injEq] at hrw
+      subst hrw
+      refine hjp y ?_
+      unfold rowsAt
+      simp only [hform, hd', hL, Bool.false_eq_true, ↓reduceIte]
+      exact hf
+  · rename_i hns hnb
+    obtain ⟨rows, hrw, hf⟩ := Walk.except_bind_ok hf
+    simp only [pure, Except.pure, Except.ok.injEq] at hrw
+    subst hrw
+    refine hjp y ?_
+    have : rowsAt node i lo hi = #[] := by
+      unfold rowsAt
+      split
+      · rename_i hs; exact absurd hs hns
+      · rename_i d L hb hd; exact absurd hd (hnb d L hb)
+      · rfl
+    rw [this]
+    exact hf
+
+/-- **All members' reads of a mapped argument at once** (`Desc.memberRows`) name exactly what the members' reads of
+the parameter's used leaves resolve to (`ArgB`). -/
+theorem rowsSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
+    {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
+    (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
+    (hpm : perMember node i = true) {lv : Nat}
+    (hu : ∀ j, Width.inIvs (((c.memo[node.fn]!).used[i]?.getD #[]).toList) j → j < lv)
+    (hL0 : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → lv = 0)
+    (hlo : ∀ m < node.members, ∀ j < lv, (node.form = .scan → i = 0 → m = 0) →
+      upIdx node i m j < (node.args[i]!).seq.count)
+    (hsucc : ∀ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j →
+      ∃ a, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a)
+    {ps : Array Piece} (hps : Desc.memberRows c node k i ((c.memo[node.fn]!).used[i]?.getD #[]) = .ok (some ps))
+    (hok : ∀ p ∈ ps.toList, ∃ segs, Desc.down c Flock.Steps.FUEL p = .ok segs) (a : Nat) :
+    (∃ x ∈ ps.toList.flatMap (downPos c), den c.P sc x = .ok a) ↔
+      ∃ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j ∧
+        Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a := by
+  set u := (c.memo[node.fn]!).used[i]?.getD #[] with hudef
+  have hg : c.body.nodes[k]! = node := node_get hn
+  have hnode : (c.P.defs[sc.d]!).body.nodes[k]! = node := by rw [hd]; exact hg
+  have hnc : node.form = .scan → i ≠ 0 := by
+    intro hs h0; subst h0; unfold perMember at hpm; rw [hs] at hpm; simp at hpm
+  obtain ⟨hmem, hcovr⟩ := memberRows_rows c node k i u hps
+  have hL0' : ∀ p ∈ u.toList, ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → p.2 ≤ p.1 := by
+    intro p hp d L hdl h0
+    have := hL0 d L hdl h0
+    by_contra hlt
+    have := hu p.1 ⟨p, hp, Nat.le_refl _, by omega⟩
+    omega
+  have hidx : ∀ p ∈ u.toList, ∀ q ∈ (rowsAt node i p.1 p.2).toList, ∀ t ∈ idxOf q,
+      ∃ m < node.members, ∃ j, Width.inIvs u.toList j ∧ t = upIdx node i m j := by
+    intro p hp q hq t ht
+    obtain ⟨m, hm, j, h1, h2, rfl⟩ := (rowsAt_idx node i p.1 p.2 hpm (hL0' p hp) t).1
+      (List.mem_flatMap.2 ⟨q, hq, ht⟩)
+    exact ⟨m, hm, j, ⟨p, hp, h1, h2⟩, rfl⟩
+  have hhg : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t) := by
+    rw [hg]; exact hR
+  -- one piece's read
+  have one : ∀ p ∈ u.toList, ∀ q ∈ (rowsAt node i p.1 p.2).toList, ∀ bp,
+      Desc.throughPS (c.arg k i) q = some bp → (∃ segs, Desc.down c Flock.Steps.FUEL bp = .ok segs) →
+      ((∃ x ∈ downPos c bp, den c.P sc x = .ok a) ↔
+        ∃ m j, (ArgB node u i m j ∧ upIdx node i m j ∈ idxOf q) ∧
+          Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a) := by
+    intro p hp q hq bp hbp ⟨segs, hsegs⟩
+    have hag := throughPS_agree c sc hD hA hhg (rowsAt_nonneg node i p.1 p.2 q hq) (fun t ht => by
+      obtain ⟨m, hm, j, hj, rfl⟩ := hidx p hp q hq t ht
+      rw [hg]
+      exact hlo m hm j (hu j hj) (fun hs hi => absurd hi (hnc hs))) hbp hsegs
+    rw [hg] at hag
+    have e : downPos c bp = segsPos segs := by unfold downPos; rw [hsegs]
+    rw [e]
+    refine branch_iff _ _ _ (upIdx node i) hag (fun t => ⟨fun ht => ?_, ?_⟩)
+      (fun m j a hB h => up_idx c.P sc hnode hB.1.2.1 h) (fun m j hB => hsucc m j hB.1) a
+    · obtain ⟨m, hm, j, hj, rfl⟩ := hidx p hp q hq t ht
+      exact ⟨m, j, ⟨⟨hm, fun hs hi => absurd hi (hnc hs), hj⟩, ht⟩, rfl⟩
+    · rintro ⟨m, j, ⟨-, h⟩, rfl⟩; exact h
+  constructor
+  · rintro ⟨x, hx, hxa⟩
+    obtain ⟨bp, hbp, hx⟩ := List.mem_flatMap.1 hx
+    obtain ⟨p, hp, q, hq, hq'⟩ := hmem bp hbp
+    obtain ⟨m, j, ⟨hB, -⟩, hr⟩ := (one p hp q hq bp hq' (hok bp hbp)).1 ⟨x, hx, hxa⟩
+    exact ⟨m, j, hB, hr⟩
+  · rintro ⟨m, j, hB, hr⟩
+    obtain ⟨p, hp, h1, h2⟩ := hB.2.2
+    have ht : upIdx node i m j ∈ (rowsAt node i p.1 p.2).toList.flatMap idxOf :=
+      (rowsAt_idx node i p.1 p.2 hpm (hL0' p hp) _).2 ⟨m, hB.1, j, h1, by omega, rfl⟩
+    obtain ⟨q, hq, htq⟩ := List.mem_flatMap.1 ht
+    obtain ⟨bp, hbp, hq'⟩ := hcovr p hp q hq
+    obtain ⟨x, hx, hxa⟩ := (one p hp q hq bp hq' (hok bp hbp)).2 ⟨m, j, ⟨hB, htq⟩, hr⟩
+    exact ⟨x, List.mem_flatMap.2 ⟨bp, hbp, hx⟩, hxa⟩
+
+/-- **One argument's read names exactly its members' reads of the parameter** (`argSet`, all members at once by
+`rowsSet`). -/
+theorem argSet_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
+    {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
+    (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
+    (hm0 : node.members ≠ 0) (hok : ArgReadOk c k node i) {lv : Nat}
+    (hlv : ((c.P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0 = lv)
+    (hu : ∀ j, Width.inIvs (((c.memo[node.fn]!).used[i]?.getD #[]).toList) j → j < lv)
+    (hL0 : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → lv = 0)
+    (hlo : ∀ m < node.members, ∀ j < lv, (node.form = .scan → i = 0 → m = 0) →
+      upIdx node i m j < (node.args[i]!).seq.count)
+    (htile : ∀ t < (node.args[i]!).seq.count, ∃ m < node.members, ∃ j < lv, upIdx node i m j = t)
+    (hsucc : ∀ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j →
+      ∃ a, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a) (a : Nat) :
+    (∃ x ∈ argPos c k node i, den c.P sc x = .ok a) ↔
+      ∃ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j ∧
+        Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a :=
+  argSet c sc hd hD hn hA hR hm0 hok hlv hu hL0 hlo htile hsucc
+    (fun hpm _ hps hok' a => rowsSet c sc hd hD hn hA hR hpm hu hL0 hlo hsucc hps hok' a) a
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
