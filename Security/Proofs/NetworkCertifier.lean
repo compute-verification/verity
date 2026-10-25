@@ -119,7 +119,7 @@ theorem EncardDecodableWithinLeCompiledPerWindowV1 : NetTiming.Guarantees.Encard
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
-  fun hSA => NetTiming.sampledLeak_free hSA
+  fun hSA => NetTiming.sampledLeak_reg hSA
 
 theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := @NetTiming.wardenView_eq_clientView
 theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le

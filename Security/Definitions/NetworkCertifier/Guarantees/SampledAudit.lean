@@ -27,8 +27,9 @@ verifier at which `Claims.Sampling.KS` holds, and every public layout `lay` and 
 
 * the faulty set is in `M_δ`;
 * the faulty set holds no unit of a class drawn `all` (the transfer-gate units and N2's head checks: error `0`);
-* some advice, holding values only at the faulty units' committed gates, makes `Accepted` by the circuit's Program
-  every observation sequence and operator that the trace's transfer gates carry with every status complete.
+* the advice whose inputs are the trace's committed values, holding values only at the faulty units' committed gates,
+  makes `Accepted` by the circuit's Program every observation sequence and operator that the trace's transfer gates
+  carry with every status complete.
 
 With no unit faulty, the advice holds no gate, and `Accepted` is exact. -/
 def SampledAuditAccepted : Prop :=
