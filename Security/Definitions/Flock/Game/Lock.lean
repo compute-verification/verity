@@ -15,11 +15,10 @@ probability (`expect_withDummy`).
 
 For a compiled strategy `σ'` and a choice of table at every table node (`plur`, the plurality of
 the slot's openings over the continuation), `oracleStrat` is the oracle strategy `P̃` that sends
-the chosen tables and otherwise plays `σ'`. `expect_le_coupled`: the compiled event has
-probability at most the oracle event's under `P̃`, plus the probability of `Bad`, the runs whose
-leaf fails the coupling. `leafE_off_le`: per slot, the probability that a run opens a position
-off the table chosen at that slot is at most `√(N · Q · Pr[fork conflict])`: the rewinding lemma
-(`Rewinding.expect_bad_le`) at the slot's node, averaged over prefixes by Jensen.
+the chosen tables and otherwise plays `σ'`. Two locksteps interleave (`interleaveLock`) over the
+pair index (`getPair`) when their slots are disjoint; the `getPair_*` facts here are the proofs
+the embeddings carry. The lemmas (`expect_le_coupled`, `leafE_off_le` and the rest) are in
+`Proofs.Flock.Soundness.Game.Lock`.
 -/
 
 namespace FlockSoundness
