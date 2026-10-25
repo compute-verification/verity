@@ -47,7 +47,7 @@ from verity_vllm.observe.fold.patterns import (Embedding, LogitsGather, TokenSel
                                                TransparentAten, TransparentTritonMetadata, dsa_patterns, dsv4_patterns)
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
-from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
+from verity_vllm.engine.collectives.embedding_shard import EmbeddingShardCuda
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
