@@ -2,9 +2,9 @@
 the warden's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
 `warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
 advice v1's order permutation where the engine's numbering isn't the arrival order, as on TRACE-CORPUS's heavy trace);
-and the Commit's sampled ids, one hiding row a step, which each bucket's unit opens at its outputs' steps. The
-reference accepts every honest window and refuses every way the cells can differ from the map and the port, every
-port that isn't the Commit's and a connection the warden failed; the Boolean parts agree with it."""
+and the Commit's sampled ids, one hiding row a step, which each bucket's unit reads at its outputs' steps as
+registered rows. The reference accepts every honest window and refuses every way the cells can differ from the map and
+the port, every port that isn't the Commit's and a connection the warden failed; the Boolean parts agree with it."""
 
 import hashlib
 import json
@@ -20,7 +20,8 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.commitments.gates.frame_v3 import opens
+from verity.ml.commitments import advice as ADV
+from verity.ml.commitments.gates.frame_v3 import _part, opens
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
 from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
@@ -86,7 +87,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
-            c.admitted = t
+            c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
             for frame in W.Warden._egress(warden, c, t):
@@ -409,9 +410,67 @@ def test_a_connection_the_warden_failed_is_refused():
     assert not all(IT.reference(commit(BIG, failed._replace(outputs=short, release=keep), w)) for w in windows)
 
 
-def test_a_port_that_isnt_the_commits_is_refused(big):
-    """The port's openings are the prover's witness and the port's root is the Commit's: a row, a salt, a sibling or a
-    step other than the opening's, or the root of another commitment, each refuse the bucket."""
+def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
+    """A statement's registered entry of port row s over the window's T bucket units (unit t's s-th read row at its
+    step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket rows'."""
+    T = inst.shape.T
+    entry = {"value": IT.SAMPLED, "positions": [inst.steps[t][s] for t in range(T)],
+             "paths": [b"".join(inst.paths[t][s]).hex() for t in range(T)]}
+    return entry, [WR.bc(inst.port[t][s], inst.port_salts[t][s]) for t in range(T)]
+
+
+def port_refusals(inst: IT.Instance, link: Link, seed: bytes = b"w") -> list[str | None]:
+    """The Lean verifier's registered reads of the window's port rows (`warden_rows.refusal`) against the verifier's
+    own ports (`port_reads`), a port row at a time: None where they accept."""
+    count = len(link.port)
+    ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, inst.shape.P)
+    dom = IT.domain(_h(b"port" + seed), count)
+    return [WR.refusal(ports[f"{IT.PORT}[{s}]"], dom, *port_statement(inst, s)) for s in range(inst.shape.S)]
+
+
+def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
+    """REDTEAM phase 19 #2: `warden_rows.refusal` climbs under the `dom` it is handed, and the Lean verifier under its
+    port's own `domain` and `leaves`, so a port naming another domain or leaf count (another Commit's, say) gets
+    another verdict there: the host's read refuses to stand in for it rather than answer for the domain it was
+    handed."""
+    link = small()
+    inst, count = commit(SMALL, link, 0), len(link.port)
+    dom = IT.domain(_h(b"portw"), count)
+    port_ = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, SMALL.P)["port[0]"]
+    assert WR.refusal(port_, dom, *port_statement(inst, 0)) is None
+    for wrong in ({"domain": _h(b"another domain").hex()}, {"leaves": 2 * count}):
+        with pytest.raises(ValueError, match="names"):
+            WR.refusal(port_ | wrong, dom, *port_statement(inst, 0))
+
+
+def test_the_ports_reads_are_the_commits_registration():
+    """The fake Commit's port tree is `verity.ml.commitments.advice`'s registration of its rows (`hm96-sha512/row/v2`
+    leaves under `domain`), the form the served rows' registration takes, so its root is one the Lean verifier's
+    registered reads open. `port_reads` has unit `reads_from + t` read its bucket's s-th step at `port[s]`, a row of
+    2P u16 words, keys a one-row port `port`, and refuses units of unequal S and a read past the Commit's rows."""
+    link = small()
+    inst, count = commit(SMALL, link, 0), len(link.port)
+    binding, salts = _h(b"portw"), [IT.fake_salt(b"wp", s) for s in range(count)]
+    assert ADV.register(link.port, 32 * SMALL.P, binding, salts).root == inst.port_root
+    assert ADV.domain(binding, count).domain_id == IT.domain(binding, count).domain_id == inst.port_domain
+    ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, SMALL.P, reads_from=3)
+    assert ports == {f"port[{s}]": {
+        "value": IT.SAMPLED, "root": inst.port_root.hex(), "leaves": count, "words": 2 * SMALL.P, "word_bits": 16,
+        "domain": inst.port_domain.hex(), "row_schema": IT.SCHEMA, "reads": [st[s] for st in inst.steps],
+        "reads_from": 3} for s in range(SMALL.S)}
+    assert list(IT.port_reads([(5,), (2,)], inst.port_root, inst.port_domain, count, SMALL.P)) == [IT.PORT]
+    with pytest.raises(ValueError, match="same S"):
+        IT.port_reads([(1, 2), (1,)], inst.port_root, inst.port_domain, count, SMALL.P)
+    with pytest.raises(ValueError, match="a step of the Commit's 8 rows"):
+        IT.port_reads([(1, 8)], inst.port_root, inst.port_domain, count, SMALL.P)
+
+
+def test_a_port_that_isnt_the_commits_is_refused(link, big):
+    """The port's rows are the Commit's registered rows, read at the verifier's steps: a row, a salt, a sibling or a
+    step other than the opening's, or the root of another commitment, each refuse the window's reads of the port, in
+    the clear (`reference_parts`' port) and as the Lean verifier's registered reads make them (`port_refusals`), which
+    accept the honest window's."""
+    assert IT.reference_parts(big)["port"] and port_refusals(big, link) == [None] * BIG.S
     t = next(t for t in range(BIG.T) if any(not _marker(m) for m in big.map[big.bucket(t)]))
     row = bytearray(big.port[t][1])
     row[2] ^= 1
@@ -429,7 +488,8 @@ def test_a_port_that_isnt_the_commits_is_refused(big):
                        "a sibling": at("paths", _set(big.paths[t], 1, tuple(path))),
                        "a step": at("steps", steps),
                        "another commitment's root": replace(big, port_root=other.port_root)}.items():
-        assert IT.reference_parts(inst)["port"] is False and not IT.bucket_reference(inst, t), name
+        assert IT.reference_parts(inst)["port"] is False and not IT.reference(inst), name
+        assert any(port_refusals(inst, link)), name
     with pytest.raises(ValueError, match="instance has"):
         IT.reference(replace(big, steps=big.steps[1:]))
 
@@ -556,6 +616,51 @@ def test_the_route_circuit_is_its_reference():
         assert o.tolist() == IT.benes_apply(xs, bits)
 
 
+def _build_flat_route(C, S, *e):
+    """`IoTieRoute` as one flat trace, the build the recursive one replaced."""
+    it = iter(e[-1])
+
+    def swap(s, a, b):
+        t = [C.AND(s, x ^ y) for x, y in zip(a, b)]
+        return [x ^ u for x, u in zip(a, t)], [y ^ u for y, u in zip(b, t)]
+
+    def run(v):
+        if len(v) == 2:
+            return list(swap(next(it), v[0], v[1]))
+        up, down = [], []
+        for k in range(len(v) // 2):
+            a, b = swap(next(it), v[2 * k], v[2 * k + 1])
+            up.append(a)
+            down.append(b)
+        up, down = run(up), run(down)
+        res = []
+        for a, b in zip(up, down):
+            res += swap(next(it), a, b)
+        return res
+
+    return run([list(x) for x in e[:-1]])
+
+
+FLAT_ROUTE = _part("IoTieRouteFlat", ("W", "D"), IT._sig_route, _build_flat_route, "IoTieRoute's flat trace")
+
+
+def test_the_recursive_route_is_the_flat_one():
+    """`IoTieRoute` (a column of switches, two half networks, a column) against the flat trace it replaced: the same
+    ANDs, and the same outputs on random inputs and switch bits, at depths 1 to 6; and a binding's body is its four
+    nodes, so a deep network is built once a depth (IoTieRequestIds{4096, 16, 1, 512, 6}'s sort is D = 14)."""
+    rng = random.Random(7)
+    for W_, D in ((1, 1), (5, 1), (3, 2), (8, 3), (9, 4), (36, 4), (44, 5), (2, 6)):
+        new, flat = bind(IT.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
+        n = (2 * D - 1) << (D - 1)
+        assert HC.ands(new) == HC.ands(flat) == W_ * n
+        xs = _bits([[rng.randrange(2) for _ in range(W_ << D)] for _ in range(16)])
+        bits = _bits([[rng.randrange(2) for _ in range(n)] for _ in range(16)])
+        assert np.array_equal(np.asarray(evaluate_bits(new, xs, bits)), np.asarray(evaluate_bits(flat, xs, bits)))
+    deep = bind(IT.IoTieRoute, W=46, D=14)
+    assert [nd.form for nd in deep.body.nodes] == ["batch", "call", "call", "batch"]
+    assert HC.ands(deep) == 46 * (27 << 13)
+
+
 def _changed(inst, cells, cmap):
     """The buckets where a tamper differs from the honest window."""
     return [t for t in range(inst.shape.T) if tuple(cells[inst.bucket(t)]) != inst.cells[inst.bucket(t)]
@@ -608,7 +713,7 @@ def _tz(x: int) -> int:
 
 
 def test_the_parts_ands():
-    """Each composite but the hashing ones is its parts: what the cost table in PROTOCOL.md extrapolates from."""
+    """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
     sh, memo = SMALL, {}
     a = lambda fn: HC.ands(fn, memo)  # noqa: E731
     route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
@@ -623,65 +728,23 @@ def test_the_parts_ands():
 CELL_256, CELL_4096 = 4_139, 50_224
 
 
-def _read(D: int) -> int:
-    """`FrameV3Read{D}`'s ANDs: its leaf, D nodes and `LmsEqual`."""
-    leaf = {1: 110_125, 2: 110_904, 3: 111_683}
-    node = {1: 166_475, 2: 167_630, 3: 168_774}
-    return leaf[IT.index_bytes(D)] + sum(node[IT.index_bytes(D - k - 1)] for k in range(D)) + 511
-
-
-def _digest(n_bits: int) -> int:
-    return 57_947 * -(-(n_bits // 8 + 17) // 128)
-
-
-@pytest.mark.slow
-def test_the_port_circuit_is_its_reference():
-    """`IoTiePort` on a bucket's honest openings and on each way they can differ from the Commit's (a row, a salt, a
-    sibling, a step, another root), and its ANDs: S × (the row's digest, its hm96 leaf, `FrameV3Read{DS}`) and the
-    join. What the reference's tests can't reach is the wiring of each row's bytes, salt, step and path into its read.
-    Building the hm96 and frame-v3 gadgets' Boolean bodies takes most of its time."""
-    inst, t = commit(SMALL, small(), 0), 1
-    other = commit(SMALL, small(), 0, seed=b"other")
-    row = bytearray(inst.port[t][1])
-    row[5] ^= 4
-    steps = list(inst.steps[t])
-    steps[2] ^= 1
-
-    def at(field, value):
-        return replace(inst, **{field: _set(getattr(inst, field), t, tuple(value))})
-
-    cases = [inst, at("port", _set(inst.port[t], 1, bytes(row))),
-             at("port_salts", _set(inst.port_salts[t], 0, IT.fake_salt(b"x", 0))),
-             at("paths", _set(inst.paths[t], 3, (inst.paths[t][3][0], _h(b"x"), inst.paths[t][3][2]))),
-             at("steps", steps), replace(inst, port_root=other.port_root)]
-    want = [int(IT.bucket_reference(i, t)) for i in cases]
-    assert want == [1, 0, 0, 0, 0, 0]
-    fn = bind(IT.IoTiePort, P=SMALL.P, S=SMALL.S, DS=SMALL.DS)
-    assert _eval(fn, *[list(col) for col in zip(*[IT.port_arguments(i, t) for i in cases])]) == want
-    assert HC.ands(fn) == SMALL.S * (_digest(32 * SMALL.P) + 215_597 + _read(SMALL.DS)) + SMALL.S - 1
-
-
-@pytest.mark.slow
 def test_the_bucket_circuit_is_its_reference():
-    """`IoTieBucket` on each honest bucket row and on one wrong in its port's root or its content: what the parts'
-    tests can't reach is the wiring of the registered row's bits into the cells, and of the opened rows into both the
-    port's reads and the content's entries. `NetworkRowsRoot` (the ingress's, which recomputes its rows' root) on
-    three rows and another root. Building the hm96 and frame-v3 gadgets' Boolean bodies takes most of its time."""
-    inst = commit(SMALL, small(), 0)
-    other = commit(SMALL, small(), 0, seed=b"other")
+    """`IoTieBucket` on each honest bucket row, on one wrong in its content and on a port row with an id a data cell
+    reads changed (which the registered reads refuse, `reference_parts`' port): what the parts' tests can't reach is
+    the wiring of the registered row's bits into the cells and of the read port rows into the content's entries. No
+    gate of it hashes, so it is its content's ANDs."""
+    inst, t = commit(SMALL, small(), 0), 1
     wrong = with_cells(inst, _cell_tampers(inst)["a wrong id"])
     t_wrong = _changed(inst, wrong.cells, inst.map)[0]
-    cases = [(inst, t) for t in range(SMALL.T)] + [(replace(inst, port_root=other.port_root), 1), (wrong, t_wrong)]
+    s, r = divmod(next(m.e for m in inst.map[inst.bucket(t)] if not _marker(m)), SMALL.P)
+    row = bytearray(inst.port[t][s])
+    row[4 * r + 3] ^= 1
+    forged = replace(inst, port=_set(inst.port, t, tuple(_set(inst.port[t], s, bytes(row)))))
+    assert IT.reference_parts(forged)["port"] is False
+    cases = [(inst, t) for t in range(SMALL.T)] + [(wrong, t_wrong), (forged, t)]
     want = [int(IT.bucket_reference(i, t)) for i, t in cases]
     assert want == [1, 1, 1, 0, 0]
-    rows = [bytes([i]) * 128 for i in range(3)]
-    salts = [IT.fake_salt(b"r", i) for i in range(3)]
-    dom = IT.domain(_h(b"r"), 3)
-    root = IT.rows_root(dom.domain_id, rows, salts)
-    d = HC._digest_bits
-    rargs = [[b for r in rows for b in HC._bytes_bits(r)], [b for s in salts for b in d(s)], d(root), d(dom.domain_id)]
-    assert _eval(bind(IT.NetworkRowsRoot, N_BITS=1024, COUNT=3),
-                 *[[x, y] for x, y in zip(rargs, [*rargs[:2], d(other.port_root), rargs[3]])]) == [1, 0]
     args = [IT.bucket_arguments(i, t, IT.switches(i, t)) for i, t in cases]
-    fn = bind(IT.IoTieBucket, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S, DS=SMALL.DS)
+    fn = bind(IT.IoTieBucket, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S)
     assert _eval(fn, *[list(col) for col in zip(*args)]) == want
+    assert HC.ands(fn) == HC.ands(bind(IT.IoTieContent, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S))

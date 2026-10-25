@@ -84,8 +84,9 @@ from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.grid import Record  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P  # noqa: E402
-from verity_vllm.commit import serving_rows as CS  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity_vllm.commit import index as IX  # noqa: E402
+from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
@@ -254,8 +255,8 @@ def commit(out: Path, mine: CS.Window, at: dict[str, SimpleNamespace], altered: 
         registered[m.key] = {port: st.entry}
         entries.append([[m.base, m.base + m.n, f"connection-{x.connection}", 0, 0, x.units.value(x.head), m.key, 0, 0]])
     c = CS.commit(mine, data, salts_of=salts_of)
-    CS.write(c, out, {"of": provenance(at), "committer": {"module": "a5_warden.py"}}, CS.index_doc(mine.members, entries, mine.run),
-             kind="stand-in", registered=registered)
+    CS.write(c, out, {"of": provenance(at), "committer": {"module": "a5_warden.py"}}, IX.index_doc(mine.members, entries, mine.run),
+             kind="stand-in", registered=registered, registrar=R)
     return c
 
 

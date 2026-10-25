@@ -1,7 +1,8 @@
 """h1_prove's live units (`h1_prove/live.py`), without a prover or Lean: on a served window's dump (`pouw_h1_live.dump`'s
 form) the verifier's files are the live Program's, every opened row opens its registered root, each round's staged
 statement is the verifier's own public file byte for byte with ok 1 at the served rows, and a prover that claims one row
-more stages ok 0; a tampered opening is refused."""
+more stages ok 0; a tampered opening is refused. The live Program is credit's, `PouwLiveWindow_v2`, each unit reading the
+public max_tokens as its caps."""
 from __future__ import annotations
 
 import importlib.util
@@ -26,6 +27,8 @@ T, S, PREFIX = 4, 2, "h1/"
 PROGRAM, WINDOW, SESSION = "ab" * 64, "cd" * 64, "session-1"
 #: request 0 with a 2-token prompt and request 1 with a 1-token one: round 0's prefill serves 3 rows, round 1's decode 2
 HEADERS = [(0, 0, 0, 3, 2), (1, 0, 2, 3, 1)]
+#: their public max_tokens, the caps their headers carry
+MAX_TOKENS = [3, 3]
 SLOTS = [[1, 1, 2, 0], [1, 2, 0, 0]]
 
 
@@ -42,11 +45,13 @@ def dump(out: Path) -> dict:
                                  G.SCHEMA_V2, window=WINDOW) for s in range(S)]
     served = [sum(1 for x in r if x) for r in SLOTS]
     pub = {"T": T, "S": S, "prefix": PREFIX, "program": PROGRAM, "window": WINDOW, "session": SESSION,
-           "roots": {r.value: r.root.hex() for r in (req, *slots)}, "served": served}
+           "roots": {r.value: r.root.hex() for r in (req, *slots)}, "served": served, "max_tokens": MAX_TOKENS}
+    cap = LR.caps_table(PROGRAM, PREFIX, WINDOW, T, MAX_TOKENS)[2]
     out.mkdir(parents=True)
     (out / "window.json").write_text(json.dumps(pub))
     for s, m in enumerate(served):
         reads = {f"slot_{i}": (slots[s], i) for i in range(T)} | {f"req_{i}": (req, i) for i in range(T)}
+        reads |= {f"cap_{i}": (cap, i) for i in range(T)}
         reads |= {"m": (LR.m_table(PROGRAM, PREFIX, WINDOW, s, m)[2], 0), "s": (LR.round_table(PROGRAM, PREFIX, WINDOW, s)[2], 0),
                   "o0": (LR.ok_table(PROGRAM, PREFIX, WINDOW, S)[2], s)}
         z = {"units": np.array([s])}
@@ -65,6 +70,9 @@ def test_the_dump_is_live_ok_at_the_served_rows_only():
     assert [L.live_ok(SLOTS[s], heads, m, s) for s, m in enumerate((3, 2))] == [1, 1]
     assert [L.live_ok(SLOTS[s], heads, m, s) for s, m in enumerate((4, 3))] == [0, 0]
     assert L.live_ok(SLOTS[0], heads, 3, 1) == 0
+    caps = LR.caps(MAX_TOKENS, T)
+    assert [L.live_ok_v2(SLOTS[s], heads, m, s, caps) for s, m in enumerate((3, 2))] == [1, 1]
+    assert L.live_ok_v2(SLOTS[1], heads, 2, 1, LR.caps([3, 2], T)) == 0
     assert list(CC.OK_ROW) == LR.ok_table(PROGRAM, PREFIX, WINDOW, S)[0][0]
 
 
@@ -97,6 +105,9 @@ def test_prepare_stages_every_round_as_the_verifiers_own_file(prepared):
     assert json.loads((work / "verifier" / "honest-1.registered.json").read_text())["ports"]["s"]["known"]["rows"] == [LR.slot_words([1])[0]]
     assert (work / "verifier" / "m-other.pub.bin").read_bytes() != (work / "verifier" / "honest-0.pub.bin").read_bytes()
     assert record["program_sha512"] == json.loads((work / "verifier" / "partition.json").read_text())["program"]
+    assert json.loads((work / "verifier" / "program.json").read_text())["program_fn"].startswith("PouwLiveWindow_v2{")
+    caps = json.loads((work / "verifier" / "honest-0.registered.json").read_text())["ports"]
+    assert [caps[f"cap_{i}"]["known"]["rows"][i] for i in range(T)] == LR.slot_words(LR.caps(MAX_TOKENS, T))
 
 
 def test_a_tampered_opening_is_refused(prepared):

@@ -34,7 +34,7 @@ verity_vllm/ops/pod_gate.sh
 # --- Python entry points
 verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
-verity_vllm.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
+verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
 verity_vllm.properties.router_tap_exactness
@@ -44,44 +44,44 @@ verity_vllm.program.registry.moe_difftest      # properties-admission --adapter:
 verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)
-verity_vllm.protocol_options
-verity_vllm.protocol_options.credit_gate
-verity_vllm.protocol_options.interface
-verity_vllm.protocol_options.pous
-verity_vllm.protocol_options.pouw
-verity_vllm.protocol_options.pouw_circuit
-verity_vllm.protocol_options.pouw_device
-verity_vllm.protocol_options.pouw_h1
-verity_vllm.protocol_options.pouw_h1_challenger
-verity_vllm.protocol_options.pouw_h1_commit
-verity_vllm.protocol_options.pouw_h1_handoff
-verity_vllm.protocol_options.pouw_h1_hooks
-verity_vllm.protocol_options.pouw_h1_kept
-verity_vllm.protocol_options.pouw_h1_live
-verity_vllm.protocol_options.pouw_h1_prover
-verity_vllm.protocol_options.pouw_h1_ranks
-verity_vllm.protocol_options.pouw_h1_records
-verity_vllm.protocol_options.pouw_h1_registered
-verity_vllm.protocol_options.pouw_h1_registered_device
-verity_vllm.protocol_options.pouw_h1_requests
-verity_vllm.protocol_options.pouw_h1_served
-verity_vllm.protocol_options.pouw_h1_served_files
-verity_vllm.protocol_options.pouw_h1_settings
-verity_vllm.protocol_options.pouw_h1_static
-verity_vllm.protocol_options.pouw_h1_window
-verity_vllm.protocol_options.pouw_native
-verity_vllm.protocol_options.pouw_pass
-verity_vllm.protocol_options.pouw_pearl_c_device
-verity_vllm.protocol_options.pouw_pearl_c_graphs
-verity_vllm.protocol_options.pouw_pearl_c_grouped
-verity_vllm.protocol_options.pouw_pearl_c_host
-verity_vllm.protocol_options.pouw_pearl_c_kernel
-verity_vllm.protocol_options.pouw_pearl_c_lanes
-verity_vllm.protocol_options.pouw_pearl_c_manifest
-verity_vllm.protocol_options.pouw_pearl_c_screen
-verity_vllm.protocol_options.pouw_pearl_c_triton
-verity_vllm.protocol_options.pouw_pearl_c_whole
-verity_vllm.protocol_options.sampled_proofs
+verity_vllm.protocols
+verity_vllm.protocols.pouw.credit_gate
+verity_vllm.protocols.interface
+verity_vllm.protocols.pous
+verity_vllm.protocols.pouw
+verity_vllm.protocols.pouw.circuit
+verity_vllm.protocols.pouw.device
+verity_vllm.protocols.pouw.h1
+verity_vllm.protocols.pouw.h1.challenger
+verity_vllm.protocols.pouw.h1.commit
+verity_vllm.protocols.pouw.h1.handoff
+verity_vllm.protocols.pouw.h1.hooks
+verity_vllm.protocols.pouw.h1.kept
+verity_vllm.protocols.pouw.h1.live
+verity_vllm.protocols.pouw.h1.prover
+verity_vllm.protocols.pouw.h1.ranks
+verity_vllm.protocols.pouw.h1.records
+verity_vllm.protocols.pouw.h1.registered
+verity_vllm.protocols.pouw.h1.registered_device
+verity_vllm.protocols.pouw.h1.requests
+verity_vllm.protocols.pouw.h1.served
+verity_vllm.protocols.pouw.h1.served_files
+verity_vllm.protocols.pouw.h1.settings
+verity_vllm.protocols.pouw.h1.static
+verity_vllm.protocols.pouw.h1.window
+verity_vllm.protocols.pouw.native
+verity_vllm.protocols.pouw.pearl_c.passes
+verity_vllm.protocols.pouw.pearl_c
+verity_vllm.protocols.pouw.pearl_c.graphs
+verity_vllm.protocols.pouw.pearl_c.grouped
+verity_vllm.protocols.pouw.pearl_c.host
+verity_vllm.protocols.pouw.pearl_c.kernel
+verity_vllm.protocols.pouw.pearl_c.lanes
+verity_vllm.protocols.pouw.pearl_c.manifest
+verity_vllm.protocols.pouw.pearl_c.screen
+verity_vllm.protocols.pouw.pearl_c.screen_kernels
+verity_vllm.protocols.pouw.pearl_c.whole
+verity_vllm.protocols.sampled_proofs
 tests/regression/
-verity_vllm/store/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
-verity_vllm.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch
+verity_vllm/protocols/remote_bandwidth/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
+verity_vllm.program.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch

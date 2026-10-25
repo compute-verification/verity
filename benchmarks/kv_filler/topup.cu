@@ -499,11 +499,17 @@ static void host_gate() {
 
 }  // namespace tu
 
+namespace gc {
+static bool split();
+static int stream(int which, int prio, cudaStream_t* s);
+}  // namespace gc
+
 extern "C" {
 
 // Starts the top-up on `device` over `n` regions (device pointers and byte counts).  `priority` is the stream's
 // (cudaDeviceGetStreamPriorityRange: 0 the least, negative greater).  `ctas` > 0 caps the grid: the read mode's CTAs, or
-// a receipt mode's chunk at that many CTAs of blocks.  Returns 0 or a CUDA error.
+// a receipt mode's chunk at that many CTAs of blocks.  Once sq_green has split the SMs, the stream is on the filler's
+// green context, so every chunk runs on its SMs only.  Returns 0 or a CUDA error.
 int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int mode, uint64_t chunk_bytes,
              uint64_t tile_bytes, int depth, int priority, const uint8_t* seed, int ctas) {
   if (tu::S || n <= 0 || depth <= 0 ||
@@ -522,7 +528,11 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   memcpy(st->seed, seed, 32);
   for (int k = 0; k < n; ++k) st->regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
   CK(cudaSetDevice(device));
-  CK(cudaStreamCreateWithPriority(&st->s, cudaStreamNonBlocking, priority));
+  if (gc::split()) {
+    if (int e = gc::stream(1, priority, &st->s)) return e;
+  } else {
+    CK(cudaStreamCreateWithPriority(&st->s, cudaStreamNonBlocking, priority));
+  }
   if (mode == tu::MODE_FILL) {
     if (!tu::fill_ok(st->regions)) return -1;
     st->plan = tu::fill_regions(st->regions);
@@ -994,8 +1004,9 @@ static void loop(State* sp) {
 // --- the SM partition: green contexts (benchmarks/fill_compute/fill.cu's `gc_split` at 1b21bc8f7, the filler's side
 // split first) ---
 // sq_green splits the device's SMs into the filler's `fill_sms` (as the driver rounds) and the step's rest, each a green
-// context. Once it has run, sq_start makes the BASE, STEP and PREFILL streams on the filler's context; IDLE stays on the
-// device's, every SM, as no step is on the GPU while it reads. The driver API through dlopen, as fill.cu's.
+// context. Once it has run, tu_start makes its stream, and sq_start the BASE, STEP and PREFILL streams, on the filler's
+// context; IDLE stays on the device's, every SM, as no step is on the GPU while it reads. The driver API through dlopen,
+// as fill.cu's.
 #include <cuda.h>
 #include <dlfcn.h>
 
@@ -1007,6 +1018,8 @@ template <class F> static F drv(const char* name) {
 }
 
 static CUgreenCtx ctx[2] = {nullptr, nullptr};  // [0] the step's, [1] the filler's
+
+static bool split() { return ctx[1] != nullptr; }
 
 static int make(CUdevResource* r, CUdevice dev, CUgreenCtx* g) {
   auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");

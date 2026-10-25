@@ -267,6 +267,16 @@ private def isStr (j : Json) : Bool := match j with | .str _ => true | _ => fals
 
 private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
 
+/-- `j == Json.bool true`, by a match the kernel reduces (`BEq Json` is a `partial def`, opaque to the kernel). -/
+private def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
+
+example : jsonTrue (getD (Json.mkObj [("closed", .bool true)]) "closed") = true := by decide
+example : jsonTrue (getD (Json.mkObj [("closed", .bool false)]) "closed") = false := by decide
+example : jsonTrue (getD (Json.mkObj [("files", .null)]) "closed") = false := by decide
+example : (getD (Json.mkObj [("record_leaf", .null)]) "record_leaf").isNull = true := by decide
+example : (getD (Json.mkObj [("schema", .str "x")]) "record_leaf").isNull = true := by decide
+example : (getD (Json.mkObj [("record_leaf", .str "7")]) "record_leaf").isNull = false := by decide
+
 /-- `_window`: a window's identity `{root}`. -/
 def isWindow (j : Json) : Bool := keys? j == some #["root"] && isDigest (getD j "root")
 
@@ -542,7 +552,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
       let w := wins[k]!
       if w.ended.isSome then throw s!"entry {i}: an end for session {s}, which has no open or has ended"
       let r := getD e.body "record_leaf"
-      if e.schema == LEDGER_SCHEMA && r != Json.null then
+      if e.schema == LEDGER_SCHEMA && !r.isNull then
         let some r := nat? r | throw s!"entry {i}: record leaf {r.compress} isn't between its open's and its end's, once"
         unless w.leaf < r && r < q && !records.any (·.1 == r) do
           throw s!"entry {i}: record leaf {r} isn't between its open's and its end's, once"
@@ -641,7 +651,7 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
   let some e := w.ended
     | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
   let b := e.body
-  unless getD b "closed" == Json.bool true do
+  unless jsonTrue (getD b "closed") do
     throw s!"the auditor's ledger ends session {s} unclosed: its client didn't close it"
   let files := getD b "files"
   let malformed := s!"the auditor's ledger's end of session {s} is malformed: {END_FORM}"
