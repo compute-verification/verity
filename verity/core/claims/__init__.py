@@ -215,9 +215,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `Verity.Assumptions.TrustedHost` (Security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
     Entry("trusted-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
-          "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
-          "never restores an earlier copy of the state the device keeps there", "Trusted host", "standard"),
+          "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
+          "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
+          "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",

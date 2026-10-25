@@ -1747,7 +1747,7 @@
   },
   "Verity.Assumptions.TrustedHost": {
    "owner": "@network-accounting",
-   "digest": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
+   "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
   },
   "Verity.Circuit.InputsAgree": {
    "owner": "@proofs",
@@ -15899,7 +15899,7 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "6da5d5a2ccfc88f3bdf2b83422b2db6ee36fcbef6b6fa610c074c6c8db5c24db",
+   "digest": "59b3549b39b549f8128b6ff2559c36d39c6b9d378aeef174c4ded7c21b906ea6",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -16118,7 +16118,7 @@
     "Claims.run": "2ba785854da4b812a030ee1d2a767f08c2880c9632891a1810d0ffd2b2742c5f",
     "Claims.runStar": "3a577125ddd331d3fd7ad8f460dc8b8f15982f01a371562139d5b5f122adb107",
     "Claims.stepWith": "530977e19848dbb40e78746a5c30960924c320f3492d4c9199c2dad7083c268f",
-    "Claims.trustedBase": "2c10155b92ea40c2db8cbc59c86da559ccc3cadb792781fb7ca5b527c692c84a",
+    "Claims.trustedBase": "556bfbde87e5628245b3360e3dbeff759b0c0fffb82449a439504593c2d293b6",
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
    "guarantees": [
@@ -16834,12 +16834,12 @@
    "guarantees": ["Verity.SecurityProofs.RegisteredMeets"]
   },
   "Definitions.Core.Assumptions": {
-   "digest": "ffc6b1380e0c28f358863d5c8a6aae982abbac2437bd44b7f518850e33f86e5e",
+   "digest": "a6b1940a89d9e1e3257e570c806ade30787f6cc303b568efa4fd90125fead4dd",
    "definitions": {
     "Verity.Assumptions.GemmAmpereStep": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1",
     "Verity.Assumptions.GemmHopperStep": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e",
     "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d",
-    "Verity.Assumptions.TrustedNebiusHost": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
+    "Verity.Assumptions.TrustedHost": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
@@ -19239,11 +19239,11 @@
    "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.Warden": {
-   "digest": "46625366a15801feb0a95444017b294af2e8540511ee7e414aae0cba11ae2a5f",
+   "digest": "a98a2c111c8bac72989806ee802eac94640401d732a66a852eb28586278f1ffe",
    "definitions": {
-    "NetTiming.Guarantees.EncardWardenDecodableLe": "499d1254ccb1a7b0b0dd2c8ea713698023b0358e8ca5eb6e07ce0cfdecf87429",
-    "NetTiming.Guarantees.EncardWardenViewsLe": "1cf76130c401d8a182befc4f1d0923988bd5a64edebc4e18d4e36ca276183ba7",
-    "NetTiming.Guarantees.WardenViewEqClientView": "4c48a9ac12c5e2dfd6c67d490ae6164407e56e7d9d96085fb086c7aa828e09ec"
+    "NetTiming.Guarantees.EncardWardenDecodableLe": "49cbf20c30a73158123bba0f86b6b72cb45fde9a115c5b4541bc889a1fca0ba4",
+    "NetTiming.Guarantees.EncardWardenViewsLe": "68e1db52b130203ec19f54f03d91f76f053424decdd55a7bcd7a7970a99aeda4",
+    "NetTiming.Guarantees.WardenViewEqClientView": "05c0a375167e3725b82e82b11b062ca30c06e426e927f1c2e4fc80b002db34f2"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
