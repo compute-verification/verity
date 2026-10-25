@@ -250,9 +250,9 @@ theorem finRepLanes_ret (vs : finS.SwVals)
   have hgl : ∀ A B : F128, gOf (⟨A, B⟩ : _root_.Flock.F256) = FlockSoundness.execArith.ofLimbs (fOf A) (fOf B) :=
     fun A B => (FlockSoundness.Refine.gOf_limbs _).trans (FlockSoundness.Discharge.ZkExec.ofLimbs_eq _ _).symm
   have h0 := hEs 0 (by norm_num)
-  rw [if_pos (rfl : (0 : ℕ) = 0)] at h0
+  rw [ite_eq_left (rfl : (0 : ℕ) = 0)] at h0
   have h1 := hEs 1 (by norm_num)
-  rw [if_neg (show (1 : ℕ) ≠ 0 by decide)] at h1
+  rw [ite_eq_right (show (1 : ℕ) ≠ 0 by decide)] at h1
   exact {
     oodVal := by
       rw [hO]
