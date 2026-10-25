@@ -302,18 +302,20 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False):
+                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
+                 whole_shape_joins: bool = False):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.  The whole
         capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
         ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`)."""
-        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends)
+        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
+                      whole_shape_joins)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
-        self.whole_tree_sm = whole_tree_sm
+        self.whole_tree_sm, self.whole_shape_joins = whole_tree_sm, whole_shape_joins
         self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
@@ -372,7 +374,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
                        + (" (the GEMM leaving the tree its SM)" if whole_tree_sm else "")
-                       + (", its A scales beside its A commitment" if whole_fork_stats else "")) if self.graphs else None,
+                       + (", its A scales beside its A commitment" if whole_fork_stats else "")
+                       + (", its side steps joined before its shape's next call" if whole_shape_joins else "")) if self.graphs else None,
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
