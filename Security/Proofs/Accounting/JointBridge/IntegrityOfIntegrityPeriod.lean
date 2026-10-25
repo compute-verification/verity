@@ -38,7 +38,8 @@ theorem IntegrityOfIntegrityPeriod : Accounting.Guarantees.Bridge.IntegrityOfInt
       FlockSoundness.Game.value (fun l => (∀ w ∈ l, w.accepted) ∧
           Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ))
         (Flock.Guarantees.Period.run W T (R.strat ξ)) :=
-    R.law ξ _
+    R.law ξ fun l => (∀ w ∈ l, w.accepted) ∧
+      Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ)
   have hsrc := Flock.SecurityProofs.IntegrityHorizon W T q δ hq hδ hqt hA3 (R.strat ξ) (hCR ξ)
   refine (Pouw.pr_mono hsub).trans ?_
   rw [← ENNReal.toReal_ofReal (Pouw.pr_nonneg _), hlaw]
