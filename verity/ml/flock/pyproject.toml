@@ -32,7 +32,7 @@ inputs = [
     "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
     "Security/Properties/lakefile.toml", "Security/Properties/lake-manifest.json", "Security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
-    "Security/Proofs/Flock/Soundness/Audit", "Security/Models/Flock/Guarantees/Audit.lean",
+    "Security/Proofs/Flock/Soundness/Audit", "Security/Definitions/Flock/Guarantees/Audit.lean",
     # test_lean_rope.py compares the RoPE data `verity_flock.lean_rows` writes
     "Security/Proofs/Flock/Soundness/Rope/Gates.lean", "Security/Proofs/Flock/Soundness/Rope/Pinned.lean",
     "Security/Proofs/Flock/Soundness/Rope/Checkpoints.lean", "Security/Proofs/Flock/Soundness/Rope/Chunks.lean",
