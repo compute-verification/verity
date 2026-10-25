@@ -95,11 +95,25 @@ theorem linkRead_bucketer (st : State) (now : Nat) (data : ByteArray) :
     rw [Std.Legacy.Range.forIn_eq_forIn_range']
     exact forIn_inv (fun (b : Bucketer) => BuRel st.bucketer b) (BuRel.refl _) (fun _ _ b hb => hb)
 
+theorem egressFrame_bucketer (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) :
+    (st.egressFrame s position bytes ready).bucketer = st.bucketer := by
+  unfold State.egressFrame
+  dsimp only
+  split <;> rfl
+
 theorem egressEvent_bucketer (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
     (st.egressEvent s event ready).bucketer = st.bucketer := by
   unfold State.egressEvent
-  dsimp only
-  split <;> rfl
+  split
+  · exact egressFrame_bucketer _ _ _ _ _
+  · rfl
+
+theorem egressRecord_bucketer (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
+    (st.egressRecord s position record ready).bucketer = st.bucketer := by
+  unfold State.egressRecord
+  split
+  · exact egressFrame_bucketer _ _ _ _ _
+  · rfl
 
 theorem upstreamEnd_bucketer (st : State) (s now : Nat) : (st.upstreamEnd s now).bucketer = st.bucketer := by
   unfold State.upstreamEnd
@@ -112,10 +126,25 @@ theorem upstreamRead_bucketer (st : State) (s now : Nat) (data : ByteArray) :
   dsimp only
   split
   · exact upstreamEnd_bucketer _ _ _
-  · refine Id.bind_inv (fun (r : State) => r.bucketer = st.bucketer) (fun (r : State) => r.bucketer = st.bucketer) _ _ ?_
-      (fun _ h => h)
-    exact forIn_inv_arr (fun (r : State) => r.bucketer = st.bucketer) rfl
-      (fun _ _ b hb => (egressEvent_bucketer _ _ _ _).trans hb)
+  · split
+    · refine Id.bind_inv (fun (r : State) => r.bucketer = st.bucketer) (fun (r : State) => r.bucketer = st.bucketer) _ _
+        ?_ (fun _ h => h)
+      refine forIn_inv_arr (fun (r : State) => r.bucketer = st.bucketer) rfl (fun u _ b hb => ?_)
+      rcases u with ⟨position, record⟩
+      exact (egressRecord_bucketer _ _ _ _ _).trans hb
+    · refine Id.bind_inv (fun (r : State) => r.bucketer = st.bucketer) (fun (r : State) => r.bucketer = st.bucketer) _ _
+        ?_ (fun _ h => h)
+      exact forIn_inv_arr (fun (r : State) => r.bucketer = st.bucketer) rfl
+        (fun _ _ b hb => (egressEvent_bucketer _ _ _ _).trans hb)
+
+theorem opened_bucketer (st : State) (s : Nat) : (st.opened s).1.bucketer = st.bucketer := by
+  rw [opened_fst, pump_bucketer]
+  rfl
+
+theorem opened_publishes (st : State) (s : Nat) : publishes (st.opened s).2.toList = [] := by
+  refine publishes_nil fun a ha r p he => ?_
+  obtain ⟨s, b, d, rfl⟩ := (opened_spec st s).2 a (Array.mem_toList_iff.1 ha)
+  cases he
 
 theorem egressPre_bucketer (st : State) (now backlog : Nat) : (egressPre st now backlog).bucketer = st.bucketer := by
   unfold egressPre
@@ -256,6 +285,11 @@ theorem step_other {c : Config} {st : State} (hg : Good c st) (ev : Event)
     intro st' s y hq hy
     subst hy
     exact ⟨BuRel.of_eq ((pump_bucketer st' s).trans hq), pump_publishes st' s⟩
+  have opened_ok : ∀ (s : Nat) (y : State × Array Action), st.opened s = y →
+      BuRel st.bucketer y.1.bucketer ∧ publishes y.2.toList = [] := by
+    intro s y hy
+    subst hy
+    exact ⟨BuRel.of_eq (opened_bucketer st s), opened_publishes st s⟩
   have saltPump_ok : ∀ (st' : State) (y : State × Array Action), st'.bucketer = st.bucketer → st'.saltPump = y →
       BuRel st.bucketer y.1.bucketer ∧ publishes y.2.toList = [] := by
     intro st' y hq hy
@@ -279,7 +313,7 @@ theorem step_other {c : Config} {st : State} (hg : Good c st) (ev : Event)
       · cases heq; exact ⟨linkRead_bucketer _ _ _, rfl⟩
       · cases heq; exact none_ok
     · split at heq
-      · exact pump_ok _ _ _ (by rfl) heq
+      · exact opened_ok _ _ heq
       · cases heq; exact none_ok
     · split at heq
       · cases heq; exact ⟨BuRel.fault _ _, rfl⟩

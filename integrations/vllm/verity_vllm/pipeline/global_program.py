@@ -403,14 +403,12 @@ def declared_live_counts(reqs: list[dict]) -> list[int]:
 
 
 def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
-    """[COORD M-0169 on M-0571 (3)] The workload Program's declaration of the top-p split geometry as a WORKLOAD-level derived value:
-    S_t = SplitsFor_v1(|live(t)|, num_SMs), with |live(t)| the requests holding a logits row at engine step t (the declared chronology
-    and the verified EOS stops GM-01 G6 establishes) and num_SMs the components' agreed target constant (`applicability.num_sms`).
-    vLLM computes S on the host per sampler launch (`registry/topp_geometry.splits_for`), so no fold instance carries the relation: GM-01
-    evaluates it per engine step against every top-p TokenSelect's launch S (`global_match.sampler_geometry_check`).  Declared for a
-    stochastic sampler only (None for greedy); a stochastic sampler without an agreed num_SMs is a named refusal (the relation cannot be
-    evaluated).  The declared schedule (every request to its cap) is carried for the reader; the check uses the REALIZED live count.
-    Not part of the Program digest (a declaration beside `applicability`, like `stop_rule`)."""
+    """The workload Program's declaration of the top-p split geometry: every launch runs at the registered split count S =
+    `topp_geometry.registered_splits(num_SMs)` whatever the live batch (`engine.topp_pin`), num_SMs the components' agreed target
+    constant (`applicability.num_sms`).  vLLM computes S on the host, so no fold instance carries the relation: GM-01 holds every top-p
+    TokenSelect's launch S to it (`check.match.sampler_geometry.sampler_geometry_check`).  Declared for a stochastic sampler only (None
+    for greedy); a stochastic sampler without an agreed num_SMs, or whose components declare another S, is a named refusal.  Not part
+    of the Program digest (a declaration beside `applicability`, like `stop_rule`).  ``reqs`` is unused: S reads no request."""
     comps = app.get("components") or {}
     samp = comps.get("sampler") if isinstance(comps.get("sampler"), dict) else {}
     if (samp.get("kind") or "greedy") != "stochastic":
@@ -418,20 +416,20 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     nsm = comps.get("num_sms")
     if nsm is None:
         nsm = (samp.get("geometry") or {}).get("num_sms") if isinstance(samp.get("geometry"), dict) else None
-    out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "SplitsFor_v1", "num_sms": nsm,
-           "rule": "S_t = SplitsFor_v1(|live(t)|, num_SMs) per engine step t; |live(t)| = the requests with a logits row at t (declared chronology "
-                   "and verified EOS stops, G6); every top-p TokenSelect of the fold at t carries S_t (its launch S); GM-01 fails by name otherwise",
-           "source": "verity_vllm.program.registry.topp_split.splits_for (vLLM _apply_topp_split doubling loop); num_SMs = applicability.components.num_sms",
+    out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
+           "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
+                   "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
+           "source": "verity_vllm.program.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
-        out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): S_t = SplitsFor_v1(|live(t)|, num_SMs) "
-                          "cannot be evaluated -- the Program does not model this row's sampler geometry (M-0571 (3))")
+        out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count "
+                          "cannot be evaluated -- the Program does not model this row's sampler geometry")
         return out
-    from verity_vllm.program.registry.topp_geometry import splits_for
-    live = declared_live_counts(reqs)
-    out["declared_live_counts"] = live
-    out["declared_schedule"] = [int(splits_for(n, int(nsm))) if n > 0 else None for n in live]
-    out["declared_schedule_note"] = "S per engine step when every request runs to its cap; a verified EOS lowers |live(t)| from that step on and the check follows the record"
+    from verity_vllm.program.registry.topp_geometry import registered_splits
+    out["splits"] = S = int(registered_splits(int(nsm)))
+    if samp.get("splits") != S:
+        out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "
+                          f"rebuild them (`pipeline.build.sampler_geometry`)")
     return out
 
 
@@ -441,16 +439,13 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
     the Program of ONE request: compose must not reuse it for a request with the same shape (LP, T) but another arrival (its S-schedule
     differs and its Match would fail for the wrong reason).  Checked here per binding: (a) every request bound to the component arrives
     at the step the component declares; (b) a list schedule has T+1 entries; (c) the component's declared live counts are the manifest's
-    (a component derived against another manifest of the same shape does not compose); (d) a constant S (the single-request form,
-    SplitsFor_v1(1, num_SMs)) binds only in a manifest of one request.  Refusal is named; greedy and derived-S components bind by shape."""
+    (a component derived against another manifest of the same shape does not compose).  Refusal is named; greedy components and those
+    at the registered S (an int, held to the registered split count by `sampler_geometry`) bind by shape."""
     out = {"checked": {}, "refusal": None}
     for s, d in shapes.items():
         samp = component_sampling(d)
         geom, splits = samp.get("geometry") or {}, samp.get("splits")
         req = geom.get("request")
-        if type(splits) is int and len(reqs) != 1:
-            out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S = {splits} is the single-request constant, but this manifest has {len(reqs)} requests (S_t follows the live set: the derived-S component)"
-            return out
         if not req and not isinstance(splits, list):
             continue
         bound = [r for r in reqs if shape_of(r) == s]
@@ -732,8 +727,8 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
                                           "applicability.engine.async_scheduling carries the resolved value the record must attest (G1/G6)")
     assert eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
-    # [COORD M-0169 / M-0571 (3)] a stochastic row declares its top-p split geometry as a workload-level derived value (S_t from the live
-    # count and the declared num_SMs); GM-01 evaluates it per engine step. Greedy rows carry no declaration (None -> omitted).
+    # a stochastic row declares its top-p split geometry: the registered split count of the declared num_SMs, which GM-01 holds every
+    # launch to. Greedy rows carry no declaration (None -> omitted).
     sgeo = sampler_geometry(app, reqs)
     if sgeo is not None:
         art["sampler_geometry"] = sgeo

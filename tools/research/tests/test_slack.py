@@ -1868,6 +1868,11 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 0 and out == "decided no thread -\n"
     assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve", {"choice": "no", "note": "needs changes"})
     assert run(capsys, "ask-daniel", "resolve", "42")[0] == 2
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--provisional")
+    assert route.requests[-1][2] == {"choice": "a", "provisional": True}
+    note = "Provisionally accepted (Daniel, 19 Oct 21:59Z standing rule): a. Page: https://app.notion.com/p/x"
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--note", note)
+    assert route.requests[-1][2] == {"choice": "a", "note": note, "provisional": True}
     route.answer = (403, {"error": "not_your_card"})
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no")
     assert rc == 2 and "only a card's own asker" in err

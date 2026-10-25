@@ -95,6 +95,7 @@ def _base(n) -> str:
     return getattr(n.fn, "base_id", None) or n.fn.id.split("[")[0].split("{")[0]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kind,sampling,form", [("request", STOCH, vm.SplitsWithPeers), ("step", STOCH, vm.SplitsWithPeers),
                                                 ("request", SINGLE, vm.SeededWithPeers), ("step", SINGLE, vm.SeededWithPeers)],
                          ids=["request-derived-S", "step-derived-S", "request-single-S", "step-single-S"])

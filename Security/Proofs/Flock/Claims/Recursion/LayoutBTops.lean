@@ -448,7 +448,8 @@ theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg 
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro L Bd D bL hP hRT hRP
-  refine ksLin2_deployed_plain_closed b L wE join final w ?_ hRT hRP
+  refine ksLin2_deployed_plain_closed b L (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl) wE join
+    final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain ⟨hM, hC, hRw, hF, chk, shows, cmt, hV, hPC, hPO, hD⟩ := hS shape hsh

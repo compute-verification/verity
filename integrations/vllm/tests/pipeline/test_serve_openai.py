@@ -13,10 +13,15 @@ from typing import Any
 
 import numpy as np
 import pytest
+import torch
 
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SRW
+from verity_vllm.commit import served_record as SR
+from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_protocol as proto
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -25,15 +30,16 @@ CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, 
 # ---------------------------------------------------------------------------------------------------------------- protocol
 
 def test_certifier_body_parses_to_its_sampling():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     req = p.parse(dict(CERTIFIER_BODY, seed=0))
     assert (req.prompt, req.stream, req.max_tokens, req.include_usage) == ([128000, 791, 4062], True, 4, False)
     sp = p.sampling_params(req, p.max_tokens(req, 512, 3, {"temperature": 0.6}), {"temperature": 0.6})
-    assert sp == {"max_tokens": 4, "min_tokens": 4, "ignore_eos": True, "temperature": 0, "seed": 0, "output_kind": "delta"}
+    assert sp == {"max_tokens": 4, "min_tokens": 4, "ignore_eos": True, "temperature": 0, "top_p": 1.0, "top_k": 0, "seed": 0,
+                  "output_kind": "delta"}
 
 
 def test_text_prompt_and_defaults():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     req = p.parse({"prompt": ["hello"], "stream": False})
     assert (req.prompt, req.stream, req.max_tokens, req.add_special_tokens) == ("hello", False, 16, True)
     assert p.sampling_params(req, 16, {"temperature": 0.6})["temperature"] == 0.6
@@ -41,7 +47,7 @@ def test_text_prompt_and_defaults():
 
 
 def test_max_tokens_as_vllm_bounds_it():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     assert p.max_tokens(p.parse({"prompt": [1] * 500, "max_tokens": 64}), 512, 500, {}) == 12
     assert p.max_tokens(p.parse({"prompt": [1], "max_tokens": None}), 512, 1, {"max_tokens": 7}) == 7
     with pytest.raises(ValueError, match="exceeds model's maximum context length"):
@@ -52,88 +58,119 @@ def test_max_tokens_as_vllm_bounds_it():
                                   {"prompt": [1], "echo": True}, {"prompt": [1], "logprobs": 1},
                                   {"prompt": [1], "stream_options": {"include_usage": True}}])
 def test_refused_bodies(body):
-    with pytest.raises(so.RequestError):
-        so.PlainProtocol().parse(body)
+    with pytest.raises(proto.RequestError):
+        proto.PlainProtocol().parse(body)
 
 
 def test_usage_rule_is_vllms():
-    assert so.should_include_usage(None, True) == (True, True)
-    assert so.should_include_usage(None, False) == (False, False)
-    assert so.should_include_usage({"include_usage": True}, False) == (True, False)
-    assert so.should_include_usage({"include_usage": True, "continuous_usage_stats": True}, False) == (True, True)
-    assert so.should_include_usage({"include_usage": False, "continuous_usage_stats": True}, False) == (False, False)
+    assert proto.should_include_usage(None, True) == (True, True)
+    assert proto.should_include_usage(None, False) == (False, False)
+    assert proto.should_include_usage({"include_usage": True}, False) == (True, False)
+    assert proto.should_include_usage({"include_usage": True, "continuous_usage_stats": True}, False) == (True, True)
+    assert proto.should_include_usage({"include_usage": False, "continuous_usage_stats": True}, False) == (False, False)
 
 
 def test_frames_are_vllms_serialization():
     """vLLM's `completion_stream_generator` at d9105ea80: a choice chunk is `model_dump_json(exclude_unset=True)` of a
     CompletionStreamResponse whose choice sets every field it names (so its nulls stay), the usage chunk
     `exclude_unset=False, exclude_none=True` with `choices=[]`; UsageInfo's field order is prompt, total, completion."""
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     base = dict(request_id="cmpl-1-0", created=7, model="m")
     assert p.chunk(**base, text=" é", finish_reason=None, stop_reason=None, prompt_token_ids=None, token_ids=None, usage=None) == (
         '{"id":"cmpl-1-0","object":"text_completion","created":7,"model":"m","choices":[{"index":0,"text":" é","logprobs":null,'
         '"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}]}')
     assert p.chunk(**base, text="x", finish_reason="length", stop_reason=None, prompt_token_ids=None, token_ids=[5],
-                   usage=so._usage(3, 4)).endswith('"token_ids":[5]}],"usage":{"prompt_tokens":3,"total_tokens":7,"completion_tokens":4}}')
-    assert p.usage_chunk(**base, usage=so._usage(128, 16)) == (
+                   usage=proto.usage_of(3, 4)).endswith('"token_ids":[5]}],"usage":{"prompt_tokens":3,"total_tokens":7,"completion_tokens":4}}')
+    assert p.usage_chunk(**base, usage=proto.usage_of(128, 16)) == (
         '{"id":"cmpl-1-0","object":"text_completion","created":7,"model":"m","choices":[],'
         '"usage":{"prompt_tokens":128,"total_tokens":144,"completion_tokens":16}}')
-    assert so.sse("{}") == b"data: {}\n\n" and so.SSE_DONE == b"data: [DONE]\n\n"
-    assert so.http_chunk(b"data: x\n\n") == b"9\r\ndata: x\n\n\r\n"
+    assert proto.sse("{}") == b"data: {}\n\n" and proto.SSE_DONE == b"data: [DONE]\n\n"
+    assert proto.http_chunk(b"data: x\n\n") == b"9\r\ndata: x\n\n\r\n"
 
 
 def test_plain_frames_agree_with_vllm():
     """Where vLLM is installed (the GPU nodes' env), the plain frames are its frames."""
     pytest.importorskip("vllm.entrypoints.openai.completion.protocol")
-    got = so.framing_agrees(so.VllmProtocol())
+    got = proto.framing_agrees(proto.VllmProtocol())
     assert got["agrees"], got["differences"]
 
 
-def test_command_is_registered():
+def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
-    assert (opts.port, opts.commit, opts.precision, opts.window_steps) == (0, False, "int8_exact", 64)
+    assert (opts.port, opts.commit, opts.precision, opts.gpu_tree, opts.window_steps) == (0, False, "verity_int8", True, 64)
     assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
-    assert so.engine_options(opts)["quantization"] == "verity_int8" and so.engine_options(opts)["attention_backend"] == "CUSTOM"
+    assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
+    exact = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "int8_exact", "--no-gpu-tree"], environ={})
+    assert so.engine_options(exact)["attention_backend"] == "CUSTOM" and not exact.gpu_tree
+    assert "enable_prefix_caching" not in so.engine_options(opts)
+    cached = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--prefix-caching"], environ={})
+    assert so.engine_options(cached)["enable_prefix_caching"] is True
     env = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={"RESEARCH_RUN_ID": "r1", "HF_HOME": "/h"})
     assert (env.run_id, env.hf_home) == ("r1", "/h")
     with pytest.raises(SystemExit):
         cli.parse("serve-openai", ["--out", "/tmp/x"], environ={})
 
 
-def test_each_int8_precision_registers_its_parts_and_names_its_scope():
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "verity_int8"], environ={})
-    assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
-    assert so.INT8_PARTS == {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears")}
+@pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
+                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None)])
+def test_every_precision_registers_the_verity_int8_method_before_the_engine(precision, parts, scope):
+    got: list = []
+    assert so.register_int8(precision, got.append) == scope
+    assert got == [parts] and "linears" in got[0]
+    assert set(so.INT8_PARTS) == set(so.PRECISIONS)
+
+
+def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads():
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={})
+    with pytest.raises(cli.UsageError, match="ninja.*--no-gpu-tree"):
+        so.preflight(opts, which=lambda _: None)
+    so.preflight(opts, which=lambda _: "/v/bin/ninja")
+    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-gpu-tree"], environ={}), which=lambda _: None)
+    with pytest.raises(cli.UsageError, match="window-steps"):
+        so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--window-steps", "0"], environ={}),
+                     which=lambda _: "/v/bin/ninja")
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
 
 class Runner:
-    """Model Runner V2 as the server reads it: ``execute_model`` leaves ``execute_model_state.input_batch``, ``sample``
-    returns the step's sampled ids."""
+    """Model Runner V2 as the committer reads it: ``execute_model`` runs a step's input batch, ``sample`` returns its sampled
+    ids, and ``sampler.sampling_states.seeds`` holds each request's seed in its state slot."""
 
     def __init__(self) -> None:
-        self.execute_model_state: Any = None
+        self.sampler = SimpleNamespace(sampling_states=SimpleNamespace(seeds=SimpleNamespace(gpu=torch.zeros(64, dtype=torch.int64))))
 
     def execute_model(self, sched: Any) -> None:
-        self.execute_model_state = SimpleNamespace(input_batch=sched.ib)
+        pass
 
-    def sample(self, sampled: list[int]) -> list[int]:
+    def sample(self, ib: Any, sampled: list[int]) -> list[int]:
         return sampled
 
 
 class Engine:
     """vLLM's ``LLMEngine`` as the loop drives it: each ``step`` is one forward over every live request (its whole prompt
     at its first step, else its last sampled token), whose sample is a function of its inputs; outputs are DELTA, one
-    token each, under the engine id, while the runner sees vLLM's internal id ``<id>-<8 hex>``."""
+    token each, under the engine id, while the runner sees vLLM's internal id ``<id>-<8 hex>``. Each request's seed goes to
+    its state slot (``seed_override``: a seed other than the one admitted). With ``block``, a prefix cache: a request's first
+    row starts after the longest whole-block prefix (at most its prompt but one) of the ids a finished request computed."""
 
-    def __init__(self, runner: Runner) -> None:
-        self.runner, self.reqs, self.n = runner, {}, 0
+    def __init__(self, runner: Runner, seed_override: int | None = None, block: int | None = None) -> None:
+        self.runner, self.reqs, self.n, self.seed_override, self.block, self.computed = runner, {}, 0, seed_override, block, []
+
+    def cached(self, prompt: list[int]) -> int:
+        if not self.block:
+            return 0
+        common = max((next((k for k, (a, b) in enumerate(zip(c, prompt)) if a != b), min(len(c), len(prompt))) for c in self.computed),
+                     default=0)
+        return min(common, len(prompt) - 1) // self.block * self.block
 
     def add_request(self, request_id: str, prompt: dict, params: Any) -> None:
         self.n += 1
-        self.reqs[request_id] = {"internal": f"{request_id}-{self.n:08x}", "prompt": list(prompt["prompt_token_ids"]), "out": [],
-                                 "max": params["max_tokens"], "seen": 0}
+        slot = self.n % 64
+        self.runner.sampler.sampling_states.seeds.gpu[slot] = params["seed"] if self.seed_override is None else self.seed_override
+        ids = list(prompt["prompt_token_ids"])
+        self.reqs[request_id] = {"internal": f"{request_id}-{self.n:08x}", "prompt": ids, "out": [],
+                                 "max": params["max_tokens"], "slot": slot, "hit": self.cached(ids)}
 
     def abort_request(self, ids: list[str]) -> None:
         for i in ids:
@@ -144,14 +181,21 @@ class Engine:
 
     def step(self) -> list[Any]:
         live = list(self.reqs.items())
-        ids, qsl = [], [0]
+        ids, qsl, pos, starts = [], [0], [], []
         for _, r in live:
-            ids += r["prompt"] if not r["out"] else r["out"][-1:]
+            P = len(r["prompt"])
+            rows, start = (r["prompt"][r["hit"]:], r["hit"]) if not r["out"] else (r["out"][-1:], P + len(r["out"]) - 1)
+            ids += rows
             qsl.append(len(ids))
-        ib = SimpleNamespace(num_reqs=len(live), req_ids=[r["internal"] for _, r in live], query_start_loc_np=np.array(qsl))
-        self.runner.execute_model(SimpleNamespace(ib=ib, ids=ids, total_num_scheduled_tokens=len(ids)))
+            pos += range(start, start + len(rows))
+            starts.append(start)
+        ib = SimpleNamespace(num_reqs=len(live), req_ids=[r["internal"] for _, r in live], query_start_loc_np=np.array(qsl),
+                             idx_mapping=torch.tensor([r["slot"] for _, r in live], dtype=torch.int32), positions=torch.tensor(pos),
+                             logits_indices=torch.tensor(qsl[1:]) - 1, num_computed_tokens_np=np.array(starts),
+                             prefill_len_np=np.array([len(r["prompt"]) for _, r in live]))
+        self.runner.execute_model(SimpleNamespace(ib=ib, ids=ids))
         sampled = [(sum(ids[qsl[i]:qsl[i + 1]]) + 31 * len(r["out"])) % 32000 for i, (_, r) in enumerate(live)]
-        self.runner.sample(sampled)
+        self.runner.sample(ib, sampled)
         outs = []
         for (eid, r), t in zip(live, sampled):
             r["out"].append(t)
@@ -160,42 +204,53 @@ class Engine:
                                         outputs=[SimpleNamespace(token_ids=[t], text=f" w{t}", finish_reason="length" if done else None,
                                                                  stop_reason=None)]))
             if done:
+                self.computed.append(r["prompt"] + r["out"][:-1])
                 del self.reqs[eid]
         return outs
 
 
 class Committer:
     """`NativeHostCommitter` as `CommitWindows` uses it: its patches of the runner begin a step at ``execute_model`` and
-    commit the embedding's input ids there and the sampled ids at ``sample``, host-retained; ``flip`` changes one
-    committed sampled id, at (step, row) of the first window that reaches that step."""
+    commit the embedding's input ids there, and the sampled ids at ``sample``, where its sources bind the draw's inputs
+    (`served_record.SamplerInputsSource`), all host-retained; ``flip`` changes one committed sampled id, at (step, row) of
+    the first window that reaches that step."""
 
     def __init__(self, runner: Runner, flip: tuple[int, int] | None = None) -> None:
-        self.runner, self.flip = runner, flip
+        self.runner, self.flip, self.sources, self.errors = runner, flip, [], []
+        self.attach_source(SR.SamplerInputsSource(self))
         self.reset()
+
+    def attach_source(self, src: Any) -> None:
+        self.sources.append(src)
 
     def reset(self) -> None:
         self._layouts, self._step_index = {}, 0
 
-    def _commit(self, name: str, values: list[int], dtype: str) -> None:
+    def _commit(self, step: int, name: str, values: list[int], dtype: str) -> None:
         raw = np.asarray(values, dtype=dtype).tobytes()
-        self._layouts.setdefault(self._step_index - 1, []).append(
-            SimpleNamespace(name=name, dtype=dtype, nbytes=len(raw), host=memoryview(raw), dev_off=0, stream_off=-1))
+        self._layouts.setdefault(step, []).append(
+            SimpleNamespace(name=name, dtype=dtype, nbytes=len(raw), host=memoryview(raw), dev_off=-1, stream_off=-1))
+
+    def _acquire(self, name: str, t: Any, job: Any) -> None:
+        self._commit(job.step, name, t.tolist(), "int64")
 
     def install(self) -> None:
         orig_exec, orig_sample = self.runner.execute_model, self.runner.sample
 
         def execute_model(sched: Any) -> Any:
             self._step_index += 1
-            self._commit("model.embed_tokens/in", sched.ids, "int64")
+            self._commit(self._step_index - 1, "model.embed_tokens/in", sched.ids, "int64")
             return orig_exec(sched)
 
-        def sample(sampled: list[int]) -> Any:
-            vals = list(sampled)
-            if self.flip and self.flip[0] == self._step_index - 1:
+        def sample(ib: Any, sampled: list[int]) -> Any:
+            step, vals = self._step_index - 1, list(sampled)
+            if self.flip and self.flip[0] == step:
                 vals[self.flip[1]] += 1
                 self.flip = None
-            self._commit(sc.SAMPLED_NAME, vals, "int32")
-            return orig_sample(sampled)
+            self._commit(step, SR.SAMPLED, vals, "int32")
+            for s in self.sources:
+                s.on_sample(ib, len(vals), SimpleNamespace(step=step))
+            return orig_sample(ib, sampled)
 
         self.runner.execute_model, self.runner.sample = execute_model, sample
 
@@ -208,6 +263,8 @@ class Committer:
 
 
 class Tokenizer:
+    eos_token_id = 2
+
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         return ([1] if add_special_tokens else []) + [100 + len(w) for w in text.split()]
 
@@ -219,14 +276,17 @@ class Serving:
     """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
-                 idle_close_steps: int = 1, force_include_usage: bool = True) -> None:
+                 idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
+                 served: dict | None = None, marks: Any = None, block: int | None = None) -> None:
         self.runner = Runner()
-        self.windows = sc.CommitWindows(Committer(self.runner, flip), self.runner, out, run_id="t", window_steps=window_steps,
-                                       idle_close_steps=idle_close_steps, clock=lambda: 0.0) if commit else None
-        self.loop = so.EngineLoop(Engine(self.runner), self.windows)
-        self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
+        self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
+                                       idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
+        self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
+        self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
+        self.loop.engine.block = block
 
     def __enter__(self) -> Serving:
         self.engine_thread = threading.Thread(target=self.loop.run, daemon=True)
@@ -252,7 +312,7 @@ class Serving:
 
 
 def events(raw: bytes) -> list[str]:
-    assert raw.endswith(so.SSE_DONE)
+    assert raw.endswith(proto.SSE_DONE)
     return [e[len("data: "):] for e in raw.decode().split("\n\n") if e]
 
 
@@ -332,14 +392,49 @@ def test_commit_record_maps_and_checks_every_request(tmp_path, window_steps):
         streamed_text = "".join(c["choices"][0]["text"] for c in chunks if c["choices"])
         assert streamed_text == "".join(f" w{t}" for t in rec["streamed_ids"]) and len(rec["streamed_ids"]) == body["max_tokens"]
         assert rec["check"]["passed"], rec["check"]
-        assert len(rec["steps"]) == body["max_tokens"] and rec["steps"][0][3] - rec["steps"][0][2] == len(prompt)
+        assert len(rec["rows"]) == body["max_tokens"] and rec["rows"][0][3] - rec["rows"][0][2] == len(prompt)
+        assert rec["finish"] == {"reason": "length", "stop_reason": None} and rec["committed_seeds"] == [DEFAULT_SEED]
     wins = records(tmp_path, "windows.jsonl")
     assert all(w["passed"] for w in wins)
     assert {e for w in wins for e in w["requests"]} == {r["engine_id"] for r in reqs.values()}
     assert all(w["ids_name"] == "model.embed_tokens/in" for w in wins if not w.get("empty"))
+    trace = records(tmp_path, "step_trace.jsonl")
+    assert [(t["window"], t["step_root"]) for t in trace] == [(w["window"], r) for w in wins for r in w.get("step_roots", [])]
+    assert all(t["rows"] and t["t_end"] is not None for t in trace)
     if window_steps == 2:
         assert len([w for w in wins if not w.get("empty")]) > 1 and any(len(r["windows"]) > 1 for r in reqs.values())
     assert s.windows.summary()["passed"]
+
+
+def test_a_later_turn_read_from_the_prefix_cache_is_checked_against_the_turns_that_committed_it(tmp_path):
+    def turn(s: Serving, prompt: list[int]) -> list[int]:
+        body = dict(CERTIFIER_BODY, prompt=prompt, max_tokens=3, min_tokens=3, stream=False, return_token_ids=True)
+        return prompt + json.loads(s.post("/v1/completions", body)[1])["choices"][0]["token_ids"]
+
+    with Serving(tmp_path, block=4) as s:
+        turn(s, turn(s, turn(s, [128000] + list(range(10, 19))) + [40, 41]) + [50])
+    a, b, c = records(tmp_path, "requests.jsonl")
+    assert a["check"]["passed"] and a["check"]["cache_hit"] == 0
+    assert b["check"]["passed"] and b["check"]["cache_hit"] == 12 and b["check"]["prefix_spans"] == [[a["engine_id"], 0, 12]], b["check"]
+    assert c["check"]["passed"] and c["check"]["cache_hit"] == 16, c["check"]
+    assert c["check"]["prefix_spans"] == [[a["engine_id"], 0, 12], [b["engine_id"], 12, 16]]
+    got = s.windows.summary()
+    assert got["passed"] and (got["cache_hits"], got["cached_positions"]) == (2, 28), got
+
+
+def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(tmp_path):
+    from tests.pipeline import serve_prefix_gpu as client
+
+    sent = tmp_path / "client.jsonl"
+    with Serving(tmp_path, block=4) as s:
+        assert client.main(["--url", s.url, "--out", str(sent), "--requests", "6", "--prompt-range", "8:32", "--tokens", "4",
+                            "--system-prompts", "2", "--system-tokens", "24", "--turns", "2", "--max-model-len", "512"]) == 0
+    got = client.compare(records(tmp_path, "client.jsonl"), records(tmp_path, "requests.jsonl"))
+    assert got["passed"] and got["later_turns"] > 0 and got["cache_hits"] >= got["later_turns"], got
+    assert s.windows.summary()["passed"]
+    bad = records(tmp_path, "client.jsonl")
+    bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
+    assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
 
 
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
@@ -356,21 +451,127 @@ def test_check_fails_on_a_committed_id_that_was_not_served(tmp_path):
     with Serving(tmp_path, flip=(1, 0)) as s:
         serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6])])
     failed = [r["check"] for r in records(tmp_path, "requests.jsonl") if not r["check"]["passed"]]
-    assert len(failed) == 1 and failed[0]["first_mismatch"]["what"] == "sampled"
+    assert len(failed) == 1 and any(p.startswith("samples: 1 position(s) differ") for p in failed[0]["problems"]), failed
     assert not s.windows.summary()["passed"]
 
 
-def test_check_request_rule():
-    led = sc.Ledger("cmpl-a", "cmpl-a-0", [1, 2, 3], streamed=[7, 8, 9], inputs=[1, 2, 3, 7, 8], sampled=[7, 8, 9], finished=True)
-    assert sc.check_request(led)["passed"]
-    led.inputs = [1, 2, 3, 7, 9]
-    got = sc.check_request(led)
-    assert not got["passed"] and got["first_mismatch"] == {"what": "inputs", "at": 4, "committed": [9], "served": [8], "lengths": [5, 5]}
-    assert not sc.check_request(sc.Ledger("b", "b-0", [1], finished=True))["passed"]
+def test_a_seedless_request_commits_the_default_seed_and_a_seeded_one_its_own(tmp_path):
+    with Serving(tmp_path) as s:
+        serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6], seed=1234)])
+    by_rule = {r["ingress"]["seed_rule"]: r for r in records(tmp_path, "requests.jsonl")}
+    assert by_rule["default"]["ingress"]["seed"] == DEFAULT_SEED and by_rule["default"]["committed_seeds"] == [DEFAULT_SEED]
+    assert "seed" not in by_rule["default"]["ingress"]["brought"]
+    assert by_rule["request"]["ingress"]["seed"] == 1234 and by_rule["request"]["committed_seeds"] == [1234]
+    assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
-def test_runner_ids_map_back():
-    known = {"cmpl-ab-0": 1}
-    assert sc.known_id("cmpl-ab-0-0123abcd", known) == "cmpl-ab-0"
-    assert sc.known_id("cmpl-ab-0", known) == "cmpl-ab-0"
-    assert sc.known_id("cmpl-zz-0-0123abcd", known) is None
+def test_a_committed_seed_other_than_the_one_admitted_fails(tmp_path):
+    with Serving(tmp_path, seed_override=7) as s:
+        s.post("/v1/completions", CERTIFIER_BODY)
+    (rec,) = records(tmp_path, "requests.jsonl")
+    assert not rec["check"]["passed"] and any(p.startswith("seeds: committed [7]") for p in rec["check"]["problems"])
+    assert not s.windows.summary()["passed"]
+
+
+def test_the_ingress_record_holds_the_sampling_the_request_brought(tmp_path):
+    body = dict(CERTIFIER_BODY, temperature=0.7, top_k=50, ignore_eos=False, stop=["."])
+    with Serving(tmp_path) as s:
+        assert s.post("/v1/completions", body)[0] == 200
+    (rec,) = records(tmp_path, "requests.jsonl")
+    ing = rec["ingress"]
+    assert ing["brought"] == {k: body[k] for k in ("temperature", "top_k", "max_tokens", "min_tokens", "ignore_eos", "stop")}
+    assert (ing["params"]["temperature"], ing["params"]["top_k"], ing["params"]["top_p"]) == (0.7, 50, 1.0)
+    assert rec["check"]["passed"], rec["check"]
+
+
+@pytest.mark.parametrize("top_p", [0.9, 0.5])
+def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
+    with Serving(tmp_path) as s:
+        status, raw = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=top_p))
+        ok, _ = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=1))
+    err = json.loads(raw)["error"]
+    assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
+    assert "split count" in err["message"] and ok == 200
+    assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
+
+
+# ---------------------------------------------------------------------------------------------------------------- served rows
+
+ENGINE = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 512, "num_gpu_blocks": 64, "block_size": 16}
+
+
+def served_statics(**size_class: int) -> dict:
+    return sc.served_statics(ENGINE, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6, **size_class})
+
+
+def private(out: Path, w: int) -> dict:
+    return json.loads((out / "served_rows" / f"w{w}.json").read_text())
+
+
+def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str, priv: dict):
+    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]])
+
+
+def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict], list[dict], list[dict]]:
+    bodies = [dict(CERTIFIER_BODY, prompt=[128000, 10 + i, 20 + i], max_tokens=3 + i, min_tokens=3 + i) for i in range(4)]
+    with Serving(out, window_steps=4, served=statics, marks=marks) as s:
+        serve_concurrently(s, bodies)
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3, 4]))[0] == 200
+    return records(out, "windows.jsonl"), records(out, "requests.jsonl"), records(out, "step_trace.jsonl")
+
+
+def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
+    """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
+    line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
+    requests' arrival ids, as `served_rows.register` commits them, each slice window's registered row the slice's ``srv``
+    row, its b‖c a leaf of the published root. The record holds no row or salt."""
+    statics = served_statics()
+    closed: list[dict] = []
+
+    def marks(w: int, event: str) -> None:
+        if event == "close":
+            line = records(tmp_path, "windows.jsonl")[-1]
+            assert line["window"] == w
+            closed.append(line)
+
+    wins, reqs, trace = served_run(tmp_path, statics, marks)
+    full = [w for w in wins if not w.get("empty")]
+    assert len(full) > 1 and all(w["passed"] for w in wins) and [w["window"] for w in closed] == [w["window"] for w in wins]
+    assert all("served_rows" in w for w in closed if not w.get("empty"))
+    assert sorted(r["arrival"] for r in reqs) == list(range(len(reqs)))
+    arrival = {rid: r["arrival"] for r in reqs for rid in r["runner_ids"]}
+    S = SimpleNamespace(**statics)
+    for w in full:
+        rec, priv = w["served_rows"], private(tmp_path, w["window"])
+        assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
+        assert rec["count"] == -(-w["steps"] // S.P)
+        by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
+        ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
+        assert priv["ids"] == ids
+        served, session = recommit(statics, by_step, ids, w["steps"], w["run_root"], priv)
+        assert {k: v for k, v in rec.items() if k != "statics"} == served.record()
+        for k, win in enumerate(session):
+            assert served.registration.rows[k] == SRW._row(CS.srv_row(S, win))[0]
+            assert SRW.leaf_ok(rec, bytes.fromhex(w["run_root"]), k, served.bc(k), served.registration.open(k).path)
+        text = json.dumps(w)
+        assert not any(s in text for s in priv["salts"])
+
+
+def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
+    """An arrival id wider than the class's IW can't be packed: the window that holds it fails, named, and the run fails."""
+    wins, _, _ = served_run(tmp_path, served_statics(IW=1))
+    bad = [w for w in wins if "error" in w.get("served_rows", {})]
+    assert bad and all(not w["passed"] and "doesn't fit its 1 bits" in w["served_rows"]["error"] for w in bad)
+
+
+def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
+    def opts(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--max-num-seqs", "8", "--window-steps", "16", *more],
+                         environ={})
+
+    assert so.served_class(opts()) == {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 16, "IW": 16}
+    assert so.served_class(opts("--served-rows-class", '{"P": 7, "IW": 10}'))["P"] == 7
+    with pytest.raises(cli.UsageError, match="a JSON object of"):
+        so.served_class(opts("--served-rows-class", '{"X": 1}'))
+    with pytest.raises(cli.UsageError, match="under --max-num-seqs 8"):
+        so.preflight(opts("--served-rows-class", '{"R": 4}'), which=lambda _: "/v/bin/ninja")

@@ -69,6 +69,20 @@ def test_the_unit_refuses_an_out_of_range_s(op):
         RR.residual_forms(C, bad, W, V)
 
 
+def test_the_leaf_operands_are_karatsubas_ands_in_order():
+    """`_leaf_operands` on each side, zipped, is the sequence of operand pairs `gf2k.karatsuba` ANDs, so the unit's gates and
+    their order are the ones the product's recursion lays down."""
+    g = random.Random(3)
+    form = lambda: RR.L(frozenset(g.sample(range(400), g.randrange(4))), g.getrandbits(1))
+    for n in (1, 2, 8, 128):
+        a, b = [form() for _ in range(n)], [form() for _ in range(n)]
+        rec = RR._Pairs()
+        G.karatsuba(rec, a, b)
+        key = lambda pairs: [((x.s, x.c), (y.s, y.c)) for x, y in pairs]
+        assert key(zip(RR._leaf_operands(a), RR._leaf_operands(b))) == key(rec.pairs)
+        assert len(rec.pairs) == 3 ** (n.bit_length() - 1)
+
+
 @pytest.mark.slow
 def test_the_unit_sums_each_residuals_products_leaf_by_leaf():
     """The unit (through its M0 layout) equals the reference on random ports, the words after each port's elements unread: one

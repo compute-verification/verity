@@ -17,7 +17,11 @@ Arms, each one linear's call on a BF16 x of M rows:
 - ``deepgemm``: vLLM's per-token-group FP8 quant (ue8m0 scales) and DeepGEMM ``fp8_gemm_nt`` on the weight's 128 x 128
   blocks, its scales ue8m0: what the pinned vLLM serves from 32 tokens (FlashInfer below 32 is not timed here);
 - ``cutlass``: the same quant (FP32 scales) and vLLM's CUTLASS block-scaled ``cutlass_scaled_mm``;
-- ``triton``: the same quant and vLLM's Triton block-scaled matmul.
+- ``triton``: the same quant and vLLM's Triton block-scaled matmul;
+- ``deepgemm-graph``, ``cutlass-graph``, ``triton-graph``: each stock arm that builds, its call (quant and GEMM) captured as
+  one CUDA graph and replayed (`capture_stock`), as vLLM's decode graphs run it, so its launch overhead is off the host,
+  and held, its output poisoned before a replay, to the eager arm's bound (`replay_error`); ``slowdowns_graphed`` gives
+  each pearlc arm over the fastest of these, and a call torch can't capture, or whose replay misses x·Wᵀ, is recorded.
 
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
@@ -231,8 +235,8 @@ def replay_whole(run, graph, calls):
 
 def capture_stock(forward):
     """A stock arm's forward as vLLM's decode graphs run the stock GEMMs: after a warm-up (autotuning, JIT), one CUDA graph's
-    replay, or the forward itself when torch can't capture it.  Returns (f, whether captured, the error); f is None when the
-    warm-up fails."""
+    replay (which returns the forward's output, the graph's to write), or the forward itself when torch can't capture it.
+    Returns (f, whether captured, the error); f is None when the warm-up fails."""
     import torch
     try:
         forward()
@@ -243,12 +247,27 @@ def capture_stock(forward):
         graph, stream = torch.cuda.CUDAGraph(), torch.cuda.Stream()
         stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.graph(graph, stream=stream):
-            forward()
+            out = forward()
         torch.cuda.synchronize()
-        return graph.replay, True, None
+
+        def replay():
+            graph.replay()
+            return out
+        return replay, True, None
     except Exception as e:  # noqa: BLE001 - recorded, the arm run eagerly
         torch.cuda.synchronize()
         return forward, False, f"{type(e).__name__}: {e}"[:400]
+
+
+def replay_error(replay, ref) -> str | None:
+    """Why a captured stock arm (`capture_stock`'s replay) doesn't compute `ref` (FP32), or None: its output poisoned with
+    NaN, one replay, then held to `ERR` as `stock_arms` holds the eager arms."""
+    import torch
+    replay().fill_(float("nan"))
+    y = replay()
+    torch.cuda.synchronize()
+    err = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
+    return None if err < ERR else f"replay's rel RMS {err:.4f} against x·Wᵀ"
 
 
 def same_bits(a, b) -> bool:
@@ -279,7 +298,10 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
             errors[nm] = err
     names = [*arms, *stocks]
 
+    at = run.epoch_calls()
+
     def fresh(nm):
+        run.repeat_at = at          # every compared pass from one call index, so their commitments can repeat
         run.end_pass()
         run.hashing, run.whole_defer = arms[nm][0], arms[nm][1]
 
@@ -397,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         gam = {r: float(glm53.gamma(glm53.scheme(f, a.scheme), n, k)) for r, f in glm53.FADD_READINGS.items()}
         for m in ms:
             x = torch.randn(m, k, device=dev, generator=gen).to(torch.bfloat16)
-            ys = {}
+            ys, at = {}, run.epoch_calls()
 
             def pearlc(nm: str, hashing: bool, schedule: str, graphs: bool, x=x, w=w, W=W):
                 """The arm's call, and before it a fresh pass under `hashing`, `schedule` and `graphs` (the open pass
@@ -406,13 +428,23 @@ def main(argv: list[str] | None = None) -> int:
                     ys[nm] = run.gemm(w, x, W, None)
 
                 def before():
+                    run.repeat_at = at      # every compared pass from one call index, so their commitments can repeat
                     run.end_pass(schedule=schedule)
                     run.hashing, run.graphs = hashing, graphs
                 return f, before, run.end_pass
 
+            graphed, graph_errors = {}, {}
+            for nm, f in arms.items():
+                g, captured, err = capture_stock(lambda f=f, x=x: f(x))
+                err = replay_error(g, x.float() @ W.float().T) if captured else err
+                if captured and err is None:
+                    graphed[f"{nm}-graph"] = g
+                else:
+                    graph_errors[f"{nm}-graph"] = err
             calls = {**{nm: pearlc(nm, True, sc, g) for nm, (sc, g) in pearls.items()},
                      "pearlc-nohash": pearlc("pearlc-nohash", False, a.schedule[0], a.graphs),
-                     **{nm: ((lambda f=f, x=x: f(x)), None, None) for nm, f in arms.items()}}
+                     **{nm: ((lambda f=f, x=x: f(x)), None, None) for nm, f in arms.items()},
+                     **{nm: (g, None, None) for nm, g in graphed.items()}}
             names = list(calls)
             for f, before, after in calls.values():       # warm-up: buffers, graphs of torch's allocator, autotuning
                 timed(f, before, after)
@@ -440,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
             want, y_want = ends["pearlc"][0], ys["pearlc"].clone()
             agree = {}
             for nm, (sc, g) in pearls.items():
+                run.repeat_at = at
                 run.end_pass(schedule=sc)
                 run.hashing, run.graphs = True, g
                 run.poison()
@@ -453,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
             med = {nm: statistics.median(v) for nm, v in samples.items()}
             stock = {nm: med[nm] for nm in arms}
             best = min(stock, key=stock.get) if stock else None
+            gstock = {nm: med[nm] for nm in graphed}
+            gbest = min(gstock, key=gstock.get) if gstock else None
             ok = all(all(v.values()) for v in agree.values())
             row = {"name": lin["name"] if lin else None, "n": n, "k": k, "m": m, "ms": med, "runs": samples,
                    "host_ms": {nm: statistics.median(v) for nm, v in host.items()},
@@ -463,14 +498,18 @@ def main(argv: list[str] | None = None) -> int:
                    "slowdown": med["pearlc"] / stock[best] if best else None,
                    "slowdowns": {nm: med[nm] / stock[best] for nm in pearls} if best else None,
                    "slowdown_nohash": med["pearlc-nohash"] / stock[best] if best else None, "gamma": gam,
+                   "fastest_stock_graphed": gbest, "stock_graph_errors": graph_errors,
+                   "slowdowns_graphed": {nm: med[nm] / gstock[gbest] for nm in pearls} if gbest else None,
                    "tflops": {nm: 2 * m * n * k / v / 1e9 for nm, v in med.items()},
                    "commitment": want, "agree": agree, **({} if ok else {"commitments": ends})}
             rows.append(row)
             print(f"n {n} k {k} m {m}: " + ", ".join(f"{nm} {med[nm]:.4f} ms" for nm in [*pearls, "pearlc-nohash"]) + ", "
-                  + ", ".join(f"{nm} {v:.4f} ms" for nm, v in stock.items())
+                  + ", ".join(f"{nm} {v:.4f} ms" for nm, v in {**stock, **gstock}.items())
                   + (f"; slowdown {row['slowdown']:.3f}x over {best}" + "".join(
                       f", {nm} {v:.3f}x" for nm, v in row["slowdowns"].items() if nm != "pearlc") if best
                      else f"; no stock arm ({errors})")
+                  + (f"; over {gbest}: " + ", ".join(f"{nm} {v:.3f}x" for nm, v in row["slowdowns_graphed"].items())
+                     if gbest else "")
                   + f"; {'agree' if ok else 'DIFFER ' + json.dumps(agree)}", flush=True)
             (out / "timing.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")
     return 0 if all(r["fastest_stock"] and all(all(v.values()) for v in r["agree"].values()) for r in rows) else 1

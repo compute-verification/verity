@@ -5,10 +5,10 @@ inside one module body, committed as the ops computed them.
   (`Int8RowQuant_v1`, read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the call-boundary source never evaluates
   them on the host.  The fx node's name counts on through the run, so the names come from the manifest: per (engine step, module) its
   one Int8RowQuant_v1 site.
-- `verity_int8::kv_quant` inside an attention module, or `verity_int8::kv_quant_window` under a credited cache read
-  (`engine.int8_window`): its (K', V', s_v, f32(V'_0)) per KV head are the `instance_outputs` identities of `Int8KvQuant_v1`'s ports
-  0..3 at `<attention>`, each the op's result over every KV head; several requests at one step are committed in call order,
-  concatenated.  They are committed as `<attention>/kv_quant.<port>`, labels this source declares as those ports (`ports`), so the
+- `verity_int8::kv_quant_batch` inside an attention module, or `verity_int8::kv_quant_window_batch` under a credited cache read
+  (`engine.int8_window`): each request's (K', V', s_v, f32(V'_0)) per KV head, its slices of the batch's results (K'[r, :, :s]
+  and so on, s its window), are the `instance_outputs` identities of `Int8KvQuant_v1`'s ports 0..3 at `<attention>`, each over
+  every KV head; the requests of a step are committed in batch order, concatenated (a request with no window, none).  They are committed as `<attention>/kv_quant.<port>`, labels this source declares as those ports (`ports`), so the
   binder binds them by structure whatever the manifest's member spelling (`<hint>.<port>`), and the attention's own return binds its
   one remaining member.
 
@@ -31,8 +31,9 @@ KV_SPEC = "Int8KvQuant_v1"
 KV_PORTS = ("0", "1", "2", "3")
 KV_LABELS = tuple(f"kv_quant.{p}" for p in KV_PORTS)
 KV_CLASS = "int8_kv_quant"
-#: the ops whose results are a request's Int8KvQuant_v1: from the pages (`paged_attention`) or a credited read's window
-KV_OPS = ("kv_quant", "kv_quant_window")
+#: the ops whose results hold each request's Int8KvQuant_v1, by the position of their `lens` argument: from the pages
+#: (`paged_attention`) or a credited read's windows
+KV_OPS = {"kv_quant_batch": 3, "kv_quant_window_batch": 3}
 
 
 def _spec(r: Mapping[str, Any]) -> str:
@@ -99,8 +100,8 @@ class Int8Source:
         if self.quant:
             self._hooks.append(hooks.patch(int8_ops, "row_quant", self._wrap_quant(int8_ops.row_quant)))
         if self.kv:
-            for name in KV_OPS:
-                self._hooks.append(hooks.patch(int8_ops, name, self._wrap_kv(getattr(int8_ops, name))))
+            for name, lens_at in KV_OPS.items():
+                self._hooks.append(hooks.patch(int8_ops, name, self._wrap_kv(getattr(int8_ops, name), lens_at)))
         self.active = True
 
     def uninstall(self) -> None:
@@ -173,13 +174,15 @@ class Int8Source:
 
         return row_quant
 
-    def _wrap_kv(self, orig: Any) -> Any:
+    def _wrap_kv(self, orig: Any, lens_at: int) -> Any:
         me = self
 
         def kv_quant(*args: Any) -> Any:
             out = orig(*args)
             if me.c._cur is not None and me._scope and me._scope[-1] in me._kv_out:
-                me._kv_out[me._scope[-1]].append(tuple(out))
+                kq, vq, sv, v0 = out
+                me._kv_out[me._scope[-1]].extend((kq[r, :, :s], vq[r, :, :s], sv[r], v0[r])
+                                                 for r, s in enumerate(args[lens_at]) if s > 0)
             return out
 
         return kv_quant
@@ -244,9 +247,9 @@ class Int8Source:
         if self.kv:
             out.append({"class": KV_CLASS, "how": "bound-as-leaf", "rule": None, "count": self.stats["kv_tensors"], "bytes": self.stats["kv_bytes"],
                         "tensors": self.stats["kv_tensors"], "errors": self.stats["errors"],
-                        "evidence": (f"int8 source: `<attention>/kv_quant.0..3` of {len(self.kv)} attention modules, the results of verity_int8::kv_quant "
-                                     "(or kv_quant_window under a credited read) per KV head as the served op computed them (engine.int8_ops; "
-                                     "no kernel change)")})
+                        "evidence": (f"int8 source: `<attention>/kv_quant.0..3` of {len(self.kv)} attention modules, each request's slices of "
+                                     "verity_int8::kv_quant_batch (or kv_quant_window_batch under a credited read) per KV head as the served op "
+                                     "computed them (engine.int8_ops; no kernel change)")})
         return out
 
 

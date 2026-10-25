@@ -119,6 +119,9 @@ def test_refusals_fire_eagerly_in_the_builder_and_lazily_on_a_direct_bind_both_b
 
 @pytest.mark.slow
 def test_program_and_digest_are_functions_of_the_manifest(programs, program_eos2):
+    """The lifted request's Program is a function of its manifest: a second build is the same Program, and the EOS set, the cap
+    and the prompt length each change it. About 70 s (four more builds of the lifted B1 request): a pinned digest of one build
+    can't show that the build is deterministic or which manifest facts it reads."""
     _, p_l = programs
     d = program_digest(p_l)
     again = Program(L.lifted_request(C, LP, CAP, EOS, attention=ATT, lag=0))
@@ -148,6 +151,7 @@ def _lserve_names(d_max: int, n_eos: int) -> list[str]:
     return names
 
 
+@pytest.mark.slow
 def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
     p_u, p_l = programs
     assert p_u.gates > 10**9  # a real shape, not a toy
@@ -182,6 +186,7 @@ def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
 # ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_sampling_event_population_is_cap_and_independent_of_the_eos_set(programs, program_eos2):
     _, p_l = programs
     events = [k for n, k in _body_named(p_l) if n.endswith("/final")]
@@ -202,6 +207,7 @@ def test_sampling_event_population_is_cap_and_independent_of_the_eos_set(program
 # ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_exact_count_rule_and_the_served_prefix_rule_on_the_real_shape(programs):
     _, p_l = programs
     per_step = 1 + 2 * C["NL"] * C["KVH"] * C["D"]
