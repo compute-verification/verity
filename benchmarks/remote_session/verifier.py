@@ -1151,10 +1151,10 @@ class Verifier:
         if one:
             params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         g = params.groups_per_coin
-        shared = {} if g == 1 else {"groups_per_coin": g}
+        shared, per = ({}, {}) if g == 1 else ({"groups_per_coin": g}, {"per_coin": g})
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, per_coin=g))
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
         case = None if self.transcript is None else lv.Transcript(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
