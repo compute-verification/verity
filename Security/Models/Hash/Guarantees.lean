@@ -89,9 +89,9 @@ Scope:
 * **A token outside the vocabulary** returns the fill and ok whatever the witness, and the statement says nothing there. -/
 def EmbeddingReadBinding : Prop :=
   ∀ (H G : Msg → Digest) (domain : Tree.Domain) (key : Msg) (root : Digest) (vocab words tok : ℕ)
-    (o o₀ : RowLeaf.Opening),
+    (o : RowLeaf.Opening),
     EmbeddingRead.ok H G domain key root vocab tok o →
-    tok < vocab → RowLeaf.accepts H G (EmbeddingRead.verifier domain key) root tok o₀ →
+    ∀ o₀ : RowLeaf.Opening, tok < vocab → RowLeaf.accepts H G (EmbeddingRead.verifier domain key) root tok o₀ →
       EmbeddingRead.h vocab words tok o = o₀.row ∨
         CollisionIn H (RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok o ++
           RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok o₀) ∨
