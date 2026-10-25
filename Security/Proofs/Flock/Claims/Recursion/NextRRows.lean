@@ -83,7 +83,7 @@ theorem setup_tables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Arra
 
 namespace Rows
 
-open FlockSoundness.Refine (Frame colBytes colBytes_length)
+open FlockSoundness.Refine (Frame colBytes)
 open FlockSoundness.Discharge.DecodeZL (ProofSizes)
 open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames zcFrames lcFrames rsFrames ligFrames levelFr
   introFr queryFr chFr kFr capFr)
@@ -100,10 +100,13 @@ theorem fast100_m {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) : m �
 `k0 ≤ 6`. -/
 theorem fast100_bound {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) :
     s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧ ∀ i < 7, (s.levels.getD i default).cap ≤ 7 := by
-  have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, decide (s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧
-      ∀ i < 7, (s.levels.getD i default).cap ≤ 7) = true := by
+  have key : ∀ m < 40, (match fast100 m with
+      | some s => decide (s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧ ∀ i < 7, (s.levels.getD i default).cap ≤ 7)
+      | none => true) = true := by
     decide +kernel
-  simpa using key ⟨m, by have := fast100_m hs; omega⟩ s hs
+  have h := key m (by have := fast100_m hs; omega)
+  rw [hs] at h
+  simpa using h
 
 /-! ## Values -/
 
@@ -306,7 +309,7 @@ theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (
         (hps.rcapsEach i hi).1
       have := Nat.pow_le_pow_right (show 0 < 2 by decide) (hcap (i + 1) (by omega))
       omega
-    rw [Array.length_toList, hrc] at h
+    have e : p.ligerito.recursiveCaps.toList.length = p.ligerito.recursiveCaps.size := Array.length_toList
     omega
   intro rs hrs
   unfold repRows at hrs
@@ -317,7 +320,7 @@ theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (
     have : r.size = c.st.merkle.digestLen := (hps.rcapsEach i hi).2 r hra
     omega
   · show (colBytes (vals ch)).toArray.size < 2 ^ 64
-    rw [List.size_toArray, colBytes_length]
+    rw [List.size_toArray, Frame.colBytes_length]
     have := vals_chunk_le (fs := repFrames c.st c.sch c.dom c.n p T) hch
     omega
 
@@ -326,7 +329,7 @@ theorem capRows_fit {caps : Array (Array ByteArray)} (hn : caps.size ≤ 64)
     (hc : ∀ a ∈ caps, a.size ≤ 128 ∧ ∀ b ∈ a, b.size ≤ 64) : RowsFit (capRows caps) := by
   refine ⟨?_, fun r hr => ?_⟩
   · have h := flatMap_length_le (B := 128) (l := caps.toList) fun a ha => (hc a (Array.mem_toList_iff.1 ha)).1
-    rw [Array.length_toList] at h
+    have e : caps.toList.length = caps.size := Array.length_toList
     show (caps.toList.flatMap Array.toList).length < 2 ^ 64
     omega
   · obtain ⟨l, hl, hr⟩ := List.mem_flatten.1 hr
