@@ -7,7 +7,7 @@ and checks a period with the Python the period's pieces already have: one-stage'
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
 under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`) and `registration.digest`. Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms, each audit's with its
-own `delta`: the Lean publishes no union of the audits' deltas (`eps`) yet, and neither does this.
+own `delta`, and `eps`, the union of those deltas as an exact ratio string.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases): the link-windows of one link, each registered under the link's Program
@@ -314,7 +314,8 @@ def public(p: Params, facts: list[Facts]) -> dict:
     cells = sum(clog2(cap + 1) for cap in p.cells)
     schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in audits)
-    return {"K": K, "audits": audits, "cells": cells, "schedules": schedules, "windows": p.windows}
+    eps = sum((f.delta for _, f in zip(p.audits, facts)), Fraction(0))
+    return {"K": K, "audits": audits, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
 
 def check(p: Params, c: Commitment, e) -> tuple:

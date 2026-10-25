@@ -4,8 +4,9 @@ Python mirror, through the difftest harness's `ProtocolPort`.
 The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) checks a period in the core interface's
 answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases), and `case` a small period aimed at a verdict or at a decoding failure
-(`KINDS`). This module re-exports what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it draws onsite's
-certifier cases from `build` and answers them with `reference` (`verity/core/protocols/composition/tests/reference.py`)."""
+(`KINDS`). This module re-exports what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it
+draws onsite's certifier cases from `build` and answers them with `reference`
+(`verity/core/protocols/composition/tests/reference.py`)."""
 
 from __future__ import annotations
 
@@ -98,7 +99,9 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server):
     assert all(a["reason"].startswith(k.removeprefix("broken-") + ":")
                and (a["commitment"] is None) == (k != "broken-evidence")
                for (k, _), a in answers.items() if k.startswith("broken-"))
-    assert all(isinstance(a["public"]["K"], int) for (k, _), a in answers.items() if k == ACCEPT)
+    accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
+    assert all(isinstance(x["K"], int)
+               and x["eps"] == str(sum((Fraction(t["delta"]) for t in x["audits"]), Fraction(0))) for x in accepted)
     assert PC.cases(3) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
           server=server)
@@ -106,10 +109,15 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units drawn subset:3 at δ = 1/10 with at most 4 wrong, 7 cells on one
-    connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps (Lean's `#guard`)."""
+    connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps; and eps over audits at
+    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
     p = Params(((0, 3),), (7, 0), 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
     assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
             out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
     assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
     assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
+    assert out["eps"] == "1/10"
+    three = dataclasses.replace(p, audits=((0, 0),) * 3)
+    assert public(three, [Facts(1, 1, Fraction(1, d), 0) for d in (10, 15, 6)])["eps"] == "1/3"
+    assert public(dataclasses.replace(p, audits=()), [])["eps"] == "0"
