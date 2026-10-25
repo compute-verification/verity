@@ -208,7 +208,6 @@
     {"file": "verity_vllm/target_family.py", "kind": "environ", "symbol": "device_cc", "detail": "CUDA_VISIBLE_DEVICES"},
     {"file": "verity_vllm/pipeline/timeline.py", "kind": "environ", "symbol": "Timeline.from_env", "detail": "VERITY_TIMELINE"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "seed-default", "symbol": "build_manifest", "detail": "seed"},
-    {"file": "verity_vllm/pipeline/workload.py", "kind": "broad-except", "symbol": "case_for", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/workload.py", "kind": "environ", "symbol": "hf_home", "detail": "HF_HOME"},
     {"file": "verity_vllm/check/root_policy.py", "kind": "broad-except", "symbol": "_check_prompt_root", "detail": "except Exception"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "broad-except", "symbol": "derivation_provenance", "detail": "except Exception", "count": 2},
