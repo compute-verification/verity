@@ -11751,11 +11751,11 @@
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
-   "digest": "aa61381a6870692a0cb93298f0b695b764f8b55851309f9f214f6a1d47a9deae",
+   "digest": "594c8b4333594e799d46313a6dd1af858346aab58eaa82460cfb26671367d08e",
    "definitions": {
     "Accounting.Remote.Draw.Assumptions.Counted": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62",
     "Accounting.Remote.Draw.Assumptions.Live": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9",
-    "Accounting.Remote.Draw.Assumptions.Refused": "a6140fd270d4bdec60585a30263c5c2920e51076d780afbf573b7149ecee25ff"
+    "Accounting.Remote.Draw.Assumptions.Refused": "55fdec45e868957bc5f4e4c536744064f10bb6470609d52c9a724bae0b9c088d"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
@@ -13661,13 +13661,13 @@
    ]
   },
   "Definitions.Accounting.Guarantees.RemoteDraw": {
-   "digest": "ee588f92e34fc3aabd9a3a4effedb3f0800be582761025e8e662ca494fd72b7b",
+   "digest": "7dfdd02e342a70e70a095b8e60d12feaef61f6148e3f0c7e29824e7f445a1007",
    "definitions": {
-    "Accounting.Guarantees.Remote.HeldDrawn": "6bd9a98bcb2521ac6e4f4c4527de217c30145c6c5cdfc56ebcb52da6d7744793",
-    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "b1a340d90c1f365e13e5aedaba7a5fc362089650bd0e48fa7d225860b865a3da",
-    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "63eeb877c82e121519ac2bc0394b0a08d2c03c89f2ae967456ddbbc00e9c166c",
-    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "ad316f4b652bd92c7498bb488091f4677104278d9bdcde15bde38c936f1e2bd4",
-    "Accounting.Guarantees.Remote.PooledDraw": "092a97d93888b88ab1a4db6ac0c5d4dc221535e49dd0cbe24c3536552ae789de"
+    "Accounting.Guarantees.Remote.HeldDrawn": "a5f97793b15cdf5c81367ac3454008c8cde6ae707bb92ad5fafe3900ed576fbf",
+    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "51f41341ec6b313528c1e468b7a49a3eba22d1b2c755b22066f8066611a296c3",
+    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "9505aac0cd3d96035d954872df9d606936283283fedd8fd183fa207746606209",
+    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "e82ac89efde6cc69038db61cf4f40701563d93ec1dc4267971a1c05829d3f02f",
+    "Accounting.Guarantees.Remote.PooledDraw": "fb788c5c1e1f27aae3562b99599eb2a65f5befd3015ab19769cc8f20520bf5c6"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
