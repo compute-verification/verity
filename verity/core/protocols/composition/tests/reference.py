@@ -1,6 +1,7 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case) and mirrors of the stub components.
+`Core.Protocol.case` and `answer` decode a case), mirrors of the stub components, and the network certifier's answers
+recorded by its own suite (`Recorded`).
 
 The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
 `cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
@@ -29,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from verity_difftest import Reject, canonical
@@ -188,10 +190,41 @@ class Product:
         return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
+@dataclass(frozen=True)
+class Recorded:
+    """A port this suite doesn't run, answered as its own suite's mirror answered a few of its cases: `cases`, each
+    `{"case", "answer"}`, which that suite holds to its mirror and to Lean. The composition's breaks reach such a component
+    with no other case than one whose commitment `bad-hex` made bytes that aren't JSON, which the port refuses before it
+    reads anything else."""
+
+    id: str
+    cases: tuple
+
+    @classmethod
+    def load(cls, id: str, path: Path) -> Recorded:
+        return cls(id, tuple(json.loads(path.read_text())["cases"]))
+
+    def answer(self, case: Any) -> dict:
+        key = canonical(case)
+        for e in self.cases:
+            if canonical(e["case"]) == key:
+                return e["answer"]
+        try:
+            P.canonical_json(P.unhex(case["commitment"]))
+        except Reject:
+            return P.outcome(self.id, REJECT, "commitment: not canonical JSON")
+        raise KeyError(f"{self.id}: no recorded answer for this case")
+
+
 def stub_ids(*names: str) -> tuple[Stub, ...]:
     return tuple(Stub(f"verity/stub/{n}/v0") for n in names)
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over the stubs that stand in for their components.
+#: The network certifier's period check (`NetworkCheck.Period`), as `network/tests/test_network_period_protocol.py`'s
+#: mirror answered the cases it wrote here.
+CERTIFIER = Recorded.load("verity/certifier/v0", Path(__file__).parent / "fixtures" / "certifier.json")
+
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components: the certifier's recorded answers, and the
+#: stubs that stand in for the others.
 REMOTE = Product("verity/remote/v0", stub_ids("pouw", "sampled-proofs"))
-ONSITE = Product("verity/onsite/v0", stub_ids("certifier", "pous", "pouw", "sampled-proofs"))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, *stub_ids("pous", "pouw", "sampled-proofs")))

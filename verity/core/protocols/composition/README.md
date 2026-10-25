@@ -36,19 +36,24 @@ keyed by the component's id. On rejection or undecided nothing is public.
 
 ## Components
 
-Until their ports land, each component is a stub, `Core.Example.protocol` under an id that says so:
-`verity/stub/sampled-proofs/v0` (integrity, sampled proofs' one-stage audit), `verity/stub/pouw/v0` (work),
-`verity/stub/pous/v0` (space) and `verity/stub/certifier/v0` (communication, the network certifier). A port replaces its
-stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, keeping each list in the
-order of its ids (`ordered`, which each product's `#guard` checks). NCI and the trial's reconciling are not components yet.
+Communication is the network certifier's own port, `verity/certifier/v0` (`NetworkCheck.Period`,
+`../network/lean`, a requirement of `core_onsite`): a period's link-windows, each proved by N2 through one-stage and
+certified at both ends and on its clock, beside the period's compute audits, and on acceptance `K`, the bits that can
+leave the site in the period. Until their ports land, the others are stubs, `Core.Example.protocol` under an id that says
+so: `verity/stub/sampled-proofs/v0` (integrity, sampled proofs' one-stage audit), `verity/stub/pouw/v0` (work) and
+`verity/stub/pous/v0` (space). A port replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its
+own `Core.Protocol` value, keeping each list in the order of its ids (`ordered`, which each product's `#guard` checks).
+NCI and the trial's reconciling are not components yet.
 
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
-with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`) and a
-mirror of the stub. Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or
+with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), a
+mirror of the stub, and the certifier's answers on the cases in `tests/fixtures/certifier.json`, which the network suite
+writes from its own mirror and holds to it and to Lean (`network/tests/test_network_period_protocol.py`), since this suite
+runs neither. Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or
 fails to decode, and the composition's inputs or the case itself are often broken. The port follows top's rule where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
