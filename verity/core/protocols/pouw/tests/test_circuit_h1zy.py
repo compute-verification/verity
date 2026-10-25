@@ -793,3 +793,118 @@ def test_the_unit_on_chunk_rows_on_bits_is_its_word_reference():
     receipt = Z.reference(a, b, sa, sw, zy, SALT, 5, ROOTS)[0]
     assert want == [(receipt, 1), (receipt, 0), (receipt, 0), (receipt, 0)]
     assert got == want
+
+
+# -- the unit on chunk rows over J10-R ------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("defn", [H.PouwH1Tile5, H.PouwH1Tile6], ids=["v5", "v6"])
+@pytest.mark.parametrize("r,c,k,n", [(4, 8, 64, 2), (32, 32, 14336, 4)])
+def test_the_j10r_unit_on_chunk_rows_takes_the_call_and_blocks_after_the_tiles_parameters(defn, r, c, k, n):
+    """Over J10-R's tiles the unit on chunk rows is `PouwH1TileZyChunks_v2`, with `h1window.TILE_PARAMS_J10R`: n R A and n C
+    B rows of `ROW`(K / n), then UNIT's record, salt, position, roots, call and blocks, its outputs and ports UNIT's;
+    `window_unit` binds it past 4096 (Llama-3.1-8B's down projection at K = 14336 in 4 chunks), and UNIT up to 4096. v1's
+    stays `PouwH1TileZyChunks_v1`."""
+    t = _tile(defn, r, c, k)
+    u = Z.unit_chunks(t, n)
+    params, ret = u.signature()
+    inner = Z.unit(t).signature()
+    assert u.defn is Z.PouwH1TileZyChunks2 and u.id.startswith("PouwH1TileZyChunks_v2{")
+    assert [nm for nm, _t in params] == list(HW.TILE_PARAMS_J10R) and ret == inner[1]
+    assert [(nm, tp.n, tp.elem) for nm, tp in params[:2]] == [("a", n * r, Z.ROW(k // n)), ("b", n * c, Z.ROW(k // n))]
+    assert params[2:] == inner[0][2:]
+    decl = u.defn.ports(u.S())
+    assert {nm: p.kind for nm, p in decl.params.items()} == {"salt": "coin", "position": "position"}
+    assert set(decl.ret) == {"receipt"} and decl.ret["receipt"].sink and PT._coin_role(u) is None
+    assert Z.unit_chunks(_tile(H.PouwH1Tile, r, c, k), n).defn is Z.PouwH1TileZyChunks
+    if r == 32:
+        assert Z.window_unit(t) == u and Z.window_unit(_tile(defn, r, c, 4096)) == Z.unit(_tile(defn, r, c, 4096))
+
+
+@pytest.mark.parametrize("bindings,why", [
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile, 4, 8)), CHUNKS=2), "PouwH1Tile_v1's unit on chunk rows is .*_v1"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile3, 4, 8)), CHUNKS=2), "over J10-R's tiles"),
+    (lambda: dict(UNIT=_tile(H.PouwH1Tile5, 4, 8), CHUNKS=2), "PouwH1TileZy_v1 over a J10-R tile"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile5, 4, 8)), CHUNKS=1), "at least 2"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile5, 4, 8, 96)), CHUNKS=2), "whole 32-entry segments"),
+])
+def test_a_j10r_unit_on_chunk_rows_of_another_unit_or_chunking_is_refused(bindings, why):
+    """v2 takes only J10-R's zy unit, at whole 32-entry segments a chunk, and v1 still refuses a J10-R tile."""
+    with pytest.raises(ValueError, match=why):
+        bind(Z.PouwH1TileZyChunks2, **bindings())
+    with pytest.raises(ValueError, match="over PouwH1Tile_v1, not PouwH1Tile_v5"):
+        bind(Z.PouwH1TileZyChunks, UNIT=Z.unit(_tile(H.PouwH1Tile5, 4, 8)), CHUNKS=2)
+
+
+#: a 4-tile-row slot's call at the J10-R unit (1, 0), its first unit at position 40 and the unit at 41
+J10R_M, J10R_I, J10R_J, J10R_CALL, J10R_AT = 16, 1, 0, 40, 41
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["v5", "v6"])
+def test_the_j10r_unit_on_chunk_rows_on_words_is_j10r_reference_on_its_whole_rows(stream):
+    """`chunks_reference` with ``j10r``: `h1tile.j10r_reference` on each row's chunks joined, at the blocks
+    `h1tile.j10r_blocks` gives at the whole K (the call-scale stream's rows and columns), so a J10-R unit of
+    Llama-3.1-8B's down projection (K = 14336, 4 chunks, on a 4 × 8 tile) has its whole-row receipt and ok 1. Blocks
+    taken at a chunk's K / n move the receipt; a later chunk's scale off its row's leaves the receipt and makes ok 0; a
+    code off in the last chunk moves the receipt as it moves the whole row's."""
+    rng, k, n = random.Random(50), 14336, 4
+    a, b, sa, sw = _unit_rows(rng, 4, 8, k)
+    zy = Z.records(a, b, sa, sw)
+    blocks = H.j10r_blocks(J10R_M, k, (4, 8), J10R_I, J10R_J)
+    j10r = (J10R_CALL, blocks)
+    z, receipt = H.j10r_reference(a, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks, stream=stream)
+    assert Z.reference(a, b, sa, sw, zy, SALT, J10R_AT, ROOTS, stream, j10r) == (receipt, 1)
+    (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+    assert Z.chunks_reference(ca, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n, stream, j10r) == (receipt, 1)
+    chunk_blocks = H.j10r_blocks(J10R_M, k // n, (4, 8), J10R_I, J10R_J)
+    assert chunk_blocks != blocks and Z.chunks_reference(ca, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n, stream,
+                                                         (J10R_CALL, chunk_blocks))[0] != receipt
+    assert Z.chunks_reference(ca, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n)[0] != receipt, "v1's noise is no J10-R's"
+    off = list(csw)
+    off[n * 6 + n - 1] ^= 1 << 7
+    assert Z.chunks_reference(ca, cb, csa, off, zy, SALT, J10R_AT, ROOTS, n, stream, j10r) == (receipt, 0)
+    moved = [list(row) for row in ca]
+    moved[n * 2 + n - 1][7] ^= 0x40
+    a2 = [list(row) for row in a]
+    a2[2][(n - 1) * (k // n) + 7] ^= 0x40
+    got = Z.chunks_reference(moved, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n, stream, j10r)
+    assert got[0] == H.j10r_reference(a2, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks, stream=stream)[1] != receipt
+    assert got[1] == 0, "the record is the honest rows' product, not the moved row's"
+
+
+def _j10r_tail(position, call, blocks):
+    return {"salt": SD.leaves(SALT, True), "position": SD.position_leaves(position, True),
+            "roots": SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True), "call": SD.position_leaves(call, True),
+            "blocks": SD.position_leaves(blocks[0], True) + SD.position_leaves(blocks[1], True)}
+
+
+@pytest.mark.slow
+def test_the_j10r_unit_on_chunk_rows_on_bits_is_its_word_reference():
+    """`PouwH1TileZyChunks_v2` over the 4 × 8 v5 unit at K = 64 in 2 chunk rows a row, on bits against `chunks_reference`
+    with ``j10r``, about a minute: the honest chunk rows (ok 1), a later A chunk's scale off (0), a code off in a later
+    B chunk (the moved row's receipt, ok 0), and the blocks of another unit of the call (another receipt, ok 1). It is
+    the only test of v2's gates: the whole rows it joins, the call and blocks it passes on to UNIT and the scales'
+    equality."""
+    rng, n, k = random.Random(51), 2, 64
+    a, b, sa, sw = _unit_rows(rng, 4, 8, k)
+    (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+    zy = Z.records(a, b, sa, sw)
+    blocks = H.j10r_blocks(J10R_M, k, (4, 8), J10R_I, J10R_J)
+    other = H.j10r_blocks(J10R_M, k, (4, 8), J10R_I + 1, J10R_J)
+    off_a = list(csa)
+    off_a[3] ^= 1 << 5
+    moved = [list(row) for row in cb]
+    moved[n * 5 + 1][9] ^= 0x10
+    cases = [(cb, csa, blocks), (cb, off_a, blocks), (moved, csa, blocks), (cb, csa, other)]
+    u = Z.unit_chunks(_tile(H.PouwH1Tile5, 4, 8, k), n)
+    names = [p for p, _t in u.signature()[0]]
+    inputs, want = [], []
+    for xb, xsa, blk in cases:
+        want.append(Z.chunks_reference(ca, xb, xsa, csw, zy, SALT, J10R_AT, ROOTS, n, j10r=(J10R_CALL, blk)))
+        v = {"a": _row_bits(ca, xsa), "b": _row_bits(xb, csw),
+             "zy": _word_bits(zy[0]) + [x for y in zy[1] for x in _bits(y, 16)], **_j10r_tail(J10R_AT, J10R_CALL, blk)}
+        inputs.append([v[p] for p in names])
+    out = evaluate_bits(u, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
+    got = [([_int(o[32 * w:32 * w + 32]) for w in range((len(o) - 1) // 32)], int(o[-1])) for o in out]
+    receipt = H.j10r_reference(a, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks)[1]
+    assert [(w[0] == receipt, w[1]) for w in want] == [(True, 1), (True, 0), (False, 0), (False, 1)]
+    assert got == want

@@ -37,6 +37,11 @@ interface is note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
   population. Its work, `Σ_c ⌈m_c/R⌉·(n_c/C)·R·C·K_c`, is at least the credit. A call with `m = 0` has no unit and earns
   0. Each unit holds a row that serves an admitted request, no dead tile is a unit, and every `m_c` is at most `T` and at
   most what its round's entries take.
+* `LiveView2`, `capsBound`, `liveOk2`, `LiveSlotsChecks2`, `liveSlotsChecks_of_v2`, `live_schedule`:
+  **`PouwLiveSlots_v2{T}`**, which credit reads. Its public port `cap` is each leaf's public `max_tokens`, and its `ok`
+  adds that a leaf is an entry iff its cap is nonzero, admitted in round 0 with its header cap that cap. Its premise gives
+  v1's, so `live_credit` holds of it. With the decoded caps the committed `max_tokens` (`hcap`, as `hm` and `hs`),
+  a round `s ≥ 1` serves at most `#{q < T : s < max_tokens q}` rows, so no hidden request takes another's decode rows.
 
 What a decode reads from the port rows (the slot words, each header's index, round, cap and prompt length, the public
 `m` and `s`, and the `ok` word) is the statement's port layout, read through `dec`. That the decoded `m` is the call's
@@ -395,5 +400,86 @@ theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m
     fun u hu => population_admits calls step m n v hv hm hu,
     fun u hd => dead_not_drawn calls m n u hd,
     fun c _ h0 => zero_call calls m n h0 (K c)⟩
+
+/-! ## `PouwLiveSlots_v2`: each request's cap is its public `max_tokens` -/
+
+/-- **A round's words as `PouwLiveSlots_v2{T}` reads them**: v1's, and the public port `cap`, leaf `q`'s public
+`max_tokens` (0 past the period's requests). -/
+structure LiveView2 extends LiveView where
+  pcap : ℕ → ℕ
+
+/-- **The caps binding** (`circuit.live.caps_bound`): leaf `q` is an entry iff its public cap is nonzero, and an entry was
+admitted in round 0 with its header's cap its public cap. -/
+def capsBound (T : ℕ) (v : LiveView2) : Prop :=
+  ∀ q < T, (v.plen q ≠ 0 ↔ v.pcap q ≠ 0) ∧ (v.plen q ≠ 0 → v.rnd q = 0 ∧ v.cap q = v.pcap q)
+
+/-- **`PouwLiveSlots_v2{T}`'s `ok`, on words** (`circuit.live.live_ok_v2`): v1's `ok` and the caps binding. -/
+def liveOk2 (T : ℕ) (v : LiveView2) : Prop := liveOk T v.toLiveView ∧ capsBound T v
+
+/-- In an accepted v2 round at `s ≥ 1`, an entry takes one slot while `s` is below its public cap and none after. -/
+theorem liveOk2_takes {T : ℕ} {v : LiveView2} (h : liveOk2 T v) (hs : 1 ≤ v.s) {q : ℕ}
+    (hq : q ∈ entries T v.toLiveView) : takes v.toLiveView q = if v.s < v.pcap q then 1 else 0 := by
+  simp only [entries, mem_filter, mem_range] at hq
+  obtain ⟨h0, hc⟩ := (h.2 q hq.1).2 hq.2
+  unfold takes takesAt
+  rw [h0, hc]
+  split_ifs <;> omega
+
+/-- **An accepted v2 decode round serves at most the public schedule's rows**: at `s ≥ 1`, `m` is at most the count of
+leaves whose public cap exceeds `s`, whatever requests the hidden table holds and whichever slots name them. -/
+theorem liveOk2_m_le {T : ℕ} {v : LiveView2} (h : liveOk2 T v) (hs : 1 ≤ v.s) :
+    v.m ≤ ((range T).filter fun q => v.s < v.pcap q).card := by
+  calc v.m ≤ ∑ q ∈ entries T v.toLiveView, takes v.toLiveView q := liveOk_m_le h.1
+    _ = ∑ q ∈ entries T v.toLiveView, if v.s < v.pcap q then 1 else 0 :=
+        sum_congr rfl fun q hq => liveOk2_takes h hs hq
+    _ = ((entries T v.toLiveView).filter fun q => v.s < v.pcap q).card := (card_filter _ _).symm
+    _ ≤ ((range T).filter fun q => v.s < v.pcap q).card := card_le_card fun q hq => by
+        simp only [entries, mem_filter, mem_range] at hq ⊢
+        exact ⟨hq.1.1, hq.2⟩
+
+/-- `LiveSlotsChecks2` (a fact of `circuit.live.PouwLiveSlots_v2{T}`'s circuit, backed as `LiveSlotsChecks` is, by
+circuit-check and `test_circuit_live`'s agreement of its gates with `live_ok_v2`, not proved; no guarantee takes it yet).
+**The unit's circuit computes its Definition at its port rows**, in `LiveSlotsChecks`' form. -/
+def LiveSlotsChecks2 (T : ℕ) (sess : RowsSession) (dec : RowsSession → (ℕ → ℕ → Option Bool) → LiveView2) : Prop :=
+  ∀ vals : Fin sess.Circ.N → Bool,
+    (∀ u, ∀ g ∈ sess.P.io u, sess.Circ.eval vals g = vals g) →
+    (dec sess (portRead sess vals)).ok = true →
+    liveOk2 T (dec sess (portRead sess vals))
+
+/-- v2's premise gives v1's at the decoder's v1 view, so `live_credit` holds of every v2 window. -/
+theorem liveSlotsChecks_of_v2 {T : ℕ} {sess : RowsSession} {dec : RowsSession → (ℕ → ℕ → Option Bool) → LiveView2}
+    (h : LiveSlotsChecks2 T sess dec) : LiveSlotsChecks T sess fun s r => (dec s r).toLiveView :=
+  fun vals heval hok => (h vals heval hok).1
+
+/-- **The public schedule bounds every v2 window** (the fixed length, `credit._length`). Where each call's round has its
+`PouwLiveSlots_v2{T}` session accepted at the call's public row `m c` (`hm`) and its step's round (`hs`), with the decoded
+caps the period's committed `max_tokens` (`hcap`: credit opens each `cap_<i>` at the known `<prefix>caps` row of the
+committed length): in a round `≥ 1`, `m c` is at most `#{q < T : round < max_tokens q}`, so no hidden request takes a
+decode row past its own public `max_tokens`; and every entry of the round's request table is a leaf with a nonzero
+`max_tokens`, admitted in round 0, whose header cap is that `max_tokens`. -/
+theorem live_schedule {ι σ : Type} (calls : Finset ι) (step : ι → σ) (m : ι → ℕ) {T : ℕ}
+    (sess : σ → RowsSession) (dec : RowsSession → (ℕ → ℕ → Option Bool) → LiveView2)
+    (hchk : ∀ c ∈ calls, LiveSlotsChecks2 T (sess (step c)) dec) (vals : (s : σ) → Fin (sess s).Circ.N → Bool)
+    (heval : ∀ c ∈ calls, ∀ u, ∀ g ∈ (sess (step c)).P.io u, (sess (step c)).Circ.eval (vals (step c)) g = vals (step c) g)
+    (hok : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).ok = true)
+    (hm : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).m = m c)
+    (round : σ → ℕ) (hs : ∀ c ∈ calls, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).s = round (step c))
+    (maxTokens : ℕ → ℕ)
+    (hcap : ∀ c ∈ calls, ∀ q < T, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).pcap q = maxTokens q) :
+    (∀ c ∈ calls, 1 ≤ round (step c) → m c ≤ ((range T).filter fun q => round (step c) < maxTokens q).card) ∧
+      ∀ c ∈ calls, ∀ q < T, (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).plen q ≠ 0 →
+        maxTokens q ≠ 0 ∧ (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).rnd q = 0 ∧
+          (dec (sess (step c)) (portRead (sess (step c)) (vals (step c)))).cap q = maxTokens q := by
+  refine ⟨fun c hc h1 => ?_, fun c hc q hq hp => ?_⟩
+  · have hv := hchk c hc _ (heval c hc) (hok c hc)
+    have hle := liveOk2_m_le hv (by rw [hs c hc]; exact h1)
+    rw [hm c hc, hs c hc] at hle
+    refine le_trans hle (le_of_eq (congrArg card (filter_congr fun q hq => ?_)))
+    rw [hcap c hc q (mem_range.1 hq)]
+  · have hb := (hchk c hc _ (heval c hc) (hok c hc)).2 q hq
+    obtain ⟨h0, hcp⟩ := hb.2 hp
+    refine ⟨?_, h0, hcp.trans (hcap c hc q hq)⟩
+    rw [← hcap c hc q hq]
+    exact hb.1.1 hp
 
 end Pouw.SecurityProofs.LiveCredit

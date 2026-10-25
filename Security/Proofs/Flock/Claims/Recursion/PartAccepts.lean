@@ -9,10 +9,13 @@ only as a hypothesis on the readers' messages, so it is antitone in `chk` (`deco
 that `PartChecksB` admits, what part `s`'s circuit accepts, read at the messages (`PartAccepts`): at a compiled
 statement of the shape, some V\* statement showing the coins and some outer witness passing `Flock.check` there, with
 its recorded calls true and none colliding, that agrees with the messages at the rounds it holds whole and at its
-pieces, and whose commit strings are the messages at the rounds read whole off the run (`LayoutB.CmtAgrees`). The last
-ties every part to the readers' rounds, those it reads without holding them included, so no two parts' checks can pass
-on different values of one round. `VstarShowsB` supplies it on the run (`RecDeploy.vstarAccepts_bound`), so no route
-gains a premise.
+pieces, whose commit strings are the messages at the rounds read whole off the run (`LayoutB.CmtAgrees`), and whose
+shared rows are the messages' where they carry them (`LayoutB.RowsRead`). The commit strings tie every part to the
+readers' rounds, those it reads without holding them included, so no two parts' checks can pass on different values of
+one round; the shared rows do the same for a row one part writes and another reads. On the run, `VstarShowsB` supplies
+the commit strings and `LayoutB.ReadsRows` the shared rows (`RecDeploy.vstarAccepts_bound`). `ReadsRows` holds outright
+at a layout whose messages carry no shared row (`LayoutB.readsRows_of_rowIn`), as at every deployed layout, so no
+deployed route gains a premise.
 
 * `PartChecksB` holds at `PartAccepts`, at every deployment, layout, shape and staging (`partChecksB_partAccepts`).
 * `PartAccepts` implies every inner check `PartChecksB` admits (`partAccepts_chk`).
@@ -42,8 +45,9 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **What V\* part `s`'s circuit accepts, read at the inner messages `ms`**, at the coins `c`: `x` is a compiled
 statement of the shape, and some V\* statement `xO` showing `c` for the part (`shows`) has an outer witness `w` passing
 `Flock.check`, its recorded calls true evaluations and none colliding, that agrees with `ms` at each round the part
-holds whole and at each of its pieces, at its offset, and whose commit strings (`cmt`) are `ms`'s at the rounds read
-whole off the run (`LayoutB.CmtAgrees`). It is the least inner check `PartChecksB` admits (`partChecksB_partAccepts`,
+holds whole and at each of its pieces, at its offset, whose commit strings (`cmt`) are `ms`'s at the rounds read
+whole off the run (`LayoutB.CmtAgrees`), and whose shared rows are `ms`'s where `ms` carries them (`LayoutB.RowsRead`).
+It is the least inner check `PartChecksB` admits (`partChecksB_partAccepts`,
 `partAccepts_chk`). -/
 def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
@@ -53,7 +57,7 @@ def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
       (findColl (L.calls x s w)).isSome = false ∧ shows s x xO c ∧
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) ∧
-      L.CmtAgrees cmt x xO ms
+      L.CmtAgrees cmt x xO ms ∧ L.RowsRead x s w ms
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`PartChecksB` at what each part's circuit accepts**, at every deployment, layout, shape and staging: a witness
@@ -63,7 +67,7 @@ theorem partChecksB_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.
     PartChecksB H D DO L shape shows cmt (PartAccepts H D DO L shape shows cmt) s := by
   intro x st hx hf xO w hck hT
   cases hc : (findColl (L.calls x s w)).isSome
-  · exact Or.inl fun c hs ms hh hp hm => ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp, hm⟩
+  · exact Or.inl fun c hs ms hh hp hm hr => ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp, hm, hr⟩
   · exact Or.inr rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -74,9 +78,9 @@ theorem partAccepts_chk {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy C
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hP : ∀ s, PartChecksB H D DO L shape shows cmt chk s)
     {s : ℕ} {x : Msg} {c : ℕ → Coin} {ms : List Msg} (h : PartAccepts H D DO L shape shows cmt s x c ms) :
     chk s x c ms := by
-  obtain ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp, hm⟩ := h
+  obtain ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp, hm, hr⟩ := h
   rcases hP s x st hx hf xO w hck hT with h | h
-  · exact h c hs ms hh hp hm
+  · exact h c hs ms hh hp hm hr
   · rw [hc] at h
     exact absurd h Bool.false_ne_true
 
