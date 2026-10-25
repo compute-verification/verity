@@ -311,7 +311,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self._nc.blocks_per_desc = blocks if blocks is not None else 1024 if self.auto_blocks else 32 if self.native_hooks else 4
             # R11 candidate B: size-adaptive blocks per window (cap = blocks_per_desc; ceil(max staged bytes / auto_bytes_per_block) otherwise)
             self._nc.auto_blocks = self.auto_blocks
-            self._nc.auto_bytes_per_block = settings.NATIVE_GATHER_AUTO_BYTES
+            self._nc.auto_bytes_per_block = int(os.environ.get("NATIVE_GATHER_AUTO_BYTES", "32768"))
         self._names: list[str] = []
         self._name_ids: dict[str, int] = {}
         self._metas_cache = PlanCache()                          # (plan key, version) -> PlanMetas, for this run's and the previous run's plans

@@ -42,7 +42,6 @@ if REPO not in sys.path:
     sys.path.insert(0, REPO)
 import numpy as np  # noqa: E402  -- identity is settled before anything heavy loads
 import torch  # noqa: E402
-from verity_vllm import settings  # noqa: E402
 from verity_vllm.commit import hidden_stream as hs  # noqa: E402
 from verity_vllm.commit import scheme  # noqa: E402
 from verity_vllm.config import option  # noqa: E402
@@ -58,7 +57,7 @@ def ext():
         from verity_vllm.commit.committer import native_jit
 
         _EXT, _bd, _digest = native_jit.jit_load('hidden_gpu_tree', [os.path.join(HERE, 'hidden_gpu_tree.cu')],
-                                                 parent=settings.HIDDEN_GPU_BUILD or None, cuda_cflags=('-O3', '--use_fast_math'))
+                                                 parent=os.environ.get('HIDDEN_GPU_BUILD') or None, cuda_cflags=('-O3', '--use_fast_math'))
     return _EXT
 
 
