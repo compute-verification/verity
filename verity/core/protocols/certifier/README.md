@@ -86,6 +86,11 @@ A spec-level reference for network accounting's timing channel:
   (`protocol/compile-slice.md`), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
   evaluator from `verity`;
+- the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
+  replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
+  each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
+  are the pool's, so eviction, preemption and a leaving request's returns are in the slice
+  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
@@ -111,7 +116,7 @@ A spec-level reference for network accounting's timing channel:
 - the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
   hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
   leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
-  cumulative pool bound too, in N = NB − 1 entries. Not yet wired into the replay (its docstring's "Composition");
+  cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and

@@ -65,10 +65,11 @@ ROOT), KU = ⌈L / U⌉, HW = bitlen(KU), LW = bitlen(L), SL = bitlen(R − 1), 
 little-endian. A slot's mask bit and its stamps' order are the only places the call reads a slot's number, and an
 invalid entry's unit, parent, owner and level are never read (`decode` drops them).
 
-**Composition** (not wired yet): the calls follow the replay's `_KV` calls in order. `ReplayStep_v1` would read each
-admitting candidate's hit and evictable count from its lookup, and each leaving slot's returns from its free. Its
-blocks per request would be each free's `held` and each compute's `new`, and its free count hf plus the queued copies.
-The replay's state chain carries the pool. `trail` and `sources` give a hit's canonical sources as `cache_step` does.
+**Composition** (`compile_slice_v2.CompileSlice_v2`): the calls follow the replay's `_KV` calls in order. `ReplayStep_v1`
+reads each reached candidate's hit and evictable count from its lookup, and each victim's and leaving slot's returns
+from its free. Each free's `held` and each compute's `new` are ReplayStep_v1's own (⌈comp / B⌉ and the row's need), and
+its free count is hf plus the queued copies. The slice's pool rows carry the pool. `trail` and `sources` give a hit's
+canonical sources as `cache_step` does.
 
 **Cost** (`size`): a unit of the window costs about N·(2·(U·TW + EW) + 2·RW + HW + D·R) ANDs: a comparison against
 every entry and a masked write to every entry. A call is KU units, the eviction (about N·(2^EW + D·(R + 2·SW))) and
