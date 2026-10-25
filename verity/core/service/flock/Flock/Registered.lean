@@ -601,13 +601,27 @@ def checkDescription (c : Circuit) (pub : Public) (own : Array Port) : V Unit :=
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
   own.toList.forM (checkDescriptionPort c pub t)
 
+/-- The first of the circuit's ports whose name an earlier port has. -/
+def dupName (c : Circuit) : Option Nat :=
+  (List.range c.ports.size).find? fun q => (List.range q).any fun q' => c.ports[q']!.name == c.ports[q]!.name
+
+/-- **With registered reads, the circuit names each port once**: the verifier's registered reads, and every check of them,
+name a port by its name, so a second port of a name is one no check reads. -/
+def namesOnce (c : Circuit) : V Unit :=
+  match dupName c with
+  | some q => throw s!"registered reads: the circuit names port {c.ports[q]!.name} twice, and a registered read names one port"
+  | none => pure ()
+
 end Registered
 
-/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
-output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
-registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
+/-- An hm96 statement's registered reads (`Registered.check`), and with the verifier's own, a circuit that names each port
+once (`Registered.namesOnce`). A hidden-output statement's registered ports may be its output rows as well as its input
+rows (§16.13): an output row's table is its instances' own rows, each opened against the registered root at the position
+its unit reads, so the instance's output is that row of the registered value. -/
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
-  Registered.check st.c st.pub registered (Registered.derived st.partition)
+  match registered with
+  | some _ => Registered.namesOnce st.c >>= fun _ => Registered.check st.c st.pub registered (Registered.derived st.partition)
+  | none => Registered.check st.c st.pub none (Registered.derived st.partition)
 
 /-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
 table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
