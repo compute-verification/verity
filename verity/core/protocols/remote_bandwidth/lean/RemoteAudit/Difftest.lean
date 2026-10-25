@@ -583,8 +583,8 @@ private def blockOf (j : Json) : V Schedule.Block := do
       | f => some <$> J.asNat f "free"
     pure (some (← J.asNat xs[0]! "write", free))
 
-/-- `schedule.run_json`: the schedule check of `{"blocks", "schedule": {"registered", "appends", "steps"}, "passes":
-[[step, runs], ...], "appends": [[first, count], ...]}`, to `{"bits"}` or why not. -/
+/-- `schedule.run_json`: the schedule check of `{"blocks", "cap", "schedule": {"registered", "appends", "steps"},
+"passes": [[step, runs], ...], "appends": [[first, count], ...]}`, to `{"bits"}` or why not. -/
 def scheduleFn (j : Json) : V Json := do
   let s ← J.get j "schedule" "input"
   let registered ← (← J.arr s "registered" "schedule").mapM fun r => do
@@ -602,7 +602,7 @@ def scheduleFn (j : Json) : V Json := do
   let made ← (← J.arr j "appends" "input").mapM fun a => do
     let ys ← natsOfN a 2 "append"
     pure (ys[0]!, ys[1]!)
-  let got := Schedule.check ⟨registered, appends, steps⟩ (← nat j "blocks") passes made
+  let got := Schedule.check ⟨registered, appends, steps⟩ (← nat j "blocks") (← nat j "cap") passes made
   pure (refusedOr ((fun b => Json.mkObj [("bits", toJson b)]) <$> got))
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [

@@ -2,7 +2,8 @@
 `schedule`), refusals as outputs so that both sides' reasons are compared word for word: drawn schedules (registered
 frees, appended blocks never resident, never freed and freed, passes at increasing steps), each session's passes and
 appends the schedule's or with one fault (a plan steered off the schedule's, a step, a pass or an append missing or
-moved, a schedule that is not one), with malformed inputs rejected by both.  The Lean is of record: `audit.ledger`
+moved, a schedule that is not one, a schedule over the cap committed before the coins), with malformed inputs
+rejected by both.  The Lean is of record: `audit.ledger`
 reads the Python's verdict (`Session.scheduled`) and this holds it to the Lean, on which
 `Properties.RemoteAudit.ScheduleChecked` is proved."""
 
@@ -27,13 +28,13 @@ def port(inputs=st.nothing(), reference=schedule.run_json) -> D.Port:
 
 server = D.server_fixture(port())
 
-HONEST = {"blocks": 8, "schedule": {"registered": [[2, 1, 1]],
+HONEST = {"blocks": 8, "cap": 256, "schedule": {"registered": [[2, 1, 1]],
                                     "appends": [[[0, None], [0, 1], [0, None], [0, None]], [[2, None], [2, None]]],
                                     "steps": [0, 1, 2, 3, 4]},
           "passes": [[0, [[0, 8]]], [1, [[0, 12]]], [2, [[0, 2], [3, 6], [10, 2]]], [3, [[0, 2], [3, 6], [10, 4]]],
                      [4, [[0, 2], [3, 6], [10, 4]]]],
           "appends": [[8, 4], [12, 2]]}
-"""`tests/test_appends.py`'s honest session: its schedule, its passes' plans and its appends."""
+"""`tests/test_appends.py`'s honest session: its cap (`CAP`), its schedule, its passes' plans and its appends."""
 
 
 @st.composite
@@ -52,19 +53,20 @@ def schedules(draw) -> tuple[int, schedule.Schedule]:
     return blocks, schedule.Schedule(tuple(registered), tuple(appends), tuple(steps))
 
 
-def as_json(blocks: int, sc: schedule.Schedule, passes, appends) -> dict:
-    return {"blocks": blocks, "schedule": sc.to_json(), "passes": [[s, [list(r) for r in runs]] for s, runs in passes],
-            "appends": [list(a) for a in appends]}
+def as_json(blocks: int, cap: int, sc: schedule.Schedule, passes, appends) -> dict:
+    return {"blocks": blocks, "cap": cap, "schedule": sc.to_json(),
+            "passes": [[s, [list(r) for r in runs]] for s, runs in passes], "appends": [list(a) for a in appends]}
 
 
 @st.composite
 def inputs(draw) -> dict:
-    """A drawn schedule with its own session's passes and appends, or one fault (most often none)."""
+    """A drawn schedule with its own session's passes and appends and a cap at or above its bits, or one fault (most
+    often none)."""
     blocks, sc = draw(schedules())
     passes = [(s, list(sc.plan(blocks, s))) for s in sc.steps]
     appends = [list(a) for a in sc.append_runs(blocks)]
     fault = draw(st.sampled_from([None] * 6 + ["plan", "step", "pass", "append", "extent", "free", "steps",
-                                                "registered", "malformed"]))
+                                                "registered", "cap", "malformed"]))
     if fault == "plan" and passes:
         k = draw(st.integers(0, len(passes) - 1))
         runs = passes[k][1]
@@ -90,11 +92,12 @@ def inputs(draw) -> dict:
         sc = schedule.Schedule(sc.registered + draw(st.sampled_from([((0, 1, 0),), ((0, blocks + 1, 0),),
                                                                        ((blocks - 1, 1, 2 ** 64),)])),
                                sc.appends, sc.steps)
-    v = as_json(blocks, sc, passes, appends)
+    cap = draw(st.integers(0, sc.bits - 1)) if fault == "cap" else sc.bits + draw(st.sampled_from([0, 0, 1, 8, 2 ** 70]))
+    v = as_json(blocks, cap, sc, passes, appends)
     if fault == "malformed":
         bad = draw(st.sampled_from([-1, None, True, "1", [], {}, [1, 2, 3]]))
-        k = draw(st.sampled_from(["blocks", "passes", "appends", "registered", "block", "step", "drop"]))
-        if k in ("blocks", "passes", "appends"):
+        k = draw(st.sampled_from(["blocks", "cap", "passes", "appends", "registered", "block", "step", "drop"]))
+        if k in ("blocks", "cap", "passes", "appends"):
             v[k] = bad
         elif k == "registered":
             v["schedule"]["registered"] = [bad]
@@ -103,26 +106,32 @@ def inputs(draw) -> dict:
         elif k == "step":
             v["schedule"]["steps"] = [bad]
         else:
-            v.pop(draw(st.sampled_from(["blocks", "schedule", "passes", "appends"])))
+            v.pop(draw(st.sampled_from(["blocks", "cap", "schedule", "passes", "appends"])))
     return v
 
 
 def test_schedule(server) -> None:
-    told = {"bits": 0, "refused": 0, "plan": 0}
+    told = {"bits": 0, "refused": 0, "plan": 0, "cap": 0}
 
     def reference(v):
         out = schedule.run_json(v)
         told["refused" if "refused" in out else "bits"] += 1
         told["plan"] += "plan is not the schedule's" in out.get("refused", "")
+        told["cap"] += "committed before the coins" in out.get("refused", "")
         return out
 
     stats = D.run(port(inputs(), reference), examples=500, server=server)
-    assert stats.rejects > 10 and told["bits"] > 150 and told["refused"] > 100 and told["plan"] > 15, (stats, told)
+    assert (stats.rejects > 10 and told["bits"] > 150 and told["refused"] > 100 and told["plan"] > 15
+            and told["cap"] > 10), (stats, told)
 
 
 def test_the_honest_session_s_verdict_is_the_leans(server) -> None:
-    assert schedule.run_json(HONEST) == {"bits": 200}
-    assert D.replay(port(), HONEST, server) == ("output", D.canonical({"bits": 200}))
+    """At its cap and at its own bits the honest schedule passes, and one bit under them it is refused."""
+    for cap, out in ((256, {"bits": 200}), (200, {"bits": 200}),
+                     (199, {"refused": "the schedule is 200 bits, over the cap of 199 committed before the coins"})):
+        v = {**HONEST, "cap": cap}
+        assert schedule.run_json(v) == out
+        assert D.replay(port(), v, server) == ("output", D.canonical(out))
 
 
 @pytest.mark.parametrize("change, why", [
@@ -142,10 +151,13 @@ def test_the_honest_session_s_verdict_is_the_leans(server) -> None:
     (lambda v: v["passes"][3].__setitem__(1, [[0, 2], [3, 6], [10, 2], [13, 1]]),
      "pass 3's plan is not the schedule's at step 3"),
     (lambda v: v["passes"][1].__setitem__(1, [[0, 8], [8, 4]]), "pass 1's plan is not the schedule's at step 1"),
+    (lambda v: v["schedule"]["registered"].append([7, 1, 2 ** 40]),
+     "the schedule is 264 bits, over the cap of 256 committed before the coins"),
 ], ids=["registered", "empty-append", "write-past", "free-past", "free-before-write", "steps", "appends",
-        "append-extent", "passes", "step", "steered-plan", "unjoined-runs"])
+        "append-extent", "passes", "step", "steered-plan", "unjoined-runs", "over-cap"])
 def test_each_refusal_is_the_leans_word_for_word(server, change, why) -> None:
-    v = {"blocks": HONEST["blocks"], "schedule": {k: [list(x) if isinstance(x, list) else x for x in vs]
+    v = {"blocks": HONEST["blocks"], "cap": HONEST["cap"],
+         "schedule": {k: [list(x) if isinstance(x, list) else x for x in vs]
                                                   for k, vs in HONEST["schedule"].items()},
          "passes": [[s, [list(r) for r in runs]] for s, runs in HONEST["passes"]],
          "appends": [list(a) for a in HONEST["appends"]]}

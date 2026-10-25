@@ -17,6 +17,9 @@ from verity.core.protocols.remote_bandwidth.audit import Params, Session
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 N = 8
+CAP = 256
+"""The cap on its schedule's bits that a test session commits before its coins (`Params.schedule_cap`): above
+`HONEST_SCHEDULE`'s 200, so a ledger crediting the schedule's own bits instead would show."""
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
@@ -77,14 +80,16 @@ class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
-    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
+    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
+    parameters commit `schedule_cap` (`CAP` by default) on its schedule's bits."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
-                 deferred: bool = False, appends: int = coins.APPENDS) -> None:
+                 deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = CAP) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
-                        window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred)
+                        window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred,
+                        schedule_cap=schedule_cap)
         self.clock = Clock()
         if registry is None:
             self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
@@ -151,11 +156,11 @@ class Run:
         return out
 
 
-def honest_session() -> Run:
+def honest_session(schedule_cap: int | None = CAP) -> Run:
     """Window 0: a pass over the registered store; 4 pages appended (8 … 11) and read; one of them and a registered
     block released and dropped from the plan.  Window 1: 2 more pages (12, 13) read with the rest, then a pass sent
     whole."""
-    r = Run(store())
+    r = Run(store(), schedule_cap=schedule_cap)
     assert r.run() is None
     r.append(4)
     assert r.run(change=(((N, 4),), ())) is None
@@ -219,7 +224,8 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
     """Without a verdict (None), the session's 17 post-seed receipts are certified but not credited: μ_timing counts
     only the registered blocks' 37.  On a verdict that holds, all 54 are credited, and μ_carrier charges each pass the
     least of the verdict's carrier bytes and its post-seed bytes, with the session's schedule check beside it, whose
-    bits it reports.  A verdict that fails is refused."""
+    cap it reports as the steering: the one committed before the coins, not the 200 bits of the schedule published
+    after them.  A verdict that fails is refused."""
     rec = honest[0].s.record()
     scheduled = honest[0].s.scheduled(HONEST_SCHEDULE)
     capacity = 4096 * 10**9 / 10
@@ -230,7 +236,7 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
     assert set(none.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "carrier" in audit.LEDGER_SOURCES
     assert none.steering is None and none.to_json()["steering_bits"] is None
     held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096), schedule=scheduled)
-    assert held.steering == scheduled.bits == HONEST_SCHEDULE.bits == 200 and held.to_json()["steering_bits"] == 200
+    assert HONEST_SCHEDULE.bits == 200 and held.steering == scheduled.cap == CAP == held.to_json()["steering_bits"]
     assert held.timing == pytest.approx(1 - 54 * 4096 / whole)
     assert held.carrier == pytest.approx((0 + 3 + 3 + 3 + 3) * 4096 / whole)
     assert held.sample == none.sample and held.counting == none.counting
@@ -788,6 +794,16 @@ def test_a_session_that_defers_residency_has_a_lifetime_of_at_least_two() -> Non
     for bad in (1, "yes", None):
         with pytest.raises(ValueError, match="deferred is a bool"):
             Params(blocks=N, deadline_ns=1, windows=1, deferred=bad)
+
+
+def test_a_session_s_schedule_cap_is_none_or_bits() -> None:
+    """The cap a session commits on its schedule's bits is None (the default: none, so no appended block is credited)
+    or a nonnegative integer."""
+    assert Params(blocks=N, deadline_ns=1, windows=1).schedule_cap is None
+    assert Params(blocks=N, deadline_ns=1, windows=1, schedule_cap=0).schedule_cap == 0
+    for bad in (-1, True, 8.0, "200"):
+        with pytest.raises(ValueError, match="schedule's cap"):
+            Params(blocks=N, deadline_ns=1, windows=1, schedule_cap=bad)
 
 
 def test_the_lifetime_cap_is_the_whole_windows_of_t_in_30_seconds() -> None:
