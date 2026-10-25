@@ -107,6 +107,10 @@ A spec-level reference for network accounting's timing channel:
   row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
+- the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
+  hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
+  leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
+  cumulative pool bound too, in N = NB − 1 entries. Not yet wired into the replay (its docstring's "Composition");
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
