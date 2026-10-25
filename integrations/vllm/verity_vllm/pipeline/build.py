@@ -508,7 +508,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
-                                    session=session)
+                                    session=session, dead_free=wrapper == "request" and tp == 1)
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]

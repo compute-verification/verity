@@ -10,6 +10,8 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
+- puts every stored session's record (its vectors and forgeries) in the canonical text the writers emit
+  (`record_text.session_text`, Lean's `Json.compress`), in a copy under the set's work directory;
 - runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
   proof does not cover, which the Lean verifier refuses whatever the session, once every check has passed),
   `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws
@@ -35,6 +37,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import agree  # noqa: E402
+from record_text import session_text  # noqa: E402
 
 #: the verifier processes all sets may run at once (main sets it: `--session-jobs`)
 SLOTS = threading.Semaphore(1)
@@ -68,6 +71,28 @@ def fetch(art, store):
     return files[0] if len(files) == 1 and files[0].is_file() else d
 
 
+def canonical(src, dst):
+    """The stored session directory `src` at `dst`, its record in the canonical text the writers emit
+    (`record_text.session_text`): the stored vectors predate it. Its other files are hard links (copies across devices); a
+    record that isn't JSON is kept as it is."""
+    if not dst.exists():
+        def link(a, b):
+            try:
+                os.link(a, b)
+            except OSError:
+                shutil.copy2(a, b)
+        shutil.copytree(src, dst, copy_function=link)
+        rec = dst / "session.json"
+        if rec.is_file():
+            try:
+                v = json.loads(rec.read_text())
+            except ValueError:
+                return dst
+            rec.unlink()
+            rec.write_text(session_text(v))
+    return dst
+
+
 def py(*args):
     subprocess.run([sys.executable, *map(str, args)], check=True, capture_output=True)
 
@@ -92,7 +117,8 @@ def run_set(i, s, a, ups, store):
         w.mkdir(parents=True, exist_ok=True)
         expect.write_text(json.dumps([{"name": x["dir"].rsplit("/", 1)[1], "expect": x["expect"]} for x in s["sessions"]]))
         expects = [expect]
-        sessions = [str(vectors / x["dir"].rsplit("/", 1)[1]) for x in s["sessions"]]
+        names = [x["dir"].rsplit("/", 1)[1] for x in s["sessions"]]
+        sessions = [str(canonical(vectors / n, w / "stored" / n)) for n in names]
     if "mutants" in s:
         honest = vectors / "honest"
         py(HERE / "redigest.py", honest, w / "mutants")
@@ -106,7 +132,7 @@ def run_set(i, s, a, ups, store):
         sessions += sorted(str(p) for p in (w / "fuzz").iterdir() if p.is_dir())
     if "forgeries" in s:
         f = fetch(s["forgeries"], store)
-        sessions += sorted(str(p) for p in f.iterdir() if p.is_dir())
+        sessions += sorted(str(canonical(p, w / "forgeries" / p.name)) for p in f.iterdir() if p.is_dir())
     for k, rd in enumerate(s.get("selftest", [])):
         d = w / "selftest" / str(k)
         py(HERE / "selftest_records.py", fetch(rd, store), d)

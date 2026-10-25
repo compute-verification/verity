@@ -137,8 +137,8 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
                                    "float softmax scale read back",
                                    "q [T, NH, D], k, v [T, KVH, D] bf16; NH % KVH == 0", "output is an unwritten allocation of q's shape",
                                    "assumed (op contract): causal attention over the history + this call's rows"),
-                    evidence_domain="structural; numerics: Int8KvQuant_v1 + Int8LutAttentionRow_v1 (engine.int8_attention's kv_quant and "
-                                    "window_rows, bit-equal on the RTX PRO 6000 to its CPU run and to fattn_ref.py)")
+                    evidence_domain="structural; numerics: Int8KvQuant_v1 + Int8LutAttentionRow_v1 (engine.int8_ops' kv_quant_batch and "
+                                    "window_rows_batch, bit-equal on the RTX PRO 6000 to its CPU run and to fattn_ref.py)")
 
     def registered_tables(self, ep, mode):
         ts = self.targets()

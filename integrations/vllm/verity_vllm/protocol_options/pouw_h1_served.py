@@ -60,7 +60,9 @@
   is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
   round 0's request root and its domain bound to the session (`ids_tree`); each later round's
   is the Commit's ids of its step (`close_round`). The Commit registers the window's own tree as its
-  value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`).
+  value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`). With the tap, the
+  window's round tables are the live unit's registered values too (`pouw_h1_live`, `live`, in `entries`): round 0's
+  request headers ``requests@0`` and each round's slot table ``slots@<s>``, listed whole under round s's root.
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
   linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, served weights that
@@ -78,7 +80,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -88,20 +89,19 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
-from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
+from verity_vllm.protocol_options import pouw_h1_live as LV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options.pouw_h1_served_files import FILE, Registration, file_name, reads_file, register, trees
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
-#: a statement's ``--registered`` file, one a call
-FILE = "pouw-h1-registered-c{call}.json"
 #: the window Program's parameter prefix, the same for every window of a period
 PREFIX = "h1/"
 #: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
@@ -112,6 +112,8 @@ B_NONCE = Wt.B_NONCE
 IDS_NONCE = B_NONCE + (1 << 39)
 #: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
 RECEIPT_NONCE = IDS_NONCE + (1 << 38)
+#: the live tables' nonces (`pouw_h1_live.nonce`): requests@0's LIVE_NONCE, round s's slots@<s>'s LIVE_NONCE + 1 + s
+LIVE_NONCE = RECEIPT_NONCE + (1 << 37)
 #: an input-ids slot past the step's rows: no token id is 2^32 - 1
 EMPTY_ID = 0xFFFFFFFF
 #: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
@@ -124,10 +126,6 @@ def nonce(call: int, table: str) -> int:
     """The salt nonce of call ``call``'s table ``table`` (`h1window.TABLES`): a step's A table of K takes its first call of
     K's ``a`` nonce, which no other table takes."""
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
-
-
-def file_name(call: int) -> str:
-    return FILE.format(call=int(call))
 
 
 def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
@@ -354,6 +352,8 @@ class Served:
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
+    #: with the tap, the live unit's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
+    live: dict[str, G.Registered] = field(default_factory=dict)
     #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
     _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
@@ -511,7 +511,7 @@ class Served:
         of its step), and the Commit's value of it (`pouw_h1_commit.CommitTap.input_ids`)."""
         if self.tap is None or self.refused or self.program is None:
             return
-        ids = self.tap.ids_at(r)
+        ids = self.tap.ids_at(r, next((c.pad for c in run.calls if c.step == r and c.layer == 0), 0))
         if r:
             try:
                 self._register_ids(run, r, ids)
@@ -519,6 +519,10 @@ class Served:
                 self.refused.append(f"round {r}'s input ids: {e}")
                 return
         self.tap.input_ids(run, self, r, ids)
+
+    def live_table(self, run: Any, name: str, r: int) -> LV.Table | None:
+        """With the tap, round r's live request (round 0's) or slot table, registered now (`pouw_h1_live.table`)."""
+        return LV.table(self, run, name, r, LIVE_NONCE, run.session or LOCAL_SESSION)
 
     def _weight(self, call: Any, weight: Any, scale: Any) -> None:
         held = self._weights.get(call.layer)
@@ -659,7 +663,8 @@ class Served:
         """Round r's A segments (`credit.round_root`): step r's A table ``a/<K>@<r>`` of each K its calls have, whole, as
         the aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root
         commits it before round r's coin and no other round lists it; with ``receipts``, each of step r's calls' receipt
-        table alike; and round r's input-ids table. Nothing once the window is refused."""
+        table alike; and round r's input-ids table and its live slot table ``slots@<r>`` (`pouw_h1_live`). Nothing once the
+        window is refused."""
         if self.refused or self.program is None:
             return {}
         per, out = len(self.linears), {}
@@ -668,7 +673,7 @@ class Served:
         if self.receipts is not None:
             values.update(dict.fromkeys(self.receipt_table(c) for c in mine))
         regs = [self.registered.get(v) for v in values]
-        for reg in [*regs, self.ids.get(r)]:
+        for reg in [*regs, self.ids.get(r), self.live.get(LV.value(self, LV.SLOTS, r))]:
             if reg is not None:
                 out[reg.value] = [(lv, ix, reg.levels[lv][ix]) for lv, ix in CR.cover(0, reg.leaves)]
         return out
@@ -714,8 +719,9 @@ class Served:
         return HW.window_ports(self.program)
 
     def entries(self) -> list[dict[str, Any]]:
-        """The Program's registered values' entries, then each round's input-ids table's."""
-        return [r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
+        """The Program's registered values' entries, then each round's input-ids table's, then the live tables'."""
+        return ([r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
+                + [r.entry() for r in self.live.values()])
 
     def digest(self) -> bytes:
         """SHA-512 over the trees' entries and what was refused, canonical JSON: what `calls_root` binds."""
@@ -729,69 +735,6 @@ class Served:
 def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> bytes:
     """`Served.digest` of the trees' `entries` and `refused`, as a record carries them (the commitment's ``served``)."""
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
-
-
-def _served(run: Any) -> Served:
-    served = getattr(run, "served", None)
-    if not isinstance(served, Served):
-        raise ValueError(f"{run.entry}: the window's rows aren't registered values (the run has no `Served`)")
-    if not run.closed:
-        raise ValueError(f"{run.entry}: the window isn't closed, so its tables aren't all committed")
-    if served.refused or not served.registered:
-        raise ValueError(f"{run.entry}: the window's trees were refused: {'; '.join(served.refused) or 'none committed'}")
-    return served
-
-
-def trees(run: Any) -> list[ServedTree]:
-    """The window's registered trees, in registration order: refused unless `run` committed them as `Served` values."""
-    return [ServedTree.of(r) for r in _served(run).registered.values()]
-
-
-def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: Any = None) -> dict[str, Any]:
-    """The verifier's ``--registered`` file of a statement over call ``call``'s units: `h1window.table_reads_file` over the
-    window's Program (``tp`` its template partition, `partition.evaluate`'s, when the caller holds it) and its trees'
-    roots, under the circuit ports ``ports`` (default `Served.ports`), each call table's domain bound to the window's open
-    root and the weights' to none, as their trees' are. With ``receipts``, the file reads its units' receipts at the
-    call's receipt table as its output row o0 (`h1window.RECEIPT_PORT`), unit u0 + t at row t. Its public row
-    (`h1window.PUB_PORT`) is the call's public table at its known content, under the window's Program salt."""
-    served = _served(run)
-    prog = served.program
-    tp = tp if tp is not None else P.evaluate(prog, served.query())
-    return HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
-                               prog=served.program_digest, window=served.root, steps=served.steps,
-                               salt=run._salt.hex())
-
-
-@dataclass(frozen=True)
-class Registration:
-    """What `register` returns: the record's ``registered`` entries (every tree of the window), the window's open root, and
-    each call's ``--registered`` file."""
-
-    registered: list[dict[str, Any]]
-    window_root: str
-    files: dict[int, dict[str, Any]]
-
-
-def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping[str, Any]] = (),
-             directory: str | Path | None = None, ports: Mapping[str, str] | None = None) -> Registration:
-    """The window's trees as one record's ``registered`` entries, held to this prover's earlier records ``log`` (R7-held:
-    a value an earlier record registered under the same domain with another root is refused), and the ``--registered``
-    file of each of ``calls`` (default every call; `reads_file`), written as `file_name` in ``directory`` (default the
-    run's ``transcript_dir``)."""
-    got, served = trees(run), run.served
-    held = R.held_roots(log)
-    for t in got:
-        if held.get((t.value, t.domain), t.root) != t.root:
-            raise ValueError(f"served tree {t.value!r}: an earlier record of the log registered it under this domain with "
-                             f"root {held[(t.value, t.domain)][:16]}..., and a value is committed once a domain (R7-held)")
-    tp = P.evaluate(served.program, served.query())
-    files = {int(c): reads_file(run, c, ports, tp) for c in (range(len(served.calls)) if calls is None else calls)}
-    d = directory if directory is not None else run.transcript_dir
-    if d is not None:
-        Path(d).mkdir(parents=True, exist_ok=True)
-        for c, doc in files.items():
-            (Path(d) / file_name(c)).write_bytes(canonical_json(doc))
-    return Registration([t.entry() for t in got], served.root, files)
 
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",

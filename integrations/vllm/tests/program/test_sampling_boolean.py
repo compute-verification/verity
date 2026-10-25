@@ -220,8 +220,6 @@ def test_word_view_at_one_logit() -> None:
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()
 
 
-@pytest.mark.xfail(strict=True, reason="rows.token_select_first_max maps NaN to -inf before argmax, so with a NaN first logit "
-                   "it returns the first maximum of the rest, where TokenSelect_v1 (a scan whose best stays the NaN) returns 0")
 def test_rows_oracle_with_a_nan_first_logit() -> None:
     x = np.array([[0x7FC0, 0x3F80, 0x4000]], np.uint16)
     assert rows.token_select_first_max(x[0]) == int(first_max(x)[0]) == 0
