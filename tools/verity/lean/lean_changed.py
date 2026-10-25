@@ -5,6 +5,15 @@ the audit's cold build reaches it.
 
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache]   a lane's records
+    python tools/verity/lean/lean_changed.py --try FILE   a lane's edit loop (`verity lean try FILE`)
+
+`--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
+`build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
+`lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
+`lake env lean FILE` in that package's directory, and exits with lean's status. It never runs check.py, so it reads and writes
+no record; where the node grants no `build` slot it refuses, naming the nodes that do. Dependencies the tree holds that no
+`--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs unsandboxed, and fetches
+dependencies the node does not keep.
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
@@ -243,14 +252,17 @@ def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 
 
-def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None) -> tuple[int, str]:
-    """`lake build` (of ``targets``, else the default ones) of ``tree/pkg`` in the sandbox; Lake's output is echoed as it
-    comes. Before the default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
-    if targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
-        rc, text = build(pkg, tree, lake, plugins)
+def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
+          cmd: list[str] | None = None) -> tuple[int, str]:
+    """`lake build` (of ``targets``, else the default ones; ``cmd``: that `lake` command instead) of ``tree/pkg``, in the
+    sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes. Before the default targets it links the
+    dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
+    if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
+        rc, text = build(pkg, tree, lake, plugins, sandbox)
         if rc:
             return rc, text
-    argv = in_sandbox(pkg, tree, [lake, "build", *(targets or [])])
+    argv = [lake, *(cmd or ["build", *(targets or [])])]
+    argv = in_sandbox(pkg, tree, argv) if sandbox else argv
     env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS") or
            str(AUDIT.build_threads(tree / pkg) or LA.COMMON.cores())}
     p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -604,6 +616,97 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     return rc
 
 
+#: the nodes whose Lean slots list a `build` pool, which `--try` names when it is refused one
+BUILD_NODES = "vy-nebius-cpu-1, vy-nebius-cpu-3, vy-nebius-cpu-5 and vy-nebius-1"
+
+
+def owner(file: str, pkgs: list[str]) -> str | None:
+    """The package whose directory holds ``file`` (a path from the repository's root), the deepest when packages nest."""
+    return max((p for p in pkgs if file.startswith(p + "/")), key=len, default=None)
+
+
+def module_of(pkg: str, file: str) -> str:
+    """``file``'s module name in ``pkg``: its path from the package's `srcDir` (lakefile.toml or lakefile.lean), dotted."""
+    src = "."
+    if (toml := ROOT / pkg / "lakefile.toml").is_file():
+        import tomllib
+        src = tomllib.loads(toml.read_text()).get("srcDir", ".")
+    elif (lean := ROOT / pkg / "lakefile.lean").is_file() and (m := re.search(r'srcDir\s*:=\s*"([^"]*)"', lean.read_text())):
+        src = m.group(1)
+    rel = os.path.relpath(ROOT / file, os.path.normpath(ROOT / pkg / src))
+    return rel.removesuffix(".lean").replace(os.sep, ".")
+
+
+def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
+    """`--try`: on the tree of the `build` slot it takes (as `--records` does), with the closure of the package that owns
+    ``file`` synced from this checkout and its fetched dependencies taken, `lake build +MODULE:deps` (its imports, of which
+    Lake rebuilds only what changed) then `lake env lean FILE` in that package's directory; lean's exit status, or 2 when
+    ``file`` is in no package, no `build` slot is granted, or the tree's dependencies can't be had. Never check.py."""
+    file = file.removeprefix("./")
+    base = (LA.COMMON.cache_dir() / RECORDS).resolve()
+    if tree is not None and base not in tree.resolve().parents:
+        log(f"lean-try: {tree} is not under {base}, where the trees `--records` and `--try` keep are")
+        return 2
+    files = LA.COMMON.tracked_files(ROOT)
+    if files is None:
+        log("lean-try: the tree's files cannot be listed")
+        return 2
+    pkg = owner(file, LA.packages(files))
+    if pkg is None or not (ROOT / file).is_file() or not file.endswith(".lean"):
+        log(f"lean-try: {file} is not a .lean file in a Lake package with a lean-audit.json")
+        return 2
+    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
+    if not Path(lake).is_file():
+        log("lean-try: no `lake` here")
+        return 2
+    mod, rel = module_of(pkg, file), os.path.relpath(file, pkg)
+    os.environ.pop(LEAN_SLOT.HELD, None)
+    try:
+        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
+    except LEAN_SLOT.Refused as e:
+        log(f"lean-try: no `{FAST_POOL}` Lean slot here ({e}): nothing ran; try on a node that has them ({BUILD_NODES})")
+        return 2
+    try:
+        tree = tree or records_tree()
+        tree.mkdir(parents=True, exist_ok=True)
+        with open(tree / ".lock", "w") as held:
+            if not hold_tree(held, tree, log):
+                return 2
+            t0, links, left = time.monotonic(), read_links(tree), left_by(tree)
+            mark(tree, package=pkg, phase="sync")
+            n = sync(closure(pkg), files, tree)
+            there = [q for q in [*closure(pkg), (left or {}).get("package")] if isinstance(q, str) and (tree / q).is_dir()]
+            repair(tree, list(dict.fromkeys(there)), links, left, log)
+            write_links(tree, links)
+            mark(tree, package=pkg, phase="deps")
+            sandbox = sandboxed()
+            packages = tree / pkg / ".lake" / "packages"
+            # dependencies a `--records` run did not take (not in LINKS) are kept as they are, and stay out of LINKS, whose
+            # packages the next `--records` run on another package drops
+            if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
+                if sandbox:
+                    log(f"lean-try: {pkg}: no dependencies to take on this node, and the sandbox can't fetch them: nothing "
+                        f"ran; run `lean_changed.py --records {pkg}` here once")
+                    (tree / DIRTY).unlink(missing_ok=True)
+                    return 2
+                links[pkg] = LA.deps_key(tree / pkg)
+                log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
+            write_links(tree, links)
+            mark(tree, package=pkg, phase="try")
+            log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
+                f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean {rel})")
+            step, (rc, _) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
+            if rc == 0:
+                step, (rc, _) = "lean", build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", rel])
+            log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
+            (tree / DIRTY).unlink(missing_ok=True)
+            return rc
+    finally:
+        if slot is not None:
+            os.close(slot)
+            os.environ.pop(LEAN_SLOT.HELD, None)
+
+
 def reports(out: Path, pkg: str, p: str) -> Path:
     """Where check.py's reports on ``p`` go: ``out`` for PKG, `requirer-<path>/` under it for a requirer."""
     return out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
@@ -728,7 +831,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
     ap.add_argument("--dev-cache", action="store_true", help="with --records: take the check.py --dev-cache path even where "
                     "a build slot is granted (its tree's dependencies are fetched cold, say)")
+    ap.add_argument("--try", dest="try_", metavar="FILE",
+                    help=f"elaborate FILE (from the repository's root) on the tree of a Lean slot of pool {FAST_POOL}: "
+                    "lake build of its imports, then lake env lean FILE; never check.py")
     a = ap.parse_args(argv)
+    if a.try_:
+        if a.records or a.update or a.moved or a.out or a.dev_cache:
+            ap.error("--try takes only --deps and --tree")
+        return try_file(a.try_, a.deps, a.tree, log=lambda s: print(s, flush=True))
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache:
             ap.error("--update, --moved, --out and --dev-cache go with --records")
