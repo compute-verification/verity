@@ -74,14 +74,14 @@ theorem take_sum_lt : ∀ (ns : List ℕ) (j : ℕ) (hj : j < ns.length) (e : �
     omega
 
 /-- The input column where an algebra part's row port `j` starts. -/
-def portCol (ns : List ℕ) (j : ℕ) : ℕ := FlockVBridge.OfVStar.rowCol (ns.map ("", ·)) 0 (128 * (ns.take j).sum)
+def rowPortCol (ns : List ℕ) (j : ℕ) : ℕ := FlockVBridge.OfVStar.rowCol (ns.map ("", ·)) 0 (128 * (ns.take j).sum)
 
 /-- **A row port's elements among the rows a copy reads**: element `e` of row port `j` is the copy's element
 `(ns.take j).sum + e`, read from the port's columns. -/
 theorem rowsRead_port {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} {j : ℕ} (hj : j < ns.length) {e : ℕ}
     (he : e < ns[j]) :
     _root_.Flock.Readable.rowsRead ns nv v ((ns.take j).sum + e) =
-      _root_.Flock.Readable.readElems (portCol ns j + ·) ns[j] v e := by
+      _root_.Flock.Readable.readElems (rowPortCol ns j + ·) ns[j] v e := by
   unfold _root_.Flock.Readable.rowsRead _root_.Flock.Readable.readElems
   rw [ite_eq_left (take_sum_lt ns j hj e he), ite_eq_left he]
   refine FlockVBridge.OfVStar.ofBits_congr fun q hq => ?_
@@ -132,16 +132,15 @@ frame. -/
 theorem rowsRead_msgs {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {ms : List Msg}
     (hR : L.RowsRead x s w ms) {p : _root_.Flock.Readable.Parsed} {t : ℕ} {ht : t < p.sts.size} {o g u : ℕ}
     {ns : List ℕ} {nv j : ℕ} (hj : j < ns.length) {r N i off : ℕ} {pre : Msg}
-    (hm : L.rowAt x s r = some (segsAt [(pre, Claims.Recursion.VStar.copyPs p t ht o g u (portCol ns j) (8 * N))]))
-    (htop : portCol ns j + 8 * N ≤ p.sts[t].c.unit.constPos + 1) (hN : 16 * ns[j] ≤ N)
+    (hm : L.rowAt x s r = some (segsAt [(pre, Claims.Recursion.VStar.copyPs p t ht o g u (rowPortCol ns j) (8 * N))]))
+    (htop : rowPortCol ns j + 8 * N ≤ p.sts[t].c.unit.constPos + 1) (hN : 16 * ns[j] ≤ N)
     (hi : L.rowIn x r = some (i, off)) {e : ℕ} (he : e < ns[j]) :
     _root_.Flock.Readable.rowsRead ns nv (_root_.Flock.Readable.copyOf p t ht w o g u) ((ns.take j).sum + e) =
       elemsOf (((ms.getD i []).drop off).drop pre.length) ns[j] e := by
-  have hb := FlockVBridge.Family.colsHold_bytesAt (_root_.Flock.Readable.copyOf p t ht w o g u) (portCol ns j) N
-  have hs := FlockVBridge.Family.size_bytesAt (_root_.Flock.Readable.copyOf p t ht w o g u) (portCol ns j) N
-  have hB :
-      (FlockVBridge.Family.bytesAt (_root_.Flock.Readable.copyOf p t ht w o g u) (portCol ns j) N).data.toList.length =
-        N := by
+  have hb := FlockVBridge.Family.colsHold_bytesAt (_root_.Flock.Readable.copyOf p t ht w o g u) (rowPortCol ns j) N
+  have hs := FlockVBridge.Family.size_bytesAt (_root_.Flock.Readable.copyOf p t ht w o g u) (rowPortCol ns j) N
+  have hB : (FlockVBridge.Family.bytesAt (_root_.Flock.Readable.copyOf p t ht w o g u) (rowPortCol ns j)
+      N).data.toList.length = N := by
     rw [Array.length_toList]
     exact hs
   rw [← hs] at hm htop
@@ -211,8 +210,9 @@ theorem partAccepts_resZero {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
             (FlockVBridge.termVal (_root_.Flock.Readable.rowsRead ns nv (_root_.Flock.Readable.copyOf p t ht w o g u))
               (vv t o g u)) (FlockVBridge.resOf S.res[q]) = 0) ∧
           ∀ (jp : ℕ) (hj : jp < ns.length) (rr N i off : ℕ) (pre : Msg),
-            L.rowAt x s rr = some (segsAt [(pre, Claims.Recursion.VStar.copyPs p t ht o g u (portCol ns jp) (8 * N))]) →
-            portCol ns jp + 8 * N ≤ p.sts[t].c.unit.constPos + 1 → 16 * ns[jp] ≤ N →
+            L.rowAt x s rr =
+              some (segsAt [(pre, Claims.Recursion.VStar.copyPs p t ht o g u (rowPortCol ns jp) (8 * N))]) →
+            rowPortCol ns jp + 8 * N ≤ p.sts[t].c.unit.constPos + 1 → 16 * ns[jp] ≤ N →
             L.rowIn x rr = some (i, off) → ∀ e, e < ns[jp] →
               _root_.Flock.Readable.rowsRead ns nv (_root_.Flock.Readable.copyOf p t ht w o g u)
                 ((ns.take jp).sum + e) = elemsOf (((ms.getD i []).drop off).drop pre.length) ns[jp] e := by
