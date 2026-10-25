@@ -37,7 +37,7 @@ noncomputable def ratio (n kd t : ℕ) : ℝ := ((n - t).choose kd : ℝ) / (n.c
 theorem ratio_anti (n kd : ℕ) {t t' : ℕ} (h : t ≤ t') : ratio n kd t' ≤ ratio n kd t := by
   unfold ratio
   gcongr
-  exact Nat.choose_le_choose kd (by omega)
+  all_goals first | exact Nat.choose_le_choose kd (by omega) | omega
 
 theorem ratio_nonneg (n kd t : ℕ) : 0 ≤ ratio n kd t := by
   unfold ratio; positivity
@@ -56,7 +56,16 @@ theorem designPa_subset {s : Stmt} {P : Partition} {n kd : ℕ} (h : SubsetDesig
   have hsum : (strataSizes c).sum = n := by
     rw [← hn, hrus, List.length_flatten, strataSizes]
   have hlen : c.flatten.length = n := by rw [← hn, hrus]
-  simp only [Design.Pa, hr, hc, classesPa, mul_one, Rule.Pa, OneStage.Pa, hsum, hlen, ratio]
+  have e : s.design.Pa P B = (OneStage.subset kd).Pa (strataSizes c) (window 0 c.flatten.length B) := by
+    show classesPa s.design.rules P.classes 0 B = _
+    rw [hr, hc]
+    show Rule.Pa ⟨.subset kd, none⟩ (strataSizes c) (ruSizes c) (window 0 c.flatten.length B) * 1 = _
+    rw [mul_one]
+    exact Rule.Pa_none (r := ⟨.subset kd, none⟩) rfl _ _ _
+  rw [e, hlen]
+  show (((strataSizes c).sum - _).choose kd : ℝ) / ((strataSizes c).sum.choose kd : ℝ) = _
+  rw [hsum]
+  rfl
 
 /-- **The draw law, at a set**: under A3, the game form's draw `Law.execOS src (.subset kd) n` misses `B` with
 probability at most the claims' design's `P_a(B)`. -/
@@ -79,13 +88,14 @@ theorem designMiss_subset {s : Stmt} {P : Partition} {n kd : ℕ} (h : SubsetDes
     rintro ⟨B, hB, htB⟩
     rw [designPa_subset h, ← h.card, window_zero hB, h.card]
     exact ratio_anti n kd htB
-  obtain ⟨B₀, hB₀, hc⟩ := Finset.exists_subset_card_eq (s := Finset.range P.rus.length)
-    (by rw [Finset.card_range, h.card]; exact ht)
+  obtain ⟨B₀, hB₀, hc⟩ : ∃ B₀ ⊆ Finset.range P.rus.length, B₀.card = t :=
+    Finset.exists_subset_card_eq (by rw [Finset.card_range, h.card]; exact ht)
   have : Nonempty {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card} := ⟨⟨B₀, hB₀, hc.ge⟩⟩
+  have hPa : s.design.Pa P B₀ = ratio n kd t := by
+    rw [designPa_subset h, ← h.card, window_zero hB₀, h.card, hc]
+  unfold Design.miss
   refine le_antisymm (ciSup_le hle) ?_
-  refine le_ciSup_of_le ⟨ratio n kd t, Set.forall_mem_range.2 hle⟩ ⟨B₀, hB₀, hc.ge⟩ ?_
-  show ratio n kd t ≤ s.design.Pa P B₀
-  rw [designPa_subset h, ← h.card, window_zero hB₀, h.card, hc]
+  exact le_ciSup_of_le ⟨ratio n kd t, Set.forall_mem_range.2 hle⟩ ⟨B₀, hB₀, hc.ge⟩ hPa.ge
 
 section Deploy
 
@@ -97,7 +107,10 @@ theorem missAt_subset (D : Deploy Coin Col T) {x : Msg} {s : Stmt} {P : Partitio
     (hx : D.parse x = some s) (hP : D.partition s = some P) (h : SubsetDesign s P n kd) {t : ℕ} (ht : t ≤ n) :
     missAt D t x = ratio n kd t := by
   have hpart : D.part s = P := by simp [Deploy.part, hP]
-  simp only [missAt, hx, hpart, designMiss_subset h ht]
+  unfold missAt
+  rw [hx]
+  dsimp only
+  rw [hpart, designMiss_subset h ht]
   exact max_eq_right (ratio_nonneg n kd t)
 
 /-- `missAt_subset` in `ℝ≥0∞`, as EndToEnd states its miss term. -/
@@ -125,8 +138,7 @@ theorem notMem_M_iff {s : Stmt} {P : Partition} {n kd : ℕ} (h : SubsetDesign s
     ∃ K₀ ≤ n + 1, (K₀ ≤ n → ratio n kd K₀ ≤ δ) ∧
       ∀ B ⊆ Finset.range P.rus.length, (B ∉ s.design.M P δ ↔ K₀ ≤ B.card) := by
   classical
-  let p : ℕ → Prop := fun K => K = n + 1 ∨ ratio n kd K ≤ δ
-  have hex : ∃ K, p K := ⟨n + 1, Or.inl rfl⟩
+  have hex : ∃ K, K = n + 1 ∨ ratio n kd K ≤ δ := ⟨n + 1, Or.inl rfl⟩
   refine ⟨Nat.find hex, Nat.find_min' hex (Or.inl rfl), fun hK => ?_, fun B hB => ?_⟩
   · rcases Nat.find_spec hex with h1 | h1
     · omega
