@@ -5,9 +5,9 @@
  },
  "layers": {
   "CoreOnsite": {
-   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs"],
+   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "PousCheck.RunProtocol", "RemoteAudit.Protocol"],
    "except": [],
-   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface, the composition and its real components' core protocols (PoUS's run check, the remote bandwidth session), on C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

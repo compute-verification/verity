@@ -5,7 +5,8 @@ Three Lake packages, each on C-Flock's verifier and the core interface (`../inte
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
   stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
-- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space and communication.
+- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): space, bandwidth, integrity, work and
+  communication; it also requires the real components' packages (`pous_check`, `remote_audit`).
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
 
 The rule and the formats are written once, over any list of components, and the two products are values
@@ -36,11 +37,19 @@ keyed by the component's id. On rejection or undecided nothing is public.
 
 ## Components
 
-Until their ports land, each component is a stub, `Core.Example.protocol` under an id that says so:
-`verity/stub/sampled-proofs/v0` (integrity, sampled proofs' one-stage audit), `verity/stub/pouw/v0` (work),
-`verity/stub/pous/v0` (space) and `verity/stub/certifier/v0` (communication, the network certifier). A port replaces its
-stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, keeping each list in the
-order of its ids (`ordered`, which each product's `#guard` checks). NCI and the trial's reconciling are not components yet.
+Onsite's space and bandwidth components are real:
+
+| component | id | its check | published on acceptance |
+| --- | --- | --- | --- |
+| space | `verity/pous/p2/v4/run` | `PousCheck.RunProtocol` (`../pous/check`): `PousCheck.Run.checkAt` of a run, its setup's public outputs the commitment | `s_bits`, `eps`, `certified`: ⌊ρ·blocks·w⌋ at δ + 2^-128 where P2's certificate covers the point, else 0 |
+| bandwidth | `verity/remote-bandwidth/v0` | `RemoteAudit.Protocol` (`../remote_bandwidth/lean`): the verifier's log of a session replayed through `Flight.run`, its registration the commitment | `q_bytes`, `eps`: the receipts less the pooled bound's wrong ones, times 4096, at 2^-40 + S/2^64 |
+
+Bandwidth is the remote bandwidth audit's session because bandwidth v0 (`../bandwidth`) is superseded and has no Lean
+verdict. The others are stubs until their ports land, `Core.Example.protocol` under an id that says so:
+`verity/stub/sampled-proofs/v0` (integrity, sampled proofs' one-stage audit), `verity/stub/pouw/v0` (work) and
+`verity/stub/certifier/v0` (communication, the network certifier). A port replaces its stub in `Core.Onsite.components`
+and `Core.Remote.components` with its own `Core.Protocol` value, keeping each list in the order of its ids (`ordered`,
+which each product's `#guard` checks). NCI and the trial's reconciling are not components yet.
 
 ## The difftest
 

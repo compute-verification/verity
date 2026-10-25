@@ -1,5 +1,6 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS) and communication (the network certifier), each a stub until its port lands. Its executable is the core CLI
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of space (PoUS's run check, `pous_check`),
+# bandwidth (the remote bandwidth session, `remote_audit`), integrity (sampled proofs), work (PoUW) and communication (the
+# network certifier), the last three stubs until their ports land. Its executable is the core CLI
 # (`onsite id | check | serve`), which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite"]
@@ -19,6 +20,14 @@ path = "../interface"
 [[require]]
 name = "core_composition"
 path = "../composition"
+
+[[require]]
+name = "pous_check"
+path = "../pous/check"
+
+[[require]]
+name = "remote_audit"
+path = "../remote_bandwidth/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"
