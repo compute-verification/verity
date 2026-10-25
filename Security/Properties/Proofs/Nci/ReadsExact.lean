@@ -7655,6 +7655,188 @@ theorem downShape_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (h
     simp only at hy ⊢
     linarith
 
+/-- Each segment a loop appending `F x`'s segments ends with is one it started with or one some `F x` gave. -/
+theorem forIn_mem {β : Type} (Q : Seg → Prop) (F : β → Except String (Array Seg))
+    (f : β → Array Seg → Except String (ForInStep (Array Seg)))
+    (hf : ∀ x r y, f x r = .ok y → ∃ segs, F x = .ok segs ∧ y = .yield (r ++ segs)) :
+    ∀ (l : List β), (∀ x ∈ l, ∀ segs, F x = .ok segs → ∀ s ∈ segs.toList, Q s) →
+      ∀ (acc out : Array Seg), (∀ s ∈ acc.toList, Q s) → forIn l acc f = .ok out → ∀ s ∈ out.toList, Q s
+  | [], _, acc, out, ha, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ha
+  | x :: l, hF, acc, out, ha, h => by
+    rw [List.forIn_cons] at h
+    rcases hx : f x acc with e | y <;> rw [hx] at h
+    · exact absurd h (by intro h; cases h)
+    obtain ⟨segs, hs, rfl⟩ := hf x acc _ hx
+    refine forIn_mem Q F f hf l (fun y hy => hF y (List.mem_cons_of_mem _ hy)) (acc ++ segs) out
+      (fun s hs' => ?_) h
+    rw [Array.toList_append, List.mem_append] at hs'
+    rcases hs' with hs' | hs'
+    · exact ha s hs'
+    · exact hF x List.mem_cons_self segs hs s hs'
+
+/-- `F`'s loop from no segments, its result returned: each segment is one some `F x` gave. -/
+theorem loop_mem {β : Type} (Q : Seg → Prop) (F : β → Except String (Array Seg)) (l : List β)
+    (hF : ∀ x ∈ l, ∀ segs, F x = .ok segs → ∀ s ∈ segs.toList, Q s) (out : Array Seg)
+    (h : (forIn l #[] (fun x (r : Array Seg) => do
+      let v ← F x
+      pure (ForInStep.yield (r ++ v))) >>= fun r => pure r) = .ok out) :
+    ∀ s ∈ out.toList, Q s :=
+  forIn_mem Q F _ (fun x r y hy => by
+    obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    exact ⟨segs, hs, hy.symm⟩) l hF #[] out (fun s hs => by simp at hs) (ok_bind_pure h)
+
+/-- `DownShape` at one fuel. -/
+def DownShapeAt (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ q segs, 0 < q.count → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
+    (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
+    Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
+
+/-- What `fromCallee` gives of member `m`'s return leaves `[a, b)`, within its callee's return when not empty, is
+`ShapeOk`. -/
+def CalleeShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ k m a b segs, m < (c.body.nodes[k]!).members → (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
+    Desc.fromCallee c fuel k m a b = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
+
+/-- What `down` gives a batch of a composite's piece of positive count, read as one row where it can be, one step up,
+is `ShapeOk`. -/
+def BatchShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+    (c.P.defs[node.fn]!).prim = false → q.count ≠ 0 → q.flat = q → (∀ x ∈ pos q, 0 ≤ x.2) →
+    (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
+
+/-- What `down` gives a scan's piece of one row, one step up, is `ShapeOk`. -/
+def ScanShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ q segs k node (carry y : Flock.Program.Ty), q.tgt = .ref false k → c.node k = .ok node → node.form = .scan →
+    node.n ≠ 0 → q.count ≠ 0 → q.flat = q → ¬ q.rows > 1 → (c.P.defs[node.fn]!).ret = .tuple #[carry, y] →
+    (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs →
+    ∀ s ∈ segs.toList, ShapeOk c.P c.d s
+
+/-- A piece's rows, each through `down`. -/
+theorem byRows_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q : Piece) (h0 : 0 < q.count)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
+    (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int))
+    {segs : Array Seg} (h : byRows c fuel q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  unfold byRows at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  rw [← Array.forIn_toList] at h
+  have hm : ∀ x ∈ q.rowsOf.toList, ∀ y ∈ pos x, y ∈ pos q := fun x hx y hy => by
+    rw [← posAll_rowsOf q]
+    exact List.mem_flatMap.2 ⟨x, hx, hy⟩
+  have hlen : q.len ≠ 0 := fun hl => by
+    unfold Desc.Piece.count at h0
+    rw [hl, Nat.mul_zero] at h0
+    exact absurd h0 (Nat.lt_irrefl 0)
+  have hc : ∀ x ∈ q.rowsOf.toList, 0 < x.count := by
+    intro x hx
+    unfold Desc.Piece.rowsOf at hx
+    simp only [Array.toList_map, List.mem_map] at hx
+    obtain ⟨r, -, rfl⟩ := hx
+    show 0 < 1 * q.len
+    omega
+  exact loop_mem _ (Desc.down c fuel) q.rowsOf.toList (fun x hx segs hs => hD x segs (hc x hx)
+    (fun y hy => hq y (hm x hx y hy)) (fun y hy => hf y (hm x hx y hy)) (fun y hy => hp y (hm x hx y hy)) hs) segs h
+
+/-- A Call's piece of one row and stride 1: what `fromCallee` gives. -/
+theorem downShape_callOne (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride = 1)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x) (hdo : Resolve.DownOk node (c.P.defs[node.fn]!))
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  rw [down_call_one c fuel q ht hff hn hform h0 hr hs] at h
+  have h1 := rows_one h0 hr
+  have hlen : 0 < q.len := by rw [← count_one h1]; omega
+  have hb : 0 ≤ q.base := by
+    have := hq _ (at_mem_pos h1 hlen)
+    simpa [Desc.Piece.at] using this
+  have hfl := hf _ (at_mem_pos h1 (t := q.len - 1) (by omega)) k ht
+  simp only [Desc.Piece.at, hs, node_get hn] at hfl
+  have hdk := hdo ((q.base + ((q.len - 1 : Nat) : Int) * 1).toNat) (by omega)
+  simp only [hform] at hdk
+  exact hC k 0 q.base.toNat (q.base.toNat + q.len) segs
+    (by rw [node_get hn, members_call hform]; omega) (fun _ => by rw [callee_eq c hn]; omega) h
+
+/-- A Call's piece of one row and another stride: what `fromCallee` gives at each position. -/
+theorem downShape_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride ≠ 1)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x) (hdo : Resolve.DownOk node (c.P.defs[node.fn]!))
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
+  unfold callPts at h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  rw [range'_size] at h
+  have h1 := rows_one h0 hr
+  exact loop_mem _ (fun t => Desc.fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1)) (List.range q.len)
+    (fun t htm segs hs => by
+      have hm := at_mem_pos h1 (List.mem_range.1 htm)
+      have hb := hq _ hm
+      have hfl := hf _ hm k ht
+      simp only [node_get hn] at hb hfl
+      have hdk := hdo (q.at t).toNat (by omega)
+      simp only [hform] at hdk
+      exact hC k 0 (q.at t).toNat ((q.at t).toNat + 1) segs
+        (by rw [node_get hn, members_call hform]; omega) (fun _ => by rw [callee_eq c hn]; omega) hs) segs h
+
+/-- **`down`'s shape step**: one step up, `down`'s segments are `ShapeOk` wherever `down`'s and `fromCallee`'s are and a
+batch of a composite's and a scan's piece of one row give `ShapeOk` ones, in a body whose node's references
+`Resolve.BodyOk` keeps in range. -/
+theorem downShape_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat) (hD : DownShapeAt c fuel)
+    (hC : CalleeShape c fuel) (hBatch : BatchShape c fuel) (hScan : ScanShape c fuel) :
+    DownShapeAt c (fuel + 1) := by
+  intro q segs h0 hq hf hp h
+  cases ht : q.tgt with
+  | gate w => exact downShape_gate c fuel q ht h0 hq h
+  | ref b k =>
+  cases b with
+  | true => exact downShape_param c fuel q ht h0 hq hp h
+  | false =>
+  rw [down_flat c fuel q ht] at h
+  rw [← pos_flat q] at hq hf hp
+  have ht' : q.flat.tgt = .ref false k := by rw [flat_tgt, ht]
+  have h0' : q.flat.count ≠ 0 := by rw [flat_count]; omega
+  have hff := flat_flat q
+  generalize q.flat = p at ht' h0' hff hq hf hp h
+  rcases hn : c.node k with e | node
+  · exact absurd h (down_node c fuel p ht' h0' hn segs)
+  have hdo := downOk_of hB hn
+  cases hform : node.form with
+  | prim =>
+    cases hr : (c.P.defs[node.fn]!).ret with
+    | value w => exact downShape_prim c fuel p ht' hff hn hform hr h
+    | _ => exact absurd h (down_prim_ret c fuel p ht' hff hn (Or.inl hform) h0' (fun w e => by rw [hr] at e; cases e) segs)
+  | call =>
+    by_cases hr : p.rows > 1
+    · rw [down_rows c fuel p ht' hff hn (Or.inl hform) h0' hr] at h
+      exact byRows_shape c fuel hD p (Nat.pos_of_ne_zero h0') hq hf hp h
+    by_cases hs : p.stride = 1
+    · exact downShape_callOne c fuel hC p ht' hff hn hform h0' hr hs hq hf hdo h
+    · exact downShape_callPts c fuel hC p ht' hff hn hform h0' hr hs hq hf hdo h
+  | scan =>
+    by_cases hn0 : node.n = 0
+    · exact absurd h (down_scan0 c fuel p ht' hff hn hform hn0 h0' segs)
+    by_cases hr : p.rows > 1
+    · rw [down_rows c fuel p ht' hff hn (Or.inr ⟨hform, hn0⟩) h0' hr] at h
+      exact byRows_shape c fuel hD p (Nat.pos_of_ne_zero h0') hq hf hp h
+    by_cases hex : ∃ carry y, (c.P.defs[node.fn]!).ret = .tuple #[carry, y]
+    · obtain ⟨carry, y, hret⟩ := hex
+      exact hScan p segs k node carry y ht' hn hform hn0 h0' hff hr hret hq hf h
+    · exact absurd h
+        (down_scan_ret c fuel p ht' hff hn hform hn0 h0' hr (fun carry y e => hex ⟨carry, y, e⟩) segs)
+  | batch =>
+    by_cases hpr : (c.P.defs[node.fn]!).prim = true
+    · cases hr : (c.P.defs[node.fn]!).ret with
+      | value w => exact downShape_batchPrim c fuel p ht' hff hn hform hpr hr hq h
+      | _ =>
+        exact absurd h
+          (down_prim_ret c fuel p ht' hff hn (Or.inr ⟨hform, hpr⟩) h0' (fun w e => by rw [hr] at e; cases e) segs)
+    · exact hBatch p segs k node ht' hn hform (by simpa using hpr) h0' hff hq hf h
+
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
 decoded Program has them (`BodiesOk.retParts_reads`). -/
