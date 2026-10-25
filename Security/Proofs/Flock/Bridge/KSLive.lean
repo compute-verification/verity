@@ -35,7 +35,7 @@ theorem rowOfPos_posOf_none (rows : Fin C.N → Option RowAt) {g : Fin C.N} (h :
 
 /-- **No opening passes under `commitDep` at a position with no row**, so every witness's value there is `none`. -/
 theorem commitDep_val_noRow (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ) (roots : List Msg)
-    (H : Msg → Msg) (s : Stmt) (hs : s.roots = roots) (w : Wit) {i : ℕ} (hr : rowOfPos C rows i = none) :
+    (H : Msg → Msg) (s : Claims.Sampling.Stmt) (hs : s.roots = roots) (w : Wit) {i : ℕ} (hr : rowOfPos C rows i = none) :
     w.val H (commitDep C rows c nl roots) s i = none := by
   unfold Wit.val
   rw [List.find?_eq_none.2, Option.map_none]
@@ -55,7 +55,7 @@ theorem faulty_of_read_noRow {n : ℕ} (P : Partition C n) (rows : Fin C.N → O
     u.val ∈ faulty H (commitDep C rows c nl roots) (stmtOf P kd desc q roots) (partOf P) w := by
   classical
   unfold faulty
-  refine Finset.mem_filter.2 ⟨by rw [Finset.mem_range, rus_length_partOf]; exact u.isLt, ?_⟩
+  refine Finset.mem_filter.2 ⟨by rw [Finset.mem_range, rus_length_partOf]; have := u.isLt; omega, ?_⟩
   rintro ⟨r, hr', ι, hc⟩
   rw [rus_partOf_getElem?] at hr'
   cases hr'
@@ -70,8 +70,8 @@ theorem faulty_of_read_noRow {n : ℕ} (P : Partition C n) (rows : Fin C.N → O
   · change RU.ref (progOf C) [unitGates P u]
       (w.val H (commitDep C rows c nl roots) (stmtOf P kd desc q roots)) ι i = none
     unfold RU.ref
-    rw [hgates, if_neg (fun h => hiu h.1)]
-    exact commitDep_val_noRow rows c nl roots H _ rfl w hr
+    have hv := commitDep_val_noRow rows c nl roots H (stmtOf P kd desc q roots) rfl w hr
+    simp [hgates, hiu, hv]
 
 end Flock.Bridge
 
