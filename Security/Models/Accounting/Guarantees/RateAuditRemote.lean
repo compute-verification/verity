@@ -7,10 +7,10 @@ import Definitions.Accounting.RateAuditRemote
 
 The game is `RateAudit.lean`'s with interactive side sources (`Definitions/Accounting/RateAuditInteractive.lean`), and
 the tiers, correct receipts and chained passes of `Definitions/Accounting/RateAuditRemote.lean`; proofs are in
-`Security/Proofs/Accounting/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`,
-the device's bounds define the class the guarantees quantify over, and the claims registry carries them to a deployed
-node (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for
-`c_enc`, `random-oracle` for the receipt and the chained seed).
+`Security/Proofs/Accounting/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`, the
+device's bounds define the class the guarantees quantify over, and the claims registry carries them to a deployed node
+(`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for `c_enc`,
+`random-oracle` for the receipt and the chained seed, `fiat-shamir` for its derivation from the prover's root).
 
 The stated instance is Sloth over a 1,024-bit prime, masked with `σ_K` between rounds, at three rounds (`k = 3`). Its
 rebuild work per word is `c_enc`, a parameter of every statement here, so the codec changes no statement.
@@ -331,12 +331,12 @@ fix, picked as any function of pass `j`'s whole oracle family, and pass `j`'s de
 devices' side sources ignore the oracle: the probability of `RateChainPaidRO`'s event is at most
 `P·G·(N/2^h + 2^q/2^λ)`.
 
-**The reading.** The pass seed is Fiat–Shamir, so a prover may hash `G` candidate roots for pass `j − 1` with pass
-`j`'s seed and keep the root whose oracle suits it: the window's correct receipts are still paid for pass by pass, at
-`G` times the error. The pick here sees the store and the whole family for free, so it can keep a candidate whose
-device guessed right, and the factor reaches the guessing term too. A pick that is part of the pass's device, seeing
-the store only through counted reads and the family only through counted queries, would leave `N/2^h` alone and add
-its queries to `q` (not stated).
+**The reading.** The pass seed is Fiat–Shamir (`fiat-shamir`), so a prover may hash `G` candidate roots for pass `j − 1`
+with pass `j`'s seed and keep the root whose oracle suits it: the window's correct receipts are still paid for pass by
+pass, at `G` times the error. The pick here sees the store and the whole family for free, so it can keep a candidate
+whose device guessed right, and the factor reaches the guessing term too. A pick that is part of the pass's device,
+seeing the store only through counted reads and the family only through counted queries, would leave `N/2^h` alone and
+add its queries to `q` (not stated).
 
 Proof: `Accounting.SecurityProofs.RateGrindPaidRO`, `RatePaidRO` at each pass of the chain that keeps each candidate,
 and a union bound over the passes and the candidates.
@@ -351,9 +351,9 @@ def RateGrindPaidRO : Prop :=
           ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
       ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam))
 
-/-- **Grinding roots costs a factor `G`, with any side sources.** `RateGrindPaidRO` for devices whose side sources
-may relay receipts: with `m` words a pass added to the slack, the probability is at most
-`P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateGrindPaid`, from `RatePaid`.
+/-- **Grinding roots costs a factor `G`, with any side sources.** `RateGrindPaidRO` for devices whose side sources may
+relay receipts, at the same Fiat–Shamir seed (`fiat-shamir`): with `m` words a pass added to the slack, the probability
+is at most `P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateGrindPaid`, from `RatePaid`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateGrindPaid : Prop :=

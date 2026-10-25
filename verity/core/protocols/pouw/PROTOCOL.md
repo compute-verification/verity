@@ -348,7 +348,18 @@ serves at a public fixed length, ignore_eos at each slot's public max_tokens, wh
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
 a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
-`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`).
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
+credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
+signs before window 0's first coin (`--length`), commits each request's public max_tokens and stop `fixed`
+(`credit.committed_length`), and each step's served rows m_s, which its manifest rows fix under `calls_root` before the
+draw coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
+decode row for each request whose max_tokens is past s. A round serving more ran a request past its public max_tokens and
+one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a period with no fixed length
+credits nothing (`no-fixed-length`). Each round's live proof (`PouwLiveSlots_v2`, credit's `_live`) proves m_s, and its
+public port `cap` binds each request's hidden cap to its public max_tokens: credit opens it at the known `<prefix>caps`
+of the period's committed max_tokens, and the unit refuses a live request whose header's cap is another or whose round is
+not 0, and a leaf live without a public cap. So a request takes a decode row in round s only when s is below its own
+public max_tokens, and no prover can move a decode row from one request to another while keeping each round's count.
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
@@ -789,7 +800,9 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 The cheap-binding lane's H100 candidate. It takes Pearl's H100 product and output tickets, and adds #311's noisy clean-up
 pinned bit for bit, so that the useful output U is a checked value.
 γ rests on the named conjecture TT_OUT(1/400), not on counting, so the certificate names no γ_0. The module's docstring
-states every step.
+states every step. TT_OUT's device forms are stated at the W1 machine
+(`Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean`): a strategy's cost is `W1.w1Priced`'s on the record's
+device, so an attack on them is a W1 program, and the γ guarantees that read them conclude at that cost model.
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
@@ -836,7 +849,8 @@ useful    U/(α_A·α_B), glue
       forming 64 + 4) and `SM120_PRICES` for sm_120 (8, 2, 40 + 1: each step at its cheapest bit-exact form, as measured
       on the card). `wref`, `credit_of`, `job_cost` and the debit read the scheme's record; the registered schemes are the
       H100's, and sm_120's record goes with sm_120's atom.
-    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), and on every row of both operands the noise floor ρ·α ≥ 1
+    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), 64 ∣ n with n ≥ 64 (`pearlCDomainDev`, the 64-column
+      tile: a 1 × (n mod 64) edge tile's words can be guessed whole, CMP-77), and on every row of both operands the noise floor ρ·α ≥ 1
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
@@ -980,7 +994,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384`, from TT_OUT at 1/1,000.
   - The per-unit γ doesn't need TT_OUT(1/1,000): the same γ for the cap-1/1,000 protocol follows from rev1 at 1/400 alone
     (`Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400` and
-    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1` at 1/400).
+    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1W1` at 1/400).
   - At the issue-bound FP32 add (8.00), the pinned guarantees are
     `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192` and
     `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384`, with the sampled
@@ -1095,7 +1109,10 @@ GPU 5's RTX PRO 6000 design. It is Pearl-C with the FP8 product replaced by `mma
   cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
   scales make honest zero codes reliable.
 The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane and proposed, not proved, so
-the certificate names no γ_0. The module's docstring states every step and rounding.
+the certificate names no γ_0. The module's docstring states every step and rounding. TT_OUT-FP4 is stated at the W1
+machine on `W1Device.fp4Sm120` (`Security/Definitions/Pouw/Assumptions/PearlC/TTOutFp4W1.lean`), and the headline γ
+guarantees conclude at that cost model. Its domain rule D-SK reads `B̃`'s lines from the oracle, which a W1 program
+can't call, so it says nothing about the deployment until D-SK is stated over SHA-512.
 
 ~~~text
 rows      k BF16 words per row of either operand

@@ -1,4 +1,5 @@
-"""The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
+"""The Pearl-C device path's host helpers (`pouw_pearl_c_device`): the epoch of the challenger's salt coin, held in this
+process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
 their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
@@ -8,23 +9,35 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import json
+import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
-from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_kernel_constants, rows_domain
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.audit import (
+    HM96,
+    Epoch,
+    Workload,
+    activation_binding,
+    hm96_kernel_constants,
+    rows_domain,
+    salt_of,
+    weights_root,
+)
+from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+from verity.core.protocols.pouw.protocol import DomainError
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
-#: the device key table's slots (`_KeyTable`, 176 bytes each): every (weight, index, m₁₆) of 512 m₁₆ sizes over 128 weights
-KEY_SLOTS = 1 << 16
 #: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
 CHECK_ROWS = 16
-#: the calls whose keys `_Keys` keeps (a pass's calls take the same weights, indices and row counts pass after pass)
-KEYS_KEPT = 1 << 14
 
 
 def torch_uint8() -> Any:
@@ -58,6 +71,32 @@ def _constants(scheme: Any, device: Any, salt_key: bytes | None) -> Any:
 def _constant_keys(t: Any) -> dict[str, int]:
     p = t.data_ptr()
     return {"salt_key": p, "hm": p + 256}
+
+
+#: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
+SaltCoins = CoinCommitment | LiveCommitment
+SaltOpening = CoinOpening | LiveOpening
+
+
+def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening) -> Epoch:
+    """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
+    `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
+    (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
+    commitment a live epoch's (`window.live_epoch_reason`), and the opening its salt coin, opening against it after the
+    weights' root (`challenger.live_reason`).  Either is refused with `DomainError`; a live salt is `audit.salt_of`'s, as
+    H1's and ncp-v2's are."""
+    live = isinstance(coins, LiveCommitment), isinstance(opening, LiveOpening)
+    if not any(live):
+        return Epoch.start(workload, roots, coins, opening)
+    if not all(live):
+        raise DomainError("a live session's salt coin opens against that session's live coin commitment, and nothing else")
+    if set(roots) != set(workload.weights()):
+        raise DomainError("every weight of the workload is committed, and only those")
+    root = weights_root(roots)
+    why = Wd.live_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, root)
+    if why is not None:
+        raise DomainError(f"the salt's {why}")
+    return Epoch(workload, dict(roots), salt_of(coins, opening.coin, root))
 
 
 class _TorchStream:
@@ -95,14 +134,12 @@ def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, ha
 class _Keys:
     """`call_keys` natively: dom_a is `merkle.domain_message` hashed by hashlib's SHA-512.  The native path is held to
     `call_keys` once at construction, so a tree hash whose domain id isn't that digest of that message fails there.
-    A call's keys are a function of the salt, B's root, the call's index and its m₁₆, so the native path keeps the last
-    `KEYS_KEPT` calls' (``kept``), their framing being most of a call's host time before its first launch.  ``native`` set
-    to None takes `call_keys` itself (the reference path)."""
+    A call's index is unique in its epoch (`pouw_pass.call_index`), so no call's keys are another's and none are kept.
+    ``native`` set to None takes `call_keys` itself (the reference path)."""
 
     def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
         self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
         self.positions: dict[int, bytes] = {}
-        self.kept: dict[tuple[bytes, int, int], bytes] = {}
         root = bytes(64)
         if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
             raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
@@ -110,17 +147,11 @@ class _Keys:
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
             return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
-        got = self.kept.get((root_b, index, m16))
-        if got is None:
-            pos = self.positions.get(m16)
-            if pos is None:
-                pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
-            msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
-            got = self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
-            if len(self.kept) >= KEYS_KEPT:
-                self.kept.clear()
-            self.kept[root_b, index, m16] = got
-        return got
+        pos = self.positions.get(m16)
+        if pos is None:
+            pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
+        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
+        return self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
 
 
 def _event() -> Any:
@@ -225,37 +256,8 @@ class _Uploads:
         driver.record(self.events[i], stream)
 
 
-class _KeyTable:
-    """Each call's keys (`_Keys`) kept on the device by (weight, index, m₁₆), which fix them within an install: a call whose
-    keys are in the table copies them device to device (`copy`: dst, src, bytes, raw stream) on the stream that uploaded
-    them, in place of hashing and uploading them again.  A call on another stream, or past the table's slots, uploads its
-    keys as before."""
-
-    def __init__(self, keys: _Keys, uploads: _Uploads, device: Any, copy: Any, slots: int = KEY_SLOTS, width: int = 176):
-        self.keys, self.uploads, self.copy, self.slots, self.width = keys, uploads, copy, slots, width
-        self.table = _zeros(slots * width, device)
-        self.at: dict[tuple[int, int, int], tuple[int, int, int]] = {}   # (weight, index, m₁₆) -> (slot address, bytes, raw stream)
-
-    def put(self, dst: Any, w: int, root_b: bytes, index: int, m16: int, raw: int, stream: Any) -> None:
-        """Call `index`'s keys (weight `w`, B's root `root_b`, m₁₆ rows) into `dst`, on raw stream `raw` (torch's `stream`)."""
-        key = (w, index, m16)
-        got = self.at.get(key)
-        if got is not None and got[2] == raw:
-            self.copy(dst.data_ptr(), got[0], got[1], raw)
-            return
-        data = self.keys(root_b, index, m16)
-        if got is None and len(self.at) < self.slots:
-            i = len(self.at)
-            slot = self.table[self.width * i:self.width * (i + 1)]
-            self.uploads.put(slot, data, stream)
-            self.at[key] = (slot.data_ptr(), len(data), raw)
-            self.copy(dst.data_ptr(), slot.data_ptr(), len(data), raw)
-            return
-        self.uploads.put(dst, data, stream)
-
-
 def memmove(dst: int, src: int, n: int, raw: int) -> None:
-    """`_KeyTable`'s copy off the GPU: host memory, no stream."""
+    """The run's device-to-device copy (`PearlCDeviceRun.copy`) off the GPU: host memory, no stream."""
     ctypes.memmove(dst, src, n)
 
 
@@ -267,6 +269,23 @@ def _write(path: Path, data: bytes, digest: bool = True) -> dict:
     out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
     if digest:
         out["sha256"] = hashlib.sha256(data).hexdigest()
+    return out
+
+
+def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True) -> dict:
+    """`_write`'s file for bytes that don't change within an install (a weight's rows and tree): a hard link to the copy an
+    earlier retained pass wrote (`kept`, by file name), so every pass's directory holds what it opens without writing it
+    again; written (and kept) where there is none or the link fails (another file system, the copy deleted)."""
+    first = kept.get(path.name)
+    if first is not None and first[0] != path:
+        try:
+            path.unlink(missing_ok=True)
+            os.link(first[0], path)
+            return dict(first[1])
+        except OSError:
+            pass
+    out = _write(path, data(), digest)
+    kept[path.name] = (path, out)
     return out
 
 

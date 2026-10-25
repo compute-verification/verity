@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "ChargeLink_v1{N=14}": {
+   "and": 50760
+  },
+  "ChargeLink_v1{N=2}": {
+   "and": 19632
+  }
+ }
+}

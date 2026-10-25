@@ -1,6 +1,7 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose warden is driven tick by tick on a `VirtualClock`, its records certified by an LMS
-key: the check accepts the run, and refuses a record that isn't what was certified, a cell that reached its client in
+key: the check accepts the run, whose server got each request with its release order under the run id `deployment.json`
+names, and refuses a record that isn't what was certified, a cell that reached its client in
 another bucket, and a response that isn't the record's; and a window's slow commit, which faults the next window when
 it runs in the warden's process, moves no tick in `serve`'s publisher process."""
 
@@ -10,6 +11,7 @@ import asyncio
 import importlib.util
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +20,7 @@ import pytest
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
 from verity.core.protocols.certifier.grid import Reason
+from verity.core.protocols.certifier.release import with_release
 from verity.core.protocols.certifier.warden import END, Shim, Warden, WardenParams, cells, read_cell, reason_frame
 
 HERE = Path(__file__).resolve().parents[1]
@@ -163,11 +166,11 @@ def _response(texts: list[str]) -> bytes:
 
 
 def slow_commit(*args, **kwargs):
-    """`Cells.commit`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
+    """`Cells.of`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
     holds its process's GIL, so a ticker in that process, on any thread, waits as long. A spawned process has none."""
     for clock in PROCESS_CLOCK:
         clock.advance(clock() + SLOW_COMMIT_S)
-    return WR.Cells.commit(*args, **kwargs)
+    return WR.Cells.of(*args, **kwargs)
 
 
 def refusing_commit(*args, **kwargs):
@@ -175,11 +178,11 @@ def refusing_commit(*args, **kwargs):
 
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False) -> Warden:
+         process: bool = False, servers: list | None = None) -> Warden:
     """A run of the warden for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
     its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`), each window
     committed by `commit`, `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was
-    sent in. Returns the warden."""
+    sent in; `servers` gets the server's side of each connection, in connect order. Returns the warden."""
     tau = PARAMS.bucket_ms / 1000
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
@@ -189,7 +192,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
     else:
         signer = ws.cs.signer(key, 4)
-        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.commit)
+        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.of)
         hooks, public = {"publish": publisher}, signer.public_key()
     answers = iter(responses)
 
@@ -197,7 +200,10 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         reader = asyncio.StreamReader()
         reader.feed_data(next(answers))
         reader.feed_eof()
-        return reader, _Writer()
+        writer = _Writer()
+        if servers is not None:
+            servers.append(writer)
+        return reader, writer
 
     def settled(w: Warden) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
@@ -229,7 +235,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     clients, warden = asyncio.run(main())
     publisher.close()
     deployment = ws.deployment_record(PARAMS, public, SESSION, origin_unix=0.0, windows=windows,
-                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack)
+                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
+                                      run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -251,7 +258,13 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
-    _run(out, key, requests, responses)
+    servers: list[_Writer] = []
+    warden = _run(out, key, requests, responses, servers=servers)
+    release = {e["ordinal"]: e["release"] for e in warden.log}
+    assert sorted(release.values()) == [0, 1, 2]
+    assert [b"".join(d for _, d in s.writes) for s in servers] == \
+        [with_release(r, release[k + 1], warden.run_id) for k, r in enumerate(requests)]
+    assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
     result = ws.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]
@@ -260,8 +273,8 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
     assert "ACCEPTED: 3/3 ended" in ws.table(result)
-    rows = PARAMS.window * PARAMS.lanes * PARAMS.slots
-    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows")} == {"registered": 2, "of": 2, "rows": [rows]}
+    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows", "row_bytes")} == \
+        {"registered": 2, "of": 2, "rows": [PARAMS.window], "row_bytes": [PARAMS.lanes * PARAMS.slots * PARAMS.cell_bytes]}
     assert s["cell_rows"]["commit_ms"]["n"] == s["cell_rows"]["sign_ms"]["n"] == 2
 
     def refused(edit) -> list[str]:
@@ -302,7 +315,10 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     def other_salt(lines, salts) -> None:
         salts[1] = bytes([salts[1][0] ^ 1]) + salts[1][1:]
 
-    for change in (other_root, other_salt):
+    def other_wiring_salt(lines, salts) -> None:
+        salts[1] = salts[1][:-1] + bytes([salts[1][-1] ^ 1])
+
+    for change in (other_root, other_salt, other_wiring_salt):
         assert "responses window 0's cells aren't registered" in refused(lambda: edit_cells(change))
 
     def forge_reason() -> None:
@@ -322,9 +338,9 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         conn["arrivals_ms"][-1] += PARAMS.bucket_ms
 
     problems = refused(lambda: edit_client(late_cell))
-    assert any(p.startswith("connection 1:") and "'in_bucket'" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'in_bucket'" in p for p in problems)
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
-    assert any(p.startswith("connection 1:") and "'response_certified': False" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
     assert ws.check(out)["accepted"]
 
 
@@ -357,3 +373,15 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
     with pytest.raises(RuntimeError, match="a refusing commit"):
         _run(runs["refusing"], tmp_path / "refusing-key", requests, responses, commit=refusing_commit, process=True)
+
+
+def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_it_was():
+    """`serve`'s process holds a table for every connection before its origin (`prepare_process`), so that no tick
+    waits on the kernel growing it (`reserve_fds`); the table's size is `FDSize` in /proc/self/status."""
+    def table() -> int:
+        status = Path("/proc/self/status").read_text().splitlines()
+        return int(next(x.split()[1] for x in status if x.startswith("FDSize:")))
+
+    held = sorted(os.listdir("/proc/self/fd"))
+    n = ws.reserve_fds(table() + 1)
+    assert table() >= n and sorted(os.listdir("/proc/self/fd")) == held

@@ -31,13 +31,17 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # graphs for arms whose served kernels are bound to a row Build. Dispatch names
 # a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
 # harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable
-# memory accounting's arms read and build from sources that exist. served_commit's arm gates on the run phases
+# memory accounting's arms read and build from sources that exist, and the breakdown's arms are its `BandwidthArm`s, which
+# a test builds (it imports the spans module). served_commit's arm gates on the run phases
 # the runner names, which a test checks with a fake committer; it and its stock profiling arm read only the public
 # names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
 # write each run's records after the run's timed window, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
-# experimental Pearl-C arm's call check, which a test runs on a fake device run.
+# experimental Pearl-C arm's call check, which a test runs on a fake device run. The served table reads each result's
+# labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
+# directory remote.
 inputs = [
+    "tools/research/src/research/store/labels_sync.py",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
     "benchmarks/harness/README.md",
     "benchmarks/served_commit/arm.py",
@@ -46,10 +50,52 @@ inputs = [
     "benchmarks/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "integrations/vllm/verity_vllm/engine/hooks.py",
-    "integrations/vllm/verity_vllm/protocol_options",
+    "integrations/vllm/verity_vllm/protocol_options/__init__.py",
+    "integrations/vllm/verity_vllm/protocol_options/credit_gate.py",
+    "integrations/vllm/verity_vllm/protocol_options/interface.py",
+    "integrations/vllm/verity_vllm/protocol_options/pous.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_challenger.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_commit.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_handoff.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_hooks.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_prover.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_ranks.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_records.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered_device.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_requests.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_settings.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_static.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_window.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pass.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_grouped.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_lanes.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py",
+    "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_cuda",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_kept.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py",
+    "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py",
     "benchmarks/vllm_encoded/bench_arm.py",
+    "benchmarks/vllm_encoded/step_spans.py",
     "benchmarks/vllm_encoded/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
     "benchmarks/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",
+    # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
+    # test checks
+    "tools/research/src/research/pods/nebius/slot_only.py",
 ]

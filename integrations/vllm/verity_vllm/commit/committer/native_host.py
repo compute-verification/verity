@@ -50,7 +50,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme, step_rows
+from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
@@ -737,7 +737,7 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
+class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
@@ -745,7 +745,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
                  geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None,
                  commit_scheme: str | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`leaf_rule.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
         `commit_scheme` rows-sha512: the offline core's GPU-tree steps (`commit_block_offline`) under `step_rows`, as the windowed collector
         commits a served run's (`NativeCollectCommitter(commit_scheme=)`, which sets its own)."""
         self.engine = engine
@@ -1211,7 +1211,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return
         self._end_step()
         self.gc_pauses.uninstall()
-        for src in self.sources:
+        for src in reversed(self.sources):
             src.uninstall()
         for h in self._handles:
             h.remove()
@@ -1386,6 +1386,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 torch.cuda.current_stream().synchronize()
             self._footprint_absorbed(job, padded, levels, keep)
             self.arena.release(job.arena)
+            job.arena = None
             memtrace("worker: block released", job.step)
         mr = mr_t.numpy().astype("uint32").tobytes() if hasattr(mr_t, "numpy") else bytes(mr_t)
         self._gpu_t["leaf_ms"] += ev[0].elapsed_time(ev[1])
@@ -1401,7 +1402,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
         self._layouts[job.step] = job.metas
-        job.arena = None
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2, job.backlog,
                                               hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
 
@@ -1810,6 +1810,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 self._commit_step(job)
             except Exception as e:  # noqa: BLE001
                 self.errors.append(f"worker step {job.step}: {e!r}"[:300])
+                for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
+                    self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
                 self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
@@ -1822,10 +1824,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return self._commit_step_gpu(job)
         if "noworker" in self.ABL:
             job.event.synchronize()
-            if job.arena is not None:
-                self.arena.release(job.arena)
-                for blk, _ in job.overflow:
-                    self.arena.release(blk)
+            for blk in [job.arena, *(b for b, _u in job.overflow)] if job.arena is not None else []:
+                self.arena.release(blk)
             self._layouts[job.step] = job.metas
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in job.metas), len(job.metas), b"", job.t_step_end,
                                                   time.perf_counter(), job.backlog)
