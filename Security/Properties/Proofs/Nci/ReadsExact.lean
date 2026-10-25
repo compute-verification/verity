@@ -94,10 +94,13 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   a composite's return is the sequence of its parts and a primitive's none (`RetParts`, the decoder's).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
-(`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
-open: `RootSegs`, that every read `Seg.split` makes of a segment `down` or `carriesRead` gives a root node names gates
-of one root node with their widths, and `RootSet`, that the positions the node reads (`rootRead`) name exactly the gates outside the node that its
-gates read; a composite's segment `keep` keeps is then one outside the node (`keep_iff`).
+(`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here:
+`RootSegs`, that every read `Seg.split` makes of a segment `down` or `carriesRead` gives a root node names gates
+of one root node with their widths, and `RootSet`, open, that the positions the node reads (`rootRead`) name exactly the
+gates outside the node that its gates read; a composite's segment `keep` keeps is then one outside the node
+(`keep_iff`). `RootSegs` holds wherever the decoder's facts do (`RootFacts`), `carriesRead`'s segments are `ShapeOk`
+(`CarriesShape`) and, open, those reads name gates of one root node with their widths (`RootGates`) (`rootSegs_of`):
+every segment is `ShapeOk` (`rootShape`), so each read is `SegGood` (`segGood_of`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -2180,10 +2183,10 @@ def rootRead (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) 
   else if node.members = 0 then []
   else (List.range node.args.size).flatMap (argPos (rootCtx P memo) k node) ++ carryPos (rootCtx P memo) k node
 
-/-- **Open: the segments `down` gives at the root, as reads.** On a Program `Desc.evaluate` reads, with its summaries
+/-- **The segments `down` gives at the root, as reads.** On a Program `Desc.evaluate` reads, with its summaries
 `memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments (`Desc.nodeReads`) have pieces naming gates only,
 every read `Seg.split` makes of a segment `down` gives a piece of one of its arguments (or one `Desc.memberRows` gives),
-or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. -/
+or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. Open past `rootSegs_of`: `RootGates`. -/
 def RootSegs : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -7576,8 +7579,9 @@ def ShapeOk (P : Prog) (d : Nat) (s : Seg) : Prop :=
       x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)) ∧
   (∀ g ∈ s.ps.toList, 0 < g.count) ∧ 1 ≤ s.reps
 
-/-- **Open: the shape of `down`'s segments**, at every fuel: of a piece of positive count whose positions are at or past
-0 and name its nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`. -/
+/-- **The shape of `down`'s segments**, at every fuel: of a piece of positive count whose positions are at or past
+0 and name its nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`
+(`downShape_decoded`). -/
 def DownShape (c : Desc.Ctx) : Prop :=
   ∀ fuel q segs, 0 < q.count → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
@@ -9275,12 +9279,21 @@ theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut
     rw [hsegs, Array.empty_append]
     exact hA
 
-/-- **`DownShape` in a decoded Definition's body**, from `downShape_of` with the decoder's facts and `specs_decoded`,
-a batch's cases by `batchShape_of`. -/
-theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
+/-- A decoded Definition's arguments as the context holds them name their references in order (`ctxOf_arg`). -/
+theorem argOk_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size) (hDec : Decoded P) :
+    ∀ k i, k < (ctxOf P memo d).body.nodes.size → i < ((ctxOf P memo d).body.nodes[k]!).args.size →
+      ArgOk (ctxOf P memo d) k i := by
+  intro k i hk hi
+  have := (hDec d hdP).2.2 k hk i hi
+  exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
+
+/-- **`down`, `fromCallee`, `throughArg` and `carry` give `ShapeOk` segments in a decoded Definition's body**, from
+`shapes` with the decoder's facts and `specs_decoded`, a batch's cases by `batchShape_of`. -/
+theorem shapes_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
     (hDec : Decoded P) (hB : Resolve.BodyOk P d)
     (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d)) :
-    DownShape (ctxOf P memo d) := by
+    ∀ fuel, DownShapeAt (ctxOf P memo d) fuel ∧ CalleeShape (ctxOf P memo d) fuel ∧
+      ThroughShape (ctxOf P memo d) fuel ∧ CarryShape (ctxOf P memo d) fuel := by
   have hS := specs_decoded P memo hdP hDec hB hR hSO (.top d 0 none) rfl
   have hfn : ∀ k node, (ctxOf P memo d).node k = .ok node → node.fn < P.defs.size := by
     intro k node hn
@@ -9288,18 +9301,14 @@ theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP 
     have := (hB.1 k hk).1
     have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
     rwa [hg] at this
-  have hA : ∀ k i, k < (ctxOf P memo d).body.nodes.size → i < ((ctxOf P memo d).body.nodes[k]!).args.size →
-      ArgOk (ctxOf P memo d) k i := by
-    intro k i hk hi
-    have := (hDec d hdP).2.2 k hk i hi
-    exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
+  have hA := argOk_decoded P memo hdP hDec
   have hAP : ∀ k i, k < (ctxOf P memo d).body.nodes.size → i < ((ctxOf P memo d).body.nodes[k]!).args.size →
       ∀ s ∈ ((ctxOf P memo d).arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count :=
     fun k i hk hi => ctxOf_argCount P memo d k i hk hi
   have hOL : ∀ k node, (ctxOf P memo d).node k = .ok node → (P.defs[node.fn]!).prim = false →
       (P.defs[node.fn]!).outLeaves = (P.defs[node.fn]!).body.ret.count :=
     fun k node hn hp => (hDec node.fn (hfn k node hn)).2.1 hp
-  refine downShape_of (ctxOf P memo d) (.top d 0 none) rfl hB hA hAP ?_ hR (fun fuel => (hS fuel).2.2.1)
+  refine shapes (ctxOf P memo d) (.top d 0 none) rfl hB hA hAP ?_ hR (fun fuel => (hS fuel).2.2.1)
     (fun fuel hD hC => batchShape_of _ fuel hD (batchAffine_shape _ hR)
       (batchOne_shape _ (.top d 0 none) hB fuel hD hC (hS fuel).2.1 hA hAP hR hOL)
       (batchStride_shape _ (.top d 0 none) hB fuel hD hC (hS fuel).2.1 hR))
@@ -9311,6 +9320,13 @@ theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP 
     · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
     · rw [getElem!_neg _ i hi] at hdims; cases hdims
   · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
+
+/-- **`DownShape` in a decoded Definition's body** (`shapes_decoded`). -/
+theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
+    (hDec : Decoded P) (hB : Resolve.BodyOk P d)
+    (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d)) :
+    DownShape (ctxOf P memo d) :=
+  fun fuel => (shapes_decoded P memo hdP hDec hB hR hSO fuel).1
 
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
@@ -9599,7 +9615,8 @@ Definition's callees are decoded before it and none is the root, and the reached
 theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
-    (hnr : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
+    (hnr : ∀ d < P.defs.size, (Desc.reached P)[d]! = true →
+      ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
     (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
     (hSO : ∀ m d, ScanOut (ctxOf P m d)) :
     ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P memo f := by
@@ -9635,7 +9652,7 @@ theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok 
       change k < (P.defs[f]!).body.nodes.size at hk
       change (P.defs[f]!).body.nodes[k]! = node at hg
       rw [← hg]
-      exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP k hk)
+      exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP hrf k hk)
     refine summarize_retOk P r f v htP hRP (hB f htP hrf)
       (fun hp => downShape_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f))
       (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) sc hsc
@@ -10053,5 +10070,320 @@ theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (h
   · refine ⟨s[0]!, ?_, by omega, by omega⟩
     rw [getElem!_pos s 0 (by omega)]
     exact Array.getElem_mem_toList _
+
+/-! ## The shape of a root node's segments
+
+Every segment `down` gives a piece of a root node's argument (`FromDown`), or one `Desc.memberRows` gives (`FromRows`),
+is `ShapeOk` in the root's body (`shapes_decoded`), wherever the decoder's facts hold (`RootFacts`): the root's callees'
+summaries hold `RetOk` (`memoOf_retOk`, `reached_root`). -/
+
+theorem mem_sl {α : Type} {l : List α} {a b : Nat} {x : α} (h : x ∈ sl l a b) : x ∈ l :=
+  List.mem_of_mem_drop (List.mem_of_mem_take h)
+
+/-- An argument a node doesn't have is, as the context holds it, of no segments. -/
+theorem ctxOf_arg_ge (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
+    (hi : ¬ i < ((P.defs[d]!).body.nodes[k]!).args.size) : ((ctxOf P memo d).arg k i).segs = #[] := by
+  unfold Desc.Ctx.arg ctxOf
+  dsimp only
+  by_cases hk : k < (P.defs[d]!).body.nodes.size
+  · rw [getElem!_pos _ k hk] at hi
+    rw [Array.getElem?_map, Array.getElem?_eq_getElem hk, Option.map_some, Option.bind_some, Array.getElem?_map,
+      Array.getElem?_eq_none (by omega), Option.map_none, Option.getD_none]
+    rfl
+  · rw [Array.getElem?_map, Array.getElem?_eq_none (by omega), Option.map_none, Option.bind_none, Option.getD_none]
+    rfl
+
+theorem pieces_empty {s : Desc.PS} (h : s.segs = #[]) (lo hi : Nat) : s.pieces lo hi = #[] := by
+  unfold Desc.PS.pieces Desc.PS.slice
+  simp [h]
+
+theorem throughPS_empty {s : Desc.PS} (h : s.segs = #[]) (p : Piece) : Desc.throughPS s p = none := by
+  unfold Desc.throughPS
+  rw [h]
+  rfl
+
+/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: `ShapeOk` segments. -/
+theorem piece_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : Nat} (hA : ArgOk c k i)
+    (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t))
+    {lo hi : Nat} {q : Piece} (hq : q ∈ (c.arg k i).pieces lo hi) {segs : Array Seg}
+    (h : Desc.down c fuel q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  have hq' := Array.mem_toList_iff.2 hq
+  have hmem : ∀ x ∈ pos q, ∃ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      x = refPos (((c.body.nodes[k]!).args[i]!).seq.get t) := by
+    intro x hx
+    have : x ∈ posAll ((c.arg k i).pieces lo hi) := List.mem_flatMap.2 ⟨q, hq', hx⟩
+    rw [pieces_pos _ hA.1 lo hi] at this
+    have := mem_sl this
+    rw [hA.2] at this
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 this
+    exact ⟨t, List.mem_range.1 ht, rfl⟩
+  have hcnt : 0 < q.count := by
+    unfold Desc.PS.pieces at hq'
+    rw [Array.toList_flatMap, List.mem_flatMap] at hq'
+    obtain ⟨g, hg, hq'⟩ := hq'
+    rw [Array.toList_flatMap, List.mem_flatMap] at hq'
+    obtain ⟨m, -, hq'⟩ := hq'
+    exact shiftGates_count _ _ (psSlice_ok _ hA.1 hP lo hi g hg).2.2 q hq'
+  exact hD q segs hcnt
+    (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem x hx; simp [refPos])
+    (fun x hx k' hk' => by
+      obtain ⟨t, ht, rfl⟩ := hmem x hx
+      simp only [refPos, Tgt.ref.injEq] at hk'
+      obtain ⟨hp', rfl⟩ := hk'
+      have := ((hR t ht).2 hp').2
+      simp only [refPos]
+      exact_mod_cast this)
+    (fun x hx i' hi' => by
+      obtain ⟨t, ht, rfl⟩ := hmem x hx
+      simp only [refPos, Tgt.ref.injEq] at hi'
+      obtain ⟨hp', rfl⟩ := hi'
+      have := (hR t ht).1 hp'
+      simp only [refPos]
+      exact ⟨this.1, by exact_mod_cast this.2⟩) h
+
+/-- **`Desc.reached` marks the root.** -/
+theorem reached_root (P : Prog) (hr : P.root < P.defs.size) : (Desc.reached P)[P.root]! = true := by
+  let N := P.defs.size
+  let G : Nat → Array Bool → Array Bool := fun i s =>
+    if (!s[N - 1 - i]!) = true then s
+    else if (P.defs[N - 1 - i]!).prim = true then s
+    else (P.defs[N - 1 - i]!).body.nodes.foldl (fun b a => b.set! a.fn true) s
+  have step : ∀ s b, b.size = N ∧ b[P.root]! = true → (G s b).size = N ∧ (G s b)[P.root]! = true := by
+    intro s b ⟨hsz, hb⟩
+    simp only [G]
+    split
+    · exact ⟨hsz, hb⟩
+    split
+    · exact ⟨hsz, hb⟩
+    rw [← Array.foldl_toList]
+    obtain ⟨m1, m2⟩ := marks_spec (P.defs[N - 1 - s]!).body.nodes.toList b
+    exact ⟨m1.trans hsz, (m2 _).2 (.inr hb)⟩
+  have run : ∀ (l : List Nat) b, b.size = N ∧ b[P.root]! = true →
+      (l.foldl (fun b i => G i b) b).size = N ∧ (l.foldl (fun b i => G i b) b)[P.root]! = true := by
+    intro l
+    induction l with
+    | nil => intro b h; exact h
+    | cons i l ih => intro b h; exact ih _ (step i b h)
+  have h0 : ((Array.replicate N false).set! P.root true).size = N ∧
+      ((Array.replicate N false).set! P.root true)[P.root]! = true := by
+    refine ⟨by rw [set!_size, Array.size_replicate], ?_⟩
+    rw [set!_get]
+    exact .inl ⟨rfl, by rw [Array.size_replicate]; exact hr⟩
+  have := run (List.range' 0 N) _ h0
+  unfold Desc.reached
+  dsimp only
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  rw [forIn_id_yield _ _ G _ (fun a b => ?_)]
+  · simpa using this.2
+  · dsimp only [G]
+    split
+    · rfl
+    · split
+      · rfl
+      · rw [Array.forIn_pure_yield_eq_foldl]; rfl
+
+/-- What `Seg.split` makes of a `ShapeOk` segment: segments naming their `len` positions, each a position of the
+segment, of pieces of positive count. -/
+theorem split_shape {P : Prog} {d : Nat} {s g : Seg} (hs : ShapeOk P d s) (hg : g ∈ (Seg.split s).toList) :
+    SegOk g ∧ (∀ x ∈ segPos g, x ∈ segPos s) ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
+  have hx : ∀ x, x ∈ segPos g → x ∈ segPos s := fun x hx =>
+    (mem_segPos_split s x).1 ⟨g, hg, hx⟩
+  refine ⟨?_, hx, ?_⟩
+  all_goals unfold Desc.Seg.split at hg; dsimp only at hg
+  all_goals split at hg
+  · rw [Array.toList_map, List.mem_map] at hg
+    obtain ⟨q, -, rfl⟩ := hg
+    show (posAll #[q]).length = q.count
+    rw [posAll_singleton, pos_length]
+  · simp only [List.mem_singleton] at hg
+    subst hg
+    unfold Desc.Seg.alike
+    split <;> exact hs.1
+  · rw [Array.toList_map, List.mem_map] at hg
+    obtain ⟨q, hq, rfl⟩ := hg
+    intro q' hq'
+    simp only [Desc.Seg.one, List.mem_singleton] at hq'
+    subst hq'
+    unfold Desc.Seg.alike at hq
+    split at hq <;> exact hs.2.2.1 _ hq
+  · simp only [List.mem_singleton] at hg
+    subst hg
+    unfold Desc.Seg.alike
+    split <;> exact hs.2.2.1
+
+/-- What `Desc.memberRows` gives are pieces `throughPS` gives of the argument. -/
+theorem memberRows_mem (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (u : Desc.Ivs) {ps : Array Piece}
+    (h : Desc.memberRows c node k i u = .ok (some ps)) :
+    ∀ bp ∈ ps.toList, ∃ p, Desc.throughPS (c.arg k i) p = some bp := by
+  let T : Array Piece → Prop := fun out => ∀ bp ∈ out.toList, ∃ p, Desc.throughPS (c.arg k i) p = some bp
+  let I : Option (Option (Array Piece)) × Array Piece → Prop := fun st => (st.1 = none ∨ st.1 = some none) ∧ T st.2
+  have hpush : ∀ out bp p, T out → Desc.throughPS (c.arg k i) p = some bp → T (out.push bp) := by
+    intro out bp p ht hp x hx
+    rw [Array.toList_push, List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact ht x hx
+    · exact ⟨p, hp⟩
+  unfold Desc.memberRows at h
+  extract_lets a out0 at h
+  obtain ⟨st, hst, h⟩ := Walk.except_bind_ok h
+  rw [← Array.forIn_toList] at hst
+  have hfin := forIn_done I I _ ?_ u.toList _ st ⟨.inl rfl, fun x hx => by simp [out0] at hx⟩ hst
+  · have hI : I st := hfin.elim id id
+    obtain ⟨r, out⟩ := st
+    obtain ⟨hr | hr, ht⟩ := hI
+    · dsimp only at hr ht h
+      subst hr
+      simp only [pure, Except.pure, Except.ok.injEq, Option.some.injEq] at h
+      subst h
+      exact ht
+    · dsimp only at hr ht h
+      subst hr
+      simp [pure, Except.pure] at h
+  intro x s y hs hf
+  obtain ⟨lo, hi⟩ := x
+  extract_lets r out jp at hf
+  dsimp (config := { zeta := false }) only at hf
+  have hjp : ∀ rows y, jp rows = .ok y → (∃ s', y = .yield s' ∧ I s') ∨ (∃ s', y = .done s' ∧ I s') := by
+    intro rows y hy
+    simp only [jp] at hy
+    obtain ⟨st2, hst2, hy⟩ := Walk.except_bind_ok hy
+    rw [← Array.forIn_toList] at hst2
+    have h2 := forIn_done I I _ ?_ rows.toList (none, out) st2 ⟨.inl rfl, hs.2⟩ hst2
+    · have hI2 : I st2 := h2.elim id id
+      obtain ⟨r2, out2⟩ := st2
+      obtain ⟨hr | hr, ht⟩ := hI2
+      · dsimp only at hr ht hy; subst hr
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        exact .inl ⟨_, hy.symm, .inl rfl, ht⟩
+      · dsimp only at hr ht hy; subst hr
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        exact .inr ⟨_, hy.symm, .inr rfl, ht⟩
+    intro p s2 y2 hs2 hf2
+    split at hf2
+    · rename_i bp hbp
+      simp only [pure, Except.pure, Except.ok.injEq] at hf2
+      exact .inl ⟨_, hf2.symm, .inl rfl, hpush _ bp p hs2.2 hbp⟩
+    · simp only [pure, Except.pure, Except.ok.injEq] at hf2
+      exact .inr ⟨_, hf2.symm, .inr rfl, hs2.2⟩
+  split at hf
+  · obtain ⟨rows, -, hf⟩ := Walk.except_bind_ok hf; exact hjp rows y hf
+  · split at hf
+    · obtain ⟨rows, -, hf⟩ := Walk.except_bind_ok hf; exact hjp rows y hf
+    · have hf := walkAtMost_bind _ _ _ hf
+      obtain ⟨rows, -, hf⟩ := Walk.except_bind_ok hf; exact hjp rows y hf
+  · obtain ⟨rows, -, hf⟩ := Walk.except_bind_ok hf; exact hjp rows y hf
+
+/-- The decoder's facts `RootSegs` reads, each one of every Program `Flock.Program.decode` gives whose order
+`Prog.orderViolation` passes (`BodiesOk`): the root a composite without parameters, `Decoded`, `RetParts` and
+`ScanOut`, every callee decoded before its caller, no reached Definition calling the root, and every reached
+Definition's references `Resolve.BodyOk`. -/
+def RootFacts (P : Prog) : Prop :=
+  P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (P.defs[P.root]!).body.params.size = 0 ∧ Decoded P ∧
+  RetParts P ∧ (∀ m d, ScanOut (ctxOf P m d)) ∧
+  (∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d) ∧
+  (∀ d < P.defs.size, (Desc.reached P)[d]! = true →
+    ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root) ∧
+  (∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
+
+/-- The root's callees' summaries hold `RetOk` (`memoOf_retOk`): each is reached (`reached_root`, `reached_closed`)
+and decoded before the root. -/
+theorem root_retOk (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P) :
+    ∀ k node, (rootCtx P memo).node k = .ok node → RetOk P memo node.fn := by
+  obtain ⟨hr, hp, -, hDec, hRP, hSO, hcf, hnr, hB⟩ := hF
+  intro k node hn
+  have hk := node_lt hn
+  have hg := node_get hn
+  change k < (P.defs[P.root]!).body.nodes.size at hk
+  change (P.defs[P.root]!).body.nodes[k]! = node at hg
+  have hlt := hcf P.root hr k hk
+  rw [← hg]
+  exact memoOf_retOk P memo hm hRP hDec hcf hnr hB hSO _ (by omega)
+    (reached_closed P hcf P.root (reached_root P hr) hp k hk) (by omega)
+
+/-- `Desc.carriesRead`'s segments for scan node `k`'s carries are `ShapeOk`. -/
+def CarriesShape (c : Desc.Ctx) : Prop :=
+  ∀ k node segs, c.node k = .ok node →
+    Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
+
+/-- **Every segment `down` gives a piece of a root node's argument, or one `Desc.memberRows` gives, is `ShapeOk`**
+(`piece_shape`, `throughPS_shape`), and so is every one `Desc.carriesRead` gives wherever `CarriesShape` holds. -/
+theorem rootShape (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node)
+    (hCS : CarriesShape (rootCtx P memo)) {s : Seg}
+    (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
+      FromCarry (rootCtx P memo) k node s) : ShapeOk P P.root s := by
+  have hR := root_retOk P memo hm hF
+  obtain ⟨hr, -, -, hDec, -, hSO, -, -, hB⟩ := hF
+  have hBr := hB P.root hr (reached_root P hr)
+  rw [rootCtx_eq] at hn hCS hs hR
+  have hSh := shapes_decoded P memo hr hDec hBr hR (hSO memo P.root) Flock.Steps.FUEL
+  have hA := argOk_decoded P memo hr hDec
+  have hk := node_lt hn
+  rcases hs with ⟨i, lo, hi, q, hq, segs, hd, hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd, hs⟩ | ⟨segs, hc, hs⟩
+  · by_cases hi' : i < ((ctxOf P memo P.root).body.nodes[k]!).args.size
+    · exact piece_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P memo P.root k i hk hi') ((hBr.1 k hk).2.1 i) hq hd
+        s (Array.mem_toList_iff.2 hs)
+    · rw [pieces_empty (ctxOf_arg_ge P memo P.root k i hi')] at hq
+      simp at hq
+  · obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
+    by_cases hi' : i < ((ctxOf P memo P.root).body.nodes[k]!).args.size
+    · exact throughPS_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P memo P.root k i hk hi') ((hBr.1 k hk).2.1 i)
+        hp' hd s (Array.mem_toList_iff.2 hs)
+    · rw [throughPS_empty (ctxOf_arg_ge P memo P.root k i hi')] at hp'
+      cases hp'
+  · exact hCS k node segs hn hc s (Array.mem_toList_iff.2 hs)
+
+/-- A read `Seg.split` makes of a `ShapeOk` segment of the root's body, the root without parameters, is `SegGood`
+wherever, of positive count, it names gates of one root node with their widths. -/
+theorem segGood_of {P : Prog} {c : Circuit} {s g : Seg} (hp0 : (P.defs[P.root]!).body.params.size = 0)
+    (hs : ShapeOk P P.root s) (hg : g ∈ (Seg.split s).toList)
+    (hG : g.count ≠ 0 → ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g →
+      w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k') :
+    SegGood P c g := by
+  obtain ⟨hok, hx, hpc⟩ := split_shape hs hg
+  refine ⟨fun h0 => ?_, fun h0 => ⟨hpc, ?_⟩⟩
+  · have := segPos_length g hok
+    rw [h0] at this
+    exact List.eq_nil_of_length_eq_zero this
+  · obtain ⟨k', hk', hw⟩ := hG h0
+    refine ⟨k', hk', fun x hxg => ?_⟩
+    obtain ⟨t, p⟩ := x
+    obtain ⟨hp0', hnk, hpar⟩ := hs.2.1 _ (hx _ hxg)
+    rcases t with ⟨b, i⟩ | w
+    · cases b
+      · exact absurd rfl (hnk i)
+      · have := (hpar i rfl).1
+        rw [hp0] at this
+        omega
+    · obtain ⟨e1, e2⟩ := hw w p hxg
+      refine ⟨p.toNat, ?_, e2⟩
+      dsimp only at hp0'
+      rw [← e1, Int.toNat_of_nonneg hp0']
+
+/-- **Open: the gates a root node's reads name are one root node's, with their widths.** On a Program `Desc.evaluate`
+reads, with its summaries `memo` and `circuitOf`'s circuit `c`: every read `Seg.split` makes of a segment `down` gives
+a piece of one of root node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's
+carries, of positive count, names gates `p` of width `c.w[p]` of one root node. -/
+def RootGates : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+    Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+    Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+    ∀ k < nodeCount P, ∀ node, (rootCtx P memo).node k = .ok node →
+      ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
+        FromCarry (rootCtx P memo) k node s) → ∀ g ∈ (Seg.split s).toList, g.count ≠ 0 →
+        ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k'
+
+/-- **`RootSegs` from the decoder's facts, the shape of a scan's carries' reads and `RootGates`**: every segment is
+`ShapeOk` (`rootShape`), so each read `Seg.split` makes of it is `SegGood` (`segGood_of`). -/
+theorem rootSegs_of (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
+    (hC : ∀ bytes P memo, Flock.Program.decode bytes = .ok P → P.orderViolation = none → memoOf P = .ok memo →
+      CarriesShape (rootCtx P memo))
+    (hG : RootGates) : RootSegs := by
+  intro bytes P memo c hd ho hl hi hw hm hc k hk node rs hn hrs hg s hs g hgs
+  have hF' := hF bytes P hd ho
+  exact segGood_of hF'.2.2.1 (rootShape P memo hm hF' hn (hC bytes P memo hd ho hm) hs) hgs
+    (hG bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs g hgs)
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
