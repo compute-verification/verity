@@ -518,14 +518,15 @@ DEV void pd_line_block(const uint32_t* key, uint32_t line, uint64_t* w) {
   w[15] = 8 * (128 + 38);
 }
 // H_seed-A(salt ‖ x ‖ root_B ‖ u64 LE iota) from the label's midstate, and its line key (s512_seeds' bytes); x as 8 words,
-// lab the label states (PD_LABELS, or a copy of it).  With PD_LOOP and h, also the hash of the key's line 0 (pd_line_hash's)
-// into h, from the same paired site
+// lab the label states (PD_LABELS, or a copy of it).  With PD_LOOP and line, also the hash of the key's line 0
+// (pd_line_hash's) into h, from the same paired site; a flag rather than a null h, since selecting between h and key would
+// put both in local memory
 template <int V, int P = 0>
 DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_t* seed, uint32_t* key,
-                 const uint64_t* lab = &PD_LABELS[0][0], uint32_t* h = nullptr) {
+                 const uint64_t* lab = &PD_LABELS[0][0], uint32_t* h = nullptr, bool line = false) {
   uint64_t st[8], w[16];
   if constexpr ((V & PD_LOOP) != 0) {
-    const int blocks = h ? 4 : 3;
+    const int blocks = line ? 4 : 3;
 #pragma unroll 1
     for (int b = 0; b < blocks; b++) {
       if (b == 0) {
@@ -556,7 +557,8 @@ DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_
       }
       pd_cmp<V, P>(st, w);
     }
-    s512_out32(st, h ? h : key);
+    if (line) s512_out32(st, h);
+    else s512_out32(st, key);
   } else {
 #pragma unroll
     for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_SEED_A + t];
@@ -846,7 +848,7 @@ DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, u
   for (int q = 0; q < 8; q++) x[q] = xr[q];
   if (on) pd_stamp<V>(a.p[13], r, PS_SEED0);
   if constexpr ((V & PD_LOOP) != 0) {
-    pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab, line ? h : nullptr);
+    pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab, h, line);
   } else {
     pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab);
     if (line) pd_line_hash<V, P>(key, 0, h, lab);
