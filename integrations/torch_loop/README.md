@@ -63,7 +63,7 @@ K₀ = 32. The draw on the gate's coins is `Select.select`'s, and the theorem co
 
 - `live-verifier`, a hypothesis. It says the draw a5 serves the session (its share of the gate challenger's draw) is the
   one `flock-verify draw` printed. That premise is not proved for the served path. A3 is read here of the gate
-  challenger's bytes, an auditor device under `trusted-nebius-host`.
+  challenger's bytes, an auditor device under `trusted-host`.
 - The checks a5 and `records_audit.py` make outside the session (R1 to R7, the receipt, the registration fixed before the
   draw), which the bound does not need.
 - The chain from this bound into `Claims.Sampling.KS` (the "session verdict ⇒ Flock KS" row that
