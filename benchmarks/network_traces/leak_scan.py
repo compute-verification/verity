@@ -46,7 +46,8 @@ _SWAP = threading.Lock()
 #: Ligerito's grinding nonces, which `redigest.layout` keys without a "nonce" suffix (consumed by
 #: `transcript_check`'s ``t.pow``, and prover-controlled: `redigest`'s ``lig-query-nonce``/``lig-claim-nonce``
 #: mutants flip them and the verifier accepts), so `reads` counts them among the nonces, not the reader-fixed integers.
-GRIND = ("lig.qn", "lig.cbn", "lig.consn")
+#: ``lig.fold`` (``fold_grinding_nonces``) is one too: the verifier requires it empty, but the scan reads what it got.
+GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 
 
 def is_stream(name: str) -> bool:
