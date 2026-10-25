@@ -148,6 +148,32 @@ def test_lent_blocks_come_back_free_at_the_reset_after_their_restore(host_blocks
     assert any(f is lent[0] for f in pool.free) and len(pool.free) == 2
 
 
+def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monkeypatch):
+    from verity_vllm.commit.committer import native_collect as NC
+
+    got: list[list[int]] = []
+    fake = SimpleNamespace(reserve=lambda sizes: got.append(sizes) or len(sizes) * ss.WARM_BLOCK)
+    t = iter([1.0, 3.5])
+    assert ss.warm_pool(SimpleNamespace(pool=fake), 2.5, clock=lambda: next(t)) == {"gb": 3.2, "blocks": 3, "seconds": 2.5}
+    assert got == [[ss.WARM_BLOCK] * 3] and ss.WARM_BLOCK >= NC.WINDOW_MB << 20
+    assert ss.warm_pool(SimpleNamespace(pool=fake), 0) is None and ss.warm_pool(SimpleNamespace(), 8) is None
+    with pytest.raises(UsageError, match="--seal-warm-gb"):
+        so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--seal-warm-gb", "-1"], environ={}))
+
+    monkeypatch.setattr(ss, "WARM_BLOCK", 1 << 20)
+    monkeypatch.setattr(PP, "_shared_map", lambda n: (torch.zeros(n, dtype=torch.uint8), None))
+    monkeypatch.setattr(PP, "_populate", lambda *_a: True)
+    monkeypatch.setattr(PP, "_register", lambda *_a: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    pool = PP.PinnedPool(1 << 20, exact=True, populate_threads=1)
+    assert ss.warm_pool(SimpleNamespace(pool=pool), 3 * (1 << 20) / ss.GB)["blocks"] == 3 and pool.allocs == 3
+    pool.reset()
+    for n in (1 << 18, 1 << 19, 1 << 20, 1 << 18):
+        pool.take(n)
+    assert pool.allocs == 3 and len(pool.in_use) == 3, "the first window's takes are served from the warmed blocks"
+    pool.mode = None
+
+
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
     first, go, done = threading.Event(), threading.Event(), threading.Event()
     sealer = ss.Sealer(15, clock=lambda: (go.set(), 0.0)[1] if first.is_set() else 0.0)
@@ -253,6 +279,47 @@ def test_a_window_closes_once_its_steps_have_committed_window_bytes(tmp_path):
         s.post("/v1/completions", _body(0, n=4))
     wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
     assert [w["steps"] for w in wins] == [1, 1, 1, 1]
+
+
+def test_a_size_bound_crossed_inside_a_step_closes_its_window_at_the_step_boundary(tmp_path):
+    """The window's bytes pass ``window_bytes`` between a step's input ids and its sampled ids: the window closes only before
+    the next step, so each step's schedule (between its window's marks, as `advice.windows_of` reads them), its committed
+    values and its rows sit in one window, which runs past its bound."""
+    s = Sealed(tmp_path, sealer=None, window_bytes=25)
+    w, engine = s.windows, s.loop.engine
+    w.seal = None
+    scheduled: list[tuple[int, list[str]]] = []
+    commits: list[tuple[int, int, str, int]] = []
+    marks: list[tuple[int, str, int]] = []
+    step, commit = engine.step, w.com._commit
+
+    def traced_step() -> list[Any]:
+        scheduled.append((w.window, sorted(r["internal"] for r in engine.reqs.values())))
+        return step()
+
+    def traced_commit(st: int, name: str, values: list[int], dtype: str) -> None:
+        commit(st, name, values, dtype)
+        commits.append((w.window, st, name, ss.committed_bytes(w.com)))
+
+    w.com._commit, engine.step, w.marks = traced_commit, traced_step, lambda k, ev: marks.append((k, ev, len(scheduled)))
+    with s:
+        status, _ = s.post("/v1/completions", _body(0, n=3))
+    assert status == 200
+    names = [name for k, st, name, _b in commits if (k, st) == (0, 0)]
+    crossed = next((i for i, (k, st, _n, b) in enumerate(commits) if (k, st) == (0, 0) and b >= 25), None)
+    assert crossed is not None and 0 < crossed < len(names) - 1, "window 0 passes its bound part way through step 0's commits"
+    opened = {k: n for k, ev, n in marks if ev == "open"}
+    closed = {k: n for k, ev, n in marks if ev == "close"}
+    traced = records(tmp_path, "step_trace.jsonl")
+    wins = [x for x in records(tmp_path, "windows.jsonl") if not x.get("empty")]
+    assert [x["steps"] for x in wins] == [1, 1, 1] and all(x["committed_bytes"] > 25 for x in wins), "each window runs past its bound"
+    for x in wins:
+        k, steps = x["window"], range(opened[x["window"]], closed[x["window"]])
+        assert all(scheduled[j][0] == k for j in steps), "each step scheduled while its window was open"
+        assert [scheduled[j][1] for j in steps] == [sorted(r[0] for r in t["rows"]) for t in traced if t["window"] == k]
+        for j in steps:
+            assert [name for kk, st, name, _b in commits if (kk, st) == (k, j - opened[k])] == names, "all of its values in its window"
+    assert {(k, st) for k, st, _n, _b in commits} == {(x["window"], 0) for x in wins}
 
 
 def test_below_the_disk_floor_a_window_is_not_sealed_and_the_server_stops_cleanly(tmp_path, monkeypatch):

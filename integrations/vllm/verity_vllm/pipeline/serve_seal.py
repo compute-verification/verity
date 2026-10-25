@@ -455,6 +455,22 @@ def thaw(frozen: Any) -> None:
     frozen.lent = []
 
 
+#: a warmed block holds any one of the windowed collector's takes (at most a 256 MiB window, `native_collect.WINDOW_MB`)
+WARM_BLOCK = 1 << 30
+
+
+def warm_pool(com: Any, gb: float, clock: Callable[[], float] = time.perf_counter) -> dict[str, Any] | None:
+    """The committer's pinned pool grown by ``gb`` GB before serving, in `WARM_BLOCK` blocks faulted in together
+    (`PinnedPool.reserve`; free from the first window's reset), so the windows awaiting their seal and the open window find
+    blocks ready: grown on the engine loop instead, a burst's windows stall it 0.1-0.2 s a GiB on n1. None for no growth."""
+    pool, n = getattr(com, "pool", None), -(-int(gb * GB) // WARM_BLOCK) if gb > 0 else 0
+    if pool is None or not n:
+        return None
+    t0 = clock()
+    made = pool.reserve([WARM_BLOCK] * n)
+    return {"gb": round(made / GB, 1), "blocks": n, "seconds": round(clock() - t0, 2)}
+
+
 def extras_of(com: Any, rc: Any) -> Any:
     """The registered tensors' bytes a window's bundle carries (`replay_bundle.weights_extra`), read from the device on the engine
     loop at the close; None without a weights tree (`write_store` then refuses the window by name)."""
