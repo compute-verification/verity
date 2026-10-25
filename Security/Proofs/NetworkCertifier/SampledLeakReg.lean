@@ -2,6 +2,7 @@ import Definitions.NetworkCertifier.SampledReg
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.Flock.Claims.Sampling.KS
+import Proofs.Flock.Claims.Finder
 
 /-!
 # The leak bound at the registration's values
@@ -148,8 +149,13 @@ theorem regLog_valid (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg)
     ∀ p ∈ regLog H Cm roots ops, H p.1 = p.2 := by
   intro p hp
   obtain ⟨o, -, hpo⟩ := List.mem_flatMap.1 hp
-  rw [← ownLog_ofOC H (fun _ : Unit => (default : Trace))] at hpo
-  exact ownLog_valid H _ _ p hpo
+  exact OC.eval_log H _ p hpo
+
+/-- **Binding is the commitment's alone**: a record whose trace commitment is `D`'s binds where `D` does, whatever its
+Flock verifier, the plain one included. So `sampledLeak_registered` holds at such a record with `D`'s binding and the
+record's own `KS`. -/
+theorem binds_of_commit {Coin Col T Coin' Col' T' : Type} {H : Msg → Msg} {D : Deploy Coin Col T}
+    {D' : Deploy Coin' Col' T'} (h : D'.commit = D.commit) (hb : D.commit.Binds H) : D'.commit.Binds H := h ▸ hb
 
 section Deploy
 
@@ -165,6 +171,7 @@ def RegColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col
       ((D.parse x).map fun st => regLog H D.commit st.roots (ops st)).getD [],
     p.1 ≠ p'.1 ∧ p.2 = p'.2
 
+omit [DecidableEq Col] [Zero Col] in
 /-- **A disagreement with the registration is a collision**: at an accepted run, an extracted trace that opens a
 registered position to a value other than the registration's makes, with the registration's opening there, calls that
 collide among the extraction's own and the registration's checks. -/
@@ -178,19 +185,26 @@ theorem regColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.co
   rw [E_eval H D decode P x s.1 s.2.1 s.2.2 hst hacc, Option.some.injEq] at hw
   subst hw
   obtain ⟨q, hq, hqr, hqp, hqv⟩ := mem_assemble_of_val hwb
-  have hpass := Passes.found H D decode x (run H P D.V x s.1) st s.2.2
-    (outerList H D x (run H P D.V x s.1) s.2.2) q hq
+  rw [found_eq] at hq
+  obtain ⟨hqo, hql⟩ := Passes.found H D decode x (run H P D.V x s.1) st s.2.2 _ q hq
   obtain ⟨o', ho', ho'p, ho'v⟩ := regVal_mem (hreg.2 g hg)
-  set rl := ((D.parse x).map fun st => regLog H D.commit st.roots (ops st)).getD [] with hrl
-  have hrl' : rl = regLog H D.commit st.roots (ops st) := by rw [hrl, hst]; rfl
-  have hcoll := disagree_collision (l := ownLog H (run H P D.V x s.1) ((E D decode).ext x s.2.1 s.2.2) ++ rl) hb
-    (roots := st.roots) (o := q.2) (o' := o') (hqp.trans ho'p.symm) (by rw [hqv, ho'v]; exact hne)
-    (hqr ▸ hpass.1) (hreg.1 o' ho')
-    (fun t ht => List.mem_append_left _
-      (ownLog_E H D decode P x s.1 s.2.1 s.2.2 hst hacc t (hpass.2 t (hqr ▸ ht))))
-    (fun t ht => List.mem_append_right _ (hrl' ▸ List.mem_flatMap.2 ⟨o', ho', ht⟩))
-  exact hcoll
+  have hqo' : D.commit.Opens H st.roots q.2 = true := by rw [← hqr]; exact hqo
+  have hql' : ∀ t ∈ ((D.commit.opens st.roots q.2).eval H).2,
+      t ∈ ownLog H (run H P D.V x s.1) ((E D decode).ext x s.2.1 s.2.2) := by
+    intro t ht
+    rw [← hqr] at ht
+    exact ownLog_E H D decode P x s.1 s.2.1 s.2.2 hst hacc t (hql t ht)
+  have hrl : ((D.parse x).map fun st => regLog H D.commit st.roots (ops st)).getD [] =
+      regLog H D.commit st.roots (ops st) := by
+    rw [hst]
+    rfl
+  unfold RegColl
+  rw [hrl]
+  exact disagree_collision hb (hqp.trans ho'p.symm) (by rw [hqv, ho'v]; exact hne) hqo' (hreg.1 o' ho')
+    (fun t ht => List.mem_append_left _ (hql' t ht))
+    (fun t ht => List.mem_append_right _ (List.mem_flatMap.2 ⟨o', ho', ht⟩))
 
+omit [DecidableEq Col] [Zero Col] in
 /-- **The reduction's probability step**: the registration's collisions have probability at most `B_reg`'s. -/
 theorem Pr_regColl_le_Breg (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (ops : Stmt → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
