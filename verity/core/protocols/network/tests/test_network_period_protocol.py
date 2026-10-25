@@ -1,0 +1,667 @@
+"""The network certifier over a period (`NetworkCheck.Period`, `verity/certifier/v0`, `network-period serve`) against its
+Python mirror, through the difftest harness's `ProtocolPort`.
+
+The mirror decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring) and checks a period with the
+Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW reads them
+(`pouw.core_check.answer_of` and `integrity`), the certifier's certificates and clock certificates under its LMS key
+(`certifier.certificate`), Σ_sync (`certifier.schedule`) and `registration.digest`. The cases are generated periods: the
+link-windows of one link, each registered under the link's Program with its provenance, certified at both ends and on its
+clock by a small LMS key in a drawn certifier session, and answered by one-stage with its one unit proved; beside them the
+compute audits, each answered with a subset draw and its bound on wrong units. Then one change (`EXPECT`), each aimed at
+one path of the check, or malformed parameters, commitments, evidence and cases.
+
+The composition's difftest draws onsite's certifier cases from `build` and answers them with `reference`
+(`verity/core/protocols/composition/tests/reference.py`)."""
+
+from __future__ import annotations
+
+import dataclasses
+import hashlib
+import json
+import math
+import random
+import re
+import shutil
+import sys
+from collections import Counter
+from fractions import Fraction
+from functools import lru_cache
+from pathlib import Path
+
+import pytest
+from hypothesis import strategies as st
+
+import verity_difftest as D
+from verity_difftest import protocol as P
+from verity.core.protocols.certifier.certificate import (Certificate, ClockCertificate, Direction, LmsKey,
+                                                            clock_digest)
+from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+from verity.core.protocols.pouw import core_check as CC
+from verity.ml.commitments.identity import tagged_sha512
+from verity.ml.crypto import lms
+
+LEAN = Path(__file__).resolve().parents[1] / "lean"
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+ID = "verity/certifier/v0"
+COMMITMENT_TAG = "verity-network-certifier/period/v0"
+ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
+FORMATS = ("verity/registration/v1", "verity/registration/v2")
+#: a proof unit's outputs are at most 16 bits
+OUT_BITS = 16
+UNIT = "unit"
+EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
+ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
+PARAMS_KEYS = ["audits", "cells", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
+DIGEST = re.compile("[0-9a-f]{128}")
+
+# --- the reference --------------------------------------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class Params:
+    audits: tuple[tuple[int, int], ...]
+    cells: tuple[int, ...]
+    jitter: int
+    link: str
+    key: LmsKey
+    session: bytes
+    program: str
+    sync_set: SyncSet
+    windows: int
+
+
+@dataclasses.dataclass(frozen=True)
+class Registration:
+    record: dict
+    digest: bytes
+
+
+@dataclasses.dataclass(frozen=True)
+class Commitment:
+    audits: list[Registration]
+    windows: list[Registration]
+    bytes: bytes
+
+
+@dataclasses.dataclass(frozen=True)
+class Window:
+    answer: dict
+    certificates: list[Certificate]
+    clock: ClockCertificate
+
+
+@dataclasses.dataclass(frozen=True)
+class Facts:
+    units: int
+    drawn: int
+    delta: Fraction
+    wrong: int
+
+
+def _exactly(j, keys: list[str], ctx: str) -> None:
+    if not isinstance(j, dict):
+        raise D.Reject(f"{ctx}: not an object")
+    if sorted(j) != keys:
+        raise D.Reject(f"{ctx}: the keys must be {keys}, not {sorted(j)}")
+
+
+def _nat(v, ctx: str) -> int:
+    if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+        raise D.Reject(f"{ctx}: not a natural number")
+    return v
+
+
+def _of(v, kind, ctx: str):
+    if not isinstance(v, kind) or isinstance(v, bool) != (kind is bool):
+        raise D.Reject(f"{ctx}: not a {kind.__name__}")
+    return v
+
+
+def _rho(j, ctx: str) -> Fraction:
+    if not isinstance(j, list) or len(j) != 2:
+        raise D.Reject(f"{ctx}: not [numerator, denominator]")
+    n, d = (_nat(x, ctx) for x in j)
+    if n < 1 or d < 1:
+        raise D.Reject(f"{ctx}: a numerator and a denominator of at least 1")
+    return Fraction(n, d)
+
+
+def _sync_set(j) -> SyncSet:
+    _exactly(j, ["deltas", "rhos"], "sync_set")
+    deltas = [_nat(x, "sync_set.deltas") for x in _of(j["deltas"], list, "sync_set.deltas")]
+    rhos = [_rho(x, "sync_set.rhos") for x in _of(j["rhos"], list, "sync_set.rhos")]
+    if not deltas or not rhos or len(set(deltas)) < len(deltas) or len(set(rhos)) < len(rhos):
+        raise D.Reject("sync_set: non-empty, each delta and each rho listed once")
+    return SyncSet(tuple(deltas), tuple(rhos))
+
+
+def params(j) -> Params:
+    _exactly(j, PARAMS_KEYS, "the object")
+    audits = []
+    for a in _of(j["audits"], list, "audits"):
+        _exactly(a, ["free", "steps"], "an audit")
+        audits.append((_nat(a["free"], "an audit"), _nat(a["steps"], "an audit")))
+    cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
+    jitter = _nat(j["jitter"], "jitter")
+    if jitter < 1:
+        raise D.Reject("jitter: the observations' jitter bound is at least 1")
+    link = _of(j["link"], str, "link")
+    if len(link.encode()) >= 1 << 16:
+        raise D.Reject("link: a name is at most 65,535 UTF-8 bytes")
+    lj = j["lms"]
+    _exactly(lj, ["H", "N", "W", "toy"], "lms")
+    try:
+        lp = lms.Params(*(_nat(lj[k], "lms") for k in ("N", "W", "H")), toy=_of(lj["toy"], bool, "lms"))
+    except ValueError as x:
+        raise D.Reject(str(x)) from None
+    key = P.unhex(_of(j["key"], str, "key"))
+    if len(key) != 16 + lp.N:
+        raise D.Reject(f"an LMS public key is {16 + lp.N} bytes")
+    session = P.unhex(_of(j["session"], str, "session"))
+    if len(session) != lms.SESSION_BYTES:
+        raise D.Reject(f"a certifier session id is {lms.SESSION_BYTES} bytes")
+    program = _of(j["program"], str, "program")
+    if not DIGEST.fullmatch(program):
+        raise D.Reject("program: not a SHA-512 digest")
+    sync_set = _sync_set(j["sync_set"])
+    windows = _nat(j["windows"], "windows")
+    if windows < 1:
+        raise D.Reject("windows: a period has at least one link-window")
+    return Params(tuple(audits), cells, jitter, link, LmsKey(lp, key), session, program, sync_set, windows)
+
+
+def registration_digest(record: dict) -> bytes:
+    """`registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record)."""
+    return hashlib.sha512(record["format"].encode() + b"\0" + D.canonical(record).encode()).digest()
+
+
+def _registration(j, ctx: str) -> Registration:
+    if not isinstance(j, dict) or not isinstance(j.get("format"), str):
+        raise D.Reject(f"{ctx}: no format")
+    if j["format"] not in FORMATS:
+        raise D.Reject(f"{ctx}: format is not {' or '.join(FORMATS)}")
+    return Registration(j, registration_digest(j))
+
+
+def commitment(b: bytes) -> Commitment:
+    j = P.canonical_json(b)
+    _exactly(j, ["audits", "windows"], "the object")
+    return Commitment([_registration(x, "an audit's registration") for x in _of(j["audits"], list, "audits")],
+                      [_registration(x, "a link-window's registration") for x in _of(j["windows"], list, "windows")], b)
+
+
+def _answer(j, ctx: str) -> dict:
+    try:
+        return CC.answer_of(j, ctx)
+    except CC.Refused as e:
+        raise D.Reject(str(e)) from None
+
+
+def _certificate(j, ctx: str) -> Certificate:
+    _exactly(j, CERTIFICATE_KEYS, ctx)
+    try:
+        direction = Direction(_of(j["direction"], str, ctx))
+    except ValueError:
+        raise D.Reject(f"{ctx}: not a direction") from None
+    return Certificate(P.unhex(_of(j["key_id"], str, ctx)), _of(j["link"], str, ctx), direction,
+                       _nat(j["window"], ctx), P.unhex(_of(j["digest"], str, ctx)),
+                       P.unhex(_of(j["signature"], str, ctx)))
+
+
+def _sync(j) -> ClockSync:
+    if not isinstance(j, list) or len(j) != 3:
+        raise D.Reject("a sync is [delta, num, den]")
+    return ClockSync(_nat(j[0], "a sync's delta"), _rho(j[1:], "a sync's rho"))
+
+
+def _window(j, ctx: str) -> Window:
+    _exactly(j, ["answer", "certificates", "clock"], ctx)
+    answer = _answer(j["answer"], f"{ctx}.answer")
+    certificates = [_certificate(c, f"{ctx}.certificates") for c in _of(j["certificates"], list, ctx)]
+    c = j["clock"]
+    _exactly(c, ["certificate", "sync"], f"{ctx}.clock")
+    return Window(answer, certificates, ClockCertificate(_sync(c["sync"]), _certificate(c["certificate"], f"{ctx}.clock")))
+
+
+def evidence(b: bytes) -> tuple[list[dict], list[Window]]:
+    j = P.canonical_json(b)
+    _exactly(j, ["audits", "windows"], "the object")
+    return ([_answer(a, "an audit's answer") for a in _of(j["audits"], list, "audits")],
+            [_window(x, "a link-window") for x in _of(j["windows"], list, "windows")])
+
+
+class Finding(Exception):
+    """A finding against the period: a rejection, or what leaves it undecided."""
+
+    def __init__(self, verdict: str, reason: str):
+        super().__init__(reason)
+        self.verdict, self.reason = verdict, reason
+
+
+def _certifies(p: Params, d: Direction, w: int, c: Certificate) -> bool:
+    return c.direction is d and c.link == p.link and c.window == w and c.verify(p.key, p.session)
+
+
+def _clock_digest(s: ClockSync) -> bytes | None:
+    try:
+        return clock_digest(s)
+    except ValueError:
+        return None
+
+
+def _answered(what: str, reg: Registration, a: dict) -> tuple[dict, object]:
+    if a["protocol"] != ONE_STAGE:
+        raise Finding(REJECT, f"{what}: protocol {a['protocol']}")
+    if a["commitment"] != reg.digest.hex():
+        raise Finding(REJECT, f"{what}: the answer is for another registration")
+    if a["verdict"] == ACCEPT:
+        try:
+            return CC.integrity(a["profile"]), a["public"]
+        except CC.Refused as e:
+            raise Finding(REJECT, f"{what}: {e}") from None
+    raise Finding(a["verdict"], f"{what}: service: {a['reason']}")
+
+
+def served(w: int) -> dict:
+    return {"kind": "served", "window": w}
+
+
+def _window_check(p: Params, w: int, reg: Registration, x: Window) -> None:
+    what = f"window {w}"
+    if not (reg.record.get("program") == p.program
+            and D.canonical(reg.record.get("window")) == D.canonical(served(w))):
+        raise Finding(REJECT, f"{what}: registration")
+    if not (len(x.certificates) == 2
+            and all(_certifies(p, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
+        raise Finding(REJECT, f"{what}: certificates")
+    c = x.clock.certificate
+    if not (_certifies(p, EGRESS, w, c) and _clock_digest(x.clock.sync) == c.digest):
+        raise Finding(REJECT, f"{what}: clock")
+    if x.clock.sync not in p.sync_set:
+        raise Finding(REJECT, f"{what}: advice")
+    prof, _ = _answered(what, reg, x.answer)
+    if ([(lv["name"], lv["size"], lv["draw"]) for lv in prof["levels"]] != [(UNIT, 1, {"subset": 1})]
+            or prof["drawn"] != [(UNIT, 1)]):
+        raise Finding(REJECT, f"{what}: profile")
+
+
+def _audit_check(i: int, reg: Registration, a: dict) -> Facts:
+    what = f"audit {i}"
+    prof, pub = _answered(what, reg, a)
+    if len(prof["levels"]) != 1:
+        raise Finding(REJECT, f"{what}: profile: not one level")
+    (lv,) = prof["levels"]
+    if not (isinstance(lv["draw"], dict) and "subset" in lv["draw"]):
+        raise Finding(REJECT, f"{what}: profile: not a subset draw")
+    bound = pub.get("bound") if isinstance(pub, dict) else None
+    if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
+        raise Finding(REJECT, f"{what}: no bound")
+    return Facts(lv["size"], lv["draw"]["subset"], prof["delta"], bound)
+
+
+def clog2(x: int) -> int:
+    """`⌈log2 x⌉`, 0 for x ≤ 1."""
+    return 0 if x <= 1 else (x - 1).bit_length()
+
+
+def at_most(n: int, b: int) -> int:
+    """`Σ_{j ≤ b} C(n, j)`: the sets of at most `b` of `n` units."""
+    return sum(math.comb(n, j) for j in range(min(b, n) + 1))
+
+
+def public(p: Params, facts: list[Facts]) -> dict:
+    audits = [{"delta": str(f.delta), "drawn": f.drawn, "faulty_bits": OUT_BITS * f.wrong,
+               "faulty_sets": clog2(at_most(f.units, f.wrong)), "free": free, "jitter": clog2(p.jitter ** steps),
+               "units": f.units, "wrong_units": f.wrong} for (free, steps), f in zip(p.audits, facts)]
+    cells = sum(clog2(cap + 1) for cap in p.cells)
+    schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
+    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in audits)
+    return {"K": K, "audits": audits, "cells": cells, "schedules": schedules, "windows": p.windows}
+
+
+def check(p: Params, c: Commitment, e) -> tuple:
+    audits, windows = e
+    if len(c.windows) != p.windows:
+        return REJECT, "the commitment registers another number of link-windows"
+    if len(c.audits) != len(p.audits):
+        return REJECT, "the commitment registers another number of audits"
+    if len(windows) != len(c.windows):
+        return REJECT, "evidence: another number of link-windows"
+    if len(audits) != len(c.audits):
+        return REJECT, "evidence: another number of audits' answers"
+    findings, facts = [], []
+    for w, (reg, x) in enumerate(zip(c.windows, windows)):
+        try:
+            _window_check(p, w, reg, x)
+        except Finding as f:
+            findings.append(f)
+    for i, (reg, a) in enumerate(zip(c.audits, audits)):
+        try:
+            facts.append(_audit_check(i, reg, a))
+        except Finding as f:
+            findings.append(f)
+    if rejected := next((f for f in findings if f.verdict == REJECT), None):
+        return REJECT, rejected.reason
+    if findings:
+        return UNDECIDED, findings[0].reason
+    return ACCEPT, public(p, facts), {
+        "link": p.link, "syncs": [[x.clock.sync.delta, x.clock.sync.rho.numerator, x.clock.sync.rho.denominator]
+                                  for x in windows], "windows": p.windows}
+
+
+def reference(case) -> dict:
+    return P.answer(ID, case, params=params, commitment=commitment, evidence=evidence, check=check,
+                    digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
+
+
+# --- the generator --------------------------------------------------------------------------------------------------------
+
+#: Small LMS parameter sets (N, W, H, toy): the toy N = 8, and the deployed N = 64 at height 1.
+KEYS = [(8, 8, 1, True), (8, 2, 2, True), (64, 4, 1, False)]
+
+
+@lru_cache(maxsize=None)
+def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
+    """KEYS[i]'s key from `seed`; `same_id`: the identifier of seed 0's key with another seed's one-time keys."""
+    N, W, H, toy = KEYS[i]
+    p = lms.Params(N, W, H, toy=toy)
+    s = hashlib.sha512(b"network-period %d %d" % (i, seed)).digest()[:N]
+    return lms.key(p, _key(i).I, s) if same_id else lms.keygen(p, s)
+
+
+EXPECT = {
+    "honest": ACCEPT,
+    "program": REJECT, "provenance": REJECT,
+    "cert-swap": REJECT, "cert-count": REJECT, "cert-forged": REJECT, "cert-window": REJECT, "cert-link": REJECT,
+    "cert-session": REJECT, "cert-key": REJECT,
+    "clock-ingress": REJECT, "clock-digest": REJECT, "clock-window": REJECT, "advice": REJECT,
+    "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
+    "answer-profile": REJECT,
+    "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
+    "audit-bound": REJECT,
+    "undecided-and-reject": REJECT,
+    "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
+    "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
+}
+MUTATIONS = list(EXPECT)
+
+
+def _flip(b: bytes, i: int) -> bytes:
+    i %= len(b)
+    return b[:i] + bytes([b[i] ^ 1]) + b[i + 1:]
+
+
+def _cert_json(c: Certificate) -> dict:
+    return {"digest": c.digest.hex(), "direction": c.direction.value, "key_id": c.key_id.hex(), "link": c.link,
+            "signature": c.signature.hex(), "window": c.window}
+
+
+def _sync_json(s: ClockSync) -> list[int]:
+    return [s.delta, s.rho.numerator, s.rho.denominator]
+
+
+def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int) -> dict:
+    """One-stage's answer accepting `k` of `size` units drawn `subset:k` (`OneStage.check`'s public and profile)."""
+    units = list(range(k))
+    return {"commitment": digest.hex(),
+            "profile": {"covered": [], "delta": delta, "drawn": {UNIT: k},
+                        "levels": [{"draw": {"subset": k}, "name": UNIT, "query": query, "size": size}],
+                        "linked": False, "prescribed": [], "programs": [program]},
+            "protocol": ONE_STAGE, "public": {"bound": bound, "drawn": units, "per_template": None, "proved": units},
+            "reason": None, "verdict": ACCEPT}
+
+
+def _refused(answer: dict, verdict: str) -> dict:
+    return answer | {"profile": None, "public": None, "reason": f"the audit is {verdict}", "verdict": verdict}
+
+
+def build(m: str, seed: int, small: bool = False) -> dict:
+    """A period's case with the change `m`, every choice drawn from `seed`; `small`: the toy key, as few link-windows
+    and audits as `m` needs."""
+    r = random.Random(f"network-period {m} {seed}")
+    ki = 0 if small else r.randrange(len(KEYS))
+    key = _key(ki)
+    N, W, H, toy = KEYS[ki]
+    session = r.randbytes(lms.SESSION_BYTES)
+    link = r.choice(["eth0", "a", "dé"])
+    program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
+    least_windows = 2 if m == "undecided-and-reject" else 1
+    least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
+    n_windows = r.randint(least_windows, least_windows if small else 3)
+    n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
+    deltas = r.sample(range(4), r.randint(1, 3))
+    rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
+    t, a = r.randrange(n_windows), r.randrange(max(n_audits, 1))
+    signed = iter(range(1 << 30))
+
+    def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key, s: bytes = session) -> Certificate:
+        c = Certificate(k.I, link, d, w, digest, b"")
+        return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
+
+    window_regs, windows = [], []
+    for w in range(n_windows):
+        rec = {"format": r.choice(FORMATS), "law": {"k": 1, "law": "subset"}, "partition": f"{link}/{w}",
+               "population": 1, "program": program, "protocol": ONE_STAGE, "window": served(w)}
+        sync = ClockSync(r.choice(deltas), r.choice(rhos))
+        aimed = w == t
+        if aimed and m == "program":
+            rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
+        elif aimed and m == "provenance":
+            rec["window"] = r.choice([served(w + 1), {"kind": "batch", "window": w}, served(w) | {"run": 0}, None])
+        elif aimed and m == "advice":
+            sync = r.choice([ClockSync(max(deltas) + 1, sync.rho), ClockSync(sync.delta, Fraction(5, 7))])
+        digest = registration_digest(rec)
+        egress = sign(link, EGRESS, w, r.randbytes(64))
+        ingress = sign(link, INGRESS, w, r.randbytes(64))
+        clock = sign(link, EGRESS, w, clock_digest(sync))
+        answer = _accepted(digest, program, rec["partition"], 1, 1, r.choice(["1/100", "1/1000000"]), 0)
+        if aimed:
+            if m == "cert-forged":
+                i = r.randrange(2)
+                c = (egress, ingress)[i]
+                sig = r.choice([_flip(c.signature, seed), c.signature[:-1], b""])
+                forged = dataclasses.replace(c, signature=sig)
+                egress, ingress = (forged, ingress) if i == 0 else (egress, forged)
+            elif m == "cert-window":
+                egress = sign(link, EGRESS, w + 1, egress.digest)
+            elif m == "cert-link":
+                ingress = sign(link + "x", INGRESS, w, ingress.digest)
+            elif m == "cert-session":
+                egress = sign(link, EGRESS, w, egress.digest, s=_flip(session, seed))
+            elif m == "cert-key":
+                ingress = sign(link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "clock-ingress":
+                clock = sign(link, INGRESS, w, clock.digest)
+            elif m == "clock-digest":
+                clock = sign(link, EGRESS, w, r.choice([clock_digest(ClockSync(sync.delta + 1, sync.rho)),
+                                                        r.randbytes(64)]))
+            elif m == "clock-window":
+                clock = sign(link, EGRESS, w + 1, clock.digest)
+            elif m == "answer-protocol":
+                answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
+            elif m == "answer-other":
+                answer["commitment"] = r.choice([r.randbytes(64), registration_digest(rec | {"population": 2})]).hex()
+            elif m == "answer-reject":
+                answer = _refused(answer, REJECT)
+            elif m in ("answer-undecided", "undecided-and-reject"):
+                answer = _refused(answer, UNDECIDED)
+            elif m == "answer-profile":
+                answer = _accepted(digest, program, rec["partition"], *r.choice([(2, 1), (2, 2), (1, 0)]), "1/100", 0)
+                if r.random() < 0.3:
+                    answer["profile"]["delta"] = "2/200"
+        certificates = [egress, ingress]
+        if aimed and m == "cert-swap":
+            certificates = [ingress, egress]
+        elif aimed and m == "cert-count":
+            certificates = r.choice([[egress], [egress, ingress, ingress], []])
+        window_regs.append(rec)
+        windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates],
+                        "clock": {"certificate": _cert_json(clock), "sync": _sync_json(sync)}})
+
+    audit_params, audit_regs, audits = [], [], []
+    for i in range(n_audits):
+        units = r.randint(1, 40)
+        k = r.randint(1, units)
+        rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset"}, "partition": f"loop/{i}",
+               "population": units, "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
+               "window": {"kind": "served", "window": i}}
+        digest = registration_digest(rec)
+        answer = _accepted(digest, rec["program"], rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
+                           r.randint(0, units))
+        if i == a:
+            if m == "audit-other":
+                answer["commitment"] = r.randbytes(64).hex()
+            elif m in ("audit-reject", "undecided-and-reject"):
+                answer = _refused(answer, REJECT)
+            elif m == "audit-undecided":
+                answer = _refused(answer, UNDECIDED)
+            elif m == "audit-profile":
+                lv = answer["profile"]["levels"][0]
+                answer["profile"]["levels"] = r.choice([
+                    [lv, lv | {"name": "token", "size": 3}], [lv | {"draw": {"bernoulli": "1/2"}}], [lv | {"draw": None}],
+                    [lv | {"draw": {"law": "stratified", "strata": [{"k": k, "name": "s", "size": units}]}}], []])
+            elif m == "audit-bound":
+                answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
+                                             answer["public"] | {"bound": "3"}, []])
+        audit_params.append({"free": r.randint(0, 5), "steps": r.randint(0, 4)})
+        audit_regs.append(rec)
+        audits.append(answer)
+
+    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))],
+                   "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
+                   "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
+                   "sync_set": {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]},
+                   "windows": n_windows}
+    c_json = {"audits": audit_regs, "windows": window_regs}
+    e_json = {"audits": audits, "windows": windows}
+    if m == "count-windows":
+        case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
+    elif m == "count-audits":
+        case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {"free": 0, "steps": 0}]])
+    elif m == "evidence-count":
+        e_json = r.choice([{"audits": audits, "windows": windows[1:]}, {"audits": audits, "windows": windows + windows[:1]},
+                           {"audits": [*audits, audits[0] if audits else windows[0]["answer"]], "windows": windows}])
+    c_bytes, e_bytes = D.canonical(c_json).encode(), D.canonical(e_json).encode()
+    if m == "params":
+        case_params = r.choice(_bad_params(case_params, seed))
+    elif m == "commitment":
+        c_bytes = r.choice(_bad_commitments(c_json, c_bytes))
+    elif m == "evidence":
+        e_bytes = r.choice(_bad_evidence(e_json, e_bytes))
+    case = {"commitment": c_bytes.hex(), "evidence": e_bytes.hex(), "params": case_params}
+    if m == "case":
+        case = r.choice([case | {"commitment": case["commitment"].upper()}, case | {"evidence": case["evidence"] + "0"},
+                         {k: v for k, v in case.items() if k != "params"}, [case]])
+    return case
+
+
+def _bad_params(p: dict, n: int) -> list:
+    """Parameters `params` refuses, each one change to `p`."""
+    out = [{k: v for k, v in p.items() if k != sorted(p)[n % len(p)]}, p | {"x": 0}, [p], p | {"windows": 0},
+           p | {"jitter": 0}, p | {"jitter": True}, p | {"link": "x" * (1 << 16)}, p | {"link": 1},
+           p | {"key": p["key"][:-2]}, p | {"key": p["key"] + "00"}, p | {"key": p["key"].upper()},
+           p | {"session": p["session"][:-2]}, p | {"session": ""}, p | {"program": p["program"][:-2]},
+           p | {"program": p["program"].upper()}, p | {"program": 0},
+           p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
+           p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
+           p | {"sync_set": p["sync_set"] | {"deltas": []}}, p | {"sync_set": p["sync_set"] | {"rhos": [[0, 1]]}},
+           p | {"sync_set": p["sync_set"] | {"rhos": [[1, 0]]}}, p | {"sync_set": p["sync_set"] | {"deltas": [1, 1]}},
+           p | {"sync_set": p["sync_set"] | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": p["sync_set"] | {"x": 0}},
+           p | {"audits": [{"free": 0}]}, p | {"audits": [{"free": -1, "steps": 0}]}, p | {"audits": "x"},
+           p | {"cells": [-1]}, p | {"cells": [True]}]
+    return out
+
+
+def _bad_commitments(c: dict, b: bytes) -> list[bytes]:
+    """Commitments that don't decode: bytes that aren't canonical JSON, or a registration without a known format."""
+    enc = lambda j: D.canonical(j).encode()  # noqa: E731
+    return [b + b" ", b[:-1], b"", json.dumps(c).encode(), enc(c | {"x": 1}), enc({"audits": c["audits"]}),
+            enc(c | {"windows": [1]}), enc(c | {"windows": [{"format": "verity/registration/v3"}]}),
+            enc(c | {"audits": [{"format": 1}]}), enc(c | {"audits": "x"}), enc([c])]
+
+
+def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
+    """Evidence that doesn't decode, each one change to `e`."""
+    enc = lambda j: D.canonical(j).encode()  # noqa: E731
+    x, rest = e["windows"][0], e["windows"][1:]
+    cert, clock = x["certificates"][0] if x["certificates"] else x["clock"]["certificate"], x["clock"]
+    bad_windows = [{k: v for k, v in x.items() if k != "clock"}, x | {"clock": clock | {"sync": [0, 0, 1]}},
+                   x | {"clock": clock | {"sync": [0, 1]}}, x | {"clock": clock | {"x": 0}},
+                   x | {"certificates": [cert | {"direction": "up"}]}, x | {"certificates": [cert | {"key_id": "abc"}]},
+                   x | {"certificates": [cert | {"window": -1}]}, x | {"certificates": [cert | {"x": 0}]},
+                   x | {"certificates": "x"}, x | {"answer": {k: v for k, v in x["answer"].items() if k != "reason"}},
+                   x | {"answer": x["answer"] | {"verdict": "maybe"}}, x | {"answer": x["answer"] | {"reason": "r"}}]
+    return [b[:-1], b"\xff" + b, json.dumps(e).encode(), enc(e | {"x": 1}), enc({"windows": e["windows"]}),
+            enc(e | {"audits": [1]})] + [enc(e | {"windows": [w, *rest]}) for w in bad_windows]
+
+
+TAGS: dict[str, str] = {}
+SEEN: Counter = Counter()
+
+
+@st.composite
+def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
+    m = draw(st.sampled_from(["honest"] * 3 + list(only) if "honest" in only else list(only)))
+    case = build(m, draw(st.integers(0, 1 << 16)))
+    TAGS[D.canonical(case)] = m
+    return case
+
+
+def counted(case) -> dict:
+    out = reference(case)
+    SEEN[(TAGS.get(D.canonical(case), "?"), out["verdict"])] += 1
+    return out
+
+
+PORT = D.ProtocolPort("network-period", counted, cases(), package=LEAN)
+server = D.server_fixture(PORT)
+
+
+@pytest.mark.slow
+def test_the_period_check_agrees_with_its_mirror(server):
+    """Lean and the mirror agree on every case, and each change reaches its verdict at least once."""
+    SEEN.clear()
+    examples = 800
+    stats = D.run(PORT, examples=examples, server=server)
+    print("\n".join(f"{tag:22} {verdict:10} {k}" for (tag, verdict), k in sorted(SEEN.items())))
+    missed = [tag for tag, verdict in EXPECT.items() if not SEEN[(tag, verdict)]]
+    assert not missed, (missed, SEEN)
+    assert min(stats.counts.get(v, 0) for v in (ACCEPT, REJECT, UNDECIDED)) > examples // 50, stats
+
+
+def test_each_verdict_is_the_mirrors(server):
+    """A short run over an honest period, an undecided link-window and a forged certificate: all three verdicts."""
+    port = dataclasses.replace(PORT, inputs=cases(("honest", "answer-undecided", "cert-forged")))
+    stats = D.run(port, examples=30, server=server)
+    assert all(stats.counts.get(v) for v in (ACCEPT, REJECT, UNDECIDED)), stats
+
+
+def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypatch):
+    """A mirror that reads only the egress certificate accepts a period whose ingress certificate names another link,
+    and Lean rejects it."""
+    real = _certifies
+    monkeypatch.setattr(sys.modules[__name__], "_certifies", lambda p, d, w, c: d is INGRESS or real(p, d, w, c))
+    with pytest.raises(D.Mismatch) as x:
+        D.run(dataclasses.replace(PORT, inputs=cases(("cert-link",))), examples=20, server=server)
+    assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+
+
+def test_a_small_period_reaches_its_verdict(server):
+    """Each change's small period (`build(..., small=True)`, which the composition's difftest draws) gets the change's
+    verdict from the mirror, and Lean agrees."""
+    small = [build(m, n, small=True) for m in MUTATIONS if m != "case" for n in range(2)]
+    assert [reference(c)["verdict"] for c in small] == [EXPECT[m] for m in MUTATIONS if m != "case" for _ in range(2)]
+    D.run(dataclasses.replace(PORT, inputs=st.sampled_from(small)), examples=2 * len(small), server=server)
+
+
+def test_the_bound_counts_what_it_says():
+    """K's terms on a period worked by hand: 10 units drawn subset:3 at δ = 1/10 with at most 4 wrong, 7 cells on one
+    connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps (Lean's `#guard`)."""
+    p = Params(((0, 3),), (7, 0), 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
+    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
+    assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
+            out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
+    assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
+    assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
