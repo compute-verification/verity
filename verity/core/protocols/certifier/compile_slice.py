@@ -81,7 +81,7 @@ which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry`
 **Stand-ins** (named, each a piece not ready):
 - *the evictable and returned counts*: ENC-DERIVED's evictable and returned-block counts are held at 0 (ReplayStep_v1's
   ``evict`` and ``ret``), true of a slice that stops or preempts nothing; on one that does, the rows differ from the
-  clear recompile's and ``rows`` refuses;
+  clear recompile's and ``rows`` refuses. `compile_slice_v2.CompileSlice_v2` derives them from vLLM's block pool;
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count, so ChargeLink_v1 codes the
   window's other counts as 0 (`arith_encode.ZERO_COUNTS`);
 - *one window*: the slice is a window mid-session from the empty rows, so the decisions its steps leave unread carry

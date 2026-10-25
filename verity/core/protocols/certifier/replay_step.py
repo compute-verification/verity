@@ -516,7 +516,16 @@ def _split(fields, elements) -> dict:
     return out
 
 
-def _build(C, S, *elements):
+def _build(C, S, *elements, tap: dict | None = None):
+    """The step traced on `C`. A caller tracing it inline may pass `tap`, a dict the trace fills with wires it has
+    already made, so a composition binds them without new gates: ``run``, ``wait`` and ``arr`` (the slots' records,
+    after a quiet step's arrival moves into waiting slot 0), ``forced``, ``free`` (the state's); per running slot
+    ``needs``, ``backs``, ``avail`` (free plus the returns of the slots after it), ``upto`` (the needs up to it),
+    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, and ``at``, the
+    running count before it: its placed slot when admitted); the placed slots'
+    records ``slots``; and per placed slot ``update`` (on, comp after the row, sampled before AS's fin mask, leave,
+    held, keep)."""
+    tap = {} if tap is None else tap
     Z = widths(S)
     LW, TW, BW, HW, RC, AC, LB = Z.LW, Z.TW, Z.BW, Z.HW, Z.RC, Z.AC, Z.LB
     NW = max(LW, TW) + 1
@@ -556,6 +565,7 @@ def _build(C, S, *elements):
     arr = [{k: (mux(C, forced, [nxt[k]], [cur[k]])[0] if k in one_bit else mux(C, forced, nxt[k], cur[k])) for k in keys}
            for cur, nxt in zip(arr, arr[1:] + [zero])]
     free = I["free"][0]
+    tap.update(run=run, wait=wait, arr=arr, forced=forced, free=free)
 
     def ret_of(p, held):
         if not S.PC:
@@ -584,11 +594,14 @@ def _build(C, S, *elements):
     after = [[ZERO] * SW]
     for j in range(R - 1, 0, -1):
         after.insert(0, _add(C, after[0], backs[j], SW))
-    room, upto, kept = _pad(free, SW), [ZERO] * SW, []
+    room, upto, kept, uptos, avail = _pad(free, SW), [ZERO] * SW, [], [], []
     for i in range(R):
         upto = _add(C, upto, needs[i], SW)
-        kept.append(C.AND(run[i]["valid"], _lt(C, _add(C, room, after[i], SW), upto).inv()))
+        avail.append(_add(C, room, after[i], SW))
+        uptos.append(upto)
+        kept.append(C.AND(run[i]["valid"], _lt(C, avail[i], upto).inv()))
     popped = [C.AND(run[j]["valid"], kept[j].inv()) for j in range(R)]
+    tap.update(needs=needs, backs=backs, avail=avail, upto=uptos, kept=kept, popped=popped)
     budget = const_bits(S.T, TW)
     run_n = []
     for j in range(R):
@@ -609,7 +622,7 @@ def _build(C, S, *elements):
     used = [ZERO] * AC
     taken = [ZERO] * AC
     taken[0] = forced
-    adm, looked = [], []
+    adm, looked, cands = [], [], []
     for c in range(W + A):
         is_arr = c >= W
         r = arr[c - W] if is_arr else wait[c]
@@ -646,11 +659,14 @@ def _build(C, S, *elements):
             going = C.AND(going, present.inv() ^ go)
             k_wait = _add(C, k_wait, [admit], RC + 1)
         bad.append(C.AND(admit, _eq(C, cnt, const_bits(R, RC + 1))))
+        at = cnt
         cnt = _add(C, cnt, [admit], RC + 1)
         free = _sub(C, free, _sel(C, admit, _add(C, new, ev, BW)), BW)
         budget = _sub(C, budget, _sel(C, admit, _pad(n, TW)), TW)
         adm.append((admit, hb, _pad(n, TW)))
+        cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok, "at": at})
     bad.append(going)
+    tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
 
     # the admitted after the running list
     stage("place")
@@ -682,7 +698,8 @@ def _build(C, S, *elements):
     # close and update
     stage("update")
     O = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
-    keep, nxt = [], []
+    keep, nxt, upd = [], [], []
+    tap.update(slots=slots, update=upd)
     for p, s in enumerate(slots):
         n = s["n"]
         on = C.AND(s["valid"][0], or_reduce(C, n))
@@ -693,6 +710,7 @@ def _build(C, S, *elements):
         O["row_n"].append(_sel(C, on, n))
         comp = _add(C, s["comp"], n, LW)
         sample = C.AND(on, _lt(C, comp, _add(C, s["P"], s["out"], LW)).inv())
+        upd.append({"on": on, "comp": comp, "sampled": sample})
         if AS:
             sample = C.AND(sample, s["fin"][0].inv())
         out = _add(C, s["out"], [sample], LW)
@@ -706,6 +724,7 @@ def _build(C, S, *elements):
             bad.append(C.AND(leave, _lt(C, held, back)))
         free = _add(C, free, _sel(C, leave, back), BW)
         keep.append(C.AND(s["valid"][0], leave.inv()))
+        upd[p].update(leave=leave, held=held, keep=keep[p])
         pfx = []
         if EW:
             pfx = mux(C, on, I["row_pfx"][p], _sel(C, kept[p], I["run_pfx"][p]))
