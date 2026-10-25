@@ -20,7 +20,7 @@ verity_vllm/
   engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
-  correspondence/     runtime corresp.   runtime.py reader_for_*.py capture_identities.py
+  correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
   protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
