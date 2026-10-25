@@ -1,43 +1,119 @@
-"""The ratchet rule: a change to the vLLM integration's non-test source leaves fewer ratchet exceptions than its base has
-(Daniel, 24 Oct 20:20Z).
+"""The ratchet rule: no change grows the vLLM integration's ratchets, and a change to a lint is judged like source (Daniel's
+delegation to the vLLM coordinator, 25 Oct 09:40Z).  Dedicated cleanup lanes pay the exceptions down; a feature PR owes none.
 
     python3 integrations/vllm/tools/ratchet_gate.py BASE TOP [--json]
 
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
-them (a branch's own commits against its merge base).  A change is judged when it touches a file under
-``integrations/vllm/verity_vllm/`` that is not a test (``test_*.py``, ``conftest.py``, a ``tests/`` directory) or a ``*.md``.
-It passes when the ratchets' exceptions after it, summed over the ratchets its base has, are strictly fewer than before.  A
-ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
-holding an ``entries`` list), known by its file's name, so a moved allowlist is still compared; one the change adds starts at
-its own count and is not compared.  Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title
-starts ``Revert``) and a pure move that BASE's ``tools/verity/check/move_check.py`` certifies.
+them (a branch's own commits against its merge base).  A ratchet is a shrink-only allowlist under ``integrations/vllm/tests``
+(``**/allowlists/*.json`` or ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a
+rule number (``p10_size.json`` and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the
+change adds starts at its own count and is not compared.  A change is judged when it touches a ratchet or a ``*.py`` file
+under ``integrations/vllm/tests/lint/`` (the lints' code), and passes when:
 
-It reads only git, in the repository of the current directory, so the merge queue runs `main`'s copy of it, which a PR can't
-weaken, on `main` and a PR's head as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s
-preflight refuses the mark, and the sync onto `next` leaves the PR out).  Before marking a branch, run
-``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails (with
-the fix), 2 on a usage or git error.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
+* no ratchet its base has holds more entries after it than before;
+* no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
+* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
+  In a temporary worktree of the change's top, ``tests/lint/`` is replaced by the base's, each allowlist there holding the
+  top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose code or allowlist
+  changed (every lint's, if the shared code did) run without pytest.  So loosening a lint to drop its entries (raising P10's
+  cap, skipping a kind, deleting the lint) fails, naming each violation the base's lint still finds, while tightening one
+  passes once the change fixes what it finds.
+
+Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
+BASE's ``tools/verity/check/move_check.py`` certifies.
+
+It runs on git, in the repository of the current directory, and runs no code but the base's (its lints, and BASE's
+move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head as it admits the
+PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the sync onto
+`next` leaves the PR out).  Before marking a branch, run ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.
+Exit 0 when every change passes, 1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints can't
+run.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-KIND = "vllm-ratchet-gate/v1"
+KIND = "vllm-ratchet-gate/v2"
 INTEGRATION = "integrations/vllm"
-SOURCE = f"{INTEGRATION}/verity_vllm/"
 TESTS = f"{INTEGRATION}/tests/"
+LINT = f"{TESTS}lint"
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
-#: entries named in a failure's fix, at most
+RULE_NUMBER = re.compile(r"^p\d+_")
+#: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
+
+#: Run as ``python -I -c RUNNER LINT_DIR SLUGS`` (SLUGS a JSON list, or null for every lint): imports the lint directory as a
+#: package of its own, so no other file of the tree runs, with a stand-in for pytest (its marks), and calls each selected
+#: lint's ``test_no_new*`` tests.  A lint is a module whose ``NAME`` is a string literal, read before it is imported, so a
+#: test module that isn't one is never run.  Prints ``{"ran": [NAME, ...], "failures": [{"lint", "test", "message"}, ...]}``.
+RUNNER = r'''
+import ast, importlib, inspect, json, re, sys, traceback, types
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+lint, slugs = Path(sys.argv[1]), json.loads(sys.argv[2])
+
+
+class Mark:
+    def __getattr__(self, name):
+        def mark(*args, **kwargs):
+            return args[0] if len(args) == 1 and callable(args[0]) and not kwargs else (lambda f: f)
+        return mark
+
+
+pytest = types.ModuleType("pytest")
+pytest.mark = Mark()
+pytest.fixture = pytest.mark.fixture
+sys.modules["pytest"] = pytest
+pkg = types.ModuleType("base_lints")
+pkg.__path__ = [str(lint)]
+sys.modules["base_lints"] = pkg
+
+def lint_name(f):
+    """A lint's `NAME`, read without running the module: other test modules here may need what this Python lacks."""
+    for node in ast.parse(f.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "NAME" for t in node.targets):
+            return node.value.value if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str) else None
+    return None
+
+
+slug = lambda s: re.sub(r"^p\d+_", "", s)
+out = {"ran": [], "failures": []}
+for f in sorted(lint.glob("test_*.py")):
+    selected = slugs is None or slug(f.stem[5:]) in slugs
+    try:
+        name = lint_name(f)
+        if name is None or not (selected or slug(name) in slugs):
+            continue
+        mod = importlib.import_module(f"base_lints.{f.stem}")
+    except Exception:
+        out["failures"].append({"lint": f.name, "test": None, "error": True, "message": traceback.format_exc(limit=2)})
+        continue
+    tests = [(n, fn) for n, fn in vars(mod).items() if n.startswith("test_no_new") and inspect.isfunction(fn)]
+    if not tests:
+        out["failures"].append({"lint": name, "test": None, "message": f"{f.name} has no test_no_new* test to run"})
+    for n, fn in tests:
+        try:
+            if inspect.signature(fn).parameters:
+                raise TypeError(f"{n} takes arguments, so it can't run without pytest")
+            fn()
+        except AssertionError as e:
+            out["failures"].append({"lint": name, "test": n, "message": str(e)})
+        except Exception:
+            out["failures"].append({"lint": name, "test": n, "error": True, "message": traceback.format_exc(limit=2)})
+    out["ran"].append(name)
+print(json.dumps(out))
+'''
 
 
 class GitError(RuntimeError):
@@ -51,11 +127,10 @@ def git(*args: str) -> str:
     return r.stdout
 
 
-def is_source(path: str) -> bool:
-    if not path.startswith(SOURCE):
-        return False
-    p = PurePosixPath(path)
-    return not ("tests" in p.parts[:-1] or p.name.startswith("test_") or p.name == "conftest.py" or p.suffix == ".md")
+def slug(path: str) -> str:
+    """A ratchet's or a lint's name less its rule number: ``.../p10_size.json`` and ``.../test_p10_size.py`` are ``size``."""
+    stem = PurePosixPath(path).stem
+    return RULE_NUMBER.sub("", stem.removeprefix("test_"))
 
 
 def is_ratchet(path: str) -> bool:
@@ -63,8 +138,21 @@ def is_ratchet(path: str) -> bool:
     return path.startswith(TESTS) and p.suffix == ".json" and (p.parent.name == "allowlists" or "allowlist" in p.name)
 
 
+def is_lint_code(path: str) -> bool:
+    return path.startswith(f"{LINT}/") and path.endswith(".py")
+
+
+def key(entry: object) -> str:
+    return json.dumps({k: v for k, v in entry.items() if k != "count"} if isinstance(entry, dict) else entry, sort_keys=True)
+
+
+def count(entry: object) -> int:
+    n = entry.get("count", 1) if isinstance(entry, dict) else 1
+    return n if isinstance(n, int) else 1
+
+
 def ratchets(rev: str) -> tuple[dict[str, list], dict[str, str], list[str]]:
-    """({name: entries}, {name: path}, the ratchet-named files that aren't readable allowlists) at ``rev``."""
+    """({slug: entries}, {slug: path}, the ratchet-named files that aren't readable allowlists) at ``rev``."""
     entries: dict[str, list] = {}
     paths: dict[str, str] = {}
     bad: list[str] = []
@@ -75,9 +163,8 @@ def ratchets(rev: str) -> tuple[dict[str, list], dict[str, str], list[str]]:
             bad.append(path)
             continue
         if isinstance(doc, dict) and isinstance(doc.get("entries"), list):
-            name = PurePosixPath(path).stem
-            entries.setdefault(name, []).extend(doc["entries"])
-            paths[name] = path
+            entries.setdefault(slug(path), []).extend(doc["entries"])
+            paths[slug(path)] = path
     return entries, paths, bad
 
 
@@ -88,11 +175,12 @@ class Change:
     commits: list[str]
     pr: int | None = None
     title: str = ""
-    source: list[str] = field(default_factory=list)
+    touched: list[str] = field(default_factory=list)
     verdict: str = ""
     why: str = ""
     before: int | None = None
     after: int | None = None
+    lints: list[str] = field(default_factory=list)
     fix: list[str] = field(default_factory=list)
 
     @property
@@ -101,7 +189,7 @@ class Change:
 
     def doc(self) -> dict:
         return {"name": self.name, "commit": self.hi, "base": self.lo, "pr": self.pr, "verdict": self.verdict, "why": self.why,
-                "before": self.before, "after": self.after, "source": self.source, "fix": self.fix}
+                "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix}
 
 
 def changes(base: str, top: str) -> list[Change]:
@@ -143,28 +231,87 @@ def is_pure_move(c: Change, base: str) -> bool:
         return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
 
 
-def cheapest(c: Change, entries: dict[str, list], paths: dict[str, str]) -> list[str]:
-    """The entries after ``c`` that name a file it already changes, then each ratchet's size, smallest first."""
-    mine = {s.removeprefix(f"{INTEGRATION}/") for s in c.source}
-    named = [f"{paths[k]}: {' '.join(str(e.get(x, '')) for x in ('file', 'kind', 'symbol', 'detail')).strip()}"
-             for k in sorted(entries) for e in entries[k] if isinstance(e, dict) and e.get("file") in mine]
-    sizes = ", ".join(f"{paths[k]} {len(v)}" for k, v in sorted(entries.items(), key=lambda kv: (len(kv[1]), kv[0])) if v)
-    return [*named[:CHEAPEST], *([f"... and {len(named) - CHEAPEST} more in files it changes"] if len(named) > CHEAPEST else []),
-            f"each ratchet's entries, fewest first: {sizes}"]
+def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str]) -> tuple[list[str], list[str]]:
+    """(each grown ratchet and each grown count, the entries that grew it): what the change adds, against its base."""
+    grown, fix = [], []
+    for s in sorted(before):
+        was = {key(e): count(e) for e in before[s]}
+        now = after.get(s, [])
+        if len(now) > len(before[s]):
+            grown.append(f"{paths[s]} {len(before[s])} -> {len(now)} entries")
+            fix += [f"{paths[s]}: new {key(e)}" for e in now if key(e) not in was]
+        for e in now:
+            if count(e) > was.get(key(e), count(e)):
+                grown.append(f"{paths[s]} count {was[key(e)]} -> {count(e)} for {key(e)}")
+    return grown, fix
+
+
+def lint_selection(touched: list[str]) -> list[str] | None:
+    """The slugs of the lints to run, or None for all of them (the shared lint code changed)."""
+    code = [f for f in touched if is_lint_code(f)]
+    if any(not PurePosixPath(f).name.startswith("test_") for f in code):
+        return None
+    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{LINT}/") and is_ratchet(f)})
+
+
+def base_lints(c: Change, slugs: list[str] | None, after: dict[str, list]) -> tuple[list[str], list[dict]]:
+    """(the lints run, their failures): the base's lint code run on the change's tree against its allowlists."""
+    if not git("ls-tree", "--name-only", c.lo, "--", LINT).strip():
+        return [], []
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
+        tree = Path(d) / "tree"
+        git("worktree", "add", "-q", "--detach", str(tree), c.hi)
+        try:
+            shutil.rmtree(tree / LINT, ignore_errors=True)
+            git("-C", str(tree), "checkout", "-q", c.lo, "--", LINT)
+            for p in (tree / LINT / "allowlists").glob("*.json"):
+                p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
+            r = subprocess.run([sys.executable, "-I", "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d,
+                               capture_output=True, text=True)
+        finally:
+            git("worktree", "remove", "--force", str(tree))
+    try:
+        doc = json.loads(r.stdout)
+        return doc["ran"], doc["failures"]
+    except (ValueError, KeyError, TypeError):
+        raise GitError(f"the base's lints at {c.lo[:12]} didn't run on {c.hi[:12]}: {(r.stderr or r.stdout).strip()[-300:]}")
+
+
+def violations(failures: list[dict]) -> list[str]:
+    """Each violation a failing test names (its message's indented lines, else its first), or the error a test raised, by
+    lint."""
+    out = []
+    for f in failures:
+        lines = f["message"].strip().splitlines() or [""]
+        if f.get("error"):
+            items = [f"{f['test'] or 'import'} raised {lines[-1]}"]
+        else:
+            items = [ln.strip() for ln in lines if ln.startswith("  ") and ln.strip()] or lines[:1]
+        out += [f"{f['lint']}: {x}" for x in items]
+    return out
 
 
 def judge(c: Change, base: str) -> None:
-    c.source = sorted(f for f in git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0") if f and is_source(f))
-    if not c.source:
-        c.verdict, c.why = "untouched", f"changes nothing under {SOURCE} but tests and docs"
+    diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f)))
+    if not c.touched:
+        c.verdict, c.why = "untouched", f"changes no ratchet and no lint code under {LINT}/"
         return
-    before, _, _ = ratchets(c.lo)
-    after, paths, bad = ratchets(c.hi)
+    before, was_at, _ = ratchets(c.lo)
+    after, now_at, bad = ratchets(c.hi)
     c.before = sum(len(v) for v in before.values())
-    c.after = sum(len(after.get(k, [])) for k in before)
-    if c.after < c.before and not bad:
-        c.verdict, c.why = "passed", f"{c.before} -> {c.after} ratchet exceptions"
-        return
+    c.after = sum(len(after.get(s, [])) for s in before)
+    grown, added = growth(before, after, {**was_at, **now_at})
+    found: list[str] = []
+    if not grown and not bad:
+        slugs = lint_selection(c.touched)
+        if slugs is None or slugs:
+            c.lints, failures = base_lints(c, slugs, after)
+            found = violations(failures)
+        if not found:
+            c.verdict, c.why = "passed", f"{c.before} -> {c.after} ratchet exceptions" + (
+                f"; the base's lint code finds nothing uncovered ({', '.join(c.lints)})" if c.lints else "")
+            return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
         return
@@ -174,11 +321,17 @@ def judge(c: Change, base: str) -> None:
     c.verdict = "failed"
     if bad:
         c.why = f"leaves {', '.join(bad)} unreadable as an allowlist (a JSON object with an `entries` list)"
-        return
-    c.why = (f"changes {len(c.source)} source file(s) under {SOURCE} and leaves {c.after} ratchet exceptions, its base "
-             f"{c.before}: retire at least {c.after - c.before + 1} (fix what an entry allows, delete the entry, and the "
-             f"ratchet's stale-entry test holds it gone)")
-    c.fix = cheapest(c, after, paths)
+    elif grown:
+        c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count (fix the new code; "
+                 f"an entry may move with the violation it allows, within its ratchet)")
+        c.fix = added[:CHEAPEST] + ([f"... and {len(added) - CHEAPEST} more"] if len(added) > CHEAPEST else [])
+    else:
+        moves = git("diff", "--name-only", "-M", "--diff-filter=R", c.lo, c.hi).strip()
+        c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "
+                 f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries"
+                 + (f" (a layout move, whose lints move with it, is exempt once `python3 {MOVE_CHECK} {c.lo[:12]} "
+                    f"{c.hi[:12]}` certifies it)" if moves else ""))
+        c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
 def gate(base: str, top: str) -> dict:
