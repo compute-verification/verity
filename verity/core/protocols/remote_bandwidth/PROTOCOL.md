@@ -886,6 +886,13 @@ due once \(t\) has \(k - 1\) roots, so that the pass in flight is its last
 window's roots are due within about \(k\) allowances of its challenge. A window's \((k+1)\)-th root is out of turn
 (`order`).
 
+That is two windows in flight, `Pace.in_flight` \(f = 2\), the default. At \(f = 1\) (`Pace(k, window_ns, 1)`, its
+pace naming `in_flight`) window \(t\)'s boundary message is due once \(t\) has its \(k\) roots, at the latest at
+\(\max(b_{t-1} + k A, D_{t-1})\), and is refused before any of them arrived; a root of \(t\) after it is out of turn
+(`order`). So every coin leaves after the root before it, which the challenger's signed log shows
+(`coins.released_reason`) and a record naming \(f = 1\) holds (`Record`), and the honest prover waits a round trip on
+each coin. The Lean is `RemoteAudit.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
+
 Each root's arrival on the verifier's clock is in the record (`WindowRecord.arrived_ns`), so the record bounds when
 each group's reads were: after its challenge left at \(s_g = b_{g-1}\), and before
 \(e_g = \max(\text{its last root's arrival}, s_{g+1})\) (the closing window's: its last arrival). The time-held line

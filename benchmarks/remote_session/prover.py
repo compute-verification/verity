@@ -37,7 +37,9 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
 ~~~
 
 In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
-waits for the next, and a window's first pass starts at its coin's arrival.
+waits for the next, and a window's first pass starts at its coin's arrival.  At one window in flight (the message's
+`in_flight`, 1) a pass whose window's boundary message came before its root is sent is dropped: the verifier would
+reject that root as out of turn.
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
@@ -709,6 +711,7 @@ class ProverSide:
 
     def session(self, head: dict, mode: str, fraction: float) -> dict:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
+        one = head.get("in_flight") == 1
         commitment = wire.commitment_of(head["commitment"])
         why = coins.layout_reason(commitment, k, W)
         if why is not None:
@@ -888,7 +891,7 @@ class ProverSide:
                 unsent = x.plan is not None and x.upto[0] > sent_appends
                 if unsent and not x.discard:
                     self._drain(pending)
-                    if not pending or (pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
+                    if not pending or (not one and pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
                         if (gone := flush(x)) is not None:
                             ended, stopping = gone, True
                             discarded += 1 + len(inflight)
@@ -922,7 +925,7 @@ class ProverSide:
                     ended, stopping = msg, True
                     discarded += 1
                     continue
-                if stamp < x.start and not x.flushed:
+                if (stamp < x.start or one) and not x.flushed:
                     discarded += 1
                 else:
                     send(x, root, handle, seen)

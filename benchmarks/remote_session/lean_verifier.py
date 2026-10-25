@@ -233,7 +233,7 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
                                  tuple(w["stale"]), tuple(w["arrived_ns"])) for t, w in enumerate(j["windows"])),
         registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
         j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
-        None if pace is None else audit.Pace(pace["k"], pace["window_ns"]))
+        None if pace is None else audit.Pace(pace["k"], pace["window_ns"], pace.get("in_flight", 2)))
 
 
 def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:

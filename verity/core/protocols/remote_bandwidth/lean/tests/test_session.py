@@ -58,6 +58,17 @@ def test_a_session_that_could_draw_nothing_is_refused_by_both(server, key) -> No
     assert D.replay(PORT, case, server)[0] == "reject"
 
 
+def test_a_pace_names_one_or_two_windows_in_flight_two_when_it_names_none(server) -> None:
+    """`in_flight` 2 named gives the session that names none (`Flight.run_two`); 0, 3 or a boolean is refused by both."""
+    case = copy.deepcopy(M.recorded("honest-paced")[0])
+    plain = D.replay(PORT, case, server)
+    case["params"]["pace"]["in_flight"] = 2
+    assert plain[0] == "output" and D.replay(PORT, case, server) == plain
+    for bad in (0, 3, True):
+        case["params"]["pace"]["in_flight"] = bad
+        assert D.replay(PORT, case, server)[0] == "reject"
+
+
 def test_a_registration_that_binds_tiles_is_refused_by_both(server) -> None:
     case = copy.deepcopy(M.recorded("honest")[0])
     case["registration"]["bind"] = True
