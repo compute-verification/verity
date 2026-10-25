@@ -285,7 +285,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
     work.mkdir(parents=True, exist_ok=True)
-    plain, tool = AUDIT.run, AUDIT.TOOL
+    plain, tool, programs = AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS
     # the sandbox mounts a private /tmp, where this checkout may be; the copy sits in the writable `.lake`, as the audit runs
     # its tool from a copy
     shutil.copy2(tool / "Facts.lean", work / "Facts.lean")
@@ -294,14 +294,14 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
         # the audit runs `lake env` unsandboxed on a tree of its own; here `.lake/packages` holds links to the files it keeps
         return plain(in_sandbox(pkg, tree, [lake, *argv[1:]] if argv[:1] == ["lake"] else argv), cwd, *a, **kw)
 
-    AUDIT.run, AUDIT.TOOL = lake_in_sandbox, work
+    AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS = lake_in_sandbox, work, work
     try:
         facts = AUDIT.facts_of(tree / pkg, policy, work)
         cross: list[str] = []
         if "proved_in" in policy:
             cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work)
     finally:
-        AUDIT.run, AUDIT.TOOL = plain, tool
+        AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS = plain, tool, programs
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
     return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 

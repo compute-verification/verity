@@ -9,6 +9,8 @@ cells; the client speaks cells through the thin, workload-blind shim (`warden.ce
 
 Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed `/v1/completions`
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
+The server gets each request whole at its release, with its place in the warden's release order and the warden's run
+id (`release`), which `deployment.json` names (`run_id`).
 
 **What it can't enforce here.**
 - Run directly, the warden runs on the server's host (`trusted-host` stands for the auditor's host). The gate's
@@ -442,12 +444,14 @@ def _quantiles(xs: list[float]) -> dict:
 
 
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
-                      listen: tuple[str, int], upstream: tuple[str, int], slack: float) -> dict:
+                      listen: tuple[str, int], upstream: tuple[str, int], slack: float,
+                      run_id: bytes | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the warden's public key and session, the schedule's
-    parameters and their digest, the origin and where it listened."""
+    parameters and their digest, the origin and where it listened, and the run id its server's requests carry."""
     return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
-            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream)}
+            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream),
+            "run_id": None if run_id is None else run_id.hex()}
 
 
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
@@ -464,7 +468,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     server = await asyncio.start_server(warden.handle, *listen)
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
-                                   upstream=upstream, slack=slack)
+                                   upstream=upstream, slack=slack, run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
     announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
     try:

@@ -133,6 +133,7 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -142,7 +143,8 @@ MODULES = ["q_proj", "k_proj", "o_proj", "down_proj", "attn·out"]
 
 
 def _hex(rng: random.Random) -> str:
-    return rng.randbytes(64).hex()
+    # a digest of one short draw: 64 drawn bytes a root made a period's examples overrun Hypothesis's entropy budget
+    return hashlib.sha512(rng.randbytes(8)).hexdigest()
 
 
 def _row(rng: random.Random, i: int) -> dict:
@@ -191,7 +193,7 @@ REQUEST_WORDS = 10
 def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str | Callable[[str | None], str],
            other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
            weights: list[dict] | None = None, off: str | None = None, sid: str = "s-1", m: int = 1,
-           requests: str | None = None) -> tuple[list[dict], list[dict], dict[str, dict]]:
+           requests: str | None = None, t: int | None = None) -> tuple[list[dict], list[dict], dict[str, dict]]:
     """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
     window's open root `window`, or `window` of round 0's registered input-ids table's root when it is a function, since
     that root is inside the open root), each value under `prefix` (a random ``h1/w-<i>/`` when None), its round log over
@@ -209,8 +211,11 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     (``program``) or no window root nor session (``unbound``, main's h1_prove form). `off` (`AROW_NAMES`') registers an
     A table or an ids table over other rows than its true ones, an A table one call short (its true rows too), or no ids
     table of a round, and ``ids0-other-session`` binds ids@0's domain to another session. With `calls` and round 0's
-    request table's root `requests`, it registers (at random, always under `REQ0_NAMES`) the request table
-    ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break."""
+    request table's root `requests`, it registers (at random, always under `REQ0_NAMES` or with `t`) the request table
+    ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break. With `t`
+    (the period's T) its request table has T rows, and each round s registers its slot table ``…/slots@<s>`` (T leaves
+    of `live_reads.SLOT_WORDS`, committed whole by round s, binding the open root), the tables the live units read,
+    which `LIVE_TABLE_NAMES` break."""
     prefix = f"h1/w-{rng.randrange(100)}/" if prefix is None else prefix
     values, entries, true = {}, [], {}
     prog = _hex(rng) if other == "program" else program
@@ -221,11 +226,11 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         mine: dict[int, int] = {}
         for k in calls[st * (len(calls) // steps):(st + 1) * (len(calls) // steps)]:
             mine[k] = mine.get(k, 0) + 1
-        tables += [(f"{prefix}a/{k}@{st}", k // 2, n, st) for k, n in mine.items()]
+        tables += [(f"{prefix}a/{k}@{st}", Wt.leaf_words(k), n, st, Wt.chunks(k)) for k, n in mine.items()]
     if calls and off in ("a-zero", "a-row-off"):
         target = rng.choice(tables)[0]
     elif calls and off in TWO_CALLS:
-        target = rng.choice([v for v, _w, n, _s in tables if n > 1])
+        target = rng.choice([v for v, _w, n, _s, _x in tables if n > 1])
     elif calls and off in ("ids-off", "ids-missing"):
         target = f"{prefix}ids@{rng.randrange(steps)}"
 
@@ -264,19 +269,28 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
                  **({G.WIDTH_KEY: 32} if rng.random() < 0.3 else {})}
             entries.append({**b, "domain": Cr.domain_of(program, window, b)})
     entries += [dict(e) for e in weights or ()]
-    for v, words, n, st in tables:
-        a(v, words, (n - (v == target and off == "a-call-missing")) * m, st)
+    for v, words, n, st, x in tables:
+        a(v, words, (n - (v == target and off == "a-call-missing")) * m * x, st)
     for c, k in enumerate(calls or []):
         zy = {"value": f"{prefix}zy@{c}", "root": _hex(rng), "leaves": rng.randint(1, 8), "words": 3}
         entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
     for s in range(1, steps if calls else 0):
         a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
-    if calls and requests is not None and (off in REQ0_NAMES or rng.random() < 0.5):
+    if calls and t is not None:
+        odd = rng.randrange(steps)
+        for s in range(steps):
+            if not (s == odd and off == "live-no-slots"):
+                a(LR.table(prefix, LR.SLOTS, s), LR.SLOT_WORDS,
+                  t + rng.choice([-1, 1]) if s == odd and off == "live-slots-rows" and t > 1 else
+                  t + 1 if s == odd and off == "live-slots-rows" else t, s)
+    if (calls and requests is not None and off != "live-no-requests"
+            and (off in REQ0_NAMES or t is not None or rng.random() < 0.5)):
+        n = leaves if t is None else t + 1 if off == "live-requests-rows" else t
         v = f"x/{prefix}requests@0" if off == "req0-other-prefix" else f"{prefix}requests@0"
-        dom = (G.domain(prog, v, REQUEST_WORDS, leaves, window=own) if off == "req0-window" else
-               G.domain(prog, v, REQUEST_WORDS, leaves, session=f"{sid}-other" if off == "req0-other-session"
+        dom = (G.domain(prog, v, REQUEST_WORDS, n, window=own) if off == "req0-window" else
+               G.domain(prog, v, REQUEST_WORDS, n, session=f"{sid}-other" if off == "req0-other-session"
                         else sid if off == "ids0-other-session" else session))
-        e = {"value": v, "root": _hex(rng) if off == "req0-root-off" else requests, "leaves": leaves,
+        e = {"value": v, "root": _hex(rng) if off == "req0-root-off" else requests, "leaves": n,
              "words": REQUEST_WORDS, "domain": dom.domain_id.hex()}
         entries += [e, dict(e)] if off == "req0-twice" else [e]
     if rng.random() < 0.5:
@@ -347,12 +361,14 @@ def bad_rows(rng: random.Random, t: int) -> object:
     return rng.choice([0, -1, True, None, str(t), [t]])
 
 
-def served_rows(rng: random.Random, t: int, calls: int, steps: int, name: str = "honest") -> list:
-    """Each call's served rows m_s, one a step of `steps` over `calls` calls (call c at step ``c // (C/S)``): the
-    tables' T rows, some of them or none (an empty step, whose calls are no credit), then mutation `name`
-    (`ROWS_NAMES`)."""
+def served_rows(rng: random.Random, t: int, calls: int, steps: int, name: str = "honest",
+                each: list[int] | None = None) -> list:
+    """Each call's served rows m_s, one a step of `steps` over `calls` calls (call c at step ``c // (C/S)``): `each`'s
+    (a fixed length's schedule, `length_rows`) or, when None, the tables' T rows, some of them or none (an empty step,
+    whose calls are no credit), then mutation `name` (`ROWS_NAMES`)."""
     m = t
-    each = [rng.choice([m, m, rng.randint(1, m), rng.randint(0, max(1, m // 8)), 0]) for _ in range(steps)]
+    if each is None:
+        each = [rng.choice([m, m, rng.randint(1, m), rng.randint(0, max(1, m // 8)), 0]) for _ in range(steps)]
     per = calls // steps
     out: list = [each[c // per] for c in range(calls)]
     match name:
@@ -370,7 +386,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
                   leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
-                  served: list | None = None) -> tuple[dict, rc.Session]:
+                  served: list | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
     (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose draw coin opened after its draw root
     (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
@@ -380,7 +396,8 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     when None); with `weights`, its open root is `salt.window_open_root` of their
     `weights_root` (`fold`), round 0's ``requests`` and `sid`, else a random one. Round 0's ``requests`` is
     `credit.requests_root` of its ``request_table`` (a random root) and its input-ids table's (`IDS0_NAMES` break
-    it), or the bare table's when it registers none. Each round's root is the one the
+    it), or the bare table's when it registers none; with `t` it registers the live units' tables (`_a_log`). Each
+    round's root is the one the
     challenger received and its coin the one opened after it; under ``never-received`` the challenger received other
     roots, and the log carries their coins as if opened after its own, its draw root over it (the composed check's
     counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
@@ -400,7 +417,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
 
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
     entries, log, true = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, open_root, other,
-                                calls, prefix, weights, off, sid, m, table)
+                                calls, prefix, weights, off, sid, m, table, t)
     window = opened["window"]
     log[0]["requests"], log[0]["request_table"] = opened["requests"], table
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
@@ -427,6 +444,25 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     else:
         d["draw"]["coin"] = s.draw[0].to_json()
     return {"key": s.key(), "pins": list(rc.PINS), "main": list(rc.MAIN), "window": window, "session": s.files(), **d}, s
+
+
+def length_rows(rng: random.Random, max_tokens: list[int], steps: int, t: int) -> list[int]:
+    """Each step's served rows m_s in a window of `steps` steps and T = `t` table rows that serves the fixed length
+    `max_tokens`: step 0 each request's prompt (one row or more, at most `t` in all), step s ≥ 1 one decode row for each
+    request whose max_tokens is past s."""
+    return [rng.randint(len(max_tokens), t) if s == 0 else sum(1 for n in max_tokens if n > s) for s in range(steps)]
+
+
+def fixed_length(rng: random.Random, t: int, rounds: int, aim: str | None = None) -> list[int]:
+    """Each request's public max_tokens in a window of T = `t` table rows and `rounds` rounds: one to `t` requests,
+    often four or fewer, each served to its cap inside the window; aimed at ``length-past`` one runs two rounds or more,
+    at ``length-early`` one ends before the window's last round (`rounds` ≥ 2 for both)."""
+    out = [rng.randint(1, rounds) for _ in range(rng.choice([rng.randint(1, min(t, 4)), rng.randint(1, t)]))]
+    if aim == "length-past":
+        out[rng.randrange(len(out))] = rng.randint(2, rounds)
+    elif aim == "length-early":
+        out[rng.randrange(len(out))] = rng.randint(1, rounds - 1)
+    return out
 
 
 def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
@@ -537,7 +573,7 @@ def layout(rng: random.Random, big: bool = False) -> dict:
     of the tile's C, called once a step over one to three steps (A block s at step s) in a shuffled order; ``big``, a
     population past `credit.RECORD_K`."""
     r, c = rng.choice([(1, 1), (2, 4), (4, 8), (8, 8), (16, 16)])
-    ks = rng.sample([32, 64, 4096, 14336], rng.randint(1, 2))
+    ks = rng.sample([32, 64, 4096, 6144, 14336], rng.randint(1, 2))
     names = rng.sample(LINEARS, rng.randint(len(ks), 4))
     linears = [[name, ks[i] if i < len(ks) else rng.choice(ks), c * (rng.randint(1, 4) if not big else 64)]
                for i, name in enumerate(names)]
@@ -574,14 +610,23 @@ def _template_id(k: int, unit: dict) -> str:
     return f"{Cr.TILE_FN}{{UNIT={_canon(unit)},K={k}}}"
 
 
-def _template(k: int, r: int, c: int, unit: dict, receipt: object = None) -> dict:
+def row_type(k: int) -> list:
+    """`h1zy.ROW` (K) as the codec writes it: K s8 codes, then the row's f32 scale, each its bits."""
+    return ["Record", [["codes", ["Array", k, ["Array", 8, ["Value", 1]]]], ["scale", ["Array", 32, ["Value", 1]]]]]
+
+
+def _template(k: int, r: int, c: int, unit: dict, receipt: object = None, j10r: bool = False) -> dict:
     """K's template as `h1window.template` encodes it: a composite over the tile unit `unit`, its A and B rows
-    ``a_k<K>`` and ``b_k<K>``, then the unit's z/y record ``zy``, the salt, its position and the roots; returning
-    ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given, else a word."""
-    word = ["Value", 16]
-    params = [[f"a_k{k}", ["Array", r, ["Array", 2, word]]], [f"b_k{k}", ["Array", c, ["Array", 2, word]]],
+    ``a_k<K>`` and ``b_k<K>`` (n·R and n·C chunk rows, `row_type` of K/n, n = `weights.chunks` (K): the zy unit's, or at
+    n > 1 `h1zy.PouwH1TileZyChunks`'), then the unit's z/y record ``zy``, the salt, its position and the roots (and,
+    `j10r`, a J10-R unit's call and blocks); returning ``{receipt, ok}`` with ``receipt`` the type `receipt` when one
+    is given, else a word."""
+    word, n = ["Value", 16], _n(k)
+    params = [[f"a_k{k}", ["Array", n * r, row_type(k // n)]], [f"b_k{k}", ["Array", n * c, row_type(k // n)]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
               ["roots", ["Array", 2, ["Array", 4, word]]]]
+    if j10r:
+        params += [["call", ["Array", 4, word]], ["blocks", ["Array", 2, ["Array", 4, word]]]]
     ret = word if receipt is None else ["Record", [["receipt", receipt], ["ok", ["Value", 1]]]]
     return {"form": "composite", "id": Cr.TILE_FN, "bindings": {"K": k, "UNIT": unit},
             "body": {"params": params, "ret_type": ret, "nodes": [{"form": "call", "fn": 0, "args": [], "out": 0}],
@@ -594,17 +639,35 @@ def record(tiles: list, lay: dict, prefix: str = "") -> str:
     return Cr.WINDOW_FN + "{" + ",".join(f"{k}={_canon(vals[k])}" for k in Cr.RECORD) + "}"
 
 
-def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> dict:
+def _n(k: int) -> int:
+    """`weights.chunks` (K), or 1 at a K it refuses: a ``tile-k`` case's, which `credit.layout_of` refuses before it
+    reads K's template."""
+    try:
+        return Wt.chunks(k)
+    except ValueError:
+        return 1
+
+
+def _unit_fn(k: int, r: int, c: int, j10r: bool = False) -> str:
+    """K's unit id in the descriptor: the tile's (J10-R's v5 when `j10r`), wrapped in `h1zy.PouwH1TileZyChunks_v1` at a
+    chunked K."""
+    tile, n = f"H1Tile_v{5 if j10r else 1}{{K={k},R={r},C={c}}}", _n(k)
+    return tile if n == 1 else f"PouwH1TileZyChunks_v1{{UNIT={tile},CHUNKS={n}}}"
+
+
+def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
-    template returning a receipt of type `receipt` (`_template`) when one is given."""
+    template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`.
+    At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile,
+    as `h1window.program` wraps it."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
-    units = {k: {"fn": f"H1Tile_v1{{K={k},R={r},C={c}}}"} for k in ks}
+    units = {k: {"fn": _unit_fn(k, r, c, j10r)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
-    defs |= {tids[k]: _template(k, r, c, units[k], receipt) for k in ks}
+    defs |= {tids[k]: _template(k, r, c, units[k], receipt, j10r) for k in ks}
     defs["Input16_v1"] = {"form": "primitive", "id": "Input16_v1", "params": [], "ret": ["Value", 16]}
     nodes = [{"form": "batch", "fn": 0, "args": [], "out": 0, "axes": [], "n": rng.randint(1, 64)}
              for _ in range(2 * len(ks) + 3)]
@@ -629,9 +692,27 @@ def desc_bytes(desc: dict) -> bytes:
     return _canon(desc).encode()
 
 
-def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> str:
+def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> str:
     """`window_desc`'s bytes in hex, as a window's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix, receipt)).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r)).hex()
+
+
+def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
+    """A J10-R window's descriptor (`descriptor`'s, ``j10r``) whose template at some K is in no one form: its ``call``
+    or ``blocks`` dropped, the two swapped, or (a window of two K) that K's template today's while the other's is
+    J10-R's; in hex."""
+    desc = window_desc(rng, lay, prefix, j10r=True)
+    tiles = json.loads(dict(Cr._record(desc["program_fn"]))["TILES"])
+    _k, tid = rng.choice(tiles)
+    params = desc["definitions"][tid["fn"]]["body"]["params"]
+    how = rng.choice(["drop", "swap", *(["mixed"] if len(tiles) > 1 else [])])
+    if how == "drop":
+        del params[rng.choice([-1, -2])]
+    elif how == "swap":
+        params[-2:] = params[-2:][::-1]
+    else:
+        del params[-2:]
+    return desc_bytes(desc).hex()
 
 
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
@@ -696,7 +777,13 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
                 case "params":
                     body["params"] = body["params"][:4]
                 case "rows":
-                    body["params"][rng.randrange(2)][1] = rng.choice([["Array", 0, ["Value", 16]], ["Value", 16]])
+                    n, x = Wt.chunks(k), rng.randrange(2)
+                    rows = body["params"][x][1][1]
+                    body["params"][x][1] = rng.choice([
+                        ["Array", 0, ["Value", 16]], ["Value", 16], ["Array", rows, ["Array", 2, ["Value", 16]]],
+                        ["Array", rows, row_type(k // n + 1)], ["Array", rows, row_type(k)] if n > 1 else ["Value", 16],
+                        ["Array", rows // n, row_type(k)] if n > 1 else ["Array", rows, row_type(2 * k)],
+                        ["Array", rows + 1, row_type(k // n)] if n > 1 else ["Array", rows, ["Value", 16]]])
                 case "unit":
                     t["bindings"]["UNIT"] = {"fn": "Other_v1"}
                 case "missing":
@@ -1017,11 +1104,19 @@ def b_row_words(codes: bytes, sw: float) -> list[int]:
     return Wt.row_words(Wt.row_bytes(bytes(codes), struct.pack("<f", sw)))
 
 
+def b_leaf_words(codes: bytes, sw: float) -> list[list[int]]:
+    """A B row of K's leaves' u16 words: x = `weights.chunks` (K) leaves, leaf c chunk c's K/x codes then the row's s_w
+    (`b_row_words` of each)."""
+    x = Wt.chunks(len(codes))
+    kc = len(codes) // x
+    return [b_row_words(codes[c * kc:(c + 1) * kc], sw) for c in range(x)]
+
+
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
     """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
-    `b_row_words`, salts drawn once, binding no window)."""
-    words = [b_row_words(codes, sw) for codes, sw in rows]
-    return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(rows)), schema=G.SCHEMA_V2).entry()
+    its `b_leaf_words`, salts drawn once, binding no window)."""
+    words = [w for codes, sw in rows for w in b_leaf_words(codes, sw)]
+    return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
 
 
 def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
@@ -1033,42 +1128,241 @@ def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
     return out
 
 
+def round_choices(lay: dict, name: str = "honest") -> list[int]:
+    """The round counts an honest window of layout `lay` may have under mutation `name`: its calls the rounds' equal
+    blocks, each calling every linear at most once (`_once`; two calls a round or more under ``rows-other``), at most
+    three when one is."""
+    lins = [lin for lin, _blk in lay["calls"]]
+    once = [s for s in _once(lins) if name != "rows-other" or len(lins) // s > 1]
+    return [s for s in once if s <= 3] or once[:1]
+
+
+#: each way the tables a window's live units read are not its registration's, made before its draw: one round's slot
+#: table unregistered (``live-no-slots``) or of other than T rows (``live-slots-rows``), and round 0's request table
+#: unregistered (``live-no-requests``) or of other than T rows (``live-requests-rows``)
+LIVE_TABLE_NAMES = ["live-no-slots", "live-slots-rows", "live-no-requests", "live-requests-rows"]
+#: each way a window's live evidence does not prove each step's served rows: its form, a descriptor that is no canonical
+#: descriptor (``live-descriptor-form``), no live Program or one whose units are not S calls of its unit
+#: (``live-body``), a live Program at another T, S or PREFIX, and its rounds' proof outcomes: one missing, twice, past the
+#: rounds, rejected, verified against another circuit, opening ``m@<s>`` at another m than the manifest's m_s
+#: (``live-m-other``), ``round@<s>`` at another round than s (``live-round-other``), another round's slot table
+#: (``live-slots-other``) or other ok rows than ``live-ok`` (``live-ok-off``, a unit that computed 0), and their form
+LIVE_NAMES = [*LIVE_TABLE_NAMES, "live-form", "live-descriptor-form", "live-not-live", "live-body", "live-t-other",
+              "live-s-other", "live-prefix", "live-missing", "live-twice", "live-past", "live-failed",
+              "live-other-circuit", "live-m-other", "live-round-other", "live-slots-other", "live-ok-off", "live-proofs-form"]
+
+
+def live_program(t: int, steps: int, prefix: str) -> dict:
+    """A live Program's descriptor (`circuit.live.program`'s encoding as far as `credit.live_of` reads it): its program
+    function's record T, S and PREFIX, its unit ``PouwLiveSlots_v1{T=<T>}`` (a composite bound to T alone) and its
+    root's input batches (S·T slot words, T headers, S m's, S rounds, as bits) then S calls of the unit, round s's unit
+    s."""
+    fn = f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX={Cr._canonical(prefix)}}}"
+    unit, root = f"{Cr.LIVE_UNIT}{{T={t}}}", f"Root[{Cr.LIVE_FN}]_v1"
+    nodes = [{"form": "batch", "fn": 0, "n": n} for n in (steps * t * 32, t * 160, steps * 32, steps * 32)]
+    nodes += [{"form": "call", "fn": 1} for _s in range(steps)]
+    return {"schema": Cr.SCHEMA, "callees": ["Input1_v1", unit], "program_fn": fn, "root": root,
+            "definitions": {"Input1_v1": {"form": "primitive", "id": "Input1_v1"},
+                            root: {"form": "composite", "id": root, "bindings": {},
+                                   "body": {"nodes": nodes, "params": []}},
+                            unit: {"form": "composite", "id": Cr.LIVE_UNIT, "bindings": {"T": t},
+                                   "body": {"nodes": [], "params": []}}}}
+
+
+def live_hex(p: dict) -> str:
+    return Cr._canonical(p).encode().hex()
+
+
+def _live_ms(d: dict, steps: int) -> list[int]:
+    """Each step's served rows m_s as the manifest states them (0 for a malformed one, which an earlier step refuses)."""
+    per = len(d["calls"]) // steps
+    ms = [d["calls"][s * per].get(Cr.SERVED_ROWS) for s in range(steps)]
+    return [m if type(m) is int and 0 <= m < 1 << 32 else 0 for m in ms]
+
+
+def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int, prefix: str | None = None) -> dict:
+    """Round s's accepted live@<s> proof outcome, as the verifier of record gives it on the ``--registered`` file
+    `live_reads.reads_file` builds for the window `d` of PREFIX `prefix` (its descriptor's when None) at served rows
+    `m`: each port at its value and root (a random root for a table the window doesn't register)."""
+    steps, t = len(d["rounds"]), d["rows"]
+    prefix = Cr._prefix(bytes.fromhex(d["descriptor"])) if prefix is None else prefix
+    program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+    roots = {e["value"]: e["root"] for e in d["entries"] if isinstance(e, dict) and "value" in e}
+    for v in [LR.table(prefix, LR.SLOTS, x) for x in range(steps)] + [LR.table(prefix, LR.REQUESTS)]:
+        if v not in roots:
+            roots[v] = _hex(rng)
+    reg = LR.reads_file(program, t, steps, s, roots, d["window"]["root"], d["sid"], m, prefix)
+    return {"unit": s, "verdict": "accept", "program": hashlib.sha512(bytes.fromhex(desc)).hexdigest(),
+            "registered": {port: {"value": x["value"], "root": x["root"]} for port, x in reg["ports"].items()}}
+
+
+def live_evidence(rng: random.Random, d: dict, prefix: str) -> dict:
+    """The window `d`'s live evidence (`credit.LIVE_KEYS`): its live Program at its period's T, its S rounds and its
+    circuit's PREFIX `prefix` (given, since a broken descriptor's names none), and each round's accepted proof outcome
+    (`live_proof`) at its step's m_s, in any order."""
+    steps = len(d["rounds"])
+    desc = live_hex(live_program(d["rows"], steps, prefix))
+    proofs = [live_proof(rng, d, desc, s, m, prefix) for s, m in enumerate(_live_ms(d, steps))]
+    rng.shuffle(proofs)
+    return {"descriptor": desc, "proofs": proofs}
+
+
+def _break_live_desc(rng: random.Random, d: dict, name: str) -> str:
+    t, steps, prefix = d["rows"], len(d["rounds"]), Cr._prefix(bytes.fromhex(d["descriptor"]))
+    p = live_program(t, steps, prefix)
+    unit, root = p["callees"][1], p["root"]
+    match name:
+        case "live-descriptor-form":
+            return rng.choice([json.dumps(p).encode().hex(), live_hex({**p, "schema": "verity-ir/descriptor/v0"}),
+                               live_hex({k: v for k, v in p.items() if k != "callees"}), b"\xff\xfe".hex(),
+                               live_hex([p])])
+        case "live-not-live":
+            pre = Cr._canonical(prefix)
+            p["program_fn"] = rng.choice([f"{Cr.LIVE_FN}{{T=0,S={steps},PREFIX={pre}}}",
+                                          f"{Cr.LIVE_FN}{{T={t},S={steps}}}",
+                                          f"{Cr.LIVE_FN}{{T={t},S={steps},PREFIX=5}}",
+                                          f"{Cr.LIVE_FN}{{S={steps},T={t},PREFIX={pre}}}",
+                                          f"{Cr.LIVE_FN}{{T={t},S=0{steps},PREFIX={pre}}}",
+                                          f"PouwLiveWindow_v2{{T={t},S={steps},PREFIX={pre}}}"])
+            if rng.random() < 0.3:
+                return d["descriptor"]
+        case "live-body":
+            nodes = p["definitions"][root]["body"]["nodes"]
+            match rng.randrange(6):
+                case 0:
+                    p["definitions"][unit]["bindings"] = {"T": t, "N": 1}
+                case 1:
+                    p["definitions"][unit]["bindings"] = {"T": t + 1}
+                case 2:
+                    p["definitions"][unit]["id"] = "PouwLiveSlots_v2"
+                case 3:
+                    nodes.append({"form": "call", "fn": 1}) if rng.random() < 0.5 else nodes.pop()
+                case 4:
+                    p["callees"].append("And2_v1")
+                    p["definitions"]["And2_v1"] = {"form": "primitive", "id": "And2_v1"}
+                    nodes.append({"form": "call", "fn": 2})
+                case _:
+                    del p["definitions"][unit]
+        case "live-t-other":
+            p = live_program(rng.choice([x for x in (t - 1, t + 1, 2 * t) if x >= 1 and x != t]), steps, prefix)
+        case "live-s-other":
+            p = live_program(t, rng.choice([x for x in (steps - 1, steps + 1) if x >= 1]), prefix)
+        case "live-prefix":
+            p = live_program(t, steps, rng.choice([f"other-{rng.randrange(100)}/", prefix + "x/", ""]))
+    return live_hex(p)
+
+
+def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
+    live, steps = d["live"], len(d["rounds"])
+    proofs = live["proofs"]
+    match name:
+        case "live-form":
+            h = live["descriptor"]
+            d["live"] = rng.choice([None, [live], {**live, "statements": []}, {"descriptor": h},
+                                    {**live, "descriptor": h.upper()}, {**live, "descriptor": h[:-1]},
+                                    {**live, "descriptor": 5}])
+        case "live-descriptor-form" | "live-not-live" | "live-body" | "live-t-other" | "live-s-other" | "live-prefix":
+            live["descriptor"] = _break_live_desc(rng, d, name)
+        case "live-missing":
+            del proofs[rng.randrange(len(proofs))]
+        case "live-twice":
+            proofs.insert(rng.randrange(len(proofs) + 1), json.loads(json.dumps(rng.choice(proofs))))
+        case "live-past":
+            proofs.append({**rng.choice(proofs), "unit": steps + rng.randrange(3)})
+        case "live-failed":
+            rng.choice(proofs)["verdict"] = "reject"
+        case "live-other-circuit":
+            rng.choice(proofs)["program"] = _hex(rng)
+        case "live-m-other":
+            i = rng.randrange(len(proofs))
+            s = proofs[i]["unit"]
+            m = _live_ms(d, steps)[s]
+            other = rng.choice([x for x in (m - 1, m + 1, rng.randint(0, d["rows"])) if x >= 0 and x != m])
+            proofs[i] = live_proof(rng, d, live["descriptor"], s, other)
+        case "live-round-other":
+            p = rng.choice(proofs)
+            raw = bytes.fromhex(d["descriptor"])
+            x = rng.choice([y for y in (p["unit"] + 1, p["unit"] - 1, rng.randrange(1 << 16)) if y >= 0 and y != p["unit"]])
+            reg = LR.round_table(hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), d["window"]["root"], x)[2]
+            p["registered"]["s"] = {"value": rng.choice([reg.value, LR.table(Cr._prefix(raw), LR.ROUND_ROWS, p["unit"])]),
+                                    "root": reg.root.hex()}
+        case "live-slots-other":
+            p = rng.choice(proofs)
+            ports = [port for port in p["registered"] if port.startswith("slot_")]
+            prefix = Cr._prefix(bytes.fromhex(d["descriptor"]))
+            others = [e for e in d["entries"] if e["value"].startswith(f"{prefix}{LR.SLOTS}@")
+                      and e["value"] != p["registered"][ports[0]]["value"]]
+            for port in rng.sample(ports, rng.randint(1, len(ports))):
+                p["registered"][port] = ({"value": others[0]["value"], "root": others[0]["root"]} if others
+                                         else {**p["registered"][port], "root": _hex(rng)})
+        case "live-ok-off":
+            rng.choice(proofs)["registered"][LR.OK_PORT]["root"] = _hex(rng)
+        case "live-proofs-form":
+            p = rng.choice(proofs)
+            match rng.randrange(5):
+                case 0:
+                    live["proofs"] = rng.choice([None, {"0": p}, 5])
+                case 1:
+                    del p["registered"]
+                case 2:
+                    p["verdict"] = "maybe"
+                case 3:
+                    p["unit"] = rng.choice([-1, True, "0", None])
+                case _:
+                    p["registered"][LR.OK_PORT]["root"] = "zz"
+        case _:
+            raise ValueError(name)
+
+
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
                   lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
-                  weights: list[dict] | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
+                  weights: list[dict] | None = None, t: int | None = None, length: list[int] | None = None,
+                  j10r: bool = False) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
     when None), its weights `weights` (`weights_of` when None, its open root over them, ``d["weights"]``), a K it can be
     drawn at, its period's table rows T `t` (``rows``, `table_rows` when None) and each step's served rows at most T,
     one call per manifest row, and an accepted proof of each unit its draw coin
-    draws at that K. Its A rows are its rounds' A tables of each K, as main's served form registers them
+    draws at that K, and its live evidence (``live``, `live_evidence`): its live Program and each round's accepted
+    live@<s> proof outcome at its step's m_s. Its A rows are its rounds' A tables of each K, as main's served form
+    registers them
     (`h1window.table`), beside each round's input-ids table, over rounds that call each linear once (one round under
     `TWO_CALLS`), and its Commit record registers each of them (`commit_record`); under `AROW_NAMES`
-    one of them is not the Commit's. ``layout`` is the layout, which the verifier
+    one of them is not the Commit's. Its calls' served rows are the schedule of the fixed length `length`
+    (`fixed_length` when None, aimed at ``length-past`` and ``length-early``; `length_rows`), then `ROWS_NAMES`'
+    mutation, ``d["length"]`` the ``{max_tokens, stop}`` its period's open commits. ``layout`` is the layout, which the verifier
     reads from the descriptor. Its values are named `prefix` (a random ``h1/w-<n>/`` when None) and their roles, and so
-    are its circuit's parameters (``PREFIX``) when `desc` is None, as a served path names them."""
+    are its circuit's parameters (``PREFIX``) when `desc` is None, as a served path names them, over J10-R units when
+    `j10r`."""
     lay = layout(rng) if lay is None else lay
     prefix = f"h1/w-{rng.randrange(100)}/" if prefix is None else prefix
-    desc = descriptor(rng, lay, prefix) if desc is None else desc
+    desc = descriptor(rng, lay, prefix, j10r=j10r) if desc is None else desc
     program = hashlib.sha512(bytes.fromhex(desc)).hexdigest()
     weights = weights_of(rng, lay, program, prefix) if weights is None else weights
     other = {"other-registration": rng.choice(["window", "program"]), "a-call-unbound": "unbound"}.get(name)
     k_of = {lin: k for lin, k, _n in lay["linears"]}
-    lins = [lin for lin, _blk in lay["calls"]]
     t = table_rows(rng, lay) if t is None else t
-    once = [s for s in _once(lins) if name != "rows-other" or len(lins) // s > 1]
-    steps = 1 if name in TWO_CALLS else rng.choice([s for s in once if s <= 3] or once[:1])
+    aim = name if name in ("length-past", "length-early") else None
+    choices = [s for s in round_choices(lay, name) if s >= 2] if aim else round_choices(lay, name)
+    steps = 1 if name in TWO_CALLS else rng.choice(choices)
+    if length is None:
+        length = fixed_length(rng, t, steps, aim)
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
-                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES] else None, m=lay["m"],
-                         rounds=steps, served=served_rows(rng, t, len(lins), steps, name))
+                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
+                         m=lay["m"], rounds=steps, t=t,
+                         served=served_rows(rng, t, len(lay["calls"]), steps, name, length_rows(rng, length, steps, t)))
+    d["length"] = {"max_tokens": length, "stop": Wd.STOP_FIXED}
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
+    d["sid"] = sid
+    d["live"] = live_evidence(rng, d, prefix)
     return d, s
 
 
 def window_instance(rng: random.Random, name: str = "honest", lay: dict | None = None) -> dict:
-    """One `window` case: an honest window (of layout `lay` when given), then mutation `name`."""
+    """One `window` case: an honest window (of layout `lay` when given), then mutation `name` (``j10r``: an honest window
+    over J10-R units, each call of at least two row tiles)."""
     credit = name.removeprefix("credit-")
 
     def call_ks(lay: dict) -> list[int]:
@@ -1089,13 +1383,45 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
             lay = layout(rng)
     elif name == "commit-missing-expert":
         lay = expert_layout(rng)
-    d, s = honest_window(rng, credit, lay=lay)
+    elif name in ("length-past", "length-early"):
+        lay = layout(rng)
+        while max(round_choices(lay)) < 2:
+            lay = layout(rng)
+    elif name == "j10r":
+        lay = layout(rng)
+        lay["m"] = 2 * lay["tile"][0]
+    d, s = honest_window(rng, credit, lay=lay, j10r=name == "j10r")
     signed: dict | None = {}
+    committed: object = "same"
+    mt = list(d["length"]["max_tokens"])
     match name:
-        case "honest":
+        case "honest" | "j10r":
             pass
-        case _ if name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES:
+        case "length-none":
+            committed = rng.choice([None, "absent"])
+        case "length-eos":
+            committed = {**d["length"], "stop": rng.choice(["eos-token", "eos", "stop", ""])}
+        case "length-form":
+            committed = rng.choice([{"max_tokens": []}, {"max_tokens": [], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": [0], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": [True], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": [-1], "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": "4", "stop": Wd.STOP_FIXED},
+                                    {"max_tokens": mt, "stop": 5}, {"max_tokens": mt, "stop": None},
+                                    {**d["length"], "served": mt}, {"stop": Wd.STOP_FIXED}, 5, [mt], "fixed"])
+        case "length-past":
+            q = next(q for q, t in enumerate(mt) if t >= 2)
+            committed = {**d["length"], "max_tokens": mt[:q] + [mt[q] - 1] + mt[q + 1:]}
+        case "length-early":
+            q = mt.index(min(mt))
+            committed = {**d["length"], "max_tokens": mt[:q] + [mt[q] + 1] + mt[q + 1:]}
+        case "length-slots":
+            committed = {**d["length"], "max_tokens": mt + [1] * (d["layout"]["m"] + 1 - len(mt))}
+        case _ if (name in AROW_NAMES or name in IDS0_NAMES or name in REQ0_NAMES or name in ROWS_NAMES
+                   or name in LIVE_TABLE_NAMES):
             pass
+        case _ if name in LIVE_NAMES:
+            _mutate_live(rng, d, name)
         case "commit-unbound":
             rec = json.loads(bytes.fromhex(d["commit"]))
             rec["registered"].append({"value": "sampled-ids/0", "root": _hex(rng), "leaves": 1, "words": 2,
@@ -1205,6 +1531,8 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
     if "ledger" not in d:
         if signed == {}:
             signed = signs(d["weights"])
+        if signed is not None and committed != "absent":
+            signed = {**signed, Cr.LENGTH_FIELD: dict(d["length"]) if committed == "same" else committed}
         events = rc.ledger_events(rng, d["window"], s, period=signed or {})
         if signed is None:
             events = [x for x in events if not x[0].startswith("period-")]
@@ -1215,6 +1543,11 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
 #: each way a window's registered weights are not the ones its period's open signed and its open root binds
 WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-model", "weights-no-period", "weights-requests",
                         "weights-no-requests", "weights-leaves"]
+#: each way a window does not serve its period's fixed length (ASK-39): its period's open commits none (absent or null),
+#: an EOS-keyed stop mode or a malformed one; a request ran past its public max_tokens (``length-past``: the open's
+#: max_tokens of a request served two rounds or more is one less) or stopped before it (``length-early``: one more);
+#: and more requests than the window's slots
+LENGTH_NAMES = ["length-none", "length-eos", "length-form", "length-past", "length-early", "length-slots"]
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
                       "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-unregistered",
@@ -1222,11 +1555,12 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
-                *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other", "t-form"]
+                *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other",
+                "t-form", *LIVE_NAMES, "j10r", *LENGTH_NAMES]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k", "rows")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",
-               "draw", "descriptor", "entries", "proofs", "k", "rows")
+               "draw", "descriptor", "entries", "proofs", "live", "k", "rows")
 
 
 def window_args(d: dict) -> tuple:
@@ -1269,11 +1603,14 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
                  else [(bytes(k), sw) for _codes, sw in b])
         weights = [registered_b(program, v, b) if e["value"] == v else e for e in weights]
         odd_weights = [registered_b(program, v, other) if e["value"] == v else e for e in weights]
+    length = fixed_length(rng, t, min(round_choices(lay)))
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
                           leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc,
-                          prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t)
+                          prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t,
+                          length=length)
             for i in range(n)]
-    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, prefix=prefix, weights=weights, t=t)
+    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, prefix=prefix, weights=weights, t=t,
+                            length=length)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
     least = units_of(lay)
@@ -1284,10 +1621,12 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
     committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights),
-                 **(committed_too or {})}
+                 Cr.LENGTH_FIELD: {"max_tokens": length, "stop": Wd.STOP_FIXED}, **(committed_too or {})}
     match name:
         case "no-circuit":
-            committed = {Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights)}
+            committed = {Cr.K_FIELD: big_k, Cr.ROWS_FIELD: t, **signs(weights), Cr.LENGTH_FIELD: committed[Cr.LENGTH_FIELD]}
+        case "length-none":
+            del committed[Cr.LENGTH_FIELD]
         case "no-weights":
             del committed[Cr.WEIGHTS_FIELD]
         case "weights-form":
@@ -1354,7 +1693,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "no-rows" | "t-form" | "t-other" | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin" | "no-weights" | "weights-form"
-              | "other-sw" | "zero-codes" | "stale-pin"):
+              | "other-sw" | "zero-codes" | "stale-pin" | "length-none"):
             pass
         case _ if name in MODEL_NAMES:
             pass
@@ -1392,8 +1731,14 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             windows[i]["proofs"] = _mutate_proofs(windows[i]["proofs"], rng, rng.choice(["failed", "missing"]), [])
         case "proof-other-registration":
             _other_root(rng, windows[i]["proofs"])
+        case "live-refused":
+            proofs = windows[i]["live"]["proofs"]
+            if rng.random() < 0.5:
+                del proofs[rng.randrange(len(proofs))]
+            else:
+                rng.choice(proofs)["verdict"] = "reject"
         case "windows-form":
-            drop = rng.choice(["proofs", "descriptor"])
+            drop = rng.choice(["proofs", "descriptor", "live"])
             windows = rng.choice([None, {"0": windows[0]}, windows[:i] + [5] + windows[i + 1:],
                                   windows[:i] + [{k: v for k, v in windows[i].items() if k != drop}]
                                   + windows[i + 1:]])
@@ -1409,7 +1754,7 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "k-form", "k-past-units", "other-k", "no-rows", "t-form", "t-other", "alt-layout", "bad-circuit", "tile-k",
                 "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
-                "zero-codes", "stale-pin"]
+                "zero-codes", "live-refused", "stale-pin", "length-none"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 
@@ -1423,8 +1768,11 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
     ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none, ``pub-roots`` registers the
     call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and
-    ``ok-registered`` registers the window's ok rows ``<prefix>ok``, which are the verifier's own."""
+    ``ok-registered`` registers the window's ok rows ``<prefix>ok``, which are the verifier's own. Its templates are
+    J10-R's at random (always under ``j10r``), whose public rows the verifier derives each unit's call and blocks for,
+    and ``j10r-form`` gives a J10-R window a template in no one form (`j10r_misformed`)."""
     lay = layout(rng)
+    j10r = name == "j10r" or (name == "honest" and rng.random() < 0.5)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
     steps = rng.choice([s for s in (1, 2, 3) if len(lay["calls"]) % s == 0])
@@ -1444,8 +1792,11 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             roots[f"{prefix}a/{k}@{st}"] = [_hex(rng)]
     v = rng.choice(vals[:3])
     match name:
-        case "honest":
+        case "honest" | "j10r":
             pass
+        case "j10r-form":
+            return {"descriptor": j10r_misformed(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng),
+                    "steps": steps, "salt": _hex(rng)}
         case "missing":
             if rng.random() < 0.5:
                 del roots[v]
@@ -1465,11 +1816,12 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
                                   ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)], ["Array", 3, ["Value", "16"]]])
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix, receipt), "call": call, "roots": roots, "window": _hex(rng),
+    return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r), "call": call, "roots": roots, "window": _hex(rng),
             "steps": steps, "salt": _hex(rng)}
 
 
-REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots", "ok-registered"]
+REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots", "ok-registered", "j10r",
+                         "j10r-form"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
@@ -1509,7 +1861,10 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     rounds' input-ids tables ``…/ids@<s>``, each committed whole by its round; and at random (always under the
     ``slots-`` mutations) some rounds' slot tables ``…/slots@<s>``, alike; and at random (always under the
     ``receipt-`` mutations) some calls' receipt tables ``…/receipt@<c>``, each committed whole by its call's round, of
-    the window's ``calls`` (the rounds' equal blocks)."""
+    the window's ``calls`` (the rounds' equal blocks). At random (always under ``layout-rows``) its ``rows`` give each
+    A value's and receipt table's leaf count as a layout would (`credit.table_rows`); ``leaves-cap`` gives an entry no
+    ``rows`` name a count past `credit.MAX_ROWS`, and ``layout-rows`` one that ``rows`` names another count than its
+    own, at random 2^40, which the verifier refuses before it hashes any pad."""
     calling, tying, receipts = name.startswith("table-"), name.startswith("ids-"), name.startswith("receipt-")
     slotting = name.startswith("slots-")
     steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "table-other-round", "ids-other-round",
@@ -1524,7 +1879,7 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
         entries.append({"value": v, "root": levels[-1][0].hex(), "leaves": count, "words": 96, "domain": domain})
 
     sizes = [2, 3, 4, 5] if name == "swapped" else [1, 2, 3, 4, 5, 8]
-    ks = rng.sample([64, 4096, 14336], rng.randint(1, 2))
+    ks = rng.sample([64, 4096, 6144, 14336], rng.randint(1, 2))
     for k in ks:
         a(f"{window}/a/{k}", steps * rng.choice(sizes), None)
     if calling or rng.random() < 0.5:
@@ -1544,7 +1899,10 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     rng.shuffle(entries)
     log = _log(steps, values, [_hex(rng) for _ in range(steps)])
     tied = [e for e in entries if Cr.is_tied(e["value"])]
-    e = rng.choice([x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
+    sized = [x for x in tied if Cr.ids_step(x["value"]) is None and Cr.slots_step(x["value"]) is None]
+    rows = ({x["value"]: x["leaves"] for x in sized}
+            if name == "layout-rows" or (name not in ("leaves-cap", "blocks") and rng.random() < 0.5) else None)
+    e = rng.choice(sized if name == "layout-rows" else [x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
                    else [x for x in tied if Cr.slots_step(x["value"]) is not None] if slotting
                    else [x for x in tied if Cr.receipt_call(x["value"]) is not None] if receipts
                    else [x for x in tied if Cr.is_a(x["value"]) and (values[x["value"]][2] is not None) == calling]
@@ -1591,8 +1949,12 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             entries.append(dict(e))
         case "entry-form":
             k, bad = rng.choice([("root", None), ("root", "zz"), ("domain", None), ("domain", e["domain"].upper()),
-                                 ("leaves", 0), ("leaves", True), ("leaves", Cr.MAX_ROWS + 1), ("leaves", "4")])
+                                 ("leaves", -1), ("leaves", True), ("leaves", None), ("leaves", "4")])
             e[k] = bad
+        case "leaves-cap":
+            e["leaves"] = rng.choice([0, Cr.MAX_ROWS + 1, 1 << 40])
+        case "layout-rows":
+            e["leaves"] = rng.choice([e["leaves"] + 1, e["leaves"] - 1 or 2, 1 << 40])
         case "blocks":
             e["leaves"] += 1 if (e["leaves"] + 1) % steps else 2 if (e["leaves"] + 2) % steps else 3
         case "log-form":
@@ -1644,19 +2006,21 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             _reroot(log)
         case _:
             raise ValueError(name)
-    return {"rounds": log, "entries": entries, "calls": calls}
+    return {"rounds": log, "entries": entries, "calls": calls, "rows": rows}
 
 
 A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra", "swapped", "misaligned", "unknown",
-                "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form",
-                "table-other-round", "table-past", "ids-other-round", "ids-past", "slots-other-round", "slots-past",
-                "receipt-other-round", "receipt-past",
+                "no-a", "twice", "entry-form", "leaves-cap", "layout-rows", "blocks", "log-form", "round-form",
+                "segments-form", "entries-form", "table-other-round", "table-past", "ids-other-round", "ids-past",
+                "slots-other-round", "slots-past", "receipt-other-round", "receipt-past",
                 "receipt-calls", "receipt-unknown"]
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
-    return {"value": v, "root": _hex(rng), "leaves": n, "words": Wt.b_words(k),
-            "domain": G.domain(program, v, Wt.b_words(k), n).domain_id.hex()}
+    """K's ``b/<K>`` of `n` rows: `weights.chunks` (K) leaves a row of `weights.leaf_words` (K) words."""
+    x, w = Wt.chunks(k), Wt.leaf_words(k)
+    return {"value": v, "root": _hex(rng), "leaves": x * n, "words": w,
+            "domain": G.domain(program, v, w, x * n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:

@@ -332,7 +332,7 @@ class ServingTrace:
     (`ahead`, an `Ahead`), `run` is serving on its own thread and `take` the session's half at each pass."""
 
     def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
-                 lifetime: int = audit.LIFETIME, headroom: int = 0) -> None:
+                 lifetime: int, headroom: int = 0) -> None:
         N = registration.blocks
         pool = max(1, min(pool, N))
         self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
@@ -724,7 +724,7 @@ class ProverSide:
             if mode == "kvoverwrite" and self.ahead is None:
                 raise ValueError("a kvoverwrite session's serving runs ahead of its passes (ahead=K)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
-                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME),
+                                 random.Random(self.rng.getrandbits(64)), head["lifetime"],
                                  self.kv_headroom)
             if self.ahead is not None:
                 trace.ahead = Ahead(self.ahead, self.fill)
@@ -733,7 +733,7 @@ class ProverSide:
         elif mode in ("serve", "servedrop"):
             if not hasattr(self.backend, "serving"):
                 raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.store.remote)")
-            trace = self.backend.serving(self.registration, head.get("lifetime", audit.LIFETIME))
+            trace = self.backend.serving(self.registration, head["lifetime"])
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
             dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)

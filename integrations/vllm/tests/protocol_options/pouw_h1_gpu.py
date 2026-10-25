@@ -65,7 +65,16 @@ serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `re
 the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
 registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
 window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step).
+(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
+them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
+J10-R's tile unit (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
+and they are held to `h1tile.j10r_reference`; v1's unit is the default.
+
+``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
+(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
+opens each drawn unit's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the drawn units the first and last of each kept call; then a receipt word flipped (with and
+without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
@@ -122,19 +131,36 @@ PERIOD_DIGEST = """
 import json, resource, sys, time
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity_vllm.protocol_options import pouw_h1_served as SV
-shapes, modules, rows, steps = json.loads(sys.argv[1])
+shapes, modules, rows, steps, j10r = json.loads(sys.argv[1])
+unit = None
+if j10r:
+    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
 t = time.monotonic()
-digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps))
+digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps,
+                                      unit=unit))
 print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
                   "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
 """
 
 
-def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[str, Any]]:
-    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run),
-    its digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares
-    them. The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window
-    pays, so this process's RSS is the windows' own."""
+def period_unit(j10r: bool) -> Any:
+    """The window Program's tile unit at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
+    v1's (`h1window.tile_unit`'s default), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy` (``--j10r``)."""
+    if not j10r:
+        return None
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
+
+
+def period_program(model: Any, rows: int, steps: int, j10r: bool = False) -> tuple[Any, str, dict[str, Any]]:
+    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
+    over `period_unit`'s tile unit), its digest (the period's ``--circuit``) and what declaring them cost, once before
+    any window, as a period declares them. The digest is taken in a child process, since at FILL it alone takes minutes
+    and tens of GB, which no window pays, so this process's RSS is the windows' own."""
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -142,10 +168,10 @@ def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[st
     layers = PHK.layers(model, pouw.linear_types())
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
-    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps])],
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r])],
                              stdout=subprocess.PIPE, text=True)
     t = time.monotonic()
-    program = SV.declared(shapes, modules, rows, steps)
+    program = SV.declared(shapes, modules, rows, steps, unit=period_unit(j10r))
     declare_s = round(time.monotonic() - t, 1)
     out, _ = child.communicate()
     if child.returncode:
@@ -488,9 +514,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     except ValueError as e:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
-    period = period_program(eng.model, decl.rows, decl.steps) if a.served else None
+    period = period_program(eng.model, decl.rows, decl.steps, a.j10r) if a.served else None
     if period is not None:
-        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
+        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {
+            "circuit": period[1], "noise": "j10r" if a.j10r else "v1"}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
@@ -646,6 +673,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
+        if a.credit and edit is None and tap is not None and made is not None:
+            out["credit"] = credit_check(h1, served, made)
+            out["ok"] = bool(out["ok"] and out["credit"]["ok"])
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
@@ -680,7 +710,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"),
+                         "committer": c.get("committer"), "receipts": c.get("receipts"),
+                         "credit": {k: (c.get("credit") or {}).get(k) for k in ("ok", "lines", "units", "s")},
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
                                     and all(v["refused"] for v in negs.values())
                                     and len(negs) == len(negatives_of(layers)) * a.negatives)}
@@ -969,14 +1000,16 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
     (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
-    the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
+    leaves a row past K = 4096). ``tied`` when none refuses."""
     from verity.core.protocols.pouw import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
+    rows = CR.table_rows(layout, len(rounds), CR._prefix(raw)) if why is None and isinstance(rounds, list) else None
     out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
-                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+                           "a_link": CR._a_link(rounds, entries, len(ev["calls"]), rows), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
     out["commit_values"] = len(got[1]) if got else None
@@ -1078,10 +1111,13 @@ def producer() -> Any:
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
     `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
-    on the GPU), keeping the first block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`."""
+    on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
+    block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
+    v1's or J10-R's (``--j10r``)."""
     P = producer()
-    made = P.Receipts(served, h1, P.Units(so), weight=lambda c: layers[c.layer].weight,
-                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1))
+    kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
+    made = P.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
+                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
@@ -1099,6 +1135,30 @@ def receipts_check(made: Any) -> dict[str, Any]:
     return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
             "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
             "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
+
+
+def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
+    """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
+    on, the drawn units the first and last of each kept call (`receipts_producer`'s: the first block's linears at step 0
+    and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
+    (`pouw_h1_credit.NEGATIVES`) at the first of them."""
+    from tests.protocol_options import pouw_h1_credit as PC
+    from verity.core.protocols.pouw import credit as CR
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    t0 = time.monotonic()
+    w = PC.of_run(h1, served)
+    units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
+    got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
+                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
+    got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
+    got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
+                      if e["value"].startswith(f"{w.prefix}b/")]
+    got["kept"] = [{"call": c, "k": w.k_of(c), "units": CR.call_work(w.layout)[c][0]} for c in sorted(made.kept)]
+    print(f"[fill] credit weights {json.dumps(got['weights'])} kept {json.dumps(got['kept'])}", flush=True)
+    for line in got["lines"]:
+        print(f"[fill] {line}", flush=True)
+    print(f"POUW-H1-CREDIT {'OK' if got['ok'] else 'FAIL'} units={len(units)} s={got['s']}", flush=True)
+    return got
 
 
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
@@ -1300,7 +1360,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--receipts", metavar="SO",
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
-                         "first block's linears' calls at step 0 and the last step held to h1tile.reference")
+                         "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
+                         "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+    ap.add_argument("--j10r", action="store_true",
+                    help="fill with --served: declare the period's window Program over J10-R's tile unit "
+                         "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "
+                         "receipts and public rows are J10-R's; v1's unit otherwise")
     ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
                          "of pouw_h1.FILL's 64,16,64,18")
@@ -1308,6 +1373,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--credit", action="store_true",
+                    help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
+                         "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
                     help="fill with --served: profile each served window's registration (Served.commit) and write its "
                          "functions by cumulative time to <window out>/register-profile.txt")
@@ -1321,10 +1391,14 @@ def main(argv: list[str] | None = None) -> int:
     if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
+    if a.j10r and not (a.served and a.workload == "fill"):
+        ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
+    if a.credit and not (a.commit and a.receipts):
+        ap.error("--credit is --commit's, with --receipts (a window's receipt tables are what its statements' o0 reads)")
     if a.declare and (a.workload != "fill" or len(a.declare) != 4):
         ap.error("--declare is the fill workload's, SLOTS,CAP,T,S")
     if a.close_from:

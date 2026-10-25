@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
 spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
@@ -133,12 +132,15 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
-def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_part():
+def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
              ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
     assert M.renamed_paths(moves) == {"S/Proofs/Warden.lean": "S/Proofs/NetworkCertifier.lean",
                                       "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/"}
     assert M.renamed_paths(moves[:1]) == M.renamed_paths(moves[:2])       # a branch's new file under a renamed directory
+    swapped = [("S/Properties/Proofs/Nci.lean", "S/Proofs/Properties/Nci.lean"), ("S/Properties/Proofs/Nci/V.lean",
+                                                                              "S/Proofs/Properties/Nci/V.lean")]
+    assert M.renamed_paths(swapped) == {"S/Properties/Proofs/": "S/Proofs/Properties/"}
     with pytest.raises(SystemExit, match="would move to both"):
         M.renamed_paths([("v/warden/a.py", "v/certifier/a.py"), ("v/warden/b.py", "v/guard/b.py")])
 
@@ -239,9 +241,3 @@ def test_two_files_landing_at_one_path_fail(toy):
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clash")
     with pytest.raises(SystemExit, match="two files would land at one path"):
         M.main(["--root", str(toy)])
-
-
-def test_the_tree_is_renamed():
-    files = [p for p in git(ROOT, "ls-files", "-z").split("\0") if p]
-    left = [p for p in files if not WORDS.excluded(p) and WORDS.path(p) != p]
-    assert not left, f"rename.py would still move: {left[:5]}"

@@ -48,8 +48,9 @@ class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
     on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), its SHA-512
-    compressions a second (the sketch's term), and the read ceilings of its own disks and of its boundary links
-    (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
+    compressions a second and the outside-compute factor F over them (the sketch's term, `timing.SKETCH_OUTSIDE`: the
+    prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
+    its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
@@ -69,6 +70,7 @@ class Node:
     link_burst_bytes: float = 0.0
     gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
     host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
+    sketch_outside: int = timing.SKETCH_OUTSIDE
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
@@ -76,6 +78,8 @@ class Node:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
+        if type(self.sketch_outside) is not int or self.sketch_outside < 1:
+            raise ValueError("sketch_outside, the outside-compute factor F, is a positive integer")
         for name in ("sha512_per_s", "disk_bytes_per_s", "link_bytes_per_s", "rebuild_burst_bytes",
                      "disk_burst_bytes", "link_burst_bytes"):
             _rate(getattr(self, name), name)
@@ -87,7 +91,7 @@ class Node:
     @classmethod
     def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
-               link_burst_bytes: float | None = None) -> Node:
+               link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
         a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
@@ -98,7 +102,7 @@ class Node:
         link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
                    timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S)
+                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
@@ -112,17 +116,23 @@ class Node:
                 "host_write_bytes_per_s": self.host_write_bytes_per_s, "link_burst_bytes": self.link_burst_bytes,
                 "link_bytes_per_s": self.link_bytes_per_s, "read_bytes_per_s": self.read_bytes_per_s,
                 "rebuild_burst_bytes": self.rebuild_burst_bytes, "sha512_per_s": self.sha512_per_s,
-                "spec_bytes_per_s": self.spec_bytes_per_s, "squarings_per_s": dict(self.squarings_per_s)}
+                "sketch_outside": self.sketch_outside, "spec_bytes_per_s": self.spec_bytes_per_s,
+                "squarings_per_s": dict(self.squarings_per_s)}
 
 
 def sketch(record: audit.Record, node: Node) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
-    compression the node could make over the span a guess or a key (`timing.sketch_failure`); 0 for another receipt
-    kind."""
+    compression the prover could make over the span a guess or a key: Q = F·C, C the node's over the span and F its
+    `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind."""
     if record.receipt != receipts.SKETCH_SHA512:
         return 0.0
-    compressions = math.ceil(node.sha512_per_s * record.span_ns / 1e9)
-    return float(timing.sketch_failure(compressions, record.passes, record.rows, blocks=record.blocks))
+    return float(timing.sketch_failure(compressions(record, node), record.passes, record.rows, blocks=record.blocks,
+                                       outside=node.sketch_outside))
+
+
+def compressions(record: audit.Record, node: Node) -> int:
+    """C, the node's SHA-512 compressions over the record's span, at its stated rate."""
+    return math.ceil(node.sha512_per_s * record.span_ns / 1e9)
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
