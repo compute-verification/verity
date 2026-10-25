@@ -119,7 +119,7 @@ def SessionDrawsRecords : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
-    2 ≤ g → 1 ≤ params.minPasses → ∀ c, (drawnOf s (c * g)).isSome →
+    ∀ c, 2 ≤ g → 1 ≤ params.minPasses → (drawnOf s (c * g)).isSome →
       ∃ drawn, draws reg.digest c coins[params.windows + c]! params.samples (lengthsOf (drawRecords g s c)) =
           some drawn ∧
         ∀ k (hk : k < (drawRecords g s c).length),

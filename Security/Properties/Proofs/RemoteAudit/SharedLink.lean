@@ -548,7 +548,7 @@ theorem passCount_draw {g : Nat} {s : State}
 
 /-- **The session link** at `g ≥ 2` windows a draw. -/
 theorem sessionDrawsRecords : SessionDrawsRecords := by
-  intro g params reg coins appendCoins notBeforeNs events rs s h hg hm c hc
+  intro g params reg coins appendCoins notBeforeNs events rs s h c hg hm hc
   obtain ⟨⟨⟨hInv, -, -⟩, -⟩, -, hp, hr, hco, hdig, hL, hA⟩ :=
     srun_inv g (LinkInv g params reg coins) (fun _ _ _ _ hx he => linkInv_step hg hx he) _ events rs s
       (linkInv_init g params reg coins appendCoins notBeforeNs hm) h
