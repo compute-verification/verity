@@ -96,40 +96,72 @@ def test_a_head_the_prover_changed_fails_its_signed_digest_in_window_0_alone():
     assert sim.tie["source"] == "stand-in" and tuple(sim.tie["ingress"]) != n2.TIE_PINNED
 
 
-def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_else_its_log_as_a_stand_in(tmp_path):
+def _proxy_log(run, syncs=AT.SYNCS):
+    with gzip.open(run / "proxy.json.gz", "wt") as fh:
+        json.dump({"syncs": [[s.delta, str(s.rho)] for s in syncs]}, fh)
+
+
+def test_a_served_run_without_clocks_jsonl_is_refused_unless_the_stand_in_is_asked_for_and_then_labelled_one(tmp_path):
+    """`served_clocks` fails closed: a run without ``clocks.jsonl`` is refused even beside its certifier's proxy log,
+    and only ``--clock-stand-in`` (`stand_in`) takes `CertifierClocks`, the syncs that log holds for its link alone,
+    which the summary labels a stand-in; with neither file the flag is refused too. On the simulated link at T = 8
+    every window has its view under the log; a window whose logged sync isn't the one it declares is refused alone."""
+    sim, _ = _link(AT.T)
+    lw, (link, pairs, _) = sim.lw, sim.members["honest"]
+    egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
+    with pytest.raises(SystemExit, match="no stand-in clock source"):
+        n2.served_clocks(tmp_path, lw.link, stand_in=True)
+    _proxy_log(tmp_path)
+    with pytest.raises(SystemExit, match="no clocks.jsonl.*--clock-stand-in"):
+        n2.served_clocks(tmp_path, lw.link)
+    logged = n2.replace(lw, clock_certificates=None, **n2.served_clocks(tmp_path, lw.link, stand_in=True))
+    assert isinstance(logged.clocks, n2.CertifierClocks) and logged.clocks.syncs("another") == ()
+    label = n2.clocks_label(logged, AT.SYNCS)
+    assert label["source"] == "stand-in" and "--clock-stand-in" in label["by"] and label["as_declared"]
+    assert not n2.clocks_label(logged, AT.SYNCS[::-1])["as_declared"]
+    assert None not in n2.advised_refs(logged, link, egress, ingress)
+    off = n2.CertifierClocks(lw.link, (n2.replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
+    refs = n2.advised_refs(n2.replace(lw, clock_certificates=None, clocks=off), link, egress, ingress)
+    assert refs[0] is None and None not in refs[1:]
+
+
+def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_even_beside_a_log(tmp_path):
     """`served_clocks`, the --e2e link's clock source: the run's ``clocks.jsonl`` (the certifier's clock certificates,
-    `LinkWindows.clock_certificates`) when it has one, even beside a proxy log; else `CertifierClocks`, the syncs its
-    certifier logged (``proxy.json.gz``) for its link alone, labelled a stand-in; else no source, and the run is
-    refused. On the simulated link at T = 8, whose certifier signed every window's sync, every window has its view
-    under either source. Under the certificates, a window whose sync is wrongly signed (here window 0's, swapped after
-    signing) has no sync, and neither has any window after it. Under the log, a window whose logged sync isn't the one
-    it declares is refused alone."""
+    `LinkWindows.clock_certificates`), even beside a proxy log and with the stand-in asked for. On the simulated link at
+    T = 8, whose certifier signed every window's sync, every window has its view under them, and a window whose sync is
+    wrongly signed (here window 0's, swapped after signing) has no sync, nor has any window after it."""
     sim, _ = _link(AT.T)
     lw, (link, pairs, _) = sim.lw, sim.members["honest"]
     egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
     signed = tuple(lw.clock_certificates)
     assert sim.clocks["source"] == "signed" and sim.clocks["as_declared"] and len(signed) == len(pairs)
-    with pytest.raises(SystemExit, match="no clock source"):
-        n2.served_clocks(tmp_path, lw.link)
-    with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
-        json.dump({"syncs": [[s.delta, str(s.rho)] for s in AT.SYNCS]}, fh)
-    logged = n2.replace(lw, clock_certificates=None, **n2.served_clocks(tmp_path, lw.link))
-    assert isinstance(logged.clocks, n2.CertifierClocks) and logged.clocks.syncs("another") == ()
-    label = n2.clocks_label(logged, AT.SYNCS)
-    assert label["source"] == "stand-in" and "proxy.json.gz" in label["by"] and label["as_declared"]
-    assert not n2.clocks_label(logged, AT.SYNCS[::-1])["as_declared"]
-    assert None not in n2.advised_refs(logged, link, egress, ingress)
+    _proxy_log(tmp_path)
     (tmp_path / "clocks.jsonl").write_text("".join(json.dumps(n2.cs.clock_json(c)) + "\n" for c in signed))
-    read = n2.served_clocks(tmp_path, lw.link)
-    assert list(read) == ["clock_certificates"] and read["clock_certificates"] == signed
+    for stand_in in (False, True):
+        read = n2.served_clocks(tmp_path, lw.link, stand_in)
+        assert list(read) == ["clock_certificates"] and read["clock_certificates"] == signed
     again = n2.replace(lw, clock_certificates=read["clock_certificates"])
     assert n2.clocks_label(again, AT.SYNCS)["source"] == "signed"
     assert None not in n2.advised_refs(again, link, egress, ingress)
     forged = (n2.replace(signed[0], sync=AT.SYNCS[1]), *signed[1:])
     assert n2.advised_refs(n2.replace(lw, clock_certificates=forged), link, egress, ingress) == [None] * len(pairs)
-    off = n2.CertifierClocks(lw.link, (n2.replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
-    refs = n2.advised_refs(n2.replace(lw, clock_certificates=None, clocks=off), link, egress, ingress)
-    assert refs[0] is None and None not in refs[1:]
+
+
+def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_without_one(tmp_path):
+    """A run's ``clocks.jsonl`` that is there but isn't a regular file (a dangling symlink, a directory) is the
+    certifier's clock certificates, which can't be read, so the run is refused, the stand-in asked for or not; it is
+    never taken for a run without them, whose unsigned proxy log beside it could hold phase 11's δ = 0 (REDTEAM
+    phase 18)."""
+    _proxy_log(tmp_path, [n2.replace(s, delta=0) for s in AT.SYNCS])
+    (tmp_path / "clocks.jsonl").symlink_to(tmp_path / "gone" / "clocks.jsonl")
+    for stand_in in (False, True):
+        with pytest.raises(SystemExit, match="not a file of clock certificates"):
+            n2.served_clocks(tmp_path, AT.LINK, stand_in)
+    (tmp_path / "clocks.jsonl").unlink()
+    (tmp_path / "clocks.jsonl").mkdir()
+    for stand_in in (False, True):
+        with pytest.raises(SystemExit, match="not a file of clock certificates"):
+            n2.served_clocks(tmp_path, AT.LINK, stand_in)
 
 
 def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_and_releases_by_id():

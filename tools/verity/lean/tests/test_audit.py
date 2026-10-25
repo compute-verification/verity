@@ -1428,6 +1428,34 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
     assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
 
 
+def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
+    """A predicate under `claims.modules` that is also a named assumption (a claim a guarantee takes as a premise, as
+    `SampledLeakAccepted` takes `Claims.Sampling.KS`) keeps its `claims.witnesses` or `claims.not` entry, whose witnesses are
+    still checked, and needs none; an entry naming no predicate is stale, and a claim that is no assumption needs one."""
+    defs = [{"name": n, "module": "P.Claims", "kind": "def", "statement": False, "predicate": True}
+            for n in ["P.KS", "P.Within", "P.Other"]]
+    within = {"head": "P.Within", "defs": ["P.Within"], "refl": False, "assumed": False}
+    pins = {"P.t": fact(), "P.KS_fails": fact() | {"body": {"head": "P.KS", "negated": True}},
+            "P.KS_meets": fact() | {"body": {"head": "P.Within", "negated": False, "conclusion": [within], "absurd": False}}}
+    rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}},
+            "not": {"P.Within": "a decoder's bound, which the claims read", "P.Other": "a helper"}}
+    policy = {**POLICY, "assumptions": {**POLICY["assumptions"], "P.KS": {"owner": "@proofs"}, "P.Within": {"owner": "@proofs"}},
+              "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    f = facts(pins=pins, spec_definitions=defs)
+    assert A.claim_failures(policy, f) == []
+    assert A.claim_failures({**policy, "claims": {**rule, "not": {**rule["not"], "P.Gone": "moved"}}}, f) == [
+        "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
+    assert A.claim_failures({**policy, "claims": {**rule, "witnesses": {}, "not": {"P.Other": "a helper"}}}, f) == []
+    assert A.claim_failures({**policy, "claims": {**rule, "not": {"P.Within": rule["not"]["P.Within"]}}}, f) == [
+        "claims: P.Other (P.Claims) is a claim definition with no witnesses: name its `P.Other_fails` (a theorem that it "
+        "is false at a toy instance) and `P.Other_meets` (its checkable antecedents hold at each deployed record) under "
+        "`claims.witnesses`, or list it under `claims.not` with the reason it is no claim"]
+    swapped = {**rule, "witnesses": {"P.KS": {"fails": "P.KS_meets", "meets": ["P.KS_meets"]}}}
+    assert A.claim_failures({**policy, "claims": swapped}, f) == [
+        "claims: P.KS_meets does not state that P.KS fails: past its ∀ and ∃ binders its statement must be `¬ P.KS …`, "
+        "and it is P.Within …"]
+
+
 def test_a_meets_witness_says_something_about_the_deployment():
     """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
     hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every

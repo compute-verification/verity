@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 import torch
 
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SRW
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import cli
@@ -276,11 +277,11 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 block: int | None = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
@@ -492,3 +493,85 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
     assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
     assert "split count" in err["message"] and ok == 200
     assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
+
+
+# ---------------------------------------------------------------------------------------------------------------- served rows
+
+ENGINE = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 512, "num_gpu_blocks": 64, "block_size": 16}
+
+
+def served_statics(**size_class: int) -> dict:
+    return sc.served_statics(ENGINE, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6, **size_class})
+
+
+def private(out: Path, w: int) -> dict:
+    return json.loads((out / "served_rows" / f"w{w}.json").read_text())
+
+
+def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str, priv: dict):
+    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]])
+
+
+def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict], list[dict], list[dict]]:
+    bodies = [dict(CERTIFIER_BODY, prompt=[128000, 10 + i, 20 + i], max_tokens=3 + i, min_tokens=3 + i) for i in range(4)]
+    with Serving(out, window_steps=4, served=statics, marks=marks) as s:
+        serve_concurrently(s, bodies)
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3, 4]))[0] == 200
+    return records(out, "windows.jsonl"), records(out, "requests.jsonl"), records(out, "step_trace.jsonl")
+
+
+def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
+    """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
+    line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
+    requests' arrival ids, as `served_rows.register` commits them, each slice window's registered row the slice's ``srv``
+    row, its b‖c a leaf of the published root. The record holds no row or salt."""
+    statics = served_statics()
+    closed: list[dict] = []
+
+    def marks(w: int, event: str) -> None:
+        if event == "close":
+            line = records(tmp_path, "windows.jsonl")[-1]
+            assert line["window"] == w
+            closed.append(line)
+
+    wins, reqs, trace = served_run(tmp_path, statics, marks)
+    full = [w for w in wins if not w.get("empty")]
+    assert len(full) > 1 and all(w["passed"] for w in wins) and [w["window"] for w in closed] == [w["window"] for w in wins]
+    assert all("served_rows" in w for w in closed if not w.get("empty"))
+    assert sorted(r["arrival"] for r in reqs) == list(range(len(reqs)))
+    arrival = {rid: r["arrival"] for r in reqs for rid in r["runner_ids"]}
+    S = SimpleNamespace(**statics)
+    for w in full:
+        rec, priv = w["served_rows"], private(tmp_path, w["window"])
+        assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
+        assert rec["count"] == -(-w["steps"] // S.P)
+        by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
+        ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
+        assert priv["ids"] == ids
+        served, session = recommit(statics, by_step, ids, w["steps"], w["run_root"], priv)
+        assert {k: v for k, v in rec.items() if k != "statics"} == served.record()
+        for k, win in enumerate(session):
+            assert served.registration.rows[k] == SRW._row(CS.srv_row(S, win))[0]
+            assert SRW.leaf_ok(rec, bytes.fromhex(w["run_root"]), k, served.bc(k), served.registration.open(k).path)
+        text = json.dumps(w)
+        assert not any(s in text for s in priv["salts"])
+
+
+def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
+    """An arrival id wider than the class's IW can't be packed: the window that holds it fails, named, and the run fails."""
+    wins, _, _ = served_run(tmp_path, served_statics(IW=1))
+    bad = [w for w in wins if "error" in w.get("served_rows", {})]
+    assert bad and all(not w["passed"] and "doesn't fit its 1 bits" in w["served_rows"]["error"] for w in bad)
+
+
+def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
+    def opts(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--max-num-seqs", "8", "--window-steps", "16", *more],
+                         environ={})
+
+    assert so.served_class(opts()) == {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 16, "IW": 16}
+    assert so.served_class(opts("--served-rows-class", '{"P": 7, "IW": 10}'))["P"] == 7
+    with pytest.raises(cli.UsageError, match="a JSON object of"):
+        so.served_class(opts("--served-rows-class", '{"X": 1}'))
+    with pytest.raises(cli.UsageError, match="under --max-num-seqs 8"):
+        so.preflight(opts("--served-rows-class", '{"R": 4}'), which=lambda _: "/v/bin/ninja")

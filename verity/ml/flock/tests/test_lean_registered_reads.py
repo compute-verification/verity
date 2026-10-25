@@ -183,7 +183,7 @@ def test_each_table_row_opens_the_registered_root_at_its_position(staged):
 def test_a_table_of_two_registrations_rows_opens_no_one_root(staged):
     """A table whose rows are two registrations' of the value (two row tables of a window, each row under its own salt with
     a true path to its own root) is refused whichever one root the verifier holds: a port is read against one registered
-    root, so a prover that builds a chunk over two row tables can't have it verified (`row_tables.registered_reads`)."""
+    root, so a prover that builds a chunk over two row tables can't have it verified (`tables.registered_reads`)."""
     positions, _ = G.table(POSITIONS)
     other = G.Registered.commit(P.program_digest(staged.program), VALUE,
                                 np.random.default_rng(20261024).integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
