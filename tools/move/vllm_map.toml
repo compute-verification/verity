@@ -38,6 +38,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_commit.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_handoff.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_hooks.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py"
+"integrations/vllm/verity_vllm/protocol_options/pouw_h1_kept.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py"
 # not on main yet: #3611's, #3684's, #3574's, #3509's, #3707's and #3590's branches add it, and its restack needs the row
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_prover.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py"
@@ -133,6 +134,7 @@ paths = []
 "verity_vllm.protocol_options.pouw_h1_commit" = "verity_vllm.protocols.pouw.h1.commit"
 "verity_vllm.protocol_options.pouw_h1_handoff" = "verity_vllm.protocols.pouw.h1.handoff"
 "verity_vllm.protocol_options.pouw_h1_hooks" = "verity_vllm.protocols.pouw.h1.hooks"
+"verity_vllm.protocol_options.pouw_h1_kept" = "verity_vllm.protocols.pouw.h1.kept"
 "verity_vllm.protocol_options.pouw_h1_live" = "verity_vllm.protocols.pouw.h1.live"
 "verity_vllm.protocol_options.pouw_h1_prover" = "verity_vllm.protocols.pouw.h1.prover"
 "verity_vllm.protocol_options.pouw_h1_ranks" = "verity_vllm.protocols.pouw.h1.ranks"
