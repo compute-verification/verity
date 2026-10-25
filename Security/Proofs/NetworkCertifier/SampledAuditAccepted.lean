@@ -470,8 +470,9 @@ theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay :
   obtain rfl := Option.some.inj hP₁
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
   refine ⟨s, P, hs, hP, hM, disjoint_allSlots hδ hM,
-    (traceVal s.prog (w.val H D.commit s), heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)),
-    fun g b h => faultyGate_of_heldAdv h, fun op o hcar hcov => ?_⟩
+    heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s),
+    fun g b h => faultyGate_of_heldAdv h, fun g h => by
+      rw [heldAdv_of (ref := w.val H D.commit s) h]; exact Option.some_ne_none _, fun op o hcar hcov => ?_⟩
   exact accepted_of hin.1 hin.2.1 hfit ι hι hcar hcov
 
 end NetTiming.SampledAuditProof
