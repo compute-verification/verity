@@ -1366,6 +1366,9 @@
    "assumptions": [],
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c"
   },
+  "Properties.Pouw.LiveSalt.acceptMeans": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.LiveSalt.epochRootBinding": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.LiveSalt.epochRootBinding : Properties.Pouw.LiveSalt.EpochRootBinding"],
@@ -2876,6 +2879,10 @@
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.oneRoot": {
+    "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.acceptMeans": {
     "function": "PouwCheck.liveSaltCheck",
     "outcome": "accept"
    },
