@@ -58,8 +58,8 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     c, _s, _got = committed(monkeypatch)
     mine = c.window
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}
-    ports, layer, live = CS.expected_ports(mine), CS.leaf_layer(publics), dict(c.step_roots)
-    assert {m.port(CS.LINKED) for m in mine.members if m.links} and ports[CS.TABLE_PORT]["leaves"] == len(mine.steps) == 2
+    ports, layer, live = CS.expected_ports(mine), CS.leaf_layer(publics), dict(c.segment_roots)
+    assert {m.port(CS.LINKED) for m in mine.members if m.links} and ports[CS.TABLE_PORT]["leaves"] == len(mine.segments) == 2
     spec = _spec(mine)
     held = []
 

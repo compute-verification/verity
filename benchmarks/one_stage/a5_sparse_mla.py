@@ -32,7 +32,7 @@ import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
-from verity_vllm.commit import serving_rows as CS  # noqa: E402
+from verity_vllm.commit import index as IX, serving_rows as CS  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/sparse-mla-split-stand-in/v1").hexdigest()
@@ -46,7 +46,7 @@ def commit(out: Path) -> CS.Window:
     w = replace(TS.window(s, law=D.parse_law(RULE)), run=f"{ROOT}/rank0")
     got = TS.read(s, w.members)
     c = CS.commit(w, [g for g, _e in got])
-    CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, CS.index_doc(w.members, [e for _g, e in got], w.run),
+    CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
              kind="stand-in", registrar=R)
     return w
 

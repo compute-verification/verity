@@ -22,6 +22,7 @@ opening against its table's step root, with the rows and salts in the clear when
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,8 +35,41 @@ from verity.ml.commitments.merkle import CommitmentDomain
 
 from . import serving_rows as CS
 
-__all__ = ["StepRoots", "Table", "check_row_tables", "find", "of_dir", "of_registration", "opening", "registered_reads", "reported_reads",
-           "step_roots", "verify", "witness"]
+__all__ = ["COLUMNS", "StepRoots", "Table", "check_order", "check_row_tables", "find", "layer", "of_dir", "of_registration",
+           "opening", "registered_reads", "reported_reads", "row_table", "step_roots", "table_key", "verify", "witness"]
+
+_LAYER = re.compile(r"\.layers\.(\d+)\.")
+#: a row table row's key: its request, its token row and its program row
+COLUMNS = ("request", "token_row", "program_row")
+
+
+def table_key(op_path: str) -> tuple[int, str]:
+    """A table's place in its engine step: its layer (-1 for none), then its op_path."""
+    hit = _LAYER.search(op_path)
+    return (int(hit.group(1)) if hit else -1, op_path)
+
+
+def layer(op_path: str) -> int | None:
+    """``op_path``'s layer, or None."""
+    k = table_key(op_path)[0]
+    return None if k < 0 else k
+
+
+def row_table(engine_step: int, op_path: str, template: str, words: int, rows: Iterable[tuple[str, int, int]]) -> CS.RowTable:
+    """One int8 quantize output's row table: the token rows of one linear (``op_path``) at one engine step (the table's
+    segment), as its ``ScaledMmS8_v1`` rows read them (``words`` u16 words: the s8 codes, then the f32 scale), each row keyed
+    ``(request, token row, program row)``; its ``window.json`` entry names the step, layer and op_path."""
+    return CS.RowTable(int(engine_step), op_path, template, int(words), tuple((str(r), int(t), int(i)) for r, t, i in rows),
+                       (("engine_step", int(engine_step)), ("layer", layer(op_path)), ("op_path", op_path), ("columns", COLUMNS)))
+
+
+def check_order(tables: Sequence[CS.RowTable]) -> None:
+    """vLLM's canonical order, refused otherwise: tables by engine step, then ``table_key``; each table's rows by (request, token
+    row), each once."""
+    rising = lambda xs: all(a < b for a, b in zip(xs, xs[1:]))  # noqa: E731
+    if not rising([(t.segment, *table_key(t.name)) for t in tables]) or not all(rising([k[:2] for k in t.keys]) for t in tables):
+        raise ValueError("row tables go by engine step, layer and op_path (row_tables.table_key), each table's rows by request "
+                         "and token row, each once")
 
 
 @dataclass(frozen=True)
@@ -51,12 +85,12 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
                workers: int = 1) -> StepRoots:
     """Engine step ``engine_step``'s root, from its int8 quantize outputs once all are written: ``outputs[op_path] = (rows, codes,
     scales)``, ``rows[b]`` batch row ``b``'s ``(request, token row)``, ``codes`` the (B, K) s8 codes and ``scales`` the (B,) f32
-    scales (host copies).  Its tables go in ``serving_rows.table_key`` order, each table's rows by (request, token row), under
-    ``context`` (64 bytes: the live coin commitment's root) and salted by ``serving_rows.step_salts`` under ``key``, the run's row
-    key (32 bytes), which the window's commit takes again as ``row_salt_key``."""
-    order = sorted(outputs, key=CS.table_key)
+    scales (host copies).  Its tables go in ``table_key`` order, each table's rows by (request, token row), under ``context``
+    (64 bytes: the live coin commitment's root) and salted by ``serving_rows.segment_salts`` (the step is the segment) under
+    ``key``, the run's row key (32 bytes), which the window's commit takes again as ``row_salt_key``."""
+    order = sorted(outputs, key=table_key)
     rows, ys, domains = {}, {}, {}
-    ss = CS.step_salts(key, engine_step, sum(len(outputs[op][0]) for op in order))
+    ss = CS.segment_salts(key, engine_step, sum(len(outputs[op][0]) for op in order))
     at = 0
     for i, op in enumerate(order):
         ids, codes, scales = outputs[op]
@@ -104,19 +138,19 @@ class Table:
 
     @property
     def engine_step(self) -> int:
-        return self.spec.engine_step
+        return self.spec.segment
 
     @property
     def layer(self) -> int | None:
-        return self.spec.layer
+        return layer(self.spec.name)
 
     @property
     def op_path(self) -> str:
-        return self.spec.op_path
+        return self.spec.name
 
     def rank(self, request: str, token_row: int) -> int:
         """The leaf index of ``request``'s token row ``token_row``."""
-        return self.spec.rank(request, token_row)
+        return self.spec.rank(str(request), int(token_row))
 
 
 def of_registration(window: CS.Window, rec: Mapping[str, Any], step_roots: Mapping[int, bytes]) -> list[Table]:
@@ -125,13 +159,14 @@ def of_registration(window: CS.Window, rec: Mapping[str, Any], step_roots: Mappi
     count and domain (``registration.check``'s R3) and its root is the tree over those step roots."""
     r = {x["port"]: x for x in rec["roots"]}.get(CS.TABLE_PORT)
     dom = window.tables_domain
-    if r is None or r["leaves"] != len(window.steps) or r["domain"] != dom.domain_id.hex():
-        raise ValueError(f"the registration does not hold the window's {CS.TABLE_PORT} port ({len(window.steps)} steps, its served domain)")
-    recorded = [step_roots.get(s) for s, _ in window.steps]
+    if r is None or r["leaves"] != len(window.segments) or r["domain"] != dom.domain_id.hex():
+        raise ValueError(f"the registration does not hold the window's {CS.TABLE_PORT} port ({len(window.segments)} steps, its "
+                         "window domain)")
+    recorded = [step_roots.get(s) for s, _ in window.segments]
     if any(x is None for x in recorded) or RT.RootTree(dom, recorded).root.hex() != r["root"]:
         raise ValueError(f"the registration's {CS.TABLE_PORT} root is not the tree over the step roots serving recorded")
-    ctx, count = bytes.fromhex(window.context), {s: len(ks) for s, ks in window.steps}
-    return [Table(t, window.table_domain(k), k, window.places[k], count[t.engine_step], ctx, step_roots[t.engine_step])
+    ctx, count = bytes.fromhex(window.context), {s: len(ks) for s, ks in window.segments}
+    return [Table(t, window.table_domain(k), k, window.places[k], count[t.segment], ctx, step_roots[t.segment])
             for k, t in enumerate(window.row_tables)]
 
 
@@ -156,15 +191,16 @@ def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Map
         return bad
     want = roots.get(CS.TABLE_PORT)
     want = bytes.fromhex(want) if isinstance(want, str) else want
-    steps = {s: window.step_root(s, [table_roots[k] for k in ks]) for s, ks in window.steps if all(k in table_roots for k in ks)}
+    steps = {s: window.segment_root(s, [table_roots[k] for k in ks]) for s, ks in window.segments
+             if all(k in table_roots for k in ks)}
     if step_roots is not None:
         for s, root in steps.items():
             if root != step_roots.get(s):
                 bad[f"{CS.TABLE_PORT}/{s}"] = "the members' strings are not the step root serving recorded"
-        recorded = [step_roots.get(s) for s, _ in window.steps]
+        recorded = [step_roots.get(s) for s, _ in window.segments]
         if any(r is None for r in recorded) or RT.RootTree(window.tables_domain, recorded).root != want:
             bad[CS.TABLE_PORT] = "its root is not the tree over the step roots serving recorded"
-    elif len(steps) < len(window.steps):
+    elif len(steps) < len(window.segments):
         bad[CS.TABLE_PORT] = "a step whose tables do not hold"
     elif RT.RootTree(window.tables_domain, list(steps.values())).root != want:
         bad[CS.TABLE_PORT] = "the members' strings are not its root's rows"
@@ -244,11 +280,11 @@ def of_dir(window_dir: str | Path) -> list[Table]:
     st = win["row_table_steps"]
     ctx, steps = bytes.fromhex(st["context"]), {int(e["engine_step"]): e for e in st["steps"]}
     for e in win["row_tables"]:
-        spec = CS.RowTable(int(e["engine_step"]), e["op_path"], e["template"], int(e["words"]), tuple((str(a), int(b), int(c)) for a, b, c in e["rows"]))
-        s, i = steps[spec.engine_step], int(e["step_index"])
-        dom = RT.table_domain(ctx, spec.engine_step, i, spec.n)
+        spec = row_table(e["engine_step"], e["op_path"], e["template"], e["words"], e["rows"])
+        s, i = steps[spec.segment], int(e["step_index"])
+        dom = RT.table_domain(ctx, spec.segment, i, spec.n)
         if dom.domain_id.hex() != e["domain"] or spec.port != e["port"] or s["tables"][i] != int(e["k"]):
-            raise ValueError(f"row table {e['k']}: not table {i} of step {spec.engine_step} under its domain {e['domain'][:16]}")
+            raise ValueError(f"row table {e['k']}: not table {i} of step {spec.segment} under its domain {e['domain'][:16]}")
         out.append(Table(spec, dom, int(e["k"]), i, len(s["tables"]), ctx, bytes.fromhex(s["root"])))
     return out
 
