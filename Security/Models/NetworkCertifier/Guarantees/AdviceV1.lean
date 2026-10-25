@@ -6,7 +6,7 @@ import Models.NetworkCertifier.Guarantees.AdviceString
 
 `Guarantees.AdviceString`'s two wire bounds with the advice string advice v1's decision streams (`AdviceV1.Streams`)
 and its charge (`AdviceV1.bits`, `ChargeCount_v1{N}`'s count). `BitsCount` is not a premise: advice v1's charge meets it
-under any registered book (`EncardChargedLe`, `Definitions/NetworkCertifier/Guarantees/AdviceV1`). The premises left
+under any registered book (`EncardChargedLe`, `Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft`). The premises left
 are the wire's (W2, J) and the compiler's (precommitted, deterministic).
 
 The scope and the one hypothesis left are `EncardChargedLe`'s: the windows are decision-only (their four counts sent as
