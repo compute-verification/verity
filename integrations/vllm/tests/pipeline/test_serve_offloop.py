@@ -148,6 +148,32 @@ def test_lent_blocks_come_back_free_at_the_reset_after_their_restore(host_blocks
     assert any(f is lent[0] for f in pool.free) and len(pool.free) == 2
 
 
+def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monkeypatch):
+    from verity_vllm.commit.committer import native_collect as NC
+
+    got: list[list[int]] = []
+    fake = SimpleNamespace(reserve=lambda sizes: got.append(sizes) or len(sizes) * ss.WARM_BLOCK)
+    t = iter([1.0, 3.5])
+    assert ss.warm_pool(SimpleNamespace(pool=fake), 2.5, clock=lambda: next(t)) == {"gb": 3.2, "blocks": 3, "seconds": 2.5}
+    assert got == [[ss.WARM_BLOCK] * 3] and ss.WARM_BLOCK >= NC.WINDOW_MB << 20
+    assert ss.warm_pool(SimpleNamespace(pool=fake), 0) is None and ss.warm_pool(SimpleNamespace(), 8) is None
+    with pytest.raises(UsageError, match="--seal-warm-gb"):
+        so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--seal-warm-gb", "-1"], environ={}))
+
+    monkeypatch.setattr(ss, "WARM_BLOCK", 1 << 20)
+    monkeypatch.setattr(PP, "_shared_map", lambda n: (torch.zeros(n, dtype=torch.uint8), None))
+    monkeypatch.setattr(PP, "_populate", lambda *_a: True)
+    monkeypatch.setattr(PP, "_register", lambda *_a: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    pool = PP.PinnedPool(1 << 20, exact=True, populate_threads=1)
+    assert ss.warm_pool(SimpleNamespace(pool=pool), 3 * (1 << 20) / ss.GB)["blocks"] == 3 and pool.allocs == 3
+    pool.reset()
+    for n in (1 << 18, 1 << 19, 1 << 20, 1 << 18):
+        pool.take(n)
+    assert pool.allocs == 3 and len(pool.in_use) == 3, "the first window's takes are served from the warmed blocks"
+    pool.mode = None
+
+
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
     first, go, done = threading.Event(), threading.Event(), threading.Event()
     sealer = ss.Sealer(15, clock=lambda: (go.set(), 0.0)[1] if first.is_set() else 0.0)

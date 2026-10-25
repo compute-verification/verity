@@ -3,7 +3,7 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
         [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
-        [--no-seal-off-loop] [--seal-hold-gb 64] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
+        [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
@@ -54,7 +54,8 @@ and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the 
 committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
 ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. The
 seals run on a thread of their own (`serve_seal.Sealer`) while the engine serves the next window; a close waits only while
-the windows awaiting their seal hold ``--seal-hold-gb`` of committed values. A window closes once its steps have committed
+the windows awaiting their seal hold ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
+``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
@@ -141,6 +142,10 @@ class Options:
     seal_hold_gb: float = option("--seal-hold-gb", type=float, default=64.0,
                                  help="the committed GB the windows awaiting their seal may hold (pinned host memory) before a "
                                       "close waits for room")
+    seal_warm_gb: float = option("--seal-warm-gb", type=float, default=0.0,
+                                 help="grow the committer's pinned pool by this many GB before serving (serve_seal.warm_pool), so "
+                                      "the held windows and the open one find blocks ready (about --seal-hold-gb plus --window-gb); "
+                                      "0: the pool grows on the engine loop as windows need it")
     window_gb: float = option("--window-gb", type=float, default=32.0,
                               help="close a Commit window once its steps have committed this many GB, which bounds its sealed "
                                    "bundle (0: no bound)")
@@ -536,8 +541,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1 or opts.admit_hold_ms < 1:
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
-    if min(opts.window_gb, opts.seal_hold_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
-        raise UsageError("--window-gb, --seal-hold-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+        raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
@@ -587,8 +592,9 @@ def main(opts: Options) -> int:
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
-    windows = sealer = None
+    windows = sealer = warmed = None
     if com is not None:
+        warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
@@ -628,7 +634,7 @@ def main(opts: Options) -> int:
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
-              "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None,
+              "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
