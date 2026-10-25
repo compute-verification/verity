@@ -1,0 +1,11 @@
+# The H200 demo's sequence slots and KV cache (slots.py) and their device check (check_slots.py), which the step driver
+# calls (P-CMP-1, CMP-105). Not a package: its tests run in the workspace environment, with this directory on their path.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: the commitment references the stand-in commit is checked against (hm96, rowleaf, merkle) and the window
+# helpers it reuses (`verity.ml.windows`: the hiding leaves and ChaCha20 salts).
+inputs = ["verity"]
