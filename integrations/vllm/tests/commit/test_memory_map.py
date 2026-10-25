@@ -7,6 +7,7 @@ MLA's latent page, and 1152-byte latent rows lay out 18 blocks a page of 64 slot
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 
 import pytest
@@ -17,7 +18,9 @@ from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
-from verity.ml.circuits.program import is_input
+from verity.ml.circuits.census import step_of
+from verity.ml.circuits.program import Program, is_input
+from verity.ml.circuits.requirement import from_census
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.predict.build import build_program
 
@@ -69,9 +72,36 @@ def _engine(reqs, tables, bs=4, payload=_payload):
 
 
 @pytest.fixture(scope="module")
-def reqs() -> dict[str, MM.Rows]:
-    return {"r0": MM.rows(build_program(_phi(WIDE), "request", LP=4, T=5).program),
-            "r1": MM.rows(build_program(_phi(WIDE), "request", LP=4, T=1).program)}
+def r0() -> Program:
+    return build_program(_phi(WIDE), "request", LP=4, T=5).program
+
+
+@pytest.fixture(scope="module")
+def reqs(r0) -> dict[str, MM.Rows]:
+    return {"r0": MM.rows(r0), "r1": MM.rows(build_program(_phi(WIDE), "request", LP=4, T=1).program)}
+
+
+def selected_at(c: dict, values: set[int], step: int) -> dict:
+    """Census `c` with each Call of `step` that reads one of `values` selecting it instead, a gather's candidate (the
+    census's `selects`, a new entry's `gates` and `bits` a stand-in's, which the requirement doesn't read)."""
+    c = copy.deepcopy(c)
+    at, reads, sel = step_of(c), c["values"]["reads"], c["selects"]
+    pools = {k: set(vs) for k, vs in zip(sel["call"], sel["values"])}
+    for x in values:
+        for k in [k for k in reads[x] if at(k) == step]:
+            reads[x].remove(k)
+            pools.setdefault(k, set()).add(x)
+    old, ks = dict(zip(sel["call"], zip(sel["gates"], sel["bits"]))), sorted(pools)
+    c["selects"] = {"call": ks, "gates": [old.get(k, (1, 0))[0] for k in ks], "bits": [old.get(k, (1, 0))[1] for k in ks],
+                    "values": [sorted(pools[k]) for k in ks]}
+    return c
+
+
+def census_values(program: Program, c: dict, row: MM.Row) -> set[int]:
+    """The census values a row's leaves are."""
+    inputs, v = sum(1 for nd in program.root.body.nodes if is_input(nd.fn)), c["values"]
+    return {x for _, j, lo, hi in row.group for x, k in enumerate(v["producer"])
+            if k == j + inputs and v["lo"][x] < hi and v["hi"][x] > lo}
 
 
 def test_rows_are_the_programs_kv(reqs):
@@ -124,6 +154,23 @@ def test_a_complete_block_is_held_while_its_rows_are_live(reqs):
                         assert (_slot(layer, p, plane) in held) == live, (t, r, q, layer, plane)
         held -= set(by[t].freed) if t in by else set()
         held |= {w.slot for w in by[t].written} if t in by else set()
+
+
+def test_a_block_a_gather_may_select_is_freed_after_the_last_step_that_may_select_it(r0, reqs):
+    """memory-map/v1 frees a block at its rows' last structural reader, a gather that may select one included: with r0's
+    last step, 5, selecting its first page's rows instead of reading them (`selected_at`, a stand-in: no served Program
+    gathers its KV), step 4 is their last use, but their `last` and the record are as before, the page freed after step 5
+    whichever rows step 5 selected."""
+    c = MM.census_of(r0)
+    first = {x for kv in reqs["r0"].layers for plane in kv for row in plane[:4] for x in census_values(r0, c, row)}
+    picked = selected_at(c, first, 5)
+    req = from_census(picked)
+    assert first and first <= req.upper[5] and not first & req.uses[5] and first <= req.uses[4]
+    assert {req.last[x] for x in first} == {5} and MM.rows(r0, picked) == reqs["r0"]
+    record = MM.record({**reqs, "r0": MM.rows(r0, picked)}, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    assert record == MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    page1 = {_slot(layer, 1, plane) for layer in range(2) for plane in range(2)}
+    assert [s.step for s in record[1] if page1 & set(s.freed)] == [5]
 
 
 def test_the_pages_are_the_ones_the_engine_wrote(reqs):

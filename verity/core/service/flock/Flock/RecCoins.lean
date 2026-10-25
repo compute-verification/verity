@@ -642,10 +642,11 @@ def CAP_ZERO_VALUE : String := "rec-cap-zero"
 
 /-- **RecCap holds every node of level `l`'s committed tops at a fixed row** (`VStar.capName l N`, `VStar.capUnit`): the
 reads file's `top` reads `rec-top-L<l>`, a registration of `N` rows of `VStar.CAP_TOP_WORDS` words, instance `i` reading
-row `i` whatever the coins draw, and its `out` is V*'s `N` zero rows of `VStar.CAP_OUT_WORDS` words under `zeroSalt`
-(`checkRows` at `rec-cap-zero`), so every held row's words past its node are zero. `RecVStar.checkTopRows` holds each
-table row of `top` to its node of `root_B` or of the reps' level-`l` tops (`RecVStar.topRow`), and `RecVStar.checkShared`
-holds `top` and level `l`'s `out` to one registration. -/
+row `i` whatever the coins draw, its table labels its instances `0` to `n - 1` in order (`Registered.unitIndices`), as
+V*'s stage writes it, so instance `i` reads node `i`, and its `out` is V*'s `N` zero rows of `VStar.CAP_OUT_WORDS` words
+under `zeroSalt` (`checkRows` at `rec-cap-zero`), so every held row's words past its node are zero.
+`RecVStar.checkTopRows` holds each table row of `top` to its node of `root_B` or of the reps' level-`l` tops
+(`RecVStar.topRow`), and `RecVStar.checkShared` holds `top` and level `l`'s `out` to one registration. -/
 def checkCap (c : Circuit) (pub : Public) (own : Array Registered.Port) (l N : Nat) : V Unit := do
   let unit := c.unit.name
   let some reg := own.find? (·.name == "top")
@@ -657,6 +658,10 @@ def checkCap (c : Circuit) (pub : Public) (own : Array Registered.Port) (l N : N
       s!"{N} of {VStar.CAP_TOP_WORDS}")
   if reg.reads != (Array.range N).map some then
     throw s!"rec-coins: {unit}: {reg.value}: the reads file does not read node i of the cap in instance i"
+  let idx ← Registered.unitIndices pub
+  if idx != Array.range pub.n then
+    throw (s!"rec-coins: {unit}: its instances are labelled {idx}, not 0 to {pub.n} - 1 in order, so instance i " ++
+      "would not read node i")
   checkRows (fun _ => zeroSalt CAP_ZERO_VALUE) c pub own "out" CAP_ZERO_VALUE (zeroRows N VStar.CAP_OUT_WORDS)
     fun i => s!"node {i}'s zero outputs"
 
@@ -665,7 +670,8 @@ def checkCap (c : Circuit) (pub : Public) (own : Array Registered.Port) (l N : N
 (`files`), candidate 3's besides the last three (`c3`), and its verifier-registered values are the ones the coins give
 (`checkOpen`, `checkResiduals`, `checkSparse`, `checkStackedLevel`, `checkOpening`); a `rec-cap/…` unit, which reads no
 coins, unless the verifier holds its registered reads and the inner session, as every other V* unit, and its reads hold
-the cap at fixed rows (`checkCap`, last, so no other unit's branch is behind it); any other unit passes. -/
+the cap at fixed rows (`checkCap`, last, so no other unit's branch is behind it); a `rec-cap/…` unit whose name is
+not `VStar.capName l N`'s (`VStar.capParams`) is refused; any other unit passes. -/
 def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source) (c3 : Option C3 := none) :
     V Unit := do
   let unit := st.c.unit.name
@@ -675,7 +681,8 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   let so := stackedParams unit
   let op := RecOpening.params unit
   let cap := VStar.capParams unit
-  if o.isNone && res.isNone && sp.isNone && so.isNone && op.isNone && cap.isNone then return
+  if o.isNone && res.isNone && sp.isNone && so.isNone && op.isNone && cap.isNone && !unit.startsWith "rec-cap/" then
+    return
   let some own := own
     | throw s!"rec-coins: {unit}: the verifier holds no registered reads (--registered): its coefficients would be the prover's"
   let needC3 : V C3 := match c3 with
@@ -693,7 +700,7 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   | _, some (m, k, cl, j) => checkResiduals inn st.c st.pub own m k cl j
   | none, none => match cap with
     | some (l, N) => checkCap st.c st.pub own l N
-    | none => pure ()
+    | none => throw s!"rec-coins: {unit}: a rec-cap/ unit not named rec-cap/n<N> or rec-cap/n<N>-l<l>"
 
 /-- A circuit-table level `l`'s `out` port in the reads file: level `l`'s tops `rec-top-L<l>` (`rec_outer.TopValue`),
 instance `i` (rep `i / q`'s opening `i % q`, `checkOpen`'s order) reading node `first + pos >>> H` of them, `pos` the

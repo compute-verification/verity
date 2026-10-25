@@ -25,6 +25,7 @@ import Flock.RecOpen
 import Flock.RecResiduals
 import Flock.RecSparse
 import Flock.RecOpening
+import Flock.SplitNL
 
 namespace Flock
 
@@ -61,6 +62,27 @@ def classOf (bytes : ByteArray) (head : String) (mj : Json) : V ByteArray := do
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
   return Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+
+/-- `classOf` with its hash in a task (`classOf_eq_task`), for `parseFastFrom`. Not inlined, for `parseFastFrom`'s
+reason. -/
+@[noinline] def classOfTask (bytes : ByteArray) (head : String) (mj : Json) : V (Task ByteArray) := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no section after META"
+  let m := match mj with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
+    | j => j
+  let c ← canon m
+  return Task.spawn fun _ => Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ c.toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+
+theorem classOf_eq_task (bytes : ByteArray) (head : String) (mj : Json) :
+    classOf bytes head mj = Task.get <$> classOfTask bytes head mj := by
+  unfold classOf classOfTask
+  split
+  · split
+    · dsimp only; cases canon _ <;> rfl
+    · rfl
+  · rfl
+
 def SALT_BYTES : Nat := 192
 def BC_BYTES : Nat := 128
 
@@ -729,15 +751,14 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   RecOpening.check c
   return c
 
-/-- `parseFast` with the file's digest from the task `sha`, read only for the circuit it returns. Not inlined: the
-compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, which here is the last. -/
-@[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
-    V Circuit := do
-  let text ← match String.fromUTF8? bytes with
-    | some s => pure s
-    | none => throw "circuit: not UTF-8"
-  let lines0 := (text.splitOn "\n").toArray
+/-- `parseFast` with the file's digest from the task `sha`, read only for the circuit it returns, and its lines and
+rows from the tasks `ts` (`SplitNL.splitTasks`). Not inlined: the compiler sinks a `Task.spawn` bound in a body down to
+the branch that reads it, which here is the last. -/
+@[noinline] def parseFastLines (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
+    (ts : List (Task (Array String × Array Net.Row))) : V Circuit := do
+  let lines0 := SplitNL.linesOf ts
+  let rows := SplitNL.rowsOf ts
   let lines := if lines0.back? == some "" then lines0.pop else lines0
   let head := (lines.getD 0 "").trimAsciiEnd.toString
   if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
@@ -756,8 +777,8 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
       let rule := (part.getObjValAs? String "rule").toOption.getD ""
       if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
         throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
-      classOf bytes head mj
-    else pure ByteArray.empty
+      classOfTask bytes head mj
+    else pure (Task.pure ByteArray.empty)
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
@@ -767,7 +788,7 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
     let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
     if at_ + 1 + n > lines.size then throw s!"circuit: {h[1]!} is truncated"
-    let net ← match Net.parsePar (lines.extract (at_ + 1) (at_ + 1 + n)) with
+    let net ← match Net.parseWith rows (at_ + 1) (lines.extract (at_ + 1) (at_ + 1 + n)) with
       | .ok v => pure v
       | .error e => throw s!"{h[1]!}: {e}"
     nets := nets.push (h[1]!, net)
@@ -877,7 +898,7 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha := sha.get, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
+                       shaNet, hmNet, classSha := classSha.get, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   HmNets.check c
@@ -887,7 +908,17 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
   RecOpening.check c
   return c
 
-/-- `parse` with each net's rows read in tasks (`Net.parsePar`) and the file hashed in a task beside them,
+/-- `parseFastLines` over the file's lines split in tasks between `'\n'` cuts. -/
+@[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
+    V Circuit := do
+  let text ← match String.fromUTF8? bytes with
+    | some s => pure s
+    | none => throw "circuit: not UTF-8"
+  parseFastLines sha tags bytes tables tmpl pre (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
+
+/-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
+(`Net.parseWith`) and the file hashed in a task beside them,
 `parse_eq_fast`: the firewall's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
 `flock-verify` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
@@ -899,8 +930,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
   funext tags bytes tables tmpl pre
-  unfold parse parseFast parseFastFrom
-  simp -zeta only [Net.parsePar_eq]
+  unfold parse parseFast parseFastFrom parseFastLines
+  simp -zeta only [Net.parseWith_eq, classOf_eq_task, bind_map_left, SplitNL.linesOf_splitTasks]
   try rfl
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.

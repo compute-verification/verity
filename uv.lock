@@ -48,6 +48,7 @@ members = [
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
+    "verity-network-e2e",
     "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
@@ -2429,6 +2430,17 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
 ]
 provides-extras = ["torch"]
+
+[[package]]
+name = "verity-network-e2e"
+version = "0.0.0"
+source = { virtual = "benchmarks/network_e2e" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
 name = "verity-network-sim"

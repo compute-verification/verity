@@ -97,6 +97,20 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
         CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
+def test_spare_counts_the_checks_a_machine_could_start_now_which_drive_moves_waiting_trains_onto():
+    """24 Oct 05:28Z: two new empty nodes stood idle while trains waited 1-4 h in other machines' lines; drive reads how many
+    train checks each machine could start now and moves that many waiting trains there."""
+    two = machine([{**slot("a"), "trains": True}, {**slot("b"), "trains": True}, slot("c", HOLDER)])
+    assert CHECK.spare(two, priority=True) == 2 and CHECK.spare(two) == 0            # only=trains slots: a lane check gets none
+    assert CHECK.spare(machine([slot("a"), slot("b")], [waiter(priority=True)]), priority=True) == 1   # one is spoken for
+    assert CHECK.spare(machine([slot("a"), slot("b", blocked="12 GB of memory free, under the 560 GB")]), True) == 1
+    assert CHECK.spare(machine([slot("a"), slot("b")], pools=lean(free=1)), True) == 1                 # one Lean check slot free
+    assert CHECK.spare(machine([slot("a", HOLDER)]), True) == 0
+    assert CHECK.spare(machine(None), True) == 1                                     # no slots file: a check runs at once
+    assert CHECK.spare({**machine([slot("a")]), "deadline_in_s": 60}, True) == 0
+    assert CHECK.spare({"check": {"error": "x"}, "lean": {"pools": None}}, True) == 0
+
+
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
     free = machine([slot("d")])
     docs = {N1: "exit 255: ssh: connect to host 81.85.2.165 port 22: Connection timed out", N2: free}

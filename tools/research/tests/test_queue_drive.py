@@ -68,8 +68,10 @@ def world(tmp_path):
 
 def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queue(world, monkeypatch):
     """CI-110: the train that lands next takes a node's next free slot (`slot.py --rank`), so drive launches each train's check with
-    CHECK_SLOT_RANK set to its members above `main`, and leaves os.environ as it was.  A tick's launches run at once
-    (`LAUNCH_JOBS`: 21 Oct, seven one after another took 40 min), each thread with its own rank."""
+    CHECK_SLOT_RANK set to its first-parent depth, which keeps its order with a rank sent after `main` moved (24 Oct: d836, ranked
+    17 by its members above `main`, waited 3 h behind higher trains ranked 15 after a landing), and the top tip's right after the
+    lowest train's; it leaves os.environ as it was.  A tick's launches run at once (`LAUNCH_JOBS`: 21 Oct, seven one after another
+    took 40 min), each thread with its own rank."""
     monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
     pools = []
     each = drive._each
@@ -87,7 +89,10 @@ def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queu
     assert h.tick().count("launched") == 3
     assert (3, 4) in pools and "CHECK_SLOT_RANK" not in os.environ
     chain = h.q.chain()
-    assert ranks == {m.commit: str(k) for k, m in enumerate(chain[:-1], 1)} | {chain[-1].commit: "1"}, "the top tip ranks first"
+    depth = {m.commit: int(_git(h.d.repo, "rev-list", "--count", "--first-parent", m.commit)) for m in chain}
+    assert [depth[m.commit] for m in chain] == list(range(depth[chain[0].commit], depth[chain[0].commit] + 3))
+    assert ranks == {m.commit: str(depth[m.commit]) for m in chain[:-1]} | {chain[-1].commit: str(depth[chain[0].commit] + 1)}, \
+        "each train ranks by its depth, and the top tip right after the lowest"
 
 
 def test_the_top_tip_keeps_a_check_of_its_own_while_the_trains_below_it_wait(world, monkeypatch):
@@ -138,6 +143,24 @@ def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(w
     assert since == before and set(runs.values()) == {next(iter(runs.values()))} and tip in runs
     lines = merge.landing_lines(h.q.workdir, before, tip, runs=runs)
     assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
+
+
+def test_a_landing_tick_launches_the_next_trains_before_the_landings_after_steps(world, monkeypatch):
+    """23 Oct: a landing's after-steps (`caught_up`: the spec DM, the mirror, post_train, posts and labels; 44 labels at 23:08Z)
+    ran inside the land step, and the tick's launches waited 20-30 min behind them."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 1
+    order = []
+    monkeypatch.setattr(merge, "caught_up", lambda *a, **k: order.append("after"))
+    plain = h.launch
+    h.d.launch = lambda *a: order.append("launch") or plain(*a)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    _check(world, monkeypatch, h.q.chain()[0].commit)
+    order.clear()
+    assert h.tick().startswith("landed #1")
+    assert order == ["launch", "after"], order
 
 
 def test_a_train_that_passes_while_a_tick_runs_lands_in_that_tick_not_the_next(world, monkeypatch):

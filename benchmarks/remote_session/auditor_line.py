@@ -1,6 +1,7 @@
 """The memory line on the auditor's clock, the analysis of record for a gate run: each accepted paced session's line
-(`verifier.paced_line`, time-held and snapshot, at each ingress charge) with its groups' times read from what the
-auditor's host signed rather than from the verifier's stamps.
+(`remote_bandwidth.line`, exact, through `verifier.recorded_line`: time-held and link-charged, each read held over time
+and at the passes) with its groups' times read from what the auditor's host signed rather than from the verifier's
+stamps.
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming that root (`auditor_seen`). Openings coin g's request
@@ -12,7 +13,8 @@ So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's rea
 they take, and before its last root, which chains them.
 
 Beside the times the line reads the verifier's record of the session (`verifier.json`): its verdict, each group's
-passes and held bytes (`ledger.memory`) and its pooled wrong receipts. The verifier runs on the audit's machine, not
+passes and held bytes (`ledger.memory`), and its windows' receipts and draws, whose pooled bound
+(`remote_bandwidth.pooled`) is its wrong receipts. The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
 auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
@@ -45,17 +47,20 @@ the auditor's.
 - *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
   (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
   pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited* names, so the period's circuit commits to
-  the code that decided it), the binding's root is the registration's, and its model, name and
+  the code that decided it), the Lean verifier deciding it (`hold`, the binding's `lean`), the binding's root is the
+  registration's, and its model, name and
   checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
   With neither, no session is bound.
 
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons; beside each share of weights held is the same session's share of filler held (the rest of HBM and the host
-tier, `verifier.paced_line`'s `filler`), which the line doesn't count as weights. What every accepted paced session
+tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
+their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
-        [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--ingress B/S ...] [--table FILE]
+        [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
+        [--bursts stated|none] [--table FILE]
 """
 from __future__ import annotations
 
@@ -74,22 +79,27 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
 import verifier as V  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, coins  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 
-INGRESS = (4.4e9, 54.4e9)
-"""The ingress charges a gate run's line is read at: the node's NICs into memory (time-held) and every link into it
-(link-charged), bytes a second."""
+RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
+"""The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
+which Identity leaves in, charged in both forms as `ledger.Node`'s disks are, and its boundary links beyond them,
+link-charged (54.4e9 in all)."""
+BURSTS = ("stated", "none")
+"""What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
+(`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces (a burst of 0
+states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 """What a session's credit needs, each reported per session in this order."""
 SHARES = ("time", "snapshot", "filler_time", "filler_snapshot")
-"""A session's shares of the node at an ingress charge (`shares`): weights held, time-held and snapshot, and filler
-held in the same two forms."""
+"""A session's shares of the node in a form (`shares`): weights held, over time and at the passes, and filler held in
+the same two readings."""
 
 
 def descriptor(tree: str) -> bytes:
@@ -179,26 +189,47 @@ def group_l(seen: list[dict]) -> list[int]:
     return [max(seen[g]["arrivals_ns"][-1], s[g + 1]) - s[g] for g in range(n - 1)]
 
 
-def shares(session: dict, registration: dict, host_bytes: int, ingress: tuple[float, ...]) -> dict:
+def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
+             link_bytes_per_s: float = RATES["link_bytes_per_s"], bursts: str = "stated") -> dict:
+    """The node's rates `verifier.recorded_rates` takes beside the record's squarings: its disks' and links' ceilings,
+    and with `bursts` stated `ledger.Node.stated`'s bursts (one rebuild batch on the chips, a second of the disks, one
+    link window: `verifier.ingress_bursts` in each form)."""
+    if bursts not in BURSTS:
+        raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
+    out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
+    if bursts == "stated":
+        node = ledger.Node.stated(disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
+        out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
+                "link_burst_bytes": node.link_burst_bytes}
+    return out
+
+
+def shares(session: dict, registration: dict, host_bytes: int, rates: dict) -> dict:
+    """A session's shares of the node in each form (`line.FORMS`) at `rates` (`rates_at`), on the clock its
+    `windows_seen` read: weights and filler held, over time and at the passes (`SHARES`), in floats and each exact
+    beside them (`exact`), and the worst stretch over time."""
+    got = V.recorded_line(session, registration, host_bytes=host_bytes,
+                          rates=V.recorded_rates(session, registration, **rates))
     row = {}
-    for b in ingress:
-        p = V.recorded_paced(session, registration, host_bytes=host_bytes, ingress_bytes_per_s=b)
-        worst = p["stretches"][p["time"]["stretch"]]
-        row[f"{b:.1e}"] = {"time": p["time"]["share"], "snapshot": p["snapshot"]["share"],
-                           "filler_time": p["time"]["filler_share"], "filler_snapshot": p["snapshot"]["filler_share"],
-                           "worst_stretch": p["time"]["stretch"], "worst_l_max_ms": worst["l_max_ns"] / 1e6,
-                           "worst_span_s": worst["span_ns"] / 1e9}
+    for f in line.FORMS:
+        exact = {"time": got.share(f), "snapshot": got.share(f, line.SNAPSHOT),
+                 "filler_time": got.share(f, line.TIME, "filler"),
+                 "filler_snapshot": got.share(f, line.SNAPSHOT, "filler")}
+        worst = got.form(f).worst(line.TIME)
+        row[f] = {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
+                  "worst_stretch": worst.stretch, "worst_l_max_ms": worst.l_max_ns / 1e6,
+                  "worst_span_s": worst.span_ns / 1e9}
     return row
 
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
     binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
-    store the pinned checkpoint lays out under the verifier's payload key, that root is the registration's, and the
-    binding's model is `model`."""
+    store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
+    `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`."""
     b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
     out = {"model": model, "source": source, "binding": None if b is None else {
-        k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound")}}
+        k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound", "lean")}}
     if model is None:
         why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
     elif b is None:
@@ -208,6 +239,9 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
         why = f"the verifier didn't hold the hello's payload root to {b.get('name')}'s store"
     elif b.get("expected_root") != root or b.get("payload_root") != root:
         why = "the binding's payload root is not the registration's"
+    elif not isinstance(lean := b.get("lean"), dict) or "regions" not in lean or lean.get("expected_root") != root:
+        why = ("the Lean verifier didn't hold the hello's payload root to the store (`hold`): the binding is "
+               "store.py's alone")
     elif (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
         why = (f"the verifier bound the store to {b.get('name')} ({str(b.get('checkpoint_sha512'))[:16]}...), not "
                f"{model['name']} ({model['checkpoint_sha512'][:16]}...)")
@@ -386,14 +420,15 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
-            lane: str = LANE, peer: str | None = None, ingress: tuple[float, ...] = INGRESS,
+            lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
             main: list[str] | None = None, model: dict | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
     the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
-    `--model-pin`'s) when the audit's period signs none, and `peer` the gate sessions' peer (None: the record's,
-    `peer_of`)."""
+    `--model-pin`'s) when the audit's period signs none, `peer` the gate sessions' peer (None: the record's,
+    `peer_of`), and `rates` the node's (`rates_at`; None: its defaults)."""
+    rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
@@ -401,7 +436,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     kinds = {(s.get("challenger") or {}).get("challenger") for s in v["sessions"]}
     key = windows = periods = None
     lines: list[str] = []
-    doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "ingress": list(ingress),
+    doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "rates": rates,
                  "commit": commit, "descriptor": None if desc is None else desc.decode(),
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
@@ -470,17 +505,17 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         a = copy.deepcopy(s)
         a["windows_seen"] = seen
         row["groups"] = len(seen)
-        row["shares_auditor_clock"] = shares(a, reg, host_bytes, ingress)
-        row["shares_verifier_clock"] = shares(s, reg, host_bytes, ingress)
+        row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates)
+        row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates)
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
-            for b, x in row[f"shares_{clock}_clock"].items():
-                cur = measured.setdefault(t, {}).setdefault(clock, {}).get(b)
+            for f, x in row[f"shares_{clock}_clock"].items():
+                cur = measured.setdefault(t, {}).setdefault(clock, {}).get(f)
                 if cur is None or x["time"] < cur["time"]:
-                    measured[t][clock][b] = {"k": k, **{f: x[f] for f in SHARES},
+                    measured[t][clock][f] = {"k": k, **{name: x[name] for name in SHARES},
                                              "of_record": row["of_record"], "credited": row["credit"]["ok"]}
     doc["sessions"], doc["measured"] = rows, measured
-    doc["line"], doc["credit"] = credited_line(rows, ingress)
+    doc["line"], doc["credit"] = credited_line(rows)
     return doc
 
 
@@ -491,21 +526,21 @@ def no_credit(why: str, bound: dict | None = None) -> dict:
     return {**out, "ok": False, "zero": [f"not credited: {why}"]}
 
 
-def credited_line(rows: list[dict], ingress: tuple[float, ...]) -> tuple[dict, dict]:
-    """The line of record, on the auditor's clock: at each T the least share of weights held among the credited
-    sessions there, with that session's filler held beside it, or zero with every session's reasons; and who earned
-    credit, who didn't and why, in a sentence."""
-    line: dict = {}
+def credited_line(rows: list[dict]) -> tuple[dict, dict]:
+    """The line of record, on the auditor's clock: at each T and in each form the least share of weights held among
+    the credited sessions there (exact, the first on a tie), with that session's filler held beside it, or zero with
+    every session's reasons; and who earned credit, who didn't and why, in a sentence."""
+    out: dict = {}
     for t in sorted({r["T"] for r in rows if r.get("T")}):
         at = [r for r in rows if r.get("T") == t]
         ok = [r for r in at if r["credit"]["ok"]]
         if ok:
-            line[t] = {b: min(({"k": r["k"], **{f: r["shares_auditor_clock"][b][f] for f in SHARES}} for r in ok),
-                              key=lambda x: x["time"]) for b in (f"{b:.1e}" for b in ingress)}
-            line[t]["credited_sessions"] = [r["k"] for r in ok]
+            out[t] = {f: min(({"k": r["k"], **{n: r["shares_auditor_clock"][f][n] for n in (*SHARES, "exact")}}
+                              for r in ok), key=lambda x: line.number(x["exact"]["time"])) for f in line.FORMS}
+            out[t]["credited_sessions"] = [r["k"] for r in ok]
         else:
-            line[t] = {**{f"{b:.1e}": dict.fromkeys(SHARES, 0.0) for b in ingress}, "credited_sessions": [],
-                       "zero": {r["k"]: r["credit"]["zero"] for r in at}}
+            out[t] = {**{f: {**dict.fromkeys(SHARES, 0.0), "exact": dict.fromkeys(SHARES, "0")} for f in line.FORMS},
+                      "credited_sessions": [], "zero": {r["k"]: r["credit"]["zero"] for r in at}}
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
@@ -513,7 +548,7 @@ def credited_line(rows: list[dict], ingress: tuple[float, ...]) -> tuple[dict, d
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
-    return line, {"credited_sessions": credited, "zero": zero, "summary": said + "".join(
+    return out, {"credited_sessions": credited, "zero": zero, "summary": said + "".join(
         f"; session {k}: {'; '.join(why)}" for k, why in zero.items())}
 
 
@@ -521,7 +556,7 @@ def table(doc: dict) -> str:
     """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
     its credit, weights held then filler held; then the line at each T, time-held / link-charged with the snapshot
     forms, weights and filler apart."""
-    b = [f"{x:.1e}" for x in doc["ingress"]]
+    b = line.FORMS
     out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
     for s in doc["sessions"]:
         c = s["credit"]
@@ -568,7 +603,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lane", default=LANE)
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
                     "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
-    ap.add_argument("--ingress", type=float, nargs="+", default=list(INGRESS), metavar="B/S")
+    ap.add_argument("--disk-bytes-per-s", type=float, default=RATES["disk_bytes_per_s"], metavar="B/S",
+                    help="the ceiling into node memory both forms charge (default: the NICs', `RATES`)")
+    ap.add_argument("--link-bytes-per-s", type=float, default=RATES["link_bytes_per_s"], metavar="B/S",
+                    help="the boundary links' ceiling the link-charged form adds (default: 400 Gb/s, `RATES`)")
+    ap.add_argument("--bursts", choices=BURSTS, default="stated",
+                    help="charge `ledger.Node.stated`'s bursts beyond the rates (the line of record) or none (gate runs "
+                         "up to 7)")
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
@@ -581,7 +622,8 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"auditor_line: {e}") from None
         model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins, main=first_parent, model=model)
+                  rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc, commit=a.commit,
+                  pins=pins, main=first_parent, model=model)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
