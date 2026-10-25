@@ -1374,10 +1374,6 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
-  "NetTiming.RowsCarried": {
-   "owner": "@network-accounting",
-   "digest": "97241ad2cf60b8064fd91fda08fa9fa0c7ad7c6fab1a1c2c770c6163ae60a36f"
-  },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06"
@@ -20651,9 +20647,8 @@
    ]
   },
   "Definitions.NetworkCertifier.Assumptions.Period": {
-   "digest": "96b14fbc328ce079f392b047f69868c888fca3ef6fec84d6bf1ff9a10eaf31e0",
+   "digest": "388b9a5ba18883b96d91abf2ce53f8e5ad2704c15133db65e5fc7b48d528e3b3",
    "definitions": {
-    "NetTiming.RowsCarried": "97241ad2cf60b8064fd91fda08fa9fa0c7ad7c6fab1a1c2c770c6163ae60a36f",
     "NetTiming.WardenCertifierEgress": "956b59ef88939b5b4d797ae1fbb1c0dd823826ac572d4245b4106dec31b9022f"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
@@ -20808,9 +20803,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "98cc2bb1db52075610ca899171fbbc6bef838880e904bc62bc527f7b58602852",
+   "digest": "b84efcd4873ffd09b4997383b6cb2c69c7698bcc1b117c2cf3e8acf420c8ca92",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "8d8d3992667fb31a9aadffa0449c72c4d69e9d59ba19533f288bb502e257e591"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "89fb3afd31bddfd41ad481842bdd8b667b4378f95f662a76086d64a296c97579"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -20881,10 +20876,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Period": {
-   "digest": "49876522859ca937258611632de7176a5e1b4f6847778f7ed5fc6fb7a915d0bc",
+   "digest": "90f3141c1c057a8b01cc94e78ef971ff118ae007892f1097616c247ab9323f48",
    "definitions": {
     "NetTiming.SameRegistration": "bad84087de868525ff0dd57bf0577eb11ea9a58b2a9ff421255df8c030ac6b3c",
-    "NetTiming.WindowGood": "50466b30ae486a9c3edd311038261e32ff8c9a0786dee19b18712d86a386a144"
+    "NetTiming.WindowGood": "97a35706188876e37f83342f3038321ead1ee40018a61ceba0746a0626d17c1c"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
