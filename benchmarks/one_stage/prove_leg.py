@@ -791,7 +791,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             log(f"{shape}: {rec['error']}")
         finally:
             gc.collect()
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     return summary
 
 
