@@ -95,9 +95,9 @@ theorem runIn_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, 
     by_cases hiu : i ∈ u
     · simp only [hiu, ite_true] at hc ⊢
       by_cases hig : i < g
-      · rw [dif_pos hig] at hc ⊢
+      · rw [dite_eq_left hig] at hc ⊢
         exact ih i hig c hc
-      · rw [dif_neg hig] at hc
+      · rw [dite_eq_right hig] at hc
         cases hc
     · simp only [hiu, ite_false] at hc ⊢
       exact read_mono hext hc
