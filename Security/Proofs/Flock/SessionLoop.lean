@@ -19,6 +19,12 @@ import Proofs.Flock.SessionLoop.FinRepErasedOf
 import Proofs.Flock.SessionLoop.FinHmkLive
 import Proofs.Flock.SessionLoop.FinHmkCut
 import Proofs.Flock.SessionLoop.FinRepErasedCut
+import Proofs.Flock.Claims.ZK.FinishFc
+import Proofs.Flock.Claims.ZK.FinishLigEnd
+import Proofs.Flock.Claims.ZK.FinishInnerAt
+import Proofs.Flock.Claims.ZK.FinishSwFc
+import Proofs.Flock.SessionLoop.FinHmkFc
+import Proofs.Flock.SessionLoop.FinHmkFw
 import Proofs.Flock.SessionLoop.FinRepFinal
 import Proofs.Flock.SessionLoop.FinRepOpen
 import Proofs.Flock.SessionLoop.FinRepRows
