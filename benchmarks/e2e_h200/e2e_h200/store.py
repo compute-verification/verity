@@ -1,0 +1,189 @@
+"""The weights' store and its decode call: the stand-in for CMP-95 item 2 (memory-accounting's layout and decode call) on
+the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`, KP2-DEC).
+
+**Layout.** W is the s8 codes of `shape.tensors()` back to back (`weights.Weights.base`). Block j of the store carries W bytes
+[2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row, P2 v4 (`p2-16448/v4`,
+`verity.core.protocols.pous.schemes.p2`) at the registered point, keys from `sha512_keys` under `expand_prefix(salt)`; the
+last block is zero-padded. Block j is (segment, block) = divmod(j, 2^16).
+
+**The decode call.** `Store.stage(name, dst)` writes tensor ``name``'s codes, (N, K) s8, into the staging buffer ``dst`` (or a
+new one) from the blocks it overlaps: on the GPU by kernels' `Stage.decode` (`p2stage.cu`) when its library is given, else by
+the P2 reference on the CPU. Every stage is checked against the reference's refusals (a c >= p, or a decode wider than the
+payload): a refused block raises, never stages.
+
+Stores:
+* `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, ~1 s a block with
+  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
+* `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
+  compute before C* is on the card; the record says so.
+"""
+from __future__ import annotations
+
+import hashlib
+import sys
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from verity.core.protocols.pous.schemes import p2 as S
+
+from .weights import Weights
+
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
+from p2_v1 import reference as R  # noqa: E402
+
+PARAMS = S.P2Params(*S.POINT)
+SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+ROW, PAYLOAD = PARAMS.block_bytes, PARAMS.payload_bytes     # 2,056 and 2,054
+SALT_BYTES = 24
+
+
+class Refused(ValueError):
+    """A block the registered reference refuses to decode."""
+
+
+def blocks_of(base: int, length: int) -> range:
+    return range(base // PAYLOAD, -(-(base + length) // PAYLOAD)) if length else range(0)
+
+
+def nblocks(w_bytes: int) -> int:
+    return -(-w_bytes // PAYLOAD)
+
+
+def keys(prefix: bytes, j: int) -> tuple[int, int]:
+    s, b = divmod(j, PARAMS.blocks_per_segment)
+    return S.sha512_keys(PARAMS, prefix, s, b)
+
+
+def encode_block(prefix: bytes, j: int, payload: bytes) -> bytes:
+    k, t = keys(prefix, j)
+    return R.encode(SPEC, int.from_bytes(payload.ljust(PAYLOAD, b"\0"), "big"), k, t).to_bytes(ROW, "big")
+
+
+def decode_block(prefix: bytes, j: int, row: bytes) -> bytes:
+    """Block j's 2,054 payload bytes; `Refused` where the registered reference refuses it."""
+    c = int.from_bytes(row, "big")
+    if c >= SPEC.p:
+        raise Refused(f"block {j}: c >= p")
+    k, t = keys(prefix, j)
+    m = R.decode(SPEC, c, k, t)
+    if m >> (8 * PAYLOAD):
+        raise Refused(f"block {j}: decodes wider than the payload")
+    return m.to_bytes(PAYLOAD, "big")
+
+
+def _encode_range(args: tuple[bytes, int, bytes]) -> bytes:
+    prefix, first, w = args
+    return b"".join(encode_block(prefix, first + i, w[i * PAYLOAD:(i + 1) * PAYLOAD]) for i in range(-(-len(w) // PAYLOAD)))
+
+
+class Store:
+    kind = "abstract"
+    weights: Weights
+
+    def stage(self, name: str, dst: Any | None = None) -> Any:
+        raise NotImplementedError
+
+    def describe(self) -> dict:
+        return {"kind": self.kind}
+
+
+class GeneratorStore(Store):
+    """No encoded store: ``stage`` regenerates the codes (a FIXTURE for the decode call)."""
+    kind = "generator-fixture"
+
+    def __init__(self, weights: Weights) -> None:
+        self.weights = weights
+
+    def stage(self, name: str, dst: Any | None = None) -> Any:
+        return _into(self.weights.codes(name), dst)
+
+
+class P2Store(Store):
+    """C's rows, (blocks, 2,056) u8, host (numpy) or device (torch); the deployment salt's key prefix; W's layout."""
+    kind = "p2-v4"
+
+    def __init__(self, weights: Weights, salt: bytes, rows: Any, stage_lib: str | None = None) -> None:
+        if len(salt) != SALT_BYTES:
+            raise ValueError(f"the deployment salt is {SALT_BYTES} bytes")
+        n = nblocks(weights.shape.w_bytes)
+        if tuple(rows.shape) != (n, ROW):
+            raise ValueError(f"W of {weights.shape.w_bytes} bytes is {n} blocks of {ROW}, not {tuple(rows.shape)}")
+        self.weights, self.salt, self.rows = weights, salt, rows
+        self.prefix = S.expand_prefix(PARAMS, salt)
+        self._stage = None
+        if stage_lib:
+            sys.path.insert(0, str(ROOT / "benchmarks" / "torch_gpu" / "s8_dec_linear"))
+            from stage import Stage  # kernels' KP2-DEC wrapper
+            self._stage = Stage(stage_lib, rows.device)
+
+    @classmethod
+    def encode(cls, weights: Weights, salt: bytes, workers: int = 1, chunk_blocks: int = 16) -> P2Store:
+        prefix = S.expand_prefix(PARAMS, salt)
+        n, wb = nblocks(weights.shape.w_bytes), weights.shape.w_bytes
+        jobs = []
+        for first in range(0, n, chunk_blocks):
+            lo, hi = first * PAYLOAD, min(wb, (first + chunk_blocks) * PAYLOAD)
+            jobs.append((prefix, first, weights.w_bytes(lo, hi - lo)))
+        if workers > 1:
+            with ProcessPoolExecutor(workers) as ex:
+                parts = list(ex.map(_encode_range, jobs))
+        else:
+            parts = [_encode_range(j) for j in jobs]
+        return cls(weights, salt, np.frombuffer(b"".join(parts), dtype=np.uint8).reshape(n, ROW).copy())
+
+    @classmethod
+    def load(cls, weights: Weights, salt: bytes, path: str | Path, device: Any = None, stage_lib: str | None = None) -> P2Store:
+        rows = np.fromfile(path, dtype=np.uint8).reshape(-1, ROW)
+        if device is not None:
+            import torch
+            rows = torch.from_numpy(rows).to(device)
+        return cls(weights, salt, rows, stage_lib)
+
+    def save(self, path: str | Path) -> None:
+        np.asarray(self.rows).tofile(path)
+
+    def digest(self) -> str:
+        """SHA-512 over C's rows (a FIXTURE identity of the store, not PoUS's verification root)."""
+        rows = self.rows if isinstance(self.rows, np.ndarray) else self.rows.cpu().numpy()
+        return hashlib.sha512(rows.tobytes()).hexdigest()
+
+    def describe(self) -> dict:
+        return {"kind": self.kind, "blocks": int(self.rows.shape[0]), "salt": self.salt.hex(),
+                "decode": "p2stage" if self._stage else "p2-reference-cpu"}
+
+    def block(self, j: int) -> bytes:
+        r = self.rows[j]
+        return bytes(r if isinstance(r, np.ndarray) else r.cpu().numpy())
+
+    def stage(self, name: str, dst: Any | None = None) -> Any:
+        n, k = self.weights.dims[name]
+        base, length = self.weights.base(name), n * k
+        js = blocks_of(base, length)
+        if self._stage is not None:
+            import torch
+            out = self._stage.decode(self.rows[js.start:js.stop], js.start, self.prefix, base, length,
+                                     None if dst is None else dst.view(-1).view(torch.uint8))
+            if self._stage.flags():
+                raise Refused(f"{name}: the decode kernel flagged a block the reference refuses")
+            return out.view(torch.int8).view(n, k)
+        buf = bytearray()
+        for j in js:
+            buf += decode_block(self.prefix, j, self.block(j))
+        lo = base - js.start * PAYLOAD
+        return _into(np.frombuffer(bytes(buf[lo:lo + length]), dtype=np.int8).reshape(n, k), dst)
+
+
+def _into(codes: np.ndarray, dst: Any | None) -> Any:
+    """``codes`` written into the staging buffer ``dst`` (a numpy array or a torch tensor on any device), or returned."""
+    if dst is None:
+        return codes
+    if isinstance(dst, np.ndarray):
+        dst[...] = codes
+    else:
+        import torch
+        dst.copy_(torch.from_numpy(np.require(codes, requirements=["C", "W"])))
+    return dst
