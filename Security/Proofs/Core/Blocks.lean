@@ -50,16 +50,15 @@ theorem Wipe.blank_survivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonemp
     rw [← hx, ← hy]
   have hm : (Fintype.card (Ω × Ch) : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
   have hX : (Fintype.card ((Fin S → Bool) × Ω × Ch) : ℝ≥0∞) = 2 ^ S * Fintype.card (Ω × Ch) := by
-    simp [Fintype.card_prod, Fintype.card_fun]
+    simp [Fintype.card_prod]
   rw [show Game.draw ((Fin S → Bool) × Ω × Ch) = .coin _ fun x => .ret (id x) from rfl, Game.value_coin_ret,
     Game.prCoin_eq_card]
   calc ((Finset.univ.filter P).card : ℝ≥0∞) / Fintype.card ((Fin S → Bool) × Ω × Ch)
       ≤ 1 * Fintype.card (Ω × Ch) / (2 ^ S * Fintype.card (Ω × Ch)) := by
         rw [one_mul, hX]
         gcongr
-        exact_mod_cast hcard
     _ = (2 ^ S)⁻¹ := by rw [ENNReal.mul_div_mul_right _ _ hm (ENNReal.natCast_ne_top _), one_div]
-    _ = 2⁻¹ ^ S := (ENNReal.inv_pow).symm
+    _ = 2⁻¹ ^ S := ENNReal.inv_pow
     _ ≤ 2⁻¹ ^ 128 := pow_le_pow_right_of_le_one' (by norm_num) hS'
 
 end Verity
