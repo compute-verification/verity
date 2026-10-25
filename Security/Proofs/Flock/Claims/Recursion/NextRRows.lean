@@ -30,6 +30,7 @@ section Walk
 
 open FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
+set_option maxHeartbeats 4000000 in
 /-- **A session has at most `Tags.MAX_TABLES` tables, and its spec names one per statement**, at any public input
 words. -/
 theorem setupTables_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
@@ -59,6 +60,7 @@ theorem setupTables_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count 
     all_goals exact h
   simp (config := { zeta := false }) only [jp2] at h
   dsimp only at h
+  simp only [throw_bind', pure_bind] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
