@@ -10,7 +10,6 @@ import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.SessionLoop.FinRep
 import Proofs.Flock.SessionLoop.FinRepView
 import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.SessionLoop.FinHmkLive
 import Proofs.Flock.SessionLoop.FinRepL0
 import Proofs.Flock.SessionLoop.FinRepRows
