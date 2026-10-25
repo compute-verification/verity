@@ -38,7 +38,7 @@ theorem f_zero_mul (a : F128) : 0 * a = 0 := fOf_injective (by rw [fOf_mul, fOf_
 theorem f_add_zero (a : F128) : a + 0 = a := fOf_injective (by rw [fOf_add, fOf_zero, add_zero])
 theorem f_zero_add (a : F128) : 0 + a = a := fOf_injective (by rw [fOf_add, fOf_zero, zero_add])
 
-theorem dot_zero_right (a b : Array F128) (hb : ∀ i, b[i]! = 0) : dot a b = 0 :=
+theorem dot_zero_right (a b : Array F128) (hb : ∀ i : ℕ, b[i]! = 0) : dot a b = 0 :=
   fOf_injective (by
     rw [fOf_dot a b a.size rfl, fOf_zero]
     exact Finset.sum_eq_zero fun i _ => by rw [hb, fOf_zero, mul_zero])
@@ -73,7 +73,7 @@ theorem skipHat_nil (w : Array F128) (x : ℕ) : skipHat #[] w x = 0 := by
     rw [getElem!_neg (#[] : Array Bool) _ (by simp)]
     rfl
 
-theorem zc_tab_nil (n : ℕ) (z : F128) (ρ : ℕ → F128) : ∀ i k, (Zc.tab n z ρ #[] i)[k]! = 0
+theorem zc_tab_nil (n : ℕ) (z : F128) (ρ : ℕ → F128) : ∀ i k : ℕ, (Zc.tab n z ρ #[] i)[k]! = 0
   | 0, k => by
     show ((Array.range (2 ^ n)).map (skipHat #[] (skipWeights z)))[k]! = 0
     exact get_map_range_zero (fun x _ => skipHat_nil _ x) k
@@ -101,7 +101,8 @@ theorem lc_zr0_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (k : ℕ) : (Lc.zr0 
     rw [getElem!_neg (#[] : Array Bool) _ (by simp)]
     rfl) k
 
-theorem lc_zrT_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (cs : Lc.Coins) : ∀ i k, (Lc.zrT c m tr0 zc cs i)[k]! = 0
+theorem lc_zrT_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (cs : Lc.Coins) :
+    ∀ i k : ℕ, (Lc.zrT c m tr0 zc cs i)[k]! = 0
   | 0, k => by
     show (Lc.zr0 c m tr0 zc)[k]! = 0
     exact lc_zr0_nil c m zc k
@@ -133,7 +134,8 @@ replies with its coins, where it returns from `l`, its proof and transcript are 
 theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) {lay : Zk.PadLayout}
     (hn : m - 6 ≤ lay.nMlv) (mk : ℕ → F128) {t t₁ : Transcript} {l l₁ : Array Claims.Msg} {zp : ZerocheckProof}
-    {zc : ZcOut} (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok ((zp, zc), t₁), l₁)) :
+    {zc : ZcOut}
+    (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok ((zp, zc), t₁), l₁)) :
     zp = ZcZ.proof lay (padsOf lay mk) m (zcCoins coin l.size) tr0 ∧
       t₁ = ZcZ.tEnd lay (padsOf lay mk) m digest cap root (zcCoins coin l.size) tr0 t := by
   have hA := zerocheckCut_alike coin n hm digest cap root lay (padsOf lay mk) tr0 mk t l
@@ -149,14 +151,15 @@ theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ 
   · simp only [Prod.mk.injEq, reduceCtorEq, false_and] at he
   simp only [Prod.mk.injEq, Except.ok.injEq] at he
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := he
-  have hy' := Claims.ZKMal.FinRep.zerocheckPZk_cut (n := n) hr m digest cap root lay (padsOf lay mk) tr0 t l _ _ hy
+  have hy' := Claims.ZKMal.Masked.FinRep.zerocheckPZk_cut (n := n) hr m digest cap root lay (padsOf lay mk) tr0 t l
+    _ _ hy
   obtain ⟨l', -, hgo⟩ := zerocheckPZk_go resp hm digest cap root lay (padsOf lay mk) tr0 t l
-  rw [hgo] at hy'
-  simp only [Prod.mk.injEq, Except.ok.injEq] at hy'
-  obtain ⟨⟨rfl, rfl⟩, -⟩ := hy'
+  have e := hgo.symm.trans hy'
+  simp only [Prod.mk.injEq, Except.ok.injEq] at e
+  obtain ⟨⟨rfl, rfl⟩, -⟩ := e
   have hc : Zc.coinsAt resp l.size = zcCoins coin l.size := by simp only [Zc.coinsAt, zcCoins, hr]
-  rw [hc] at hab ⊢
-  exact ⟨hab, rfl⟩
+  rw [hc] at hab
+  exact ⟨hab, by rw [hc]⟩
 
 /-- **The cut's lincheck is the masked prover's at the pads `mk` and the empty trace**: answered by `asksCut` at replies
 with its coins, from a zerocheck output with the `z` and `ρ` of `zcs`, where it returns from `l`, its fold at `α`
@@ -179,19 +182,20 @@ theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ �
   · simp only [Prod.mk.injEq, reduceCtorEq, false_and] at he
   simp only [Prod.mk.injEq, Except.ok.injEq] at he
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := he
-  have hy' := Claims.ZKMal.FinRep.lincheckPZk_cut (n := n) hr c m lay (padsOf lay mk) tr0 (Zc.out m zcs tr0) t l _ _ hy
+  have hy' := Claims.ZKMal.Masked.FinRep.lincheckPZk_cut (n := n) hr c m lay (padsOf lay mk) tr0 (Zc.out m zcs tr0)
+    t l _ _ hy
   have hfold : c.fold (coinOf (resp l.size) 0) (skipWeights (Zc.out m zcs tr0).z)
       ((Zc.out m zcs tr0).rho.extract 0 (c.kLog - 6)) = .ok full := by
     rw [hr, ← hz, ← hρ]
     exact hfull
   obtain ⟨l', -, hgo⟩ := lincheckPZk_go resp c m lay (padsOf lay mk) tr0 (Zc.out m zcs tr0) full t l hfold
-  rw [hgo] at hy'
-  simp only [Prod.mk.injEq, Except.ok.injEq] at hy'
-  obtain ⟨⟨rfl, rfl⟩, -⟩ := hy'
+  have e := hgo.symm.trans hy'
+  simp only [Prod.mk.injEq, Except.ok.injEq] at e
+  obtain ⟨⟨rfl, rfl⟩, -⟩ := e
   have hc : Lc.coinsAt resp l.size (c.kLog - 6) = lcCoins coin l.size (c.kLog - 6) := by
     simp only [Lc.coinsAt, lcCoins, hr]
-  rw [hc] at hab ⊢
-  exact ⟨full, hfull, hab, rfl⟩
+  rw [hc] at hab
+  exact ⟨full, hfull, hab, by rw [hc]⟩
 
 /-! ## The replay -/
 
