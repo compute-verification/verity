@@ -55,7 +55,7 @@ from dataclasses import dataclass
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.capture_log import read_steps, request_params
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.check.match.dag_form import dag_hashes, live_cone
 from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _fast_stats, _install_profile_counters, _n_runs_of, _NoPhase,
                                                     _Phase, _profile_on)

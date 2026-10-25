@@ -215,7 +215,6 @@
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "cwd", "symbol": "_default_manifest", "detail": "pathlib.Path.cwd"},
     {"file": "verity_vllm/engine/arrivals.py", "kind": "broad-except", "symbol": "_snapshot_computed", "detail": "except Exception"},
     {"file": "verity_vllm/engine/arrivals.py", "kind": "broad-except", "symbol": "scheduler_of", "detail": "except Exception"},
-    {"file": "verity_vllm/observe/contract.py", "kind": "broad-except", "symbol": "_program_json_layout", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "broad-except", "symbol": "_run", "detail": "except Exception"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "broad-except", "symbol": "_tuned_gemm_arch_family", "detail": "except Exception"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_of_runner", "detail": "VLLM_BATCH_INVARIANT"},

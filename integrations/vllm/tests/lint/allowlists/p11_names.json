@@ -327,7 +327,6 @@
     {"file": "verity_vllm/engine/arrivals.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/observe/capture_v1.py", "kind": "doc-date", "symbol": "LeafLayout", "detail": "date"},
     {"file": "verity_vllm/observe/capture_v1.py", "kind": "module-name", "symbol": "<module>", "detail": "capture_v1"},
-    {"file": "verity_vllm/observe/contract.py", "kind": "doc-round", "symbol": "_reads", "detail": "R1N"},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "doc-date", "symbol": "FoldResult.reference_eligible", "detail": "date"},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "doc-round", "symbol": "_Fold._const", "detail": "R1N"},
