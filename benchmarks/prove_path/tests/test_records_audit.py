@@ -8,6 +8,7 @@
   circuit is another and a length other than the registered one;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
+* the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
   compile and charges the length the registration does."""
 from __future__ import annotations
@@ -160,6 +161,36 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
     assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
     late = RA.after_draw(receipt, rec, held)
     assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
+
+
+def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
+    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger."""
+    import a5_coins as AC
+
+    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--port", "10000",
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"), "--main", "main.txt"]
+    for bad in (["--peer", "vy-nebius-1"], ["--challenger-key", "key.json"]):
+        with pytest.raises(SystemExit, match="2"):
+            RA.main([*args, "--challenger", "gate:research@gate", *bad])
+    with pytest.raises(SystemExit, match="2"):
+        RA.main([*args, "--challenger", "remote"])
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def start(challenger, root, ranks, dest, main, **kw):
+        seen.update(challenger=challenger, root=root, ranks=ranks, main=main, **kw)
+        raise Opened
+
+    monkeypatch.setattr(AC, "start", start)
+    with pytest.raises(Opened):
+        RA.main([*args, "--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json",
+                 "--gate-key", "gate.key"])
+    assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
+                    "peer": "vy-nebius-1", "key_record": "key.json"}
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
