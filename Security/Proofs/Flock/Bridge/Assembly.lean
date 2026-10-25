@@ -44,6 +44,7 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
       (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) ⊆
       (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun g v => Bridge.canonRow rows g v) (reg σ)
         Xr).map Fin.valEmbedding := by
+    classical
     intro v hv
     have hlt : v < n := by
       unfold Claims.Sampling.faulty at hv
