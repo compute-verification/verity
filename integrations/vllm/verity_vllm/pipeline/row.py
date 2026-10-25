@@ -13,7 +13,7 @@
 A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
 ``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
-(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocol_options`): a set it cannot
+(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocols`): a set it cannot
 run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
 its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 
@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, fields
 from importlib import metadata
 from typing import Any
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
                                 done_source_refusal, group, option, row_world)
 from verity_vllm.pipeline import config_record as CR
@@ -57,7 +57,7 @@ class _Row:
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     protocols: str | None = option("--protocols", env="PROTOCOLS", default=None,
                                    help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:vllm-v1' "
-                                        "(verity_vllm.protocol_options); default: the workload target's, else sampled proofs alone")
+                                        "(verity_vllm.protocols); default: the workload target's, else sampled proofs alone")
     build: BuildConfig = group(BuildConfig)
     match: MatchConfig = group(MatchConfig)
     commit: CommitConfig = group(CommitConfig)
