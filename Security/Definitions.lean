@@ -17,7 +17,7 @@ import Definitions.NetworkCertifier.Guarantees.WindowChargeKraft
 import Definitions.NetworkCertifier.Warden
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
-import Definitions.Population
+import Definitions.SampledProofs
 import Definitions.Claims
 import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion

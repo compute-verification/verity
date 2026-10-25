@@ -1,10 +1,10 @@
 import Proofs.Properties.Nci
-import Properties.NciDesc.Verdict
+import Properties.Nci.Desc.Verdict
 
 /-!
 # What a verdict of the description-sized check carries, from `DescAgrees`
 
-Each statement of `Properties.NciDesc.Verdict` is its `Properties.Nci` counterpart carried to every expansion by
+Each statement of `Properties.Nci.Desc.Verdict` is its `Properties.Nci` counterpart carried to every expansion by
 `DescAgrees` (`onExpansions_of`): `descReports_of` and `descWitnesses_of` from `Reports` and `Witnesses`, and the four
 thread bounds from `Throttles` and its forms, which `Proofs.Nci.DescVerdict` (package `security_proofs`) supplies.
 -/
