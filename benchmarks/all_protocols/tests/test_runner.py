@@ -102,7 +102,7 @@ print(json.dumps({{"commitment": c.hex(), "profile": None if {verdict!r} != "acc
 
 def test_nothing_composes_to_accept_while_onsite_has_stubs(tmp_path):
     every = {e.name: fake("accept", {"commitment": "00", "evidence": "00", "params": {}}) for e in T.TABLE}
-    r = decide(tmp_path, **every, exe=str(onsite_exe(tmp_path)))
+    r = decide(tmp_path, **every, onsite=[*EVERY_PORT[:-1], "Stub.sampledProofs"], exe=str(onsite_exe(tmp_path)))
     assert all(x["verdict"] == "accept" for x in r["protocols"].values())
     assert r["composed"]["verdict"] == "pending-ports"
     assert "onsite's stubs" in r["composed"]["reason"]
