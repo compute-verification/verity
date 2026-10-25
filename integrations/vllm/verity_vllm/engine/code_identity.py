@@ -186,7 +186,7 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
 
 def _binary_identity(k: Any, cfg: Any = None) -> dict[str, Any]:
     """One compiled Triton binary: triton hash (source x signature/specialization x options x env), cubin sha256 (bytes), per-section
-    sha256 + code_sha256 (every section except CUBIN_DENY_LIST, rev F-r16-09) + code_sha256_normalized / section_detail (path strings in
+    sha256 + code_sha256 (every section except CUBIN_DENY_LIST) + code_sha256_normalized / section_detail (path strings in
     device data decoded), the compile metadata, and the autotune config it was compiled for."""
     import hashlib
 

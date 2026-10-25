@@ -360,7 +360,6 @@
     {"file": "verity_vllm/observe/fold/resolver.py", "kind": "doc-round", "symbol": "Const", "detail": "R1N"},
     {"file": "verity_vllm/observe/fold/resolver.py", "kind": "doc-round", "symbol": "Param", "detail": "R1N"},
     {"file": "verity_vllm/observe/storage.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
-    {"file": "verity_vllm/engine/code_identity.py", "kind": "doc-board-id", "symbol": "_binary_identity", "detail": "F-rN"},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "doc-board-id", "symbol": "cubin_section_detail", "detail": "F-rN"},
     {"file": "verity_vllm/engine/build.py", "kind": "doc-board-id", "symbol": "effective_execution_doc", "detail": "M-nnnn"},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "doc-board-id", "symbol": "loaded_code_objects", "detail": "F-rN"},
