@@ -17,7 +17,6 @@
     {"file": "verity_vllm/pipeline/workload.py", "kind": "rng", "symbol": "rng_for", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "rng", "symbol": "compare", "detail": "random.Random"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "admit", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/program/kernels/kernel_registry.py", "kind": "rng", "symbol": "check", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "generate", "detail": "random.Random"},
     {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"},
     {"file": "verity_vllm/program/twins_check.py", "kind": "rng", "symbol": "check_log", "detail": "numpy.random.default_rng"},

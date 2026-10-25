@@ -667,7 +667,6 @@
     {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-board-id", "symbol": "coverage_of_unreplayable", "detail": "M-nnnn"},
     {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-lane", "symbol": "collective_family", "detail": "[lane"},
-    {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"}
+    {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"}
   ]
 }
