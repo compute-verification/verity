@@ -43,7 +43,8 @@ def main() -> None:
         lines = zip(*(open(a.data / f"{n}.jsonl") for n in ("instances", "expanded", "python")), strict=True)
         for i, (li, le, lp) in enumerate(lines):
             inst = json.loads(li)
-            m = re.search(r'"NciSharedDecl(\w+)"', inst.get("program") or "")
+            prog = inst.get("program")
+            m = re.search(r'"NciSharedDecl(\w+)"', prog if isinstance(prog, str) else json.dumps(prog))
             if not m:
                 continue
             ip, ep = Path(tmp) / f"{i}.json", Path(tmp) / f"{i}.expanded.json"
