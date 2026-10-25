@@ -19,8 +19,8 @@ by a SHA-512 collision (`leaf_misshaped_dep`), and so is a leaf under a salt of 
 `2 ≤ nl` units (`leaf_salt`).
 
 At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
-`opens_commitDep`, and `transportsLiveCS` is `Bridge.TransportsLiveC` (canonical openings, `RowsV2` circuit files) with
-one premise more, `PortRoots.RootFixesDomain`.
+`opens_commitDep`; `transportsLiveCS` is `Bridge.TransportsLiveC`'s conclusion at canonical openings, `RowsV2` circuit
+files and `PortRoots.RootFixesDomain` registrations, and `transportsLiveC` is `Bridge.TransportsLiveC`.
 -/
 
 namespace Flock.Bridge
@@ -563,6 +563,14 @@ theorem transportsLiveCS : TransportsLiveCS := by
   obtain ⟨p, v, y⟩ := o
   exact transports_shaped (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parse_flat hD) (hscope := hscope)
     (hU := hU) (hpub := hpub) (hpt := hpt) _ hv2 hsep hr p v y hv hvw hy he
+
+/-- **`Bridge.TransportsLiveC` holds** (`transportsLiveCS`): its `PortRoots.RootFixesDomain` binder is
+`TransportsLiveCS`'s one premise more, and it reads neither `dupName` nor that `g` isn't a constant wire. -/
+theorem transportsLiveC : Bridge.TransportsLiveC := by
+  intro n Reg I ht D hD hU pub hpub hpt hscope hv2 _ hroots kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust τ
+    P vb σ Cc rows κ roots Cd u g hg _
+  exact transportsLiveCS n Reg I ht D hD hU pub hpub hpt hscope hv2 kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags hCust
+    τ hroots u g hg
 
 end Live
 
