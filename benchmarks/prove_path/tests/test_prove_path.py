@@ -9,8 +9,7 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
   changed, every check before the draw passing), so only the proof can refuse it.
-* A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest,
-  each Build held to that digest: a body swapped under the Build's old digest is refused by name),
+* A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
   (the forged TP1 case at step 24) is audited through its negatives.
@@ -481,6 +480,9 @@ def _load(root: Path, digest: str):
 
 
 def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, requests_of_tiny):
+    """I2's adapter holds each Build dir to the digest I2 compiled (`build_of`) before the window reads its rows: an honest
+    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, splits, prefix,
+    weights)."""
     for name, program in requests_of_tiny.items():
         dg = _build(tmp_path / name / "build_request", program)
         p = _load(tmp_path / name, dg)
