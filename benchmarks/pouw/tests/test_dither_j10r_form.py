@@ -116,3 +116,16 @@ def test_a_j10r_arm_in_the_order_is_ask71_a_with_3574_as_its_basis():
     assert lab["form_basis"] == f"{F.Z_FORMS['zy'][1]}; {F.ADOPTED_PARTS['j10r']}" and "#3574" in lab["form_basis"]
     assert F.form_of("dither-a", "zy", True, ("ov",), ("j10r",))["form"] == F.UNADOPTED
     assert F.form_of("dither-a", "zy", True) == {"form": F.FORM_A, "form_basis": F.Z_FORMS["zy"][1]}
+
+
+def test_only_a_j10r_arm_on_credits_layout_takes_3574s_basis():
+    """`forms.j10r_part`: the slot rows mode on a slot T (64, 2048), every row block computed, is "j10r"; the live rows
+    mode, skipped dead tiles, or a T credit's window can't have as its M (96, 16) is "j10r-off", which leaves the arm
+    unadopted."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    F = dither("forms")
+    assert [F.j10r_part("slot", False, t) for t in (64, 2048)] == ["j10r"] * 2
+    assert all(HW.slot(t, TILE) == t for t in (64, 2048)) and all(HW.slot(t, TILE) != t for t in (96, 16))
+    off = [("live", False, 64), ("slot", True, 64), ("slot", False, 96), ("slot", False, 16)]
+    assert [F.j10r_part(*x) for x in off] == ["j10r-off"] * 4
+    assert F.form_of("dither-a", "zy", True, ("j10r-off",))["form"] == F.UNADOPTED

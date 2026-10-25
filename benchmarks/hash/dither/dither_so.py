@@ -41,9 +41,9 @@ fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's rec
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
-(`UNITS_ENV`; RT-ALGO-16's verifier form, #3574, `SoSide.adopted`) runs the units under J10-R's call-scale noise, every
-check here and at the window's end on j10r_so's references in h1r v1's place, and the gate step's units held to J10R's
-Definition.
+(`UNITS_ENV`; RT-ALGO-16's verifier form, #3574, at $DITHER_SO_J10R_M=slot on a slot T with every row block computed:
+`forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the window's end on j10r_so's
+references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
 -ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1; `-ovp`, R = 2 with the engine serving on a stream above the trees' and the
 units' priority) moves round s and step s's units off the steps' path, every value committed
@@ -113,6 +113,7 @@ import dither_a as DA
 import dither_fused as DF
 import dither_manifest as MF
 import dither_one as DO
+import forms as F
 import h1c as H1CM
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
 from hb_side import auto_j
@@ -153,7 +154,7 @@ SMQ_DEN_MAX = 256
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
-# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; RT-ALGO-16's verifier form, #3574): in h1r_launch's
+# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; #3574's form, forms.j10r_part): in h1r_launch's
 # version 0 place every call's seed_c at its first position and each unit's sigma_R at its own (h1u.cu's
 # kh_seeds_j10r_h1r, on the same call table), then each call's row blocks hashed once and its units on them
 # (kh_units_multi_j10r, under $DITHER_SO_UNITS_SMQ kh_units_multi_j10r_sm); needs $DITHER_SO_FUSED=1.  The gate holds it
@@ -1169,11 +1170,15 @@ class SoSide(DA.Side):
 
     in_order = True
 
+    def _j10r_part(self) -> str | None:
+        return F.j10r_part(self.j10r_m, self.skip_dead, self.win.t) if getattr(self, "j10r", False) else None
+
     def unadopted(self) -> tuple[str, ...]:
-        return tuple(x for x, on in (("ab", self.a_once), ("ov", self.ov is not None)) if on)
+        return tuple(x for x, on in (("ab", self.a_once), ("ov", self.ov is not None),
+                                     ("j10r-off", self._j10r_part() == "j10r-off")) if on)
 
     def adopted(self) -> tuple[str, ...]:
-        return ("j10r",) if getattr(self, "j10r", False) else ()
+        return ("j10r",) if self._j10r_part() == "j10r" else ()
 
     def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool):
         if unit not in DA.KONE or ao not in AO:
