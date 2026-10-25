@@ -241,6 +241,11 @@
     "about": "Assumptions.RecordCustodyExec and RecordCustodyExecH (live-verifier): the record flock-verify verify reads without --zk is the one the verifier's coin server wrote for the live session, and its draw file proves the drawn units with the outcome's link points (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
     "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
+   },
+   "live-verifier-custody-zk-law": {
+    "about": "Assumptions.Zk.RecordCustodyZKLaw, RecordCustodyZKHLaw, RecordCustodyZKJLaw and RecordCustodyZKHJLaw (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and at every draw of the live law its draw file proves the drawn units with the outcome's link points (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
    }
   },
   "scan": {
