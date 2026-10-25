@@ -202,6 +202,11 @@ hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as a
 A class whose windows send hits or order entries does the following:
 - It calls `window_charge.build_link(C, N, H, O, book, row_in, row_out, en, bits, hen, short, oen, p, r)` over
   `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over `replay-charge`'s.
+- Its `hen` and `oen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each lookup past the pool
+  bound, an order slot for each arrival out of release order, enabled slots first, never the prover's. Nothing reads a
+  disabled slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover
+  chose would pass log2(C(H, h) · C(O, o)) bits and those values uncharged (`test_network_certifier_window_charge_slots.py`:
+  every arrangement and disabled values past every cap give one charge and one carry).
 - It holds the returned bits to c_w as now. The tests check this inline: c_w equal to the charge accepts, and one bit
   less refuses.
 - Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,

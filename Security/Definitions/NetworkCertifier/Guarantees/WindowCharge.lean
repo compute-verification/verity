@@ -22,7 +22,10 @@ and the weights `2^(−charge)` of a run's windows to at most 1.
 
 **Scope.** Every advice v1 window, from any carry chained from the book's first (`Book.first`): its decisions, hits
 and order entries, with n_resumes and n_lag sent as 0 (advice v1 never sends resumes or lag bits). Which slots ask is
-not charged, as for `EncardChargedLe`.
+not charged, as for `EncardChargedLe`. A `Window` holds each field's values at its enabled slots, in order, so these
+statements count advice values, not slot arrangements. The slice that wires `ChargeLink_v2` takes `hen` and `oen` from
+the replay, as `en` is (enabled slots first, never the prover's), and reads no disabled slot's value (`charge-chain.md`,
+"The slice").
 
 **What is left, the one hypothesis.** That `ChargeCount_v2`'s circuit computes `WindowCharge.window`. It is not proved
 in Lean: circuit-check holds the circuit to the Python reference (`window_charge.py`'s `reference_window`), and the
