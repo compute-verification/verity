@@ -1,9 +1,10 @@
 """The client keeps the certificates: once an honest served run's wire has ended (on an injected clock, behind a stub
 endpoint), the reveal endpoint (`active.serve_reveals(certificates=…)`) serves each window's certificates' public part,
 unsigned, and the client (`certifier_serve.keep_certificates`) keeps every one, each verified under the deployment's
-key and session, in `certificates.jsonl` and `clocks.jsonl`: the certifier's own certificates and clock certificates,
-and nothing of a record's head or its salt. A forged or altered certificate, one of another key and an answer of
-another session are each refused by name, and the client keeps none of them."""
+key and session, in `certificates.jsonl` and `clocks.jsonl`: the certifier's own certificates and salted clock
+certificates, and nothing of a record's head, the sync a clock certificate signs, or either's salt. A forged signature,
+an altered digest, a wrong window, a clock certificate under a reused salt, one of another key and an answer of another
+session are each refused by name, and the client keeps none of them."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.certificate import Certificate, Issuer
+from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, clock_commitment
 from verity.core.protocols.certifier.schedule import ClockSync
 
 HERE = Path(__file__).resolve().parents[1]
@@ -126,9 +127,18 @@ def test_the_client_keeps_every_windows_certificates_verified_and_nothing_of_a_h
         sorted(json.dumps({f: d[f] for f in Certificate.__slots__}) for d in kept)
     text = (tmp / "client" / "certificates.jsonl").read_text()
     assert not any(d["salt_c"] in text or d["head"]["root"] in text for d in certified)
-    clocks = cs.read_clocks(tmp / "client" / "clocks.jsonl")
-    assert clocks == cs.read_clocks(tmp / "run" / "clocks.jsonl") and [c.window for c in clocks] == list(range(windows))
-    assert all(c.verify(key, session) for c in clocks)
+    signed, clocks = cs.read_clocks(tmp / "run" / "clocks.jsonl"), _lines(tmp / "client" / "clocks.jsonl")
+    assert [c.window for c in signed] == list(range(windows)) and all(c.verify(key, session) for c in signed)
+    assert len({c.salt for c in signed}) == windows
+    assert all(set(d) == {"session", *Certificate.__slots__} and d["session"] == SESSION.hex() for d in clocks)
+    assert [{f: d[f] for f in Certificate.__slots__} for d in clocks] == \
+        [cs.certificate_json(c.certificate) for c in signed]
+    assert all(cs.certificate_from_json(d).verify(key, session) for d in clocks)
+    assert all(set(d) == set(Certificate.__slots__) for a in out["answers"] for d in a["clocks"])
+    text = (tmp / "client" / "clocks.jsonl").read_text()
+    assert not any(c.salt.hex() in text for c in signed)
+    with pytest.raises(ValueError, match="without its opening's salt"):
+        cs.read_clocks(tmp / "client" / "clocks.jsonl")
 
 
 def test_the_endpoint_serves_no_window_it_hasnt_certified_and_nothing_without_certificates(honest):
@@ -142,8 +152,7 @@ def test_the_endpoint_serves_no_window_it_hasnt_certified_and_nothing_without_ce
 
 def _altered(answer: dict, part: str, field: str, change) -> dict:
     doc = json.loads(json.dumps(answer))
-    target = doc[part][0] if part == "certificates" else doc[part][0]["certificate"]
-    target[field] = change(target[field])
+    doc[part][0][field] = change(doc[part][0][field])
     return doc
 
 
@@ -157,33 +166,68 @@ def _refusals(tmp_path: Path, deployment: dict, answers: list[dict]) -> tuple[li
     return refused, _lines(tmp_path / "certificates.jsonl"), _lines(tmp_path / "clocks.jsonl")
 
 
-@pytest.mark.parametrize("part, field, change", [
-    ("certificates", "signature", _flip),
-    ("certificates", "digest", _flip),
-    ("clocks", "signature", _flip),
+@pytest.mark.parametrize("part, field", [
+    ("certificates", "signature"),
+    ("certificates", "digest"),
+    ("clocks", "signature"),
+    ("clocks", "digest"),
 ])
-def test_a_forged_or_altered_certificate_is_refused_by_name_and_not_kept(honest, tmp_path, part, field, change):
+def test_a_forged_or_altered_certificate_is_refused_by_name_and_not_kept(honest, tmp_path, part, field):
+    """A forged signature or an altered digest, of a record's certificate or a clock certificate: the client holds no
+    head, sync or salt, so either is the signature failing over the fields it was served with."""
     _, out = honest
     answers = list(out["answers"])
-    answers[0] = _altered(answers[0], part, field, change)
-    c = answers[0][part][0] if part == "certificates" else answers[0][part][0]["certificate"]
+    answers[0] = _altered(answers[0], part, field, _flip)
+    c = answers[0][part][0]
     what = "certificate" if part == "certificates" else "clock certificate"
     refused, kept, clocks = _refusals(tmp_path, out["deployment"], answers)
     assert refused == [f"window 0's {c['direction']} {what} of {cs.N2_LINK} (key {c['key_id'][:16]}…): its signature "
                        "doesn't verify under the deployment's key in its session"]
     windows = out["deployment"]["windows"]
-    assert len(kept) + len(clocks) == 3 * windows - 1 and c["signature"] not in json.dumps([kept, clocks])
+    assert len(kept) + len(clocks) == 3 * windows - 1 and c[field] not in json.dumps([kept, clocks])
 
 
-def test_a_certificate_of_another_link_window_is_refused_by_name(honest, tmp_path):
+@pytest.mark.parametrize("part", ["certificates", "clocks"])
+def test_a_certificate_of_another_link_window_is_refused_by_name(honest, tmp_path, part):
     _, out = honest
     answers = list(out["answers"])
-    answers[0] = _altered(answers[0], "certificates", "window", lambda w: w + 1)
-    c = answers[0]["certificates"][0]
-    refused, kept, _ = _refusals(tmp_path, out["deployment"], answers)
-    assert refused == [f"window 0's {c['direction']} certificate of {cs.N2_LINK} (key {c['key_id'][:16]}…): it names "
+    answers[0] = _altered(answers[0], part, "window", lambda w: w + 1)
+    c = answers[0][part][0]
+    what = "certificate" if part == "certificates" else "clock certificate"
+    refused, kept, clocks = _refusals(tmp_path, out["deployment"], answers)
+    assert refused == [f"window 0's {c['direction']} {what} of {cs.N2_LINK} (key {c['key_id'][:16]}…): it names "
                        f"{cs.N2_LINK} window 1, not {cs.N2_LINK} window 0"]
-    assert len(kept) == 2 * out["deployment"]["windows"] - 1
+    assert len(kept) + len(clocks) == 3 * out["deployment"]["windows"] - 1
+
+
+def test_a_clock_certificate_under_a_reused_salt_is_refused_by_name(tmp_path):
+    """A certifier whose clock salt repeats across two windows of one sync signs one digest for both, which shows that
+    their syncs are equal: the client, holding no sync or salt, sees window 1's clock certificate sign window 0's
+    digest and refuses it by name. The same syncs under the issuer's fresh salts sign two digests, both kept."""
+    own = cs.signer(tmp_path / "key", 6)
+    try:
+        issuer, sync, salt = Issuer(own, SESSION), ClockSync(1, Fraction(1)), bytes(range(64))
+        reused = [issuer.sign(cs.N2_LINK, Direction.EGRESS, w, clock_commitment(salt, sync)) for w in (0, 1)]
+        fresh = [issuer.salted_clock(cs.N2_LINK, w, sync).certificate for w in (0, 1)]
+        public = cs.public_json(own.public_key())
+    finally:
+        own.close()
+    deployment = {"certifier_key": public, "session": SESSION.hex(), "links": {"n2": cs.N2_LINK}, "windows": 2,
+                  "reveal": None}
+
+    def answers(certificates):
+        return [{"window": w, "session": SESSION.hex(), "certificates": [], "clocks": [cs.certificate_json(c)],
+                 "unsigned": []} for w, c in enumerate(certificates)]
+
+    (tmp_path / "reused").mkdir()
+    (tmp_path / "fresh").mkdir()
+    refused, _, clocks = _refusals(tmp_path / "reused", deployment, answers(reused))
+    assert refused == [f"window 1's egress clock certificate of {cs.N2_LINK} (key {public['key_id'][:16]}…): its "
+                       "signed digest is also window 0's clock certificate's, so its salt was reused, under which two "
+                       "windows of one sync sign one digest"]
+    assert [d["window"] for d in clocks] == [0]
+    refused, _, clocks = _refusals(tmp_path / "fresh", deployment, answers(fresh))
+    assert refused == [] and [d["window"] for d in clocks] == [0, 1]
 
 
 def test_every_certificate_is_refused_by_name_under_another_key(honest, tmp_path):
