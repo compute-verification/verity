@@ -419,6 +419,7 @@ theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec prin
       finalFits := JsonRT.finalFits_goal S h64 hP
       draw := JsonRT.drawMatches_goal S h64 hP
       liveReads := JsonRT.liveReads_goal S h64 hP
+      canonical := JsonRT.canonical_goal S h64 hP
       rootB := JsonRT.custodyRootB_goal S h64 hP
       publicsLink := JsonRT.custodyPublics_goal S h64 hP
       points := JsonRT.custodyPoints_goal S h64 hP

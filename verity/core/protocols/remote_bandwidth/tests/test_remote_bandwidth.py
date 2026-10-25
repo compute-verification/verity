@@ -304,6 +304,20 @@ def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) ->
     assert s.receive(0, 0, bytes(64), runs, step=0) == audit.Verdict(0, False, "plan")
 
 
+def test_a_pass_that_would_take_its_window_to_the_receipt_limit_rejects(store) -> None:
+    """A window's receipts stay below `RECEIPT_LIMIT`: over a store appended to its codec's `max_blocks`, every pass of
+    all of it is kept until the one that would take window 0's receipts to the limit, which rejects with `plan`."""
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
+    s.start()
+    top = s.params.codec.max_blocks
+    s.append(bytes(64), top - s.extent)
+    last = -(-audit.RECEIPT_LIMIT // top) - 1
+    for i in range(last):
+        assert s.receive(0, i, bytes([1]) * 64, ((0, top),), step=i) is None
+    assert sum(p.length for p in s.windows[0].plans) == last * top < audit.RECEIPT_LIMIT
+    assert s.receive(0, last, bytes([1]) * 64, ((0, top),), step=last) == audit.Verdict(0, False, "plan")
+
+
 def test_receipts_committed_under_another_plan_reject(store) -> None:
     """A prover whose trees commit every block but which sends a plan of the first 16 (one whole leaf, so every opened
     leaf has the size the sent plan gives it) fails on the receipt path: the tree's binding is the plan's digest."""

@@ -1951,7 +1951,8 @@ def edge_rows(k: int = 1024) -> tuple:
 def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_would_launch_the_same(monkeypatch):
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
-    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    # the module itself: under the layout move its package re-exports a function named as the module
+    PS = importlib.import_module("verity_vllm.protocol_options.pouw_pearl_c_screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -2006,7 +2007,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    PS = importlib.import_module("verity_vllm.protocol_options.pouw_pearl_c_screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
