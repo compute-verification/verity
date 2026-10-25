@@ -222,8 +222,7 @@ abbrev Entry := (String × Nat × String × Nat) × (String × Int × String)
 /-- Every reader row the wire covers, with its writer, index by index. -/
 def Wire.entries (w : Wire) : List Entry :=
   (List.range w.units).map fun i =>
-    let (u, r) := w.readerAt i
-    ((w.reader, u, w.port, r), (w.writer, w.writerAt i, w.out))
+    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out))
 
 /-- The bounds entry by entry. -/
 def boundsRef (w : Wire) (rt wt : Template) : Bool :=
