@@ -932,8 +932,10 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   codec) and read from its own disks (their measured read ceiling), each at its rate over any interval plus one burst
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
-  the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`, over
-  every window's draws). `LineHeld`'s error also carries the windows' PRF advantages,
+  the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
+  (`ledger.hiding`), plus the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\)
+  (`ledger.rejection`, over every window's draws): the ledger's parts (`ledger.DELTA_PARTS`), the horizon's profile
+  and slack and then these three. `LineHeld`'s error also carries the windows' PRF advantages,
   \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names them by their claim
   (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 

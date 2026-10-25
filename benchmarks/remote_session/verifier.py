@@ -365,13 +365,14 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
-    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the draw's
-    rejection (`ledger.rejection`, the ledger's `delta` part); `delta` alone understates it by the passes' slack.
-    None when no reading has a ledger."""
+    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
+    commitment's hiding terms and the draw's rejection (`ledger.hiding`, `ledger.rejection`, the ledger's `delta`
+    parts); `delta` alone understates it by the passes' slack.  None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
+            d = ledgers.get("delta", {})
             return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
-                    + ledgers.get("delta", {}).get("rejection", 0.0))
+                    + d.get("hiding", 0.0) + d.get("rejection", 0.0))
     return None
 
 
