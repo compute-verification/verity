@@ -117,7 +117,7 @@ def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.Prog, l
 
 def warm_projection(compact: bool = False, cached: int = C_ROWS, **kw) -> BD.Projection:
     F, mine = fold(compact, **kw)
-    P = BD.Projection(F, "oracle[r1]", mine, tok_node=1, weights_node=2)
+    P = BD.Projection(F, "oracle[r1]", mine, tok_node=1, weights_node=2, seed_node=None)
     P.cached_rows = cached
     return P
 
