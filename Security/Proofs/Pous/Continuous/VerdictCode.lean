@@ -182,13 +182,16 @@ theorem wires_foldl (x : List Bool) : ∀ (gs : List PousCheck.Verdict.Gate) (st
       match g with
       | .input => (st.1 ++ [x.getD st.2 false], st.2 + 1)
       | g => (st.1 ++ [(g.val (fun i => some (st.1.getD i false)) none).getD false], st.2)) (st.1.toList, st.2) =
-      ((gs.foldl (PousCheck.Verdict.wireStep x) st).1.toList, (gs.foldl (PousCheck.Verdict.wireStep x) st).2)
+      ((gs.foldl (PousCheck.Verdict.wireStep x.toArray) st).1.toList,
+        (gs.foldl (PousCheck.Verdict.wireStep x.toArray) st).2)
   | [], _ => rfl
   | g :: gs, st => by
     rw [List.map_cons, List.foldl_cons, List.foldl_cons, ← wires_foldl x gs]
     congr 1
     cases g with
-    | input => simp only [toB, List.getD_eq_getElem?_getD, PousCheck.Verdict.wireStep, Array.toList_push]
+    | input =>
+      simp only [toB, List.getD_eq_getElem?_getD, PousCheck.Verdict.wireStep, Array.toList_push,
+        Array.getD_eq_getD_getElem?, List.getElem?_toArray]
     | const b =>
       simp only [toB, BGate.val, Option.getD_some, PousCheck.Verdict.wireStep, PousCheck.Verdict.gval,
         Array.toList_push]

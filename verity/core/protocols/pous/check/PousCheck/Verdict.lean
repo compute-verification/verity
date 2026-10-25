@@ -11,6 +11,9 @@ memory challenger's session verdict, in executable Lean:
 `Proofs.Pous.Continuous.VerdictCode` proves each is the security analysis's (`PousVerdict.verdictProg`, `Prog.eval`,
 `PousVerdict.verdicts`, `contAccepts`), so `PousVerdict.VerdictIs` holds of `prog`, and `tests/test_verdict_difftest.py`
 holds `prog` to the Definition's compiled circuit gate for gate (`PousCheck.VerdictDifftest`). Lean core only.
+
+The builders read an array's size, and the parts of a pair they still need, before they push to the array, so that it is
+not shared and each push is in place: at `K = 132` the unit has 318,154 gates.
 -/
 
 namespace PousCheck.Verdict
@@ -52,7 +55,8 @@ Returns the gates and the carries `c_0 = c, …, c_n`. -/
 def carries : Array Gate → List (Nat × Nat) → Nat → Array Gate × List Nat
   | gs, [], c => (gs, [c])
   | gs, (x, p) :: r, c =>
-    let t := carries (((gs.push (.xor [x, c])).push (.and [p, gs.size])).push (.xor [x, gs.size + 1])) r (gs.size + 2)
+    let q := gs.size
+    let t := carries (((gs.push (.xor [x, c])).push (.and [p, q])).push (.xor [x, q + 1])) r (q + 2)
     (t.1, c :: t.2)
 
 /-- **`a + ¬s + c0`** after `gs` (`verdict_circuit.chain`): the gates `p_i = a_i ⊕ s_i ⊕ 1`, then the carries. Returns the
@@ -64,7 +68,8 @@ def chain (w1 : Nat) (gs : Array Gate) (a s : List Nat) (c0 : Nat) : Array Gate 
 
 /-- The sum bits `d_i = p_i ⊕ c_i` after `gs`. -/
 def sums (gs : Array Gate) (ps cs : List Nat) : Array Gate × List Nat :=
-  (gs ++ (ps.zip cs).map (fun pc => Gate.xor [pc.1, pc.2]), (List.range (ps.zip cs).length).map (gs.size + ·))
+  let ds := (List.range (ps.zip cs).length).map (gs.size + ·)
+  (gs ++ (ps.zip cs).map (fun pc => Gate.xor [pc.1, pc.2]), ds)
 
 /-- The equalities of round `j`: each bit of its record's `j` against `j`'s, and each bit of its `H(block)` against the
 expected digest's, as `Xor3(a, b, 1)`. -/
@@ -76,18 +81,22 @@ def litGates (K w0 w1 j : Nat) : List Gate :=
 `LIMIT + ¬(receipt − send) + 1`, and one AND over the equalities and the two last carries. -/
 def roundGates (K LIMIT w0 w1 j : Nat) (gs : Array Gate) : Array Gate × Nat :=
   let lits := litGates K w0 w1 j
+  let ls := (List.range lits.length).map (gs.size + ·)
   let c1 := chain w1 (gs ++ lits) (beWires (recordBits * j) 20 8) (beWires (recordBits * j) 12 8) w1
+  let c := c1.2.2.getLastD 0
   let d := sums c1.1 c1.2.1 c1.2.2
   let c2 := chain w1 d.1 (constWires w0 w1 64 (min LIMIT (2 ^ 64 - 1))) d.2 w1
-  (c2.1.push (.and ((List.range lits.length).map (gs.size + ·) ++ [c1.2.2.getLastD 0, c2.2.2.getLastD 0])), c2.1.size)
+  let h := c2.1.size
+  (c2.1.push (.and (ls ++ [c, c2.2.2.getLastD 0])), h)
 
 /-- The inputs, the constants `0` and `1`. -/
 def initGates (K : Nat) : Array Gate := ((Array.replicate (inputs K) Gate.input).push (.const false)).push (.const true)
 
 /-- Round `j` after the gates and hit wires so far. -/
 def hitStep (K LIMIT : Nat) (st : Array Gate × List Nat) (j : Nat) : Array Gate × List Nat :=
+  let hs := st.2
   let r := roundGates K LIMIT (inputs K) (inputs K + 1) j st.1
-  (r.1, st.2 ++ [r.2])
+  (r.1, hs ++ [r.2])
 
 /-- Every round's gates, and their hit wires. -/
 def hitGates (K LIMIT : Nat) : Array Gate × List Nat := (List.range K).foldl (hitStep K LIMIT) (initGates K, [])
@@ -100,7 +109,9 @@ def counterWidth (K M : Nat) : Nat := bitLength (max K M)
 
 /-- One round of the miss counter: `cnt + 0 + ¬hit`. -/
 def countStep (w1 w : Nat) (st : Array Gate × List Nat) (h : Nat) : Array Gate × List Nat :=
-  let c := chain w1 (st.1.push (.not h)) st.2 (List.replicate w w1) st.1.size
+  let n := st.1.size
+  let cnt := st.2
+  let c := chain w1 (st.1.push (.not h)) cnt (List.replicate w w1) n
   sums c.1 c.2.1 c.2.2
 
 /-- The counter over every round. -/
@@ -127,12 +138,12 @@ def gval (f : Nat → Bool) : Gate → Bool
 
 /-- One gate run after the wires so far, `st.2` inputs read: an input reads the next of `x`, and a wire at or past the
 reading gate's own reads `0`. -/
-def wireStep (x : List Bool) (st : Array Bool × Nat) : Gate → Array Bool × Nat
-  | .input => (st.1.push (x.getD st.2 false), st.2 + 1)
-  | g => (st.1.push (gval (fun i => st.1.getD i false) g), st.2)
+def wireStep (x : Array Bool) (st : Array Bool × Nat) : Gate → Array Bool × Nat
+  | .input => let k := st.2; (st.1.push (x.getD k false), k + 1)
+  | g => let k := st.2; (st.1.push (gval (fun i => st.1.getD i false) g), k)
 
-/-- `C` run on inputs `x`, gate by gate. -/
-def Prog.wires (C : Prog) (x : List Bool) : Array Bool := (C.gates.foldl (wireStep x) (#[], 0)).1
+/-- `C` run on inputs `x`, gate by gate (`x` read as an array: an input reads its position in constant time). -/
+def Prog.wires (C : Prog) (x : List Bool) : Array Bool := (C.gates.foldl (wireStep x.toArray) (#[], 0)).1
 
 /-- `C`'s returned values on inputs `x`. -/
 def Prog.eval (C : Prog) (x : List Bool) : List Bool := C.outs.map fun o => (C.wires x).getD o false
