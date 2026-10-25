@@ -2,9 +2,10 @@ import NciFuzz.Check
 
 /-!
 `lake exe nci-desc-fuzz IN OUT`: `IN` has one JSON object per line, `{"id": …, "program": TEXT}` (any other fields are
-copied through; `"force": true` checks `ReadsExact` on it even where `Desc.walkable` refuses it), and `OUT` gets
-`NciCheck.Fuzz.check`'s result on each, with its `id`, one line each, in order, and the program's text where a
-statement fails.
+copied through; `"force": true` checks `ReadsExact` on it even where `Desc.walkable` refuses it, and `"instances": […]`,
+each `{"theta", "owner", "gamma", "alpha"}`, are checked by `agree` beside its own four), and `OUT` gets
+`NciCheck.Fuzz.check`'s result on each, with its `id`, one line each, in order, and the program's text and instances
+where a statement fails.
 -/
 
 open Lean (Json)
@@ -19,9 +20,10 @@ def checkLine (line : String) : String :=
     let text := match j.getObjValD "program" with
       | .str s => s
       | _ => ""
-    let r := NciCheck.Fuzz.check {} text (force := j.getObjValD "force" == Json.bool true)
+    let given := (j.getObjValD "instances").getArr?.toOption.getD #[]
+    let r := NciCheck.Fuzz.check {} text (force := j.getObjValD "force" == Json.bool true) given
     let tag := match j with
-      | .obj kvs => kvs.toList.filter fun kv => kv.1 != "program" || failed r
+      | .obj kvs => kvs.toList.filter fun kv => (kv.1 != "program" && kv.1 != "instances") || failed r
       | _ => []
     (Json.mkObj (tag ++ match r with
       | .obj kvs => kvs.toList

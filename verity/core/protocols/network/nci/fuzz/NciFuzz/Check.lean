@@ -28,7 +28,8 @@ Each `∀` over members, leaves or references enumerates all of them up to `Caps
 `UpOk`, `DownOk` and `OpOk` is monotone in the member and the leaf, or periodic in a leaf block shorter than the
 sample), and says so (`cut`).
 
-`agree` is what the three are for, `DescAgrees` itself, on four instances of the Program (`instanceOf`): wherever
+`agree` is what the three are for, `DescAgrees` itself, on four instances of the Program (`instanceOf`) and on any the
+line gives (`θ`, owners, `Γ` and `α` chosen with the Program, as the shared-members family chooses its IUs): wherever
 `Desc.evaluate` gives a verdict, `NciCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`,
 `NciDesc.Expands`).
 -/
@@ -383,16 +384,21 @@ def expand (P : Prog) (j : Json) : Json := Id.run do
   Json.mkObj [("program", j.getObjValD "program"), ("theta", Json.arr theta'), ("owner", Json.arr owner'),
     ("gamma", j.getObjValD "gamma"), ("alpha", j.getObjValD "alpha")]
 
-/-- `DescAgreed` on `n` instances of the Program: the verdicts `Desc.evaluate` gives, and the first instance where the
-unrolled check on its expansion differs. -/
-def agrees (P : Prog) (text : String) (n : Nat) : Nat × Option Json := Id.run do
+/-- `DescAgreed` on `n` instances of the Program, then on each of `given` (`theta`, `owner`, `gamma` and `alpha`, numbered
+from `n`): the verdicts `Desc.evaluate` gives, and the first instance where the unrolled check on its expansion
+differs. -/
+def agrees (P : Prog) (text : String) (n : Nat) (given : Array Json := #[]) : Nat × Option Json := Id.run do
   let body := (P.defs[P.root]!).body
   let inp := body.nodes.map (Desc.isInputNode P)
   let reg := body.nodes.map fun nd => isRegisteredId (P.defs[nd.fn]!).key
   let held := (Array.range body.nodes.size).map fun k => decide (body.offsets[k + 1]! > body.offsets[k]!)
   let mut verdicts := 0
-  for v in [0:n] do
-    let j := instanceOf text (P.defs[P.root]!).gates inp reg held (hash text) v
+  for v in [0:n + given.size] do
+    let j := if v < n then instanceOf text (P.defs[P.root]!).gates inp reg held (hash text) v
+      else
+        let g := given[v - n]!
+        Json.mkObj [("program", Json.str text), ("theta", g.getObjValD "theta"), ("owner", g.getObjValD "owner"),
+          ("gamma", g.getObjValD "gamma"), ("alpha", g.getObjValD "alpha")]
     match Desc.evaluate j with
     | .error _ => pure ()
     | .ok out =>
@@ -499,9 +505,9 @@ def unwalkable (P : Prog) (caps : Caps) : Json :=
             ("outside_reads", toJson st.outside)]
         | .error j => if (j.getObjVal? "skipped").isOk then j else Json.mkObj [("fail", j)]
 
-/-- The six preconditions, then each statement's conclusion, on one descriptor's text; with `force`, `ReadsExact` on a
-Program `Desc.walkable` refuses too (`unwalkable`). -/
-def check (caps : Caps) (text : String) (force := false) : Json :=
+/-- The six preconditions, then each statement's conclusion, on one descriptor's text, `agree` on the instances `given`
+too; with `force`, `ReadsExact` on a Program `Desc.walkable` refuses too (`unwalkable`). -/
+def check (caps : Caps) (text : String) (force := false) (given : Array Json := #[]) : Json :=
   match decode text.toUTF8 with
   | .error e => Json.mkObj [("pre", Json.str "decode"), ("why", Json.str (e.take 200).toString)]
   | .ok P =>
@@ -538,8 +544,8 @@ def check (caps : Caps) (text : String) (force := false) : Json :=
                 ("outside_reads", toJson st.outside)]
             | .error j => if (j.getObjVal? "skipped").isOk then j else Json.mkObj [("fail", j)]
       let agj := if !bounded then Json.mkObj [("skipped", Json.str "past the caps")] else
-        let (n, d) := agrees P text 4
-        Json.mkObj [("verdicts", toJson n), ("fail", opt d)]
+        let (n, d) := agrees P text 4 given
+        Json.mkObj [("verdicts", toJson n), ("given", toJson given.size), ("fail", opt d)]
       Json.mkObj [("pre", Json.str "ok"), ("shape", shapeOf P), ("s1", s1j), ("s2", s2j), ("s3", s3j),
         ("agree", agj)]
 
