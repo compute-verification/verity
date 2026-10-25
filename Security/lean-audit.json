@@ -8489,7 +8489,7 @@
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -16463,6 +16463,7 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
+    "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
@@ -20786,6 +20787,13 @@
     "NetTiming.SecurityProofs.EncardChargedLe",
     "NetTiming.SecurityProofs.EncardChargedLeCounted"
    ]
+  },
+  "Definitions.NetworkCertifier.Guarantees.Horizon": {
+   "digest": "723d0a0a236028b921596dfdf2107229b3949843f4b0f74ea68fa8b9676a0546",
+   "definitions": {
+    "NetTiming.Guarantees.HorizonWrongUnitsLe": "714a21e19dcc8f20d883e5801e93168f3e81afc079674707adc46fc795b29482"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
    "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
