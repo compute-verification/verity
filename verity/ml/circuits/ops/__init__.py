@@ -16,6 +16,9 @@
     verity.ml.circuits.ops.moe     IR composites: a padded static MoE layer's expert GEMMs, one unit per (token slot, top-k slot) pair
                       with the expert a value selected inside it (MoeSelectBf16x{E}, MoePairCoordinate(W), MoePairGemm(W)),
                       and their numpy kernels; `ops.boolean.moe` has them on bits
+    verity.ml.circuits.ops.rows    IR composites: row units, one unit a row writing the whole row: the residual add Bf16AddRow
+                      and the greedy Argmax (a 16-bit index); `ops.boolean.rows` has them on bits, with the embedding of a
+                      hidden token at a public position over the commitments' row read (EmbeddingPosition)
     verity.ml.circuits.ops.boolean word arithmetic as Boolean circuits, built with `verity.ml.circuits.boolean`'s builders
                       (`forms`, `gather`, the multiplexer tree, and `trace`, Boolean Definitions from builders) and
                       `verity.ml.circuits.silicon`'s (`fp`, `tc_step`, `fp4`): `softmax`, attention's circuits over `forms`,

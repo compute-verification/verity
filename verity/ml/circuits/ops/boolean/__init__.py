@@ -12,6 +12,8 @@
                  index) as circuits over `forms`, for `verity_vllm.program.registry.boolean_int8`'s Definitions
     moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
+    rows         row units on bits: Bf16AddRow_v2, Argmax_v2, and EmbeddingPosition_v1, a hidden token's registered row (the
+                 commitments' read, `verity.ml.commitments.gates.embedding`) plus the public position's row
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
                  (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
 
