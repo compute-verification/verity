@@ -1,4 +1,5 @@
 import Flock.Canon
+import Flock.Norm
 import Std.Data.TreeMap.Raw.WF
 import Definitions.Claims.Json
 import Proofs.Flock.Claims.JsonEq
@@ -15,7 +16,9 @@ and that map's fields into another. So:
 * `norm_congr`: `norm` is the same on equivalent values;
 * `norm_norm`: `norm` is idempotent, so `eq_of_jsonEquiv_norm`, `eq_of_rel_norm`: two rebuilt values the draw check
   passes on are equal, with no premise on the parser;
-* `wf_norm`: a rebuilt value is well formed (`Claims.Json.Wf`) by construction.
+* `wf_norm`: a rebuilt value is well formed (`Claims.Json.Wf`) by construction;
+* `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's draw,
+  parsed, is the statement's up to `JsonEquiv`).
 -/
 
 namespace FlockDeploy
@@ -231,5 +234,48 @@ theorem wf_norm : ∀ j : Json, Claims.Json.Wf (Flock.norm j) := by
     simp only [Prod.mk.injEq] at he
     rw [← he.2]
     exact ih q hq
+
+/-- **On a well-formed value, `norm` keeps the form**: a well-formed object's fields are already in key order with one
+value per key, so rebuilding it gives the same fields. -/
+theorem jsonEquiv_norm : ∀ j : Json, Claims.Json.Wf j → JsonEquiv (Flock.norm j) j := by
+  refine json_ind (fun _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) ?_ ?_
+  · intro a ih hw
+    cases hw with
+    | arr h =>
+      rw [norm_arr, jsonEquiv_arr_iff]
+      refine ⟨by simp, fun i h₁ h₂ => ?_⟩
+      simp only [Array.getElem_map]
+      exact ih _ (Array.getElem_mem _) (h _ (Array.getElem_mem _))
+  · intro m ih hw
+    cases hw with
+    | obj hm h =>
+      have hM : (m.map fun _ v => Flock.norm v).WF := ⟨⟨Std.DTreeMap.Internal.Impl.WF.map hm.out.out⟩⟩
+      have hL : m.toList.map (fun p => (p.1, Flock.norm p.2)) = (m.map fun _ v => Flock.norm v).toList :=
+        (Std.TreeMap.Raw.toList_map (f := fun _ v => Flock.norm v)).symm
+      rw [norm_obj, JsonEquiv, jsonForm_obj, jsonForm_obj, toList_normObj, hL, toList_ofList_toList hM, ← hL,
+        List.map_map]
+      congr 2
+      refine List.map_congr_left fun p hp => ?_
+      have hv : m.get? p.1 = some p.2 := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
+      simp only [Function.comp_apply]
+      rw [ih p hp (h _ _ hv)]
+
+/-- **Alike values are well formed** on the right (`Claims.Json.Same` holds only of well-formed trees). -/
+theorem same_wf_right {a b : Json} (h : Claims.Json.Same a b) : Claims.Json.Wf b := by
+  induction h with
+  | null => exact .null
+  | bool b => exact .bool b
+  | num n => exact .num n
+  | str s => exact .str s
+  | arr hs _ ih =>
+    refine .arr fun x hx => ?_
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
+    exact ih i (hs ▸ hi) hi
+  | obj hm hn hk _ ih =>
+    refine .obj hn fun k v hv => ?_
+    have hs := hk k
+    rw [hv, Option.isSome_some] at hs
+    obtain ⟨a, ha⟩ := Option.isSome_iff_exists.1 hs
+    exact ih k a v ha hv
 
 end FlockDeploy

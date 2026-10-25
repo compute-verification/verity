@@ -1,5 +1,4 @@
 import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Soundness.Assumptions.Zk
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 import Proofs.Flock.Soundness.Refine.Walk
@@ -433,24 +432,6 @@ theorem recordDraw_norm {record : String} {d : Json} (h : Exec.recordDraw record
     · cases h
   · cases h
 
-/-- **A statement's draw is rebuilt** (`Flock.norm`, `Raw.ins_draw`). -/
-theorem insOf_draw_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
-    (hd : s.read.draw = some d) : Flock.norm d = d := by
-  unfold insOf at h
-  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
-  split_ifs at hw with hz
-  · cases hw
-  change w.ins.toOption = some s at hw
-  cases hi : w.ins with
-  | error e => rw [hi] at hw; cases hw
-  | ok s' =>
-    rw [hi] at hw
-    cases hw
-    obtain ⟨draw, -, hdr⟩ := Raw.ins_draw hi
-    rw [hdr] at hd
-    obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
-    exact norm_norm d₀
-
 /-- **The record's draw is the statement's, as a value**, wherever the checks pass on a statement the verifier read
 (`insOf`): both draws are rebuilt (`recordDraw_norm`, `insOf_draw_norm`), and two rebuilt values the draw check passes
 on are equal (`eq_of_rel_norm`). This is the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`, with no premise
@@ -459,7 +440,7 @@ theorem recordDraw_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (hs : insOf zk' x' = some s) (h : checks zk s spec x link c₁ mids f = .ok ()) :
     Exec.recordDraw f.record = s.read.draw :=
-  eq_of_rel_norm (checks_draw h) (fun _ hd => recordDraw_norm hd) (fun _ hd => insOf_draw_norm hs hd)
+  eq_of_rel_norm (checks_draw h) (fun _ hd => recordDraw_norm hd) (fun _ hd => (insOf_draw_norm hs hd).1)
 
 /-- **An accepting decision's record carries the statement's draw, as a value** (`recordDraw_of_checks`). -/
 theorem recordDraw_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}

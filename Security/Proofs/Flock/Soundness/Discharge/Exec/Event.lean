@@ -1,4 +1,5 @@
 import Flock.HmRow
+import Flock.Norm
 import Flock.Verify
 import Proofs.Flock.Soundness.Audit.OneStage
 

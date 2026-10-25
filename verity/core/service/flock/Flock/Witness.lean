@@ -1,4 +1,5 @@
 import Flock.Zk
+import Flock.Norm
 import Flock.ProvedScope
 import Flock.RecVStar
 import Flock.RecCoins

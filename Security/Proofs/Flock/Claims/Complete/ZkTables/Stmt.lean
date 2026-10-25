@@ -339,45 +339,6 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
 
 /-! ## The statement at a good case of several tables -/
 
-private theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
-    w.draw.mapM (jsonOf "draw") = .ok s.read.draw := by
-  unfold Raw.ins at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
-
-/-- The statement's draw is JSON that `Json.parse` read. -/
-theorem draw_parse {x : Claims.Msg} {s : Ins} (hs : insOf true x = some s) {d : Json}
-    (hd : s.read.draw = some d) : ∃ t, Json.parse t = .ok d := by
-  unfold insOf at hs
-  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
-  by_cases hz : w.zk ≠ true
-  · simp [hz] at hw
-  simp only [hz, ↓reduceIte] at hw
-  cases hi : w.ins with
-  | error e => rw [hi] at hw; cases hw
-  | ok s' =>
-    rw [hi] at hw
-    cases hw
-    have h := Raw.ins_draw hi
-    rw [hd] at h
-    cases hb : w.draw with
-    | none => rw [hb] at h; cases h
-    | some b =>
-      rw [hb] at h
-      simp only [Option.mapM_some] at h
-      cases hj : jsonOf "draw" b with
-      | error e => rw [hj] at h; cases h
-      | ok d' =>
-        rw [hj] at h
-        cases h
-        unfold jsonOf at hj
-        split at hj
-        · cases hj
-        · rename_i t _
-          cases hp : Json.parse t with
-          | error e => rw [hp] at hj; cases hj
-          | ok j => rw [hp] at hj; cases hj; exact ⟨t, hp⟩
 
 theorem ofJson_obj {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) : j ≠ Json.null := by
   rintro rfl
@@ -434,8 +395,7 @@ theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : Stmt
   | none => trivial
   | some d =>
     obtain ⟨D, hD, ⟨k, hk⟩, hn⟩ := hd d hdr
-    obtain ⟨t, ht⟩ := draw_parse (setupOf_some c.setup).1 hdr
-    obtain ⟨hgd, hcl⟩ := good_subset (S.parse_wf t d ht) hD hk
+    obtain ⟨hgd, hcl⟩ := good_subset (insOf_draw_norm (setupOf_some c.setup).1 hdr).2 hD hk
     refine ⟨ofJson_obj hD, hgd, D, hD, ?_⟩
     rw [hn]
     simp [Draw.UnitDraw.proved, hcl]
