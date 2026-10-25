@@ -1560,7 +1560,10 @@
    "type_hash": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae"
   },
   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.sessionDrawsRecords : Properties.RemoteAudit.Shared.SessionDrawsRecords"],
+   "assumptions": [],
+   "type_hash": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773"
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
@@ -4877,6 +4880,7 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -5140,6 +5144,7 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -5215,6 +5220,7 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8395,6 +8401,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.recordKeptAfterDraw"
@@ -8500,13 +8507,15 @@
    "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
   },
   "Properties.RemoteAudit.Shared": {
-   "digest": "691bc299c37faf179a0ed805709419debab20a3dc2fcd1049651b8867abab76d",
+   "digest": "5fec81c7d594ad0a321c567035b6a15eba68d4bfb0252e0104453f326491bf01",
    "definitions": {
     "Properties.RemoteAudit.Shared.AcceptDrawsOpenable": "65753d764bfe2d2c6c3c7486bd8d9be8247eb6220f954081ce3c1450b17aede7",
     "Properties.RemoteAudit.Shared.DrawIsSubset": "5e1391418f19c4953e71bddf5ceffb7540df4c8c18484a4f0243361eec42f4ff",
     "Properties.RemoteAudit.Shared.OpeningsUnreadUntilDrawn": "a96403019f2e4d40479cb0376b77513e672e3e93372da4dab71018fc58f13a23",
     "Properties.RemoteAudit.Shared.RecordKeptAfterDraw": "28b329c724115229b6cdb4dd0dfa086a0c8f3b5ed9624eb000f9070bca774d7d",
+    "Properties.RemoteAudit.Shared.SessionDrawsRecords": "83b570c39165754acd0a3695338670ed63089cc5d5d635541856dfd1434eeaea",
     "Properties.RemoteAudit.Shared.drawLengths": "39d8453df51fe66de43380186e5c0a223d9e7d2a37155c3c9f2b0feb05ce917e",
+    "Properties.RemoteAudit.Shared.drawRecords": "a7fc2f6a62e1bb91e012500cb885a33aa0654e3a976132079d28ebb77edb7cf3",
     "Properties.RemoteAudit.Shared.drawWindows": "a886097f0567a1ce1a0ee77b30b2999ebbe6a91216848035fe8dadbbc4d55be9",
     "Properties.RemoteAudit.Shared.lengthsOf": "a513bbe2b2c975d42200c7ed0592c3dd5fd34e9625589017b44b456d9e1c5752",
     "Properties.RemoteAudit.Shared.passCount": "31cc2541472556de7eea915e3142f8c57ba7655e16d37005585ac0a761dc342a",
@@ -8518,7 +8527,8 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
-    "Properties.RemoteAudit.Shared.recordKeptAfterDraw"
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords"
    ]
   },
   "Properties.SampledProofs": {
@@ -8653,6 +8663,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8717,6 +8728,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8830,6 +8842,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8926,6 +8939,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -9078,6 +9092,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
@@ -9101,7 +9116,8 @@
    "guarantees": [
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
-    "Properties.RemoteAudit.Shared.recordKeptAfterDraw"
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords"
    ]
   },
   "RemoteAudit.Window": {
@@ -9205,6 +9221,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
