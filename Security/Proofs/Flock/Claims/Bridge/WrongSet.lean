@@ -67,10 +67,9 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sam
   intro hf
   refine hf ⟨r, hr, fun g => C.eval Xv (φ g), hlow _ fun g hg hc => ?_⟩
   unfold Claims.Sampling.RU.ref
-  by_cases hin : g ∈ Claims.Sampling.RU.gates r ∧ s.prog.Boundary (Claims.Sampling.RU.gates r) g = false
-  · rw [if_pos hin]
-  · rw [if_neg hin]
-    have hB : g ∉ Claims.Sampling.RU.gates r ∨ s.prog.Boundary (Claims.Sampling.RU.gates r) g = true := by
+  split_ifs with hin
+  · rfl
+  · have hB : g ∉ Claims.Sampling.RU.gates r ∨ s.prog.Boundary (Claims.Sampling.RU.gates r) g = true := by
       by_cases h1 : g ∈ Claims.Sampling.RU.gates r
       · exact Or.inr (by simpa [h1] using hin)
       · exact Or.inl h1
