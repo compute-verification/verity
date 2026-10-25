@@ -60,10 +60,11 @@ same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks,
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
-Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
-the output of a scan of no iterations), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says
-what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
+iterations with output leaves, read or not; or a body calling a Definition decoded after it, a Definition not as the
+decoder gives it, or a root with parameters, which the decoder never gives: `walkable`), `program` (a reference the
+layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says what and how
+many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -986,12 +987,21 @@ depth `H`: each step goes down into an activation, up out of one, or to the scan
 where an earlier one was. -/
 def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
 
+/-- Every reference `Flock.Program.resolve` follows from an activation of the walk ends at a gate: the root has no
+parameters (the decoder's refusal), and no scan of no iterations has output leaves, which `resolve` refuses to read. A
+scan of no iterations carrying a value is refused here wherever it is, read or not; `analyze` would refuse it only where
+a gate's operand reaches it. -/
+def resolvable (P : Prog) : Bool :=
+  (P.defs[P.root]!).body.params.isEmpty && (List.range P.defs.size).all fun d =>
+    (P.defs[d]!).prim || (P.defs[d]!).body.nodes.all fun n => n.form != .scan || n.n != 0 || n.out.leaves == 0
+
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
 can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
 `2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
 summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
-(`bodiesLaidOut`). -/
-def walkable (P : Prog) : Bool := calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2
+(`bodiesLaidOut`), and every reference it resolves ends at a gate (`resolvable`). -/
+def walkable (P : Prog) : Bool :=
+  calleesFirst P && bodiesLaidOut P && (resolvable P && walkBound P ≤ Flock.Steps.FUEL / 2)
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
