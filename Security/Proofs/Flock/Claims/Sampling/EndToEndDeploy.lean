@@ -149,17 +149,14 @@ theorem slotDesign_rules {rule : _root_.SampledProofs.Select.Rule} {p : _root_.S
   obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
   obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
   obtain ⟨derived, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
-  obtain ⟨first, hfirst, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
-  obtain rfl := (Except.ok.inj h).symm
-  refine ⟨first, rfl, ?_⟩
   cases rule with
   | all =>
-    dsimp only at hfirst
-    exact ⟨fun _ => (Except.ok.inj hfirst).symm, fun h => absurd rfl h⟩
+    obtain rfl := (Except.ok.inj h).symm
+    exact ⟨_, rfl, fun _ => rfl, fun h => absurd rfl h⟩
   | law _ =>
-    dsimp only at hfirst
-    obtain ⟨parsed, -, hp⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 hfirst
-    exact ⟨fun h => nomatch h, fun _ => ⟨_, (Except.ok.inj hp).symm⟩⟩
+    obtain ⟨parsed, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
+    obtain rfl := (Except.ok.inj h).symm
+    exact ⟨_, rfl, fun h => nomatch h, fun _ => ⟨_, rfl⟩⟩
 
 /-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
 theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.Layout}
@@ -256,7 +253,7 @@ theorem window_range_of_le {N M t : ℕ} (ht : t ≤ N) : window N M (Finset.ran
   ext v
   simp only [window, Finset.mem_image, Finset.mem_filter, Finset.mem_range, Finset.notMem_empty, iff_false,
     not_exists, not_and]
-  intro w hw _ _
+  intro w hw _
   omega
 
 theorem Pa_subsetInputs {d : Design} {kd : ℕ} (hd : SubsetInputsDesign d kd) {P : Partition}
