@@ -335,7 +335,8 @@
    "except": [
     "Properties.Accounting.Compose",
     "Properties.Accounting.Served",
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+    "Properties.Accounting.JointBridge.WorkOfCreditedWords"
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
@@ -394,6 +395,11 @@
    "imports": ["Definitions.Accounting", "Properties.Pouw.Period"],
    "except": [],
    "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+  },
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
+   "except": [],
+   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its one named premise (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   }
  },
  "reads_exempt": {
