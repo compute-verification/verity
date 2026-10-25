@@ -52,6 +52,14 @@ def test_the_default_config():
     assert W.default_cfg(256, 64, 16384) == W.Cfg(128, 64)
 
 
+def test_the_tuned_table_holds_built_tiles_in_ascending_m():
+    from configs import CONFIGS
+    for rows in CONFIGS["wgmma:sm_90"].values():
+        assert [m for m, _ in rows] == sorted({m for m, _ in rows})
+        for _, text in rows:
+            assert str(W.Cfg.parse(text)) == text
+
+
 def test_the_grid_keeps_the_rounds_and_holds_at_most_its_ctas():
     lib = types.SimpleNamespace(sms=132)
     grid = lambda tiles, ctas: W.Lib.grid(lib, tiles, ctas)  # noqa: E731
