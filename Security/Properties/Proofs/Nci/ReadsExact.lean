@@ -11518,6 +11518,265 @@ theorem throughW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
         simp only [hf, hi0, hx0, hai', ↓reduceIte] at this
         omega
 
+/-- What `down` gives a batch of a composite's piece of positive count, one step up, names the body's gates with their
+widths. -/
+def BatchW (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+    (c.P.defs[node.fn]!).prim = false → q.count ≠ 0 → q.flat = q → (∀ x ∈ pos q, 0 ≤ x.2) →
+    (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
+
+/-- What `down` gives a scan's piece of one row, one step up, names the body's gates with their widths. -/
+def ScanW (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ q segs k node (carry y : Flock.Program.Ty), q.tgt = .ref false k → c.node k = .ok node → node.form = .scan →
+    node.n ≠ 0 → q.count ≠ 0 → q.flat = q → ¬ q.rows > 1 → (c.P.defs[node.fn]!).ret = .tuple #[carry, y] →
+    (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs →
+    ∀ s ∈ segs.toList, GateW c.P c.d s
+
+/-- A piece's rows, each through `down`, name the body's gates with their widths. -/
+theorem byRows_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece) (h0 : 0 < q.count)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
+    (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int))
+    (hg : ∀ w p, (Tgt.gate w, p) ∈ pos q → LocW c.P c.d p.toNat w)
+    {segs : Array Seg} (h : byRows c fuel q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  unfold byRows at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  rw [← Array.forIn_toList] at h
+  have hm : ∀ x ∈ q.rowsOf.toList, ∀ y ∈ pos x, y ∈ pos q := fun x hx y hy => by
+    rw [← posAll_rowsOf q]
+    exact List.mem_flatMap.2 ⟨x, hx, hy⟩
+  have hlen : q.len ≠ 0 := fun hl => by
+    unfold Desc.Piece.count at h0
+    rw [hl, Nat.mul_zero] at h0
+    exact absurd h0 (Nat.lt_irrefl 0)
+  have hc : ∀ x ∈ q.rowsOf.toList, 0 < x.count := by
+    intro x hx
+    unfold Desc.Piece.rowsOf at hx
+    simp only [Array.toList_map, List.mem_map] at hx
+    obtain ⟨r, -, rfl⟩ := hx
+    show 0 < 1 * q.len
+    omega
+  exact loop_mem _ (Desc.down c fuel) q.rowsOf.toList (fun x hx segs hs => hD x segs (hc x hx)
+    (fun y hy => hq y (hm x hx y hy)) (fun y hy => hf y (hm x hx y hy)) (fun y hy => hp y (hm x hx y hy))
+    (fun w p hy => hg w p (hm x hx _ hy)) hs) segs h
+
+/-- A Call's piece of one row and stride 1, of a composite: what `fromCallee` gives, with its widths. -/
+theorem downW_callOne (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride = 1)
+    (hpr : (c.P.defs[node.fn]!).prim = false)
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  rw [down_call_one c fuel q ht hff hn hform h0 hr hs] at h
+  exact hC k 0 q.base.toNat (q.base.toNat + q.len) segs
+    (by rw [node_get hn, members_call hform]; omega) (by rw [node_get hn]; exact hpr) h
+
+/-- A Call's piece of one row and another stride, of a composite: what `fromCallee` gives at each position, with its
+widths. -/
+theorem downW_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride ≠ 1)
+    (hpr : (c.P.defs[node.fn]!).prim = false)
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
+  unfold callPts at h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  rw [range'_size] at h
+  exact loop_mem _ (fun t => Desc.fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1)) (List.range q.len)
+    (fun _ _ segs hs => hC k 0 _ _ segs (by rw [node_get hn, members_call hform]; omega)
+      (by rw [node_get hn]; exact hpr) hs) segs h
+
+/-- **`down`'s width step**: one step up, `down`'s segments name the body's gates with their widths wherever `down`'s
+and `fromCallee`'s do and a batch of a composite's and a scan's piece of one row give such segments, in a laid-out body
+whose primitives are one gate of one leaf and whose nodes call what the decoder lets them (`downShape_succ`'s
+argument). -/
+theorem downW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c.d)
+    (hG1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).gates = 1)
+    (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
+    (hCP : ∀ k node, c.node k = .ok node → (node.form = .prim → (c.P.defs[node.fn]!).prim = true) ∧
+      (node.form = .call ∨ node.form = .scan → (c.P.defs[node.fn]!).prim = false))
+    (fuel : Nat) (hD : DownWAt c fuel) (hC : CalleeW c fuel) (hBatch : BatchW c fuel) (hScan : ScanW c fuel) :
+    DownWAt c (fuel + 1) := by
+  intro q segs h0 hq hf hp hg h
+  cases ht : q.tgt with
+  | gate w => exact downW_gate c fuel q ht hg h
+  | ref b k =>
+  cases b with
+  | true => exact downW_param c fuel q ht h
+  | false =>
+  rw [down_flat c fuel q ht] at h
+  rw [← pos_flat q] at hq hf hp hg
+  have ht' : q.flat.tgt = .ref false k := by rw [flat_tgt, ht]
+  have h0' : q.flat.count ≠ 0 := by rw [flat_count]; omega
+  have hff := flat_flat q
+  generalize q.flat = p at ht' h0' hff hq hf hp hg h
+  rcases hn : c.node k with e | node
+  · exact absurd h (down_node c fuel p ht' h0' hn segs)
+  have hdo := downOk_of hB hn
+  cases hform : node.form with
+  | prim =>
+    have hpr := (hCP k node hn).1 hform
+    cases hr : (c.P.defs[node.fn]!).ret with
+    | value w => exact downW_prim c fuel p ht' hff hn hform hr hpr (hG1 _ hpr) hL h
+    | _ => exact absurd h (down_prim_ret c fuel p ht' hff hn (Or.inl hform) h0' (fun w e => by rw [hr] at e; cases e) segs)
+  | call =>
+    have hpr := (hCP k node hn).2 (Or.inl hform)
+    by_cases hr : p.rows > 1
+    · rw [down_rows c fuel p ht' hff hn (Or.inl hform) h0' hr] at h
+      exact byRows_w c fuel hD p (Nat.pos_of_ne_zero h0') hq hf hp hg h
+    by_cases hs : p.stride = 1
+    · exact downW_callOne c fuel hC p ht' hff hn hform h0' hr hs hpr h
+    · exact downW_callPts c fuel hC p ht' hff hn hform h0' hr hs hpr h
+  | scan =>
+    by_cases hn0 : node.n = 0
+    · exact absurd h (down_scan0 c fuel p ht' hff hn hform hn0 h0' segs)
+    by_cases hr : p.rows > 1
+    · rw [down_rows c fuel p ht' hff hn (Or.inr ⟨hform, hn0⟩) h0' hr] at h
+      exact byRows_w c fuel hD p (Nat.pos_of_ne_zero h0') hq hf hp hg h
+    by_cases hex : ∃ carry y, (c.P.defs[node.fn]!).ret = .tuple #[carry, y]
+    · obtain ⟨carry, y, hret⟩ := hex
+      exact hScan p segs k node carry y ht' hn hform hn0 h0' hff hr hret hq hf h
+    · exact absurd h
+        (down_scan_ret c fuel p ht' hff hn hform hn0 h0' hr (fun carry y e => hex ⟨carry, y, e⟩) segs)
+  | batch =>
+    by_cases hpr : (c.P.defs[node.fn]!).prim = true
+    · cases hr : (c.P.defs[node.fn]!).ret with
+      | value w =>
+        have hout : node.out.leaves ≤ node.members := by
+          rw [members_batch hform]
+          by_contra hlt
+          have := hdo node.n (by omega)
+          simp only [hform, hP1 _ hpr, Nat.div_one] at this
+          exact absurd this.1 (Nat.lt_irrefl _)
+        exact downW_batchPrim c fuel p ht' hff hn hform hpr hr (hG1 _ hpr) hL hq hf hout h
+      | _ =>
+        exact absurd h
+          (down_prim_ret c fuel p ht' hff hn (Or.inr ⟨hform, hpr⟩) h0' (fun w e => by rw [hr] at e; cases e) segs)
+    · exact hBatch p segs k node ht' hn hform (by simpa using hpr) h0' hff hq hf h
+
+/-- A scan's initial carry's leaves `[lo, hi)`, each in range, through `throughArg`: segments naming the body's gates
+with their widths. -/
+theorem init_w (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hTW : ThroughW c fuel) (hm0 : 0 < node.members) {lo hi : Nat}
+    (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
+      j < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves) {segs : Array Seg}
+    (h : Desc.throughArg c fuel k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo } = .ok segs) :
+    ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  have hnode := node_get hn
+  exact hTW k 0 0 _ segs (by rw [hnode]; exact hm0) rfl (fun x hx => by
+    rw [pos_carry, List.mem_map] at hx
+    obtain ⟨j, hj, rfl⟩ := hx
+    rw [List.mem_range'_1] at hj
+    rw [hnode]
+    have := hlv j hj.1 (by omega)
+    exact ⟨by simp, this.1, by show (j : Int) < _; exact_mod_cast this.2⟩) h
+
+/-- **`carry`'s width step**: one step up, `carry`'s segments name the body's gates with their widths wherever the
+step's summary holds `RetOk`, the step is a composite, and `fromCallee`'s and `throughArg`'s segments one step down name
+them (`carryShape_succ`'s argument). -/
+theorem carryW_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hCP : ∀ k node, c.node k = .ok node → node.form = .scan → (c.P.defs[node.fn]!).prim = false)
+    (hCW : CalleeW c fuel) (hTW : ThroughW c fuel) : CarryW c (fuel + 1) := by
+  intro k m a b segs hform hm hb h
+  rw [Desc.carry.eq_2] at h
+  obtain ⟨node, hn, h⟩ := Walk.except_bind_ok h
+  dsimp only at h
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  rw [hnode] at hform hm hb
+  have hsp := hCP k node hn hform
+  have hRk := hR k node hn
+  obtain ⟨hps, hpos, -, hag, hpp⟩ := hRk
+  have hlenR : (psPos (c.memo[node.fn]!).ret).length = (c.P.defs[node.fn]!).body.ret.count := by
+    have := (hag (c.P.child sc k 0) (by rw [child_eq c sc hd hn 0]; rfl)).length_eq
+    simpa using this
+  obtain ⟨-, hid⟩ := carryRuns_cover _ hps hpp a b (fun hab => by rw [hlenR]; exact hb hab)
+  have hm0 : 0 < node.members := by omega
+  have hcarry : ∀ h j' : Nat, (psPos (c.memo[node.fn]!).ret)[h]? = some (.ref true 0, (j' : Int)) →
+      0 < (c.P.defs[node.fn]!).body.params.size ∧ j' < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves := by
+    intro h j' hx
+    have := (hpos _ (List.mem_of_getElem? hx)).2.2 0 rfl
+    exact ⟨this.1, by have h2 : ((j' : Nat) : Int) < _ := this.2; exact_mod_cast h2⟩
+  have hfa := forIn_app (GateW c.P c.d) _ _ ?_ #[] segs h'
+  · obtain ⟨out, rfl, hout⟩ := hfa
+    intro s hs
+    rw [Array.toList_append, List.mem_append] at hs
+    exact hs.elim (fun hs => by simp at hs) (hout s)
+  intro x hx r' y hy
+  split at hy
+  · rename_i hxid
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    exact ⟨v, rfl, init_w c hn hTW hm0 (fun j h1 h2 => hcarry j j (hid x hx hxid j h1 h2)) hv⟩
+  · have hy := walkAtMost_bind _ _ _ hy
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+    obtain ⟨segs', hsegs', hA2⟩ := forIn_app (GateW c.P c.d) _ _ (fun j _ r'' y' hy' => by
+        obtain ⟨ch, hch, hy'⟩ := Walk.except_bind_ok hy'
+        have hok := chainOf_ok _ j ch hch
+        split at hy'
+        · obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          exact ⟨v', rfl, hCW k (m - (ch.hist.size - 1)) _ _ v' (by rw [hnode]; omega) (by rw [hnode]; exact hsp) hv'⟩
+        · rename_i hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          have hs : ∀ s ≤ m, (psPos (c.memo[node.fn]!).ret)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := by
+            intro s hs
+            rcases hex : ch.exit with _ | q0
+            · obtain ⟨q, hq, ht, hb⟩ := chainAt_cyc hok hex s
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+            · have he : ¬ ch.hist.size - 1 ≤ m := fun he => hcond (by simp [hex, he])
+              obtain ⟨-, -, hsc, -, -⟩ := hok
+              obtain ⟨q, hq, ht, hb⟩ := hsc s (by omega)
+              rw [chainAt_lt ch (show s < ch.hist.size by omega), chainAt_lt ch (show s + 1 < ch.hist.size by omega)]
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+          exact init_w c hn hTW hm0 (lo := ch.at (m + 1)) (hi := ch.at (m + 1) + 1)
+            (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv') r' v hv
+    exact ⟨segs', by rw [hsegs'], hA2⟩
+
+/-- **`down`, `fromCallee`, `throughArg` and `carry` name the body's gates with their widths, at every fuel**, in a
+laid-out body whose callees are laid out and name theirs (`RetW`), whose primitives are one gate of one leaf, whose nodes
+call what the decoder lets them, wherever a batch of a composite's piece and a scan's piece of one row give such
+segments one step up (`shapes`'s argument). -/
+theorem widths (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hL : Laid c.P c.d)
+    (hG1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).gates = 1)
+    (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
+    (hCP : ∀ k node, c.node k = .ok node → (node.form = .prim → (c.P.defs[node.fn]!).prim = true) ∧
+      (node.form = .call ∨ node.form = .scan → (c.P.defs[node.fn]!).prim = false))
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
+      ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hRW : ∀ k node, c.node k = .ok node → RetW c.P c.memo node.fn)
+    (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
+      (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates)
+    (hBatch : ∀ fuel, DownWAt c fuel → CalleeW c fuel → BatchW c fuel)
+    (hScan : ∀ fuel, CalleeW c fuel → CarryW c fuel → ScanW c fuel) :
+    ∀ fuel, DownWAt c fuel ∧ CalleeW c fuel ∧ ThroughW c fuel ∧ CarryW c fuel
+  | 0 => by
+    refine ⟨fun q segs _ _ _ _ _ h => absurd h (down_zero c q segs), ?_, ?_, ?_⟩
+    · intro _ _ _ _ _ _ _ h; rw [Desc.fromCallee.eq_1] at h; cases h
+    · intro _ _ _ _ _ _ _ _ h; rw [Desc.throughArg.eq_1] at h; cases h
+    · intro _ _ _ _ _ _ _ _ h; rw [Desc.carry.eq_1] at h; cases h
+  | fuel + 1 =>
+    have ⟨hD, hC, hTW, hK⟩ := widths c sc hd hB hL hG1 hP1 hCP hA hAP hL0 hR hRW hLF hBatch hScan fuel
+    ⟨downW_succ c hB hL hG1 hP1 hCP fuel hD hC (hBatch fuel hD hC) (hScan fuel hC hK),
+      calleeW_succ c fuel hR hRW hL hLF hTW (throughReps c), throughW_succ c hB hA hAP hL0 fuel hD hK,
+      carryW_succ c sc hd fuel hR (fun k node hn hf => (hCP k node hn).2 (Or.inr hf)) hC hTW⟩
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
