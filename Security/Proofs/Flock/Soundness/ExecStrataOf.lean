@@ -314,26 +314,26 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
   obtain ⟨hk1, hkp, hks, hc⟩ := strataProblem_none h
   set Q := (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : Stratum) => x1 ++ x2.units) #[]).qsort
     fun (a b : ℕ × ℕ) => decide (a.fst < b.fst) with hQ
-  have hperm := qsort_perm (fun (a b : ℕ × ℕ) => decide (a.fst < b.fst))
+  have hperm := StrataExec.qsort_perm (fun (a b : ℕ × ℕ) => decide (a.fst < b.fst))
     (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : Stratum) => x1 ++ x2.units) #[])
-  rw [foldl_units] at hperm
+  rw [StrataExec.foldl_units] at hperm
   have hmemL : ∀ r ∈ (S.toList.flatMap fun s => s.units.toList), r.1 < r.2 := by
     intro r hr
     obtain ⟨s, hs, hr⟩ := List.mem_flatMap.1 hr
     exact hlt s (Array.mem_def.2 hs) r (Array.mem_def.2 hr)
-  obtain ⟨-, hin, hcnt⟩ := chain_facts 0 pop Q.toList hc fun r hr => hmemL r (hperm.subset hr)
-  let c : Fin S.size → ℕ → ℕ := fun i u => (flat S[i].units.toList).count u
+  obtain ⟨-, hin, hcnt⟩ := StrataExec.chain_facts 0 pop Q.toList hc fun r hr => hmemL r (hperm.subset hr)
+  let c : Fin S.size → ℕ → ℕ := fun i u => (StrataExec.flat S[i].units.toList).count u
   have hsum : ∀ u, ∑ i, c i u = if u < pop then 1 else 0 := by
     intro u
-    have h1 := (hperm.countP_eq (hits u)).symm.trans (hcnt u)
+    have h1 := (hperm.countP_eq (StrataExec.hits u)).symm.trans (hcnt u)
     rw [List.countP_flatMap] at h1
     simp only [Nat.zero_le, true_and] at h1
     rw [← h1]
-    simp only [c, count_flat]
+    simp only [c, StrataExec.count_flat]
     rw [← List.sum_ofFn]
     congr 1
     apply List.ext_getElem <;> simp
-  have hbound : ∀ (i : Fin S.size) u, u ∈ flat S[i].units.toList → u < pop := by
+  have hbound : ∀ (i : Fin S.size) u, u ∈ StrataExec.flat S[i].units.toList → u < pop := by
     intro i u hu
     obtain ⟨r, hr, hu⟩ := List.mem_flatMap.1 hu
     have hrQ : r ∈ Q.toList := hperm.symm.subset
@@ -358,7 +358,7 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
   let σ : Fin pop → Fin S.size := fun u => (hex u).choose
   have hσ : ∀ u i, σ u = i ↔ c i u ≠ 0 := fun u i =>
     ⟨fun h => h ▸ (hex u).choose_spec, fun h => huniq _ _ _ (hex u).choose_spec h⟩
-  have hset : ∀ i : Fin S.size, (stratum σ i).map Fin.valEmbedding = (flat S[i].units.toList).toFinset := by
+  have hset : ∀ i : Fin S.size, (stratum σ i).map Fin.valEmbedding = (StrataExec.flat S[i].units.toList).toFinset := by
     intro i
     ext x
     simp only [stratum, Finset.mem_map, Finset.mem_filter, Finset.mem_univ, true_and, Fin.valEmbedding_apply,
@@ -368,29 +368,29 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
       exact List.count_pos_iff.1 (Nat.pos_of_ne_zero ((hσ a i).1 ha))
     · intro hx
       exact ⟨⟨x, hbound i x hx⟩, (hσ _ i).2 (Nat.pos_iff_ne_zero.1 (List.count_pos_iff.2 hx)), rfl⟩
-  have hnodup : ∀ i : Fin S.size, (flat S[i].units.toList).Nodup := by
+  have hnodup : ∀ i : Fin S.size, (StrataExec.flat S[i].units.toList).Nodup := by
     intro i
     refine List.nodup_iff_count_le_one.2 fun u => ?_
-    have h1 : (flat S[i].units.toList).count u ≤ ∑ j, c j u :=
+    have h1 : (StrataExec.flat S[i].units.toList).count u ≤ ∑ j, c j u :=
       Finset.single_le_sum (f := fun j => c j u) (fun _ _ => Nat.zero_le _) (Finset.mem_univ i)
     rw [hsum u] at h1
     split at h1 <;> omega
   have hcard : ∀ i : Fin S.size, S[i].size = (stratum σ i).card := fun i => by
-    rw [← Finset.card_map Fin.valEmbedding, hset i, List.toFinset_card_of_nodup (hnodup i), size_eq]
+    rw [← Finset.card_map Fin.valEmbedding, hset i, List.toFinset_card_of_nodup (hnodup i), StrataExec.size_eq]
   refine ⟨σ, fun i => ⟨rfl, hcard i, ?_⟩, fun i => ?_⟩
   swap
   · have hmem : S[i] ∈ S := Array.getElem_mem _
     rw [← hcard i, hks _ hmem]
     refine stratumK_le ?_ hkp hk1
-    rw [size_eq]
+    rw [StrataExec.size_eq]
     obtain ⟨r, rs, hrs⟩ := List.exists_cons_of_ne_nil (fun h0 => hne _ hmem (Array.toList_eq_nil_iff.1 h0))
     have hr := hlt _ hmem r (Array.mem_def.2 (hrs ▸ List.mem_cons_self))
     rw [hrs]
-    simp [flat]
+    simp [StrataExec.flat]
     omega
   · rw [hset i]
     ext x
-    simp only [Finset.mem_image, Finset.mem_range, List.mem_toFinset, unit_eq, size_eq]
+    simp only [Finset.mem_image, Finset.mem_range, List.mem_toFinset, unit_eq, StrataExec.size_eq]
     constructor
     · rintro ⟨j, hj, rfl⟩
       rw [unitL_getElem _ _ hj]
