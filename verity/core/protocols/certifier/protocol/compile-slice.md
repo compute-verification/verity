@@ -7,7 +7,8 @@ verdict flags, reference and stand-ins are `compile_slice`'s docstring. This fil
 window, what binds the charge's inputs, and the slice's proof of record on a served window. `CompileSlice_v2`
 (`compile_slice_v2`) is the same slice with vLLM's block pool (`CacheStep_v2`) in place of the evictable and returned
 counts' stand-in; its charge is this one. `CompileSlice_v3` (`compile_slice_v3`) is v2 computing its schedule rather
-than checking it, with no ChargeLink: its advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
+than checking it, with no ChargeLink, the served rows and last rows registered reads it holds to the computed ones: its
+advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):
 - Its inputs:
