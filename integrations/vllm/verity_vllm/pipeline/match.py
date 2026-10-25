@@ -904,7 +904,7 @@ def _workload_moe_construction(path: str | None) -> str | None:
 
 
 def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
-    """[R17-42 route A (4)] The fold worker's construction flags: the MoE scope under the workload's DECLARED construction (manifest
+    """The fold worker's construction flags: the MoE scope under the workload's DECLARED construction (manifest
     target.moe_construction), the top-p select under the one the Build's Programs declare (a single-request select has no shared-greedy
     form) and the values they register; never off the trace.  The single-rank driver passes them from --program-dir, the TP fold Match
     (`tp.fold_match`) from each rank's Build dirs; a fold without them binds the profile's default select."""
