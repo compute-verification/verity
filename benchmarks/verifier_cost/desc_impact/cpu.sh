@@ -77,7 +77,7 @@ case $MODE in
     for n in instances expanded python; do gunzip -c "$IN/$n.jsonl.gz" > "$d/$n.jsonl"; done
     args=()
     for t in $TREES; do args+=(--exe "$t" "$d/nci-check-$t"); done
-    "$PY" "$I/shared.py" "$d" "${args[@]}" --out "$O/shared.json" | tee "$O/shared.txt" || rc=1 ;;
+    python3 "$I/shared.py" "$d" "${args[@]}" --out "$O/shared.json" | tee "$O/shared.txt" || rc=1 ;;
   step)
     python3 "$IN/m4_desc.py" "$IN/step-node.descriptor.json.gz" "$IN/step-node.json" "$d/step.json" | tee "$O/step-instance.json" || exit 1
     for t in $TREES; do
