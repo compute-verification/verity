@@ -15,8 +15,13 @@ import json
 import random
 from fractions import Fraction
 
+import pouw_pass_cases as PC
+import pouw_rounds_cases as RC
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.ml.crypto import lms
 
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
@@ -27,8 +32,30 @@ def _hex(rng: random.Random, n: int = 64) -> str:
     return rng.randbytes(n).hex()
 
 
-def honest(rng: random.Random) -> dict:
-    """An honest window: the verifier's parameters, the registration, and the service's accepting answer."""
+def window_live(rng: random.Random, w: bytes, layout: tuple[tuple[str, int], ...] = Wd.SALT_FAMILIES,
+                reserved: bool = True, **end) -> tuple[dict, dict]:
+    """A live window's salt over its weights' root `w`, as a live Pearl-C pass's (`pouw_pass_cases.honest_live`): a
+    salt-only session S (of `layout`) of the auditor's challenger that its gate reserved (unless not `reserved`) and
+    opened on salt epoch k's root R = `salt.epoch_open_root(w, k)` and ended complete (its end changed by `end`), S's
+    salt coin released after R.  The verifier's ``live`` inputs (`core_check.LIVE`), and the answer's ``salt``:
+    k, S's commitment, salt coin, its round-0 unit salt after R (`h1tile.live_salt`) and the gate's answer."""
+    k = PC.epoch_index(rng)
+    r = PS.epoch_open_root(w, k)
+    s = PC.salt_session(rng, r, rng.randrange(4), RC.session_id(rng), layout)
+    c, o = s.ch.commitment, s.salt[0]
+    asked = {"scheme": c.scheme, "epoch": c.epoch, "families": [list(f) for f in c.families]}
+    ledger = RC.salt_ledger(rng, {"root": r.hex()}, s, reserved, 0, asked, **{**PC.gate_end(s), **end})
+    opened = next(e for e in map(json.loads, ledger) if e["kind"] == "open" and e["session"] == s.sid)
+    live = {"key": s.key(), "ledger": ledger, "main": list(RC.MAIN), "pins": list(RC.PINS), "session": s.files()}
+    salt = {"coins": c.to_json(), "epoch": k, "opening": o.to_json(),
+            "salt": Wd.round_key(c, o.coin, 0, r).stream(0, PS.SALT_BYTES).hex(), "session": PC.carried(opened, c)}
+    return live, salt
+
+
+def honest(rng: random.Random, mode: str | None = None, **live) -> dict:
+    """An honest window: the verifier's parameters, the registration, and the service's accepting answer.  Its check
+    item names coin mode `mode` (sometimes, at random, when None); a live window's parameters hold its salt session's
+    inputs and its answer its salt (`window_live`, under `live`)."""
     bits = rng.randrange(5)
     template = rng.choice(TEMPLATES)
     tile = CC.TILES[template]
@@ -67,8 +94,10 @@ def honest(rng: random.Random) -> dict:
                           "prescribed": sorted(rng.sample(["prompt", "weights", "noise"], rng.randrange(3))),
                           "programs": [program]},
               "public": {"draw": {"k": k, "law": "subset", "population": w.n, "units": units}}}
-    if rng.random() < 0.4:
-        params["check"][Wd.COINS] = items["check"][Wd.COINS] = rng.choice(Wd.MODES)
+    if mode is not None or rng.random() < 0.4:
+        params["check"][Wd.COINS] = items["check"][Wd.COINS] = mode or rng.choice(Wd.MODES)
+    if Wd.mode(params["check"]) == "live":
+        params["live"], answer["public"]["salt"] = window_live(rng, bytes.fromhex(root_w), **live)
     return {"params": params, "record": rec, "answer": answer}
 
 
@@ -188,8 +217,24 @@ MUTATIONS = [
     ("case-commitment-type", None, None, None), ("case-not-object", None, None, None),
     ("noncanonical-record", None, None, None),
     ("noncanonical-answer", None, None, None), ("float-answer", None, None, None), ("utf8-record", None, None, None),
+    ("live-missing", "params", "live", _DROP), ("live-null", "params", "live", None),
+    ("live-keys", "params", "live.extra", 1), ("live-seeded", None, None, None),
+    ("live-other-key", "params", "live.key", None), ("live-incomplete", None, None, None),
+    ("live-unreserved", None, None, None), ("live-layout", None, None, None),
+    ("salt-missing", "answer", "public.salt", _DROP), ("salt-type", "answer", "public.salt", 1),
+    ("salt-seeded", None, None, None), ("salt-keys", "answer", "public.salt.extra", 1),
+    ("salt-no-w", None, None, None), ("salt-epoch", "answer", "public.salt.epoch", None),
+    ("salt-other-epoch", "answer", "public.salt.epoch", None), ("salt-coins-form", "answer", "public.salt.coins", 1),
+    ("salt-coins", "answer", "public.salt.coins.root", None), ("salt-opening", "answer", "public.salt.opening.coin", None),
+    ("salt-value", "answer", "public.salt.salt", None), ("salt-session", "answer", "public.salt.session.seq", None),
+    ("salt-secret", "answer", "public.salt.session.secret", "00"),
 ]
 NAMES = [m[0] for m in MUTATIONS]
+#: the mutations of a live window, and of a seeded one that brings a live window's salt or inputs
+LIVE_NAMES = {n for n in NAMES if n.startswith(("live-", "salt-"))} - {"live-seeded", "salt-seeded"}
+#: the mutations whose honest live window's salt session is generated otherwise (`window_live`'s arguments)
+LIVE_ARGS = {"live-incomplete": {"complete": False}, "live-unreserved": {"reserved": False},
+             "live-layout": {"layout": Wd.live_families(2)}}
 
 
 def _derived(name: str, case: dict, rng: random.Random):
@@ -260,8 +305,23 @@ def _derived(name: str, case: dict, rng: random.Random):
         return ans["commitment"][:-1]
     if name == "answer-commitment-upper":
         return ans["commitment"].upper()
-    if name in ("answer-public-null", "answer-level-null-query", "answer-level-null-draw"):
+    if name in ("answer-public-null", "answer-level-null-query", "answer-level-null-draw", "live-null"):
         return None
+    if name == "live-other-key":
+        return Ch.ChallengerKey(RC.PARAMS.W, RC.PARAMS.H, lms.public_key(RC._key(1))).to_json()
+    s = ans["public"].get("salt")
+    if name == "salt-epoch":
+        return rng.choice([-1, 1 << 64, str(s["epoch"]), None])
+    if name == "salt-other-epoch":
+        return (s["epoch"] + 1) % (1 << 64)
+    if name == "salt-coins":
+        return _flip(s["coins"]["root"])
+    if name == "salt-opening":
+        return _flip(s["opening"]["coin"])
+    if name == "salt-value":
+        return _flip(s["salt"])
+    if name == "salt-session":
+        return s["session"]["seq"] + 1
     if name == "answer-level-renamed":
         prof = ans["profile"]
         return {**prof, "drawn": {"tile": prof["drawn"][CC.LEVEL]}, "levels": [{**prof["levels"][0], "name": "tile"}]}
@@ -300,9 +360,25 @@ def _derived(name: str, case: dict, rng: random.Random):
     raise AssertionError(name)
 
 
+def _flip(h: str) -> str:
+    return ("1" if h[0] == "0" else "0") + h[1:]
+
+
 def instance(rng: random.Random, name: str = "honest") -> dict:
-    """An honest window from `rng`, then the mutation `name` (none for "honest")."""
-    case = honest(rng)
+    """An honest window from `rng`, then the mutation `name` (none for "honest"): a live window's mutation (`LIVE_NAMES`)
+    is of a live window, ``live-seeded`` and ``salt-seeded`` a seeded window's that brings a live window's inputs or
+    salt."""
+    mode = "live" if name in LIVE_NAMES else "seeded" if name in ("live-seeded", "salt-seeded") else None
+    case = honest(rng, mode, **LIVE_ARGS.get(name, {}))
+    if mode == "seeded":
+        live, salt = window_live(rng, bytes.fromhex(case["record"]["window"]["public"]["root_W"]))
+        if name == "live-seeded":
+            case["params"]["live"] = live
+        else:
+            case["answer"]["public"]["salt"] = salt
+    if name == "salt-no-w":
+        w = next(r for r in case["record"]["roots"] if r["port"] == "W")
+        w["root"] = case["record"]["window"]["public"]["root_W"] = w["root"][:rng.choice([0, 2, 126])]
     which, path, value = next(m[1:] for m in MUTATIONS if m[0] == name) if name != "honest" else (None, None, None)
 
     def mutate(part: str) -> None:

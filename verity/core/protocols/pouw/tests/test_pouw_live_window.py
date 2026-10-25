@@ -118,15 +118,24 @@ def test_core_checks_rounds_reads_the_challengers_own_session():
 
 def _params(check: dict) -> dict:
     template, tile = next(iter(CC.TILES.items()))
+    live = {CC.LIVE_PARAM: {k: None for k in CC.LIVE}} if check.get(Wd.COINS) == "live" else {}
     return {"check": {"entries": 4, "scheme": CC.SCHEME, "template": template, "tile_work": tile.tile_work, **check},
             "context": "served-zk/run-1/ab", "delta": "1/100", "eps": "1/10", "grid_bits": 2,
-            "length": {"max_tokens": [4], "stop": Wd.STOP_FIXED}, "query": tile.query, "range": [1, 64]}
+            "length": {"max_tokens": [4], "stop": Wd.STOP_FIXED}, "query": tile.query, "range": [1, 64], **live}
 
 
 def test_the_check_item_names_the_windows_coin_mode():
+    """The check item names the window's coin mode, and a live window's parameters, and only a live window's, hold the
+    inputs its salt session is read through (`core_check.LIVE`)."""
     assert (Wd.mode({}), Wd.mode({"coins": "live"}), Wd.mode({"coins": "seeded"})) == ("seeded", "live", "seeded")
     for coins in ({}, {"coins": "live"}, {"coins": "seeded"}):
         assert CC.params(_params(coins))["check"] == _params(coins)["check"]
+        assert (CC.params(_params(coins))["live"] is None) == (coins != {"coins": "live"})
+    for p in ({k: v for k, v in _params({"coins": "live"}).items() if k != CC.LIVE_PARAM},
+              {**_params({"coins": "seeded"}), CC.LIVE_PARAM: {k: None for k in CC.LIVE}},
+              {**_params({"coins": "live"}), CC.LIVE_PARAM: {"key": None}}):
+        with pytest.raises(CC.Refused, match="^live is exactly when check.coins is live"):
+            CC.params(p)
     with pytest.raises(CC.Refused, match="^check.coins is not live or seeded$"):
         CC.params(_params({"coins": "fiat-shamir"}))
     with pytest.raises(CC.Refused, match="^check's keys are not entries, scheme, template, tile_work, and optionally coins$"):
