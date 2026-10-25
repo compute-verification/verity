@@ -65,14 +65,14 @@ theorem rd_of_lt (C : Prog) (ref : ℕ → Option Bool) (u : List ℕ) {g i : �
 /-- A gate of `u` reading only earlier wires: `u` sees on it its gate applied to what `u` sees on those. -/
 theorem seen_gate {C : Prog} {ref : ℕ → Option Bool} {u : List ℕ} {g : ℕ} {x : BGate} (hx : C.gates[g]? = some x)
     (hg : g ∈ u) (hlt : ∀ i ∈ x.reads, i < g) : seen C ref u g = x.val (seen C ref u) (ref g) := by
-  rw [seen, if_pos hg, Boundary.runIn_eq, hx, Option.bind_some]
+  rw [seen, ite_eq_left hg, Boundary.runIn_eq, hx, Option.bind_some]
   exact Boundary.val_congr x (fun i hi => rd_of_lt C ref u (hlt i hi)) fun _ => rfl
 
 /-- XOR from the left is XOR from the right. -/
 theorem foldl_xor (l : List Bool) (b : Bool) : l.foldl Bool.xor b = Bool.xor b (l.foldr Bool.xor false) := by
   induction l generalizing b with
   | nil => simp
-  | cons a l ih => simp [ih, Bool.xor_assoc]
+  | cons a l ih => simp [ih]
 
 /-- One n-ary XOR gate of reads `ℓ` computes `xorSum ℓ v`. -/
 theorem xor_val {α : Type} (ℓ : List α) (pos : α → ℕ) (v : α → Bool) {rd : ℕ → Option Bool} (own : Option Bool)
