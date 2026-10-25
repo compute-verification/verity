@@ -4,6 +4,7 @@
     sys.path.insert(0, "benchmarks/network_traces"); import leak_scan as LS
     pieces, held, public = LS.public_pieces(a8, blobs, held, circuit)  # each witness row cut whole, less the public
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
+    LS.find_whole(received, short, vdir, control)  # each row shorter than a piece found whole, then `scan`'s rule
 
 It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
 
@@ -11,7 +12,12 @@ The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each wit
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
 zero-padded (the row's last element, packed from an element boundary). The residual (REDTEAM phase 19): a row packed
 from an element boundary whose last element pads its tail with anything but zeros matches neither, its last 16 bytes
-straddling two elements, so a leak in that tail is missed.
+straddling two elements, so a leak in that tail is missed. A row shorter than a piece (a unit's carry rows, the served
+rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds are
+judged by the same rule. It is at least 6 bytes (`WHOLE`): a uniform L-byte row matches a given offset raw, or an even
+offset of hex text, with chance 2^-8L, so R rows over N received bytes expect about 2·N·R·2^-8L chance finds, 2^-7 at 6
+bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: in a field the
+reader fixes it reads public, which also excuses a real find of it, and anywhere else leaked.
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
@@ -66,6 +72,11 @@ GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 #: field the reader fixes, and a nonzero one, which the verifier refuses, stays the prover's.
 RS_NONCE = re.compile(r"rs\.\d+\.nonce")
 
+#: The rows `find_whole` takes, by length: shorter than a piece, which `cut` covers, and long enough that chance matches
+#: stay rare (2^-7 expected at 6 bytes over a GiB and 1024 rows, 2 at 5; the module's docstring).
+WHOLE = range(6, 16)
+HEX = b"0123456789abcdefABCDEF"
+
 
 def cut(blobs: dict[str, bytes], size: int) -> dict[str, bytes]:
     """`blobs` cut into `size`-byte pieces that cover each whole, each distinct piece once under its first name
@@ -77,7 +88,7 @@ def cut(blobs: dict[str, bytes], size: int) -> dict[str, bytes]:
     for name, b in blobs.items():
         if len(b) < size:
             raise ValueError(f"{name!r} is {len(b)} bytes, shorter than the scan's {size}-byte piece, which `a8.needles` "
-                             "won't cut: scan it whole with its own finder (as compile_slice_zk's `found` does its carry rows)")
+                             "won't cut: find it whole (`find_whole`)")
         for o in [*range(0, len(b) - size + 1, size)] + [len(b) - size, len(b) - len(b) % size] * (len(b) % size > 0):
             x = b[o:o + size].ljust(size, b"\0")
             if x not in seen:
@@ -307,3 +318,67 @@ def rescan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=re
             files[f] = {**rec, "found": {**old, **a8.find((vdir / f).read_bytes(), table)}}
         received = {**received, "files": files, "verifier_found": sorted({k for x in files.values() for k in x["found"]})}
     return {"was": received.get("leaked"), **scan(received, pieces, vdir, reads)}
+
+
+def _run(data: bytes, at: int) -> tuple[int, int]:
+    """The run of hex digits in `data` around offset `at`, [start, end)."""
+    s = e = at
+    while s:
+        lo = max(0, s - 4096)
+        left = len(data[lo:s].rstrip(HEX))
+        s = lo + left
+        if left:
+            break
+    while e < len(data):
+        hi = min(len(data), e + 4096)
+        right = len(data[e:hi].lstrip(HEX))
+        e = hi - right
+        if right:
+            break
+    return s, e
+
+
+def _hex_in(data: bytes, hx: bytes) -> bool:
+    """Whether hex `hx` is in `data` as the hex of whole bytes: at an even offset into its run of hex digits, not a
+    nibble off."""
+    run, at = (0, 0), data.find(hx)
+    while at >= 0:
+        if not run[0] <= at < run[1]:
+            run = _run(data, at)
+        if (at - run[0]) % 2 == 0:
+            return True
+        at = data.find(hx, at + 1)
+    return False
+
+
+def _whole(data: bytes, row: bytes) -> int:
+    """How many of `row`'s forms are in `data`: raw, or as the hex of whole bytes in either case."""
+    raw, *hx = _forms(row)
+    return (raw in data) + sum(_hex_in(data, h) for h in set(hx))
+
+
+def find_whole(received: dict | None, rows: dict[str, bytes], vdir: Path | None, control: Path | None = None,
+               held: set[str] | None = None, reads=reads) -> dict:
+    """`rows`, each shorter than a piece (`WHOLE`), found whole in the files the verifier received (``received``'s, a
+    piece scan's record, or every file in `vdir`): raw, or as the hex of whole bytes (`_hex_in`), each distinct row once
+    under its first name. The finds are judged by `scan`'s rule (``leaked``, ``structured``, ``placed``), and with the
+    prover's `control` file, whether it holds every row in `held` (all of them by default)."""
+    if bad := {k: len(x) for k, x in rows.items() if len(x) not in WHOLE}:
+        raise ValueError(f"rows {bad} (their bytes) aren't {WHOLE.start} to {WHOLE.stop - 1} bytes: cut a row of 16 or more "
+                         f"(`public_pieces`), so a leak of any piece of it is found; a row under {WHOLE.start} bytes "
+                         "can't be told from chance matches, so scan the longer row holding it (a block of more steps)")
+    first: dict[bytes, str] = {}
+    for k, x in rows.items():
+        first.setdefault(x, k)
+    names = sorted(received["files"]) if received is not None else sorted(f.name for f in vdir.iterdir() if f.is_file())
+    files = {}
+    for f in names:
+        b = _read(vdir, f)
+        files[f] = {"bytes": len(b), "found": {k: n for x, k in first.items() if (n := _whole(b, x))}}
+    out: dict = {"rows": len(first), "files": files,
+                 "verifier_found": sorted({k for x in files.values() for k in x["found"]})}
+    if control is not None:
+        b = control.read_bytes()
+        missing = sorted({first[rows[k]] for k in (rows if held is None else held) if not _whole(b, rows[k])})
+        out["control"] = {"file": control.name, "holds_all": not missing, "missing": missing}
+    return {**out, **scan(out, {k: x for x, k in first.items()}, vdir, reads)}

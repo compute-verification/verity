@@ -15,8 +15,8 @@ the cost.
   checked against each step's committed positions (``statics_held``). The Programs are a stand-in: the honest rows' (start,
   n) in batch order (`served_statics.program_of`), as compile(advice) lays out a step whose advice's rows they are. One
   served-rows registration (`served_rows.register`, a row each block of G steps, fresh salts) holds the honest window as
-  window 0 and each case as a window of its own, all under the run root; every unit reads its leaf. Statements of one
-  template:
+  window 0 and each case as a window of its own, all under the run root; every unit reads its leaf, and a record whose G
+  isn't the statics' is refused (`same_g`). Statements of one template:
   - ``window-i``: the honest window's P / G blocks, each once, the idle ones too (Selection All), at most ``--per`` a
     statement;
   - ``cases``: the block holding each case's edit against the Programs the honest window ran (``KINDS``): a prefill's
@@ -30,7 +30,8 @@ the cost.
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
   proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
-  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's.
+  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
+  at G = 1 in the slice's class, 8 bytes) is found whole (`leak_scan.find_whole`).
 """
 from __future__ import annotations
 
@@ -107,13 +108,24 @@ def table(window: list) -> tuple[dict[str, list], dict]:
     return {n: wins[n] for n in KINDS}, {**edits, "steps": step}
 
 
+def same_g(S, St: SimpleNamespace, record: dict) -> int:
+    """The served-rows record's G, as `served_rows.leaf` reads it (P when absent), refused unless it is the G of the
+    statics the unit is built with: its leaves are blocks of the record's G steps, and the unit reads St.G of them."""
+    if (g := record.get("G", S.P)) != St.G:
+        raise SystemExit(f"the served-rows record's G is {g} but the unit's statics' is {St.G}: a leaf would be a block of "
+                         f"{g} steps read as {St.G}; register the window at the unit's G (served_rows.register(..., "
+                         f"G={St.G}))")
+    return g
+
+
 def plan(S, window: list, programs: list, run_root: bytes, g: int, ids=None) -> SimpleNamespace:
     """The registration (``KINDS``' windows in turn, a row each block of g steps) and the units: the honest window's every
     block, then each case's block holding its edit, each its leaf, the block's served rows and the Programs' statics."""
     St = SimpleNamespace(**SS.statics(S, G=g))
     wins, edits = table(window)
     served = SR.register(S, list(wins.values()), run_root, G=g)
-    rec, U = served.record(), S.P // g
+    rec = served.record()
+    U = S.P // same_g(S, St, rec)
     units = {"window": [], "cases": []}
     for c, (name, win) in enumerate(wins.items()):
         for j in range(U) if name == "honest" else [edits["steps"][name] // g]:
@@ -125,7 +137,7 @@ def plan(S, window: list, programs: list, run_root: bytes, g: int, ids=None) -> 
             units["window" if name == "honest" else "cases"].append(SimpleNamespace(
                 kind=name, j=j, leaf=leaf, rows=x.rows, flags=x.flags, verdict=x.verdict,
                 ids=None if ids is None else ids(win), words={r: STZ._words(v) for r, v in x.rows.items()}))
-    return SimpleNamespace(St=St, st=SS.statics(S, G=g), served=served, record=rec, units=units, edits=edits)
+    return SimpleNamespace(S=S, St=St, st=SS.statics(S, G=g), served=served, record=rec, units=units, edits=edits)
 
 
 def units_of(a) -> SimpleNamespace:
@@ -139,7 +151,7 @@ def units_of(a) -> SimpleNamespace:
     ok["statics_held"] = STW.statics_held(window, steps)
     seqs = {int(r["arrival"]): list(r["prompt_ids"]) + list(r["streamed_ids"]) for r in x.reqs if r.get("arrival") is not None}
     d = plan(S, window, SS.program_of(window), x.run.run_root, a.g, ids=lambda w: STW.ids_ok(StR, w, steps, seqs))
-    return SimpleNamespace(**vars(d), x=x, S=S, ok=ok, native=native, steps=steps, window=window, run_root=x.run.run_root)
+    return SimpleNamespace(**vars(d), x=x, ok=ok, native=native, steps=steps, window=window, run_root=x.run.run_root)
 
 
 # --- the statement -----------------------------------------------------------------------------------------------------
@@ -180,7 +192,9 @@ def stager(M, defn, St, n: int, out: Path) -> SimpleNamespace:
 
 def stage(M, sg: SimpleNamespace, name: str, units: list, d: SimpleNamespace, salt_key: bytes, registered: bool) -> dict:
     """A statement: each unit its own table row of both ports; ``srb``'s rows its leaves', under the registration's salts
-    (``registered``) or fresh ones, each with its leaf's position and path; and the verifier's own reads file."""
+    (``registered``) or fresh ones, each with its leaf's position and path; and the verifier's own reads file, of a
+    record at the unit's G (`same_g`)."""
+    same_g(d.S, d.St, d.record)
     t0 = time.time()
     st, n, out = sg.st, len(units), sg.out / "stage"
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
@@ -306,6 +320,19 @@ def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, set(blobs)
 
 
+def received(a8, vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], circuit: bytes) -> dict:
+    """What the verifier received (`vdir`) scanned for `blobs`, by `leak_scan`'s rule: each row of at least a piece cut
+    whole, less the pieces the staged `circuit` holds (`leak_scan.public_pieces`, found by `a8.received`), and each
+    shorter row found whole (`leak_scan.find_whole`, as ``whole_rows``); the `control` (the instance file) is to hold
+    every one in `held`."""
+    short = {k: x for k, x in blobs.items() if len(x) < a8.PIECE}
+    pieces, kept, public = LS.public_pieces(a8, {k: x for k, x in blobs.items() if k not in short}, held, circuit)
+    rec = {**a8.received(vdir, control, pieces, kept), "public_pieces": len(public)}
+    rec.update(LS.scan(rec, pieces, vdir))
+    rec["whole_rows"] = LS.find_whole(rec, short, vdir, control, held & set(short))
+    return rec
+
+
 def expected(name: str, registered: bool, res: dict, units: list) -> bool:
     """A registered statement is accepted, each unit's verdict its kind's; an unregistered one is refused by Lean's
     registered reads."""
@@ -365,21 +392,22 @@ def prove(a) -> int:
         log(f"{name}: staged {m['n']} units, {m['ands']} ANDs a unit, k_log {meta['k_log']}, m {meta['k_log'] + m['nbl']}, "
             f"{'registered' if registered else 'fresh'} srb salts, {m['stage_s']} s")
         res = audit(M, N2, av, sg, m, units, d, out / name, a.port + 20 * k)
-        blobs, held, public = LS.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
-        res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
-                           "public_pieces": len(public)}
-        res["received"].update(LS.scan(res["received"], blobs, out / name / "verifier"))
+        blobs, held = blobs_of(units, m["salts"])
+        res["received"] = rec = received(M.a8, out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held,
+                                         (m["dir"] / "circuit.txt").read_bytes())
+        wr = rec["whole_rows"]
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": meta["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"], "registered": registered}
-        res["as_expected"] = (expected(name, registered, res, units) and not res["received"]["leaked"]
-                              and res["received"]["control"]["holds_all"])
+        res["as_expected"] = (expected(name, registered, res, units) and not rec["leaked"] and rec["control"]["holds_all"]
+                              and not wr["leaked"] and wr["control"]["holds_all"])
         ok &= res["as_expected"]
         summary[name] = res
         log(f"{name}: proofs {res.get('verdicts')}, why {res.get('why')}, audit {res.get('audit')}, verdicts "
             f"{[(r['kind'], r['block'], r['verdict_word'], r['srb_read'], r['verdict']) for r in res.get('units', [])][:12]}..., "
             f"prove {res.get('timing', {}).get('timing', {}).get('prove_total_s')} s, Lean {res.get('lean_verify_s')} s, "
-            f"proof {sum(res.get('proof_bytes') or [0])} B, witness pieces found {res['received']['leaked'] or 'none'} "
-            f"(of {len(blobs)}), structured {res['received']['structured'] or 'none'}; "
+            f"proof {sum(res.get('proof_bytes') or [0])} B, witness pieces found {rec['leaked'] or 'none'} "
+            f"(of {len(blobs)} rows), structured {rec['structured'] or 'none'}; rows shorter than a piece found whole "
+            f"{wr['leaked'] or 'none'} (of {wr['rows']}), structured {wr['structured'] or 'none'}; "
             f"{'as expected' if res['as_expected'] else 'UNEXPECTED'}")
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     summary["ok"] = ok
