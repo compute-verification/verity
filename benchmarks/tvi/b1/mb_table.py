@@ -68,6 +68,7 @@ def main():
     cap_m = analyze.main([os.path.join(tmp, x) for x in sorted(os.listdir(tmp))])
     shutil.rmtree(tmp)
     g = rows_by_method(cap["greedy"].get("gsm8k"))
+    cg = rows_by_method(cap["ckpt_greedy"].get("gsm8k"))
     s = rows_by_method(cap["sampled"].get("gsm8k"))
     sm = rows_by_method(cap_m["sampled"].get("gsm8k"))
     on = rows_by_method(cap["online"].get("gsm8k"))
@@ -86,20 +87,25 @@ def main():
 
     print("### Capability: fraction of full RL's gain on GSM8K (Qwen2.5-1.5B-Instruct, 150 GRPO steps, 1319 test problems)\n")
     print("Paired hierarchical bootstrap over problems and seeds (A2's analyze.py, B = 4000). T = 1: n = 4 samples per problem.\n")
-    print("| method | S | trainable values | greedy acc (per seed) | greedy fraction | T = 1 acc (per seed) | T = 1 fraction "
-          "| T = 1 fraction, merged in-job | online T = 1 fraction (last 25 steps) |")
-    print("|---|---|---|---|---|---|---|---|---|")
+    print("Greedy is grpo.py's end-of-training reading (bf16-merged weights in vLLM); the final-checkpoint greedy column reads "
+          "the checkpoint evals, unmerged where there is one.\n")
+    print("| method | S | trainable values | greedy acc (per seed) | greedy fraction | greedy fraction, final checkpoint "
+          "| T = 1 acc (per seed) | T = 1 fraction | T = 1 fraction, merged in-job | online T = 1 fraction (last 25 steps) |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
     for m in ("base",) + METHODS:
         r = g.get(m) or s.get(m)
         if not r:
             continue
         sr = s.get(m)
         tag = " (unmerged)" if sr and "vllm-lora" in sr.get("modes", []) else ""
+        ctag = " (unmerged)" if cg.get(m) and "vllm-lora" in cg[m].get("modes", []) else ""
         print(f"| {m} | {mb(r['S_bits']) if r['S_bits'] else '0'} | {r.get('n_params', 0):,} | {fmt_acc(g.get(m))} | "
-              f"{fmt_frac(g.get(m))} | {fmt_acc(sr)}{tag} | {fmt_frac(sr)} | {fmt_frac(sm.get(m))} | {fmt_frac(on.get(m))} |")
+              f"{fmt_frac(g.get(m))} | {fmt_frac(cg.get(m))}{ctag} | {fmt_acc(sr)}{tag} | {fmt_frac(sr)} | {fmt_frac(sm.get(m))} | "
+              f"{fmt_frac(on.get(m))} |")
         out["capability"][m] = {k: {kk: x.get(kk) for kk in ("acc", "acc_per_seed", "frac_full_gain", "frac_ci", "gain", "gain_ci",
                                                          "modes", "seeds")}
-                                for k, x in (("greedy", g.get(m)), ("T1", sr), ("T1_merged", sm.get(m)), ("online", on.get(m)))
+                                for k, x in (("greedy", g.get(m)), ("greedy_ckpt", cg.get(m)), ("T1", sr),
+                                             ("T1_merged", sm.get(m)), ("online", on.get(m)))
                                 if x}
 
     print("\n### F at the cheapest block boundary, its mean over the 28 boundaries, and the betas, per checkpoint\n")
