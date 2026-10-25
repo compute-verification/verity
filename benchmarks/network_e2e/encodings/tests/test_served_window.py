@@ -1,8 +1,8 @@
-"""vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): the replay is the served scheduler on
-every step, every window opens on a drained engine, ReplayStep_v1 is the scheduler on windows 212 and 1 under the served
-async engine, `replay_vectors --slice` builds the compile slice's w212 fixtures (at the engine class's AsyncScheduler,
-and at the sync class) and its async w1 fixtures from the run's own records, and the certifier's charge chain is
-`code_v1`'s charge on every window."""
+"""vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): it serves without prefix caching,
+the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
+scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
+fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own
+records, and the certifier's charge chain is `code_v1`'s charge of the decisions alone on every window."""
 from __future__ import annotations
 
 import dataclasses
@@ -56,6 +56,15 @@ def test_the_replay_is_the_served_scheduler(recs):
         RP.decisions(_sync(tr))
 
 
+def test_the_run_serves_without_prefix_caching(recs):
+    """8eb1's trace header says it serves without prefix caching, so every window's hits are 0, and the charge chain,
+    which charges the decisions alone, leaves no hit uncharged (REDTEAM phase 18). Its order isn't 0: the run wasn't
+    served in release order, and the order's charge is the I/O tie's."""
+    header = recs[0]
+    assert header["kind"] == "header" and header["config"]["enable_prefix_caching"] is False
+    assert RP.load_step_trace(recs).engine.enable_prefix_caching is False
+
+
 @pytest.mark.slow
 def test_every_window_opens_drained(recs):
     """All 339 windows open on an empty engine, so each replays from it, and the cut windows are the whole run. Under sync
@@ -79,7 +88,8 @@ def test_every_window_opens_drained(recs):
 def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
     decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
-    book) over the 339 windows' decisions is `code_v1`'s charge on every window, 5,500 bits: its context ``run`` counts
+    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Window(arrived=…)`, every other count
+    0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
     which resets ``run``), each forced admission would change 330 windows' charges."""
     from verity.core.protocols.certifier import charge_chain as CC

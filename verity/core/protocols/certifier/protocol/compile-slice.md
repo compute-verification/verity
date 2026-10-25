@@ -18,12 +18,18 @@ window, what binds the charge's inputs, and the slice's proof of record on a ser
 - A decision a window commits but its steps don't read is charged in that window and read in a later one.
 - A forced admission (an arrival into a quiet engine, taken unasked) is no decision, so it takes no slot. ``run``, the
   charge's context, counts decisions only, as `code_v1`'s does, and the admission doesn't reset it as it resets the
-  scan's ``pc``. Each of 8eb1's 339 windows opens with one. Over them the chain is `code_v1`'s charge on every window,
-  5,500 bits; charged as a 1, the forced admissions would change 330 windows' charges
-  (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
+  scan's ``pc``. Each of 8eb1's 339 windows opens with one. Over them the chain is `code_v1`'s charge of the decisions
+  alone (its other counts 0) on every window, 5,500 bits; charged as a 1, the forced admissions would change 330
+  windows' charges (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - The slice has no coder state, codeword or context counter: ChargeLink_v1 reads its contexts and estimates from ``cin``
   and the committed decisions. Its counts other than the decisions are coded as 0 (`arith_encode.ZERO_COUNTS`, the
   still-sent fields' stand-in).
+- **What a proof of the slice covers** (REDTEAM phase 18, INFO, on #3886): the compile slice's charge, the window's
+  decisions. The chain is `code_v1`'s whole charge only where a window's hits and order are 0 as well.
+  - Hits are 0 on 8eb1, which serves without prefix caching: its trace header says so (``enable_prefix_caching``
+    false, `test_served_window.py`).
+  - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is the
+    I/O tie's (`io_tie`, a draft), outside the slice's proof.
 
 **What binds the charge's inputs** (REDTEAM phase 14: `ChargeCount_v1` on its own is faithful, but its enables, its bits
 and its carry are witness until the slice binds them):
@@ -52,6 +58,8 @@ order. w212 (requests 308–310, 21 units, 14 decisions) is padded into it
 (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
 decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv`` (`served_rows.step_rows`), each
 held to its request's slot through ``map``.
+- It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
+  the slice covers, above).
 - `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays a
   window at the trace's own scheduler unless asked for the sync class (`--AS 0`).
 - The unit is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,
