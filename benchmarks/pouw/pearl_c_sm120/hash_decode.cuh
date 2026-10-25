@@ -898,6 +898,83 @@ DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, u
     pd_line_codes(h, a.p[12] + 32ull * r, on);
   }
 }
+// PD_SM90_FORMS in mode 1 with PD_PAIR and PD_LOOP: pd_row_leaf and pd_row_seed in four steps at one paired site, on pair
+// 0's consumer (converged): lane 31 the hm96 leaf, then the frame leaf (its fourth step a stand-in), and the other lanes
+// the seed chain with its line hash, rather than each on a pair of its own beside the other (each 3.9 to 4.3 us a block
+// there, against the segments' 3.2 on one pair, stamps r20261025-130237-127e).  Out: level 0's node r into tree, and as
+// pd_row_seed (lane 0 the seed and line key, every lane its byte of the E_A line)
+template <int V>
+DEV void pd_row_leaf_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, uint64_t index, int r, const uint64_t* xr,
+                          const uint64_t* mk, const uint64_t* cc, const uint64_t* ftw, const uint64_t* ftm, uint64_t tree) {
+  __shared__ uint32_t lh[8];
+  const int lane = threadIdx.x & 31;
+  const bool leaf = lane == 31, line = a.p[12] != 0;
+  const uint64_t* mid = reinterpret_cast<const uint64_t*>(a.p[8]);
+  const uint64_t iota = index << 32 | (uint64_t)r;
+  uint64_t st[8], w[17], lt[8];
+  uint32_t seed[8], key[8];
+  if (lane == 0) pd_stamp<V>(a.p[13], r, PS_SEED0);
+#pragma unroll 1
+  for (int b = 0; b < 4; b++) {
+    if (leaf) {
+      if (b == 0) {
+#pragma unroll
+        for (int q = 0; q < 8; q++) { st[q] = mid[8 + q]; w[q] = rs_bswap64(rs_bswap64(xr[q]) ^ mk[q]); w[8 + q] = cc[q]; }
+      } else if (b == 1) {
+        pd_padw(w, 256);
+      } else if (b == 2) {
+#pragma unroll
+        for (int q = 0; q < 16; q++) w[q] = ftw[16 + q];
+        w[16] = 0;
+        wm_put64<PD_LEAF_AT>(w, st);
+#pragma unroll
+        for (int q = 0; q < 8; q++) st[q] = ftm[q];
+      } else {
+#pragma unroll
+        for (int q = 0; q < 8; q++) lt[q] = st[q];
+      }
+    } else if (b == 0) {
+#pragma unroll
+      for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_SEED_A + t];
+#pragma unroll
+      for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? xr[i - 4]
+                                                : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
+    } else if (b == 1) {
+#pragma unroll
+      for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[16 + 2 * i], unit[17 + 2 * i]) : 0;
+      w[4] = rs_be64((uint32_t)iota, (uint32_t)(iota >> 32));
+      w[5] = 0x8000000000000000ull;
+      w[15] = 8 * (128 + 168);
+    } else if (b == 2) {
+      s512_out32(st, seed);
+#pragma unroll
+      for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_NOISE_LINE + t];
+#pragma unroll
+      for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
+      w[4] = 0x8000000000000000ull;
+      w[15] = 8 * (128 + 32);
+    } else {
+      s512_out32(st, key);
+#pragma unroll
+      for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_LINE + t];
+      pd_line_block(key, 0, w);
+    }
+    pd_cmp<V, 1>(st, w);
+  }
+  if (leaf) {
+    s512_store(tree + 64ull * r, lt, 8);
+    pd_stamp<V>(a.p[13], r, PS_LEAF);
+  }
+  if (lane == 0) {
+    pd_stamp<V>(a.p[13], r, PS_LINE);
+    store_cv(a.p[3] + 32ull * r, seed);
+    store_cv(a.p[4] + 32ull * r, key);
+    s512_out32(st, lh);
+  }
+  __syncwarp();
+  if (line) pd_line_codes_warp(lh, a.p[12] + 32ull * r);
+  if (lane == 0) pd_stamp<V>(a.p[13], r, PS_SEED);
+}
 // the tree's levels above level 0 (tm the templates, nodes PD_NODES words, root 8, lk 8: shared), seed_A and line_a, E_A's
 // filler lines (p12 nonzero), and the counter at scratch reset (scratch nonzero).  PD_PAIR: by pair 0 (warps 0 and pw0) and
 // pair 1 (warps c1 and p1), every other warp returning; else by the CTA's threads
@@ -1132,6 +1209,17 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
     // the tail reads level 0 alone, so pair 0 takes the counter after the leaf and the last CTA's tail starts while pair 1
     // still runs the seed chain, which learns the verdict on PD_LAST (warp 0 arriving, c1 and p1 waiting)
     const bool rows = a.i[2] == 1;
+    if constexpr (PD_SM90_FORMS && (V & PD_LOOP) != 0) {
+      if (rows) {                                   // the leaf and the seed chain together on pair 0
+        if (warp == 0) {
+          pd_row_leaf_seed<V>(a, seed_unit, seed_lab, index, r, xr, mk, cc, ftw, ftm, tree);
+          pd_pstop();
+        } else if (warp == cw) {
+          pd_serve<V>(0);
+        }
+        return;
+      }
+    }
     if (warp == 0) {                                // the hm96 leaf, then the frame leaf: level 0's node r
       uint64_t lt[8];
       pd_row_leaf<V, 1>(a.p[8], xr, mk, cc, ftw, ftm, lt);
