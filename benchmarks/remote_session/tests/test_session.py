@@ -152,12 +152,12 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
         then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        binding=None, **kv):
+        binding=None, groups_per_coin: int = 1, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
-    (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end. With `store` (a
-    `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding` the verifier binds the registration
-    to its pinned model."""
+    (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a draw; `then(v)` once
+    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
+    the verifier binds the registration to its pinned model."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
@@ -176,7 +176,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
-                          transcript=transcript, challenger=challenger, appends=appends, binding=binding)
+                          transcript=transcript, challenger=challenger, appends=appends, binding=binding,
+                          groups_per_coin=groups_per_coin)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -1275,6 +1276,39 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
     with replay.server() as s:
         row = replay.replay(case, s)
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
+
+
+def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
+        tmp_path, monkeypatch):
+    """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each drawn at its last window's
+    close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
+    first draw's two receipts leave at least two of its windows a share of none, which the close accepts and no
+    openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
+    transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
+    at a receipt."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import json
+
+    import replay
+
+    (r,), (pr,) = run("honest", windows=5, samples=2, groups_per_coin=4, transcript=tmp_path)
+    assert r["accepted"] and pr["accepted"] and r["disagreement"] is None, r["failure"]
+    assert r["record"]["public"]["groups_per_coin"] == 4 and r["lean_record"]["groups_per_coin"] == 4
+    assert r["challenger"]["reason"] is None
+    seen = r["windows_seen"]
+    assert len({w["draws_sent_ns"] for w in seen[:4]}) == 1 and seen[4]["draws_sent_ns"] >= seen[3]["draws_sent_ns"]
+    first = [len(r["draws"].get(t, [])) for t in range(4)]
+    assert sum(first) == 2 and first.count(0) >= 2 and len(r["draws"][4]) == 2
+    assert sorted(t for t, v in r["verify_cpu_ns"].items()) == list(range(5))
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 5 + 2
+    with replay.server() as s:
+        row = replay.replay(case, s)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted", row
+    (bad,), (pbad,) = run("skip:0.5", windows=5, samples=12, groups_per_coin=4)
+    assert not bad["accepted"] and not pbad["accepted"] and bad["failure"]["failure"] == "receipt"
+    assert bad["disagreement"] is None
 
 
 def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):

@@ -637,6 +637,13 @@ class ProverSide:
                 self.jobs.task_done()
 
     def _open_window(self, t: int, draws: list) -> None:
+        """Window t's openings of `draws`, sent in parts. A window whose share of its draw is none
+        (`audit.Params.groups_per_coin` above 1) has nothing to open: the verifier accepted it at its draw's close."""
+        if not draws:
+            with self.lock:
+                for key in [key for key in self.kept if key[0] == t]:
+                    del self.kept[key]
+            return
         c0 = time.perf_counter_ns()
         by_pass = defaultdict(list)
         for k, (i, p) in enumerate(draws):
@@ -712,7 +719,7 @@ class ProverSide:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         one = head.get("in_flight") == 1
         commitment = wire.commitment_of(head["commitment"])
-        why = coins.layout_reason(commitment, k, W)
+        why = coins.layout_reason(commitment, k, W, head.get("groups_per_coin", 1))
         if why is not None:
             raise ValueError(f"the session's coins are not session {k}'s: {why}")
         N = self.backend.blocks

@@ -207,6 +207,11 @@ deriving instance Inhabited for Session.WindowSummary
 /-- `U`, a window's receipts in the record: its passes' lengths summed. -/
 def receipts (w : Session.WindowSummary) : Nat := w.lengths.toList.sum
 
+/-- Why a record drawn more than one window a coin (`groups_per_coin`, `Shared`) has no line: the line reads each
+window's own draw, `min(s, U_t)` of its receipts, and such a window holds its share of its draw's. -/
+def SHARED : String :=
+  "a record drawn more than one window a coin (groups_per_coin) has no line: the line reads each window's own draw"
+
 /-- The groups and windows the line reads of an accepted session's record `sm` (`Session.State.summary`) and what the
 auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
 the auditor's, and window `t`'s receipts and draws are the record's, `(Σ lengths_t, drawn_t)`. Refused unless the

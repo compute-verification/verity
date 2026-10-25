@@ -91,8 +91,9 @@ window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for af
 it with the event that released it, and once the session ends what the challenger signed holds the session's coins
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
 session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
-whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W
-openings coins and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the
+whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
+openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close)
+and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the
 prover's hello says its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the
 challenger's close of such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
 under the Lean, whose session holds only the append coins released, `disagreement`.
@@ -103,6 +104,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
+                       [--groups-per-coin G]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                         --challenger-period P --challenger-main FILE [--challenger-minutes M]]
                        [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
@@ -567,10 +569,12 @@ def lean_record(session: dict) -> dict:
 
 
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
-    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each window's
-    receipts and draws, and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
-    ws = session["record"]["profile"]["windows"]
-    return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
+    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each draw's
+    receipts and draws (`audit.pooled_windows`: a window's own at `groups_per_coin` g = 1, its g windows' together
+    above), and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
+    g, ws = session["record"]["public"].get("groups_per_coin", 1), session["record"]["profile"]["windows"]
+    return ([(sum(sum(w["lengths"]) for w in ws[a:a + g]), sum(w["profile"]["drawn"]["receipt"] for w in ws[a:a + g]))
+             for a in range(0, len(ws), g)], ws[0]["profile"]["delta"])
 
 
 def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) -> list[line.Seen]:
@@ -831,8 +835,9 @@ class Pair:
                           lambda: self.s.receive(t, i, root, change=change, step=step), lv.done_json, clocked=True)[0]
 
     def close(self, t: int):
-        return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json,
-                          clocked=True, coin=lambda out: self._released(coins.OPENINGS, t))[0]
+        """Window t's close: at `groups_per_coin` g, its draw's (t // g), whose openings coin goes with it."""
+        return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json, clocked=True,
+                          coin=lambda out: self._released(coins.OPENINGS, t // self.s.params.groups_per_coin))[0]
 
     def openings(self, t: int, body: bytes) -> None:
         """One frame of window t's openings to the Lean, kept there until the window is verified."""
@@ -943,9 +948,11 @@ class Verifier:
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None,
-                 binding: rstore.Binding | None = None) -> None:
+                 binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
+        coins.openings_coins(1, groups_per_coin)
+        self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
         self.binding = binding
@@ -1137,19 +1144,22 @@ class Verifier:
             self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
-                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
+                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)),
+                              groups_per_coin=self.groups_per_coin)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         if one:
             params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
+        g = params.groups_per_coin
+        shared = {} if g == 1 else {"groups_per_coin": g}
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends))
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, per_coin=g))
         case = None if self.transcript is None else lv.Transcript(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json(), "pace": K} | one)
+                        "commitment": session.commitment.to_json(), "pace": K} | one | shared)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1238,17 +1248,28 @@ class Verifier:
                 decide(t)
 
         def close(t: int) -> None:
+            """Window t's draw, at its draw's last window (`Params.draw_of`; every window at g = 1): each window's
+            share goes to the prover, and one whose share is none is accepted as the close accepted it."""
             nonlocal failure
+            group = params.draw_of(t)
+            if t != group[-1]:
+                return
             try:
                 out = session.close(t)
             except audit.SessionError:
                 failure = failed(t)
                 return
             if isinstance(out, audit.Verdict):
-                failure = {"t": t, "failure": out.failure, "at": None}
+                failure = {"t": out.window, "failure": out.failure, "at": None}
                 return
-            draws_at[t] = self.clock.now()
-            self.conn.send({"type": "draws", "t": t, "draws": [list(d) for d in out]})
+            now = self.clock.now()
+            for u in group:
+                share = session.windows[u].draws
+                draws_at[u] = now
+                self.conn.send({"type": "draws", "t": u, "draws": [list(d) for d in share]})
+                if not share:
+                    verdicts[u] = {"t": u, "accepted": True, "failure": None, "at": None, "cpu_ns": 0, "openings": 0,
+                                   "checked_ns": 0}
 
         def bound() -> None:
             """The next window's coin, or `close` after the last; where the session refuses it, `failure`."""
@@ -1415,7 +1436,7 @@ class Verifier:
             head, _, _ = self.expect("ended")
             if head["k"] == k:
                 break
-        out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
+        out = shared | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
@@ -1671,6 +1692,10 @@ def main() -> int:
     ap.add_argument("--appends", type=int, metavar="A",
                     help=f"each session's append coins, the most appends it takes (`coins.families`): by default "
                          f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
+    ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
+                    help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
+                         "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all; a session "
+                         "drawn G > 1 a coin has no line of record (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
@@ -1768,7 +1793,7 @@ def main() -> int:
                  verdict=a.verdict, lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
                  link_burst_bytes=a.link_burst_bytes,
-                 challenger=challenger, appends=a.appends, binding=binding)
+                 challenger=challenger, appends=a.appends, binding=binding, groups_per_coin=a.groups_per_coin)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()

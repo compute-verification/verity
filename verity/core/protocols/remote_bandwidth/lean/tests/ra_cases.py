@@ -315,17 +315,14 @@ def pace_of(v: Any) -> audit.Pace | None:
     return audit.Pace(k, window_ns, f)
 
 
-def session_of(v: Any, shared: bool = False) -> tuple[dict, list[bytes], list[bytes], int]:
+def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
-    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent, and
-    refused above 1 unless `shared` (`sessionFn`'s, not the registry's)."""
+    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent."""
     p = _get(v, "params")
     kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
     kw["deferred"] = _bool(p, "deferred")
     kw["pace"] = pace_of(_get(p, "pace"))
     kw["groups_per_coin"] = _positive(p, "groups_per_coin") if "groups_per_coin" in p else 1
-    if kw["groups_per_coin"] != 1 and not shared:
-        raise D.Reject("the registry draws a window an openings coin: groups_per_coin is 1")
     Params(1, **kw)
     committed = hexes(v, "coins")
     if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
@@ -344,7 +341,7 @@ def session(v: Any) -> dict:
     """`sessionFn`: a case's events through `audit.Session`, every event's result, the outcome and the record."""
     with decoding():
         reg = registration_of(_get(v, "registration"))
-        kw, committed, appends, not_before = session_of(v, shared=True)
+        kw, committed, appends, not_before = session_of(v)
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
@@ -410,7 +407,7 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
         which, kw, committed, appends, not_before, index = a
         reg = drawn[which] if isinstance(which, int) else which
         s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
-                      challenger=lambda k: Replay(k, kw["windows"], committed, appends))
+                      challenger=lambda k: Replay(k, kw["windows"], committed, appends, kw["groups_per_coin"]))
         return {"session": s.commitment.epoch}
     if op == "event":
         node, k, e = a
