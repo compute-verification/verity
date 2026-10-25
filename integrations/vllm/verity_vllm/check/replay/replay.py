@@ -36,7 +36,7 @@ C. `tier_c` — **end to end, pod only**.  The same engine over all steps with N
    32-row prefill); tested here on a synthetic toy only.
 
 Resource discipline (DESIGN §11): one `Replayer` holds one instance's transcript at a time; `computed` outputs are
-freed once their last consumer (in body order) has been replayed.  Measured on the laptop (2026-09-16), M1: fold +
+freed once their last consumer (in body order) has been replayed.  Measured on the laptop, M1: fold +
 Program 2.1 s / 0.19 GB, plus 0.51 GB once per process when the first RMSNorm gate lazily loads the MUFU tables
 (`verity_vllm.program.kernels.rms_relation.tables`); a decode-step instance costs 0.01 s (RoPE, norms) to 5.2 s
 (`Gemm_v1{K=576,N=3072}`); tier A k=2 30 s / 1.0 GB, tier B on 2 of 30 layers of a decode step 23 s / 0.85 GB
