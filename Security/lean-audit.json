@@ -5660,6 +5660,12 @@
    "assumptions": [],
    "type_hash": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20"
   },
+  "Flock.SecurityProofs.IntegrityHorizon": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.IntegrityPeriod": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.MaskedKS": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS"],
@@ -10714,6 +10720,8 @@
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHidden": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHiddenDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityHorizon": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHidden_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
