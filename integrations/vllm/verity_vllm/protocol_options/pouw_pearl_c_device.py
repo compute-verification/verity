@@ -86,6 +86,7 @@ from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept imp
     rotated,
     schedule_of,
     splits,
+    whole_options,
 )
 from .pouw_pearl_c_host import (
     _bytes,
@@ -116,11 +117,7 @@ from .pouw_pearl_c_manifest import (  # noqa: F401 - the manifest's readers, kep
     manifest_epoch,
     manifest_schema,
 )
-from .pouw_pearl_c_passes import (  # noqa: F401 - _Late kept importable here, as the tests read it
-    PassEnds,
-    _Late,
-    _Pass,
-)
+from .pouw_pearl_c_passes import PassEnds, _Pass
 from .pouw_pearl_c_screen import (
     excluded,
     screen,
@@ -147,6 +144,9 @@ WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128"
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "rowdig_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "tree_a", "line_a",
                 "seed_a", "rowdig_a", "seeds_a", "lkeys_a", "segdig_a", "segdig_t")
+#: per-call buffers only some kernels' pipelines size (`Pipeline.sizes`), each made where its pipeline has it: pearl_c_sm90's
+#: A'F_B windows
+CALL_BUFFERS_OWN = ("af_win",)
 EPOCH_STEPS = ("pad_b", "rowdig_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
 CALL_STEPS = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a",
@@ -290,28 +290,22 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, PassEnds):
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_stats_a: bool = False, whole_prefetch_b: bool = False, late_ends: bool = False,
-                 whole_eager: str | Schedule | None = None):
+                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
+                 whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
-        `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
-        tree within a whole capture (`pouw_pearl_c_graphs`); `whole_stats_a` and `whole_prefetch_b` (with `whole_defer`)
-        fork each call's ``stats_a`` there, and B̃'s prefetch into L2 (`run.Pipeline.prefetch_b`), beside its per-row
-        keying.  With `late_ends` the executor's passes (`PearlCExecutor`'s, a `Stack`'s) `end` late.  `whole_eager` is the
-        schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
-        if whole_defer_a and not (whole_defer and splits(kernel)):
-            raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
-                             f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
-        if (whole_stats_a or whole_prefetch_b) and not whole_defer:
-            raise ValueError(f"{entry}: whole_stats_a and whole_prefetch_b fork within a deferred whole capture (whole_defer)")
-        if whole_prefetch_b and not hasattr(kernel.run.Pipeline, "prefetch_b"):
-            raise ValueError(f"{entry}: whole_prefetch_b runs the kernel's B̃ prefetch (`Pipeline.prefetch_b`), which it lacks")
+        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.  The whole
+        capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
+        ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
+        too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
+        is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
+        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
+                      whole_prefetch_b)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
-        self.whole_defer, self.whole_defer_a = whole_defer, whole_defer_a
-        self.whole_stats_a, self.whole_prefetch_b = whole_stats_a, whole_prefetch_b
-        self.late_ends, self._late, self._late_host, self._late_event = late_ends, None, None, None
+        self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
+        self.whole_tree_sm, self.whole_prefetch_b = whole_tree_sm, whole_prefetch_b
+        self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
@@ -370,8 +364,13 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, PassEnds):
                        f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
+                       + (" (the GEMM leaving the tree its SM)" if whole_tree_sm else "")
+                       + (", its A scales beside its A commitment" if whole_fork_stats else "")
+                       + (", its B̃ prefetched into L2 beside its A commitment" if whole_prefetch_b else "")
                        + (f", an eager forward's pass under {self.whole_eager.name}" if self.whole_eager else ""))
             if self.graphs else None,
+            "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
+                                                                                     if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -450,7 +449,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, PassEnds):
             tile = R.BM if m16 > getattr(R, "MAINLOOP_ROWS", m16) else R.BM_D
             mp = R.cdiv(m16, tile) * tile
             size = R.Pipeline.sizes(mp, n, k, m16)
-            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
+            own = tuple(x for x in CALL_BUFFERS_OWN if x in size)
+            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in (*CALL_BUFFERS, *own)},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(self.nb + 104, self.device))
             sh.sets = [dict(sh.b)]
             sh.size, sh.count = size, _zeros(16, self.device)
@@ -497,48 +497,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, PassEnds):
     def _call_steps(self, pipe: Any) -> list[Any]:
         """The call's steps in order (`_call_names`)."""
         return _steps(pipe, self._call_names(pipe))
-
-    def _call_cuts(self, pipe: Any) -> tuple[int, int]:
-        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
-        tile hashing runs, and before the call's own tile hashing, which it forks."""
-        have = {name for name, _, _ in pipe.steps()}
-        groups = [STEP_GROUPS[x] for x in self._call_names(pipe) if x in have]
-        commit = ("row_seeds", "a_tree")
-        a = next((i for i, g in enumerate(groups) if g not in commit), len(groups))
-        b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
-        if any(g in commit for g in groups[a:]) or any(g != "tile_hash" for g in groups[b:]):
-            raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's commitment and end with the tile hashing")
-        return a, b
-
-    def _call_tree(self, pipe: Any) -> int | None:
-        """Where a deferred-a whole capture (`whole_defer_a`) forks A's tree from `_call_steps`: ``tree_seed_a``'s place, the
-        last of A's commitment's steps (`_call_cuts`' first cut is after it), or None where the pipeline doesn't split it."""
-        have = {name for name, _, _ in pipe.steps()}
-        present = [x for x in self._call_names(pipe) if x in have]
-        if "tree_seed_a" not in present:
-            return None
-        at = present.index("tree_seed_a")
-        if at + 1 != self._call_cuts(pipe)[0]:
-            raise RuntimeError(f"{self.entry}: the call's steps {present} don't end A's commitment with A's tree")
-        return at
-
-    def _call_stats(self, pipe: Any) -> int | None:
-        """Where a whole capture forking A's statistics (`whole_stats_a`) takes ``stats_a``, which reads A's words alone, from
-        `_call_steps`: its place among the forming's steps (between `_call_cuts`' cuts), or None where the call has none."""
-        have = {name for name, _, _ in pipe.steps()}
-        present = [x for x in self._call_names(pipe) if x in have]
-        if "stats_a" not in present:
-            return None
-        at, (a, b) = present.index("stats_a"), self._call_cuts(pipe)
-        if not a <= at < b:
-            raise RuntimeError(f"{self.entry}: the call's steps {present} don't run stats_a after A's commitment")
-        return at
-
-    def _split_whole(self, sh: _Shape) -> bool:
-        """Whether a call of `sh` splits A's commitment for a deferred-a whole capture (`whole_defer_a`, deferring): a call
-        that replays as a graph, at a shape the kernel's pd launches take (`_aside`'s rule)."""
-        return (self._defers_a() and self._graphed(sh.m16)
-                and self.kernel.run.pd_variant(sh.m16, sh.n, sh.k) is not None)
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
@@ -606,8 +564,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, PassEnds):
 
     def _gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         import torch
-        if self._late is not None:
-            self._after_late()
         cur, wt = self.cur, self.weights[w]
         lead, k = x.shape[:-1], x.shape[-1]
         x2 = x.reshape(-1, k)
@@ -685,8 +641,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, PassEnds):
         with `value`.  Under inference mode: buffers made during a vLLM forward are inference tensors, which torch writes only
         there."""
         import torch
-        if self._late is not None:
-            self._after_late()
         self.cur.poison = value
         with torch.inference_mode():
             self.leaves.fill_(value)
@@ -745,6 +699,6 @@ class _ExecutorPass:
 
     def end(self) -> dict[str, Any]:
         try:
-            return self.run.end(late=self.run.late_ends)
+            return self.run.end(lag=self.run.lag_ends)
         finally:
             self.run.omit = frozenset()

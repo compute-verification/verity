@@ -1,11 +1,10 @@
 """The Pearl-C device path's passes (`pouw_pearl_c_device.PearlCDeviceRun`'s): a pass's state (`_Pass`) and its end
 (`PassEnds`): one tile tree over every leaf under `audit.transcript_domain`, A's roots and the screen's counts as the pass's
-commitment, a retained pass's files and manifest (`write_manifest`), and a late end's copies (`_Late`), settled at the next
-end.
+commitment, and a retained pass's files and manifest (`write_manifest`).  A lagged end's readback and tree aside are
+`pouw_pearl_c_lanes.LaneCalls`' (`settle`, `_end_aside`, `_ended`).
 """
 from __future__ import annotations
 
-import hashlib
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,7 +15,6 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from .pouw_pearl_c_graphs import _capturing
 from .pouw_pearl_c_host import _bytes, _put, _write, _zeros, write_manifest
 from .pouw_pearl_c_manifest import MANIFEST_SCHEMA
 
@@ -34,34 +32,18 @@ class _Pass:
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
 
 
-@dataclass
-class _Late:
-    """A pass `PearlCDeviceRun.end` closed late: its commitment so far, the pass and its tile count, the host copies of A's
-    roots, the tree's root and the screen's two sums, the event after them (None off the GPU) on stream `raw`, and the
-    device tree they read, held until then."""
-    out: dict
-    cur: _Pass
-    count: int
-    host: tuple
-    event: Any
-    raw: int
-    tree: Any
-
-
 class PassEnds:
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
-    ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``_late``,
-    ``_late_host`` and ``_late_event``, and its ``stream``, ``torch_stream``, ``join_sides`` and ``begin``."""
+    ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
+    ``lag_ends`` and ``_lagged``, and its ``stream``, ``join_sides``, ``begin``, ``settle``, ``_end_aside`` and
+    ``_ended``."""
 
-    def end(self, late: bool = False) -> dict[str, Any]:
+    def end(self, lag: bool = False) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
-        commitment (also in `commits` and `details["passes"]`).  `late`, for an unretained pass of a schedule on the caller's
-        stream alone (no side lane, the caller's priority): the host waits for nothing, the device copying the tree's root,
-        A's roots and the screen's sums to host memory behind an event, and the commitment returned is filled in, and
-        `commits` updated, at `settle`, which the next pass's end, `finish` and a whole capture's start call first.  The next
-        pass's buffers are rewritten behind those copies: on their stream in its order, on another after their event
-        (`_after_late`)."""
+        commitment (also in `commits` and `details["passes"]`).  With `lag` (on CUDA, without `retain`) the root, A's roots
+        and the flag counts are copied out behind the pass's work and the host doesn't wait for them: the returned dict gets
+        them, and `commits` its root, when the next end, `settle` or `finish` completes the readback."""
         import torch
         self.settle()
         cur, K = self.cur, self.kernel
@@ -74,73 +56,41 @@ class PassEnds:
             dom = _zeros(nb, self.device)
             _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
             ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
-            K.dev.stream = self.stream()
+            units = len(cur.matmuls)
+            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
+            aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
+            leaves, side, got = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
+                (self.leaves.data_ptr(), None, None)
+            K.dev.stream = side.cuda_stream if aside else self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
-                R.Pipeline.tree_leaves(ns, "t", self.leaves.data_ptr(), count, "dom_t")
+                R.Pipeline.tree_leaves(ns, "t", leaves, count, "dom_t")
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None
-            if late and cur.retain is None and not self.schedule.side and self.schedule.main_priority != "greatest":
-                self._late = self._copy_late(out, cur, tree, count)
-                self.details["passes"].append(out)
-                return out
-            roots_a = _bytes(self.roots_buf[:nb * len(cur.matmuls)])
-            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0).tolist() if cur.flag_rows else [0, 0]
-            self._close(out, cur, count, roots_a, _bytes(tree[-nb:]), flags)
-            if cur.retain is not None:
-                out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
+            out.update(screened_rows=cur.flag_rows,
+                       excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
+            if aside:
+                with torch.cuda.stream(side):
+                    root, done = torch.empty(nb, dtype=torch.uint8, pin_memory=True).copy_(tree[-nb:], non_blocking=True), torch.cuda.Event()
+                    done.record()
+                tree.record_stream(side)
+                dom.record_stream(side)
+                self._lagged = (out, done, [got[0], root, got[1]], units, count)
+            elif lag and cur.retain is None and self.device.type == "cuda":
+                got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True)
+                       for t in (self.roots_buf[:nb * units], tree[-nb:], flags)]
+                done = torch.cuda.Event()
+                done.record()
+                self._lagged = (out, done, got, units, count)
+            else:
+                roots_a = _bytes(self.roots_buf[:nb * units])
+                self._ended(out, roots_a, _bytes(tree[-nb:]), flags.tolist(), units, count)
+                if cur.retain is not None:
+                    out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
         self.details["passes"].append(out)
         return out
-
-    def _close(self, out: dict[str, Any], cur: _Pass, count: int, roots_a: bytes, root: bytes, flags: Any) -> None:
-        """The pass's commitment, in `out` and `commits`: the tree's root, A's roots' digest and the screen's counts."""
-        out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),
-                   screened_rows=cur.flag_rows, failing_rows=int(flags[0]), unsure_rows=int(flags[1]),
-                   excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
-        self.commits.update(transcript_root=out["transcript_root"], units=len(cur.matmuls), tiles=count)
-
-    def _copy_late(self, out: dict[str, Any], cur: _Pass, tree: Any, count: int) -> _Late:
-        """`end`'s ``late`` copies, on the current stream behind the pass's tree, into host buffers made at the first (pinned
-        on the GPU), which `settle` reads before the next late end rewrites them."""
-        import torch
-        n, nb, gpu = self.nb * len(cur.matmuls), self.nb, self.device.type == "cuda"
-        if self._late_host is None:
-            self._late_host = (torch.empty(self.roots_buf.numel(), dtype=torch.uint8, pin_memory=gpu),
-                               torch.empty(nb, dtype=torch.uint8, pin_memory=gpu), torch.zeros(2, dtype=torch.int64, pin_memory=gpu))
-        roots, root, sums = self._late_host
-        roots[:n].copy_(self.roots_buf[:n], non_blocking=True)
-        root.copy_(tree[-nb:], non_blocking=True)
-        if cur.flag_rows:
-            sums.copy_(self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0), non_blocking=True)
-        raw, event = self.stream(), None
-        if gpu:
-            event = self._late_event = self._late_event or torch.cuda.Event()
-            event.record(self.torch_stream(raw))
-        return _Late(out, cur, count, (roots[:n], root, sums), event, raw, tree)
-
-    def settle(self) -> None:
-        """A late end's commitment (`end`'s ``late``) filled in once the device has copied it, and `commits` updated; nothing
-        when no end is late."""
-        p, self._late = self._late, None
-        if p is None:
-            return
-        if p.event is not None:
-            p.event.synchronize()
-        roots, root, sums = p.host
-        self._close(p.out, p.cur, p.count, roots.numpy().tobytes(), root.numpy().tobytes(),
-                    sums.tolist() if p.cur.flag_rows else [0, 0])
-
-    def _after_late(self) -> None:
-        """Before work that rewrites the pass's buffers (a call, a forward replayed whole, a poison): on another stream than
-        a late end's copies, the current stream waits for them; on theirs it follows them, and a capture takes no wait."""
-        p = self._late
-        if p is None or p.event is None:
-            return
-        raw = self.stream()
-        if raw != p.raw and not _capturing():
-            self.torch_stream(raw).wait_event(p.event)
 
     def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None, *,
                  step: bool = False) -> dict[str, Any]:
@@ -151,9 +101,8 @@ class PassEnds:
         if not step and self.cur.stepped and not self.cur.matmuls:
             if retain or run or schedule:
                 self.begin(retain, run, schedule, stepped=True)
-            self.settle()
             return self.details["passes"][-1]
-        out = self.end()
+        out = self.end(lag=step and self.lag_ends)
         self.begin(retain, run, schedule, stepped=step)
         return out
 
@@ -187,7 +136,7 @@ class PassEnds:
         return write_manifest(d, head, weights, matmuls)
 
     def finish(self) -> None:
-        self.settle()
         if self.cur is not None and self.cur.matmuls:
             self.end()
             self.cur = _Pass(None)
+        self.settle()

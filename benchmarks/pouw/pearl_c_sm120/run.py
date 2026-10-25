@@ -444,6 +444,9 @@ class Pipeline:
     #: ``tree_seed_a`` A's hm96 level 0 over the row digests, its levels, seed_A and line_a (with `fillers`, every row's E_A
     #: line again, the real rows' the same bytes)
     FUSED_GENERIC = {"rows_a": ("pad_a", "rowdig_a", "seeds_a", "lines_ea"), "tree_seed_a": ("hash_rows_a", "tree_a", "seed_a")}
+    #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
+    #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
+    beside = 0
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
@@ -657,7 +660,8 @@ class Pipeline:
         block = NT
         if tile == (BM, BM):
             ptrs[10], block = self.b["tma"] + ML_SET * ML_MAPS[(a, b)], ML_NT
-        self.dev.launch(name, min(tiles, grid or self.dev.sms), block, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER, live))
+        self.dev.launch(name, min(tiles, grid or self.dev.sms - self.beside), block, self.GEMM_SMEM[name], p=ptrs,
+                        i=(M, N, self.k, RASTER, live))
 
     def peel(self) -> dict[str, int]:
         b = self.b
