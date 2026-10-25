@@ -1,9 +1,10 @@
 """The difftest of the description-sized NCI check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 3,662 declarations divided into IUs of
+`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 3,674 declarations divided into IUs of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
-carry, one past `NciCheck.Desc.walkBound`'s limit, four on a scan of no iterations, then two pinned: θ with an input
-bound per run, refused, and θ the registered one, accepted), each expanded gate by gate where it is well-formed, and
+carry, one past `NciCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
+returning leaves of two arguments they share, then two pinned: θ with an input bound per run, refused, and θ the
+registered one, accepted), each expanded gate by gate where it is well-formed, and
 `scripts/nci_reference.py`'s `check_desc` on each.
 `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/DescDifftestMain.lean`
 fails unless `NciCheck.Desc.check` gives Python's result on every instance and `NciCheck.check`'s on every expansion. As
@@ -14,7 +15,8 @@ fixture's descriptor, the third that the data holds the decoys: a root Call or b
 id, whose gates are computed, which `NciCheck.Desc` once took for an input node, the fourth that it holds the walks: a
 gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps, and the
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
-resolve, refused read or not.
+resolve, refused read or not, and the sixth that it holds the shared members: one copy of pieces of two nodes' outputs,
+which `NciCheck.Desc` once read as all its first piece's node's.
 """
 
 from __future__ import annotations
@@ -43,7 +45,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescD
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 3,662 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 3,674 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -73,8 +75,8 @@ def test_the_generator_covers_what_it_says():
 def test_the_decoys_are_no_input_nodes():
     """The decoys come just before the walks, and the reference refuses each one the unrolled check refuses: the decoy
     node in θ (`theta-not-input`) or in no IU (`gate-in-no-iu`), and gives a verdict with the decoy node in an IU."""
-    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.empties()) - len(vectors.walks())
-             - len(vectors.decoys()))
+    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.shared()) - len(vectors.empties())
+             - len(vectors.walks()) - len(vectors.decoys()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.decoys()))]
     assert made == vectors.decoys()
     got = [reference.check_desc(m).get("error") for m in made]
@@ -87,7 +89,8 @@ def test_the_walk_past_the_bound_is_refused():
     """The walks come just before the empty scans: the reference gives the unrolled check's verdict on the small
     one, and refuses (`program`) the one of about 2^64 activations, whose gate `Prog.gate` can't locate in `Steps.FUEL`
     steps."""
-    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.empties()) - len(vectors.walks())
+    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.shared()) - len(vectors.empties())
+             - len(vectors.walks()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.walks()))]
     assert made == vectors.walks()
     small, big = made
@@ -103,15 +106,28 @@ def test_the_walk_past_the_bound_is_refused():
 
 
 def test_the_empty_scans_are_refused_where_they_carry_a_value():
-    """The empty scans come just before the pinned instances: the reference refuses (`program`) the three whose scan
+    """The empty scans come just before the shared members: the reference refuses (`program`) the three whose scan
     carries a value, read or not, and gives the unrolled check's verdict on the one whose carry is empty."""
-    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.empties())
+    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.shared()) - len(vectors.empties())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.empties()))]
     assert made == vectors.empties()
     *refused, bare = made
     assert [reference.check_desc(m) for m in refused] == [{"error": "program"}] * 3
     assert "error" not in reference.check_desc(bare)
     assert reference.check_desc(bare) == reference.check(reference.expand(bare))
+
+
+def test_the_shared_members_read_both_nodes():
+    """The shared members come just before the pinned instances, and on each the reference gives the unrolled check's
+    verdict: the other Call's 8 output bits are novel to the reading gate's IU, however the members order the pieces,
+    so it fails NCI at α 1 (`NciCheck.Desc` once counted none, and accepted)."""
+    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.shared())
+    made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.shared()))]
+    assert made == vectors.shared() and len(made) == 12
+    for m in made:
+        got = reference.check_desc(m)
+        assert got == reference.check(reference.expand(m))
+        assert got == {"gates": 7, "ius": [[2, 8], [1, 0]], "complies": False, "failure": [0, "nci"]}
 
 
 def test_the_pinned_instances_get_their_results():
