@@ -23,7 +23,9 @@
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
-#     `prove_path.py compiler` prints).
+#     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
+#     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
+#     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -132,14 +134,41 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
     --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $O/$name/commit.log 2>&1 || { tail -30 $O/$name/commit.log; return 1; }
   for d in $W/$name-windows/rank*; do   # serving's public files, never a private body
     mkdir -p $O/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $O/$name/windows/$(basename $d)/
+    [ ! -e $d/circuit.json ] || cp $d/circuit.json $O/$name/windows/$(basename $d)/
   done
   cp $W/$name-windows/commit.json $O/$name/windows/
+  if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
+    records $name $part $forged
+    local rc=$?
+    keep $name
+    return $rc
+  fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
     --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   keep $name
+  return $rc
+}
+records() {  # NAME PARTITION [--forged]: records_audit.py on the served window REC_RUN's window REC_K, the registered compiler
+             # the served one as a command (prove_path.py circuit), the run root the one windows.jsonl publishes
+  local name=$1 part=$2 forged=${3:-}
+  $PY -c 'import json, sys
+c = json.load(open(sys.argv[1]))
+print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
+    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --row-dir $D \
+    ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
+  local root law
+  root=$($PY -c 'import json, sys
+print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
+  law=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
+  $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
+    --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
+    ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+  local rc=$?
+  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   return $rc
 }
 
@@ -166,8 +195,10 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
     $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
+    REC_NAME=$1 REC_RUN=$2 REC_K=$3
     run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
     run $1-forged "$src" - ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
+    REC_RUN=
   }
   if [ -n "${PP_SERVE_RUN:-}" ]; then
     SR=$PP_SERVE_RUN
