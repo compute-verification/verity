@@ -36,10 +36,12 @@ from verity.core.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
     rows_domain,
+    salt_of,
     transcript_domain,
     weight_binding,
     weights_root,
 )
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
@@ -1004,6 +1006,59 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
     with pytest.raises(DomainError, match="recorded before epoch coins"):
         PPD.manifest_epoch({**recorded, "schema": PPD.MANIFEST_SCHEMA_RECORDED, **{k: man[k] for k in ("coins", "salt_opening")}},
                            commitment)
+
+
+def live_coin(after: bytes, entropy: int = 7):
+    """A live session's coin commitment and its salt coin opened after `after`, from a seeded in-process live challenger
+    (the auditor host's session as `pouw_h1_window.open_session` returns it)."""
+    ch = Wd.live_challenger(0, 1, random.Random(entropy).randbytes)
+    return ch.commitment, ch.open(Wd.SALT, 0, after)
+
+
+def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root(device_run):
+    """A live session's salt coin opened after the weights' root salts the device run's epoch (`audit.salt_of`, as H1's), and
+    the run records the session's coins; one opened after another root (before the weights were committed), one bound to
+    another session's commitment, and a live opening against an in-process commitment or the reverse are refused."""
+    _, kernel, weights, roots, _ = device_run
+    root = weights_root(roots)
+
+    def make(c, o):
+        return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
+                                   capacity=1 << 12, salt_key=SALT_KEY)
+    c, o = live_coin(root)
+    run = make(c, o)
+    assert run.epoch.salt == salt_of(c, o.coin, root) and run.commits["coins"] == c.to_json()
+    assert run.commits["salt_opening"] == o.to_json()
+    with pytest.raises(DomainError, match="not opened after"):
+        make(*live_coin(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])})))
+    with pytest.raises(DomainError, match="does not open against"):
+        make(live_coin(root, entropy=8)[0], o)
+    with pytest.raises(DomainError, match="pouw/draw coin 0, not its pouw/salt coin 0"):
+        ch = Wd.live_challenger(0, 1, random.Random(7).randbytes)
+        make(ch.commitment, ch.open(Wd.DRAW, 0, root))
+    in_process = salt_coin(roots)
+    for pair in ((in_process[0], o), (c, in_process[1])):
+        with pytest.raises(DomainError, match="live coin commitment, and nothing else"):
+            make(*pair)
+
+
+def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessions_commitment():
+    roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
+    work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
+    c, o = live_coin(weights_root(roots))
+    epoch = PPD.epoch_of(work, roots, c, o)
+    man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0},
+                                                      {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
+           "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
+           "coins": c.to_json(), "salt_opening": o.to_json(), "salt": epoch.salt.hex()}
+    assert PPD.manifest_epoch(man, c) == (epoch, "coin")
+    with pytest.raises(DomainError, match="not the epoch's"):
+        PPD.manifest_epoch(man, live_coin(weights_root(roots), entropy=8)[0])
+    with pytest.raises(DomainError, match="not the epoch's"):
+        PPD.manifest_epoch(man, salt_coin(roots)[0])
+    early = {**man, "salt_opening": {**o.to_json(), "after": weights_root({0: roots[0], 1: bytes(32)}).hex()}}
+    with pytest.raises(DomainError, match="not opened after"):
+        PPD.manifest_epoch(early, c)
 
 
 @pytest.mark.slow

@@ -49,11 +49,9 @@ roots copied into a pass buffer by one driver copy; filler rows zeroed only wher
 torch's raw accessor.  The key table and filler bookkeeping hold while no call has run under graphs (`eager_only`).
 
 The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
-``deferred`` runs the tile hashing on a side lane beside the next calls, and ``deferred-a`` A's tree there too, where the
-kernel splits A's commitment.  The commitments are the serial schedule's.
-
-With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the leaves and the records.  What
-is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between passes, never within.
+``deferred`` hashes tiles on a side lane beside the next calls, ``deferred-a`` A's tree too where the kernel splits A's
+commitment; the commitments are the serial schedule's.  With ``hashing`` off (``pearlc-nohash``) a call skips A's tree, E_A's
+lines, the leaves and the records, for the time split.  ``hashing`` may change between passes, never within.
 """
 from __future__ import annotations
 
@@ -64,7 +62,6 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
@@ -90,6 +87,8 @@ from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept imp
     whole_options,
 )
 from .pouw_pearl_c_host import (
+    SaltCoins,
+    SaltOpening,
     _bytes,
     _constant_keys,
     _constants,
@@ -105,6 +104,7 @@ from .pouw_pearl_c_host import (
     _write,
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
+    epoch_of,
     memmove,
     write_manifest,
 )
@@ -301,14 +301,14 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
-                 coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
+                 coins: SaltCoins, opening: SaltOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False):
-        """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.  The whole
-        capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass` with
-        ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
+        """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
+        its salt coin, opened after the weights' root (`epoch_of`, which raises `DomainError` otherwise): the salt is the coin's.
+        The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass`
+        with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`)."""
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
@@ -322,8 +322,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
         self.roots, self.coins, self.opening = dict(roots), coins, opening
-        self.epoch = Epoch.start(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
-                                 self.roots, coins, opening)
+        self.epoch = epoch_of(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
+                              self.roots, coins, opening)
         self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme, kernel)
