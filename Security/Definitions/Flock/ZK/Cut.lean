@@ -1,6 +1,4 @@
 import Definitions.Flock.ZK.Table
-import Proofs.Flock.Soundness.ZK.Blocks
-import Proofs.Flock.Soundness.ZK.Dist
 
 /-!
 # Zero knowledge: what a prover that stops has sent

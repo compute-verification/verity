@@ -23,6 +23,8 @@ import Definitions.Flock.Game.Seq
 import Definitions.Flock.Game.Prob
 import Definitions.Flock.Game.Batch
 import Definitions.Flock.ZK.Table
+import Definitions.Flock.ZK.Cut
+import Definitions.Flock.ZK.RealView
 
 /-!
 # C-Flock's definitions
