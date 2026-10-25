@@ -23,10 +23,10 @@ verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the
   first part holding the last round whole, the reader part whose message carries the record value (`ownJ`); the
   verdict's checks keep their owners (`ownJ_lt`). `RecDeploy.decompB_nextJ` is the composition at `nextJ`.
 
-**Open gap: proof-file decoding.** The proof files (`FinalJ.proofs`) are bytes the verdict decodes inside
-`verifyRepWith`. That decoding is not a reader part's check here: it stays among the verdict's checks (`LastSplitJ`'s
-`checks`), and no part's lowering fact is known to compute it. No premise is taken for it; until a rep reader part owns
-it, a `LastSplitJ` whose checks are owned by parts that don't decode the proofs has an unsatisfiable `hlow`.
+**Proof-file decoding.** The proof files (`FinalJ.proofs`) are bytes the verdict decodes inside `verifyRepWith`. That
+decoding stays among the verdict's checks here (`LastSplitJ`'s `checks`), and no part's lowering fact computes it, so a
+`LastSplitJ` whose checks are owned by parts that don't decode the proofs has an unsatisfiable `hlow`. The route is
+`NextS`: its last message carries the decoded proofs and its decision decodes no proof file (`RecDeploy.decompB_nextS`).
 -/
 
 namespace FlockDeploy
@@ -60,7 +60,7 @@ def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteA
   Record.check (drawEq (drawOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j') link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw false none
+  if s.read.draw.isNone then ProvedScope.drawLaw false s.read.tags none
 
 /-- **The decision at a session at the parsed value**: the plain verdict and custody's reading at the coin-substituted
 value. -/
@@ -211,7 +211,7 @@ theorem ownJ_lt {H : Msg → Msg} {rd : Msg → Option FinalJ} {R : Type} (LJ : 
 split (`LastSplitJ.toLast`), the reading given to the reader part of the last round (`ownJ`). Where the verdict's owners
 are the statement's parts (`hR`), the checks no part holds hold off any witnesses (`hrest`), and each part's circuit
 accepting implies its share (`hlow`), `DecompB` holds at what each part's circuit accepts. Proof-file decoding is among
-the verdict's checks, owned by no reader part (this file's open gap). -/
+the verdict's checks, owned by no reader part; `RecDeploy.decompB_nextS` is the composition without it. -/
 theorem decompB_nextJ (H : Msg → Msg) (rd : Msg → Option FinalJ)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) {join : List Msg → Msg}

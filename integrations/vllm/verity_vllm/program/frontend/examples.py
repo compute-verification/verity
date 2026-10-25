@@ -16,7 +16,8 @@ from verity.ml.circuits.refs import tuple_of
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.prims import BF16, F32, I32
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity_vllm.program.frontend.torch_frontend import Arr, Tup, batch, function, ops, scan
+from verity_vllm.program.frontend.schemas import Arr, Tup
+from verity_vllm.program.frontend.torch_frontend import batch, function, ops, scan
 
 # ---------------------------------------------------------------------------------------------------------
 # 1. TA1 composites, authored in torch

@@ -42,7 +42,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import records as RC
+from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import CHECKPOINTS, MANIFESTS, ROOT, WORKLOADS, UsageError, option
 from verity_vllm.engine.profiles import dense_generic, family_facts as FF

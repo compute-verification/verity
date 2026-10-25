@@ -8,8 +8,8 @@ import Proofs.Nci.Cover.Chained
 `α = num / den`, as `CoverTrained` (`Proofs.Nci.Cover.Checked`) is `CoverTraining`'s. `coverTrainedChained` proves it of
 every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance (`Witnesses`), and
 `CheckedCoverTrainingChained` states it of every verdict of the check of record, `NciCheck.Baseline.evaluate`, on every
-expansion of the instance. Like `CheckedCoverTraining`, it is not yet a guarantee: `checkedCoverTrainingChained_of`
-proves it from `DescAgrees`'s two open statements (`GatesLocated`, `NovelExact`).
+expansion of the instance. Like `CheckedCoverTraining`, it is not yet a guarantee: `DescAgrees` rests on one open statement,
+`Novel.ReadsExact` (`descAgrees_of_readsExact`), and `checkedCoverTrainingChained_of` proves it from that.
 -/
 
 namespace NciCheck.Properties.SecurityProofs
@@ -57,8 +57,8 @@ theorem checkedCoverTrainingChained_of_descAgrees (h : Properties.DescAgrees) : 
     ⟨hd.1, fun j' hj' => coverTrainedChained (hd.2 j' hj')⟩
 
 /-- **A verdict of compliance of the check of record carries the covering bound's factor on the chained blocks, given
-`DescAgrees`'s open statements.** -/
-theorem checkedCoverTrainingChained_of (hG : GatesLocated) (hN : NovelExact) : CheckedCoverTrainingChained :=
-  checkedCoverTrainingChained_of_descAgrees (descAgrees_of hG hN)
+`ReadsExact`.** -/
+theorem checkedCoverTrainingChained_of (hR : Novel.ReadsExact) : CheckedCoverTrainingChained :=
+  checkedCoverTrainingChained_of_descAgrees (Novel.descAgrees_of_readsExact hR)
 
 end NciCheck.Properties.SecurityProofs

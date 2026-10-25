@@ -15,8 +15,10 @@ manifest, the engine steps, the caps, the install's ``max_step_tokens`` and whet
 and ``DIR/served.json``, and exits non-zero unless at least three passes hold calls (two boundaries crossed) and every pass
 is within its caps.
 
-``verify`` runs `verify_run.py` on each pass's manifest that ``DIR/served.json`` names, in order, against
-``DIR/coins.json``, and exits 0 only when every one is accepted.  An ACCEPT is replay-verified (development shortcut; the
+``verify`` first holds the passes together to distinct call indices of one salt (`credit.passes_distinct`: the device
+numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then runs
+`verify_run.py` on each pass's manifest that ``DIR/served.json`` names, in order, against ``DIR/coins.json``, and exits 0
+only when every one is accepted.  An ACCEPT is replay-verified (development shortcut; the
 protocol's check is a ZK proof, PROTOCOL.md).
 """
 from __future__ import annotations
@@ -32,7 +34,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
 ARM = "pouw:pearl-c-sm120-v1-h3"
-KEEP = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
+KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
 
 
@@ -96,10 +98,17 @@ def serve(args: argparse.Namespace) -> int:
 
 
 def verify(args: argparse.Namespace) -> int:
+    from verity.core.protocols.pouw import credit as CR
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text())
+    held = [p for p in served["passes"] if p["units"]]
+    why = CR.passes_distinct([json.loads(Path(p["manifest"]).read_text()) for p in held])
+    if why is not None:
+        return _write_verify(args, {"schema": "verity-pouw/pearl-c-served-passes-verify/v1", "passes_dir": str(passes),
+                                    "served_run": served.get("run"), "verified": 0, "accepted": 0, "ok": False,
+                                    "refused": list(why), "verdicts": []})
     out = []
-    for p in (p for p in served["passes"] if p["units"]):
+    for p in held:
         cmd = [sys.executable, str(HERE / "verify_run.py"), p["manifest"], "--coins", str(passes / "coins.json"),
                "--jobs", str(args.jobs), *(["--fast", "--cross-check", str(args.cross_check)] if args.fast else [])]
         done = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -108,12 +117,19 @@ def verify(args: argparse.Namespace) -> int:
         out.append({"pass": p["pass"], "units": p["units"], "tiles": p["tiles"], "rc": done.returncode, "line": line,
                     "accepted": done.returncode == 0 and line.startswith("ACCEPT"), "stderr": done.stderr[-2000:]})
     ok = bool(out) and all(v["accepted"] for v in out)
-    doc = {"schema": "verity-pouw/pearl-c-served-passes-verify/v1", "passes_dir": str(passes), "served_run": served.get("run"),
-           "verified": len(out), "accepted": sum(v["accepted"] for v in out), "ok": ok, "verdicts": out}
+    return _write_verify(args, {"schema": "verity-pouw/pearl-c-served-passes-verify/v1", "passes_dir": str(passes),
+                                "served_run": served.get("run"), "verified": len(out), "accepted": sum(v["accepted"] for v in out),
+                                "ok": ok, "verdicts": out})
+
+
+def _write_verify(args: argparse.Namespace, doc: dict) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
-    print(f"{doc['accepted']} of {doc['verified']} passes accepted -> {'OK' if ok else 'FAIL'}")
-    return 0 if ok else 1
+    if "refused" in doc:
+        print(f"REFUSED {doc['refused'][0]}: {doc['refused'][1]} -> FAIL")
+    else:
+        print(f"{doc['accepted']} of {doc['verified']} passes accepted -> {'OK' if doc['ok'] else 'FAIL'}")
+    return 0 if doc["ok"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:

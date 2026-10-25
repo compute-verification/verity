@@ -78,6 +78,7 @@ import Proofs.Pouw.PearlC.ChainCapKernelGamma
 import Proofs.Pouw.PearlC.ChainCapLoopGamma
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Proofs.Pouw.PearlC.Completeness
+import Proofs.Pouw.PearlC.DeadlineWitness
 import Proofs.Pouw.PearlC.DeviceCapGamma
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceChainCapGamma

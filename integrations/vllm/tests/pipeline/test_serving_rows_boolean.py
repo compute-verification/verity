@@ -103,7 +103,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     defn = bind(REGISTRY["RoPEHead_v2"], D=D)
     program, query = P.population_program(defn, HEADS), P.template_instance_query(defn)
     part = P.digest(P.partition(program, query))
-    ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.served_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
+    ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}
              for p in ("x", "cs", "out")}
     v = R.check(rec, program, query, DR.parse_law(LAW), CS.SCHEME, ports,

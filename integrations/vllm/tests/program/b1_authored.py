@@ -23,7 +23,8 @@ from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.prims import BF16, F32, I32
 from verity.ml.circuits.types import Array, Tuple as TupleT
-from verity_vllm.program.frontend.torch_frontend import Arr, Bound, Dep, Prim, Registered, Tup, batch, bind, function, ops
+from verity_vllm.program.frontend.schemas import Arr, Dep, Tup
+from verity_vllm.program.frontend.torch_frontend import Bound, Prim, Registered, batch, bind, function, ops
 
 BN = b1.BN  # kBlockN = 64
 

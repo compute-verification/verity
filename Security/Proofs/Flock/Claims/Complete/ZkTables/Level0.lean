@@ -36,7 +36,7 @@ open Flock Transcript FlockComplete FlockComplete.Replay FlockSoundness.Discharg
 /-! ## Shapes and closed forms -/
 
 /-- **A masked Ligerito proof's lengths at a shape**: `ZkView.Shaped`'s Ligerito conjuncts, level 0's rows
-`2^lanes + EXTRA_LANES` wide. -/
+`2^lanes + EXTRA_LANES` wide, every grinding nonce `0`. -/
 def LgShaped (sh : Shape) (lg : LigeritoProof) : Prop :=
   let s := sh.sched
   let R := s.levels.size - 1
@@ -48,7 +48,7 @@ def LgShaped (sh : Shape) (lg : LigeritoProof) : Prop :=
     lg.finalProof.yr.size = 2 ^ (s.ext + 1) ∧
     LevelOk sh (lvl R) 16 ⟨lg.finalProof.rows, lg.finalProof.siblings, lg.finalProof.salts⟩ ∧
     lg.messages.size = s.k0 + 8 + 7 * (R - 1) ∧ lg.queryNonces.size = R + 1 ∧ lg.oodValues.size = 1 + 2 * R ∧
-    lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1
+    lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧ NoncesZero lg
 
 /-- Level 0's out-of-domain point: the reply to send `L`'s first `n` coins. -/
 def lanePoint (resp : ℕ → Claims.Msg) (n L : ℕ) : Array F128 := (Array.range n).map (coinOf (resp L))

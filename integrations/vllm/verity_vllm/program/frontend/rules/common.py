@@ -11,7 +11,8 @@ import torch
 from verity.ml.circuits.refs import Coll, PartLog, array_of
 from verity.ml.circuits.types import Array
 from verity_vllm.program.frontend.outcomes import refuse
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 
 def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) -> tuple[PartLog, PartLog]:
