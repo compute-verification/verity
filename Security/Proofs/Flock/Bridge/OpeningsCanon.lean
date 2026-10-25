@@ -32,7 +32,7 @@ namespace Flock.Guarantees
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 /-- **A drawn unit's openings are canonical where its wires have rows**, at `EndToEndHidden`'s session:
@@ -62,9 +62,14 @@ theorem _root_.Flock.Bridge.openingsCanonH : Bridge.OpeningsCanonTargetH := by
     with _ | ⟨u', q, k⟩
   · exact Or.inl (by simp [rows, hx])
   have hpos : vb.pos g = Sum.inl (u', q) :=
-    Discharge.Layout.ofRows_pos_some (rowAddr := fun _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩)
+    Discharge.Layout.ofRows_pos_some
+      (FlockSoundness.Discharge.HiddenExec.keyPlaceH (sitesShHJ_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope)
+        (Discharge.Layout.outsOf D.unroll hU n))
+      (hN := Discharge.Layout.keyN_pos D.unroll hU n) (W := Finset.univ.sup (Discharge.Layout.portRowW D.unroll) + 1)
+      (hW := fun q => (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) (h1 := Nat.le_add_left 1 _)
+      (rowAddr := fun _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩)
       (saltAddr := fun _ _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩) (bcAddr := fun _ _ _ _ _ _ => ⟨0, Nat.two_pow_pos _⟩)
-      (regBc := fun _ _ _ => []) (regGate := fun _ _ => false) _ hx
+      (regBc := fun _ _ _ => []) (regGate := fun _ _ => false) hx
   obtain ⟨b, hb⟩ : ∃ b, vb.val (vb.opening S R u M (Sum.inl (u', q))) =
       (Discharge.Layout.widthOf (Finset.univ.sup (Discharge.Layout.portRowW D.unroll) + 1)
         (Discharge.Layout.portRowW D.unroll q), Discharge.Layout.padBits b) := ⟨_, rfl⟩
