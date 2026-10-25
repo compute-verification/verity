@@ -73,9 +73,9 @@ theorem tapeSim_take (T : ℕ → ByteArray) (need : ℕ) : TapeSim (Draw.take (
   show (if pos 0 + need ≤ (T 0).size then
       some ((T 0).extract (pos 0) (pos 0 + need), Function.update pos 0 (pos 0 + need)) else none) = _
   by_cases h : pos 0 + need ≤ (T 0).size
-  · rw [if_pos h, if_neg (show ¬ (T 0).size < pos 0 + need by omega)]
+  · simp only [h, show ¬ (T 0).size < pos 0 + need by omega, ↓reduceIte]
     rfl
-  · rw [if_neg h, if_pos (show (T 0).size < pos 0 + need by omega)]
+  · simp only [h, show (T 0).size < pos 0 + need by omega, ↓reduceIte]
     rfl
 
 /-- A `repeat` loop whose bodies agree, each code `yield` lowering a measure of the position, agrees. -/
@@ -119,17 +119,19 @@ theorem tapeSim_onWith (T : ℕ → ByteArray) (N : ℕ) (hN : 0 < N) (run : Byt
     | some units => exact tapeSim_pure _
     | none => exact tapeSim_bind (tapeSim_take T N) fun x => tapeSim_pure _
   · intro b p b' p' h
-    split at h
-    · rw [StateT.run_pure] at h
+    obtain ⟨r, s⟩ := b
+    cases hrun : run s with
+    | some units =>
+      simp only [hrun, StateT.run_pure] at h
       obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
       exact absurd h1 (by simp)
-    · rw [StateT.run_bind, take_run] at h
+    | none =>
+      simp only [hrun] at h
+      rw [StateT.run_bind, take_run] at h
       split at h
       · exact absurd h (by rw [bind_error]; simp)
-      · rename_i hle
-        rw [bind_ok, StateT.run_pure] at h
+      · rw [bind_ok, StateT.run_pure] at h
         obtain ⟨_, rfl⟩ := Prod.mk.inj (Except.ok.inj h)
-        show (T 0).size + 1 - (p + N) < (T 0).size + 1 - p
         omega
   · obtain ⟨r, s⟩ := r
     cases r <;> exact tapeSim_pure _
@@ -182,6 +184,7 @@ theorem flockLaw_subset (law : Json) (n k : ℕ) (h : Draw.flockLaw law n = .ok 
     all_goals repeat' (first
       | exact absurd h (throw_bind_ne _ _ _)
       | exact absurd h (throw_ne _ _)
+      | exact absurd (Except.ok.inj h) (by split <;> simp)
       | exact absurd (Except.ok.inj h) (by simp)
       | split at h)
   next => exact absurd h (throw_ne _ _)
@@ -196,11 +199,7 @@ theorem deriveLaw_subset (d : Program) (query law : Json) (table : Option Json) 
     rw [hk] at hs'
     subst hs'
     try dsimp only at h
-    first
-      | exact (Except.ok.inj h).symm
-      | (split at h
-         · exact (Except.ok.inj h).symm
-         · rename_i hc; exact absurd (by decide) hc)
+    exact (Except.ok.inj h).symm
   next hne =>
     exfalso
     have h0 : kindOf law = "" := by
