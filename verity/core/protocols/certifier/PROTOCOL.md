@@ -2071,26 +2071,10 @@ them.
     vLLM's stream text).
     - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
       q + 1.
-    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, and the
-      certifier commits whatever ids and finish the server writes: one of three states (none, `length`, `stop`) at
-      each response's end, where an id event marks the end out of band. A stop carries the EOS id the model sampled,
-      so where a response stops can be checked as an id event's can. The rehearsal's certified I/O
-      (`certifier_serve.certified_io`) refuses a mark before a response's last record, a stop on an id that isn't
-      one of the model's EOS ids, an EOS id in any record but the stop, and `COMPACT_LAST` alone short of
-      `max_tokens`. Like an EOS id event, a stop on an EOS id that the model didn't sample there passes it, so the
-      check that refuses a wrong length or finish is the I/O tie's, required of compact framing, against the Commit's
-      sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each carries its
-      sampled id, the response is as long as the Commit's, and it stops only where the Commit sampled EOS
-      (`compact_finish_violations`), its `COMPACT_LAST` alone at `max_tokens` exactly. A response its client
-      aborted ends on an unmarked record, which both checks accept only where the Commit's finish for that request is
-      an abort, after 1 ≤ k < `max_tokens` outputs, none of them EOS (`aborted`; the rehearsal's own `check` reads no
-      Commit and refuses it). The link is one connection with no per-request cancel, so the certifier observes no
-      abort, and an abort on a certified run is the prover's side's (the shim's cut at the horizon, or an error):
-      what bounds it is the advice charging each `output_len` in full, not an observation. IO-TIE's egress tie holds
-      each compact cell's token field to this rule as well
-      as to its id. Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io`
-      accepted it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the
-      model never sampled; that field is now a stop on id 2^30 − 1, which isn't EOS.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, which the
+      certifier commits whatever they say. The certified I/O and the I/O tie hold each response's length and finish
+      to the Commit's sampled ids, a client's abort only where the Commit says so
+      ([protocol/compact-finish.md](protocol/compact-finish.md)).
     - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
