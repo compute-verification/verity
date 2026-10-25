@@ -2343,7 +2343,6 @@ dependencies = [
     { name = "numpy" },
     { name = "verity" },
     { name = "verity-numerical" },
-    { name = "verity-vllm" },
 ]
 
 [package.metadata]
@@ -2352,7 +2351,6 @@ requires-dist = [
     { name = "numpy" },
     { name = "verity", editable = "." },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
-    { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
