@@ -1,6 +1,9 @@
 import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Proofs.Pouw.PearlC.Rows
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120Gamma
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1RowSeed
 
 /-!
 # Row additivity: rev1's TT_OUT gives the row-seeded one (staging, nothing pinned)
@@ -23,7 +26,9 @@ gives `TTOutRowSeed`, and the γ theorems carry over with the error at the row c
 * **γ at the sm_120 records**, from rev1's TT_OUT (per unit or per tile), C1 and C3 alone:
   - v1 (`devSm120v1 Prices.sm120`), cap 1/400: `16223/3177500` at 8192³ and `2963/586700` at 16384³;
   - v2 (`devSm120v2 Prices.sm120`), cap 1/1,000: `216793/59950000` at 8192³ and `2950127/829250000` at 16384³;
-  per unit and per audit tile, the rev1 values at both records.
+  per unit and per audit tile, the rev1 values at both records. The per-tile ones at 8192³
+  (`pearlCSampledSm120v1RowSeed_8192`, `pearlCSampledSm120v2RowSeedCap1000_8192`) are stated at W1 (`W1.w1Priced` on
+  `W1Device.sm120`), from `TTOutTilePearlCDevRev1W1` and C1, where C3 holds (`w1Priced_splitClosed`).
 -/
 
 namespace Pouw.PearlC
@@ -31,58 +36,6 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-! ## The split layout's indices -/
-
-theorem rowOffset_succ (L : Layout) (u : ℕ) : rowOffset L (u + 1) = rowOffset L u + (L.shape u).m := by
-  unfold rowOffset; exact sum_range_succ _ _
-
-theorem rowOffset_mono (L : Layout) {u w : ℕ} (h : u ≤ w) : rowOffset L u ≤ rowOffset L w := by
-  unfold rowOffset; exact sum_le_sum_of_subset (range_subset_range.mpr h)
-
-theorem unitOfRow_rowIdx {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
-    unitOfRow L (rowIdx L u i) = u := by
-  unfold unitOfRow
-  rw [Nat.findGreatest_eq_iff]
-  refine ⟨by omega, fun _ => ?_, fun w hw _ => ?_⟩
-  · show rowOffset L u ≤ rowIdx L u i
-    unfold rowIdx; omega
-  · have h1 := rowOffset_mono L (Nat.succ_le_of_lt hw)
-    rw [rowOffset_succ] at h1
-    show ¬ rowOffset L w ≤ rowIdx L u i
-    unfold rowIdx; omega
-
-theorem rowOfRow_rowIdx {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
-    rowOfRow L (rowIdx L u i) = i := by
-  unfold rowOfRow; rw [unitOfRow_rowIdx hu hi]; unfold rowIdx; omega
-
-theorem rowIdx_lt_rowsOf {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
-    rowIdx L u i < rowsOf L := by
-  have h1 := rowOffset_mono L (Nat.succ_le_of_lt hu)
-  rw [rowOffset_succ] at h1
-  unfold rowIdx rowsOf; omega
-
-theorem rowIdx_inj {L : Layout} {u i u' i' : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) (hu' : u' < L.N)
-    (hi' : i' < (L.shape u').m) (h : rowIdx L u i = rowIdx L u' i') : u = u' ∧ i = i' := by
-  have h1 := unitOfRow_rowIdx hu hi
-  have h2 := unitOfRow_rowIdx hu' hi'
-  rw [h] at h1
-  have e : u = u' := h1.symm.trans h2
-  subst e
-  refine ⟨rfl, ?_⟩
-  unfold rowIdx at h; omega
-
-theorem unitOfRow_lt {L : Layout} {v : ℕ} (hv : v < rowsOf L) : unitOfRow L v < L.N := by
-  have hN : L.N ≠ 0 := by
-    intro h
-    unfold rowsOf rowOffset at hv
-    rw [h] at hv
-    simp at hv
-  have := Nat.findGreatest_le (P := fun u => rowOffset L u ≤ v) (L.N - 1)
-  unfold unitOfRow; omega
-
-/-- On a one-shape layout the declared rows are `N·m`. -/
-theorem rowsOf_const {L : Layout} {s : Shape} (h : ∀ u < L.N, L.shape u = s) : rowsOf L = L.N * s.m := by
-  unfold rowsOf rowOffset
-  rw [sum_congr rfl fun u hu => by rw [h u (mem_range.mp hu)], sum_const, card_range, smul_eq_mul]
 
 theorem splitShape_eq {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     (splitLayout L).shape (rowIdx L u i) = ⟨1, (L.shape u).n, (L.shape u).k⟩ := by
@@ -515,10 +468,14 @@ theorem split_actOK (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (hu 
     have ha0 : a = 0 := by omega
     subst ha0
     exact h.1 i hi l (by rw [← hk]; exact hl)
-  · exact Eq.mp (finFun_congr (F := fun k x => LiveRow Params.pi.δ x Stat.every8 ∧ 1 ≤ sem'.floor k x)
+  · obtain ⟨a, ha⟩ := a
+    have ha1 : a < 1 := ha
+    have ha0 : a = 0 := by omega
+    subst ha0
+    exact Eq.mp (finFun_congr (F := fun k x => LiveRow Params.pi.δ x Stat.every8 ∧ 1 ≤ sem'.floor k x)
       (F' := fun k x => LiveRow Params.pi.δ x Stat.every8 ∧ 1 ≤ sem.floor k x) (by rw [hN.2.2.2.1]) hk.symm
       (f := wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, hi⟩)
-      (f' := wordsVal _ _ (rowCodes act i) a) fun _ _ _ => rfl) (h.2 ⟨i, hi⟩)
+      (f' := wordsVal _ _ (rowCodes act i) ⟨0, ha⟩) fun _ _ _ => rfl) (h.2 ⟨i, hi⟩)
 
 /-- **The per-row cap implies rev1's cap.** -/
 theorem rowCap_agg (sem : PearlCSem Q R S) (d : PearlCDevice) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
@@ -1260,22 +1217,25 @@ theorem pearlCGammaSm120v2RowSeedCap1000_16384
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0) (devSm120_bf16 0))
 
-/-- **v1 with per-row seeds per audit tile at 8192³**, from rev1's TT_OUT per tile: `γ = 16223/3177500`. -/
-theorem pearlCSampledSm120v1RowSeed_8192
-    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
-    (hCM : CM.SplitClosed) :
-    GγSampled CM (pearlCProtocolDevRev1RowCap (devSm120v1 Prices.sm120) sem' (1 / 400))
+/-- **v1 with per-row seeds per audit tile at 8192³**, at the cost model `W1.w1Priced` on `W1Device.sm120 sha fetch`,
+from `TTOutTilePearlCDevRev1W1` there and C1 (C3 holds at W1, `w1Priced_splitClosed`): `γ = 16223/3177500`. -/
+theorem pearlCSampledSm120v1RowSeed_8192 (sha fetch : ℚ) (salt : S → List ℕ)
+    (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem
+      (1 / 400)) (hN : RowSeedNoise sem sem') :
+    GγSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt)
+      (pearlCProtocolDevRev1RowCap (devSm120v1 Prices.sm120) sem' (1 / 400))
       (pearlCTilesDevRev1RowCap (devSm120v1 Prices.sm120) sem' (1 / 400))
       (fun L => pearlCDomainDevAt (devSm120v1 Prices.sm120) sh8192 L ∧ rowsOf L ≤ 2 ^ 64)
       ((16223 / 3177500 : ℚ) : ℝ) (fun q N => εPearlC q (N * 8192)) :=
-  pearlCSampledDevRev1RowSeedAt CM _ sem' _ sh8192 (31775 / 31692) _ (by norm_num)
+  pearlCSampledDevRev1RowSeedAt _ _ sem' _ sh8192 (31775 / 31692) _ (by norm_num)
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devSm120v1_G, devSm120v1_prices]
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devSm120v1_G, devSm120v1_prices]
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num)
-    (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4)
-      (devSm120_bf16 4))
+    (ttOutTileRowSeed_of_ttOutTile (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT) hN
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ salt) (devAt_rowLocal _ _ _) (by norm_num)
+      (devSm120_add 4) (devSm120_bf16 4))
 
 /-- **v1 with per-row seeds per audit tile at 16384³**, from rev1's TT_OUT per tile: `γ = 2963/586700`. -/
 theorem pearlCSampledSm120v1RowSeed_16384
@@ -1294,23 +1254,26 @@ theorem pearlCSampledSm120v1RowSeed_16384
     (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4)
       (devSm120_bf16 4))
 
-/-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 8192³**, from rev1's TT_OUT per tile:
+/-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 8192³**, at the cost model `W1.w1Priced` on
+`W1Device.sm120 sha fetch`, from `TTOutTilePearlCDevRev1W1` there and C1 (C3 holds at W1, `w1Priced_splitClosed`):
 `γ = 216793/59950000`. -/
-theorem pearlCSampledSm120v2RowSeedCap1000_8192
-    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
-    (hCM : CM.SplitClosed) :
-    GγSampled CM (pearlCProtocolDevRev1RowCap (devSm120v2 Prices.sm120) sem' (1 / 1000))
+theorem pearlCSampledSm120v2RowSeedCap1000_8192 (sha fetch : ℚ) (salt : S → List ℕ)
+    (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem
+      (1 / 1000)) (hN : RowSeedNoise sem sem') :
+    GγSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt)
+      (pearlCProtocolDevRev1RowCap (devSm120v2 Prices.sm120) sem' (1 / 1000))
       (pearlCTilesDevRev1RowCap (devSm120v2 Prices.sm120) sem' (1 / 1000))
       (fun L => pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192 L ∧ rowsOf L ≤ 2 ^ 64)
       ((216793 / 59950000 : ℚ) : ℝ) (fun q N => εPearlC q (N * 8192)) :=
-  pearlCSampledDevRev1RowSeedAt CM _ sem' _ sh8192 (1049125 / 1047951) _ (by norm_num)
+  pearlCSampledDevRev1RowSeedAt _ _ sem' _ sh8192 (1049125 / 1047951) _ (by norm_num)
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devSm120v2_G, devSm120v2_prices]
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devSm120v2_G, devSm120v2_prices]
         norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num)
-    (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0)
-      (devSm120_bf16 0))
+    (ttOutTileRowSeed_of_ttOutTile (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT) hN
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ salt) (devAt_rowLocal _ _ _) (by norm_num)
+      (devSm120_add 0) (devSm120_bf16 0))
 
 /-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 16384³**, from rev1's TT_OUT per tile:
 `γ = 2950127/829250000`. -/

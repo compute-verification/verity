@@ -3,6 +3,7 @@ import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DeviceFp4
 import Definitions.Pouw.PearlC.DeviceFp4Issue
 import Definitions.Pouw.PearlC.Sha512
+import Definitions.Pouw.PearlC.Rows
 
 /-!
 # The accounting W1 as a cost model (trusted; definitions only)
@@ -27,7 +28,10 @@ statement; a restatement of TT_OUT over it is the proofs lane's.
 **The machine** (`Instr`, `Code`, `exec`). Memory is addressed by `(region, index)` (`Addr`) and holds 32-bit words.
 The regions are the scratch (0), the salt's bytes (1), the preprocessed state σ (2: its length, then its entries as
 32-bit words), the program's constant bank (3), the activations (4) and the weights (5), both FP32 words at
-`Nat.pair`-coded positions, and the outputs: the ticket words (6) and the useful words (7). A program (`Prog`) is a
+`Nat.pair`-coded positions, and the outputs: the ticket words (6) and the useful words (7). A unit's activations, ticket
+words and useful words are keyed by the layout's global row (`rowIdx L u i`, `Definitions.Pouw.PearlC.Rows`), not by
+the pair `(u, i)`: W1 doesn't see which rows form a unit, so regrouping rows into units renames no word a run touches
+(the per-row seeds' `CostModel.SplitClosed` holds at W1). A program (`Prog`) is a
 constant bank and a code tree, both functions of the public layout, so the layout's control flow, unrolling and
 addressing are compiled in and free, as public control flow is on a GPU. Its text is bounded (`Prog.bounded`, below).
 What depends on data is an `ite` (a branch on a word) or an `ld`/`st` with a register address, and W1's taint rule
@@ -37,7 +41,8 @@ which is the warp's whole fragment.
 
 **The run.** `run` executes the program from the initial memory (`init`) and reads the transcript off the final memory
 (`readout`): every declared unit commits its activations (as the program left them; positions outside the unit's shape
-read back as supplied), its ticket words and its useful words. The commitment is ideal (`Commit`), so the readout is
+read back as supplied), its ticket words and its useful words (rows outside its shape read 0, since they are other
+units' rows). The commitment is ideal (`Commit`), so the readout is
 free. The model makes no oracle call (`calls = 0`), so it meets `CostModel.Queries` for any `Q`, `R`
 (`Proofs.Pouw.PearlC.W1Checks.w1_queries`).
 
@@ -248,17 +253,17 @@ def stateAt (i : ℕ) : Addr := (2, i)
 /-- Word `i` of the program's constant bank. -/
 def constAt (i : ℕ) : Addr := (3, i)
 
-/-- Activation `(i, l)` of unit `u`. -/
-def actAt (u i l : ℕ) : Addr := (4, Nat.pair u (Nat.pair i l))
+/-- Activation `(i, l)` of unit `u` of the layout `L`: column `l` of `L`'s global row `rowIdx L u i`. -/
+def actAt (L : Layout) (u i l : ℕ) : Addr := (4, Nat.pair (rowIdx L u i) l)
 
 /-- Weight `(j, l)` of weight `w`. -/
 def weightAt (w j l : ℕ) : Addr := (5, Nat.pair w (Nat.pair j l))
 
-/-- Ticket word `(i, j)` of unit `u`. -/
-def ticketAt (u i j : ℕ) : Addr := (6, Nat.pair u (Nat.pair i j))
+/-- Ticket word `(i, j)` of unit `u` of the layout `L`, at `L`'s global row `rowIdx L u i`. -/
+def ticketAt (L : Layout) (u i j : ℕ) : Addr := (6, Nat.pair (rowIdx L u i) j)
 
-/-- Useful word `(i, j)` of unit `u`. -/
-def usefulAt (u i j : ℕ) : Addr := (7, Nat.pair u (Nat.pair i j))
+/-- Useful word `(i, j)` of unit `u` of the layout `L`, at `L`'s global row `rowIdx L u i`. -/
+def usefulAt (L : Layout) (u i j : ℕ) : Addr := (7, Nat.pair (rowIdx L u i) j)
 
 /-- Pre-salt or supplied data, priced on first fetch: the state, the constant bank, the activations and the weights. -/
 def preSalt (a : Addr) : Bool := a.1 = 2 || a.1 = 3 || a.1 = 4 || a.1 = 5
@@ -505,23 +510,28 @@ def exec (dv : W1Device) : Bool → Code → St → St
       let st1 : St := ⟨st.mem, st.fetched ++ [p].filter preSalt, st.cost + dv.prices.int32⟩
       exec dv t k (if w32 (st.mem p) = 0 then exec dv true b st1 else exec dv true a st1)
 
-/-- The initial memory: the salt's bytes, the state, the constant bank, the activations and the weights, as words. -/
+/-- The initial memory: the salt's bytes, the state, the constant bank, the activations and the weights, as words. A
+declared global row holds its unit's activation row, and the rows past the declared ones hold 0. -/
 def init (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : Mem := fun a =>
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
   if a.1 = 1 then salt.getD a.2 0 % 256
   else if a.1 = 2 then (if a.2 = 0 then w32 σ.length else zig (σ.getD (a.2 - 1) 0))
   else if a.1 = 3 then w32 ((pr.consts U.layout).getD a.2 0)
-  else if a.1 = 4 then w32 (act x.1 y.1 y.2)
+  else if a.1 = 4 then
+    (if x.1 < rowsOf U.layout then w32 (act (unitOfRow U.layout x.1) (rowOfRow U.layout x.1) x.2) else 0)
   else if a.1 = 5 then w32 (U.weight x.1 y.1 y.2)
   else 0
 
 /-- The committed transcript of a final memory: every declared unit's activations (within its shape as the program
-left them, outside it as supplied), ticket words and useful words. -/
+left them, outside it as supplied), ticket words and useful words (within its rows, and 0 at the rows past them, which
+are other units' global rows). -/
 def readout (U : Workload) (act : ℕ → Codes) (M : Mem) : Transcript := fun u =>
   if u < U.layout.N then
-    some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then M (actAt u i l) else act u i l,
-      fun i j => M (ticketAt u i j), fun i j => M (usefulAt u i j)⟩
+    some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then M (actAt U.layout u i l)
+        else act u i l,
+      fun i j => if i < (U.layout.shape u).m then M (ticketAt U.layout u i j) else 0,
+      fun i j => if i < (U.layout.shape u).m then M (usefulAt U.layout u i j) else 0⟩
   else none
 
 /-- The final state of a run. -/
@@ -530,12 +540,13 @@ def final (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : �
 
 variable {Q R S : Type}
 
-/-- A first fetch W1 does not charge: an activation within a correct unit's shape, or a weight row and column a correct
-unit of that weight reads. -/
+/-- A first fetch W1 does not charge: an activation within a correct unit's shape (a declared global row of that unit,
+within its columns), or a weight row and column a correct unit of that weight reads. -/
 def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) (a : Addr) : Prop :=
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
-  (a.1 = 4 ∧ x.1 ∈ correctSet P U H s τ ∧ y.1 < (U.layout.shape x.1).m ∧ y.2 < (U.layout.shape x.1).k) ∨
+  (a.1 = 4 ∧ x.1 < rowsOf U.layout ∧ unitOfRow U.layout x.1 ∈ correctSet P U H s τ ∧
+      x.2 < (U.layout.shape (unitOfRow U.layout x.1)).k) ∨
     (a.1 = 5 ∧ ∃ u ∈ correctSet P U H s τ, U.layout.wid u = x.1 ∧ y.1 < (U.layout.shape u).n ∧ y.2 < (U.layout.shape u).k)
 
 open Classical in

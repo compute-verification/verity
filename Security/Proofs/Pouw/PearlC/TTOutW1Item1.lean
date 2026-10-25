@@ -1,6 +1,7 @@
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.HonestWords
 import Proofs.Pouw.Copy
+import Proofs.Pouw.PearlC.Rows
 
 /-!
 # CMP-77 item 1 at W1: guessing a `1 × 1 × k` unit's two output words
@@ -52,10 +53,11 @@ variable {Q R S : Type}
 /-- One unit of shape `1 × 1 × k`, weight id 0, weights `w`. -/
 def oneUnit (k : ℕ) (w : Codes) : Workload := ⟨⟨1, fun _ => ⟨1, 1, k⟩, fun _ => 0⟩, fun _ => w⟩
 
-/-- Constant word 0 to ticket word `(0, 0, 0)` and constant word 1 to useful word `(0, 0, 0)`: three nodes of text and two
-constants, within W1's bound. -/
+/-- Constant word 0 to the layout's ticket word `(0, 0, 0)` and constant word 1 to its useful word `(0, 0, 0)`: three
+nodes of text and two constants, within W1's bound. -/
 def guessProg (t y : ℕ) : W1.Prog :=
-  ⟨fun _ => [t, y], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) (.op (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) .done),
+  ⟨fun _ => [t, y],
+    fun L => .op (.mov (W1.ticketAt L 0 0 0) (W1.constAt 0)) (.op (.mov (W1.usefulAt L 0 0 0) (W1.constAt 1)) .done),
     fun _ => by norm_num [W1.Code.size]⟩
 
 /-- The guessing adversary: no preprocessing, `guessProg t y` online, activations `a` for every unit. -/
@@ -70,46 +72,46 @@ def pearlCDomainDevOld (d : PearlCDevice) (L : Layout) : Prop :=
 
 /-! ## Its run -/
 
-theorem tk_ne_us (u i j : ℕ) : W1.ticketAt u i j ≠ W1.usefulAt 0 0 0 := by
+theorem tk_ne_us (L : Layout) (u i j : ℕ) : W1.ticketAt L u i j ≠ W1.usefulAt L 0 0 0 := by
   intro h
   have h1 := congrArg Prod.fst h
   change (6 : ℕ) = 7 at h1
   omega
 
-theorem us_ne_tk (u i j : ℕ) : W1.usefulAt u i j ≠ W1.ticketAt 0 0 0 := by
+theorem us_ne_tk (L : Layout) (u i j : ℕ) : W1.usefulAt L u i j ≠ W1.ticketAt L 0 0 0 := by
   intro h
   have h1 := congrArg Prod.fst h
   change (7 : ℕ) = 6 at h1
   omega
 
-theorem c1_ne_tk : W1.constAt 1 ≠ W1.ticketAt 0 0 0 := by
+theorem c1_ne_tk (L : Layout) : W1.constAt 1 ≠ W1.ticketAt L 0 0 0 := by
   intro h
   have h1 := congrArg Prod.fst h
   change (3 : ℕ) = 6 at h1
   omega
 
-theorem act_ne_tk (u i l : ℕ) : W1.actAt u i l ≠ W1.ticketAt 0 0 0 := by
+theorem act_ne_tk (L : Layout) (u i l : ℕ) : W1.actAt L u i l ≠ W1.ticketAt L 0 0 0 := by
   intro h
   have h1 := congrArg Prod.fst h
   change (4 : ℕ) = 6 at h1
   omega
 
-theorem act_ne_us (u i l : ℕ) : W1.actAt u i l ≠ W1.usefulAt 0 0 0 := by
+theorem act_ne_us (L : Layout) (u i l : ℕ) : W1.actAt L u i l ≠ W1.usefulAt L 0 0 0 := by
   intro h
   have h1 := congrArg Prod.fst h
   change (4 : ℕ) = 7 at h1
   omega
 
-theorem pair_ne {u i j : ℕ} (hj : j ≠ 0) : Nat.pair u (Nat.pair i j) ≠ Nat.pair 0 (Nat.pair 0 0) := by
+theorem pair_ne {r r' j : ℕ} (hj : j ≠ 0) : Nat.pair r j ≠ Nat.pair r' 0 := by
   intro h
-  have h1 := congrArg (fun n => (Nat.unpair (Nat.unpair n).2).2) h
+  have h1 := congrArg (fun n => (Nat.unpair n).2) h
   simp only [Nat.unpair_pair] at h1
   exact hj h1
 
-theorem ticketAt_ne {u i j : ℕ} (hj : j ≠ 0) : W1.ticketAt u i j ≠ W1.ticketAt 0 0 0 :=
+theorem ticketAt_ne {L : Layout} {u i j : ℕ} (hj : j ≠ 0) : W1.ticketAt L u i j ≠ W1.ticketAt L 0 0 0 :=
   fun h => pair_ne hj (congrArg Prod.snd h)
 
-theorem usefulAt_ne {u i j : ℕ} (hj : j ≠ 0) : W1.usefulAt u i j ≠ W1.usefulAt 0 0 0 :=
+theorem usefulAt_ne {L : Layout} {u i j : ℕ} (hj : j ≠ 0) : W1.usefulAt L u i j ≠ W1.usefulAt L 0 0 0 :=
   fun h => pair_ne hj (congrArg Prod.snd h)
 
 section Run
@@ -125,8 +127,8 @@ theorem price_mov (d a : W1.Addr) : W1.Instr.price dv false (.mov d a) = 0 := by
 
 /-- The moves are free. -/
 theorem guess_cost0 : (W1.final dv sl (guessProg t y) U act σ).cost = 0 := by
-  show (0 : ℚ) + W1.Instr.price dv false (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) +
-    W1.Instr.price dv false (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) = 0
+  show (0 : ℚ) + W1.Instr.price dv false (.mov (W1.ticketAt U.layout 0 0 0) (W1.constAt 0)) +
+    W1.Instr.price dv false (.mov (W1.usefulAt U.layout 0 0 0) (W1.constAt 1)) = 0
   rw [price_mov, price_mov]
   norm_num
 
@@ -152,56 +154,59 @@ theorem guess_bounded (salt : S → List ℕ) (a : Codes) :
 
 /-- The final memory: the two moves on the initial memory. -/
 theorem guess_mem : (W1.final dv sl (guessProg t y) U act σ).mem =
-    Function.update (Function.update (W1.init sl (guessProg t y) U act σ) (W1.ticketAt 0 0 0)
-        (W1.w32 (W1.init sl (guessProg t y) U act σ (W1.constAt 0)))) (W1.usefulAt 0 0 0)
-      (W1.w32 (Function.update (W1.init sl (guessProg t y) U act σ) (W1.ticketAt 0 0 0)
+    Function.update (Function.update (W1.init sl (guessProg t y) U act σ) (W1.ticketAt U.layout 0 0 0)
+        (W1.w32 (W1.init sl (guessProg t y) U act σ (W1.constAt 0)))) (W1.usefulAt U.layout 0 0 0)
+      (W1.w32 (Function.update (W1.init sl (guessProg t y) U act σ) (W1.ticketAt U.layout 0 0 0)
         (W1.w32 (W1.init sl (guessProg t y) U act σ (W1.constAt 0))) (W1.constAt 1))) := rfl
 
 theorem init_const0 : W1.init sl (guessProg t y) U act σ (W1.constAt 0) = W1.w32 t := rfl
 
 theorem init_const1 : W1.init sl (guessProg t y) U act σ (W1.constAt 1) = W1.w32 y := rfl
 
-theorem guess_mem_of_ne {z : W1.Addr} (h1 : z ≠ W1.ticketAt 0 0 0) (h2 : z ≠ W1.usefulAt 0 0 0) :
+theorem guess_mem_of_ne {z : W1.Addr} (h1 : z ≠ W1.ticketAt U.layout 0 0 0) (h2 : z ≠ W1.usefulAt U.layout 0 0 0) :
     (W1.final dv sl (guessProg t y) U act σ).mem z = W1.init sl (guessProg t y) U act σ z := by
   rw [guess_mem, Function.update_of_ne h2, Function.update_of_ne h1]
 
-theorem guess_ticket : (W1.final dv sl (guessProg t y) U act σ).mem (W1.ticketAt 0 0 0) = W1.w32 t := by
-  rw [guess_mem, Function.update_of_ne (tk_ne_us 0 0 0), Function.update_self, init_const0]
+theorem guess_ticket : (W1.final dv sl (guessProg t y) U act σ).mem (W1.ticketAt U.layout 0 0 0) = W1.w32 t := by
+  rw [guess_mem, Function.update_of_ne (tk_ne_us U.layout 0 0 0), Function.update_self, init_const0]
   simp only [W1.w32, Nat.mod_mod]
 
-theorem guess_useful : (W1.final dv sl (guessProg t y) U act σ).mem (W1.usefulAt 0 0 0) = W1.w32 y := by
-  rw [guess_mem, Function.update_self, Function.update_of_ne c1_ne_tk, init_const1]
+theorem guess_useful : (W1.final dv sl (guessProg t y) U act σ).mem (W1.usefulAt U.layout 0 0 0) = W1.w32 y := by
+  rw [guess_mem, Function.update_self, Function.update_of_ne (c1_ne_tk U.layout), init_const1]
   simp only [W1.w32, Nat.mod_mod]
 
 theorem guess_ticket_zero {u i j : ℕ} (hj : j ≠ 0) :
-    (W1.final dv sl (guessProg t y) U act σ).mem (W1.ticketAt u i j) = 0 := by
-  rw [guess_mem_of_ne dv sl t y U act σ (ticketAt_ne hj) (tk_ne_us u i j)]
+    (W1.final dv sl (guessProg t y) U act σ).mem (W1.ticketAt U.layout u i j) = 0 := by
+  rw [guess_mem_of_ne dv sl t y U act σ (ticketAt_ne hj) (tk_ne_us U.layout u i j)]
   rfl
 
 theorem guess_useful_zero {u i j : ℕ} (hj : j ≠ 0) :
-    (W1.final dv sl (guessProg t y) U act σ).mem (W1.usefulAt u i j) = 0 := by
-  rw [guess_mem_of_ne dv sl t y U act σ (us_ne_tk u i j) (usefulAt_ne hj)]
+    (W1.final dv sl (guessProg t y) U act σ).mem (W1.usefulAt U.layout u i j) = 0 := by
+  rw [guess_mem_of_ne dv sl t y U act σ (us_ne_tk U.layout u i j) (usefulAt_ne hj)]
   rfl
 
-theorem init_act (a : Codes) (u i l : ℕ) :
-    W1.init sl (guessProg t y) U (fun _ => a) σ (W1.actAt u i l) = W1.w32 (a i l) := by
-  simp [W1.init, W1.actAt]
+theorem init_act (a : Codes) {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (l : ℕ) :
+    W1.init sl (guessProg t y) U (fun _ => a) σ (W1.actAt U.layout u i l) = W1.w32 (a i l) := by
+  simp [W1.init, W1.actAt, rowIdx_lt_rowsOf hu hi, rowOfRow_rowIdx hu hi]
 
-/-- The activations stay as supplied when they are 32-bit words. -/
-theorem guess_act (a : Codes) (ha : ∀ i l, a i l < 2 ^ 32) (u i l : ℕ) :
-    (W1.final dv sl (guessProg t y) U (fun _ => a) σ).mem (W1.actAt u i l) = a i l := by
-  rw [guess_mem_of_ne dv sl t y U _ σ (act_ne_tk u i l) (act_ne_us u i l), init_act, W1.w32,
-    Nat.mod_eq_of_lt (ha i l)]
+/-- The activations of a declared row stay as supplied when they are 32-bit words. -/
+theorem guess_act (a : Codes) (ha : ∀ i l, a i l < 2 ^ 32) {u i : ℕ} (hu : u < U.layout.N)
+    (hi : i < (U.layout.shape u).m) (l : ℕ) :
+    (W1.final dv sl (guessProg t y) U (fun _ => a) σ).mem (W1.actAt U.layout u i l) = a i l := by
+  rw [guess_mem_of_ne dv sl t y U _ σ (act_ne_tk U.layout u i l) (act_ne_us U.layout u i l),
+    init_act _ _ _ _ _ a hu hi l, W1.w32, Nat.mod_eq_of_lt (ha i l)]
 
 /-- The committed transcript of a declared unit. -/
 theorem guess_transcript (salt : S → List ℕ) (a : Codes) (H : Q → R) (s : S) {u : ℕ} (hu : u < U.layout.N) :
     (guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s u =
       some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then
-          (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.actAt u i l) else a i l,
-        fun i j => (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.ticketAt u i j),
-        fun i j => (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.usefulAt u i j)⟩ := by
+          (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.actAt U.layout u i l) else a i l,
+        fun i j => if i < (U.layout.shape u).m then
+          (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.ticketAt U.layout u i j) else 0,
+        fun i j => if i < (U.layout.shape u).m then
+          (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.usefulAt U.layout u i j) else 0⟩ := by
   show W1.readout U (fun _ => a) (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem u = _
-  exact if_pos hu
+  exact ite_eq_left hu
 
 end Run
 
@@ -237,23 +242,36 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
     (ht : wordQ t = P.ticket H s (oneUnit k w) 0 a 0 0) (hy : wordQ y = P.useful H s (oneUnit k w) 0 a 0 0)
     (hθ : θ < P.credit H s (oneUnit k w) 0 a) : GuessWins dv salt P k w a θ t y (H, s) := by
   have hτ : (guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s 0 =
-      some ⟨a, fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.ticketAt 0 i j),
-        fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.usefulAt 0 i j)⟩ := by
+      some ⟨a, fun i j => if i < ((oneUnit k w).layout.shape 0).m then
+          (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem
+          (W1.ticketAt (oneUnit k w).layout 0 i j) else 0,
+        fun i j => if i < ((oneUnit k w).layout.shape 0).m then
+          (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem
+          (W1.usefulAt (oneUnit k w).layout 0 i j) else 0⟩ := by
     rw [guess_transcript dv t y (oneUnit k w) salt a H s Nat.one_pos]
     congr 2
     funext i l
-    split_ifs <;> first | rfl | exact guess_act dv (salt s) t y (oneUnit k w) [] a ha 0 i l
+    split_ifs with h
+    · exact guess_act dv (salt s) t y (oneUnit k w) [] a ha Nat.one_pos h.1 l
+    · rfl
   have hC : Correct P (oneUnit k w) H s 0
-      ⟨a, fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.ticketAt 0 i j),
-        fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.usefulAt 0 i j)⟩ := by
+      ⟨a, fun i j => if i < ((oneUnit k w).layout.shape 0).m then
+          (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem
+          (W1.ticketAt (oneUnit k w).layout 0 i j) else 0,
+        fun i j => if i < ((oneUnit k w).layout.shape 0).m then
+          (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem
+          (W1.usefulAt (oneUnit k w).layout 0 i j) else 0⟩ := by
     refine ⟨hact, hcap, fun j hj => ?_, fun i hi j hj => ?_⟩
     · obtain rfl : j = 0 := Nat.lt_one_iff.1 hj
       exact hwt
     · obtain rfl : i = 0 := Nat.lt_one_iff.1 hi
       obtain rfl : j = 0 := Nat.lt_one_iff.1 hj
-      exact ⟨(congrArg wordQ (guess_ticket dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
-          ((wordQ_w32 t).trans ht),
-        (congrArg wordQ (guess_useful dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans ((wordQ_w32 y).trans hy)⟩
+      exact ⟨(congrArg wordQ (ite_eq_left Nat.one_pos)).trans
+          ((congrArg wordQ (guess_ticket dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
+            ((wordQ_w32 t).trans ht)),
+        (congrArg wordQ (ite_eq_left Nat.one_pos)).trans
+          ((congrArg wordQ (guess_useful dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
+            ((wordQ_w32 y).trans hy))⟩
   have hK : correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) =
       {0} := by
     ext u
@@ -591,9 +609,13 @@ theorem guess_zero_words {dv : W1.W1Device} {salt : S → List ℕ} {P : Protoco
   rw [hA]
   have ht0 : c.ticket i j = 0 := by
     rw [hc']
+    show (if i < (U.layout.shape u).m then _ else 0) = 0
+    rw [ite_eq_left hi]
     exact guess_ticket_zero dv (salt s) t y U (fun _ => a) [] hj0
   have hu0 : c.useful i j = 0 := by
     rw [hc']
+    show (if i < (U.layout.shape u).m then _ else 0) = 0
+    rw [ite_eq_left hi]
     exact guess_useful_zero dv (salt s) t y U (fun _ => a) [] hj0
   obtain ⟨h1, h2⟩ := hw i hi j hj
   rw [ht0, Freeze.wordQ_zero] at h1

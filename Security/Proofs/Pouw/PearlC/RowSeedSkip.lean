@@ -331,8 +331,12 @@ theorem fragCount_congr (p : Pipeline) (G : ℕ) {m n k : ℕ} {A A' : Matrix (F
   simp only [mem_filter, h]
 
 theorem operandOK_rowCodes {sem : PearlCSem Q R S} {m k : ℕ} {act : Codes} (h : sem.OperandOK m k act) (i : Fin m) :
-    sem.OperandOK 1 k (rowCodes act i) :=
-  ⟨fun _ _ l hl => h.1 i i.isLt l hl, fun _ => h.2 i⟩
+    sem.OperandOK 1 k (rowCodes act i) := by
+  refine ⟨fun a ha l hl => ?_, fun a => ?_⟩
+  · obtain rfl : a = 0 := by omega
+    exact h.1 i i.isLt l hl
+  · obtain rfl : a = 0 := Subsingleton.elim _ _
+    exact h.2 i
 
 /-- Under (C6), row `i` of `A′` reads the row's words, the job's answer and the row's answer only. -/
 theorem unitChain_row_eq {sem : PearlCSem Q R S} {s : S} {U : Workload} {u : ℕ} {xJ : Q}

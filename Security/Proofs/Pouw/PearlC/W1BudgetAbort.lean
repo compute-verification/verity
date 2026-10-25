@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.W1
+import Proofs.Pouw.PearlC.Rows
 
 /-!
 # W1 doesn't truncate
@@ -195,7 +196,7 @@ theorem small_exec_code (dv : W1Device) (h : Positive dv) :
 /-! ## The counterexample -/
 
 /-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`: two nodes of text, within W1's bound. -/
-def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
+def copyAct : Prog := ⟨fun _ => [], fun L => .op (.mov (ticketAt L 0 0 0) (actAt L 0 0 0)) .done,
   fun _ => by norm_num [W1.Code.size]⟩
 
 /-- What `copyAct` commits, on every oracle. -/
@@ -207,12 +208,14 @@ theorem copy_cost (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ �
   simp [final, copyAct, exec, Instr.price, Instr.base, Instr.dynamic]
 
 theorem copy_fetched (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) :
-    (final dv salt copyAct U act []).fetched = [actAt 0 0 0] := by
+    (final dv salt copyAct U act []).fetched = [actAt U.layout 0 0 0] := by
   simp [final, copyAct, exec, Instr.reads, preSalt, actAt]
 
-theorem copy_ticket (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) :
-    (final dv salt copyAct U act []).mem (ticketAt 0 0 0) = w32 (act 0 0 0) := by
-  simp [final, copyAct, exec, Instr.exec, init, actAt, ticketAt, w32]
+theorem copy_ticket (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) (hN : 0 < U.layout.N)
+    (hm : 0 < (U.layout.shape 0).m) :
+    (final dv salt copyAct U act []).mem (ticketAt U.layout 0 0 0) = w32 (act 0 0 0) := by
+  simp [final, copyAct, exec, Instr.exec, init, actAt, ticketAt, w32, rowIdx_lt_rowsOf hN hm, unitOfRow_rowIdx hN hm,
+    rowOfRow_rowIdx hN hm]
 
 open Classical in
 /-- **W1 doesn't truncate**: given positive prices, a one-unit workload whose first activation word is 256 or more, and
@@ -225,13 +228,14 @@ theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R
     ¬ BudgetAbortPearlC (w1 dv P salt) := by
   rintro ⟨-, hab⟩
   obtain ⟨p', hp'⟩ := hab copyAct U act 0 le_rfl
-  have hfree : FreeFetch P U H₁ s (copyTranscript dv (salt s) U act) (actAt 0 0 0) := by
-    refine Or.inl ⟨rfl, ?_, ?_, ?_⟩ <;> simp only [actAt, Nat.unpair_pair]
+  have hN0 : 0 < U.layout.N := by omega
+  have hfree : FreeFetch P U H₁ s (copyTranscript dv (salt s) U act) (actAt U.layout 0 0 0) := by
+    refine Or.inl ⟨rfl, ?_, ?_, ?_⟩ <;> simp only [actAt, Nat.unpair_pair, unitOfRow_rowIdx hN0 hm]
+    · exact rowIdx_lt_rowsOf hN0 hm
     · exact h₁
-    · exact hm
     · exact hk
   have c1 : (w1 dv P salt).cost copyAct H₁ U act [] s ≤ 0 := by
-    simp only [w1, copy_cost, copy_fetched, List.dedup_eq_self.mpr (List.nodup_singleton (actAt 0 0 0))]
+    simp only [w1, copy_cost, copy_fetched, List.dedup_eq_self.mpr (List.nodup_singleton (actAt U.layout 0 0 0))]
     simp [hfree]
   have hrun := (hp' H₁ [] s).2.2 c1
   have hc2 := (hp' H₂ [] s).1
@@ -273,12 +277,12 @@ theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R
     linarith
   have hsmall : Small (final dv (salt s) p' U act []).mem :=
     small_exec_code dv hdv _ false _ hcost hfetch (small_init _ _ _ _ _)
-  have key : ∀ M : Mem, (readout U act M 0).map (fun c => c.ticket 0 0) = some (M (ticketAt 0 0 0)) := by
+  have key : ∀ M : Mem, (readout U act M 0).map (fun c => c.ticket 0 0) = some (M (ticketAt U.layout 0 0 0)) := by
     intro M
-    simp [readout, hN]
+    simp [readout, hN, hm]
   have e := congrArg (Option.map fun c : Commit => c.ticket 0 0) (congrFun hrun 0)
-  rw [key, key, copy_ticket] at e
-  have hlt := hsmall (ticketAt 0 0 0) (by simp [preSalt, ticketAt])
+  rw [key, key, copy_ticket dv (salt s) U act hN0 hm] at e
+  have hlt := hsmall (ticketAt U.layout 0 0 0) (by simp [preSalt, ticketAt])
   rw [Option.some.inj e] at hlt
   omega
 
@@ -304,7 +308,7 @@ def toyP : Protocol Unit Bool Unit where
 theorem toy_correct (dv : W1Device) (H : Unit → Bool) :
     0 ∈ correctSet toyP toyU H () (copyTranscript dv [] toyU toyAct) ↔ H () = true := by
   simp [correctSet, Correct, readout, toyP, toyU, toyAct, final, copyAct, exec, Instr.exec, init, actAt, ticketAt,
-    usefulAt, Function.update_apply, w32]
+    usefulAt, rowIdx, rowOffset, rowsOf, Function.update_apply, w32]
 
 theorem sm120_positive (sha fetch : ℚ) (hs : 0 < sha) (hf : 0 < fetch) : Positive (W1Device.sm120 sha fetch) := by
   refine ⟨by norm_num [W1Device.sm120, W1Device.sm120At, W1Prices.sm120],

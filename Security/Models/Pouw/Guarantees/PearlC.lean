@@ -55,8 +55,9 @@ machine on the record's device `dv` (`W1Device.sm120`, `.sm120Loop` or `.h100` a
 salt's bytes `salt`, and rests on that form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`,
 `Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1`, and the chain-cap and U-only forms' `…W1` beside them).
 Pearl-C4's headline readers rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
-`W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
-row-seed readers) are still stated over any `CostModel`.
+`W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The row-seed
+reader (`TTOutRowSeedOfTTOut`) is at W1 too: W1 keys a unit's words by the layout's global row, so the split closure
+it once took as a hypothesis on the cost model holds there.
 -/
 
 namespace Pouw.Guarantees.PearlC
@@ -185,13 +186,14 @@ end Pouw.PearlC
 namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- **Row additivity for P2 (a theorem).** rev1's TT_OUT at `sem` bounds the row-seeded game at `sem'`, with the cap
-checked per row: the row-seeded adversary is the split game's, relabelled row by row (C3), each row of a correct unit is
-a correct one-row unit whose credit is the row's (C0, C1), and the error is the split layout's, at `R = Σ_u m_u` units.
-One-row units are in the domain (`pearlCDomainDev_split`). -/
+/-- **Row additivity for P2 (a theorem), at W1.** rev1's TT_OUT at W1 at `sem` bounds the row-seeded game at `sem'`,
+with the cap checked per row: the row-seeded adversary is the split game's, relabelled row by row (C3, which holds at W1
+because W1 keys a unit's words by the global row), each row of a correct unit is a correct one-row unit whose credit is
+the row's (C0, C1), and the error is the split layout's, at `R = Σ_u m_u` units. One-row units are in the domain
+(`pearlCDomainDev_split`). -/
 def _root_.Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut : Prop :=
-  ∀ {Q R S : Type} {sem sem' : PearlCSem Q R S} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S} {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutPearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16),
-    TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCDomainDev d) (1 / 400)
+  ∀ {Q R S : Type} {sem sem' : PearlCSem Q R S} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {dv : Pouw.PearlC.W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutPearlCDevRev1W1 dv salt d sem ρ) (hN : RowSeedNoise sem sem') (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16),
+    TTOutRowSeed (Pouw.PearlC.W1.w1Priced dv salt) (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCDomainDev d) (1 / 400)
 
 end Pouw.PearlC
 

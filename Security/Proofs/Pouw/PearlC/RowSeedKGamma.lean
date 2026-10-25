@@ -1,6 +1,7 @@
 import Models.Pouw.Assumptions.PearlC.TTOutRowSeedK
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.HiddenGamma
+import Proofs.Pouw.PearlC.TTOutW1RowSeed
 
 /-!
 # Per-row seeds on the served line: rev1 against the honest kernel's `W_ref` (compute accounting's file)
@@ -21,8 +22,9 @@ with the cap checked per row and the error at the row count:
   `pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCap1000_8192`.
 * **The code-form seed (`-h3`)**, adding C1-h3 (`CodeSeedNoise`) and C5 (`CM.RelabelClosed`):
   `pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192`.
-* **Under the hidden audit, conditional** as the served line's (`gammaHidden_of_sampled_all`):
-  `pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192` and its code form
+* **Under the hidden audit, conditional** as the served line's (`gammaHidden_of_sampled_all`), at W1 (`W1.w1Priced` on
+  `W1Device.sm120Loop`) from `TTOutTilePearlCDevRev1W1`, where C3 and C5 hold (`w1Priced_splitClosed`,
+  `w1Priced_relabelClosed`): `pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192` and its code form
   `pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192`.
 -/
 
@@ -126,39 +128,49 @@ conditional**, FP32 at 8.376, the honest cast at 8.72: `γ = 1648180439/44607275
 
 Conditional as `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`: `HA` and `ηzk` are free, and the open obligation
 `TileProofSoundAll` holds at a degenerate hidden audit (an empty class) for any `ηzk ≥ 0`, so this says nothing about
-C-Flock until C-Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
-theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 (HA : HiddenAudit Q R S) (ηzk : ℕ → ℝ)
-    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
-    (hCM : CM.SplitClosed)
+C-Flock until C-Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional.
+
+Stated at the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`, from `TTOutTilePearlCDevRev1W1` there and C1;
+C3 holds at W1 (`w1Priced_splitClosed`). -/
+theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 (sha fetch : ℚ) (salt : S → List ℕ)
+    (HA : HiddenAudit Q R S) (ηzk : ℕ → ℝ)
+    (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop)
+      sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hzk : TileProofSoundAll
       (pearlCProtocolDevRev1KRowCap (devSm120v1 Prices.sm120Loop) sem' (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1KRowCap (devSm120v1 Prices.sm120Loop) sem' (1 / 1000) (218 / 25 - 8953 / 1000))
       (fun L => pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192 L ∧ rowsOf L ≤ 2 ^ 64) HA ηzk) :
-    GγHidden CM
+    GγHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)
       (pearlCProtocolDevRev1KRowCap (devSm120v1 Prices.sm120Loop) sem' (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1KRowCap (devSm120v1 Prices.sm120Loop) sem' (1 / 1000) (218 / 25 - 8953 / 1000))
       (fun L => pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192 L ∧ rowsOf L ≤ 2 ^ 64) HA
       ((1648180439 / 446072750000 : ℚ) : ℝ) (fun q N => εPearlC q (N * 8192)) ηzk :=
-  gammaHidden_of_sampled_all CM _ _ _ HA _ _ ηzk
-    (pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 CM hTT hN hCM) hzk
+  gammaHidden_of_sampled_all _ _ _ _ HA _ _ ηzk
+    (pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 _ (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
+      hN (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ salt)) hzk
 
 /-- **The code-form seed (`-h3`) per audit tile at the cap 1/1,000, 8192³, under the hidden audit, conditional**, as
-`pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192` with C1-h3 and C5 added:
+`pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192` with C1-h3 added (C5 holds at W1, `w1Priced_relabelClosed`):
 `γ = 1648180439/446072750000` (0.36949%), with the error at the `8192·N` rows. Cite it only as conditional. -/
-theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {π : Layout → Q ≃ Q} (HA : HiddenAudit Q R S)
-    (ηzk : ℕ → ℝ) (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000))
-    (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed)
+theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {π : Layout → Q ≃ Q} (sha fetch : ℚ)
+    (salt : S → List ℕ) (HA : HiddenAudit Q R S) (ηzk : ℕ → ℝ)
+    (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop)
+      sem (1 / 1000))
+    (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
     (hzk : TileProofSoundAll
       (pearlCProtocolDevRev1KRowCap (devSm120v1 Prices.sm120Loop) semC (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1KRowCap (devSm120v1 Prices.sm120Loop) semC (1 / 1000) (218 / 25 - 8953 / 1000))
       (fun L => pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192 L ∧ rowsOf L ≤ 2 ^ 64) HA ηzk) :
-    GγHidden CM
+    GγHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)
       (pearlCProtocolDevRev1KRowCap (devSm120v1 Prices.sm120Loop) semC (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1KRowCap (devSm120v1 Prices.sm120Loop) semC (1 / 1000) (218 / 25 - 8953 / 1000))
       (fun L => pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192 L ∧ rowsOf L ≤ 2 ^ 64) HA
       ((1648180439 / 446072750000 : ℚ) : ℝ) (fun q N => εPearlC q (N * 8192)) ηzk :=
-  gammaHidden_of_sampled_all CM _ _ _ HA _ _ ηzk
-    (pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 CM hTT hN hC hCM hCM') hzk
+  gammaHidden_of_sampled_all _ _ _ _ HA _ _ ηzk
+    (pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 _
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT) hN hC
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ salt)
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_relabelClosed _ salt)) hzk
 
 end Gamma
 

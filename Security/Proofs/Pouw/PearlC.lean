@@ -10,6 +10,7 @@ import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutFp4W1
 import Proofs.Pouw.PearlC.TTOutW1Item1
+import Proofs.Pouw.PearlC.TTOutW1RowSeed
 
 /-!
 # Proofs of Pearl-C's guarantees
@@ -67,7 +68,10 @@ theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192 : 
     @Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut : Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut := @Pouw.PearlC.ttOutRowSeed_of_ttOut
+theorem Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut : Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut :=
+  fun hTT hN hd hρ hadd hbf =>
+    Pouw.PearlC.ttOutRowSeed_of_ttOut (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT) hN
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ _) hd hρ hadd hbf
 
 theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 :
     Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 :=

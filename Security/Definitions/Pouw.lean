@@ -74,6 +74,7 @@ import Definitions.Pouw.PearlC.RowCircuit
 import Definitions.Pouw.PearlC.RowPrimVectors
 import Definitions.Pouw.PearlC.RowPrims
 import Definitions.Pouw.PearlC.RowSem
+import Definitions.Pouw.PearlC.Rows
 import Definitions.Pouw.PearlC.SaltDead
 import Definitions.Pouw.PearlC.Sha512
 import Definitions.Pouw.PearlC.Skip

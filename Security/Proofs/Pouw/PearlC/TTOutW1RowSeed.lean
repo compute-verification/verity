@@ -1,23 +1,22 @@
 import Definitions.Pouw.PearlC.W1
-import Proofs.Pouw.PearlC.RowSeedGamma
+import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Proofs.Pouw.PearlC.Rows
 
 /-!
 # The row-seed reductions' cost-model conditions at W1
 
 The row-seed readers of TT_OUT (`RowSeedGamma.lean`, `RowSeedKGamma.lean`, `RowSeedCode.lean`, `RowCapAtGamma.lean`)
 take two conditions on the cost model: (C3) `CostModel.SplitClosed`, and for the code-form seed (C5)
-`CostModel.RelabelClosed`. At `W1.w1Priced dv salt`, the cost model TT_OUT is stated at (`TTOutW1`):
+`CostModel.RelabelClosed`. Both hold at `W1.w1Priced dv salt`, the cost model TT_OUT is stated at (`TTOutW1`), for
+every device and salt encoding:
 
-- (C5) holds (`w1Priced_relabelClosed`): W1 runs no oracle, so relabelling the oracle changes nothing.
-- (C3) fails, for every device and salt encoding, as soon as there is an oracle and a salt
-  (`w1Priced_not_splitClosed`). `splitTranscript` commits row `i` of a unit as every row of a one-row matrix
-  (`rowCodes`), so a split unit's ticket matrix repeats that row at every row index. W1 reads a unit's ticket words
-  off memory (`W1.readout`), and a W1 program writes finitely many words (`exec_frame`) into a ticket region that starts
-  at 0. The one-move program `ticketOne` sets unit 0's ticket word `(0, 0)` to 1 on a one-unit workload, and no W1
-  program on the split workload commits a ticket word `(i, 0)` of 1 at every `i`.
-
-So the row-seed readers can't be restated at W1 through `SplitClosed` as it is defined: a W1 reader that kept it as a
-hypothesis would be vacuous.
+- (C5) `w1Priced_relabelClosed`: W1 runs no oracle, so relabelling the oracle changes nothing.
+- (C3) `w1Priced_splitClosed`: W1 keys a unit's activations, ticket words and useful words by the layout's global row
+  (`W1.actAt`, `W1.ticketAt`, `W1.usefulAt`), and on the split layout split unit `v`'s one row is global row `v`
+  (`rowOffset_splitLayout`). So the original program's text at the original layout (`splitProg`), run on the split
+  workload with each split unit's row as its activations (`splitAct`), starts from the same memory (`init_split`) and
+  runs to the same final state (`final_split`): the same transcript words, at the same cost and no calls. Its readout
+  groups those words row by row (`readout_split`), which is `splitTranscript`.
 -/
 
 namespace Pouw.PearlC.TTOutW1RowSeed
@@ -32,138 +31,160 @@ theorem w1Priced_relabelClosed (dv : W1.W1Device) (salt : S → List ℕ) :
     (W1.w1Priced dv salt : CostModel Q R S).RelabelClosed :=
   fun _ prog _ _ => ⟨prog, fun _ _ _ => ⟨rfl, le_rfl, le_rfl⟩⟩
 
-/-! ## A W1 run writes below a bound fixed by its code -/
+/-! ## The split layout's global rows -/
 
-/-- An index past every word the instruction writes, in any region; a register-addressed store writes below
-`2^32 + off`. -/
-def instrBound : W1.Instr → ℕ
-  | .mov d _ => d.2 + 1
-  | .ld d _ _ _ => d.2 + 1
-  | .st _ _ off _ => 2 ^ 32 + off
-  | .iop _ d _ _ => d.2 + 1
-  | .iadd3 d _ _ _ => d.2 + 1
-  | .lop3 d _ _ _ _ => d.2 + 1
-  | .prmt d _ _ _ => d.2 + 1
-  | .sel d _ _ _ => d.2 + 1
-  | .fop _ d _ _ _ => d.2 + 1
-  | .cvt _ d _ _ _ => d.2 + 1
-  | .mma f d _ _ _ _ _ => d.2 + f.m * f.n
-  | .sha d _ _ => d.2 + 16
+/-- Every split unit has one row, so split unit `v` starts at global row `v`. -/
+theorem rowOffset_splitLayout (L : Layout) (v : ℕ) : rowOffset (splitLayout L) v = v := by
+  simp [rowOffset, splitLayout]
 
-/-- An index past every word the code writes, on every path. -/
-def codeBound : W1.Code → ℕ
-  | .done => 0
-  | .op i k => instrBound i + codeBound k
-  | .ite _ a b k => codeBound a + codeBound b + codeBound k
+theorem rowsOf_splitLayout (L : Layout) : rowsOf (splitLayout L) = rowsOf L :=
+  rowOffset_splitLayout L (rowsOf L)
 
-theorem instr_frame (dv : W1.W1Device) (i : W1.Instr) (M : W1.Mem) {x : W1.Addr} (h : instrBound i ≤ x.2) :
-    i.exec dv M x = M x := by
-  have upd : ∀ (d : W1.Addr) (v : ℕ), d.2 + 1 ≤ x.2 → Function.update M d v x = M x := fun d v hd =>
-    Function.update_of_ne (by rintro rfl; omega) v M
-  have fil : ∀ (d : W1.Addr) (n : ℕ) (g : ℕ → ℕ), d.2 + n ≤ x.2 → W1.Mem.fill M d n g x = M x := fun d n g hd => by
-    show (if x.1 = d.1 ∧ d.2 ≤ x.2 ∧ x.2 < d.2 + n then W1.w32 (g (x.2 - d.2)) else M x) = M x
-    exact ite_eq_right fun hc => absurd hc.2.2 (by omega)
-  cases i with
-  | mov d _ => exact upd d _ h
-  | ld d _ _ _ => exact upd d _ h
-  | st rg r off _ =>
-    have hr : W1.w32 (M r) < 2 ^ 32 := Nat.mod_lt _ (by norm_num)
-    have h' : 2 ^ 32 + off ≤ x.2 := h
-    exact upd (rg, W1.w32 (M r) + off) _ (by show W1.w32 (M r) + off + 1 ≤ x.2; omega)
-  | iop _ d _ _ => exact upd d _ h
-  | iadd3 d _ _ _ => exact upd d _ h
-  | lop3 d _ _ _ _ => exact upd d _ h
-  | prmt d _ _ _ => exact upd d _ h
-  | sel d _ _ _ => exact upd d _ h
-  | fop _ d _ _ _ => exact upd d _ h
-  | cvt _ d _ _ _ => exact upd d _ h
-  | mma f d _ _ _ _ _ =>
-    simp only [W1.Instr.exec]
-    by_cases hh : dv.has f = true
-    · rw [ite_eq_left hh]
-      exact fil d _ _ h
-    · rw [ite_eq_right hh]
-  | sha d _ _ =>
-    simp only [W1.Instr.exec]
-    exact fil d 16 _ h
+theorem unitOfRow_splitLayout {L : Layout} {v : ℕ} (hv : v < rowsOf L) : unitOfRow (splitLayout L) v = v := by
+  have h := unitOfRow_rowIdx (L := splitLayout L) (u := v) (i := 0) hv Nat.one_pos
+  rw [rowIdx, rowOffset_splitLayout, Nat.add_zero] at h
+  exact h
 
-/-- **A run leaves every word at index `codeBound c` or past it as it found it.** -/
-theorem exec_frame (dv : W1.W1Device) :
-    ∀ (c : W1.Code) (t : Bool) (st : W1.St) (x : W1.Addr), codeBound c ≤ x.2 → (W1.exec dv t c st).mem x = st.mem x
-  | .done, _, _, _, _ => rfl
-  | .op i k, t, st, x, h => by
-      have h' : instrBound i + codeBound k ≤ x.2 := h
-      simp only [W1.exec]
-      rw [exec_frame dv k t _ x (by omega)]
-      exact instr_frame dv i st.mem (by omega)
-  | .ite p a b k, t, st, x, h => by
-      have h' : codeBound a + codeBound b + codeBound k ≤ x.2 := h
-      simp only [W1.exec]
-      rw [exec_frame dv k t _ x (by omega)]
-      split_ifs
-      · exact exec_frame dv b true _ x (by omega)
-      · exact exec_frame dv a true _ x (by omega)
+theorem rowOfRow_splitLayout {L : Layout} {v : ℕ} (hv : v < rowsOf L) : rowOfRow (splitLayout L) v = 0 := by
+  have h := rowOfRow_rowIdx (L := splitLayout L) (u := v) (i := 0) hv Nat.one_pos
+  rw [rowIdx, rowOffset_splitLayout, Nat.add_zero] at h
+  exact h
 
-/-- A run leaves every ticket word at row `codeBound` or past it at 0. -/
-theorem final_ticket_zero (dv : W1.W1Device) (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes)
-    (σ : State) (u i j : ℕ) (hi : codeBound (pr.code U.layout) ≤ i) :
-    (W1.final dv salt pr U act σ).mem (W1.ticketAt u i j) = 0 := by
-  have hx : codeBound (pr.code U.layout) ≤ (W1.ticketAt u i j).2 :=
-    hi.trans ((Nat.left_le_pair i j).trans (Nat.right_le_pair u (Nat.pair i j)))
-  unfold W1.final
-  rw [exec_frame dv _ false _ _ hx]
-  simp [W1.init, W1.ticketAt]
+theorem rowIdx_splitLayout (L : Layout) (v i : ℕ) : rowIdx (splitLayout L) v i = v + i := by
+  rw [rowIdx, rowOffset_splitLayout]
 
-/-! ## The counterexample -/
+theorem rowCodes_zero (M : Codes) (i l : ℕ) : rowCodes M i 0 l = M i l := rfl
 
-/-- One unit of shape `1 × 1 × 1`, weight 0, all zero. -/
-def oneU : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ _ _ => 0⟩
+theorem rowCodes_ne (M : Codes) (i : ℕ) {i' : ℕ} (h : i' ≠ 0) (l : ℕ) : rowCodes M i i' l = 0 := by
+  unfold rowCodes
+  exact ite_eq_right h
 
-/-- Activations of 0 everywhere. -/
-def zeroAct : ℕ → Codes := fun _ _ _ => 0
+/-! ## The split run is the original run -/
 
-/-- Unit 0's ticket word `(0, 0)` set to 1, the constant bank's one word: one free move, two nodes of text, within W1's
-bound. -/
-def ticketOne : W1.Prog := ⟨fun _ => [1], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) .done,
-  fun _ => by norm_num [W1.Code.size]⟩
+/-- The split program: the original's constants and code at the layout `L`, at every layout. -/
+def splitProg (pr : W1.Prog) (L : Layout) : W1.Prog :=
+  ⟨fun _ => pr.consts L, fun _ => pr.code L, fun _ => pr.bounded L⟩
 
-theorem ticketOne_ticket (dv : W1.W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) (σ : State) :
-    (W1.final dv salt ticketOne U act σ).mem (W1.ticketAt 0 0 0) = 1 := by
-  simp [W1.final, ticketOne, W1.exec, W1.Instr.exec, W1.init, W1.constAt, W1.w32]
+/-- The split activations: split unit `v`'s row 0 is row `rowOfRow L v` of unit `unitOfRow L v`, and its other rows
+are 0. -/
+def splitAct (L : Layout) (act : ℕ → Codes) : ℕ → Codes :=
+  fun v i' l => if i' = 0 then act (unitOfRow L v) (rowOfRow L v) l else 0
 
-theorem readout_ticket (U : Workload) (act : ℕ → Codes) (M : W1.Mem) (hN : 0 < U.layout.N) (i j : ℕ) :
-    (W1.readout U act M 0).map (fun c => c.ticket i j) = some (M (W1.ticketAt 0 i j)) := by
-  simp only [W1.readout, ite_eq_left hN]
-  rfl
+/-- **The split run starts from the original's memory.** A declared global row holds the same activation row on both
+layouts, and the rest of memory doesn't read the layout's units. -/
+theorem init_split (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) :
+    W1.init salt (splitProg pr U.layout) (splitWorkload U) (splitAct U.layout act) σ = W1.init salt pr U act σ := by
+  have h4 : ∀ g l : ℕ, (if g < rowsOf (splitLayout U.layout) then
+        W1.w32 (splitAct U.layout act (unitOfRow (splitLayout U.layout) g) (rowOfRow (splitLayout U.layout) g) l)
+      else 0) = (if g < rowsOf U.layout then W1.w32 (act (unitOfRow U.layout g) (rowOfRow U.layout g) l) else 0) := by
+    intro g l
+    rw [rowsOf_splitLayout]
+    by_cases hg : g < rowsOf U.layout
+    · rw [ite_eq_left hg, ite_eq_left hg, unitOfRow_splitLayout hg, rowOfRow_splitLayout hg]
+      exact congrArg W1.w32 (ite_eq_left rfl)
+    · rw [ite_eq_right hg, ite_eq_right hg]
+  funext a
+  simp only [W1.init, splitProg, splitWorkload]
+  rw [h4]
 
-/-- **W1 priced is not closed under splitting rows into units**, for every device and salt encoding, given an oracle
-`H` and a salt `s`. On `oneU`, `ticketOne` commits ticket word `(0, 0)` of 1; the split transcript gives the one
-split unit that word at row `i` for every `i`, and a program on the split workload leaves its ticket words from row
-`codeBound` on at 0. -/
-theorem w1Priced_not_splitClosed (dv : W1.W1Device) (salt : S → List ℕ) (H : Q → R) (s : S) :
-    ¬ (W1.w1Priced dv salt : CostModel Q R S).SplitClosed := by
-  intro hCM
-  obtain ⟨prog', act', h⟩ := hCM ticketOne oneU zeroAct
-  have hrun : W1.readout (splitWorkload oneU) act' (W1.final dv (salt s) prog' (splitWorkload oneU) act' []).mem =
-      splitTranscript oneU.layout (W1.readout oneU zeroAct (W1.final dv (salt s) ticketOne oneU zeroAct []).mem) :=
-    (h H [] s).1
-  have hsplit := splitTranscript_rowIdx
-    (W1.readout oneU zeroAct (W1.final dv (salt s) ticketOne oneU zeroAct []).mem)
-    (L := oneU.layout) (u := 0) (i := 0) (by decide) (by decide)
-  have h00 : rowIdx oneU.layout 0 0 = 0 := rfl
-  rw [h00, ← hrun] at hsplit
-  obtain ⟨B, hB⟩ : ∃ B, codeBound (W1.Prog.code prog' (splitWorkload oneU).layout) ≤ B := ⟨_, le_rfl⟩
-  have hN' : 0 < (splitWorkload oneU).layout.N := by decide
-  have hL := readout_ticket (splitWorkload oneU) act' (W1.final dv (salt s) prog' (splitWorkload oneU) act' []).mem
-    hN' B 0
-  have hR : Option.map (fun c : Commit => c.ticket B 0)
-      (Option.map (fun c => rowCommit c 0)
-        (W1.readout oneU zeroAct (W1.final dv (salt s) ticketOne oneU zeroAct []).mem 0)) =
-      some ((W1.final dv (salt s) ticketOne oneU zeroAct []).mem (W1.ticketAt 0 0 0)) := by
-    rw [Option.map_map]
-    exact readout_ticket oneU zeroAct _ (by decide) 0 0
-  have key := Option.some.inj (hL.symm.trans ((congrArg (Option.map fun c : Commit => c.ticket B 0) hsplit).trans hR))
-  rw [final_ticket_zero dv (salt s) prog' (splitWorkload oneU) act' [] 0 B 0 hB, ticketOne_ticket] at key
-  omega
+/-- **The split run is the original run:** the same code from the same memory. -/
+theorem final_split (dv : W1.W1Device) (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) :
+    W1.final dv salt (splitProg pr U.layout) (splitWorkload U) (splitAct U.layout act) σ =
+      W1.final dv salt pr U act σ := by
+  show W1.exec dv false (pr.code U.layout)
+      ⟨W1.init salt (splitProg pr U.layout) (splitWorkload U) (splitAct U.layout act) σ, [], 0⟩ =
+    W1.exec dv false (pr.code U.layout) ⟨W1.init salt pr U act σ, [], 0⟩
+  rw [init_split]
+
+theorem w1Read_split (dv : W1.W1Device) (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes)
+    (σ : State) :
+    W1.w1Read dv salt (splitProg pr U.layout) (splitWorkload U) (splitAct U.layout act) σ =
+      W1.w1Read dv salt pr U act σ := by
+  unfold W1.w1Read
+  rw [final_split]
+
+/-- **The split readout is the original's, row by row**, on every memory: split unit `v` commits global row `v`'s
+words, which are row `rowOfRow L v` of unit `unitOfRow L v`, and 0 (or the split activations, also 0) at its other
+rows. -/
+theorem readout_split (U : Workload) (act : ℕ → Codes) (M : W1.Mem) :
+    W1.readout (splitWorkload U) (splitAct U.layout act) M = splitTranscript U.layout (W1.readout U act M) := by
+  funext v
+  by_cases hv : v < rowsOf U.layout
+  · have hi := rowOfRow_lt hv
+    have hidx := rowIdx_unitOfRow U.layout v
+    have hv' : v < (splitWorkload U).layout.N := hv
+    have hu := unitOfRow_lt hv
+    simp only [W1.readout, splitTranscript]
+    rw [ite_eq_left hv', ite_eq_left hv, ite_eq_left hu, Option.map_some]
+    refine congrArg some ?_
+    show Commit.mk _ _ _ = Commit.mk (rowCodes _ (rowOfRow U.layout v)) (rowCodes _ (rowOfRow U.layout v))
+      (rowCodes _ (rowOfRow U.layout v))
+    congr 1
+    · funext i' l
+      by_cases h0 : i' = 0
+      · subst h0
+        rw [rowCodes_zero]
+        show (if 0 < 1 ∧ l < (U.layout.shape (unitOfRow U.layout v)).k then
+            M (4, Nat.pair (rowIdx (splitLayout U.layout) v 0) l) else splitAct U.layout act v 0 l) =
+          (if rowOfRow U.layout v < (U.layout.shape (unitOfRow U.layout v)).m ∧
+              l < (U.layout.shape (unitOfRow U.layout v)).k then
+            M (4, Nat.pair (rowIdx U.layout (unitOfRow U.layout v) (rowOfRow U.layout v)) l)
+          else act (unitOfRow U.layout v) (rowOfRow U.layout v) l)
+        rw [rowIdx_splitLayout, hidx, Nat.add_zero]
+        by_cases hl : l < (U.layout.shape (unitOfRow U.layout v)).k
+        · rw [ite_eq_left (And.intro Nat.one_pos hl), ite_eq_left (And.intro hi hl)]
+        · rw [ite_eq_right (not_and_of_not_right _ hl), ite_eq_right (not_and_of_not_right _ hl)]
+          exact ite_eq_left rfl
+      · have h1 : ¬ i' < 1 := by omega
+        rw [rowCodes_ne _ _ h0]
+        show (if i' < 1 ∧ l < (U.layout.shape (unitOfRow U.layout v)).k then
+            M (W1.actAt (splitWorkload U).layout v i' l) else splitAct U.layout act v i' l) = 0
+        rw [ite_eq_right (not_and_of_not_left _ h1)]
+        exact ite_eq_right h0
+    · funext i' j
+      by_cases h0 : i' = 0
+      · subst h0
+        rw [rowCodes_zero]
+        show (if 0 < 1 then M (6, Nat.pair (rowIdx (splitLayout U.layout) v 0) j) else 0) =
+          (if rowOfRow U.layout v < (U.layout.shape (unitOfRow U.layout v)).m then
+            M (6, Nat.pair (rowIdx U.layout (unitOfRow U.layout v) (rowOfRow U.layout v)) j) else 0)
+        rw [rowIdx_splitLayout, hidx, Nat.add_zero, ite_eq_left Nat.one_pos, ite_eq_left hi]
+      · have h1 : ¬ i' < 1 := by omega
+        rw [rowCodes_ne _ _ h0]
+        show (if i' < 1 then M (W1.ticketAt (splitWorkload U).layout v i' j) else 0) = 0
+        rw [ite_eq_right h1]
+    · funext i' j
+      by_cases h0 : i' = 0
+      · subst h0
+        rw [rowCodes_zero]
+        show (if 0 < 1 then M (7, Nat.pair (rowIdx (splitLayout U.layout) v 0) j) else 0) =
+          (if rowOfRow U.layout v < (U.layout.shape (unitOfRow U.layout v)).m then
+            M (7, Nat.pair (rowIdx U.layout (unitOfRow U.layout v) (rowOfRow U.layout v)) j) else 0)
+        rw [rowIdx_splitLayout, hidx, Nat.add_zero, ite_eq_left Nat.one_pos, ite_eq_left hi]
+      · have h1 : ¬ i' < 1 := by omega
+        rw [rowCodes_ne _ _ h0]
+        show (if i' < 1 then M (W1.usefulAt (splitWorkload U).layout v i' j) else 0) = 0
+        rw [ite_eq_right h1]
+  · have hv' : ¬ v < (splitWorkload U).layout.N := hv
+    simp only [W1.readout, splitTranscript]
+    rw [ite_eq_right hv', ite_eq_right hv]
+
+/-- **W1 priced is closed under splitting rows into units (C3)**, for every device and salt encoding: the split
+program is the original's text at the original layout, its activations each split unit's row, and its run is the
+original run, so it commits the split transcript at the same cost and no calls. -/
+theorem w1Priced_splitClosed (dv : W1.W1Device) (salt : S → List ℕ) :
+    (W1.w1Priced dv salt : CostModel Q R S).SplitClosed := by
+  intro prog U act
+  refine ⟨splitProg prog U.layout, splitAct U.layout act, fun H σ s => ⟨?_, ?_, le_rfl⟩⟩
+  · show W1.readout (splitWorkload U) (splitAct U.layout act)
+        (W1.final dv (salt s) (splitProg prog U.layout) (splitWorkload U) (splitAct U.layout act) σ).mem =
+      splitTranscript U.layout (W1.readout U act (W1.final dv (salt s) prog U act σ).mem)
+    rw [final_split, readout_split]
+  · refine le_of_eq ?_
+    show (((W1.final dv (salt s) (splitProg prog U.layout) (splitWorkload U) (splitAct U.layout act) σ).cost +
+        dv.prices.fetch * W1.w1Read dv (salt s) (splitProg prog U.layout) (splitWorkload U) (splitAct U.layout act) σ :
+          ℚ) : ℝ) =
+      (((W1.final dv (salt s) prog U act σ).cost + dv.prices.fetch * W1.w1Read dv (salt s) prog U act σ : ℚ) : ℝ)
+    rw [final_split, w1Read_split]
 
 end Pouw.PearlC.TTOutW1RowSeed

@@ -1,6 +1,8 @@
 import Models.Pouw.Assumptions.PearlC.TTOutRowSeedK
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.DeviceGamma
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1RowSeed
 
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
@@ -15,10 +17,12 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
   with non-negative add and BF16 prices.
 * **The sampled γ** (`pearlCSampledDevRev1RowCapAtW`, at any per-shape `W_ref`; `pearlCSampledDevRev1KRowCapAt` at the
   honest kernel's): `γ = 1 − (1 − γ₀')/ω = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)`, where `W_ref = ω·(1 − ρ)·creditDevRev1`.
-* **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, from
-  `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3 (`pearlCSampledH100v1RowSeedRowCap100_6144x256`), and its code form
-  (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`): `ω = 25210/25137` and
-  `γ = 32437/2521000` (1.28667%), with the error at the `m·N` rows. C0 is `devAt_rowLocal`, by `rfl`.
+* **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, at W1
+  (`W1.w1Priced` on `W1Device.h100`), from `TTOutTilePearlCH100Rev1W1` at 1/100 and C1
+  (`pearlCSampledH100v1RowSeedRowCap100_6144x256`), and its code form (`-h3`) with C1-h3
+  (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`): `ω = 25210/25137` and `γ = 32437/2521000` (1.28667%), with
+  the error at the `m·N` rows. C0 is `devAt_rowLocal`, by `rfl`; C3 and C5 hold at W1 (`w1Priced_splitClosed`,
+  `w1Priced_relabelClosed`).
 -/
 
 namespace Pouw.PearlC
@@ -228,38 +232,46 @@ theorem wrefDevRev1_h100_n6144k256 (m : ℕ) : wrefDevRev1 devH100 ⟨m, 6144, 2
 variable (CM : CostModel Q R S) {sem sem' semC : PearlCSem Q R S}
 
 /-- **GLM-5.3's down projection, `m × 6144 × 256` at any `m`, on the H100 record with per-row seeds per audit tile, the
-tile cap 1/400 and the row cap 1/100** (card a6872606, option (a)), from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3:
-`γ = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at `ω = 25210/25137`, with the error at the
-`m·N` rows. -/
-theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)
-    (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) :
-    GγSampled CM (pearlCProtocolDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
+tile cap 1/400 and the row cap 1/100** (card a6872606, option (a)), at the cost model `W1.w1Priced` on
+`W1Device.h100 sha fetch`, from `TTOutTilePearlCH100Rev1W1` there at 1/100 and C1 (C3 holds at W1,
+`w1Priced_splitClosed`): `γ = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at
+`ω = 25210/25137`, with the error at the `m·N` rows. -/
+theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ) (sha fetch : ℚ) (salt : S → List ℕ)
+    (hTT : TTOutTilePearlCH100Rev1W1 sha fetch salt sem (1 / 100)) (hN : RowSeedNoise sem sem') :
+    GγSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt)
+      (pearlCProtocolDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowCapAt devH100 sem' (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  pearlCSampledDevRev1RowCapAt CM devH100 sem' (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _ devH100_add
+  pearlCSampledDevRev1RowCapAt _ devH100 sem' (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _ devH100_add
     devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
     (by rw [wrefDevRev1_h100_n6144k256]; positivity)
     (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
     (by norm_num)
-    (ttOutTileRowSeed_of_ttOutTile hTT hN hCM devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
+    (ttOutTileRowSeed_of_ttOutTile (Pouw.PearlC.TTOutW1.ttOutTilePearlCH100Rev1_of_w1 hTT) hN
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ salt) devH100_rowLocal (by norm_num) devH100_add
+      devH100_bf16)
 
 /-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256`**, the served record
-`pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: `γ = 32437/2521000` (1.28667%), with the error at the `m·N`
-rows. -/
-theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ Q} (m : ℕ)
-    (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
-    (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
-    GγSampled CM (pearlCProtocolDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
+`pearl-c-h100-v1-h3` at a census k, adding C1-h3 (C5 holds at W1, `w1Priced_relabelClosed`): `γ = 32437/2521000`
+(1.28667%), with the error at the `m·N` rows. -/
+theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ Q} (m : ℕ) (sha fetch : ℚ)
+    (salt : S → List ℕ) (hTT : TTOutTilePearlCH100Rev1W1 sha fetch salt sem (1 / 100)) (hN : RowSeedNoise sem sem')
+    (hC : CodeSeedNoise sem' semC π) :
+    GγSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt)
+      (pearlCProtocolDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))
       (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => εPearlC q (N * m)) :=
-  pearlCSampledDevRev1RowCapAt CM devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _ devH100_add
+  pearlCSampledDevRev1RowCapAt _ devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _ devH100_add
     devH100_bf16 (by norm_num) (by norm_num) (by norm_num)
     (by rw [wrefDevRev1_h100_n6144k256]; positivity)
     (by rw [wrefDevRev1_h100_n6144k256, creditDevRev1_h100_n6144k256]; ring)
     (by norm_num)
-    (ttOutTileRowSeedCode_of_ttOutTile hTT hN hC hCM hCM' devH100_rowLocal (by norm_num) devH100_add devH100_bf16)
+    (ttOutTileRowSeedCode_of_ttOutTile (Pouw.PearlC.TTOutW1.ttOutTilePearlCH100Rev1_of_w1 hTT) hN hC
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_splitClosed _ salt)
+      (Pouw.PearlC.TTOutW1RowSeed.w1Priced_relabelClosed _ salt) devH100_rowLocal (by norm_num) devH100_add
+      devH100_bf16)
 
 end Gamma
 

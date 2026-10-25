@@ -119,6 +119,7 @@ import Proofs.Pouw.PearlC.Rev1Witness
 import Proofs.Pouw.PearlC.RowCircuit
 import Proofs.Pouw.PearlC.Row4Words
 import Proofs.Pouw.PearlC.RowPrimChecks
+import Proofs.Pouw.PearlC.Rows
 import Proofs.Pouw.PearlC.RowCapAtGamma
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.RowSeedFragment

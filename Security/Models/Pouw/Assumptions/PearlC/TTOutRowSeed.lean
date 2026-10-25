@@ -1,4 +1,5 @@
 import Models.Pouw.Assumptions.PearlC.TTOutRev1
+import Definitions.Pouw.PearlC.Rows
 
 /-!
 # Per-row seeds (P2) as the per-unit game on the split layout (trusted definitions; nothing assumed)
@@ -21,8 +22,9 @@ The reduction reads four conditions, all definitions here, each for the statemen
   aggregate one. At a census k the served check caps each row at `ρr = 4ρ` and the tile at `ρ`
   (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGamma.lean`).
 - **(C3) `CostModel.SplitClosed CM`:** regrouping rows into units doesn't change what a program costs or queries.
-  `CostModel` is abstract, so this is a hypothesis on `CM`, a property of W1 (which charges instructions, not which rows
-  form a unit), and no cryptographic assumption.
+  `CostModel` is abstract, so this is a hypothesis on `CM`, and no cryptographic assumption. It holds at W1
+  (`w1Priced_splitClosed`, in `TTOutW1RowSeed.lean`): W1 keys a unit's words by the layout's global row, so splitting
+  rows into units renames no word a run touches.
 
 The reduction also takes `ρ ≤ 1` and the record's add and BF16 prices `≥ 0`, so that a row correct in the split game
 earns a credit `≥ 0`: arithmetic, discharged at the concrete records by `norm_num`.
@@ -51,22 +53,9 @@ open Finset Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-! ## The split layout -/
+/-! ## The split layout
 
-/-- The rows before unit `u`: `Σ_{v < u} m_v`. -/
-def rowOffset (L : Layout) (u : ℕ) : ℕ := ∑ v ∈ range u, (L.shape v).m
-
-/-- The declared rows, `R = Σ_u m_u`. -/
-def rowsOf (L : Layout) : ℕ := rowOffset L L.N
-
-/-- Row `i` of unit `u` as a unit of the split layout: `offset(u) + i`. -/
-def rowIdx (L : Layout) (u i : ℕ) : ℕ := rowOffset L u + i
-
-/-- The unit that split unit `v` is a row of: the last `u < N` with `offset(u) ≤ v`. -/
-def unitOfRow (L : Layout) (v : ℕ) : ℕ := Nat.findGreatest (fun u => rowOffset L u ≤ v) (L.N - 1)
-
-/-- The row of its unit that split unit `v` is. -/
-def rowOfRow (L : Layout) (v : ℕ) : ℕ := v - rowOffset L (unitOfRow L v)
+The global rows (`rowOffset`, `rowsOf`, `rowIdx`, `unitOfRow`, `rowOfRow`) are `Definitions.Pouw.PearlC.Rows`'. -/
 
 /-- **The split layout:** unit `u` becomes `m_u` units of shape `(1, n_u, k_u)` with `u`'s weight id, its row `i` at
 `rowIdx L u i`. -/
@@ -78,8 +67,8 @@ def splitLayout (L : Layout) : Layout where
 /-- The split workload: the split layout, with the same weights. -/
 def splitWorkload (U : Workload) : Workload := ⟨splitLayout U.layout, U.weight⟩
 
-/-- Row `i` of a matrix of codes, as a one-row matrix. -/
-def rowCodes (M : Codes) (i : ℕ) : Codes := fun _ l => M i l
+/-- Row `i` of a matrix of codes, as a one-row matrix: row 0 is row `i`, and every other row is 0. -/
+def rowCodes (M : Codes) (i : ℕ) : Codes := fun i' l => if i' = 0 then M i l else 0
 
 /-- Row `i` of a unit's commitment: that row of its activations, ticket words and useful words. -/
 def rowCommit (c : Commit) (i : ℕ) : Commit := ⟨rowCodes c.act i, rowCodes c.ticket i, rowCodes c.useful i⟩
