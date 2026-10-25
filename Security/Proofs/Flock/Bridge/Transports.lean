@@ -105,7 +105,7 @@ theorem find?_portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q : ℕ
     (portsOf c nl roots).find? (fun p => decide (bs p.root = roots.getD q [])) = some (portAt c nl roots q) := by
   rw [Array.find?_eq_some_iff_getElem]
   refine ⟨by simp [portAt, Claims.Sampling.bs_bytes], q, by simp [portsOf_eq, hq], by simp [portsOf_eq], fun j hj => ?_⟩
-  simp [portsOf_eq, portAt, Claims.Sampling.bs_bytes, hfirst j hj]
+  simpa [portsOf_eq, portAt, Claims.Sampling.bs_bytes, List.getD_eq_getElem?_getD] using hfirst j hj
 
 end Layout
 
@@ -156,7 +156,11 @@ theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → O
     have h1 : (rootsOf c pub nl)[r.port]? = some ((rootsOf c pub nl).getD r.port []) := by
       rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hlen]
       rfl
-    simp [atOf, hr, h1]
+    unfold atOf
+    rw [hr]
+    show (rootsOf c pub nl)[r.port]?.map (fun rt => (rt, r.leaf)) = _
+    rw [h1]
+    rfl
   unfold commitDep
   rw [SamplingDeploy.opens_pathCommit]
   refine ⟨_, _, hat, find?_portsOf c nl (rootsOf c pub nl) hq hfirst, ?_⟩
