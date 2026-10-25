@@ -376,7 +376,6 @@
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "doc-round", "symbol": "StochasticServe", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "def-name", "symbol": "<module>", "detail": "_serve_v3_binder"},
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "doc-round", "symbol": "BroadcastBiasAddRule", "detail": "R1N"},
-    {"file": "verity_vllm/program/frontend/rules/triton_iface.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/__init__.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py", "kind": "doc-board-id", "symbol": "_collective_hint", "detail": "F-rN"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py", "kind": "doc-lane", "symbol": "AllGatherRule", "detail": "[lane"},
