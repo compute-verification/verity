@@ -55,7 +55,7 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule Conn × Srv → Conn → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run w (schedOf z, srvOf z)) = z)

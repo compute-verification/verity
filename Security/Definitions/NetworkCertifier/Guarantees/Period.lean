@@ -33,7 +33,7 @@ set_option linter.unusedVariables false
 /-- **The leak through the wardens over a period of accepted sampled audits.** At every deployment `D` of the sampled
 verifier where `Claims.Sampling.KS` holds, with a decoder that lists every trace within Flock's radius, over a period of
 `n` windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
-committed bits of each of its possible faulty sets), and wardens that run their code by `trusted-nebius-host` on
+committed bits of each of its possible faulty sets), and wardens that run their code by `trusted-host` on
 schedules in `Ss`, each giving connection `c` at most `cap c` cells:
 
 * each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`;
@@ -51,7 +51,7 @@ def PeriodLeakAccepted : Prop :=
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule Conn × Srv → Conn → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run w (schedOf z, srvOf z)) = z)
