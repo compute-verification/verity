@@ -338,7 +338,10 @@ def OnePair (check : Check) : Prop :=
       (salt = salt' ∨ Collides (hashedBy c o PouwWindow.SALT 0) (hashedBy c' o' PouwWindow.SALT 0))
 
 /-- One session salts one epoch: of two passes that the check accepts against one ledger, under one key, pins log and
-history, any two acceptances by one session were opened on one epoch root. -/
+history, any two acceptances by one session were opened on one epoch root. It doesn't bound the salt's choice among a
+weights' root's epochs: the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it
+likes, and that choice rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until
+CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968). -/
 def OneRoot (check : Check) : Prop :=
   ∀ key ledger pins main session session' m m' salt salt',
     check key ledger pins main session m = .ok salt → check key ledger pins main session' m' = .ok salt' →
