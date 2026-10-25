@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Properties.RemoteAudit.Schedule
 
 /-!
