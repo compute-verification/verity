@@ -372,14 +372,14 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
-    (hrd : rd last = some fl) (hps : fl.ps = readPs spec sts c₁ pfs) :
-    ∃ d, decR rd x (honestMsgs (readCaps spec sts c₁ pfs) ((List.range (readPs spec sts c₁ pfs).size).map fun k =>
-      repRows (repCtx spec sts c₁ (capRows (readCaps spec sts c₁ pfs)) k) (readPs spec sts c₁ pfs)[k]! (Ts k)) last)
+    (hrd : rd last = some fl) (hps : fl.ps = filePs spec sts c₁ pfs) :
+    ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
+      repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) k) (filePs spec sts c₁ pfs)[k]! (Ts k)) last)
         cs = some d := by
   obtain ⟨h64t, hts⟩ := setup_tables hx
-  obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (readCaps spec sts c₁ pfs))
+  obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (fileCaps spec sts c₁ pfs))
   refine sessionRun_decides h64 hx hcs hc hts.symm htab hS ?_ ?_ hrd hps
-  · refine capRows_fit (by rw [readCaps_size]; exact h64t) fun a ha => ?_
+  · refine capRows_fit (by rw [fileCaps_size]; exact h64t) fun a ha => ?_
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi
     have hk2 : 2 * i / 2 < sts.size := by omega
@@ -387,11 +387,11 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
     have hok := htab (2 * i / 2) hk2
     exact rep_cap_le hsc hon (repCtx_bounds hk2 hok.1 hok.2).1
   · intro k hk rs hrs
-    rw [readPs_size, hsz] at hk
+    rw [filePs_size, hsz] at hk
     have hk2 : k / 2 < sts.size := by omega
     obtain ⟨-, hsc, hon, -, -⟩ := hall k hk
     have hok := htab (k / 2) hk2
-    obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows (readCaps spec sts c₁ pfs)) hk2 hok.1 hok.2
+    obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows (fileCaps spec sts c₁ pfs)) hk2 hok.1 hok.2
     exact repRows_fit (Ts k) hsc hon hd hkl hn rs hrs
 
 end FlockDeploy
