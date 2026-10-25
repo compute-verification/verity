@@ -10644,7 +10644,7 @@ def SegNodes (P : Prog) (c : Circuit) (s : Seg) : Prop :=
 
 /-- **`RootGates` segment by segment.** With `RootGates`' premises, every segment `down` gives a piece of one of root
 node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries, is
-`SegNodes` (`rootNodes_of`, from the open `RootOneNode`). -/
+`SegNodes` (`rootNodes_of`, from `RootOneNode`). -/
 def RootNodes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -12909,10 +12909,10 @@ theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hm :
   obtain ⟨hLd, hlast, -⟩ := (hWF P.root hF.1).2 hF.2.1
   exact w_of_locW hc (locW_lt hL hLd hlast) hL
 
-/-- **Open: `SegNodes`' node parts.** With `RootNodes`' premises, of every segment `down` gives a piece of one of root
+/-- **`SegNodes`' node parts.** With `RootNodes`' premises, of every segment `down` gives a piece of one of root
 node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries: each piece
 of positive count names gates of one root node, and, when its copies shift, all its copies' gates are one root
-node's. -/
+node's. Proved in `ReadsOneNode` (`rootOneNode_of`). -/
 def RootOneNode : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
