@@ -941,8 +941,8 @@ def live_coin(after: bytes, entropy: int = 7):
     return ch.commitment, ch.open(Wd.SALT, 0, after)
 
 
-def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_pass_root(device_run, tmp_path):
-    """A live session's salt coin opened after salt epoch k's pass root (`salt.pass_open_root` of the weights' root W and
+def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(device_run, tmp_path):
+    """A live session's salt coin opened after salt epoch k's root (`salt.epoch_open_root` of the weights' root W and
     k, the run's `pass_index`) salts the device run's epoch (`audit.salt_of` over W, as H1's), and the run records the
     session's coins and k; a retained pass's manifest names k (``pass_index``) and the session the install carries by its
     id, ledger seq, root and commitment alone (never the gate's hello secret or the rest of its answer, which core's
@@ -952,7 +952,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_pass_
     ends complete), and a live opening against an in-process commitment or the reverse are refused."""
     _, kernel, weights, roots, _ = device_run
     root = weights_root(roots)
-    r = PS.pass_open_root(root, 1)
+    r = PS.epoch_open_root(root, 1)
 
     def make(c, o, k=1):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
@@ -982,7 +982,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_pass_
     with pytest.raises(DomainError, match="not opened after"):
         make(*live_coin(root))
     with pytest.raises(DomainError, match="not opened after"):
-        make(*live_coin(PS.pass_open_root(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])}), 1)))
+        make(*live_coin(PS.epoch_open_root(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])}), 1)))
     with pytest.raises(DomainError, match="does not open against"):
         make(live_coin(r, entropy=8)[0], o)
     with pytest.raises(DomainError, match="not a Pearl-C salt session's"):
@@ -997,7 +997,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_pass_
 def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessions_commitment():
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
-    c, o = live_coin(PS.pass_open_root(weights_root(roots), 0))
+    c, o = live_coin(PS.epoch_open_root(weights_root(roots), 0))
     epoch = PPD.epoch_of(work, roots, c, o, 0)
     man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0},
                                                       {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
@@ -1859,6 +1859,22 @@ def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
     assert ring.i == 11 % 4
 
 
+def test_the_key_table_copies_each_calls_keys_from_its_first_upload_and_uploads_past_it():
+    keys = PPD._Keys(F, bytes(range(32)), HM96)
+    copies = []
+
+    def copy(dst, src, n, raw):
+        copies.append(raw)
+        ctypes.memmove(dst, src, n)
+    table = PPD._KeyTable(keys, PPD._Uploads(torch.device("cpu"), slots=4), torch.device("cpu"), copy, slots=2)
+    dst, root = torch.zeros(176, dtype=torch.uint8), bytes(range(64))
+    for w, index, m16, raw in ((0, 0, 16, 5), (0, 0, 16, 5), (1, 3, 32, 5), (0, 0, 16, 6), (2, 1, 16, 5), (1, 3, 32, 5)):
+        dst.fill_(0xA5)
+        table.put(dst, w, root, index, m16, raw, None)
+        assert PPD._bytes(dst[:168]) == PPD.call_keys(F, keys.salt, root, index, m16, HM96)
+    assert copies == [5, 5, 5, 5] and len(table.at) == 2          # stream 6 and the third key uploaded, no copy
+
+
 def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(device_run):
     make, _, weights, *_ = device_run
     run = make()
@@ -1874,39 +1890,22 @@ def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(devic
     assert bool((sh.xa[17:] == 0).all())
 
 
-def test_two_passes_over_the_same_activations_under_one_salt_do_distinct_work(device_run, tmp_path):
-    """CMP-81: within an epoch every pass's work is distinct.  The call indices run on across the epoch's passes (`begin`),
-    so a second pass's calls over the same activations, under the same salt, have indices of their own, and with them
-    their own keys (dom_a ‖ unit, `call_keys`: A's domain and its hm96 nonce) and row seeds (`pearl_c.row_seed`'s unit).
-    Each pass's A roots still land in its buffer by position, its retained manifest names its calls by their epoch
-    indices, and it restarts under the epoch's coins."""
+def test_each_calls_a_root_lands_in_the_pass_buffer_and_the_second_steps_keys_come_from_the_table(device_run):
     make, _, weights, roots, salt = device_run
     run = make()
-    xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(40 + i), 8, 1024).view(np.float32).copy()).to(torch.bfloat16))
-          for i, w in enumerate((0, 1, 0))]
-    keys, seeds, mans = [], [], []
     for step in range(2):
-        run.begin(retain=str(tmp_path / str(step)), run=RUN)
-        assert run.cur.base == 3 * step
-        for i, (w, x) in enumerate(xs):
+        for i, w in enumerate((0, 1, 0)):
             sh = run._shape(16, weights[w].shape[0], 1024)
             tree = sh.b["tree_a"]
             with torch.inference_mode():                           # A's tree, which the device would write
                 tree.copy_((torch.arange(len(tree)) * 7 + 3 * i + step).to(torch.uint8))
-            run.gemm(w, x, weights[w], None)
+            run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
             size = run._pipe(w, sh)[0].size["tree_a"]
             assert PPD._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPD._bytes(tree[size - 64:size])
-            keys.append(PPD._bytes(sh.keys[:168]))
-            assert keys[-1] == PPD.call_keys(F, salt, roots[w], 3 * step + i, 16, run.tree_hash)
-            row = x[0].float().numpy().tobytes()
-            seeds.append(C.row_seed(salt, C.row_digest(row), roots[w], run.cur.matmuls[-1].index, 0))
-        assert [u.index for u in run.cur.matmuls] == [3 * step + i for i in range(3)]
-        mans.append(json.loads(Path(run.end()["manifest"]).read_text()))
-    assert len(set(keys)) == len(set(seeds)) == 6               # the same rows, under one salt: no call's work repeats
-    assert [[u["index"] for u in m["matmuls"]] for m in mans] == [[0, 1, 2], [3, 4, 5]]
-    assert all(m["salt"] == salt.hex() and PPD.manifest_epoch(m, run.coins)[0].salt == salt for m in mans)
-    run.begin()
-    assert run.cur.base == 6
+            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], i, 16, run.tree_hash)
+        run.end_pass()
+        run.key_table.keys = None                                  # the second step hashes nothing
+    assert len(run.key_table.at) == 3
 
 
 def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):

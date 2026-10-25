@@ -329,11 +329,10 @@ after the weights' root and refuses without one; a pipeline that is its run's ow
 `pouw.challenged`), `retain_steps` and `transcript_dir`. Under `ncp-v2` and Pearl-C, `challenger` (the auditor host's,
 `HOST:PORT`) and `session` replace `coins`: ncp-v2's session is the gate's open answer, and Pearl-C's the gate's reserve
 answer for a session of its salt coin alone (`window.SALT_FAMILIES`), which install opens through `gate` on its salt
-epoch's pass root (`salt.pass_open_root` of the weights' root and the epoch's number k) before its salt coin opens after
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k) before its salt coin opens after
 that root (`pouw_h1_window.salt_session`), so the session ends complete. Each install is an epoch, committing its weights
 under a fresh hm96 key; a reinstall over a weights' root this process already had an epoch over takes the next k. The
-epoch's call indices run across its passes, so no two passes repeat a call's keys or row seeds. The retained manifest
-names k (`pass_index`) and that session (`session`: its id, ledger seq, root and commitment, never the hello's secret),
+retained manifest names k (`pass_index`) and that session (`session`: its id, ledger seq, root and commitment, never the hello's secret),
 and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root from the weights' root and k. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its

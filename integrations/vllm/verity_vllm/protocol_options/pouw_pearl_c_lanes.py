@@ -127,7 +127,7 @@ def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
 
 class LaneCalls:
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
-    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``,
+    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``key_table``, ``eager_only``, ``roots``, ``roots_buf``,
     ``_side_turn`` and ``_side_cache``, and its
     graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``); where a whole capture cuts a
     call's steps (`_call_cuts`, `_call_tree`, `_call_stats`, from ``entry`` and `_call_names`); and a lagged end's readback
@@ -256,8 +256,12 @@ class LaneCalls:
             if cuda and ("keys" in rot or g is not None) and sh.done[j] is not None:   # the side lane may still read set j's keys
                 caller.wait_event(sh.done[j])
                 waited = True
-            data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
-            self.uploads.put(keys, data, caller if self.uploads.cuda else None)
+            stream = caller if self.uploads.cuda else None
+            if self.eager_only:
+                self.key_table.put(keys, w, self.roots[w], index, sh.m16, raw, stream)
+            else:
+                data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
+                self.uploads.put(keys, data, stream)
         if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
             main.event.record(caller)
             lane.wait_event(main.event)
@@ -280,9 +284,9 @@ class LaneCalls:
                     for f in side[:side_cut]:
                         f()
                 if g is None:
-                    size, nb, at = pipe.size["tree_a"], self.nb, index - self.cur.base
+                    size, nb = pipe.size["tree_a"], self.nb
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
-                        self.roots_buf[nb * at:nb * (at + 1)].copy_(sh.buf("tree_a")[size - nb:size])
+                        self.roots_buf[nb * index:nb * (index + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
                     to.tree_event.record(tl.stream)
             if side:

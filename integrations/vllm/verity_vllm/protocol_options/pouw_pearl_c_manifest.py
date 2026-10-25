@@ -17,7 +17,7 @@ MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
 MANIFEST_SCHEMA_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 MANIFEST_SCHEMAS = (MANIFEST_SCHEMA, MANIFEST_SCHEMA_RECORDED)
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt epoch's
-#: pass root, `salt.pass_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's
+#: epoch root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's
 #: secret
 SESSION_KEYS = ("session", "seq", "root", "commitment")
 
@@ -46,7 +46,7 @@ def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, rec
     """A retained pass's epoch, as its verifier re-starts it, and how its salt was had.  A `MANIFEST_SCHEMA` pass carries
     the epoch's coin commitment and its salt coin's opening: the commitment must be `coins`, the one the challenger published
     (the verifier's copy, not the pass's; a live session's when the pass's coins are `LIVE_SCHEME`'s), and the opening the
-    salt coin's against it, opened after every weight's root (`epoch_of`; a live session's after the pass root of the
+    salt coin's against it, opened after every weight's root (`epoch_of`; a live session's after the epoch root of the
     weights' root and the manifest's ``pass_index``).  A pass recorded before epoch coins (`MANIFEST_SCHEMA_RECORDED`) carries a beacon instead, which only a
     replay of a recorded pass reads (`recorded`: `Epoch.unverified`, a salt that claims nothing).  Either way the pass's salt
     must be the epoch's.  Raises `DomainError` naming what doesn't hold."""

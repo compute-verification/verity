@@ -9,7 +9,7 @@ as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). An H1 window (`Window`) h
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C
 install holds the same reserve answer, for a session reserved with its salt coin alone (`window.SALT_FAMILIES`), and has
-the gate open S on its salt epoch's pass root R = `salt.pass_open_root` of the weights' root W and the epoch's number k
+the gate open S on its salt epoch's root R = `salt.epoch_open_root` of the weights' root W and the epoch's number k
 over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. ncp-v2's `session` is
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the root its session was opened on (serve.py's ``--root``,
@@ -36,7 +36,7 @@ RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
 #: auditor host's ``ssh -R`` to this machine not up yet)
 TRIES = 120
 #: Pearl-C's salt epochs: how many this process has asked the gate to open on each weights' root W (hex).  The next one
-#: over W is numbered that count, k (a manifest's ``pass_index``), and opens on `salt.pass_open_root` of W and k, so a
+#: over W is numbered that count, k (a manifest's ``pass_index``), and opens on `salt.epoch_open_root` of W and k, so a
 #: reinstall committing the same W (the same hm96 key over the same weights) opens a root of its own
 EPOCHS: dict[str, int] = {}
 
@@ -49,7 +49,7 @@ def session_setting(raw: Any) -> dict[str, Any] | None:
 
 def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -> list[str]:
     """Why `scheme` can't take its coins from the challenger under `settings` at `stage`; `opens` names the root a scheme
-    that opens its session itself opens it on (H1's window-open root, `Window`; Pearl-C's pass root, `salt_session`)."""
+    that opens its session itself opens it on (H1's window-open root, `Window`; Pearl-C's epoch root, `salt_session`)."""
     out = []
     if settings.session is None:
         out.append(f"{scheme}: the pouw setting 'challenger' needs 'session', the challenger gate's "
@@ -186,9 +186,9 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any], int | None]:
     """The session an install's salt coin comes from, on the challenger at ``settings.challenger``: when `opens`
     (Pearl-C's), the reserved session ``settings.session`` that ``settings.gate`` opens on the install's salt epoch's
-    pass root, `salt.pass_open_root` of the weights' root `root` and the epoch's number k over it (`EPOCHS`), its coins
+    epoch root, `salt.epoch_open_root` of the weights' root `root` and the epoch's number k over it (`EPOCHS`), its coins
     the salt coin alone (`window.salt_epoch_reason`, so it ends complete once that coin is released) and that coin
-    opened after the pass root (`opened`); else (ncp-v2's) the session the gate's open answer ``settings.session``
+    opened after the epoch root (`opened`); else (ncp-v2's) the session the gate's open answer ``settings.session``
     names (`session`), its salt coin opened after `root`. Returns the session, its coin commitment, the salt coin's
     opening, the epoch's salt (`audit.salt_of` over `root`), the gate's answer as the run carries it
     (`pouw_h1_challenger.carried`) and k (None for ncp-v2)."""
@@ -198,7 +198,7 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
     k = EPOCHS.get(root.hex(), 0)
     EPOCHS[root.hex()] = k + 1
     client, c, opening, given = opened(entry, settings.challenger, 0, settings.gate, settings.session["session"],
-                                       PS.pass_open_root(root, k), f"salt epoch {k}'s pass root", TRIES,
+                                       PS.epoch_open_root(root, k), f"salt epoch {k}'s root", TRIES,
                                        layout=Wd.salt_epoch_reason)
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given), k
 
@@ -206,14 +206,14 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
                  at: str = "127.0.0.1:0", tries: int = TRIES, wait: Callable[[float], Any] = time.sleep
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any]]:
-    """Reserved session `sid` opened at infra's gate, as words (`gate_of`), on salt epoch `k`'s pass root over the
-    weights' root `root` (`salt.pass_open_root`), reached at `at`'s host on the port the answer names, its coins the salt
-    coin alone (`window.salt_epoch_reason`), and that coin opened after the pass root (`opened`): the run whose salt
-    follows its epoch's pass root (Pearl-C's device run, `pouw_pearl_c_host.epoch_of`). Returns the session, its coin
+    """Reserved session `sid` opened at infra's gate, as words (`gate_of`), on salt epoch `k`'s root over the
+    weights' root `root` (`salt.epoch_open_root`), reached at `at`'s host on the port the answer names, its coins the salt
+    coin alone (`window.salt_epoch_reason`), and that coin opened after the epoch root (`opened`): the run whose salt
+    follows its epoch's root (Pearl-C's device run, `pouw_pearl_c_host.epoch_of`). Returns the session, its coin
     commitment, the salt coin's opening, the epoch's salt (`audit.salt_of` over `root`) and the gate's answer as a run
     carries it (`pouw_h1_challenger.carried`)."""
-    client, c, opening, given = opened(entry, at, 0, gate_of(gate), sid, PS.pass_open_root(root, k),
-                                       f"salt epoch {k}'s pass root", tries, wait, Wd.salt_epoch_reason)
+    client, c, opening, given = opened(entry, at, 0, gate_of(gate), sid, PS.epoch_open_root(root, k),
+                                       f"salt epoch {k}'s root", tries, wait, Wd.salt_epoch_reason)
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given)
 
 

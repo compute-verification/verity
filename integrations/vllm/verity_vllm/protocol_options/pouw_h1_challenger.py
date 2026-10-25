@@ -39,7 +39,7 @@ verifier's check that a served window's coins are that challenger's.
   hellos the ones the end sealed); its coins pass the checks above, the salt by `core_check.salt` and the rounds by
   `core_check.rounds`.
 * **Pearl-C passes** (`salt_session_reason`): a Pearl-C device run's session is reserved with its salt coin alone
-  (`window.SALT_FAMILIES`) and opened on its salt epoch's pass root (`salt.pass_open_root` of the weights' root and the
+  (`window.SALT_FAMILIES`) and opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and the
   pass's ``pass_index``, recomputed, never read from the pass), so it counts only ended closed and complete, its one coin
   released; the pass's salt is that coin's over the weights' root, read from the session, never from the pass.
 * **Pins**: every session read is held to the host's pins log (`challenger.pinned_session`): the open's signed body
@@ -437,7 +437,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
 def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
                         commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why a Pearl-C pass (its device run's commitment `commits`) isn't held to its salt session, the one whose salt
-    coin follows the pass's salt epoch's pass root R = `salt.pass_open_root` of its weights' root W (``weights_root``)
+    coin follows the pass's salt epoch's root R = `salt.epoch_open_root` of its weights' root W (``weights_root``)
     and its epoch's number k (``pass_index``, `salt.PASS_FORM` unless it is one) rather than a window's open root
     (statement: Lean `Properties.Pouw.LiveSalt.Accepted`); None when it is. R is recomputed here, never read from the
     pass. The session is the one the auditor's `ledger` opened on R, ended closed and complete under the commitment the
@@ -459,7 +459,7 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
         return why
     if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
         return "the pass's session names its hello's secret, which a pass never records: a refused pass"
-    root = PS.pass_open_root(bytes.fromhex(w), commits["pass_index"])
+    root = PS.epoch_open_root(bytes.fromhex(w), commits["pass_index"])
     why, window = held(commits.get("session"), ledger, root.hex())
     if why is not None:
         return why
@@ -477,7 +477,7 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
     if (why := Wd.salt_epoch_reason(trusted)) is not None:
         return f"session {sid}'s signed coins: {why}"
     if dict(received) != {Wd.SALT: (root,)}:
-        return f"session {sid}'s signed log does not show the pass root alone as the root its salt coin followed"
+        return f"session {sid}'s signed log does not show the epoch root alone as the root its salt coin followed"
     try:
         claimed = LiveCommitment.from_json(commits.get("coins"))
         opening = LiveOpening.from_json(commits.get("salt_opening"))

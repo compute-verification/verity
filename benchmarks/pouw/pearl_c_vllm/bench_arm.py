@@ -20,7 +20,7 @@ build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``defe
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
 peers) are set: then it is a live session's on the auditor host, reserved at install with its salt coin alone
-(`window.SALT_FAMILIES`), opened on its salt epoch's pass root (`salt.pass_open_root` of the weights' root and epoch 0, the
+(`window.SALT_FAMILIES`), opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and epoch 0, the
 arm's one install under a fresh hm96 key) and its salt coin opened after it (`_LiveSession`), which the device run checks
 (`pouw_pearl_c_host.epoch_of`); the gate's result names the session (``coins``), and the arm's close ends it complete.
 """
@@ -64,7 +64,7 @@ class _LiveSession:
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
     construction (`commit_coins.Gate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
-    `window.SALT_FAMILIES`), opened on salt epoch ``k``'s pass root over the weights' root once they are committed, its
+    `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the weights' root once they are committed, its
     salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete."""
 
     #: the arm's salt epoch over its weights' root: one install, under a fresh hm96 key
@@ -146,7 +146,7 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.core.protocols.pouw.audit import weights_root
-        from verity.core.protocols.pouw.salt import pass_open_root
+        from verity.core.protocols.pouw.salt import epoch_open_root
         from verity_vllm.linear import vllm_site
         from verity_vllm.linear.api import Arm as StackArm
         from verity_vllm.linear.api import PassSpec, Stack
@@ -170,7 +170,7 @@ class PearlCArm:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
             self.coins = {"source": "challenger", "session": self.session.carried, "pass_index": self.session.k,
-                          "salt_after": pass_open_root(weights_root(roots), self.session.k).hex()}
+                          "salt_after": epoch_open_root(weights_root(roots), self.session.k).hex()}
         else:
             coins = _Coins(self.epoch)
             opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment

@@ -64,8 +64,8 @@ window's open root (`salt.window_open_root` of its weights' root, its round-0 re
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
 round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a
 window's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
-(`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its epoch's pass root
-(`salt.pass_open_root`), so it ends complete once that coin is released.
+(`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its epoch's root
+(`salt.epoch_open_root`), so it ends complete once that coin is released.
 """
 from __future__ import annotations
 
