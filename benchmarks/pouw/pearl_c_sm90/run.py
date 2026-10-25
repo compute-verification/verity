@@ -31,7 +31,8 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
                                  PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
                                  PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_WORDS_FORM=0 for A'F_B's
-                                 windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly)
+                                 windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly,
+                                 PEARLC_GRID_BALANCE=0 for persistent GEMMs on every SM they may take)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -67,6 +68,10 @@ FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
 #: under FORM_EP and WORDS_WIN, A'F_B's windows in that launch too (form_s5_epw, the step `form_epw_a`), from a cubin with it;
 #: PEARLC_WORDS_FORM=0 runs gemm_words_win_d
 WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
+#: a persistent GEMM takes the fewest CTAs that keep its rounds of tiles (decode's gate_up: 448 tiles, four rounds on 112 CTAs
+#: as on 131), leaving the rest of the SMs to the side lanes; a tile's bytes don't depend on its CTA.  PEARLC_GRID_BALANCE=0
+#: takes every SM it may
+GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
 #: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
@@ -746,8 +751,10 @@ class Pipeline:
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
-        self.dev.launch(name, min(tiles, grid or self.dev.sms - self.beside), gemm_threads(name), self.GEMM_SMEM[name], p=ptrs,
-                        i=(M, N, self.k, RASTER, live))
+        ctas = min(tiles, grid or self.dev.sms - self.beside)
+        if GRID_BALANCE and grid is None:
+            ctas = cdiv(tiles, cdiv(tiles, ctas))
+        self.dev.launch(name, ctas, gemm_threads(name), self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER, live))
 
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored) and `gemm_pearlc_s`
