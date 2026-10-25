@@ -7,9 +7,9 @@ REDTEAM's seven cases (`cursor/redteam-phase8-certvarlen-061a` @d75f64a52e), wit
      circuit. `check_salts` now takes the salt only as bucket 0's first frame, where `Bucketer` releases it, so the
      moved record is a `salt` violation.
   b. The compact record's ordinal is pinned to its connection's stream, its fill is zero and its token field is no
-     wider than an id event's, but its finish is in band: `COMPACT_LAST` and `COMPACT_EOS` are records the certifier
-     commits whatever they say. `compact_finish_violations` holds them to advice v0's `finish`, the rule the I/O tie
-     applies.
+     wider than an id event's, but its finish is in band: `COMPACT_LAST` and `COMPACT_STOP` are flags of records the
+     certifier commits whatever they say. `compact_finish_violations` holds them to the Commit's sampled ids (a stop
+     carries its EOS id, REDTEAM phase 12), the rule the I/O tie applies.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ import pytest
 
 from verity.core.protocols.certifier import active as A
 from verity.core.protocols.certifier import served as SV
-from verity.core.protocols.certifier.advice import RequestAdvice
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Record, row_count
 from verity.core.protocols.certifier.schedule import ClockSync
 
@@ -130,15 +129,17 @@ def test_compact_padding_carries_no_channel():
 
 
 def test_compact_finish_is_in_band_at_the_certifier():
-    """`COMPACT_LAST` on any token and `COMPACT_EOS` are well-formed records the certifier commits; an id event carries
-    `"finish_reason":null` and no finish. The finish is the one field compact adds in band."""
+    """`COMPACT_LAST` on any token, and a stop on any id, EOS or not, are well-formed records the certifier commits; an
+    id event carries `"finish_reason":null` and no finish. The finish is the one field compact adds in band."""
     length_on_a_token = A.compact_record(request=1, token_id=5, finish="length")
-    stop = A.compact_record(request=1, token_id=None, finish="stop")
+    stop = A.compact_record(request=1, token_id=0, finish="stop")
+    stop_on_a_token = A.compact_record(request=1, token_id=5, finish="stop")
     plain = A.compact_record(request=1, token_id=5, finish=None)
-    for record in (length_on_a_token, stop, plain):
+    for record in (length_on_a_token, stop, stop_on_a_token, plain):
         assert not _egress_malformed(record, stream=1)
     assert A.compact_record_data(length_on_a_token) == (1, 5, "length")
-    assert A.compact_record_data(stop) == (1, None, "stop")
+    assert A.compact_record_data(stop) == (1, 0, "stop")
+    assert A.compact_record_data(stop_on_a_token) == (1, 5, "stop")
     assert A.compact_record_data(plain) == (1, 5, None)
     assert set(A.COMPACT_FINISHES) == {None, "length", "stop"}
     assert "finish" in inspect.signature(A.compact_record).parameters
@@ -146,49 +147,63 @@ def test_compact_finish_is_in_band_at_the_certifier():
     assert b'"finish_reason":null' in A.ID_EVENT_TAIL
 
 
-def _cells(ordinal: int, ids: list[int], finish: str) -> list[bytes]:
+EOS = (0,)
+
+
+def _cells(ordinal: int, ids: list[int]) -> list[bytes]:
+    """The honest cells of a response whose sampled ids are `ids` (`compact_records_of`)."""
+    return [A.compact_cell(r, B) for r in A.compact_records_of(ordinal, ids, EOS)]
+
+
+def _forged(ordinal: int, ids: list[int], finish: str) -> list[bytes]:
+    """`ids` as cells, every one unmarked but the last, which carries `finish` whatever its id."""
     *body, last = ids
-    tail = A.compact_record(ordinal, None, "stop") if finish == "stop" else A.compact_record(ordinal, last, "length")
-    return [A.compact_cell(A.compact_record(ordinal, t), B) for t in body] + [A.compact_cell(tail, B)]
+    return [A.compact_cell(A.compact_record(ordinal, t), B) for t in body] + \
+        [A.compact_cell(A.compact_record(ordinal, last, finish), B)]
 
 
-def test_a_stop_where_the_advice_says_length_is_refused():
-    """The advice's request ended at its cap; a last record claiming a stop is the one violation, at ordinal 1."""
-    advice = [RequestAdvice("u", 4, 3, "length")]
-    assert A.compact_finish_violations(advice, _cells(1, [7, 8, 9], "length")) == []
-    assert A.compact_finish_violations(advice, _cells(1, [7, 8, 9], "stop")) == \
-        [(1, "finish stop where the advice's is length")]
+def test_a_stop_where_the_commit_sampled_no_eos_is_refused():
+    """The Commit's request ended at its cap; a last record claiming a stop is the one violation, at ordinal 1."""
+    sampled = {1: [7, 8, 9]}
+    assert A.compact_finish_violations(sampled, EOS, _cells(1, [7, 8, 9])) == []
+    assert A.compact_finish_violations(sampled, EOS, _forged(1, [7, 8, 9], "stop")) == \
+        [(1, "finish stop on output 2 where the Commit's is length")]
 
 
-def test_compact_finishes_held_to_the_advice():
-    """Request q is ordinal q + 1; its last record carries the advice's finish, and nothing earlier is marked."""
-    advice = [RequestAdvice("a", 4, 3, "eos"), RequestAdvice("b", 2, 2, "length")]
-    honest = _cells(1, [7, 8, 0], "stop") + _cells(2, [5, 6], "length")
-    assert A.compact_finish_violations(advice, honest) == []
-    assert A.compact_finish_violations(advice, _cells(1, [7, 8, 9], "length") + _cells(2, [5, 6], "length")) == \
-        [(1, "finish length where the advice's is eos")]
-    early = [A.compact_cell(A.compact_record(1, None, "stop"), B)] + _cells(1, [8, 0], "stop")
-    assert A.compact_finish_violations(advice, early + _cells(2, [5, 6], "length")) == \
-        [(1, "a stop finish on output 0, before the advice's last (2)")]
-    short = _cells(1, [8, 0], "stop") + _cells(2, [5, 6], "length")
-    assert A.compact_finish_violations(advice, short) == \
-        [(1, "a stop finish on output 1, before the advice's last (2)")]
-    long = _cells(1, [7, 8, 0], "stop") + [A.compact_cell(A.compact_record(1, 4), B)] + _cells(2, [5, 6], "length")
-    assert A.compact_finish_violations(advice, long) == [(1, "4 records where the advice has 3 outputs")]
+def test_compact_cells_held_to_the_commits_sampled_ids():
+    """Ordinal o's cells are `compact_records_of` the Commit's sampled ids for o, one for one: each id the sampled
+    one, nothing marked before the last, the response as long as the Commit's, a stop only on its sampled EOS."""
+    sampled = {1: [7, 8, 0], 2: [5, 6]}
+
+    def violations(cells):
+        return A.compact_finish_violations(sampled, EOS, cells)
+
+    honest = _cells(1, [7, 8, 0]) + _cells(2, [5, 6])
+    assert honest == _forged(1, [7, 8, 0], "stop") + _forged(2, [5, 6], "length") and violations(honest) == []
+    assert violations(_forged(1, [7, 8, 9], "length") + _cells(2, [5, 6])) == \
+        [(1, "output 2 is id 9 where the Commit sampled 0")]
+    assert violations(_forged(1, [7, 8, 0], "length") + _cells(2, [5, 6])) == \
+        [(1, "finish length on output 2 where the Commit's is stop")]
+    assert violations(_forged(1, [7], "stop") + _cells(2, [5, 6])) == \
+        [(1, "finish stop on output 0 where the Commit's is none")]
+    assert violations(_forged(1, [7, 8], "stop") + _cells(2, [5, 6])) == \
+        [(1, "finish stop on output 1 where the Commit's is none")]
+    assert violations(_cells(1, [7, 8, 0]) + _forged(2, [0], "stop")) == \
+        [(2, "output 0 is id 0 where the Commit sampled 5")]
+    long = honest[:3] + [A.compact_cell(A.compact_record(1, 4), B)] + honest[3:]
+    assert violations(long) == [(1, "4 records where the Commit sampled 3 ids")]
     unmarked = [A.compact_cell(A.compact_record(2, t), B) for t in (5, 6)]
-    assert A.compact_finish_violations(advice, honest[:3] + unmarked) == \
-        [(2, "finish none where the advice's is length")]
-    extra = honest + [A.compact_cell(A.compact_record(3, 1), B)]
-    assert A.compact_finish_violations(advice, extra) == [(3, "no request of the advice is this ordinal")]
-    assert A.compact_finish_violations(advice, honest + [bytes(B - 1) + b"\x01"]) == \
-        [(0, "a cell that isn't a compact record")]
+    assert violations(honest[:3] + unmarked) == [(2, "finish none on output 1 where the Commit's is length")]
+    assert violations(honest[:3]) == [(2, "0 records where the Commit sampled 2 ids")]
+    assert violations(honest + [A.compact_cell(A.compact_record(3, 1), B)]) == \
+        [(3, "no request of the Commit is this ordinal")]
+    assert violations(honest + [bytes(B - 1) + b"\x01"]) == [(0, "a cell that isn't a compact record")]
 
 
 def test_compact_does_not_widen_the_token_channel():
-    """The compact token field is a 31-bit id with the length flag, or EOS: no wider than an id event's u32 id, which
+    """The compact token field is a 30-bit id with the length and stop flags: no wider than an id event's u32 id, which
     spans the whole u32."""
-    assert A.COMPACT_LAST == 1 << 31
-    assert A.COMPACT_EOS == 0xFFFF_FFFF
+    assert (A.COMPACT_LAST, A.COMPACT_STOP) == (1 << 31, 1 << 30)
     assert isinstance(A.id_event(1, (1 << 32) - 1), bytes)
     with pytest.raises(ValueError):
         A.id_event(1, 1 << 32)

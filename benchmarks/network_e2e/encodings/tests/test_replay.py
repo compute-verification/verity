@@ -178,6 +178,26 @@ def test_reads_a_trace_corpus_trace(tmp_path):
         assert R.compare(R.decode(x.certified(), R.encode(x)).steps, x.steps).first_mismatch is None
 
 
+def test_warden_ingress_is_the_engines_arrival_order(tmp_path):
+    """Design v3's warden admits requests on its own schedule, so the certified ingress is the engine's `arrival` stamp:
+    requests the client sent out of the engine's order cost order bits at the client's send and none at the warden's."""
+    t = trace("sync-kv-pressure")
+    d = corpus_dir(t, tmp_path)
+    recs = [json.loads(line) for line in (d / "requests.jsonl").read_text().splitlines()]
+    for r in recs:
+        r["arrival"] = r["send_unix"]
+    for k in range(4, len(recs), 5):
+        recs[k]["send_unix"] = recs[k - 3]["arrival"] - 1e-3          # sent early, stamped late: a delay after the wire
+    (d / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+    client, warden = R.read_corpus_trace(d), R.read_corpus_trace(d, ingress="warden")
+    n = len(t.requests)
+    assert warden.ingress_t == sorted(warden.ingress_t) == [r["arrival"] for r in recs]
+    assert R.order_bits(warden) <= 0.5 * R.math.log2(n) + 1 < R.order_bits(client)
+    assert R.compare(R.decode(warden.certified(), R.encode(warden)).steps, warden.steps).first_mismatch is None
+    with pytest.raises(ValueError, match="ingress"):
+        R.read_corpus_trace(d, ingress="server")
+
+
 def test_order_bits_charge_only_reordering():
     t = trace("sync-kv-pressure")
     assert sorted(t.ingress_t) == t.ingress_t

@@ -856,6 +856,111 @@ def _embedding_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
     return embedding_row(rel["statics"]["V"], rel["statics"]["H"]) if rel.get("definition") == "Embedding_v1" else None
 
 
+def _ingress_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    from verity_vllm.program.registry import io_shell as X
+
+    MODEL, LP, V = sub.params["MODEL"], sub.params["LP"], sub.params["V"]
+    ids = [key.uniform(V, ("id", j, k)) for k in range(LP)]
+    m = 1 + key.uniform(10 ** X.MAX_TOKENS_WIDTH - 1, ("max_tokens", j))
+    return Draw({"body": np.frombuffer(X.encode(MODEL, ids, m, V), dtype=np.uint8).copy()}, {}, {})
+
+
+def ingress_prompt(MODEL: str, LP: int, V: int) -> Subcircuit:
+    """The I/O shell's ingress parse unit (``io_shell.IngressPrompt_v1{MODEL,LP,V}``): the attested request body of ingress v0,
+    whole SHA-512 blocks of bytes, to (ok, the prompt's LP token ids, max_tokens)."""
+    MODEL, LP, V = str(MODEL), int(LP), int(V)
+
+    def target(**_s: int) -> Any:
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import io_shell as X
+
+        return bind(X.IngressPrompt, MODEL=MODEL, LP=LP, V=V)
+
+    from verity_vllm.program.registry import io_shell as X
+
+    rel = {"subcircuit": "IngressPrompt_v1", "definition": "IngressPrompt_v1", "statics": {"MODEL": MODEL, "LP": LP, "V": V},
+           "rule": "io_shell.reference: ok = the body is ingress v0's layout at (MODEL, LP, V); ids and max_tokens its fields' sums"}
+    return Subcircuit(TEMPLATES["ingress-prompt"], {"MODEL": MODEL, "LP": LP, "V": V}, f"ingress-prompt/{MODEL}-lp{LP}-v{V}/v0",
+                      f"IngressPrompt_v1<{MODEL}, {LP}, {V}> · ingress v0", row_set_name("IngressPrompt_v1", {"MODEL": MODEL, "LP": LP, "V": V}), rel,
+                      (Port("body", "u8", X.length(MODEL, LP, V)),), (Port("ok", "u8", 1), Port("ids", "u32", LP), Port("max_tokens", "u32", 1)),
+                      target, target, sampler=_ingress_sample, admit=lambda out: np.array([int(o[0]) == 1 for o in out["ok"]]),
+                      recipe={"body": "io_shell.encode(MODEL, ids, max_tokens, V): ids key.uniform(V, ('id', j, k)), max_tokens "
+                                      "1 + key.uniform(10^6 - 1, ('max_tokens', j))"})
+
+
+def _ingress_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") != "IngressPrompt_v1":
+        return None
+    return ingress_prompt(rel["statics"]["MODEL"], rel["statics"]["LP"], rel["statics"]["V"])
+
+
+def _chunk_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    x, h = TOKEN_LOGITS.words(key, ("x", j), sub.params["C"], ("x", j))
+    return Draw({"x": x}, {}, {"h": h})
+
+
+def token_select_chunk(C: int) -> Subcircuit:
+    """A V-chunk of the registered compiler's greedy select (``dead_free.TokenSelectChunk_v2{C}``): C logits, one SHA-512 block at
+    C = 64, to their first maximum above -inf and its index in the chunk."""
+    C = int(C)
+
+    def target(**_s: int) -> Any:
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import dead_free as DF
+
+        return bind(DF.TokenSelectChunkV2, C=C)
+
+    rel = {"subcircuit": "TokenSelectChunk_v2", "definition": "TokenSelectChunk_v2", "statics": {"C": C},
+           "rule": "the first maximum above -inf of the chunk's bf16 logits and its index (NaN never taken; (-inf, 0) when none)"}
+    return Subcircuit(TEMPLATES["token-select-chunk"], {"C": C}, f"token-select-chunk/c{C}/bf16", f"TokenSelectChunk_v2<{C}> · BF16",
+                      row_set_name("TokenSelectChunk_v2", {"C": C}), rel, (Port("x", "u16", C),),
+                      (Port("best", "u16", 1), Port("idx", "u32", 1)), target, target, sampler=_chunk_sample, admit=_all,
+                      recipe={"x": TOKEN_LOGITS.describe()})
+
+
+def _chunk_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    return token_select_chunk(rel["statics"]["C"]) if rel.get("definition") == "TokenSelectChunk_v2" else None
+
+
+def _combine_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    from verity_vllm.program.registry import b1
+
+    n, C = len(b1.chunks(sub.params["V"], sub.params["C"])), sub.params["C"]
+    x0, h = TOKEN_LOGITS.words(key, ("x0", j), 1, ("x0", j))
+    best, _ = TOKEN_LOGITS.words(key, ("best", j), n, ("x0", j))
+    idx = np.array([key.uniform(C, ("idx", j, c)) for c in range(n)], dtype=np.uint32)
+    return Draw({"x0": x0, "best": best, "idx": idx}, {}, {"h": h})
+
+
+def token_select_combine(V: int, C: int) -> Subcircuit:
+    """The registered compiler's greedy token (``dead_free.TokenSelectCombine_v2{V,C}``) from logits[0] and the row's V-chunk
+    partials: the egress id, a 32-bit word."""
+    V, C = int(V), int(C)
+
+    def target(**_s: int) -> Any:
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import dead_free as DF
+
+        return bind(DF.TokenSelectCombineV2, V=V, C=C)
+
+    from verity_vllm.program.registry import b1
+
+    n = len(b1.chunks(V, C))
+    rel = {"subcircuit": "TokenSelectCombine_v2", "definition": "TokenSelectCombine_v2", "statics": {"V": V, "C": C},
+           "rule": "TokenSelect_v1's token from logits[0] and its V-chunks' (best, index) partials"}
+    return Subcircuit(TEMPLATES["token-select-combine"], {"V": V, "C": C}, f"token-select-combine/v{V}-c{C}/bf16",
+                      f"TokenSelectCombine_v2<{V}, {C}> · BF16", row_set_name("TokenSelectCombine_v2", {"V": V, "C": C}), rel,
+                      (Port("x0", "u16", 1), Port("best", "u16", n), Port("idx", "u32", n)), (Port("id", "u32", 1),), target, target,
+                      sampler=_combine_sample, admit=_all,
+                      recipe={"x0, best": TOKEN_LOGITS.describe(), "idx": "key.uniform(C, ('idx', j, c))"})
+
+
+def _combine_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") != "TokenSelectCombine_v2":
+        return None
+    return token_select_combine(rel["statics"]["V"], rel["statics"]["C"])
+
+
 def _expert_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
     E, K, tile = sub.params["E"], sub.params["K"], int(sub.recipe.get("tile", 32))
     t = j // tile
@@ -999,6 +1104,16 @@ for _r in ROWS.values():
 _add(Template("embedding-row", "Embedding_v1", "one row of the token embedding table, gathered by token id (Embedding_v1): an input "
               "stores the id and the row it opens", {"V": "int, vocabulary", "H": "int, hidden size"}, embedding_row, _embedding_identify,
               {"V": 32768, "H": 4096}))
+_add(Template("ingress-prompt", "IngressPrompt_v1", "the I/O shell's ingress parse unit (io_shell.IngressPrompt_v1): the attested request "
+              "body of ingress v0 to its ok bit, the prompt's token ids and max_tokens", {"MODEL": "str, the served model's name",
+              "LP": "int, prompt tokens", "V": "int, vocabulary"}, ingress_prompt, _ingress_identify,
+              {"MODEL": "served-model", "LP": 16, "V": 128256}))
+_add(Template("token-select-chunk", "TokenSelectChunk_v2", "a V-chunk of the registered compiler's greedy select "
+              "(dead_free.TokenSelectChunk_v2): C logits to their first maximum above -inf and its index", {"C": "int, logits per chunk"},
+              token_select_chunk, _chunk_identify, {"C": 64}))
+_add(Template("token-select-combine", "TokenSelectCombine_v2", "the registered compiler's greedy token from logits[0] and the row's "
+              "V-chunk partials (dead_free.TokenSelectCombine_v2): the egress id", {"V": "int, vocabulary", "C": "int, logits per chunk"},
+              token_select_combine, _combine_identify, {"V": 128256, "C": 64}))
 _add(Template("moe-expert-coordinate", "MoeExpertCoordinate<K>", "one output word of the routed expert's GEMM (MoeExpertCoordinate_v1): "
               "GemmCoordinate_v1 on expert e's row", {"E": "int, experts", "K": "int, a multiple of 16"},
               lambda **p: moe_expert_coordinate(**p), _expert_identify(False), {"E": 64, "K": 2048}))
@@ -1062,6 +1177,12 @@ def parse_subcircuit_id(sid: str) -> Subcircuit:
         return moe_expert_coordinate(int(m[1]), int(m[2]), weighted=tid.endswith("weighted"))
     elif tid == "scaled-mm-fp8-block-coordinate" and (m := re.fullmatch(r"k(\d+)-g(\d+)", params)) and sem == "sm90-wgmma-e4m3":
         return scaled_mm_fp8_block_coordinate(int(m[1]), int(m[2]))
+    elif tid == "ingress-prompt" and (m := re.fullmatch(r"(.+)-lp(\d+)-v(\d+)", params)) and sem == "v0":
+        return ingress_prompt(m[1], int(m[2]), int(m[3]))
+    elif tid == "token-select-chunk" and (m := re.fullmatch(r"c(\d+)", params)) and sem == "bf16":
+        return token_select_chunk(int(m[1]))
+    elif tid == "token-select-combine" and (m := re.fullmatch(r"v(\d+)-c(\d+)", params)) and sem == "bf16":
+        return token_select_combine(int(m[1]), int(m[2]))
     raise KeyError(f"not a subcircuit id this catalogue binds: {sid!r}")
 
 

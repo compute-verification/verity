@@ -148,3 +148,42 @@ def test_the_inner_statement_passes_only_with_its_units_derived_from_the_program
     _statement(tmp_path, 1, "setup: partition: unit 0 is a unit of GemmCoordinate_v2{K=4096}, not of the circuit's template unit-class/731c")
     rc, out = _run(tmp_path, "inner-statement", capsys=capsys)
     assert rc == 1 and "exit 1, accepted false, why \"setup: partition: unit 0 is a unit of" in out[0] and out[0].endswith("<- FAILS")
+
+
+def test_a_forged_inner_coin_no_part_run_reads_is_not_covered(tmp_path, capsys):
+    """A forged inner coin is refused only by the parts that read it (the challenge by the algebra, the query by L0): a
+    subset run without one (LEVELS=L0, L3, cap) can't refuse it, so its forgery is "not covered by the parts run" and fails
+    the step, never "refused by no part" as if Lean had accepted it; with a covering part that accepts it, the step fails as
+    a real acceptance."""
+    _part(tmp_path, "L0", 0, True)
+    _part(tmp_path, "forged-inner-challenge-L0", 0, True)
+    _part(tmp_path, "forged-inner-query-L0", 1, False, why="rec-dirs row")
+    parts = ("L0", "forged-inner-challenge-L0", "forged-inner-query-L0")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 1
+    assert ("lean forgery inner-challenge: not covered by the parts run (needs one of ['alg'], or its parts; ran ['L0'])  "
+            "<- FAILS") in out
+    assert not any("refused by no part" in line for line in out)
+    assert out[-1] == "lean: 1/1 accepted, 1/2 forgeries refused, 1 not covered by the parts run: the step fails"
+    for p in ("alg-p0", "alg-p1"):
+        _part(tmp_path, p, 0, True)
+        _part(tmp_path, f"forged-inner-challenge-{p}", 1, False, why="rec-v row")
+    parts += ("alg-p0", "alg-p1", "forged-inner-challenge-alg-p0", "forged-inner-challenge-alg-p1")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted, 2/2 forgeries refused"
+    for p in ("alg-p0", "alg-p1"):
+        _part(tmp_path, f"forged-inner-challenge-{p}", 0, True)
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 1 and "lean forgery inner-challenge: refused by no part of 3  <- FAILS" in out
+
+
+@pytest.mark.parametrize("kind, parts, rc", [
+    ("inner-challenge", ["L0"], 1), ("inner-challenge", ["L3", "cap-L3"], 1), ("inner-challenge", ["L0", "alg-p0"], 0),
+    ("inner-challenge", ["alg"], 0), ("inner-query", ["L1", "alg-p0"], 1), ("inner-query", ["L0"], 0),
+    ("comb", ["L0"], 0)])
+def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts, rc):
+    """``--cover``, which 85's lean step runs before it forges an inner coin, refuses the forgery when no part reads it; a
+    kind COVERS doesn't name (a forged statement, its own part) is not refused."""
+    assert LV.main(["--cover", kind, *parts]) == rc
+    out = capsys.readouterr().out
+    assert ("not covered by the parts run" in out) == bool(rc)
