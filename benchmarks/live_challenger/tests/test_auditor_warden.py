@@ -36,10 +36,11 @@ def host(tmp_path) -> A.Host:
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
 
-def gate(host, argv, *, key=LANE, active=lambda r: False, started=None, token="ab12"):
+def gate(host, argv, *, key=LANE, active=lambda r: False, started=None, token="ab12", stdin=None, own=None):
     argv = ["--ssh", shlex.join(argv)] + ([] if key is None else ["--key", key])
-    return A.gate(argv, host, now=T0, token=token, own=lambda p: None, certifier_active=active,
-                  start_certifier=(started.append if started is not None else lambda r: None))
+    return A.gate(argv, host, now=T0, token=token, own=own or (lambda p: None), certifier_active=active,
+                  start_certifier=(started.append if started is not None else lambda r: None),
+                  read=lambda n: pytest.fail("read stdin") if stdin is None else stdin[:n])
 
 
 def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device_runs_at_a_time(host):
@@ -98,6 +99,10 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--upstream", "10.0.0.2:8011"], "unrecognized arguments: --upstream"),
     (["--rate", "5"], "unrecognized arguments: --rate"),
     (["--command", "id"], "unrecognized arguments: --command"),
+    (["--ids", "1"], "unrecognized arguments: --ids 1"),
+    (["--delay", "21"], "unrecognized arguments: --delay"),
+    (["--window", "32"], "unrecognized arguments: --window"),
+    (["--scan", "1"], "unrecognized arguments: 1"),
     (["--temperature", "2.5"], "--temperature '2.5': 0 to 2"),
     (["--temperature", "-0.1"], "--temperature '-0.1': 0 to 2"),
     (["--temperature", "nan"], "--temperature 'nan': 0 to 2"),
@@ -251,6 +256,28 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
     assert A.warden_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
 
 
+def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_the_scans_schedule(host, tmp_path):
+    """`--scan` is recorded (`scan: true`) only when given, and its run is the same rehearsal with `--ids` and
+    `SCAN_SCHEDULE` added: the same traffic, sampling, height and tokens, so `warden_minutes` bounds it as it does any
+    (`test_warden_serve` holds the schedule to `scan_zk.PARAMS`)."""
+    rc, out = gate(host, REQUEST + ["--scan", "--tokens", "64"], started=[])
+    assert rc == 0, out
+    scan = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert scan["scan"] is True and scan["device"] == "warden" and scan["tokens"] == 64
+    rc, out = gate(host, REQUEST, started=[], token="cd34")
+    plain = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert "scan" not in plain
+    rc, out = gate(host, REQUEST + ["--scan", "--minutes", "10"], started=[], token="ef56")
+    assert rc == 3 and "--minutes 10: 100 requests take 11 minutes" in json.loads(out)["refused"]
+
+    argv = A.warden_command(scan, tmp_path, "http://127.0.0.1:40001")
+    without = A.warden_command({k: v for k, v in scan.items() if k != "scan"}, tmp_path, "http://127.0.0.1:40001")
+    at = without.index("--max-tokens")
+    assert argv == [*without[:at], "--ids", *A.SCAN_SCHEDULE, *without[at:]]
+    assert A.warden_command(plain, tmp_path, "u") == A.warden_command(plain | {"scan": False}, tmp_path, "u")
+    assert "--ids" not in A.warden_command(plain, tmp_path, "u")
+
+
 def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
     """The defaults, temperature 0 and top_p 1, and given values alike are recorded and passed on, so that every request
     of the traffic carries both (`warden_serve.varied_traffic`) and an endpoint's own generation config never applies;
@@ -265,3 +292,81 @@ def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(ho
         assert argv[argv.index("--temperature"):][:4] == ["--temperature", str(recorded[0]), "--top-p", str(recorded[1])]
     older = {k: v for k, v in request.items() if k not in ("temperature", "top_p")}
     assert A.warden_command(older, tmp_path, "u")[-4:] == ["--temperature", "0.0", "--top-p", "1.0"]
+
+
+PROMPTS = [[70001, 3], [5], [7]]
+SCAN = REQUEST + ["--scan", "--prompts", "--height", "10"]
+
+
+def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and_runs_rehearse_on_them(host):
+    """`--prompts` reads the prompts off the gate's stdin and writes them, canonical, to `witness/prompts.json` (0700,
+    the file 0600, both `auditor`'s); the request records their count and ids, never the ids, and `--requests` is their
+    count unless given. The run runs `rehearse --prompts` on that file (with `--window-per-group` when asked), which
+    stays in `witness/`, beside what the rehearsal writes, and `out/` publishes a grouped run's `groups.json`; `fetch`
+    gives the prompts to the run's own lane alone."""
+    owned, data = [], json.dumps(PROMPTS, indent=2).encode()
+    rc, out = gate(host, SCAN + ["--window-per-group", "--tokens", "2", "--requests", "6", "--minutes", "4"],
+                   stdin=data, own=owned.append, started=[])
+    assert rc == 0, out
+    run = json.loads(out)["run"]
+    d, w = host.certifier / run, host.certifier / run / A.WITNESS
+    req = json.loads((d / "request.json").read_text())
+    assert {k: req[k] for k in ("device", "scan", "prompts", "window_per_group", "requests", "tokens", "height")} == \
+        {"device": "warden", "scan": True, "prompts": {"count": 3, "ids": 4}, "window_per_group": True, "requests": 6,
+         "tokens": 2, "height": 10}
+    assert b"70001" not in out and b"70001" not in (d / "request.json").read_bytes()
+    assert (w / A.PROMPTS).read_bytes() == b"[[70001,3],[5],[7]]"
+    assert (w.stat().st_mode & 0o777, (w / A.PROMPTS).stat().st_mode & 0o777) == (0o700, 0o600)
+    assert owned == [host.certifier, w / A.PROMPTS, w, d]
+
+    rc, out = gate(host, SCAN + ["--minutes", "4"], stdin=data, started=[], token="cd34")
+    assert rc == 0 and json.loads(out)["requests"] == 3 and "window_per_group" not in json.loads(out)
+
+    seen = []
+    grouped = WARDEN_FILES + '(out / "groups.json").write_text(json.dumps({"groups": [{"group": 0}]}))\n'
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+                          command=rehearsal(grouped, seen), wait=lambda proc, s: proc.wait())
+    (got, work, url), = seen
+    assert got == req and work == w and end["rc"] == 0 and end["witness"][A.PROMPTS] == len(b"[[70001,3],[5],[7]]")
+    argv = A.warden_command(got, work, url)
+    assert argv[argv.index("--egress-cells") + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
+                                                       "--max-tokens", "2"]
+    assert "groups.json" in end["files"] and json.loads((d / "out" / "groups.json").read_text())["groups"]
+    public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+    assert b"70001" not in public
+    rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", "memory-accounting"], host)
+    assert rc == 0 and not any(n.startswith(f"{run}/witness") for n in tar_names(blob))
+    rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", LANE], host)
+    assert rc == 0 and f"{run}/witness/prompts.json" in tar_names(blob)
+
+
+@pytest.mark.parametrize("argv, stdin, why", [
+    (["--prompts"], b"[[1]]", "--prompts: the scan's id requests' prompts, with --scan"),
+    (["--scan", "--window-per-group"], b"[[1]]", "--window-per-group: groups of the --prompts"),
+    (["--window-per-group"], b"[[1]]", "--window-per-group: groups of the --prompts"),
+    (["--scan", "--prompts", "--requests", "0"], b"[[1]]", "--requests '0': 1 to 400"),
+    (["--scan", "--prompts", "--requests", "401"], b"[[1]]", "--requests '401': 1 to 400"),
+    (["--scan", "--prompts", "--tokens", "0"], b"[[1]]", "--tokens '0': 1 to 64"),
+    (["--scan", "--prompts", "--tokens", "65"], b"[[1]]", "--tokens '65': 1 to 64"),
+    *[(["--scan", "--prompts"], bad, "--prompts: stdin is a JSON array of 1 to 400 prompts, each an array of 1 to 2048 "
+                                     "token ids below 2^17")
+      for bad in (b"", b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]',
+                  b'{"p": [[1]]}', b"\xff", json.dumps([[1]] * 401).encode(), json.dumps([[0] * 2049]).encode())],
+    (["--scan", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
+    (["--scan", "--prompts", "--window-per-group"], json.dumps([[1]] * 5).encode(),
+     "--window-per-group: 5 prompts, past a group's 4 (the scan's lanes)"),
+    (["--scan", "--prompts", "--minutes", "3"], b"[[1]]", "--minutes 3: 1 requests take 4 minutes"),
+    (["--scan", "--prompts", "--window-per-group", "--requests", "400", "--minutes", "45"], b"[[1]]",
+     "--minutes 45: 400 groups take 46 minutes"),
+])
+def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, stdin, why):
+    rc, out = gate(host, REQUEST + ["--height", "10"] + argv, stdin=stdin, started=[])
+    assert rc == 3 and why in json.loads(out)["refused"]
+    assert not host.certifier.exists()
+
+
+def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
+    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the warden's schedule."""
+    assert [A.scan_group_windows(t) for t in (1, 2, 32, 35, 36, 64)] == [1, 1, 1, 1, 2, 2]
+    assert [A.warden_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
+    assert A.warden_group_minutes(400, 64, 10) == 46 and A.warden_group_minutes(1, 2) == 8
