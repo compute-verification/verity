@@ -7559,6 +7559,102 @@ def DownShape (c : Desc.Ctx) : Prop :=
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
     Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
+/-- One piece of positive count, its positions at or past 0, naming no node's output and its parameters' leaves in
+range, as a segment. -/
+theorem shapeOk_one (P : Prog) (d : Nat) (q : Piece) (h0 : 0 < q.count) (hq : ∀ x ∈ pos q, 0 ≤ x.2)
+    (hk : ∀ k, q.tgt ≠ .ref false k)
+    (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
+      x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)) :
+    ShapeOk P d (Seg.one q) := by
+  refine ⟨segOk_one q, fun x hx => ?_, fun g hg => ?_⟩
+  · rw [segPos_one] at hx
+    exact ⟨hq x hx, fun k e => hk k (by rw [← mem_pos_tgt hx]; exact e), hp x hx⟩
+  · have e : g = q := by simpa [Seg.one] using hg
+    subst e
+    exact h0
+
+/-- `down` keeps a gate's piece as it is. -/
+theorem downShape_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q.tgt = .gate w)
+    (h0 : 0 < q.count) (hq : ∀ x ∈ pos q, 0 ≤ x.2) {segs : Array Seg}
+    (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  rw [down_gate c fuel q ht] at h
+  injection h with h
+  subst h
+  intro s hs
+  have e : s = Seg.one q := by simpa using hs
+  subst e
+  exact shapeOk_one c.P c.d q h0 hq (fun k e => by rw [ht] at e; cases e)
+    (fun x hx i e => by rw [mem_pos_tgt hx, ht] at e; cases e)
+
+/-- `down` keeps a parameter's piece as it is. -/
+theorem downShape_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : q.tgt = .ref true i)
+    (h0 : 0 < q.count) (hq : ∀ x ∈ pos q, 0 ≤ x.2)
+    (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int))
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  rw [down_param c fuel q ht] at h
+  injection h with h
+  subst h
+  intro s hs
+  have e : s = Seg.one q := by simpa using hs
+  subst e
+  exact shapeOk_one c.P c.d q h0 hq (fun k e => by rw [ht] at e; cases e) hp
+
+/-- A primitive node's piece is the node's gate, once per position. -/
+theorem downShape_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim) {w : Nat}
+    (hret : (c.P.defs[node.fn]!).ret = .value w) {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) :
+    ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  rw [down_prim c fuel q ht hff hn hform hret] at h
+  injection h with h
+  subst h
+  split
+  · intro s hs
+    simp at hs
+  · rename_i h0
+    intro s hs
+    have e : s = Seg.one { tgt := .gate w, base := (c.body.offsets[k]! : Int), stride := 0, len := q.count } := by
+      simpa using hs
+    subst e
+    refine shapeOk_one _ _ _ ?_ ?_ (fun k' e => by cases e) (fun x hx i e => by rw [mem_pos_tgt hx] at e; cases e)
+    · show 0 < 1 * q.count
+      omega
+    · intro x hx
+      unfold pos at hx
+      simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
+      obtain ⟨r, -, t, -, rfl⟩ := hx
+      simp
+
+/-- A batch of a primitive's piece is its members' gates, at the piece's positions past the node's first gate. -/
+theorem downShape_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = true) {w : Nat} (hret : (c.P.defs[node.fn]!).ret = .value w)
+    (hq : ∀ x ∈ pos q, 0 ≤ x.2) {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) :
+    ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  rw [down_batchPrim c fuel q ht hff hn hform hp hret] at h
+  injection h with h
+  subst h
+  split
+  · intro s hs
+    simp at hs
+  · rename_i h0
+    intro s hs
+    have e : s = Seg.one { q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base } := by
+      simpa using hs
+    subst e
+    refine shapeOk_one _ _ _ (Nat.pos_of_ne_zero h0) ?_ (fun k' e => by cases e)
+      (fun x hx i e => by rw [mem_pos_tgt hx] at e; cases e)
+    intro x hx
+    unfold pos at hx
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
+    obtain ⟨r, hr, t, htl, rfl⟩ := hx
+    have hy := hq (q.tgt, q.base + (r : Int) * q.rowStride + (t : Int) * q.stride) (by
+      unfold pos
+      simp only [List.mem_flatMap, List.mem_map, List.mem_range]
+      exact ⟨r, hr, t, htl, rfl⟩)
+    have ho : (0 : Int) ≤ (c.body.offsets[k]! : Int) := Int.natCast_nonneg _
+    simp only at hy ⊢
+    linarith
+
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
 decoded Program has them (`BodiesOk.retParts_reads`). -/
