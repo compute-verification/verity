@@ -1,4 +1,4 @@
-"""The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``), and the bound over a horizon of periods.
+"""The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``).
 
 Onsite's check (verity/core/protocols/composition/README.md) runs each component's own ``answer`` on that component's
 case and decides, reject first: any component's rejection rejects onsite whatever the others answer; otherwise onsite
@@ -23,12 +23,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
 import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -37,12 +35,6 @@ from verity.ml.circuits.codec import canonical_json
 ROOT = Path(__file__).resolve().parents[3]
 ONSITE = ROOT / "verity" / "core" / "protocols" / "onsite" / "CoreOnsite.lean"
 PROTOCOL = "verity/onsite/v0"
-#: a month, the horizon `horizon` projects to
-MONTH_S = 30 * 86400
-#: the network certifier's period check, whose public carries K and eps
-CERTIFIER = "verity/certifier/v0"
-#: the spans `communication` pools the network certifier's K over
-SPANS_S = {"week": 7 * 86400, "month": MONTH_S, "year": 365 * 86400}
 
 
 def onsite_components(source: str | None = None) -> list[str]:
@@ -179,56 +171,5 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
     return {**out, "verdict": verdict, "reason": got.get("reason")}
 
 
-def horizon(reports: Sequence[Mapping[str, Any]], period_s: float, month_s: float = MONTH_S) -> dict[str, Any]:
-    """The integrity bound over the periods so far and projected to a month of ``period_s`` periods: each period is its
-    own audit on its own live coins, so by a union bound, except with probability at most the sum of their δ, every
-    accepted period's wrong units are within its bound, and the horizon's wrong units within their sum. ``vacuous`` when
-    that probability reaches 1. A period that didn't accept certifies nothing, and counts in ``refused``."""
-    rows = [r["protocols"]["integrity"] for r in reports]
-    accepted = [r for r in rows if r.get("verdict") == "accept"]
-    delta = sum((Fraction(r["delta"]) for r in accepted), Fraction(0))
-    so_far = {"periods": len(rows), "accepted": len(accepted), "refused": len(rows) - len(accepted),
-              "wrong_units_bound": sum(r["quantity"]["bound"] for r in accepted),
-              "units": sum(r["answer"]["profile"]["levels"][-1]["size"] for r in accepted),
-              "delta": str(min(delta, Fraction(1))), "vacuous": delta >= 1}
-    n = max(1, math.floor(month_s / period_s)) if period_s > 0 else None
-    month: dict[str, Any] = {"periods": n, "period_s": period_s}
-    if n is not None and accepted:
-        per = delta / len(accepted)
-        month.update(delta=str(min(n * per, Fraction(1))), vacuous=n * per >= 1,
-                     wrong_units_bound=n * so_far["wrong_units_bound"] // len(accepted),
-                     units=n * so_far["units"] // len(accepted))
-    worst = "reject" if any(r["composed"]["verdict"] == "reject" for r in reports) else \
-        "accept" if reports and all(r["composed"]["verdict"] == "accept" for r in reports) else "pending-ports"
-    return {"rule": "union bound over periods, each audited on its own live coins", "integrity": so_far, "month": month,
-            "communication": communication(reports, period_s), "composed": worst}
-
-
-def communication(reports: Sequence[Mapping[str, Any]], period_s: float,
-                  spans: Mapping[str, float] = SPANS_S) -> dict[str, Any]:
-    """The network certifier's leak bound over the periods so far and pooled over each of ``spans`` of ``period_s``
-    periods: a covert sender in the server moves at most an accepted period's ``K`` bits over its link, except with
-    probability its ``eps`` (`NetTiming.Guarantees.PeriodLeakAccepted`), so over periods the bits add and, by a union
-    bound, the eps too, ``vacuous`` once they reach 1. ``K_per_window`` is K over the periods' link-windows. A period
-    that didn't accept certifies nothing, and counts in ``refused``, as does another protocol's answer."""
-    rows = [r["protocols"].get("communication") or {} for r in reports]
-    got = [r["quantity"] for r in rows if r.get("verdict") == "accept" and r.get("protocol") == CERTIFIER]
-    K, eps, windows = sum(q["K"] for q in got), sum((Fraction(q["eps"]) for q in got), Fraction(0)), \
-        sum(q["windows"] for q in got)
-    out: dict[str, Any] = {
-        "periods": len(rows), "accepted": len(got), "refused": len(rows) - len(got), "K": K,
-        "eps": str(min(eps, Fraction(1))), "vacuous": eps >= 1, "windows": windows,
-        "K_per_window": str(Fraction(K, windows)) if windows else None, "period_s": period_s}
-    for name, span in spans.items():
-        n = max(1, math.floor(span / period_s)) if period_s > 0 else None
-        row: dict[str, Any] = {"periods": n}
-        if n is not None and got:
-            pooled = n * eps / len(got)
-            row.update(K=math.ceil(Fraction(n * K, len(got))), eps=str(min(pooled, Fraction(1))), vacuous=pooled >= 1)
-        out[name] = row
-    return out
-
-
-
-__all__ = ["CERTIFIER", "MONTH_S", "SPANS_S", "communication", "NO_CASE", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "component_of", "composed", "horizon",
-           "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs", "stub_component"]
+__all__ = ["NO_CASE", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "component_of", "composed", "onsite_cases", "onsite_check",
+           "onsite_components", "onsite_inputs", "stub_component"]
