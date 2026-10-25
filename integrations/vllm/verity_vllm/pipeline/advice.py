@@ -12,7 +12,8 @@ declared before the run predicts.  This command writes it from what the run reco
 and refuses a run whose two records disagree (a prompt or output length, a request the trace never saw), a row whose first
 position isn't where the request's last row ended (`continuity`: no position is computed twice and none is skipped, except
 from a prefix-cache hit at first scheduling or at a resume from preemption), a finish the advice can't say (a stop string; an
-abort outside a Commit window), and a row after an abort's step.  A cache hit's KV `sources` are the runs of earlier-computed
+abort outside a Commit window; an abort before the request's first output, or while it waits after a preemption, neither of
+which has a row in the step it is freed at), and a row after an abort's step.  A cache hit's KV `sources` are the runs of earlier-computed
 positions whose requests share the hit's tokens, read
 from the Commit record's token ids.  Each kept output's `release` bucket is the bucket of width `--tau` seconds, counted from
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
@@ -65,7 +66,7 @@ from . import window_advice as WA
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
 SERVED = "verity-vllm/advice-windows-index/v1"
-COMPILER = "verity_vllm.predict.steps.compile_steps"
+COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 
 
 #: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
@@ -107,6 +108,16 @@ def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
         return reason
     raise ValueError(f"request {rid} finished by {reason}{f' ({why!r})' if why is not None else ''}, which the advice can't say "
                      f"(its finishes are {', '.join(WA.FINISHES)})")
+
+
+def _aborted_before_output(rid: str) -> str:
+    return (f"request {rid} was aborted before its first output, which the advice refuses: an aborted request's Program ends at "
+            "its last kept output, and it kept none")
+
+
+def _aborted_preempted(rid: str, step: int) -> str:
+    return (f"request {rid} was aborted after step {step} while it waited after a preemption, which the advice refuses: it has no "
+            "row in the step it is freed at")
 
 
 def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
@@ -273,8 +284,12 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             reqs[rid].finish = {**f, "at": s}
         for rid, f in outside.items():
             if f["after_step"] == s and reqs[rid].finish is None:
+                if f["reason"] == "abort" and reqs[rid].preempted:
+                    raise ValueError(_aborted_preempted(rid, s))
                 reqs[rid].finish = {**f, "at": s}
     if unscheduled := [rid for rid, q in reqs.items() if q.index is None]:
+        if gone := [rid for rid in unscheduled if (outside.get(rid) or {}).get("reason") == "abort"]:
+            raise ValueError(_aborted_before_output(gone[0]))
         raise ValueError(f"{len(unscheduled)} requests arrived and never ran: {unscheduled[:3]}")
     advice_reqs = []
     for q in order:
@@ -299,6 +314,8 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             finish = finish_of(q.rid, (rec and rec.get("finish")) or outside.get(q.rid))
         else:
             finish = was.finish
+        if finish == "abort" and total == 0:
+            raise ValueError(_aborted_before_output(q.rid))
         if was is not None and (user, total, finish) != (was.id, was.output_len, was.finish):
             raise ValueError(f"request {q.rid} is carried in as {was}, and its Commit record says {user!r}, {total} outputs, {finish}")
         advice_reqs.append(WA.RequestAdvice(user, q.prompt_len, total, finish))

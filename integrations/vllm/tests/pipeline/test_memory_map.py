@@ -20,7 +20,7 @@ import pytest
 import torch
 
 from tests.commit.test_memory_map import PREFIX, PRODUCERS, WARM_ARRIVE, WARM_TABLES, _slots, dsa_request, warm_program
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
@@ -30,7 +30,7 @@ from verity_vllm.commit import memory_map as MM
 from verity_vllm.pipeline import memory_map as PMM
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYERS = [f"model.layers.{i}.self_attn.attn" for i in range(2)]

@@ -30,8 +30,8 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
-from verity_vllm.predict.phi import Phi
-from verity_vllm.predict.steps import Registered, compile_steps
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.steps import Registered, compile_steps
 
 C = ADV.registered_compiler("test-compiler", "ab" * 64)
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -287,19 +287,53 @@ def test_a_request_the_last_window_didnt_carry_is_refused_where_it_starts_past_i
     assert m and m[1] in spanning and int(m[2]) == _rows_in(recs, m[1], k2)[0][1] > 0   # na-4, or na-5 if it runs first in k2
 
 
+GONE, OTHER, K_GONE = _body(6, 9, 12, "na-ab"), _body(7, 5, 9, "na-7"), 5
+
+
+def _aborted(tmp_path: Path) -> tuple[Server, dict]:
+    """na-ab's client goes away after 5 of its 12 outputs, in 3-step windows beside na-7; the server and na-ab's record."""
+    with Server(tmp_path, window_steps=3, abort_after={tuple(GONE["prompt"]): K_GONE}) as s:
+        serve_concurrently(s, [GONE, OTHER])
+    return s, next(r for r in records(tmp_path, "requests.jsonl") if r["user"] == "na-ab")
+
+
+def test_a_request_its_client_aborts_passes_as_an_abort_after_its_k_streamed_ids_and_fails_if_they_differ(tmp_path):
+    """The Commit record's check of an aborted request: its finish is ``abort`` with the k ids streamed before it, and it passes,
+    since those are the committed ids' prefix; the same record against a stream that differs at one id, or that says it was
+    aborted after more ids than it streamed, fails by name."""
+    s, q = _aborted(tmp_path)
+    assert q["finish"] == {"reason": "abort", "stop_reason": None, "k": K_GONE} and q["check"]["passed"], q["check"]
+    assert q["check"]["streamed_ids"] == K_GONE and q["check"]["problems"] == []
+    assert s.windows.summary()["passed"]
+
+    def check(streamed: list[int], k: int = K_GONE) -> dict:
+        return s.windows.check(sc.Ledger(q["http_id"], q["engine_id"], q["prompt_ids"], q["ingress"], q["user"], streamed=streamed,
+                                         finish={"reason": "abort", "stop_reason": None, "k": k}, finished=True))
+
+    assert check(list(q["streamed_ids"]))["passed"]
+    bad = list(q["streamed_ids"])
+    bad[2] += 1
+    got = check(bad)
+    P = len(q["prompt_ids"])
+    assert not got["passed"] and any(p.startswith(f"samples: 1 position(s) differ, first {P + 1}: ") for p in got["problems"])
+    short = check(list(q["streamed_ids"])[:-1], k=K_GONE)
+    assert not short["passed"] and f"finish: aborted after {K_GONE} ids, {K_GONE - 1} streamed" in short["problems"]
+    cut = check(list(q["streamed_ids"])[:3], k=3)       # two committed outputs it never streamed: more than a step in flight's
+    assert not cut["passed"] and cut["problems"] == [
+        "finish: aborted after 3 ids, and 2 committed samples run past them, more than the one of the step in flight"]
+
+
 def test_a_request_its_client_aborts_is_freed_after_its_step_and_every_window_it_ran_in_says_so_and_compiles(tmp_path):
     """The client of na-ab goes away after 5 of its 12 outputs: the loop aborts it before the next step, the trace records the
     abort after the step that emitted the 5th, and no row of it follows. Its prompt and 4 decodes take 5 steps, so 3-step windows
-    split it: the window that leaves it carries it on with its record's finish, the abort the trace records later, and each window
+    split it: the window that leaves it carries it on with its record's finish, the abort, and each window
     that holds it is version 2, follows the last, and compiles, its Program the one of a request that kept 5 outputs."""
-    gone, other, k = _body(6, 9, 12, "na-ab"), _body(7, 5, 9, "na-7"), 5
-    with Server(tmp_path, window_steps=3, abort_after={tuple(gone["prompt"]): k}) as s:
-        serve_concurrently(s, [gone, other])
-    q = next(r for r in records(tmp_path, "requests.jsonl") if r["user"] == "na-ab")
+    gone, other, k = GONE, OTHER, K_GONE
+    _, q = _aborted(tmp_path)
     recs = ST.load(tmp_path / ST.SERVED)
     (fin,) = [r for r in recs if r["kind"] == "finish" and r["request"] == q["engine_id"]]
     rows = [st["step"] for st in recs if st["kind"] == "step" for row in st["rows"] if row[0] == q["engine_id"]]
-    assert len(q["streamed_ids"]) == k and len(q["windows"]) > 1 and not q["check"]["passed"]
+    assert len(q["streamed_ids"]) == k and len(q["windows"]) > 1
     assert (fin["reason"], fin["outside"], fin["after_step"]) == ("abort", True, max(rows)) and len(rows) == k
     rep = ADV.write(tmp_path, compiler=C)
     assert rep["refused"] == {} and rep["open"] == []

@@ -1458,7 +1458,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
   registered row at `positions[i]`. Each table row's leaf, the frame-v3-sha512 leaf under the port's row schema, must
   climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
-  program (units `derived`). A port on
+  program (units `derived`). With `F`, a circuit that names a port twice refuses (`Registered.namesOnce`), since `F`
+  names a port by its name. A port on
   one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
   with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
   refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
@@ -1863,7 +1864,7 @@ expectation):
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`: `from_record`
   requires `msg` on every round when `Hello` says `"rounds": "bytes retained"`, and checks its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
-  refuses a row that does not open its registered root.
+  refuses a row that does not open its registered root, and under `--registered` a circuit that names a port twice.
 - **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
 - **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
