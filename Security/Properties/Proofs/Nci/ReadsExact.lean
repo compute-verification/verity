@@ -57,7 +57,7 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   the callees' summaries hold `RetOk`, `throughArg` one step down keeps what its parameters' leaves name (`ThroughSpec`)
   and its segments are of a copy at least (`ThroughReps`) (`calleeSpec_succ`);
 * every segment `down`, `fromCallee`, `throughArg` and `carry` give is of a copy at least, and of more than one only of
-  gates or of copies all alike (`RepsOk`, `reps_fuel`), followed through `Desc`'s code (`OkIs`, `reps_step`); so
+  gates or of copies all alike (`RepsOk`, `reps_fuel`), followed through `Desc`'s code (`OkIs`, `reps_succ`); so
   `ThroughReps` holds (`throughReps`) and so does `RetOk`'s third part of every summary `memoOf` makes (`retOk_reps`);
 * `throughArg`'s step: a member's parameter leaves, read through its node's argument (whole, a batch member's spans, or
   a scan iteration's slice, or its carry through `carry`), keep the gates they resolve to in the member wherever
@@ -5056,7 +5056,7 @@ def BatchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
 Every segment `down`, `fromCallee`, `throughArg` and `carry` return has a copy at least, and more than one only of
 gates or of copies all alike (`RepsOk`; `reps_fuel`, `throughReps`): `Seg.one`, a member's return segments of more than
 one copy (gates moved by `shiftGates`, `gates_shiftGates`), a summary's slice copies of one resolved (`shift = 0`), or
-what the calls one step down return, followed through `Desc`'s code (`OkIs`, `reps_step`), its scan case and `down`'s
+what the calls one step down return, followed through `Desc`'s code (`OkIs`, `reps_succ`), its scan case and `down`'s
 body copied out (`scanBranch`, `downBody`, `down_succ`). So every summary `memoOf` makes has return segments of that
 shape (`summarize_reps`, `memoOf_reps`), `RetOk`'s third part (`retOk_reps`). -/
 
@@ -5356,86 +5356,69 @@ theorem gates_flatMap {segs : Array Seg} {p : Piece → Bool} {b : Bool}
   rw [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem] at this
   exact this.2 g hgs
 
-set_option hygiene false in
-/-- One step of `OkIs AllReps` through `Desc`'s code, its calls' segments by the hypotheses in scope named `hD`
-(`down`), `hC` (`fromCallee`), `hK` (`carry`), `hT` (`throughArg`) and `hS` (`scanBranch`). -/
-macro "reps_step" : tactic => `(tactic| first
-  | with_reducible exact okIs_throw
-  | with_reducible exact okIs_throw_bind
-  | (with_reducible apply okIs_bind_of (hD _)) <;> intro _ _
-  | (with_reducible apply okIs_bind_of (hC _ _ _ _)) <;> intro _ _
-  | (with_reducible apply okIs_bind_of (hK _ _ _ _)) <;> intro _ _
-  | (with_reducible apply okIs_bind_of (hT _ _ _ _)) <;> intro _ _
-  | (with_reducible apply okIs_bind_of (hS _ _ _)) <;> intro _ _
-  | with_reducible exact hD _
-  | with_reducible exact hC _ _ _ _
-  | with_reducible exact hK _ _ _ _
-  | with_reducible exact hT _ _ _ _
-  | with_reducible exact hS _ _ _
-  | rw [Std.Legacy.Range.forIn_eq_forIn_range']
-  | rw [← Array.forIn_toList]
-  | with_reducible refine okIs_forIn_bind _ _ _ (fun _ _ _ _ => ?_) ?_ (fun _ _ => ?_)
-  | with_reducible refine okIs_forIn_bind_arr _ _ _ (fun _ _ _ _ => ?_) ?_ (fun _ _ => ?_)
-  | with_reducible refine okIs_forIn_arr _ _ _ (fun _ _ _ _ => ?_) ?_
-  | with_reducible refine okIs_forIn_range _ _ _ (fun _ _ _ => ?_) ?_
-  | with_reducible refine okIs_bind_of (J := AllReps) ?_ (fun _ _ => ?_)
-  | (with_reducible apply okIs_bind) <;> intro _ _
-  | (with_reducible apply okIs_ite) <;> intro _
-  | (with_reducible apply okIs_forIn) <;> try intro _ _ _ _
-  | with_reducible apply okIs_pure
-  | with_reducible exact allReps_empty
-  | with_reducible apply allReps_single
-  | exact repsOk_one rfl
-  | with_reducible apply allReps_append
-  | with_reducible apply allReps_push
-  | assumption
-  | split
-  | dsimp only [ForInStep.value]
-  | (with_reducible refine allReps_range (fun _ _ _ => ?_) ‹_›)
-  | (refine repsOk_alike ?_ rfl; (try dsimp only);
-      (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega)
-  | (refine repsOk_gates ?_ (gates_shiftGates (by first | exact ‹_› | exact gates_flatMap ‹_›)
-        (fun _ hg => by split at hg <;> first | exact ⟨_, ‹_›⟩ | cases hg) _);
-      (try dsimp only); (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega))
-
--- one `repeat' reps_step` walks every case of `down`'s body, about 4x the default budget
-set_option maxHeartbeats 1000000 in
-theorem down_reps (c : Desc.Ctx) (fuel : Nat) (hD : ∀ q, OkIs AllReps (Desc.down c fuel q))
+-- one `repeat'` walks every case of `down`'s, `scanBranch`'s, `fromCallee`'s, `throughArg`'s and `carry`'s bodies,
+-- about 8x the default budget
+set_option maxHeartbeats 1600000 in
+/-- **One step of fuel**: every segment `down`, `fromCallee`, `throughArg` and `carry` return one step up is of a copy
+at least wherever those one step down are, followed through `Desc`'s code (`OkIs`), its calls' segments by the
+hypotheses `hD` (`down`), `hC` (`fromCallee`), `hK` (`carry`), `hT` (`throughArg`) and `hS` (`scanBranch`). -/
+theorem reps_succ (c : Desc.Ctx) (fuel : Nat) (hD : ∀ q, OkIs AllReps (Desc.down c fuel q))
     (hC : ∀ k m a b, OkIs AllReps (Desc.fromCallee c fuel k m a b))
-    (hS : ∀ k node q, OkIs AllReps (scanBranch c fuel k node q)) (q : Piece) :
-    OkIs AllReps (Desc.down c (fuel + 1) q) := by
-  rw [down_succ]
-  unfold downBody
-  repeat' reps_step
-
-theorem scanBranch_reps (c : Desc.Ctx) (fuel : Nat)
-    (hC : ∀ k m a b, OkIs AllReps (Desc.fromCallee c fuel k m a b))
-    (hK : ∀ k m a b, OkIs AllReps (Desc.carry c fuel k m a b)) (k : Nat) (node : Flock.Program.Node) (q : Piece) :
-    OkIs AllReps (scanBranch c fuel k node q) := by
-  unfold scanBranch
-  rcases hr : (c.P.defs[node.fn]!).ret with w | ⟨n, e⟩ | ⟨⟨_ | ⟨ct, _ | ⟨y, _ | ⟨z, l⟩⟩⟩⟩⟩ | fs
-  all_goals (try exact okIs_throw)
-  show OkIs AllReps (scanTuple c fuel k node ct y q)
-  unfold scanTuple
-  repeat' reps_step
-
-
-theorem fromCallee_reps (c : Desc.Ctx) (fuel : Nat) (hT : ∀ k m i g, OkIs AllReps (Desc.throughArg c fuel k m i g))
-    (k m a b : Nat) : OkIs AllReps (Desc.fromCallee c (fuel + 1) k m a b) := by
-  rw [Desc.fromCallee.eq_2]
-  repeat' reps_step
-
-theorem throughArg_reps (c : Desc.Ctx) (fuel : Nat) (hD : ∀ q, OkIs AllReps (Desc.down c fuel q))
-    (hK : ∀ k m a b, OkIs AllReps (Desc.carry c fuel k m a b)) (k m i : Nat) (g : Piece) :
-    OkIs AllReps (Desc.throughArg c (fuel + 1) k m i g) := by
-  rw [Desc.throughArg.eq_2]
-  repeat' reps_step
-
-theorem carry_reps (c : Desc.Ctx) (fuel : Nat) (hC : ∀ k m a b, OkIs AllReps (Desc.fromCallee c fuel k m a b))
-    (hT : ∀ k m i g, OkIs AllReps (Desc.throughArg c fuel k m i g)) (k m a b : Nat) :
-    OkIs AllReps (Desc.carry c (fuel + 1) k m a b) := by
-  rw [Desc.carry.eq_2]
-  repeat' reps_step
+    (hT : ∀ k m i g, OkIs AllReps (Desc.throughArg c fuel k m i g))
+    (hK : ∀ k m a b, OkIs AllReps (Desc.carry c fuel k m a b)) :
+    (∀ q, OkIs AllReps (Desc.down c (fuel + 1) q)) ∧
+    (∀ k m a b, OkIs AllReps (Desc.fromCallee c (fuel + 1) k m a b)) ∧
+    (∀ k m i g, OkIs AllReps (Desc.throughArg c (fuel + 1) k m i g)) ∧
+    (∀ k m a b, OkIs AllReps (Desc.carry c (fuel + 1) k m a b)) := by
+  refine (fun (hS : ∀ k node q, OkIs AllReps (scanBranch c fuel k node q)) =>
+    ⟨fun q => ?down, fun k m a b => ?callee, fun k m i g => ?through, fun k m a b => ?carry⟩) (fun k node q => ?scan)
+  case' down => rw [down_succ]; unfold downBody
+  case' callee => rw [Desc.fromCallee.eq_2]
+  case' through => rw [Desc.throughArg.eq_2]
+  case' carry => rw [Desc.carry.eq_2]
+  case' scan =>
+    unfold scanBranch
+    rcases hr : (c.P.defs[node.fn]!).ret with w | ⟨n, e⟩ | ⟨⟨_ | ⟨ct, _ | ⟨y, _ | ⟨z, l⟩⟩⟩⟩⟩ | fs
+    all_goals (try exact okIs_throw)
+    show OkIs AllReps (scanTuple c fuel k node ct y q)
+    unfold scanTuple
+  all_goals repeat' (first
+    | with_reducible exact okIs_throw
+    | with_reducible exact okIs_throw_bind
+    | (with_reducible apply okIs_bind_of (hD _)) <;> intro _ _
+    | (with_reducible apply okIs_bind_of (hC _ _ _ _)) <;> intro _ _
+    | (with_reducible apply okIs_bind_of (hK _ _ _ _)) <;> intro _ _
+    | (with_reducible apply okIs_bind_of (hT _ _ _ _)) <;> intro _ _
+    | with_reducible exact hD _
+    | with_reducible exact hC _ _ _ _
+    | with_reducible exact hK _ _ _ _
+    | with_reducible exact hT _ _ _ _
+    | with_reducible exact hS _ _ _
+    | rw [Std.Legacy.Range.forIn_eq_forIn_range']
+    | rw [← Array.forIn_toList]
+    | with_reducible refine okIs_forIn_bind _ _ _ (fun _ _ _ _ => ?_) ?_ (fun _ _ => ?_)
+    | with_reducible refine okIs_forIn_bind_arr _ _ _ (fun _ _ _ _ => ?_) ?_ (fun _ _ => ?_)
+    | with_reducible refine okIs_forIn_arr _ _ _ (fun _ _ _ _ => ?_) ?_
+    | with_reducible refine okIs_forIn_range _ _ _ (fun _ _ _ => ?_) ?_
+    | with_reducible refine okIs_bind_of (J := AllReps) ?_ (fun _ _ => ?_)
+    | (with_reducible apply okIs_bind) <;> intro _ _
+    | (with_reducible apply okIs_ite) <;> intro _
+    | (with_reducible apply okIs_forIn) <;> try intro _ _ _ _
+    | with_reducible apply okIs_pure
+    | with_reducible exact allReps_empty
+    | with_reducible apply allReps_single
+    | exact repsOk_one rfl
+    | with_reducible apply allReps_append
+    | with_reducible apply allReps_push
+    | assumption
+    | split
+    | dsimp only [ForInStep.value]
+    | (with_reducible refine allReps_range (fun _ _ _ => ?_) ‹_›)
+    | (refine repsOk_alike ?_ rfl; (try dsimp only);
+        (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega)
+    | (refine repsOk_gates ?_ (gates_shiftGates (by first | exact ‹_› | exact gates_flatMap ‹_›)
+          (fun _ hg => by split at hg <;> first | exact ⟨_, ‹_›⟩ | cases hg) _);
+        (try dsimp only); (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega))
 
 /-- **Every segment `down`, `fromCallee`, `throughArg` and `carry` return is of a copy at least**, at every fuel. -/
 theorem reps_fuel (c : Desc.Ctx) : ∀ fuel, (∀ q, OkIs AllReps (Desc.down c fuel q)) ∧
@@ -5449,8 +5432,7 @@ theorem reps_fuel (c : Desc.Ctx) : ∀ fuel, (∀ q, OkIs AllReps (Desc.down c f
     · intro _ _ _ _ _ h; rw [Desc.carry.eq_1] at h; cases h
   | fuel + 1 =>
     have ⟨hD, hC, hT, hK⟩ := reps_fuel c fuel
-    ⟨down_reps c fuel hD hC (scanBranch_reps c fuel hC hK), fromCallee_reps c fuel hT, throughArg_reps c fuel hD hK,
-      carry_reps c fuel hC hT⟩
+    reps_succ c fuel hD hC hT hK
 
 /-- **`throughArg`'s segments are each of a copy at least.** -/
 theorem throughReps (c : Desc.Ctx) : ThroughReps c :=
@@ -5480,7 +5462,28 @@ theorem summarize_reps (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
     have hD : ∀ q, OkIs AllReps (Desc.down c Flock.Steps.FUEL q) := (reps_fuel c _).1
     have hret' : AllReps ret := by
       refine (?_ : OkIs AllReps _) ret hret
-      repeat' reps_step
+      repeat' (first
+        | with_reducible exact okIs_throw
+        | with_reducible exact okIs_throw_bind
+        | (with_reducible apply okIs_bind_of (hD _)) <;> intro _ _
+        | with_reducible exact hD _
+        | rw [Std.Legacy.Range.forIn_eq_forIn_range']
+        | rw [← Array.forIn_toList]
+        | with_reducible refine okIs_forIn_bind _ _ _ (fun _ _ _ _ => ?_) ?_ (fun _ _ => ?_)
+        | with_reducible refine okIs_forIn_bind_arr _ _ _ (fun _ _ _ _ => ?_) ?_ (fun _ _ => ?_)
+        | with_reducible refine okIs_forIn_arr _ _ _ (fun _ _ _ _ => ?_) ?_
+        | with_reducible refine okIs_forIn_range _ _ _ (fun _ _ _ => ?_) ?_
+        | with_reducible refine okIs_bind_of (J := AllReps) ?_ (fun _ _ => ?_)
+        | (with_reducible apply okIs_forIn) <;> try intro _ _ _ _
+        | with_reducible apply okIs_pure
+        | with_reducible exact allReps_empty
+        | with_reducible apply allReps_single
+        | exact repsOk_one rfl
+        | with_reducible apply allReps_append
+        | with_reducible apply allReps_push
+        | assumption
+        | split
+        | dsimp only [ForInStep.value])
     exact allReps_of hret'
 
 theorem memo_push_reps {memo : Array Desc.Summary} {x : Desc.Summary} (hm : ∀ f : Nat, AllReps (memo[f]!).ret.segs)
