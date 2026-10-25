@@ -7,6 +7,8 @@ head-check units and the I/O tie's units all ride it.
 
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR [--n 4] [--negatives] [--registered]
+    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
+      --out DIR --shape gemm:1b:2048 [--shape attention:1b:69 ...] [--negatives] [--census]
 
 * **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
   refuses typed and template statements until PRF-133), `UnitStager`'s rows and output rows, the prover's rows, the rows
@@ -35,6 +37,11 @@ Negatives (`negatives`), each refused at the proof layer:
     wrong-unit        a member's session checked against another member's circuit (that stratum's committed pin)
     tampered-registered-root  (members with registered reads) the verifier's --registered file with a root changed
 
+Served Definitions (`served`, ``defs``): vLLM's served Definitions as the frontend binds them on the RTX PRO 6000 target
+(`targets.gemm_spec`, `attention_spec`, `rmsnorm_fused_spec`, the dead-free rewrites) at a Llama model's statics, each the
+template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values. A
+shape whose rows' in-circuit hashing alone passes C-Flock's block (`m1_families.block`) is reported refused, not lowered.
+
 Known limits: units flat or untyped staged (PRF-133); C-Flock's block at most 2^27 (split-K, #3467, past K = 5041);
 table-heavy units need lookup slots (#3416, #3478); tail lookup slots are the GPU prover's; prover worker threads may need
 a bigger stack (PRF-141).
@@ -45,7 +52,10 @@ import argparse
 import copy
 import hashlib
 import json
+import contextlib
+import gc
 import os
+import resource
 import shutil
 import socket
 import sys
@@ -72,6 +82,10 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "k_log
 
 def log(msg: str) -> None:
     print(f"LEG {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def maxrss_gb(who: int) -> float:
+    return round(resource.getrusage(who).ru_maxrss / 2**20, 2)
 
 
 @dataclass
@@ -370,7 +384,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                                                             None if lv["accepted"] else f"lean {lv.get('why')}",
                                                             f"opening {op[i]}" if op[i] else None) if x)} for i in local]
         ml.update(session_s=session_s, timing=statement[m.name]["timing"], m0=m0["accepted"], lean=lv["accepted"],
-                  prover_stopped=(live or {}).get("prover_stopped"),
+                  prover_stopped=(live or {}).get("prover_stopped"), children_maxrss_gb=maxrss_gb(resource.RUSAGE_CHILDREN),
                   lean_why=lv.get("why"), lean_verify_s=lv.get("verify_s"), openings=verdicts[f"openings/{m.name}"])
         log(f"{m.name}: drawn {local}, M0 {m0['accepted']}, Lean {lv['accepted']} ({lv.get('why')}), openings "
             f"{verdicts[f'openings/{m.name}']['accepted']}, session {session_s} s")
@@ -444,18 +458,20 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
 
 
 def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict,
-              program=None, query=None) -> dict:
+              program=None, query=None, k: int | None = None) -> dict:
     """The proof-layer negatives on the first member (and, for wrong-unit, the second), each expected refused. ``coins``
-    must draw unit 0 of the first member (``"lean"`` with every unit drawn does). ``program``/``query``: the honest
-    leg's, when it was given its own."""
+    must draw unit 0 of the first member (``"lean"`` with every unit drawn does), or ``k`` (the stratified rule's K, fewer
+    than the member's units) is given and every unit is forged. ``program``/``query``: the honest leg's, when it was given
+    its own."""
     m = members[0]
     neg: dict[str, dict] = {}
-    kw = {"tools": tools, "program": program, "query": query}
+    kw = {"tools": tools, "program": program, "query": query, "k": k}
+    forge = tuple(range(m.n)) if k is not None and k < m.n else (0,)
 
     for name, t in (("tampered-unit", tools), ("tampered-unit-unfirewalled", replace(tools, firewall=None) if tools.firewall else None)):
         if t is None:
             continue
-        leg = prove_units([replace(m, forge=(0,))], coins, registered, out=out / name, **{**kw, "tools": t})
+        leg = prove_units([replace(m, forge=forge)], coins, registered, out=out / name, **{**kw, "tools": t})
         ml = leg["members"][m.name]
         neg[name] = {"refused": refused(leg, m.name), "units": ml.get("units"), "lean_why": ml.get("lean_why"),
                      "prover_stopped": ml.get("prover_stopped"), "audit": leg.get("audit")}
@@ -576,6 +592,205 @@ def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Seque
                   held={"pub": np.asarray(pubs, dtype=np.uint16)}, expect={"o0": np.asarray(oks, dtype=np.uint16)[:, None]})
 
 
+# --- served Definitions -----------------------------------------------------------------------------------------------
+
+#: the statics of the Llama models the served path runs (Llama-3.2-1B, Llama-3.1-8B; RoPE base 500000)
+LLAMA = {"1b": {"H": 2048, "I": 8192, "NH": 32, "KVH": 8, "D": 64, "V": 128256, "EPS": 1e-5},
+         "8b": {"H": 4096, "I": 14336, "NH": 32, "KVH": 8, "D": 128, "V": 128256, "EPS": 1e-5}}
+#: the --zk statement's least and greatest log size (`stage`)
+M_MIN = 25
+
+
+def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
+    return bf16(rng.normal(mean, scale, (n, size)))
+
+
+def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[str, np.ndarray]]]:
+    """The served Definition ``shape`` names (``family:model[:arg]``, ``model`` a key of `LLAMA`) as the frontend binds it on
+    the RTX PRO 6000 (sm_120, batch invariant, FA2 under the per-iteration Check_inf chain), and its stand-in values
+    (``rng, n -> {parameter: (n, words) u16}``):
+
+        gemm:M[:K]           Gemm_v2{K,N=1,DOT}, the unit of a Gemm_v2 row (``SLICES``), K the hidden size by default
+        attention:M:T        Attention_v5, a decode row (one query row, non-causal) over T keys
+        rmsnorm-fused:M      RMSNormFusedCuda_v2{N=H,EPS}
+        rmsnorm-triton:M     RMSNormTriton_v5{N=H,EPS} (`prune`'s rewrite of RMSNormTriton_v1)
+        embedding:M[:V]      Embedding_v1{V,H}
+        token-select:M[:V]   TokenSelect_v4{V} (`prune`'s rewrite of TokenSelect_v1)
+        rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
+    """
+    from verity.ml.circuits.defs import bind
+    from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.registry import b1, dead_free as DF
+
+    fam, model, *arg = shape.split(":")
+    L = LLAMA[model]
+    pro = TargetProfile(compute_capability=(12, 0), num_sms=188)
+    a = int(arg[0]) if arg else None
+    H, D, V = L["H"], L["D"], a or L["V"]
+    if fam == "gemm":
+        K = a or H
+        return TG.gemm_spec(pro, K, 1), lambda rng, n: {"x": _gen(rng, n, K), "w": _gen(rng, n, K, 0.02)}
+    if fam == "attention":
+        fn = TG.attention_spec(pro, a, L["NH"], L["KVH"], D, 1, row=0, own_rows=1)
+        return fn, lambda rng, n: {"q": _gen(rng, n, L["NH"] * D), "kc": _gen(rng, n, a * L["KVH"] * D),
+                                   "vc": _gen(rng, n, a * L["KVH"] * D)}
+    if fam == "rmsnorm-fused":
+        return (TG.rmsnorm_fused_spec(pro, H, L["EPS"]),
+                lambda rng, n: {"x": _gen(rng, n, H), "res": _gen(rng, n, H), "w": _gen(rng, n, H, 0.05, 1.0)})
+    if fam == "rmsnorm-triton":
+        return bind(DF.RMSNormTritonV5, N=H, EPS=L["EPS"]), lambda rng, n: {"x": _gen(rng, n, H), "w": _gen(rng, n, H, 0.05, 1.0)}
+    if fam == "embedding":
+        def emb(rng, n):
+            tok = rng.integers(0, V, n, dtype=np.uint32)
+            return {"tok": np.stack([tok & 0xFFFF, tok >> 16], axis=1).astype(np.uint16), "table": _gen(rng, n, V * H, 0.02)}
+        return bind(b1.Embedding, V=V, H=H), emb
+    if fam == "token-select":
+        return bind(DF.TokenSelectV4, V=V), lambda rng, n: {"logits": _gen(rng, n, V, 3.0)}
+    if fam == "rope":
+        heads = a or L["NH"]
+
+        def rope(rng, n):
+            pos = rng.integers(0, 8192, (n, 1))
+            ang = pos * 500000.0 ** (-np.arange(0, D, 2) / D)
+            return {"x": _gen(rng, n, heads * D), "cs": bf16(np.concatenate([np.cos(ang), np.sin(ang)], axis=1))}
+        return bind(b1.RoPE, NHEADS=heads, D=D), rope
+    raise SystemExit(f"{shape}: no served family {fam!r} (gemm, attention, rmsnorm-fused, rmsnorm-triton, embedding, "
+                     f"token-select, rope)")
+
+
+_LOWERINGS: dict = {}
+
+
+@contextlib.contextmanager
+def reuse_lowerings():
+    """`class_statement.unit_lowering` once per unit while inside: the honest leg and its negatives restage the same unit
+    under other partitions, and `circuit.compose` only reads the lowering it is given."""
+    from verity_flock import class_statement as CS
+
+    lower = CS.unit_lowering
+
+    def memo(definition, name, in_rows, *rest, **kw):
+        key = (definition.id, name, json.dumps([[r, list(ps)] for r, ps in in_rows]), repr(rest), repr(sorted(kw.items())))
+        if key not in _LOWERINGS:
+            _LOWERINGS[key] = lower(definition, name, in_rows, *rest, **kw)
+        return _LOWERINGS[key]
+
+    CS.unit_lowering = memo
+    try:
+        yield
+    finally:
+        CS.unit_lowering = lower
+        _LOWERINGS.clear()
+        gc.collect()
+
+
+def sized(fn) -> dict:
+    """`m1_families`' estimate of the unit (an upper bound on its ANDs) and M0's block for it (``rows_log``: its rows'
+    in-circuit hashing alone, a lower bound whatever its ANDs)."""
+    import math
+
+    import m1_families as MF
+
+    t = time.time()
+    e = MF.estimate(fn, {}, {})
+    b = MF.block(fn, e["ands"])
+    return {"est_ands": e["ands"], "est_log2_ands": round(math.log2(e["ands"]), 2) if e["ands"] else None, "reads": e["reads"],
+            "unpieced": e["unpieced"], **b, "refused_block": b["rows_log"] > MF.K_MAX, "k_max": MF.K_MAX,
+            "seconds": round(time.time() - t, 1)}
+
+
+def units_for(k_log: int, per_block: int) -> int:
+    """The fewest units a statement of ``k_log`` holds at least `M_MIN` in (`stage`'s m = k_log + its block bits, at least 3)."""
+    b = M_MIN - k_log
+    return 1 if b <= 3 else per_block * 2 ** (b - 1) + 1
+
+
+def served_member(shape: str, seed: int) -> tuple[Member, dict]:
+    """``shape``'s served unit as a member: its parameters the prover's rows, its outputs hidden, as few units as the --zk shape
+    admits (`units_for`, from its lowering), values seeded by ``seed``. Call inside `reuse_lowerings`."""
+    import a11_kinds as K
+    from verity.ml.circuits.codec import descriptor_id
+    from verity_flock import class_statement as CS
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    fn, gen = served(shape)
+    did = descriptor_id(fn)
+    tp = SRW.template(did)
+    params, ret = fn.signature()
+    rows = [(nm, V2, K.leaf_bits(t), [nm]) for nm, t in params]
+    out_rows = K.out_rows(len(ret.fields) if hasattr(ret, "fields") else 1)
+    name = shape.replace(":", "-")
+    t = time.time()
+    with K.no_cyclic_gc():
+        st = CS.UnitStager(tp.fn, f"unit/{name}", rows, out_rows)
+    meta = st.meta
+    n = units_for(meta["k_log"], meta["vus_per_block"])
+    counts = st.low.layout.counts
+    info = {"descriptor_id": did, "layout": tp.layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
+            "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "ands": counts["ands"], "k_log": meta["k_log"],
+            "vus_per_block": meta["vus_per_block"], "n": n, "lower_s": round(time.time() - t, 1),
+            "stage_py_maxrss_gb": maxrss_gb(resource.RUSAGE_SELF)}
+    log(f"{shape}: {did}, {counts['ands']} ANDs, k_log {meta['k_log']}, {meta['vus_per_block']} a block, {n} units, "
+        f"{info['lower_s']} s")
+    del st
+    values = gen(np.random.default_rng(seed), n)
+    if set(values) != {nm for nm, _t in params}:
+        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
+    return Member(name, tp.fn, rows, out_rows, values), info
+
+
+def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int) -> dict:
+    """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
+    `served_member`'s units, through `prove_units` and, with ``negs``, `negatives` at that draw. A shape whose rows alone
+    pass C-Flock's block, or whose estimate passes ``max_ands``, is recorded and not lowered."""
+    summary: dict[str, dict] = {}
+    for shape in shapes:
+        rec: dict[str, Any] = {"shape": shape}
+        summary[shape] = rec
+        try:
+            from verity.ml.circuits.codec import descriptor_id
+
+            fn, _gen = served(shape)
+            rec["descriptor_id"] = descriptor_id(fn)
+            rec["census"] = c = sized(fn)
+            log(f"{shape}: census {c}")
+            if c["refused_block"]:
+                rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
+                                  f"for their in-circuit hashing alone, past 2^{c['k_max']}")
+            elif c["est_ands"] > max_ands:
+                rec["blocker"] = f"not lowered here: estimated {c['est_ands']} ANDs past this run's {max_ands}"
+            if tools is None or "blocker" in rec:
+                continue
+            with reuse_lowerings():
+                m, info = served_member(shape, seed)
+                rec.update(info)
+                if info["k_log"] + 3 > a7.M_MAX:
+                    rec["blocker"] = f"k_log {info['k_log']}: m = k_log + 3 is past {a7.M_MAX} (flock-circuit's --zk shape)"
+                    continue
+                d = out / m.name
+                honest = prove_units([m], "lean", tools=tools, out=d / "honest", k=1)
+                rec["honest"] = {x: honest.get(x) for x in ("accepted", "audit", "members", "verdicts", "seconds", "firewall",
+                                                            "refused")}
+                if negs:
+                    rec["negatives"] = negatives([m], "lean", None, tools, d / "negatives", honest, k=1)
+        except Exception as ex:  # noqa: BLE001 -- recorded per shape, the rest still run
+            rec["error"] = f"{type(ex).__name__}: {ex}"[:2000]
+            log(f"{shape}: {rec['error']}")
+        finally:
+            gc.collect()
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    return summary
+
+
+def defs_ok(rec: dict) -> bool:
+    """A shape's done-condition: its honest unit accepted and every negative refused, or a named blocker."""
+    if "blocker" in rec:
+        return True
+    return bool((rec.get("honest") or {}).get("accepted")) and all(r["refused"] for r in (rec.get("negatives") or {}).values()) \
+        and "negatives" in rec
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="prove_leg.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -589,9 +804,29 @@ def main(argv=None) -> int:
     s.add_argument("--negatives", action="store_true")
     s.add_argument("--registered", action="store_true",
                    help="the registered-weights stand-in (one member at the first K) in place of the population one")
+    d = sub.add_parser("defs", help="vLLM's served Definitions at Llama shapes through the leg (`served`), and the negatives")
+    d.add_argument("--bin", default=None)
+    d.add_argument("--lean", default=None)
+    d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the firewall")
+    d.add_argument("--out", required=True, type=Path)
+    d.add_argument("--shape", action="append", required=True, help="family:model[:arg] (`served`); repeatable")
+    d.add_argument("--negatives", action="store_true")
+    d.add_argument("--census", action="store_true", help="size each shape only: no lowering, no proof")
+    d.add_argument("--seed", type=int, default=20261025)
+    d.add_argument("--mem-gb", type=int, default=64, help="the job's memory: a shape estimated past mem / 700 B an AND isn't lowered")
     a = ap.parse_args(argv)
-    tools = Tools(a.bin, a.lean, a.firewall)
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.command == "defs":
+        if not a.census and not (a.bin and a.lean):
+            ap.error("defs: --bin and --lean, or --census")
+        tools = None if a.census else Tools(a.bin, a.lean, a.firewall)
+        summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700)
+        ok = all("error" not in r for r in summary.values()) if a.census else all(defs_ok(r) for r in summary.values())
+        log("done: " + ("ok" if ok else "FAILED") + " " + json.dumps({k: ("blocker" if "blocker" in r else "error" if "error" in r
+                                                                        else "sized" if a.census else defs_ok(r))
+                                                                    for k, r in summary.items()}))
+        return 0 if ok else 1
+    tools = Tools(a.bin, a.lean, a.firewall)
     ks = [int(x) for x in a.ks.split(",")]
     program = query = reg = None
     if a.registered:

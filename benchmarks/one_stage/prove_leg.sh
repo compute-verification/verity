@@ -7,6 +7,8 @@
 # env: LEG_MEM_GB (the job's --mem-gb, 32 by default)  LEG_CACHE (the build cache)  LEG_N (units a member, 4)
 #      LEG_KS (the stand-in's K values, "128,256")  LEG_NEGATIVES=0 (honest only)  LEG_FIREWALL=0 (prove without it)
 #      LEG_REGISTERED=1 (the registered-weights stand-in at the first K, verified with --registered)
+#      LEG_DEFS="gemm:1b:2048 rope:1b ..." (vLLM's served Definitions, prove_leg.py defs, in place of the stand-in)
+#      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)
 # Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts.
 set -uo pipefail
@@ -15,6 +17,8 @@ if [ -n "${LEG_CACHE:-}" ] && mkdir -p "$LEG_CACHE" 2>/dev/null && [ -w "$LEG_CA
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+# PRF-141: the prover's worker threads overflow the default stack on wide units
+export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
@@ -25,12 +29,21 @@ if [ "${LEG_FIREWALL:-1}" = 1 ]; then
     > "$OUT/build-firewall.log" 2>&1
   [ -x "$FW" ] || { tail -20 "$OUT/build-firewall.log"; log "leg: no firewall frame"; exit 7; }
 fi
-log "leg: stand-in, n ${LEG_N:-4}, ks ${LEG_KS:-128,256}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}"
 NEG=--negatives; [ "${LEG_NEGATIVES:-1}" = 0 ] && NEG=
-REG=; [ "${LEG_REGISTERED:-0}" = 1 ] && REG=--registered
-"$PY" benchmarks/one_stage/prove_leg.py standin --bin "$BIN" --lean "$LEAN" ${FW:+--firewall "$FW"} --out "$W/leg" \
-  --n "${LEG_N:-4}" --ks "${LEG_KS:-128,256}" $NEG $REG 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
-rc=${PIPESTATUS[0]}
+if [ -n "${LEG_DEFS:-}" ]; then
+  SHAPES=(); for s in $LEG_DEFS; do SHAPES+=(--shape "$s"); done
+  CENSUS=; [ "${LEG_CENSUS:-0}" = 1 ] && CENSUS=--census
+  log "leg: served Definitions ${LEG_DEFS}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}${CENSUS:+, census only}"
+  "$PY" benchmarks/one_stage/prove_leg.py defs --bin "$BIN" --lean "$LEAN" ${FW:+--firewall "$FW"} --out "$W/leg" \
+    "${SHAPES[@]}" --mem-gb "$HZ_MEM_GB" $NEG $CENSUS 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
+  rc=${PIPESTATUS[0]}
+else
+  log "leg: stand-in, n ${LEG_N:-4}, ks ${LEG_KS:-128,256}, firewall ${FW:-off}, negatives ${LEG_NEGATIVES:-1}"
+  REG=; [ "${LEG_REGISTERED:-0}" = 1 ] && REG=--registered
+  "$PY" benchmarks/one_stage/prove_leg.py standin --bin "$BIN" --lean "$LEAN" ${FW:+--firewall "$FW"} --out "$W/leg" \
+    --n "${LEG_N:-4}" --ks "${LEG_KS:-128,256}" $NEG $REG 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
+  rc=${PIPESTATUS[0]}
+fi
 mkdir -p "$OUT/leg"
 (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
 [ -f "$W/leg/summary.json" ] && cp "$W/leg/summary.json" "$OUT/summary.json"
