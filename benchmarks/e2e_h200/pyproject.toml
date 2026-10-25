@@ -1,0 +1,12 @@
+# The H200 demo's walking skeleton (CMP-96): `replay.py`, the CPU replay of a step's drawn units against the CPU Definitions
+# and the draw of those units, and `cpu_step.py`, the frozen architecture's decode step on the CPU with every unit recorded.
+# Not a package: its tests run in the workspace environment (torch from the workspace's torch-cpu extra).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "../../integrations/torch_loop"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: the Definitions, the evaluator, the randomness and core's draw sizes it replays and draws with;
+# `integrations/torch_loop`: the MLP loop and the seeded weights generator its tests replay.
+inputs = ["verity", "integrations/torch_loop"]
