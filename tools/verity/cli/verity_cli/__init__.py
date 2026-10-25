@@ -5,7 +5,7 @@
     verity check --remote [ARGS]    the check recorded as an Attempt, on a free pod unless --on POD names one
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
-    verity lean try FILE [--on NODE] [--pool P]
+    verity lean try FILE [--on NODE] [--pool P] [--as LANE]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
                                     print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)
 """
@@ -73,8 +73,9 @@ def _lean(args: list[str]) -> int:
     ap.add_argument("file", metavar="FILE", help="the .lean file, from the repository's root")
     ap.add_argument("--on", default=TRY_NODE, metavar="NODE", help=f"the node (default {TRY_NODE})")
     ap.add_argument("--pool", help=f"its `research run` pool (default {TRY_POOL} on {TRY_NODE}, else the node's default)")
+    ap.add_argument("--as", dest="lane", metavar="LANE", help="the lane the pool's slot names (default $RESEARCH_LANE)")
     if not args or args[0] != "try":
-        raise SystemExit("verity lean try FILE [--on NODE] [--pool P]")
+        raise SystemExit("verity lean try FILE [--on NODE] [--pool P] [--as LANE]")
     a = ap.parse_args(args[1:])
     file = a.file if (ROOT / a.file).is_file() else os.path.relpath(Path(a.file).resolve(), ROOT)
     pool = a.pool or (TRY_POOL if a.on == TRY_NODE else None)
@@ -83,7 +84,8 @@ def _lean(args: list[str]) -> int:
     with tempfile.TemporaryDirectory(prefix="verity-lean-try-") as tmp:
         source = _snapshot(Path(tmp))
         try:
-            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []), "--project", "verity",
+            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []),
+                                  *(["--as", a.lane] if a.lane else []), "--project", "verity",
                                   "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
                                   "python3", "tools/verity/lean/lean_changed.py", "--try", file],
                                  cwd=ROOT, stderr=subprocess.PIPE, text=True)
