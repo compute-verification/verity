@@ -96,7 +96,7 @@ def flockNorm : DrawNorm where
 the run decided at the statement's inputs `s`, and `verify --zk` accepts the last message's record and proof files `f`
 at `s.read.I` (`AcceptsZK`), so `LiveAcceptsZK` holds at every outcome carrying that transcript. The verifier rebuilds
 every draw it reads (`flockNorm`; the record's, `Custody.recordDraw_norm`, and the statement's,
-`Custody.insOf_draw_norm`), so the record's draw is the statement's as a value. -/
+`DeployInputs.insOf_draw_norm`), so the record's draw is the statement's as a value. -/
 theorem liveAcceptsZK_of_run_rebuilt {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ (s : Ins) (f : Final), insOf true x = some s ∧
@@ -105,6 +105,6 @@ theorem liveAcceptsZK_of_run_rebuilt {n : ℕ} {Reg : Type} {Ω : Type} {P : Cla
         ZkExec.LiveAcceptsZK s.read.I (R, S, (⟨f.record, f.proofs⟩ : Exec.Transcript)) :=
   liveAcceptsZK_of_run_norm flockNorm
     (fun _ d hd => ⟨d, (Claims.Bridge.Custody.recordDraw_norm hd).symm⟩)
-    (fun _ d hs hd => ⟨d, (Claims.Bridge.Custody.insOf_draw_norm hs hd).symm⟩) h
+    (fun _ d hs hd => ⟨d, (FlockDeploy.insOf_draw_norm hs hd).1.symm⟩) h
 
 end FlockDeploy.KS
