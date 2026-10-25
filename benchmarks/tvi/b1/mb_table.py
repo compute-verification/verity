@@ -1,5 +1,5 @@
-"""B1's 1-5 MB readout: capability (A2's analyze.py over A2's runs and mb.sh's), F and the betas (summarize.py's F_beta.json),
-and the two-crossing cliff rho = 4 eta kappa_tr (1 + (d / 1536) F / h) at Qwen2.5-1.5B's width and at d = 7168.
+"""B1's 1-5 MB readout: capability (A2's analyze.py over A2's runs and mb.sh's), F at the cheapest boundary and its mean over
+every boundary, and the betas (summarize.py's F_beta.json and F_beta_layers.json), and the two-crossing cliff rho = 4 eta kappa_tr (1 + (d / 1536) F / h) at Qwen2.5-1.5B's width and at d = 7168.
 
   python mb_table.py SUMMARY_DIR RUN_DIR [RUN_DIR ...] > mb.md      (also writes mb.json beside SUMMARY_DIR's F_beta.json)
 
@@ -72,6 +72,13 @@ def main():
     C = F["entry_format_columns"]
     ents = [e for e in F["entries"] if e["fam"] == "A2" and e["cond"].startswith("gsm8k:")
             and e["cond"].split(":")[1] in METHODS]
+    lay = json.load(open(os.path.join(sdir, "F_beta_layers.json")))
+
+    def fmeans(e):
+        """F per precision averaged over every boundary (decoder-layer output) of the checkpoint"""
+        task, meth, seed = e["cond"].split(":")[0], e["cond"].split(":")[1], e["cond"].split(":")[-1]
+        L = lay[f"A2_{task}-{meth}-{seed}_step{e['step']}"]
+        return {f: sum(L[f]["F_fwd"]) / len(L[f]["F_fwd"]) for f in FMTS}
     out = {"capability": {}, "counted": [], "cliff": {}}
 
     print("### Capability: fraction of full RL's gain on GSM8K (Qwen2.5-1.5B-Instruct, 150 GRPO steps, 1319 test problems)\n")
@@ -92,45 +99,50 @@ def main():
                                 for k, x in (("greedy", g.get(m)), ("T1", sr), ("T1_merged", sm.get(m)), ("online", on.get(m)))
                                 if x}
 
-    print("\n### F at the cheapest block boundary and the betas, per checkpoint\n")
-    print("F in bits per token (fresh forward residual at the FP8-cheapest decoder-layer output); rank = that residual's "
-          "effective rank (90% / 99% energy); beta in bits per value (beta_v per counted value, beta_v|x the output given "
-          "theta's weights on theta''s input, beta_x per input coordinate, beta_w per weight of an updated matrix, the smaller "
-          "of the compressors' and S/N_w).\n")
-    print("| method | seed | step | S | KL | F bf16 | F fp8 | F nvfp4 | cheapest layer | rank r90 / r99 | keep-90% rank (fp8, cheapest probed) "
-          "| beta_x fp8 | beta_v fp8 | beta_v given x fp8 | beta_w fp8 | beta_x bf16 | beta_v bf16 | beta_v given x bf16 | beta_w bf16 |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("\n### F at the cheapest block boundary, its mean over the 28 boundaries, and the betas, per checkpoint\n")
+    print("F in bits per token of the fresh forward residual at a decoder-layer output: min = the FP8-cheapest boundary's "
+          "reading at each precision, mean = the mean over all 28 boundaries; rank = the cheapest boundary's effective rank "
+          "(90% / 99% energy); keep-90% rank = the smallest rank-r correction keeping 90% of KL(theta'||theta) at the cheapest "
+          "probed boundary (fp8 coefficients). beta in bits per value, each as bf16 / fp8 / nvfp4: beta_x per input coordinate, "
+          "beta_v per counted value, beta_v given x the output given theta's weights on theta''s input, beta_w per weight of an "
+          "updated matrix (the smaller of the compressors' and S/N_w).\n")
+    print("| method | seed | step | S | KL | F min (bf16 / fp8 / nvfp4) | F mean over 28 (bf16 / fp8 / nvfp4) | cheapest layer "
+          "| rank r90 / r99 | keep-90% rank | beta_x | beta_v | beta_v given x | beta_w |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     order = {m: i for i, m in enumerate(METHODS)}
+    trio = lambda x, k: " / ".join(str(x[f][k]) for f in FMTS)
     for e in sorted(ents, key=lambda e: (order[e["cond"].split(":")[1]], e["cond"], e["step"])):
         m, seed = e["cond"].split(":")[1], e["cond"].split(":")[-1]
         x = {f: dict(zip(C, e[f])) for f in FMTS}
+        fmean = fmeans(e)
         apx = e.get("apx", {}).get("fp8")
-        print(f"| {m} | {seed[4:]} | {e['step']} | {mb(e['S_bits'])} | {e['kl']} | {x['bf16']['Ff_min']} | {x['fp8t']['Ff_min']} | "
-              f"{x['nvfp4']['Ff_min']} | {e['cheapest']['layer']} | {e['cheapest']['r90']} / {e['cheapest']['r99']} | "
-              f"{apx[1] if apx else '–'} (layer {apx[0] if apx else '–'}) | {x['fp8t']['bx']} | {x['fp8t']['bv']} | "
-              f"{x['fp8t']['bv_gx']} | {x['fp8t']['bw_min']} | {x['bf16']['bx']} | {x['bf16']['bv']} | {x['bf16']['bv_gx']} | "
-              f"{x['bf16']['bw_min']} |")
+        print(f"| {m} | {seed[4:]} | {e['step']} | {mb(e['S_bits'])} | {e['kl']} | {trio(x, 'Ff_min')} | "
+              f"{' / '.join(f'{fmean[f]:.0f}' for f in FMTS)} | {e['cheapest']['layer']} | "
+              f"{e['cheapest']['r90']} / {e['cheapest']['r99']} | {apx[1] if apx else '–'} (layer {apx[0] if apx else '–'}) | "
+              f"{trio(x, 'bx')} | {trio(x, 'bv')} | {trio(x, 'bv_gx')} | {trio(x, 'bw_min')} |")
         out["counted"].append({"method": m, "seed": seed, "step": e["step"], "S_bits": e["S_bits"], "kl": e["kl"],
-                               "cheapest": e["cheapest"], "apx_fp8": apx, **{f: x[f] for f in FMTS}})
+                               "cheapest": e["cheapest"], "apx_fp8": apx, "F_mean_28": fmean, **{f: x[f] for f in FMTS}})
 
     print("\n### The two-crossing cliff rho = 4 eta kappa_tr (1 + (d / 1536) F / h), kappa_tr = 1/3, h = 17, eta = 1\n")
-    print("F from the final (step-150) checkpoints, mean over seeds [min, max]; the d = 7168 column scales F by 7168 / 1536.\n")
-    print("| method | S | F fp8 | rho fp8, d = 1536 | rho fp8, d = 7168 | F nvfp4 | rho nvfp4, d = 1536 | rho nvfp4, d = 7168 "
-          "| F bf16 | rho bf16, d = 1536 | rho bf16, d = 7168 |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("F from the final (step-150) checkpoints, mean over seeds [min, max over seeds], at the cheapest boundary and as the "
+          "mean over the 28 boundaries; the d = 7168 columns scale F by 7168 / 1536.\n")
+    print("| method | S | precision | F cheapest | rho, d = 1536 | rho, d = 7168 | F mean over 28 | rho, d = 1536 | rho, d = 7168 |")
+    print("|---|---|---|---|---|---|---|---|---|")
     for m in METHODS:
         fin = [e for e in ents if e["cond"].split(":")[1] == m and e["step"] == 150]
         if not fin:
             continue
-        row, rec = [m, mb(fin[0]["S_bits"])], {"S_bits": fin[0]["S_bits"], "n": len(fin)}
-        for f in ("fp8t", "nvfp4", "bf16"):
-            v = [dict(zip(C, e[f]))["Ff_min"] for e in fin]
-            mean = sum(v) / len(v)
-            r = {d: [rho(mean, d), rho(min(v), d), rho(max(v), d)] for d in WIDTHS}
-            row += [f"{mean:.0f} [{min(v)}, {max(v)}]"] + [f"{r[d][0]:.0f} [{r[d][1]:.0f}, {r[d][2]:.0f}]" for d in WIDTHS]
-            rec[f] = {"F": v, "F_mean": mean, **{f"rho_d{d}": r[d] for d in WIDTHS}}
+        rec = {"S_bits": fin[0]["S_bits"], "n": len(fin)}
+        for f in FMTS:
+            row = [m, mb(fin[0]["S_bits"]), f]
+            for key, vals in (("min", [dict(zip(C, e[f]))["Ff_min"] for e in fin]), ("mean28", [fmeans(e)[f] for e in fin])):
+                mean = sum(vals) / len(vals)
+                r = {d: [rho(mean, d), rho(min(vals), d), rho(max(vals), d)] for d in WIDTHS}
+                row += [f"{mean:.0f} [{min(vals):.0f}, {max(vals):.0f}]"] + [f"{r[d][0]:.0f} [{r[d][1]:.0f}, {r[d][2]:.0f}]"
+                                                                           for d in WIDTHS]
+                rec.setdefault(f, {})[key] = {"F": vals, "F_mean": mean, **{f"rho_d{d}": r[d] for d in WIDTHS}}
+            print("| " + " | ".join(row) + " |")
         out["cliff"][m] = rec
-        print("| " + " | ".join(row) + " |")
     json.dump(out, open(os.path.join(sdir, "mb.json"), "w"), indent=1)
 
 
