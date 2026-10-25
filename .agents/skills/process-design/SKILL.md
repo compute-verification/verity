@@ -42,7 +42,7 @@ cost on all of them.
 **Price only the scarce resources.** Machine time and agent time are cheap and run in parallel. These are not:
 
 1. **the human's attention**, the bottleneck;
-2. **the merge path:** trains, `check` on a train's tip, the coordinator;
+2. **the merge path:** `next`, its reviewers, a Lean change's Lean check, the coordinator;
 3. **files and queues many lanes pass through;**
 4. **the words every agent reads before working:** the root `AGENTS.md`, the lane contract, the `AGENTS.md` of the
    subtree;

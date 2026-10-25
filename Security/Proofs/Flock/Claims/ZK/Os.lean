@@ -143,7 +143,7 @@ def ZkDeferredOs : Prop :=
 theorem zkDeferredOs : ZkDeferredOs := by
   intro W N Ω Θ _ _ _ _ S fill H k P Rl Sim εzk γ hZK x w hR wk hRef Vs θ hk Ev ι _ _ Ls dec Ωos _ src η hη hA3
   exact (Pr_os_prod dec (fun p : (N × Ω) × S.Chk => Ev (S.timed x (runStar H (S.proverD fill k wk w) Vs x p θ).msgs))
-    hη hA3).trans (add_le_add (S.zk_deferred fill H k P Rl Sim εzk γ hZK x w hR wk hRef Vs θ hk Ev) le_rfl)
+    hη hA3).trans (add_le_add (S.zk_deferred fill H k P Rl Sim εzk γ hZK x w hR wk hRef.own Vs θ hk Ev) le_rfl)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

@@ -54,12 +54,13 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 <tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
-The memory line held over time (`line.py`) is the line of record a gate run publishes (`auditor_line.py`, through
-`verifier.py`'s `recorded_line`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and
-`HeldOverTimeLinks`' conclusions read over each stretch of a paced session's groups, from their timings, the store, the
-on-chip storage, the node's rates and bursts and the wrong receipts, in exact rationals. Its Lean is
-`lean/RemoteAudit/Line.lean`, held to the Python by `lean/tests/test_line.py`'s difftest, every refusal compared word
-for word.
+The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
+`recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
+read over each stretch of a paced session's groups, from their timings, the store, the on-chip storage, the node's
+rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
+W from `Pooled.lean`), as the verifier process's `line` request, and `line.py` computes it beside it from the same
+inputs: `auditor_line.py` holds the two exactly equal and refuses the line where they differ, and
+`lean/tests/test_line.py`'s difftest holds them together, every refusal compared word for word.
 
 ## Replay
 

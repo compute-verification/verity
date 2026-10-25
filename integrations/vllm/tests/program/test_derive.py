@@ -901,6 +901,7 @@ def test_moe_routing_is_refused_not_approximated():
     assert isinstance(r, Unsupported) and r.reason in ("numerics_unregistered", "dynamic_control_flow") and "topk" in str(r), r
 
 
+@pytest.mark.slow
 def test_hf_greedy_request_reference_mode_tokens_match_torch():
     """Bounded HF request (prefix recomputed each step): the STEPS+1 greedy tokens equal torch CPU's. Each step's rotary table is
     its own derived input (the source computes it per call; positions recorded — the prefix relation between them is not asserted)."""

@@ -69,6 +69,7 @@ from dataclasses import dataclass
 from verity.ml.circuits.evaluate import evaluate_call
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.frontend.rules.family import _field_intervals
+from verity_vllm.program.sampling_event import circuit_token_id
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import runs
 
@@ -371,7 +372,7 @@ class Replayer:
         if pi == self.W:
             return self._weight_words_at(leaves)
         toks = self.r.requests[pi]["prompt_token_ids"]
-        return np.array([int(toks[int(l)]) & 0xFFFFFFFF for l in leaves], dtype=np.uint64)
+        return np.array([circuit_token_id(toks[int(l)]) for l in leaves], dtype=np.uint64)
 
     def gate_words(self, gates: Iterable[int]) -> list[int]:
         """Encodings of root gates: Input gates from the parameters, other gates from the producing root instance's

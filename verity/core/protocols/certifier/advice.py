@@ -1,8 +1,9 @@
 """Advice v0: what serving decided, as one canonical bit string per certifier session (PROTOCOL.md, "Advice v0").
 
 The precommitted AOT compiler turns the advice into each executed engine step's circuit; the certifier certifies the
-I/O; sampled proofs hold the committed values to the compiled circuits and to the certified I/O. The advice's bit
-length is the content advice `A_c` of the certifier's accepted-runs bound, and `bits` charges it to egress windows.
+I/O; sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is the committed
+form (hm96 hiding rows), private, and `bits` splits its length among egress windows. The charge, the content advice
+`A_c` of the certifier's accepted-runs bound, is ENC-CODE's compressed length of the advice, not v0's.
 
 **What it says** (vLLM v1, the pinned 0.28.1rc1.dev472's `Scheduler.schedule` and `SchedulerOutput`):
 - `requests`, in order of their first row: each request's id (the body's `user`), prompt and output lengths and how it
@@ -32,10 +33,10 @@ length; every width is the least that holds its largest value; w_req = bitlen(le
     release    Σ output_len × u(w_rel)
     padding    zero bits to a whole byte, never charged
 
-**The charge.** Each record goes to the earliest egress window it can show in: an output's release to its own window,
+**By window.** Each record goes to the earliest egress window it can show in: an output's release to its own window,
 a step's rows to the earliest window of an output at that step or later, a request to its first step's, the header to
-the first output's. So `bits` per window sums to `total_bits`, and windows 0 … m − 1 are charged every record their
-frames read.
+the first output's. So `bits` per window sums to `total_bits`, and windows 0 … m − 1 hold every record their frames
+read.
 """
 
 from __future__ import annotations
@@ -457,14 +458,14 @@ def decode(data: bytes) -> Advice:
 
 
 def total_bits(advice: Advice) -> int:
-    """The advice's length in bits, its padding left out: `A_c` for the session."""
+    """v0's length in bits, its padding left out (the charge `A_c` is ENC-CODE's compressed length)."""
     lay = _layout(advice)
     return lay.header + sum(lay.requests) + sum(lay.steps) + lay.release * len(advice.release)
 
 
 def bits_by_window(advice: Advice, T: int) -> dict[int, int]:
-    """The bits charged to each egress window of T buckets that is charged any, by the earliest window each record can
-    show in (the module's docstring, "The charge"). The values sum to `total_bits`."""
+    """v0's bits in each egress window of T buckets that holds any, by the earliest window each record can show in (the
+    module's docstring, "By window"). The values sum to `total_bits`."""
     _int("T", T, 1)
     lay = _layout(advice)
     replay = _replay(advice.requests, advice.steps)
@@ -497,7 +498,7 @@ def bits_by_window(advice: Advice, T: int) -> dict[int, int]:
 
 
 def bits(advice: Advice, window: int, T: int) -> int:
-    """The advice bits charged to egress window `window` of T buckets."""
+    """v0's bits in egress window `window` of T buckets (`bits_by_window`)."""
     _int("window", window)
     return bits_by_window(advice, T).get(window, 0)
 

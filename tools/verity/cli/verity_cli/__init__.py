@@ -1,6 +1,6 @@
 """`verity`: the repository's one command, dispatching to the tools beside it.
 
-    verity check [ARGS]             the check a merge requires (check/check.py)
+    verity check [ARGS]             the whole check, run on `main` after each landing (check/check.py)
     verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
     verity check --remote [ARGS]    the check recorded as an Attempt, on a free pod unless --on POD names one
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
