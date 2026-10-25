@@ -17113,6 +17113,16 @@
     "Verity.SecurityProofs.HopperStepSound"
    ]
   },
+  "Definitions.Core.AuditorDevice": {
+   "digest": "2e248834619afcfe0fc8ec5dde961f8ef15403de7c8ac950f8a346f655eb4e2f",
+   "definitions": {
+    "Verity.TapCode": "f42784492de69c47955513cc862f8ecce8fe8be285326d533db63c861991208e",
+    "Verity.TapCode.onUplink": "643676a9fd1fbe0dff6271b213ba17daba61f14e9369531c15a6e766175b5fce",
+    "Verity.TapCode.record": "ba72bae481ec8efa026052d02701aee7b5d733fc3e27041dd9c5aed9ef8010af",
+    "Verity.TapCode.relay": "39258060cdb19d82ce25fc2a4932514c2e5ca4760e6ec179d75e11d16b32adf5"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+  },
   "Definitions.Core.Circuit": {
    "digest": "4b89f6ddf9d7d0b8a14ef45007686901fdfd61ea19bbc81c3f68df13cca94eec",
    "definitions": {
@@ -20647,10 +20657,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Assumptions.Period": {
-   "digest": "96b14fbc328ce079f392b047f69868c888fca3ef6fec84d6bf1ff9a10eaf31e0",
+   "digest": "7f8c898994edbe5070025e4488ea26acc73324f2798f8fef47befb45e81044e5",
    "definitions": {
-    "NetTiming.RowsCarried": "97241ad2cf60b8064fd91fda08fa9fa0c7ad7c6fab1a1c2c770c6163ae60a36f",
-    "NetTiming.WardenCertifierEgress": "956b59ef88939b5b4d797ae1fbb1c0dd823826ac572d4245b4106dec31b9022f"
+    "NetTiming.RowsCarried": "97241ad2cf60b8064fd91fda08fa9fa0c7ad7c6fab1a1c2c770c6163ae60a36f"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -20804,9 +20813,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "98cc2bb1db52075610ca899171fbbc6bef838880e904bc62bc527f7b58602852",
+   "digest": "e3343aa5743e43ee0eacaae505777f3c0c1387cd86c55e20fa66fdc580061bb6",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "8d8d3992667fb31a9aadffa0449c72c4d69e9d59ba19533f288bb502e257e591"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "3c4c2ed28521f2ac5b98bff881bb55a71555f20c9c9df2dc036be9f2cd224dc1"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -21047,6 +21056,16 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
+  },
+  "Definitions.NetworkCertifier.Tap": {
+   "digest": "9b52f096a525d38f4d299666127b2797130956c10dac881290de87626f03ce7a",
+   "definitions": {
+    "NetTiming.WardenTap": "fdce34fe4e9fa8320d0d45ab789154f9c7a7156024c151ba598a64059e8ca51d",
+    "NetTiming.WardenTap.code": "7f6b1f02e31e893af94c8a6c1f4ed1afc1e2f7d325f575c5e5f32cc69c179006",
+    "NetTiming.WardenTap.read": "0b94f784f2e04ab26e5ce91434d3461194f2df7091b8ac804db958838acb2ace",
+    "NetTiming.WardenTap.record": "987d504a0fb7a47a918ddbe2881f0918a067e9031ad89fd0a65497e0bce8cb91"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
