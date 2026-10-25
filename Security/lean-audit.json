@@ -22353,7 +22353,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "1c85f75a5e4fc26d987b89bc6c88be3f473854d3166645edc6b34ca632369dda",
+   "digest": "4357db0cce00b97af32a575f1339c6cc9dfa607a65e2fde9f8d564c0e4c018bd",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -22367,6 +22367,7 @@
     "Pouw.PearlC.W1.Code.ite": "49313a1d870064841196377a49478ec7bf382d0e833364eab853576cfb03cf01",
     "Pouw.PearlC.W1.Code.op": "ebd3f7d9a40140b476ebf67f72580af631c4a461d572e40b6998fb9d24b46510",
     "Pouw.PearlC.W1.Code.rec": "1ce59e6014ad823590b7a129b80827ab414679626a94ca9d002cf0cc2c92c18e",
+    "Pouw.PearlC.W1.Code.size": "a798590d8934093fc5c0156745e5177692dd821b94baf6fcc007074c4522ad09",
     "Pouw.PearlC.W1.Fmt": "90751949d9ced8d44d438acc9c56111cf5d8277b9b3f630c62928eb0eb3ba01f",
     "Pouw.PearlC.W1.Fmt.bf16": "ff3b4b7a2f4de3f5f91bc581622e1d32c9358b3de560db3817206489f2d74c90",
     "Pouw.PearlC.W1.Fmt.bits": "aefb038c5b7b1db823819dc0a263509de81acb0bd6e2b5cb9b2120f17f1fe879",
@@ -22435,7 +22436,7 @@
     "Pouw.PearlC.W1.Iop.xor": "a49b9694bd822f68cd6bc1c34dea4e83985352c2b80dffa81e9f6c3bee750990",
     "Pouw.PearlC.W1.Mem": "f5c3227ffed4118f14c987d752c2ac074475e491dcdfe066620c4d58be90d5bc",
     "Pouw.PearlC.W1.Mem.fill": "916bca96d912e2c0aaf617a31df847c6f33bbeff55259e409dedd63d83326f86",
-    "Pouw.PearlC.W1.Prog": "ec42b71b1379a77737b2bee2f8b14e0a1cfb97c2be7ace41513695eb8614d138",
+    "Pouw.PearlC.W1.Prog": "8b12898534aab3f55c6f2b5b0c3cb1da91cb212083aefd4eb329f283db0f0530",
     "Pouw.PearlC.W1.Prog.code": "591bf8ee203aec342af4004cb34d29c4220e9ecefed1377f83875e8e253726dc",
     "Pouw.PearlC.W1.Prog.consts": "26d33596c5df18a10a775ff58af8242664f04c99b358a72b6a7589664f41de16",
     "Pouw.PearlC.W1.St": "8af8802fd1be66b0e6bf1e732590167d44de3c719e61de0310aa188825ae1d31",
