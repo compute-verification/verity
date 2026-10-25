@@ -47,6 +47,7 @@
   "Flock.TmplUnroll",
   "Flock.TmplAt",
   "Flock.TmplValue",
+  "Flock.TmplComputes",
   "Flock.Test.TmplAt",
   "Flock.Test.TmplValue",
   "Flock.Test.TmplRows",
