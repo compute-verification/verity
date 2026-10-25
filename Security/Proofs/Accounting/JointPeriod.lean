@@ -23,7 +23,7 @@ theorem update_piSplitAt_symm {I : Type} [DecidableEq I] {Ω : I → Type} (i : 
   by_cases hj : j = i
   · subst hj
     simp [Equiv.piSplitAt_symm_apply]
-  · simp [Function.update_of_ne hj, Equiv.piSplitAt_symm_apply, hj]
+  · simp [Equiv.piSplitAt_symm_apply, hj]
 
 /-- **A bound over one coordinate bounds the event.** If, at every value of the other coins, the probability over
 coordinate `i` of `E` is at most `δ`, so is the probability over all the coins. -/
