@@ -326,8 +326,11 @@ def judge(c: Change, base: str) -> None:
                  f"an entry may move with the violation it allows, within its ratchet)")
         c.fix = added[:CHEAPEST] + ([f"... and {len(added) - CHEAPEST} more"] if len(added) > CHEAPEST else [])
     else:
+        moves = git("diff", "--name-only", "-M", "--diff-filter=R", c.lo, c.hi).strip()
         c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "
-                 f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries")
+                 f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries"
+                 + (f" (a layout move, whose lints move with it, is exempt once `python3 {MOVE_CHECK} {c.lo[:12]} "
+                    f"{c.hi[:12]}` certifies it)" if moves else ""))
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
