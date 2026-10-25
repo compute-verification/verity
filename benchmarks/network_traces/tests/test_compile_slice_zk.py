@@ -1,7 +1,6 @@
 """compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
-received leaves out exactly the witness pieces and carry rows with at most one nonzero byte, which a proof's encoding
-holds whatever the witness, and keeps the rest held as they were. Nothing here lowers or proves
-(`compile_slice_zk.prove` does, on a node)."""
+received judges every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count
+exemption. Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -13,6 +12,8 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
+#: `a8.find`'s answer, by substring: each piece (named by its needles) found in `data`
+A8 = SimpleNamespace(find=lambda data, table: {v: 1 for k, v in table.items() if k in data})
 
 
 def _load():
@@ -35,28 +36,41 @@ def test_w212_is_proved_at_its_runs_engine_class(monkeypatch):
         Z.load("w212")
 
 
-def test_sparse_pieces_leaves_out_one_nonzero_byte():
+def test_a_piece_with_one_nonzero_byte_is_judged_by_the_rule(tmp_path):
+    """No piece is left out for its byte count: a witness piece with one nonzero byte found in a file whose format isn't
+    read is leaked, and one whose bytes the public rows hold is structured."""
     Z = _load()
-    zero, low, high = bytes(16), b"\x05" + bytes(15), bytes(15) + b"\x80"
-    two, full = b"\x01\x02" + bytes(14), bytes(range(1, 17))
-    pieces = {"wit 0 @0": low, "wit 0 @16": two, "wit 0 @32": full, "wit 8 @0": high, "wit salt 0 @0": zero}
-    kept, held, out = Z.sparse_pieces(pieces, {"wit 0 @0", "wit 0 @16", "wit 0 @32", "wit 8 @0"})
-    assert kept == {"wit 0 @16": two, "wit 0 @32": full}
-    assert held == {"wit 0 @16", "wit 0 @32"}
-    assert out == sorted(x.hex() for x in (zero, low, high))
+    low, pub = b"\x05" + bytes(15), bytes(15) + b"\x80"
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "openings.json").write_bytes(b"[" + low + b"]")
+    (vdir / "pub-2.bin").write_bytes(b"\x01" + pub)
+    (tmp_path / "inst.bin").write_bytes(low + pub)
+    got = Z.received(A8, vdir, tmp_path / "inst.bin", {"wit 0 @0": low, "wit 8 @0": pub}, {"wit 0 @0", "wit 8 @0"})
+    assert got["verifier_found"] == ["wit 0 @0", "wit 8 @0"]
+    assert got["leaked"] == ["wit 0 @0"] and got["structured"] == {"wit 8 @0": "public"}
+    assert got["control"]["holds_all"]
 
 
-def test_carry_rows_received_leaves_out_a_zero_row(tmp_path):
-    """A restart from zero counts commits a ``cin`` row of twelve zero bytes, which any proof holds: the carry scan
-    lists it as sparse and scans the rest, finding a row the verifier received and holding the control to them all."""
+def test_the_carry_rows_are_each_scanned_whole_under_the_rule(tmp_path):
+    """Each unit's carry rows (12 bytes) are scanned whole, the public priors' ``cin`` not among them. A restart's zero
+    ``cin`` row is structured where the public rows hold its bytes, and leaked where they don't; a carry row found off
+    them is leaked; the control holds every row."""
     Z = _load()
-    a8 = SimpleNamespace(find=lambda data, table: {v: 1 for k, v in table.items() if k in data})
     zero, live, sent = [0] * 6, [58, 50, 58, 0, 392, 48], [1, 2, 3, 4, 5, 6]
     units = [SimpleNamespace(words={"cin": zero, "cout": live}, chained=False),
              SimpleNamespace(words={"cin": live, "cout": sent}, chained=True)]
+    assert list(Z.carry_rows(units, SimpleNamespace(public=True))) == ["cout 0", "cin 0", "cout 1"]
+    carry = Z.carry_rows(units, SimpleNamespace(public=False))
+    assert carry == {"cout 0": Z._u16(live), "cin 0": bytes(12), "cout 1": Z._u16(sent), "cin 1": Z._u16(live)}
     vdir = tmp_path / "verifier"
     vdir.mkdir()
-    (vdir / "proof.bin").write_bytes(bytes(64) + Z._u16(sent))
-    (tmp_path / "control.bin").write_bytes(Z._u16(live) + Z._u16(sent))
-    got = Z.carry_rows_received(a8, vdir, tmp_path / "control.bin", units, SimpleNamespace(public=False))
-    assert got == {"distinct_rows": 2, "verifier_found": ["cout 1"], "control_holds_all": True, "sparse": ["cin 0"]}
+    (vdir / "openings.json").write_bytes(bytes(64) + Z._u16(sent))
+    (vdir / "pub-2.bin").write_bytes(b"\x07" + bytes(20))
+    (tmp_path / "inst.bin").write_bytes(b"".join(carry.values()))
+    got = Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))
+    assert got["verifier_found"] == ["cin 0", "cout 1"]
+    assert got["structured"] == {"cin 0": "public"} and got["leaked"] == ["cout 1"] and got["control"]["holds_all"]
+
+    (vdir / "pub-2.bin").write_bytes(bytes(range(1, 22)))
+    assert Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))["leaked"] == ["cin 0", "cout 1"]
