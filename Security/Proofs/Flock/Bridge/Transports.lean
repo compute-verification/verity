@@ -1,4 +1,5 @@
 import Proofs.Flock.Bridge.Canon
+import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Claims.Bridge.Transports
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
@@ -10,8 +11,8 @@ claims position whose registered row sits at a `sha512/row/v2` port of `16 w` bi
 `RowShaped` of the row's width, under a salt of `saltLen` bytes, whose hm96 leaf is the registered leaf of that row
 (`opens_commitDep`). The opening's data is the salt, the row's frame-v3 path in the verifier's own tree (`sibsV`) and the
 value's bits (`dataOf`). The one more condition: the registration's roots separate differently named ports
-(`RootsSep`), since the verifier opens at the first port whose root the position names, and a port of the same root
-and name opens the same leaves (`opensLeaf_portAt`).
+(`PortRoots.RootFixesDomain`), since the verifier opens at the first port whose root the position names, and a port of
+the same root and name opens the same leaves (`opensLeaf_portAt`).
 
 The restriction is the deployed check's own: a misshaped value's leaf is the leaf of an opening `commitDep` passes only
 by a SHA-512 collision (`leaf_misshaped_dep`), and so is a leaf under a salt of another length once the path has a level,
@@ -19,7 +20,7 @@ by a SHA-512 collision (`leaf_misshaped_dep`), and so is a leaf under a salt of 
 
 At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
 `opens_commitDep`, and `transportsLiveCS` is `Bridge.TransportsLiveC` (canonical openings, `RowsV2` circuit files) with
-one premise more, `RootsSep`.
+one premise more, `PortRoots.RootFixesDomain`.
 -/
 
 namespace Flock.Bridge
@@ -112,14 +113,10 @@ theorem find?_portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q : ℕ
   refine ⟨by simp [portAt, Claims.Sampling.bs_bytes], q, by simp [portsOf_eq, hq], by simp [portsOf_eq], fun j hj => ?_⟩
   simpa [portsOf_eq, portAt, Claims.Sampling.bs_bytes, List.getD_eq_getElem?_getD] using hfirst j hj
 
-/-- **The registration's roots separate differently named ports**: two ports have one root only when they have one
-frame-v3 domain (one name). -/
-def RootsSep (c : Flock.Circuit) (roots : List Msg) : Prop :=
-  ∀ q q' : ℕ, q' < q → q < c.ports.size → roots.getD q' [] = roots.getD q [] → domOf c q' = domOf c q
-
-/-- **The port the verifier opens a row of port `q` at** has `q`'s root and `q`'s domain, under `RootsSep`. -/
+/-- **The port the verifier opens a row of port `q` at** has `q`'s root and `q`'s domain, when every earlier port of
+`q`'s root has `q`'s domain. -/
 theorem find?_portsOf_sep (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q : ℕ} (hq : q < c.ports.size)
-    (hsep : RootsSep c roots) :
+    (hsep : ∀ q' < q, roots.getD q' [] = roots.getD q [] → domOf c q' = domOf c q) :
     ∃ q', (portsOf c nl roots).find? (fun p => decide (bs p.root = roots.getD q [])) = some (portAt c nl roots q') ∧
       roots.getD q' [] = roots.getD q [] ∧ domOf c q' = domOf c q := by
   have hqs : q < (portsOf c nl roots).size := by simp [portsOf_eq, hq]
@@ -140,7 +137,7 @@ theorem find?_portsOf_sep (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q :
     simpa [portAt, Claims.Sampling.bs_bytes] using hpx
   refine ⟨j, hx, hroot, ?_⟩
   rcases Nat.lt_or_eq_of_le hjq with h | h
-  · exact hsep q j h hq hroot
+  · exact hsep j h hroot
   · rw [h]
 
 /-- Two registered ports of one root and one domain open the same leaves. -/
@@ -162,14 +159,14 @@ theorem rowsV2_port {c : Flock.Circuit} (h : RowsV2 c) (q : Fin c.ports.size) :
 end Layout
 
 /-- **A shaped registered opening opens the deployed commitment.** At a claims position `i` whose registered row `r`
-sits at port `r.port` of `16 w` bits, under roots that separate differently named ports (`RootsSep`), unit `r.leaf < nl`, and bit `r.place`: a
-value `v` `RowShaped` of the row's width under a salt of `saltLen` bytes, whose hm96 leaf at a `sha512/row/v2` port is
+sits at port `r.port` of `16 w` bits, under roots that separate differently named ports (`PortRoots.RootFixesDomain`),
+unit `r.leaf < nl`, and bit `r.place`: a value `v` `RowShaped` of the row's width under a salt of `saltLen` bytes, whose hm96 leaf at a `sha512/row/v2` port is
 the registered leaf of row `(r.leaf, r.port)`, opens `commitDep` under `rootsOf` at `i` to its bit `r.place`, with data
 `dataOf`: the salt, the row's path in the verifier's tree and the value's bits. -/
 theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < nl) (h16 : r.width % 16 = 0) (hpl : r.place < r.width)
-    (hsep : RootsSep c (rootsOf c pub nl))
+    (hsep : PortRoots.RootFixesDomain c pub nl)
     {W : ℕ} (hW : r.width ≤ W) {v : BitVal W} (hv : RowShaped v) (hvw : v.1.val = r.width) {y : Msg}
     (hy : y.length = saltLen)
     (hleaf : H512 (hm96Input (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y) =
@@ -215,7 +212,7 @@ theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → O
     rfl
   unfold commitDep
   rw [SamplingDeploy.opens_pathCommit]
-  obtain ⟨q', hfind, hroot, hdom⟩ := find?_portsOf_sep c nl (rootsOf c pub nl) hq hsep
+  obtain ⟨q', hfind, hroot, hdom⟩ := find?_portsOf_sep c nl (rootsOf c pub nl) hq fun q' h => hsep r.port q' h hq
   refine ⟨_, _, hat, hfind, ?_⟩
   rw [opensLeaf_portAt c nl _ hroot hdom]
   dsimp only
@@ -470,11 +467,11 @@ noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
 
 /-- **A shaped registered opening of a row/v2 row opens the deployed commitment** (`TransportsLive` at the shaped
 openings). In `SampledKSLive`'s setting, at a circuit file whose ports are unsegmented row/v2 rows (`RowsV2`) and
-roots that separate differently named ports (`RootsSep`), at a wire `g` held by a registered row `r`: an opening `(p, v, y)` of `g`'s registered commit string at registration `R`,
-whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes, opens `commitDep` under
+roots that separate differently named ports (`PortRoots.RootFixesDomain`), at a wire `g` held by a registered row `r`:
+an opening `(p, v, y)` of `g`'s registered commit string at registration `R`, whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes, opens `commitDep` under
 `rootsOf` at `g`'s claims position to `g`'s bit in `v`. -/
 theorem transports_shaped (R : Reg)
-    (hv2 : RowsV2 c) (hsep : RootsSep c (rootsOf c pub n)) {r : RowAt} (hr : rowsOf c hU n g = some r)
+    (hv2 : RowsV2 c) (hsep : PortRoots.RootFixesDomain c pub n) {r : RowAt} (hr : rowsOf c hU n g = some r)
     (p : PosH c hU n) (v : ValH c) (y : List UInt8) (hv : RowShaped v) (hvw : v.1.val = r.width)
     (hy : y.length = saltLen)
     (he : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com (p, v, y) =
@@ -513,8 +510,8 @@ open scoped ENNReal
 open Classical in
 /-- **`TransportsLiveC` under roots that separate differently named ports.** `TransportsLiveC`'s setting (circuit
 files whose ports are unsegmented row/v2 rows, `RowsV2`), commitment, roots and hash, when the registration's roots
-separate differently named ports (`RootsSep`): at every unit `u` and committed wire `g` of `u`, every opening `o` of
-`g`'s registered commit string at the prover's registration that is canonical at `g` (`canonOpen`: `g` has a row, the
+separate differently named ports (`PortRoots.RootFixesDomain`): at every unit `u` and committed wire `g` of `u`, every
+opening `o` of `g`'s registered commit string at the prover's registration that is canonical at `g` (`canonOpen`: `g` has a row, the
 value is `RowShaped` of its width, the salt has `saltLen` bytes) opens `g`'s claims position under `Cd` to `o`'s bit
 there, at SHA-512. The deployed check passes no other openings but by a SHA-512 collision (`leaf_misshaped_dep`,
 `leaf_salt`). -/
@@ -551,7 +548,7 @@ def TransportsLiveCS : Prop :=
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
-    RootsSep D.unroll roots →
+    Bridge.PortRoots.RootFixesDomain D.unroll pub n →
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
