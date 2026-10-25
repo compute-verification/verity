@@ -30,8 +30,8 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
                                  PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
-                                 PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_PDL=0 for PDL_KERNELS
-                                 launched plainly)
+                                 PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_WORDS_FORM=0 for A'F_B's
+                                 windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -64,12 +64,15 @@ WINDOW = 128
 WORDS_WIN = os.environ.get("PEARLC_WORDS_WIN", "1") != "0"
 #: A's E' in its forming's launch (form_s5_ep, the step `form_ep_a`); PEARLC_FORM_EP=0 runs eprime and form_s5
 FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
+#: under FORM_EP and WORDS_WIN, A'F_B's windows in that launch too (form_s5_epw, the step `form_epw_a`), from a cubin with it;
+#: PEARLC_WORDS_FORM=0 runs gemm_words_win_d
+WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
 #: read and write what they did: only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
 #: launches them plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
-PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
+PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
 PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK = 6, "pdl_waits"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
@@ -481,10 +484,11 @@ class Pipeline:
     GEMM_SMEM: dict[str, int] = {}
     #: the steps one launch does: under pd, `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
     #: lines, and with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding
-    #: rows' E_A lines only with `fillers`); under FORM_EP, `form_ep_a` (form_s5_ep) for A's E' and forming
+    #: rows' E_A lines only with `fillers`); under FORM_EP, `form_ep_a` (form_s5_ep) for A's E' and forming, and under
+    #: `words_form`, `form_epw_a` (form_s5_epw) for those and A'F_B's windows
     FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
              "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a"),
-             "form_ep_a": ("eprime_a", "form_a")}
+             "form_ep_a": ("eprime_a", "form_a"), "form_epw_a": ("eprime_a", "form_a", "af")}
     #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
     #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
     beside = 0
@@ -746,15 +750,28 @@ class Pipeline:
 
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored) and `gemm_pearlc_s`
-        (y alone: the call without hashing)."""
-        b, m, n, tile = self.b, self.m, self.n, self.tile
+        (y alone: the call without hashing); under `words_win`, A'F_B's windows both ways, `af` (gemm_words_win_d over A's
+        codes) and, from a cubin with it, `form_epw_a` (form_s5_epw: A's E', codes and windows in one launch)."""
+        d, b, m, n, k, tile = self.dev, self.b, self.m, self.n, self.k, self.tile
         peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}  # noqa: E731
-        return {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}", "at", "bt", m, n, out=("c", "u", "y"), **peel()),
-                "gemm_pearlc_s": lambda: self.gemm(f"gemm_pearlc_s{tile}", "at", "bt", m, n, out=(None, None, "y"), **peel())}
+        out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}", "at", "bt", m, n, out=("c", "u", "y"), **peel()),
+               "gemm_pearlc_s": lambda: self.gemm(f"gemm_pearlc_s{tile}", "at", "bt", m, n, out=(None, None, "y"), **peel())}
+        if self.words_win():
+            out["af"] = lambda: self.gemm("gemm_words_win_d", "at", "fbT32", m, WORDS_N, out=("af_win",))
+            if getattr(d, "has", lambda _: False)("form_s5_epw"):
+                out["form_epw_a"] = lambda: d.launch("form_s5_epw", (k // 128, m // 64), 128,
+                                                     p=(b["xa"], b["alpha_a"], b["ea_codes"], b["fa_codes"], b["at"], b["beta_a"],
+                                                        b["epa_codes"], b["fbT32"], b["af_win"]), i=(m, k))
+        return out
 
     def words_win(self) -> bool:
         """Whether A'F_B runs a CTA a window (WORDS_WIN): on 64-row tiles, where the buffers hold its windows."""
         return WORDS_WIN and self.bm == BM_D and "af_win" in self.b
+
+    def words_form(self) -> bool:
+        """Whether A's forming launch makes A'F_B's windows too (WORDS_FORM, `form_epw_a`): under FORM_EP and `words_win`,
+        from a cubin with form_s5_epw."""
+        return WORDS_FORM and FORM_EP and self.words_win() and getattr(self.dev, "has", lambda _: False)("form_s5_epw")
 
     def words(self, a: str, b: str, M: int, out: str, small: bool = False) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 tiles where 128 divides M (and not `small`), else
@@ -814,9 +831,12 @@ class Pipeline:
         forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at", fused=FORM_EP)
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         if self.words_win():
-            cleanup = [("af", lambda: self.gemm("gemm_words_win_d", "at", "fbT32", m, WORDS_N, out=("af_win",))),
-                       ("pa", lambda: d.launch("pa_w", cdiv(m * 64, 256), 256, p=(b["epa_codes"], b["af_win"], b["af"], b["pa_t"]),
-                                               i=(m, k // WINDOW)))]
+            pa_w = ("pa", lambda: d.launch("pa_w", cdiv(m * 64, 256), 256, p=(b["epa_codes"], b["af_win"], b["af"], b["pa_t"]),
+                                           i=(m, k // WINDOW)))
+            if self.words_form():
+                forming[-1], cleanup = ("form_epw_a", chain["form_epw_a"]), [pa_w]
+            else:
+                cleanup = [("af", chain["af"]), pa_w]
         else:
             cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", small=self.bm == BM_D)),
                        ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,)))]
@@ -1054,6 +1074,24 @@ def check_live(dev: Dev, pipe: Pipeline, want) -> dict:
     return res
 
 
+def check_form_words(dev: Dev, pipe: Pipeline, want) -> dict:
+    """form_s5_epw (`form_epw_a`), where the cubin has it, at 64-row tiles: A's E', codes and A'F_B's windows from one launch,
+    the windows added up by pa_w, each output poisoned first: E', the codes, AF and P_A against the fixture's."""
+    p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, bm=BM_D,
+                  bn=BM_D, weight=pipe.weight)
+    extra, res = p_.extra(), {}
+    if "form_epw_a" in extra:
+        outs = ("epa_codes", "at", "af", "pa_t")
+        for o in (*outs, "af_win"):
+            dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), POISON, pipe.size[o])
+        extra["form_epw_a"]()
+        {nm: fn for nm, _, fn in p_.steps()}["pa"]()
+        dev.sync()
+        res = {f"{o}@form_s5_epw": compare(dev, pipe, o, want(o)) for o in outs}
+    p_.free()
+    return res
+
+
 def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
     m, n, k = man["shape"]
     load = lambda d, f: open(os.path.join(base, d, f["file"]), "rb").read()  # noqa: E731
@@ -1104,6 +1142,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                         res[f"{o}@{step}/{tag}/grid{grid or 'all'}"] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
             p_.free()
         res.update(check_live(dev, pipe, want))
+        res.update(check_form_words(dev, pipe, want))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -1187,7 +1226,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         e2e_nh = statistics.median(dev.timed(lambda: [f() for f in no_hash], reps))
         chain = med["gemm_pearlc"]
         split = {"commit": phases["commit"], "forming": phases["forming"], "gemm": med["gemm_ct"],
-                 "cleanup": med["af"] + med["pa"] + chain - med["gemm_ct"], "hashing": phases["hashing"]}
+                 "cleanup": phases["cleanup"] - med["gemm_ct"], "hashing": phases["hashing"]}
         out.update({"split_ms": {kk: round(v, 4) for kk, v in split.items()}, "call_sum_ms": round(sum(split.values()), 4),
                     "call_e2e_ms": round(e2e, 4), "call_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4),
                     "pearlc_tflops": round(2 * m * n * k / chain / 1e9, 1)})

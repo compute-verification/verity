@@ -47,11 +47,11 @@ from .pouw_pearl_c_host import _event, _stream
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
 #: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``;
-#: ``form_ep_a`` (E' and the forming in one launch) is ``forming``
+#: ``form_ep_a`` (E' and the forming in one launch) is ``forming``, and so is ``form_epw_a`` (those and A'F_B's windows)
 STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
                "seeds_a": "row_seeds", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
                "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "row_seeds",
-               "rows_a": "row_seeds", "tree_seed_a": "a_tree", "form_ep_a": "forming"}
+               "rows_a": "row_seeds", "tree_seed_a": "a_tree", "form_ep_a": "forming", "form_epw_a": "forming"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  The tile hashing reads C~ and U; A's tree (``tree_seed_a``, only where the pipeline splits A's commitment,

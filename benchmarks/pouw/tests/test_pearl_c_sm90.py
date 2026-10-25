@@ -94,10 +94,12 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
         alone = name.replace("_g_d", "_d")
         assert spec == next((m, tm, bn, g) for n, m, tm, bn, g in gemms() if n == alone), name
         assert RUN.gemm_tile(name) == RUN.gemm_tile(alone) and S.WANT[name] == S.WANT[alone], name
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep"} == names | set(grouped)
-    assert S.WANT["form_s5_g"] == S.WANT["form_s5_ep"] == S.WANT["form_s5"]
+    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep", "form_s5_epw"} == names | set(grouped)
+    assert S.WANT["form_s5_g"] == S.WANT["form_s5_ep"] == S.WANT["form_s5_epw"] == S.WANT["form_s5"]
+    # form_s5_epw's window is gemm_words_win_d's tile: its four k32 atoms at N = 32
+    assert S.WINDOW_ATOMS == {"form_s5_epw": S.WANT["gemm_words_win_d"][1]} and S.WANT["gemm_words_win_d"][0] == 32
     assert set(RUN.FORM_ALTS) == {"form_s5_scalar"}
-    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep"]
+    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep", "form_s5_epw"]
 
 
 def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
@@ -225,6 +227,14 @@ def test_sass_gate_refuses_what_it_should(monkeypatch):
     assert S.gate(PTXAS_OK + "ptxas info    : (C7515) Potential Performance Loss: wgmma.mma_async instructions are serialized\n",
                   SASS_OK)[1]
     assert S.gate(PTXAS_OK, SASS_OK.replace("gemm_x", "gemm_y"))[1]
+    # a kernel with A'F_B's window has exactly its atoms at N = 32 beside its own; no other kernel has any
+    monkeypatch.setattr(S, "WINDOW_ATOMS", {"gemm_x": 2})
+    window = "\n  /*0050*/ QGMMA.64x32x32.F32.E4M3.E4M3 R8, gdesc[UR4], RZ, !UPT, gsb0 ;"
+    funcs, problems = S.gate(PTXAS_OK, SASS_OK + window * 2)
+    assert not problems and funcs["gemm_x"]["QGMMA_window"] == 2 and funcs["gemm_x"]["QGMMA"] == 2
+    assert S.gate(PTXAS_OK, SASS_OK + window)[1] and S.gate(PTXAS_OK, SASS_OK + window * 3)[1]
+    monkeypatch.setattr(S, "WINDOW_ATOMS", {})
+    assert S.gate(PTXAS_OK, SASS_OK + window * 2)[1]
 
 
 def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypatch):
@@ -358,8 +368,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
     if name.startswith("form_"):
         rows, k = i[:2]
-        ep = {5: 4 * rows, 6: 32 * rows} if name == "form_s5_ep" else {}
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k, **ep}
+        ep = {5: 4 * rows, 6: 32 * rows} if name in ("form_s5_ep", "form_s5_epw") else {}
+        words = {7: 32 * k, 8: 4 * rows * 32 * (k // RUN.WINDOW)} if name == "form_s5_epw" else {}
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k, **ep, **words}
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K, 10: 4 * 128}                 # Maps: A, B, P_A, P_B
@@ -588,11 +599,13 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert {(ev["i"][2], ev["i"][4]) for ev in lines_ea} == {(1024, 1008), (64, 40)}
     # decode's 40 rows pad to 64, so the chain runs on 64 x 64 tiles and A'F_B on 64 x 32, a CTA a window (WORDS_WIN) that
-    # pa_w adds up
+    # pa_w adds up: in A's forming launch (WORDS_FORM), and timed beside it on its own
     names = {ev["name"] for ev in launched}
-    assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "pa_w", "gemm_words"} <= names
+    assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "form_s5_epw", "pa_w", "gemm_words"} <= names
+    assert {ev["i"][0] for ev in launched if ev["name"] == "form_s5_epw"} == {64}
     # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
-    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep"}
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep",
+                                                                                           "form_s5_epw"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 

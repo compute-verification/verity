@@ -43,7 +43,7 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",
-            **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "form_ep_a", "af", "pa")},
+            **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "form_ep_a", "form_epw_a", "af", "pa")},
             **{x: "hashing" for x in ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "hash_leaf")},
             "commit_a": "hashing"}      # run.Pipeline's FUSED at decode: A's commitment, with E_A's lines
 #: GPU 1's cubin's kernels by category, for nsys's per-kernel sums: short names exactly (``pa`` is not ``paged_attention``),

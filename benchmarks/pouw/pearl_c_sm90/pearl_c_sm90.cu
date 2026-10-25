@@ -593,10 +593,15 @@ extern "C" __global__ void eprime(const Args a) {
 // cvt), 1 form_s5_scalar's (one code per cvt), its gate: both write the same codes.  GR (form_s5_g, the grouped calls): p3
 // holds the experts' F lines one after another (k x 32 each) and p5 each 64-row block's expert, whose lines the block takes.
 // EP (form_s5_ep, eprime in the same launch): p2 holds the rows' E codes, p5 beta and p6 the E' codes out; each block makes
-// its rows' E' as eprime does while staging them, and the blocks at depth 0 store them.
+// its rows' E' as eprime does while staging them, and the blocks at depth 0 store them.  WORDS (form_s5_epw, with EP): each
+// block also makes gemm_words_win_d's tile for its rows and window kb = blockIdx.x, A'F_B's: its codes (staged again in core
+// matrices, a k32 atom each 2,048 bytes) by the 128 bytes of window kb of p7's 32 rows (the F_B^T lines, 32 x k; a k32 atom
+// each 1,024 bytes), four m64n32k32 atoms from +0 (scale-d 0 on the first), stored to slab kb of p8 (k / 128 slabs of rows x
+// 32 FP32) as gemm_words_win_d stores it: the same atoms over the same operands, in the same order
 constexpr int FORM_ROW = 144;
-template <int MODE, bool GR = false, bool EP = false> DEV void form_body(const Args& a) {
+template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV void form_body(const Args& a) {
   static_assert(!(GR && EP), "p5 is GR's experts or EP's beta");
+  static_assert(!WORDS || EP, "the windows are form_s5_ep's");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
   pdl_entry();
@@ -605,6 +610,16 @@ template <int MODE, bool GR = false, bool EP = false> DEV void form_body(const A
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
                      (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
   const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
+  // the windows' F_B^T bytes, read now so their latency is under the forming: line n's 16-byte chunk c, a warp's quarter on
+  // eight lines (n & 7) of one chunk, so its staging stores hit distinct banks
+  uint4 fb[2];
+  if constexpr (WORDS) {
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, n = 8 * (idx / 64) + idx % 8, c = (idx / 8) % 8;
+      fb[j] = *reinterpret_cast<const uint4*>(a.p[7] + (size_t)n * k + t0 + 16 * c);
+    }
+  }
   uint4 ev = *reinterpret_cast<const uint4*>(E + eo);
   if constexpr (EP) {
     const float beta = reinterpret_cast<const float*>(a.p[5])[r0 + tid / 2];
@@ -658,17 +673,52 @@ template <int MODE, bool GR = false, bool EP = false> DEV void form_body(const A
     }
   }
   __syncthreads();
+  float w[16];
+  if constexpr (WORDS) {
+    // row r's 16-byte chunk c of the codes into atom c / 2's core matrices, a warp's quarter on eight rows (r & 7) of one
+    // chunk: distinct banks on both sides.  The atoms run while the codes leave
+    __shared__ __align__(128) uint8_t sA[4 * 64 * 32], sB[4 * 32 * 32];
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      const int idx = tid + 128 * j, r = 8 * (idx / 64) + idx % 8, c = (idx / 8) % 8;
+      *reinterpret_cast<uint4*>(sA + (c / 2) * 2048 + core(r, 16 * (c % 2))) = *reinterpret_cast<const uint4*>(sO + r * FORM_ROW + 16 * c);
+    }
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, n = 8 * (idx / 64) + idx % 8, c = (idx / 8) % 8;
+      *reinterpret_cast<uint4*>(sB + (c / 2) * 1024 + core(n, 16 * (c % 2))) = fb[j];
+    }
+    asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+    __syncthreads();
+    WG_FENCE;
+    qmma<32>(w, desc_plain(sa(sA)), desc_plain(sa(sB)), 0);
+    qmma<32>(w, desc_plain(sa(sA + 2048)), desc_plain(sa(sB + 1024)), 1);
+    qmma<32>(w, desc_plain(sa(sA + 4096)), desc_plain(sa(sB + 2048)), 1);
+    qmma<32>(w, desc_plain(sa(sA + 6144)), desc_plain(sa(sB + 3072)), 1);
+    WG_COMMIT;
+  }
   uint8_t* out = reinterpret_cast<uint8_t*>(a.p[4]);
 #pragma unroll
   for (int j = 0; j < 4; j++) {
     const int idx = tid + 128 * j, r = idx / 8, c = idx % 8;
     *reinterpret_cast<uint4*>(out + (size_t)(r0 + r) * k + t0 + 16 * c) = *reinterpret_cast<const uint4*>(sO + r * FORM_ROW + 16 * c);
   }
+  if constexpr (WORDS) {
+    WG_WAIT(0);
+    acc_fence<16>(w);
+    float* W = reinterpret_cast<float*>(a.p[8]) + (size_t)blockIdx.x * a.i[0] * 32 + (size_t)(r0 + rA) * 32;
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      store2(W + cA + 8 * j, w[4 * j], w[4 * j + 1]);
+      store2(W + 8 * 32 + cA + 8 * j, w[4 * j + 2], w[4 * j + 3]);
+    }
+  }
 }
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) { form_body<0>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) { form_body<1>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_g(const Args a) { form_body<0, true>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_ep(const Args a) { form_body<0, false, true>(a); }
+extern "C" __global__ void __launch_bounds__(128) form_s5_epw(const Args a) { form_body<0, false, true, true>(a); }
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements
