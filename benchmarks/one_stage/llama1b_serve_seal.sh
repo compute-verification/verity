@@ -23,8 +23,9 @@
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
 # WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
 # --max-num-batched-tokens and --window-requests (a window's class slots, e.g. 4 for V3b's class of record).
-# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw, for a warden in front of the endpoint (the
-# whole-response smokes and bursts are unchanged; VARIED's streamed load reads vLLM's stream, so not with ids).
+# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to a warden's id requests, for a warden in
+# front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the network certifier's
+# shim and probes) as vllm does.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
