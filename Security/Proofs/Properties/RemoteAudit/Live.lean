@@ -1,7 +1,7 @@
 import Batteries.Tactic.OpenPrivate
 import Properties.RemoteAudit.Live
 import Proofs.Properties.RemoteAudit.Order
-import Properties.Proofs.RemoteAudit.SharedLink
+import Proofs.Properties.RemoteAudit.SharedLink
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)

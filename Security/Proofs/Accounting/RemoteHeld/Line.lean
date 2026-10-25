@@ -4,7 +4,7 @@ import Proofs.Accounting.RemoteHeld.Outside
 import Proofs.Properties.RemoteAudit.Line
 import Proofs.Properties.RemoteAudit.Pooled
 import Proofs.Properties.RemoteAudit.Session
-import Properties.Proofs.RemoteAudit.Shared
+import Proofs.Properties.RemoteAudit.Shared
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
