@@ -102,18 +102,22 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep", "form_s5_epw"]
 
 
-def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
+def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds(monkeypatch):
     """`Pipeline.beside` (a whole capture's deferred A tree: pd_tree's CTA holds its SM under PD_WHOLE) comes off a
     persistent GEMM's grid, so no CTA waits for that launch to end; a grid the caller gives, and a GEMM of fewer tiles than
-    SMs, keep theirs."""
+    SMs, keep theirs.  Under GRID_BALANCE the grid is the fewest CTAs that keep its rounds of tiles: 448 tiles take four
+    rounds on 112 CTAs as on 131."""
     grids = []
     dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, **k: grids.append(grid))
     pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1}, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d")}, dev=dev, k=4096,
                            b=dict.fromkeys(("at", "bt", "c", "tma"), 0), m_real=16)
-    for beside, n, grid in ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None)):
-        pipe.beside = beside
-        RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
-    assert grids == [132, 131, 64, 64] and RUN.Pipeline.beside == 0
+    cases = ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None), (0, 8448, None), (1, 8448, None))
+    for balance in (False, True):
+        monkeypatch.setattr(RUN, "GRID_BALANCE", balance)
+        for beside, n, grid in cases:
+            pipe.beside = beside
+            RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
+    assert grids == [132, 131, 64, 64, 132, 131] + [112, 112, 64, 64, 132, 66] and RUN.Pipeline.beside == 0
 
 
 def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
