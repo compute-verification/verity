@@ -201,7 +201,7 @@ catalog alone.
 ## The served table
 
 `verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B from
-the store, never from numbers in code. It has three sections.
+the store, never from numbers in code. It has four sections.
 
 - **PoUW's run of record** is kernels' live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
   `summary.json` and `stop.json` in the run's record: the arm's median decode step at batch 32 over its control's
@@ -221,6 +221,9 @@ the store, never from numbers in code. It has three sections.
   an eager stock, over that.
 - **The conversion factors** (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `FACTORS`) are rendered the
   same way.
+- **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and a record, as above) is the bandwidth
+  breakdown's rows (below) at each point of the record's runs, in ms an output token and not a ratio, beside the
+  protocol's row of record.
 
 The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
 read through from the remote (and a live run's `row` label).
