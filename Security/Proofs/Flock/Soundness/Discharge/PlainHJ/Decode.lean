@@ -165,7 +165,7 @@ theorem decodesOnPHJ_exec (ht : I.tags.typed = false) {c : Flock.Circuit}
   obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenI (I := inputsPJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) (PlainJ.typedPJ ht j.val)
     ((ZkHidden.parseH_tagsAt ht I.count j.val I.circuitFile I.tables).trans hc) hst hf hD ((hdraw ω ⟨j.val, hjn⟩).1 D hD) hmP
-  obtain ⟨y, hyx, e⟩ := tablePHJ_of dj x₀ x
+  obtain ⟨y, hyx, e⟩ := tablePHJ_of dj x₀ (S := L.draw ω) (j := ⟨j.val, hjn⟩) x
   have hget : (planPHJ (Reg := Reg) dj x₀ (L.draw ω) R).get j = (tablePHJ dj x₀ (L.draw ω) ⟨j.val, hjn⟩).2.T :=
     List.get_ofFn _ j
   have hS : ((planPHJ (Reg := Reg) dj x₀ (L.draw ω) R).get j).S = stmtOf sts[j.val] hwf (regionsOf sts[j.val]) := by
