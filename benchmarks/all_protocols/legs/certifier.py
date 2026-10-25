@@ -352,9 +352,9 @@ def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
 
 # --- the certified outputs -----------------------------------------------------------------------------------------------
 
-def certified_outputs(run: Path, frame_bytes: int) -> dict[int, bytes]:
-    """Each egress stream's text as the certifier recorded it: its canonical events' bytes in record order
-    (`active.event`), from ``responses.records``."""
+def certified_outputs(run: Path, frame_bytes: int, windows: Sequence[int]) -> dict[int, bytes]:
+    """Each egress stream's text in link-windows ``windows`` as the certifier recorded it: its canonical events' bytes in
+    record order (`active.event`), from ``responses.records``."""
     sys.path.insert(0, str(TRACES))
     import active_replay as ar
     from verity.core.protocols.certifier.active import DATA, EVENT_HEAD, EVENT_TEXT, decode_frame
@@ -362,6 +362,8 @@ def certified_outputs(run: Path, frame_bytes: int) -> dict[int, bytes]:
     text: dict[int, bytearray] = {}
     for record in sorted((ar.unpack_record(b, frame_bytes) for b in ar.read_blobs(run / "responses.records")),
                          key=lambda r: r.window):
+        if record.window not in windows:
+            continue
         for row in record.grid:
             for slot in row:
                 if slot is None:
@@ -374,28 +376,36 @@ def certified_outputs(run: Path, frame_bytes: int) -> dict[int, bytes]:
     return {s: bytes(t) for s, t in text.items()}
 
 
-def io(rw: Mapping[str, Any], period: int, outputs: Mapping[tuple[str, int], bytes], steps: int, h: int) -> dict:
+def _hex(text: bytes) -> bytes | None:
+    try:
+        return bytes.fromhex(text.decode())
+    except ValueError:
+        return None
+
+
+def io(rw: Mapping[str, Any], period: int, windows: Sequence[int], outputs: Mapping[tuple[str, int], bytes],
+       steps: int, h: int) -> dict:
     """The period's certified outputs against its registered ones, request by request: request ``r`` of the period is
-    the plan's request ``period · n + r``, whose egress stream carries its steps' outputs as hex, 2H bytes a step."""
+    the plan's request ``period · n + r``, whose egress stream in the period's link-windows carries its steps'
+    outputs as hex, 2H bytes a step (``by: stream``); else, for each request, a stream there that carries them
+    (``by: content``)."""
     sys.path.insert(0, str(TRACES))
     import certifier_serve as cs
 
     setup = cs.ar.Setup(rw["calibration"])
-    got = certified_outputs(rw["run"], setup.egress_params.frame_bytes)
+    got = {s: _hex(t) for s, t in certified_outputs(rw["run"], setup.egress_params.frame_bytes, windows).items()}
     reqs = sorted({r for r, _ in outputs}, key=lambda r: int(r.lstrip("r")))
-    rows, ok = [], True
+    want = {r: b"".join(outputs[r, k] for k in range(steps)) for r in reqs}
+    rows = []
     for i, r in enumerate(reqs):
         q = rw["plan"]["requests"][period * len(reqs) + i]
-        try:
-            raw = bytes.fromhex(got.get(q["stream"], b"").decode())
-        except ValueError:
-            raw = b""
-        steps_got = [raw[k * 2 * h:(k + 1) * 2 * h] for k in range(steps)]
-        same = [steps_got[k] == outputs[r, k] for k in range(steps)]
-        ok &= all(same)
-        rows.append({"request": r, "session": q["session"], "stream": q["stream"], "steps_equal": same,
-                     "certified_bytes": len(raw)})
-    return {"equal": ok, "requests": rows}
+        by = "stream" if got.get(q["stream"]) == want[r] else \
+            "content" if want[r] in got.values() else None
+        rows.append({"request": r, "session": q["session"], "stream": q["stream"], "by": by,
+                     "certified_bytes": len(got.get(q["stream"]) or b"")})
+    return {"equal": all(x["by"] for x in rows), "streams": {str(s): None if t is None else len(t)
+                                                            for s, t in sorted(got.items())},
+            "requests": rows}
 
 
 # --- the leg -------------------------------------------------------------------------------------------------------------
@@ -424,7 +434,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         missing = [w for w in ws if w not in rw["windows"]]
         if missing:
             raise RuntimeError(f"{strategy}: N2 decided no link-window {missing} of period {index}")
-        row = {"windows": ws, "io": io(rw, index, outputs, sess["steps"], sess["h"])}
+        row = {"windows": ws, "io": io(rw, index, ws, outputs, sess["steps"], sess["h"])}
         tag = "" if strategy == "honest" else "tamper."
         if strategy == "honest" and not row["io"]["equal"]:
             (out / "io.json").write_text(json.dumps(row["io"], indent=1, sort_keys=True))
