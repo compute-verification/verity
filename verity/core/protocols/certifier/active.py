@@ -177,7 +177,7 @@ import struct
 import threading
 import time
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
@@ -433,22 +433,27 @@ def compact_record_data(cell: bytes) -> tuple[int, int, str | None] | None:
         return None
 
 
-def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int]) -> list[bytes]:
+def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int], aborted: bool = False) -> list[bytes]:
     """The compact records of a response whose sampled ids are `sampled`: each id unmarked but the last, a stop where
-    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't."""
+    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't; every one unmarked when its client
+    aborted it (`aborted`), since no record says an abort."""
     stops = frozenset(eos)
-    return [compact_record(request, t, None if k < len(sampled) - 1 else "stop" if t in stops else "length")
+    return [compact_record(request, t, None if aborted or k < len(sampled) - 1 else "stop" if t in stops else "length")
             for k, t in enumerate(sampled)]
 
 
-def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int],
-                              cells: Iterable[bytes]) -> list[tuple[int, str]]:
+def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int], cells: Iterable[bytes], *,
+                              max_tokens: Mapping[int, int], aborted: Collection[int] = ()) -> list[tuple[int, str]]:
     """A link's compact cells held to the Commit's sampled ids (`sampled`, each request's by its ingress ordinal):
-    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos)`, one for one, so each carries
-    the id the model sampled there, the response is as long as the Commit's, and its finish is the Commit's, a stop
-    only where the Commit sampled EOS. `cells` are the link's frames in canonical order, padding left out. A violation
-    is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits whatever ids and
-    finish the server writes; this is the rule the I/O tie holds each response's length and finish to."""
+    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos, o in aborted)`, one for one, so
+    each carries the id the model sampled there, the response is as long as the Commit's, and its finish is the
+    Commit's, a stop only where the Commit sampled EOS. `aborted` are the ordinals whose finish in the Commit is a
+    client's abort, each one's response held to 1 ≤ k < `max_tokens[o]` ids and none of them EOS; any other's length
+    finish is at `max_tokens[o]` exactly. `cells` are the link's frames in canonical order, padding left out. A
+    violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
+    whatever ids and finish the server writes; this is the rule the I/O tie holds each response's length and finish
+    to. An abort is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
+    stops = frozenset(eos)
     got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
     out: list[tuple[int, str]] = []
     for cell in cells:
@@ -460,7 +465,8 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
         if o not in sampled:
             out.append((o, "no request of the Commit is this ordinal"))
             continue
-        want = [compact_record_data(r)[1:] for r in compact_records_of(o, sampled[o], eos)]
+        ids, m, gone = sampled[o], max_tokens[o], o in aborted
+        want = [compact_record_data(r)[1:] for r in compact_records_of(o, ids, stops, gone)]
         mine = got.get(o, [])
         k = next((k for k, (g, w) in enumerate(zip(mine, want)) if g != w), None)
         if k is not None and mine[k][0] != want[k][0]:
@@ -469,6 +475,14 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
             out.append((o, f"finish {mine[k][1] or 'none'} on output {k} where the Commit's is {want[k][1] or 'none'}"))
         elif len(mine) != len(want):
             out.append((o, f"{len(mine)} records where the Commit sampled {len(want)} ids"))
+        elif gone and not ids:
+            out.append((o, "an abort before any output"))
+        elif gone and len(ids) >= m:
+            out.append((o, f"an abort at {len(ids)} outputs where max_tokens is {m}"))
+        elif gone and stops & set(ids):
+            out.append((o, "an abort on an EOS id"))
+        elif want and want[-1][1] == "length" and len(ids) != m:
+            out.append((o, f"a length finish at {len(ids)} outputs where max_tokens is {m}"))
     return out
 
 
