@@ -9,6 +9,8 @@ import Definitions.Flock.Ligerito
 import Definitions.Flock.Sparse
 import Definitions.Flock.Merkle
 import Definitions.Flock.Circuit
+import Definitions.Flock.Audit.Law
+import Definitions.Flock.Lowering
 import Definitions.Flock.Rewinding
 import Definitions.Flock.Accounting.Fast100
 import Definitions.Flock.Game.Expect
@@ -23,6 +25,9 @@ import Definitions.Flock.Game.Seq
 import Definitions.Flock.Game.Prob
 import Definitions.Flock.Game.Batch
 import Definitions.Flock.ZK.Table
+import Definitions.Flock.ZK.Cut
+import Definitions.Flock.ZK.RealView
+import Definitions.Flock.ZK.SHVZK
 
 /-!
 # C-Flock's definitions
