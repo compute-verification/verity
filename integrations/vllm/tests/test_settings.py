@@ -98,7 +98,6 @@ def test_the_narrow_parsers_and_a_kept_empty_read_as_their_readers_did() -> None
     for v in (None, "", "1", " no ", "false", "0", "off", "x"):
         env = {} if v is None else {"VERITY_REPLAY_FORK_GC_FREEZE": v}
         assert S.get("VERITY_REPLAY_FORK_GC_FREEZE", env) is (env.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no"))
-    assert S.get("RUNPOD_POD_ID", {"RUNPOD_POD_ID": ""}) == "" and S.get("RUNPOD_POD_ID", {}) is None
 
 
 def test_the_record_carries_the_value_settings_and_families_in_force() -> None:

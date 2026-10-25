@@ -18,7 +18,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
 from verity_vllm.engine import env
 
 DECLARED_ENV = env.ENGINE
@@ -215,7 +214,7 @@ def gpu_info() -> dict[str, Any]:
         "count": torch.cuda.device_count(),
         "driver": drv,
         "compute_capability": f"{props.major}.{props.minor}",
-        "pod": settings.RUNPOD_POD_ID if settings.is_set("RUNPOD_POD_ID") else os.uname().nodename,
+        "pod": os.environ.get("RUNPOD_POD_ID", os.uname().nodename),
         "total_memory_gb": round(props.total_memory / 2**30, 2),
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
@@ -340,7 +339,7 @@ def _backends_of_runner(runner: Any) -> dict[str, Any]:
             break
     out["linear"] = (
         "vllm.model_executor.determinism.batch_invariant.linear_batch_invariant (triton matmul_persistent)"
-        if settings.raw("VLLM_BATCH_INVARIANT") == "1"
+        if os.environ.get("VLLM_BATCH_INVARIANT") == "1"
         else "UnquantizedLinearMethod._gemm_impl"
     )
     sampler = getattr(runner, "sampler", None)
@@ -368,8 +367,8 @@ def _backends_probe(worker: Any) -> dict[str, Any]:
             "quick_allreduce": getattr(comm, "qr_comm", None) is not None and not getattr(getattr(comm, "qr_comm", None), "disabled", True),
             "flashinfer_allreduce": getattr(comm, "fi_allreduce_fusion", None) is not None,
             "pynccl": getattr(comm, "pynccl_comm", None) is not None and not getattr(getattr(comm, "pynccl_comm", None), "disabled", True),
-            "nccl_env": {k: v for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
-                                         "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if (v := settings.raw(k)) is not None},
+            "nccl_env": {k: os.environ.get(k) for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
+                                                      "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if os.environ.get(k) is not None},
         }
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)

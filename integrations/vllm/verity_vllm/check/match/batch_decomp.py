@@ -417,7 +417,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             run_prof["max_rss_mib_children"] = int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
         except Exception:   # noqa: BLE001 - telemetry only
             pass
-        out = settings.raw(PROFILE_ENV)
+        out = os.environ[PROFILE_ENV]
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         json.dump(run_prof, open(out, "w"), indent=1, default=str)
     return res

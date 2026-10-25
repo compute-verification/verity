@@ -1,8 +1,9 @@
 """Records a reader fills from the environment, pinned at their bytes on `main` before the reader moves to `verity_vllm.settings`, so
 the move can't change them: the hot worker's key (`hot.env_identity`, `hot.so_identity`), the fast Match's declared configuration
 (`global_match_fast.config`, on every result document's impl block), the Commit's reasons to run cold with the staging
-environment it hands its committers (`commit.hot_unsafe_reasons`, `commit.staging_environ`), and the configuration a committer
-takes from that environment (the collector's on `test_staging_defaults`' CPU fakes, its name among it)."""
+environment it hands its committers (`commit.hot_unsafe_reasons`, `commit.staging_environ`), the configuration a committer
+takes from that environment (the collector's on `test_staging_defaults`' CPU fakes, its name among it), and the fields of the
+engine's records the environment fills (the replay's engine facts, the engine profile, the compilation facts, the generated kernels)."""
 from __future__ import annotations
 
 import hashlib

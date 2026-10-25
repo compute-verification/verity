@@ -10,6 +10,7 @@ from the engine's `vllm_config` and checked against the declaration.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,6 @@ from typing import Any
 
 import torch
 
-from verity_vllm import settings
 from verity_vllm.engine import env as engine_env, served
 
 
@@ -352,7 +352,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["use_inductor_graph_partition"] = bool(getattr(cc, "use_inductor_graph_partition", False))
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
-        out["compile_cache"] = "disabled" if settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
+        out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # [R15 compiled, M-0285 (b)] the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused
         # regions) -- the fact that decides whether a materialised boundary value can change the computation
