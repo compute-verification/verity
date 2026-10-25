@@ -12,8 +12,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine
 from verity_vllm.program import prefix_plan as PP
@@ -237,8 +235,10 @@ THROWAWAY_SAMPLING_FIELDS = ("seed", "n", "variant", "temperature", "top_p", "to
 def throwaway_requests(engine: Engine, like: list[dict], seed: int = 0x5EED_7A9B) -> list[dict]:
     """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway), with the same per-request
     sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
+    from verity_vllm.commit import challenge
+
     vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
-    rng = np.random.default_rng(seed)
+    rng = challenge.generator(seed)
     out = []
     for i, r in enumerate(like):
         w = {"request_id": f"warmup-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist(),
