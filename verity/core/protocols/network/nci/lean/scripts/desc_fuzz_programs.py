@@ -2,7 +2,9 @@
 
     python scripts/desc_fuzz_programs.py <verity checkout> --out DIR
 
-Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program"}` object per line, from fixed seeds (`FAMILIES`).
+Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}` object per line, from fixed seeds
+(`FAMILIES`), with `"instances"` (IU assignments, each `{"theta", "owner", "gamma", "alpha"}`) on the shared families'
+(`agree`: how many instances of its own `NciCheck.DescFuzz.agrees` checks beside them).
 The Lean audit runs `NciCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
 decides the statements behind `DescAgrees` on each Program (`NciCheck.DescFuzz`'s docstring) and fails if one fails;
 `verity/core/protocols/network/tests/test_nci_desc_fuzz.py` checks that this script still writes it. The search itself,
@@ -23,9 +25,18 @@ refuses most of them, and the rest are what it lets through.
 `hand` writes the worked shapes: the Programs on which `Walk.OperandsResolve` fails as stated (a composite node's
 argument that its callee never reads names a scan of no iterations, at the root, in a callee, and as a scan's shared
 argument), each with the variant its callee reads, and gates reading the carry of a scan of 2^4 to 2^14 pass-through
-iterations. `shared` writes batch members returning leaves of several arguments they share, each another root node's
-output, read whole by one gate: `desc_difftest_vectors.shared()`'s declarations, which `NciCheck.Desc` once attributed
-to their first piece's node alone (#4066), then variations of them (`shared`'s docstring).
+iterations. `seeds` and `shared` are the lane's shared-members family (`fuzz/gen/shared.py`, ported as it is): whole
+members of a batch returning leaves of arguments they share, each another root node's output, read by a gate.
+`desc_difftest_vectors.shared()`'s six declarations first (`shared-seed`, each with its two instances), which
+`NciCheck.Desc` once attributed to their first piece's node alone (#4066), then `decl` on parameters drawn at random
+(`draw`): two or three shared arguments, each made by a root node of its own (a primitive on an input, a call of a
+composite of two gates, one member of a batch of primitives, or the input itself, registered or bound per run); the
+members' return, each argument's leaves in any order and repeated, now and then with a gate of the member's own; two to
+four members, with a mapped argument or none; the reader (a primitive, a composite's primitive, or either reading a
+composite that makes the batch) and what it reads (every member, a run of whole members, or a run cut inside them), now
+and then a second primitive reading another run. Each comes with up to `ASSIGNMENTS` IU assignments of its root nodes
+that hold gates (all of them when there are no more, else drawn without repeats), θ the registered inputs, `Γ` all the
+gates and `α` 1.
 """
 from __future__ import annotations
 
@@ -34,7 +45,15 @@ import copy
 import importlib.util
 import json
 import random
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import verity.ml.circuits
+from verity.ml.circuits import codec
+from verity.ml.circuits import program as ir
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import Affine, Coll, tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
 
@@ -711,164 +730,209 @@ def hand() -> list[dict]:
     return out
 
 
-# --- batch members returning leaves of shared arguments ---------------------------------------------------------------
+# --- batch members returning leaves of shared arguments (the lane's `fuzz/gen/shared.py`) -----------------------------
+
+ASSIGNMENTS = 12
+NAMES = ("a", "b", "c")
+INPUTS = ("y", "z", "u")
+
+desc = _load("desc_difftest_vectors")
+vectors = desc.vectors
+reference = desc.reference
 
 
-def shared_vectors() -> list[str]:
-    """`desc_difftest_vectors.shared()`'s declarations, distinct, in its order."""
-    texts = [inst["program"] for inst in _load("desc_difftest_vectors").shared()]
-    return list(dict.fromkeys(texts))
+@dataclass
+class Spec:
+    """One declaration: shared argument `NAMES[i]` made by `makers[i]` (`prim`, `call`, `batch` or `input`) from root
+    input `INPUTS[i]`, registered where `registered[i]` (a `batch` maker's input an array of `picks[i][0]` values, the
+    argument its member `picks[i][1]`); each of `n` members returns `order`'s leaves (`g`: a gate of its own, on the
+    mapped `x` where `mapped`, else on `a`); `reader` reads leaves `span` of the members' returns (all of them where
+    `None`), and a primitive those of `second`."""
+    reader: str
+    order: tuple[str, ...]
+    makers: tuple[str, ...] = ("prim", "prim")
+    registered: tuple[bool, ...] = (True, True)
+    picks: tuple[tuple[int, int] | None, ...] = (None, None)
+    w: int = 8
+    n: int = 2
+    mapped: bool = True
+    span: tuple[int, int] | None = None
+    second: tuple[int, int] | None = None
+    tag: str = field(default="")
 
 
-def _source(P: Program, root: Body, t, kind: str) -> list:
-    """A root node whose output's leaf 0 is a shared argument, after the inputs it reads: an input node (registered or
-    not, so θ can hold it), a primitive on one (`prim`), a batch of one such primitive (`batch1`), or a call of a
-    composite holding one (`call`). The reference to the leaf."""
-    w = t[1]
-    x = P.input(w, P.rng.random() < 0.6)
-    if kind == "input" and P.rng.random() < 0.5:
-        root.push({"args": [], "fn": P.fn(x), "form": "primitive", "out": P.ty(t)}, t, [], 1, "input")
-        return ["n", len(root.nodes) - 1, 0]
-    root.push({"args": [], "axes": [], "fn": P.fn(x), "form": "batch", "n": 1, "out": P.ty(A(1, t))}, A(1, t), [], 1,
-              "input")
-    src = {"refs": {"affine": ["n", len(root.nodes) - 1, 0, 1]}, "type": P.ty(t)}
-    if kind == "input":
-        return ["n", len(root.nodes) - 1, 0]
-    op = P.prim([t, t], t, f"Op{w}_v1")
-    if kind == "prim":
-        root.push({"args": [src, src], "fn": P.fn(op), "form": "primitive", "out": P.ty(t)}, t, [2], 1, "prim")
-    elif kind == "batch1":
-        root.push({"args": [src, src], "axes": [None, None], "fn": P.fn(op), "form": "batch", "n": 1,
-                   "out": P.ty(A(1, t))}, A(1, t), [1, 1], 1, "batch")
-    else:
-        b = Body(P, [t], 1)
-        b.push({"args": [{"refs": {"affine": ["p", 0, 0, 1]}, "type": P.ty(t)}] * 2, "fn": P.fn(op), "form": "primitive",
-                "out": P.ty(t)}, t, [1, 1], 1, "prim")
-        c = P.composite(b, t, {"affine": ["n", 0, 0, 1]})
-        root.push({"args": [src], "fn": P.fn(c), "form": "call", "out": P.ty(t)}, t, [1], 1, "call")
-    return ["n", len(root.nodes) - 1, 0]
+def decl(s: Spec) -> str:
+    w, n, L, k = s.w, s.n, len(s.order), len(s.makers)
+    op = vectors.prim((w, w), w)
+    tag = s.tag or f"{s.reader}{''.join(s.order)}"
+    ret = Tuple(*[Value(w)] * L)
+    params = tuple((NAMES[i], Value(w)) for i in range(k)) + ((("x", Value(w)),) if s.mapped else ())
+    axes = (None,) * k + ((0,) if s.mapped else ())
+
+    def member(B, S, *xs):
+        own = {NAMES[i]: xs[i] for i in range(k)}
+        if "g" in s.order:
+            g = xs[k] if s.mapped else xs[0]
+            own["g"] = B.call(op, g, g)
+        return tuple_of(*[own[o] for o in s.order])
+    F = bind(CompositeDefinition(f"NciShared{tag}", 1, (), lambda S: (params, ret), member, register=False))
+
+    def batch(B, *xs):
+        return B.batch(F, *xs, axes=axes, n=None if s.mapped else n)
+    gparams = params[:k] + ((("x", Array(n, Value(w))),) if s.mapped else ())
+    G = bind(CompositeDefinition(f"NciSharedBatch{tag}", 1, (), lambda S: (gparams, Array(n, ret)),
+                                 lambda B, S, *xs: batch(B, *xs), register=False))
+    lo, hi = s.span or (0, L * n)
+    total = vectors.summing(hi - lo, w, w)
+    R = bind(CompositeDefinition(f"NciSharedRead{tag}", 1, (), lambda S: ((("v", Array(hi - lo, Value(w))),), Value(w)),
+                                 lambda B, S, v: B.call(total, v), register=False))
+    Pair = bind(CompositeDefinition(f"NciSharedPair{tag}", 1, (), lambda S: ((("y", Value(w)),), Value(w)),
+                                    lambda B, S, y: B.call(op, B.call(op, y, y), y), register=False))
+
+    def made(B, i, y):
+        how = s.makers[i]
+        if how == "prim":
+            return B.call(op, y, y)
+        if how == "call":
+            return B.call(Pair, y)
+        if how == "batch":
+            return B.batch(op, y, y, axes=(0, 0))[s.picks[i][1]]
+        return y
+
+    def body(B, S, *ins):
+        shared = [made(B, i, ins[i]) for i in range(k)]
+        xs = shared + ([ins[k]] if s.mapped else [])
+        out = B.call(G, *xs) if s.reader.startswith("wrapped") else batch(B, *xs)
+        r = out.refs
+
+        def run(a, b):
+            return Coll(Array(b - a, Value(w)), Affine(r.space, r.idx, r.base + a, b - a))
+        first = B.call(R, run(lo, hi)) if s.reader.endswith("composite") else B.call(total, run(lo, hi))
+        if s.second:
+            B.call(vectors.summing(s.second[1] - s.second[0], w, w), run(*s.second))
+        return first
+    root = tuple((INPUTS[i], Array(s.picks[i][0], Value(w)) if s.makers[i] == "batch" else Value(w)) for i in range(k))
+    root += (("x", Array(n, Value(w))),) if s.mapped else ()
+    fn = bind(CompositeDefinition(f"NciSharedDecl{tag}", 1, (), lambda S: (root, Value(w)), body, register=False))
+    reg = tuple(INPUTS[i] for i in range(k) if s.registered[i])
+    return codec.canonical_json(codec.encode_program(ir.Program(fn, registered=reg))).decode()
 
 
-def _member_ret(P: Program, items: list) -> dict:
-    """References to `items` (`[space, index, leaf]` each) in one of the forms the decoder reads: explicit, a concat of
-    affine runs, or a concat whose repeats are strided runs of stride 0."""
-    r = P.rng.random()
+def _run(rng: random.Random, N: int, L: int) -> tuple[int, int]:
+    """Leaves `[lo, hi)` of `N`, `L` per member: every member, a run of whole members, or a run cut inside them."""
+    r = rng.random()
     if r < 0.4:
-        return {"explicit": items}
-    runs: list[list] = []
-    for s, i, j in items:
-        if r >= 0.7 and runs and runs[-1][:3] == [s, i, j]:
-            runs[-1][3] += 1
-        else:
-            runs.append([s, i, j, 1])
-    return {"concat": [{"affine": [s, i, j, 1]} if n == 1 else {"strided": [s, i, j, 1, 0, 0, n]}
-                       for s, i, j, n in runs]}
+        return 0, N
+    if r < 0.75:
+        m0 = rng.randrange(N // L)
+        return m0 * L, rng.randint(m0 + 1, N // L) * L
+    lo = rng.randrange(N)
+    return lo, rng.randint(lo + 1, N)
 
 
-def shared(seed: int) -> str:
-    """`desc_difftest_vectors.shared_decl`'s shape, varied: at the root, `S` (one to four) shared arguments, each a leaf
-    of another root node (`_source`), a batch of `n` (one to four) members of `F` over them (unmapped) and, now and then,
-    a per-member argument `x` from a batch of inputs (mapped), or a call of `G`, which batches `F` so; `F` returns `L`
-    (one to six) leaves in any order, repeats allowed: the shared arguments, `x` and, when it holds one, its own gate on
-    `x` or a shared argument. Then one or two gates read what the batch returns: a primitive reading all of it, a slice,
-    one member, each member through a batch of a primitive mapped over the members, or through a call of a composite
-    passing it to a primitive. A read of whole members is then one copy of pieces of several root nodes' outputs."""
+def draw(rng: random.Random, seed: int) -> Spec:
+    k = rng.choice([2, 2, 3])
+    makers = tuple(rng.choice(["prim", "prim", "call", "batch", "input"]) for _ in range(k))
+    picks = tuple((m := rng.choice([2, 3]), rng.randrange(m)) if how == "batch" else None for how in makers)
+    pool = list(NAMES[:k]) + (["g"] if rng.random() < 0.2 else [])
+    while True:
+        order = tuple(rng.choice(pool) for _ in range(rng.randint(2, 5)))
+        if len({o for o in order if o != "g"}) >= 2:
+            break
+    n = rng.choice([2, 2, 3, 4])
+    N = n * len(order)
+    return Spec(reader=rng.choice(["primitive", "composite", "wrapped", "wrappedcomposite"]), order=order,
+                makers=makers, registered=tuple(rng.random() < 0.75 for _ in range(k)), picks=picks,
+                w=rng.choice([8, 8, 1, 3, 16]), n=n, mapped=rng.random() < 0.7, span=_run(rng, N, len(order)),
+                second=_run(rng, N, len(order)) if rng.random() < 0.25 else None, tag=f"V{seed}")
+
+
+def _partitions(c: int):
+    """Every assignment of `c` nodes to IUs numbered from 0 in order of first use."""
+    if c == 0:
+        yield ()
+        return
+    for p in _partitions(c - 1):
+        for u in range(max(p, default=-1) + 2):
+            yield p + (u,)
+
+
+def instances(rng: random.Random, text: str) -> list[dict]:
+    """Up to `ASSIGNMENTS` IU assignments of the root nodes that hold gates (all of them when there are no more, else
+    drawn without repeats), θ the registered inputs, `Γ` all the gates and `α` 1."""
+    inp, reg, spans = reference.root_nodes(text)
+    held = [k for k in range(len(inp)) if not inp[k] and spans[k][1] > spans[k][0]]
+    every = list(_partitions(len(held)))
+    chosen = every if len(every) <= ASSIGNMENTS else rng.sample(every, ASSIGNMENTS)
+    theta = [k for k in range(len(inp)) if inp[k] and reg[k]]
+    out = []
+    for p in chosen:
+        owner: list = ["input"] * len(inp)
+        for k, u in zip(held, p, strict=True):
+            owner[k] = u
+        out.append({"theta": theta, "owner": owner, "gamma": spans[-1][1] if spans else 0, "alpha": [1, 1]})
+    return out
+
+
+def seeds() -> list[dict]:
+    """`shared()`'s six declarations, each with its two instances, as `decl` writes them."""
+    given: dict[str, list[dict]] = {}
+    for inst in desc.shared():
+        given.setdefault(inst["program"], []).append({k: v for k, v in inst.items() if k != "program"})
+    out = []
+    for reader in ("primitive", "composite", "wrapped"):
+        for order in (("a", "b"), ("b", "b", "a")):
+            text = decl(Spec(reader=reader, order=order))
+            if text != desc.shared_decl(reader, order):
+                raise SystemExit(f"desc_fuzz_programs: decl({reader}, {order}) is not shared_decl's declaration")
+            out.append({"id": f"shared-seed-{reader}{''.join(order)}", "family": "shared-seed", "program": text,
+                        "instances": given.pop(text)})
+    if given:
+        raise SystemExit(f"desc_fuzz_programs: {len(given)} of shared()'s declarations are not shared_decl's")
+    return out
+
+
+def shared(seed: int) -> tuple[str, list[dict]]:
+    """Seed `seed`'s declaration, `decl` on parameters drawn at random (`draw`), and its IU assignments (`instances`)."""
     rng = random.Random(seed)
-    P = Program(rng)
-    w = rng.choice([1, 2, 3, 8, 16, 32, 64])
-    t = V(w)
-    S = rng.choice([1, 2, 2, 2, 3, 3, 4])
-    n = rng.choice([1, 2, 2, 3, 4])
-    mapped = rng.random() < 0.6
-    root = Body(P, [], 10 ** 6)
-    srcs = [_source(P, root, t, rng.choice(["input", "prim", "prim", "batch1", "call"])) for _ in range(S)]
-    if mapped:
-        xs = P.input(w, rng.random() < 0.5)
-        root.push({"args": [], "axes": [], "fn": P.fn(xs), "form": "batch", "n": n, "out": P.ty(A(n, t))}, A(n, t),
-                  [], n, "input")
-        xk = len(root.nodes) - 1
-    fb = Body(P, [t] * S + ([t] if mapped else []), 1)
-    own = rng.random() < 0.35
-    if own:
-        op = P.prim([t], t, f"Own{w}_v1")
-        fb.push({"args": [{"refs": {"affine": ["p", S if mapped and rng.random() < 0.5 else rng.randrange(S), 0, 1]},
-                           "type": P.ty(t)}], "fn": P.fn(op), "form": "primitive", "out": P.ty(t)}, t, [1], 1, "prim")
-    leaves_of = [["p", i, 0] for i in range(S)] + ([["p", S, 0]] if mapped else []) + ([["n", 0, 0]] if own else [])
-    L = rng.randint(1, 6)
-    items = [rng.choice(leaves_of[:S]) if rng.random() < 0.7 else rng.choice(leaves_of) for _ in range(L)]
-    ret_t = Tup(*[t] * L) if rng.random() < 0.6 else A(L, t)
-    f = P.composite(fb, ret_t, _member_ret(P, items))
-    args = [{"refs": {"affine": [*src, 1]}, "type": P.ty(t)} for src in srcs]
-    if mapped:
-        args.append({"refs": {"affine": ["n", xk, 0, n]}, "type": P.ty(A(n, t))})
-    axes = [None] * S + ([0] if mapped else [])
-    out = A(n, ret_t)
-    if rng.random() < 0.3:
-        gb = Body(P, [t] * S + ([A(n, t)] if mapped else []), 10 ** 6)
-        gb.push({"args": [{"refs": {"affine": ["p", i, 0, leaves(pt)]}, "type": P.ty(pt)}
-                          for i, pt in enumerate(gb.params)], "axes": axes, "fn": P.fn(f), "form": "batch", "n": n,
-                 "out": P.ty(out)}, out, [leaves(pt) for pt in gb.params], n * fb.gates, "batch")
-        g = P.composite(gb, out, {"affine": ["n", 0, 0, n * L]})
-        root.push({"args": args, "fn": P.fn(g), "form": "call", "out": P.ty(out)}, out, [1] * len(args), n * fb.gates,
-                  "call")
-    else:
-        root.push({"args": args, "axes": axes, "fn": P.fn(f), "form": "batch", "n": n, "out": P.ty(out)}, out,
-                  [1] * len(args), n * fb.gates, "batch")
-    kb = len(root.nodes) - 1
-    for _ in range(rng.choice([1, 1, 1, 2])):
-        how = rng.choice(["all", "all", "slice", "member", "mapped", "composite"])
-        if how == "mapped":
-            op = P.prim([ret_t], t)
-            root.push({"args": [{"refs": {"affine": ["n", kb, 0, n * L]}, "type": P.ty(out)}], "axes": [0],
-                       "fn": P.fn(op), "form": "batch", "n": n, "out": P.ty(A(n, t))}, A(n, t), [n * L], n, "batch")
-            continue
-        base, cnt = 0, n * L
-        if how == "slice":
-            base = rng.randrange(n * L)
-            cnt = rng.randint(1, n * L - base)
-        elif how == "member":
-            base, cnt = rng.randrange(n) * L, L
-        op = P.prim([A(cnt, t)], t)
-        arg = {"refs": {"affine": ["n", kb, base, cnt]}, "type": P.ty(A(cnt, t))}
-        if how == "composite":
-            rb = Body(P, [A(cnt, t)], 1)
-            rb.push({"args": [{"refs": {"affine": ["p", 0, 0, cnt]}, "type": P.ty(A(cnt, t))}], "fn": P.fn(op),
-                     "form": "primitive", "out": P.ty(t)}, t, [cnt], 1, "prim")
-            r = P.composite(rb, t, {"affine": ["n", 0, 0, 1]})
-            root.push({"args": [arg], "fn": P.fn(r), "form": "call", "out": P.ty(t)}, t, [cnt], 1, "call")
-        else:
-            root.push({"args": [arg], "fn": P.fn(op), "form": "primitive", "out": P.ty(t)}, t, [cnt], 1, "prim")
-    last = root.outs[-1]
-    P.composite(root, last, {"affine": ["n", len(root.nodes) - 1, 0, leaves(last)]}, "R_v1")
-    return P.text("R_v1")
+    text = decl(draw(rng, seed))
+    return text, instances(rng, text)
 
 
 # --- the data ----------------------------------------------------------------------------------------------------------
 
-#: (family, Program of a seed, seeds, probability of a mutant, instances `agree` checks): each instance costs two
-#: decodes of the Program, most of the run's time, so the small shared Programs get the most.
+def _bare(make):
+    return lambda s: (make(s), [])
+
+
+#: (family, (Program, instances) of a seed, seeds, probability of a mutant, instances of its own `agree` checks): each
+#: instance costs two decodes of the Program, most of the run's time, and a shared seed comes with six on average.
 FAMILIES = (
-    ("shared", shared, range(0, 600), 0.3, 2),
-    ("random", program, range(0, 600), 0.3, 1),
-    ("copies", copies, range(0, 150), 0.2, 1),
-    ("chain", chain, range(0, 20), 0.2, 1),
-    ("big", lambda s: program(s, scale=3), range(0, 40), 0.3, 1),
+    ("shared", shared, range(0, 200), 0.3, 1),
+    ("random", _bare(program), range(0, 600), 0.3, 1),
+    ("copies", _bare(copies), range(0, 150), 0.2, 1),
+    ("chain", _bare(chain), range(0, 20), 0.2, 1),
+    ("big", _bare(lambda s: program(s, scale=3)), range(0, 40), 0.3, 1),
 )
 
 
+def _line(id_: str, family: str, text: str, given: list[dict], k: int) -> dict:
+    return {"id": id_, "family": family, "program": text, "agree": k, **({"instances": given} if given else {})}
+
+
 def programs():
-    """Every line of the data, in order: `hand()`, `desc_difftest_vectors.shared()`'s declarations, then `FAMILIES`,
-    each seed's Program and its mutant where there is one."""
+    """Every line of the data, in order: `hand()`, `seeds()`, then `FAMILIES`, each seed's Program and its mutant where
+    there is one, with the same instances."""
     yield from ({**x, "agree": 4} for x in hand())
-    for i, text in enumerate(shared_vectors()):
-        yield {"id": f"shared-vector-{i}", "family": "shared-vector", "program": text, "agree": 8}
-    for fam, make, seeds, mut, k in FAMILIES:
-        for s in seeds:
-            text = make(s)
-            yield {"id": f"{fam}-{s}", "family": fam, "program": text, "agree": k}
+    for x in seeds():
+        yield _line(x["id"], x["family"], x["program"], x["instances"], 4)
+    for fam, make, seeds_, mut, k in FAMILIES:
+        for s in seeds_:
+            text, given = make(s)
+            yield _line(f"{fam}-{s}", fam, text, given, k)
             rng = random.Random(~s)
             if rng.random() < mut:
-                yield {"id": f"{fam}-mutant-{s}", "family": f"{fam}-mutant", "program": mutate(rng, text), "agree": k}
+                yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", mutate(rng, text), given, k)
 
 
 def write(out: Path) -> dict[str, Path]:
@@ -890,7 +954,6 @@ def main() -> None:
     ap.add_argument("verity", type=Path, help="the checkout whose verity.ml.circuits builds the shared vectors")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
-    import verity.ml.circuits
     here = Path(verity.ml.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
         raise SystemExit(f"verity.ml.circuits comes from {here}, not from the checkout {a.verity}")
