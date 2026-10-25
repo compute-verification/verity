@@ -5,6 +5,7 @@ import Proofs.Flock.Recursive.ZkReg.Vals
 import Proofs.Flock.Recursive.ZkReg.Off
 import Proofs.Flock.Recursive.Finds
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+import Proofs.Flock.Soundness.Assumptions.CustodyZk
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
@@ -76,7 +77,7 @@ structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   hcH : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c
   pub : Public
   hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub
-  hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω)
+  hDraw : FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ I dj mPts Lv
   hTags : TagsOkZHJ I
   hJ : nTab I = J
   rd : FlockSoundness.Registered.ReadsX
@@ -91,7 +92,8 @@ set_option genInjectivity false in
 `verify --zk` reads is the challenger's of the live session of `J` tables, `RecordsLiveZKJ`). -/
 structure ZkOuter (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit)
     (hscope : Layout.scopeOk c = true) (Lv : Law nv) extends ZkOuterD mPts nv J Reg' c hU hscope Lv where
-  hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg') dj y₀ S R).length) wr
+  hRec : FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg') dj y₀ S R).length)
+    wr
 
 /-- **The names of a session's strategies**: a registration and, at each of the law's coins, a strategy of the live
 session of `J` tables; they read the same at every history. -/
