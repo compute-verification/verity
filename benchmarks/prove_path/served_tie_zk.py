@@ -25,7 +25,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   is proved and its verdict is ``ACCEPT``. The positions chunks are bound natively, opened under the run root
   (``bindings``): the Commit's leaves are its position-leaf digests under its hiding rule, not row leaves, so their b‖c is
   not yet a proof row's.
-  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
+  The received-pieces scan (`leak_scan.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
   row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`,
   ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of C-Flock's proof format
   (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
@@ -401,7 +401,7 @@ def prove(a) -> int:
         log(f"{name}: staged {m['n']} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, m {m['meta']['k_log'] + m['nbl']}, "
             f"{m['stage_s']} s")
         res = audit(M, N2, av, sg, m, units, a.window, d.run_root, out / name, a.port + 20 * k)
-        blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
+        blobs, held, public = LS.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
         res["received"].update(LS.scan(res["received"], blobs, out / name / "verifier"))
@@ -450,7 +450,7 @@ def rescan(a) -> int:
         if [[u.kind, u.j] for u in us] != [list(x) for x in summary["statements"][name]]:
             raise SystemExit(f"{name}: these units aren't the run's {summary['statements'][name]}")
         units = fill(us, honest, summary[name]["staged"]["n"])
-        blobs = N2.public_pieces(M.a8, *blobs_of(units, {}), b"")[0]
+        blobs = LS.public_pieces(M.a8, *blobs_of(units, {}), b"")[0]
         got = summary[name]["received"]
         res[name] = r = LS.rescan(got, blobs, src / name / "verifier")
         ok &= not r["leaked"]
