@@ -26,7 +26,7 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
@@ -183,7 +183,8 @@ def opening_of(v: Any) -> audit.Opening:
 
 
 def event_of(v: Any) -> tuple:
-    """`eventOf`: an event as a tuple, its kind first."""
+    """`eventOf`: an event as a tuple, its kind first. A `verify` carries its openings, or the frames they came in
+    (`frames`), read as the live verifiers read them (`wire.openings_of`)."""
     kind = _str(v, "kind")
     if kind in ("start", "boundary"):
         return kind, nat(v, "now")
@@ -204,6 +205,8 @@ def event_of(v: Any) -> tuple:
     if kind == "close":
         return kind, int_(v, "t"), nat(v, "now")
     if kind == "verify":
+        if "frames" in v:
+            return kind, int_(v, "t"), wire.openings_of(hexes(v, "frames"))
         return kind, int_(v, "t"), [opening_of(o) for o in _list(v, "openings")]
     raise D.Reject(f"no event kind {kind}")
 
@@ -304,21 +307,25 @@ def _positive(p: Any, k: str) -> int:
 
 
 def pace_of(v: Any) -> audit.Pace | None:
-    """`sessionOf`'s pace: None, or `{"k", "window_ns"}`, each a positive integer."""
-    return None if v is None else audit.Pace(_positive(v, "k"), _positive(v, "window_ns"))
+    """`sessionOf`'s pace: None, or `{"k", "window_ns"}`, each a positive integer, and `in_flight`, 1 or 2, if it names
+    it (`flightOf`: 2 when it doesn't)."""
+    if v is None:
+        return None
+    k, window_ns = _positive(v, "k"), _positive(v, "window_ns")
+    f = nat(v, "in_flight") if "in_flight" in v else 2
+    if f not in (1, 2):
+        raise D.Reject("a pace's in_flight is 1 or 2")
+    return audit.Pace(k, window_ns, f)
 
 
-def session_of(v: Any, shared: bool = False) -> tuple[dict, list[bytes], list[bytes], int]:
+def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
-    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent, and
-    refused above 1 unless `shared` (`sessionFn`'s, not the registry's)."""
+    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent."""
     p = _get(v, "params")
     kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
     kw["deferred"] = _bool(p, "deferred")
     kw["pace"] = pace_of(_get(p, "pace"))
     kw["groups_per_coin"] = _positive(p, "groups_per_coin") if "groups_per_coin" in p else 1
-    if kw["groups_per_coin"] != 1 and not shared:
-        raise D.Reject("the registry draws a window an openings coin: groups_per_coin is 1")
     Params(1, **kw)
     committed = hexes(v, "coins")
     if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
@@ -337,7 +344,7 @@ def session(v: Any) -> dict:
     """`sessionFn`: a case's events through `audit.Session`, every event's result, the outcome and the record."""
     with decoding():
         reg = registration_of(_get(v, "registration"))
-        kw, committed, appends, not_before = session_of(v, shared=True)
+        kw, committed, appends, not_before = session_of(v)
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
@@ -403,7 +410,7 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
         which, kw, committed, appends, not_before, index = a
         reg = drawn[which] if isinstance(which, int) else which
         s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
-                      challenger=lambda k: Replay(k, kw["windows"], committed, appends))
+                      challenger=lambda k: Replay(k, kw["windows"], committed, appends, kw["groups_per_coin"]))
         return {"session": s.commitment.epoch}
     if op == "event":
         node, k, e = a
@@ -942,6 +949,15 @@ def plan_both(r: Run) -> None:
     r.receive(0, 0, bytes(64), runs=((0, 2),), change=((), ()), step=0)
 
 
+def receipts_at_limit(r: Run) -> None:
+    """The store appended to the codec's `max_blocks` and passes of all of it, until one would take window 0's
+    receipts to `RECEIPT_LIMIT`: that pass rejects with `plan`."""
+    r.start()
+    r.commit(bytes(64), P512.max_blocks - r.store.extent)
+    for i in range(audit.RECEIPT_LIMIT // P512.max_blocks):
+        r.receive(0, i, bytes([i]) * 64, runs=((0, P512.max_blocks),), step=i)
+
+
 def plan_released(r: Run) -> None:
     r.start()
     r.run()
@@ -1059,6 +1075,35 @@ def honest_paced_drawn_at_k(r: Run) -> None:
     r.verify(1)
 
 
+def after_boundary(r: Run) -> None:
+    """Window 0's second root after its boundary, within its deadline, then window 1's two passes and the close: two
+    windows in flight (`audit.Pace.in_flight`) take it, and one rejects that root `order`."""
+    r.start()
+    r.run()
+    r.boundary()
+    r.t, r.i = 0, 1
+    r.run()
+    r.t, r.i = 1, 0
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
+def boundary_before_root(r: Run) -> None:
+    """Window 0's boundary on a clock reading before its root arrived, then another later: at two windows in flight the
+    first ends window 0 and the second, too soon after window 1's challenge, is refused; at one the first is refused
+    and the second ends window 0.  Window 1's two passes and the close follow."""
+    r.start()
+    r.run(at=20)
+    r.boundary(at=15)
+    r.boundary(at=21)
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
 def honest_shared(r: Run) -> None:
     """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each draw closed at its
     last window and its windows verified on their shares. A close at a window before its draw's last is refused, and
@@ -1165,6 +1210,7 @@ def refusals(r: Run) -> None:
 W1 = dict(windows=1)
 DEFERRED = dict(lifetime=2, deferred=True)
 PACED = dict(pace=audit.Pace(2, 10))
+PACED1 = dict(pace=audit.Pace(2, 10, 1))
 P1024 = World(codec.DEFAULT, blocks=3)
 BLOCK = World(receipt=receipts.BLOCK_SHA512)
 ROWS64 = World(rows=64)
@@ -1217,6 +1263,13 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
     "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
+    "honest-paced-one-flight": (World(), PACED1, honest_paced, "accepted"),
+    "honest-shared-paced-one-flight": (World(), dict(PACED1, windows=4, groups_per_coin=2, samples=3), honest_shared,
+                                       "accepted"),
+    "after-boundary": (World(), PACED, after_boundary, "accepted"),
+    "after-boundary-one-flight": (World(), PACED1, after_boundary, "order"),
+    "boundary-before-root": (World(), PACED, boundary_before_root, "accepted"),
+    "boundary-before-root-one-flight": (World(), PACED1, boundary_before_root, "accepted"),
     "honest-shared-4": (World(), dict(windows=8, groups_per_coin=4, samples=5), honest_shared, "accepted"),
     "honest-shared-paced-uneven": (World(), dict(PACED, windows=5, groups_per_coin=2, samples=3), honest_shared,
                                    "accepted"),
@@ -1235,6 +1288,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "plan-change-overlapping": (World(), {}, lambda r: plan_change(r, (((3, 2), (4, 1)), ())), "plan"),
     "plan-both": (World(), {}, plan_both, "plan"),
     "plan-released": (World(), {}, plan_released, "plan"),
+    "plan-receipts-at-limit": (World(), {}, receipts_at_limit, "plan"),
     "release-twice": (World(), {}, lambda r: release(r, ((2, 1),)), "release"),
     "release-malformed": (World(), {}, lambda r: release(r, ((5, 3),)), "release"),
     "release-adjacent": (World(), W1, lambda r: (release(r, ((3, 1),)), r.run(Plan(((0, 1), (4, 2)), 6)),

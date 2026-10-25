@@ -82,7 +82,6 @@ from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
-from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -97,6 +96,7 @@ from verity_vllm.protocol_options.pouw_h1_commit import calls_root
 from verity_vllm.protocol_options import pouw_h1_prover as PV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options import pouw_h1_tables_device as TD
 from verity_vllm.protocol_options.pouw_h1_requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 from verity_vllm.protocol_options.pouw_h1_static import FILL, Static, bind_all, graph_pad, utilization
 
@@ -289,14 +289,6 @@ def numpy_of(t: Any) -> np.ndarray:
     return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
-def _words(t: Any, m: int, dtype: str) -> np.ndarray:
-    """`t`'s m rows as little-endian `dtype` words, a bf16 tensor by its bits."""
-    if hasattr(t, "detach") and str(t.dtype) == "torch.bfloat16":
-        import torch
-        t = t.detach().contiguous().view(torch.int16)
-    return np.ascontiguousarray(numpy_of(t).reshape(m, -1), dtype=dtype)
-
-
 class H1Run:
     """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
     public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
@@ -358,8 +350,9 @@ class H1Run:
         self.prover = prover if prover is not None else getattr(served, "prover", None)
         if self.prover is not None and commit:
             PV.keep_key(self.prover, self._key)
-        #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
-        self.tables: dict[int, dict[str, str | None]] = {}
+        #: each call's table roots (`tables`), the calls whose tables the GPU is still hashing, and each call's receipt root
+        self._roots: dict[int, dict[str, str | None]] = {}
+        self._hashing: deque[tuple[int, TD.Pending]] = deque()
         self.receipts: dict[int, bytes] = {}
         #: the admitted requests' entries in admission order, each round's, and the requests refused admission
         self.requests: list[RQ.RequestEntry] = []
@@ -389,6 +382,12 @@ class H1Run:
     def listen(self, fn: Listener) -> None:
         """Hand every later call to `fn` (`Listener`)."""
         self.listeners.append(fn)
+
+    @property
+    def tables(self) -> dict[int, dict[str, str | None]]:
+        """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
+        TD.settle(self, wait=True)
+        return self._roots
 
     @property
     def salt(self) -> bytes:
@@ -427,24 +426,9 @@ class H1Run:
         self.commits["requests_root"], self.commits["request_table"] = requests.hex(), table.hex()
         return requests
 
-    def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
-        return RQ.hiding_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, self._key,
-                              RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]).commitment.root.hex()
-
-    def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None) -> None:
-        """The call's A table (`table_leaves`) and its z table, leaf u unit u's z/y record (`pouw_h1_records`; an empty call's
-        all zero), none for a served call whose arm handed over no records."""
-        m, t = call.m, self.rows
-        if a is not None and m:
-            av, sv = _words(a, m, "i1"), _words(s_a, m, "<f4")
-        else:
-            av = sv = np.zeros((0, 1), "i1")
-        out: dict[str, str | None] = {"a": self._table(call, "a", table_leaves(t, call.k + 4, m, av, sv))}
-        leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
-        out["z"] = None if leaves is None else self._table(call, "z", leaves)
-        self.tables[call.index] = out
-        if self.prover is not None and m:
-            PV.keep_call(self.prover, call.index, av, sv, records)
+    def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
+        """The call's A and z tables (`pouw_h1_tables_device.commit_tables`)."""
+        TD.commit_tables(self, call, a, s_a, records, zy)
 
     def call(self, index: int) -> Call:
         """Call `index`; KeyError when the window has none."""
@@ -453,7 +437,8 @@ class H1Run:
             raise KeyError(f"{self.entry}: no call {index}")
         return self.calls[i]
 
-    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None,
+              zy: Any = None) -> Call:
         n, k = self.shapes_[w]
         m, batch = int(a.shape[0]) if a is not None else 0, len(self.owners.get(s, ()))
         call = Call(s * len(self.shapes_) + w, s, w, self.modules.get(w, str(w)), m, k, n, s * self.u_step + self.offs[w],
@@ -461,9 +446,9 @@ class H1Run:
         bisect.insort(self.calls, call, key=lambda c: c.index)
         self._in[s] += 1
         if self.commit:
-            self._commit_tables(call, a, s_a, records)
+            self._commit_tables(call, a, s_a, records, zy)
             if self.served is not None:
-                self.tables[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
+                self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -614,10 +599,11 @@ class H1Run:
             return None
         n = self.shapes_[w][0]
         records = ZR.of(z, units(k, n, self.rows)) if n % TILE[1] == 0 else None
+        zy = z if records is not None else None
         if z is None and self.retain:
             from verity_vllm.engine.int8_exact import int_mm
             z = int_mm(a, weight)
-        call = self._call(self.step, w, a, s_a, weight, weight_scale, records)
+        call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
             y = ZR.split(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
@@ -632,7 +618,7 @@ class H1Run:
             return None
         call, z, held = made
         v = CG.verdict(trace, y, z)
-        if v["credit"] and (why := ZR.refusal(held, call, _words(y, call.m, "<i2"))):
+        if v["credit"] and (why := ZR.refusal(held, call, TD.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v

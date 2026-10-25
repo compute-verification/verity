@@ -148,8 +148,10 @@ WINDOW_EXPECT = {
     "live-past": ("live", "has a proof outcome and the window has"), "live-failed": ("live", "proof was rejected"),
     "live-other-circuit": ("live", "against another circuit than the window's live Program"),
     "live-m-other": ("live", LIVE_FINDING), "live-round-other": ("live", LIVE_FINDING),
-    "live-slots-other": ("live", LIVE_FINDING),
+    "live-slots-other": ("live", LIVE_FINDING), "live-caps-swapped": ("live", LIVE_FINDING),
+    "live-caps-other": ("live", LIVE_FINDING),
     "live-ok-off": ("live", LIVE_FINDING), "live-proofs-form": ("live", Cr.LIVE_PROOFS_FORM),
+    "live-v1": ("live", Cr.NOT_LIVE),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -544,10 +546,12 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
 def test_window_and_period_credit_are_the_only_entries():
     """A caller can't credit a window with a step skipped: the steps `window` composes are internal, and so are the
     forms that take proof outcomes in place of proof files (the Lean's, until it runs the verifier of record)."""
-    for step in ("credited", "outcome", "a_link", "registration", "verified", "window_outcomes", "period_outcomes"):
+    for step in ("credited", "outcome", "a_link", "registration", "verified", "asks", "lean_verified",
+                 "live_verified", "live_asks", "lean_live_verified", "window_outcomes", "period_outcomes"):
         assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
     assert {"window", "period_credit"} <= set(Cr.__all__)
-    assert not {"_credited", "_outcome", "_a_link", "_registration", "_verified", "_window_outcomes",
+    assert not {"_credited", "_outcome", "_a_link", "_registration", "_verified", "_asks", "_lean_verified",
+                "_live_verified", "_live_asks", "_lean_live_verified", "_window_outcomes",
                 "_period_outcomes"} & set(Cr.__all__)
 
 
@@ -746,18 +750,23 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
 
 
 def test_the_live_program_is_read_from_its_compiled_descriptor():
-    """`credit.live_of` reads the compiled `live.program`'s T, S and PREFIX back from its descriptor (canonical JSON
+    """`credit.live_of` reads the compiled `live.program_v2`'s T, S and PREFIX back from its descriptor (canonical JSON
     without annotations, the bytes its program digest hashes), its unit the one template its query draws, unit s round
-    s's; the cases' stand-in descriptor (`live_program`) reads the same."""
+    s's; the cases' stand-in descriptor (`live_program`) reads the same. The v1 Program, whose units don't bind each
+    request's cap to its public max_tokens, is no live Program credit reads."""
     from verity.core.protocols.pouw.circuit import live as LV
+
+    def raw(prog):
+        return codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})
+
     for t, s, prefix in ((4, 3, "h1/w-1/"), (1, 1, ""), (32, 2, "x/y/")):
-        prog = LV.program(t, s, prefix)
-        raw = codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})
-        got, why = Cr.live_of(raw)
+        prog = LV.program_v2(t, s, prefix)
+        got, why = Cr.live_of(raw(prog))
         assert why is None and (got["T"], got["S"], got["prefix"]) == (t, s, prefix)
-        assert LV.query(t) == {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [got["unit"]]}}
-        assert hashlib.sha512(raw).hexdigest() == h1.P.program_digest(prog)
+        assert LV.query_v2(t) == {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [got["unit"]]}}
+        assert hashlib.sha512(raw(prog)).hexdigest() == h1.P.program_digest(prog)
         assert Cr.live_of(bytes.fromhex(cases.live_hex(cases.live_program(t, s, prefix)))) == (got, None)
+        assert Cr.live_of(raw(LV.program(t, s, prefix))) == (None, ("live", Cr.NOT_LIVE))
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -771,6 +780,21 @@ def test_each_steps_served_rows_are_proved_by_its_live_unit(seed):
     assert got is None and refused[0] == "live" and LIVE_FINDING in refused[1]
     got, refused = _period("live-refused", seed)
     assert got is None and refused[0] == "window" and "live: round " in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
+    """Each round's live@<s> proof outcome opens every ``cap_<i>`` at the known ``caps`` of the max_tokens its period's
+    open committed (`live_reads.caps_table`): an honest window is accepted, and one whose live proof was made against the
+    requests' max_tokens in reverse order (so its hidden headers could give request 0 the last request's cap, and its
+    decode rows) or any other caps is refused, and so is a window whose live Program is v1's, whose units read no caps."""
+    d = cases.window_instance(random.Random(f"honest/{seed}"))
+    assert Cr._window_outcomes(*cases.window_args(d))[1] is None
+    for name in ("live-caps-swapped", "live-caps-other"):
+        got, refused = _window(name, seed)
+        assert got is None and refused[0] == "live" and LIVE_FINDING in refused[1], (name, refused)
+    got, refused = _window("live-v1", seed)
+    assert got is None and refused == ("live", Cr.NOT_LIVE)
 
 
 def test_the_commit_record_is_bound_under_calls_root():

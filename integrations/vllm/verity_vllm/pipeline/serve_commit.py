@@ -21,6 +21,12 @@ sit in one window, which runs past its bound by the step that crossed it (and by
 yet absorbed); a request may still span windows. ``disk`` (`serve_seal.DiskFloor`) refuses the seal of a window that would take the
 filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`Mirror`) copies the records
 into the run's ``$OUT`` after each close and each seal.
+
+With ``served`` (the compile slice's statics, `served_statics`) each close also commits the step rows the window ran
+(`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
+id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
+binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
+close and so before any draw over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
 """
 from __future__ import annotations
 
@@ -32,10 +38,16 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+from verity.core.protocols.certifier import compile_slice as CS
+from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+
+#: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
+SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 
 #: The request fields that are sampling inputs, recorded as each request brought them.
 SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "ignore_eos", "stop",
@@ -126,6 +138,24 @@ def ingress_of(brought: Mapping[str, Any], params: Any) -> dict[str, Any]:
             "seed_rule": "request" if brought.get("seed") is not None else "default"}
 
 
+def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> dict[str, int]:
+    """The compile slice's statics (`compile_slice.statics`) for the served engine's scheduler configuration
+    (`engine.step_trace.scheduler_config`) and the slice's size class (every name of `SERVED_CLASS`)."""
+    if missing := [k for k in SERVED_CLASS if k not in size_class]:
+        raise ValueError(f"the served rows' size class needs {missing}")
+    c = {k: int(size_class[k]) for k in SERVED_CLASS}
+    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
+
+
+def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
+                  run_root: bytes, salts: Sequence[bytes] | None = None) -> tuple[SRW.Served, list]:
+    """A window's served rows (`served_record.served_rows`' form, by step) committed under its run root
+    (`served_rows.register`, fresh salts unless ``salts`` gives them), and the slice windows they make."""
+    S = SimpleNamespace(**statics)
+    session = SRW.windows(S, by_step, ids, steps)
+    return SRW.register(S, session, run_root, salts=salts), session
+
+
 @dataclass
 class Ledger:
     """One request as served: its ids, the HTTP id -> engine id map, its ingress record and its stream."""
@@ -152,11 +182,13 @@ class CommitWindows:
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
                  clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time,
-                 marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None, sealer: Any = None,
-                 window_bytes: int | None = None, disk: Any = None, on_floor: Callable[[str], None] | None = None,
-                 mirror: Callable[[], None] | None = None) -> None:
+                 marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
+                 served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
+                 on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
+        self.served = dict(served) if served is not None else None   # the compile slice's statics: commit every window's rows
+        self.arrivals: dict[str, int] = {}               # every admitted engine id -> its arrival id, in admission order
         self.sealer, self.window_bytes, self.disk, self.on_floor, self.mirror = sealer, window_bytes, disk, on_floor, mirror
         self.floor_hit: dict[str, Any] | None = None     # the first window the disk floor left unsealed
         self.run_id, self.window_steps, self.idle_close_steps = run_id, int(window_steps), int(idle_close_steps)
@@ -175,6 +207,7 @@ class CommitWindows:
     def admitted(self, adm: Any) -> None:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
+        self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
         self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
                                              getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1)
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
@@ -246,6 +279,10 @@ class CommitWindows:
                    "readback_errors_n": readback["readback_errors_n"], "passed": commit["passed"] and readback["passed"],
                    "gc": gc_of(rc)}
             lap("record")
+            if self.served is not None:
+                rec["served_rows"] = self._served_rows(rec)
+                rec["passed"] = rec["passed"] and "error" not in rec["served_rows"]
+                lap("served_rows")
             if self.seal is not None:
                 job = self._seal_job(rec, rc)
                 rec["seal"] = {"row_dir": str(self.out / "windows" / f"w{self.window}"), "off_loop": self.sealer is not None} \
@@ -268,6 +305,24 @@ class CommitWindows:
         if isinstance(job, tuple):
             self._land(rec, job)
         return rec
+
+    def _served_rows(self, rec: dict[str, Any]) -> dict[str, Any]:
+        """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
+        statics it was packed under; the rows and salts written to ``served_rows/w<k>.json``. A failure is the window's."""
+        try:
+            by_step = served_rows(self.com)
+            ids = {rid: self.arrivals[e] for rows in by_step.values() for rid, *_ in rows
+                   if (e := base_id(rid, self.known)) in self.arrivals}
+            served, session = commit_served(self.served, by_step, ids, rec["steps"], bytes.fromhex(rec["run_root"]))
+        except Exception as e:  # noqa: BLE001  (a window whose rows can't be committed fails visibly; the server goes on)
+            return {"error": f"{type(e).__name__}: {e}"[:500]}
+        d = self.out / "served_rows"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"w{rec['window']}.json").write_text(json.dumps({
+            "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
+            "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
+            "salts": [s.hex() for s in served.registration.salts]}))
+        return {**served.record(), "statics": self.served}
 
     def _seal_job(self, rec: dict[str, Any], rc: Any) -> Any:
         """At the close, on the engine loop: what the window's seal reads that the next window changes (its requests, rows and
@@ -354,8 +409,8 @@ class CommitWindows:
             for eid in done:
                 led = self.ledgers.pop(eid)
                 rr = self.record.requests.get(eid)
-                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "release": led.release,
-                       "admitted": led.admitted, "runner_ids": rr.runner_ids if rr else [],
+                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "arrival": self.arrivals.get(eid),
+                       "release": led.release, "admitted": led.admitted, "runner_ids": rr.runner_ids if rr else [],
                        "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
                        "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
                        "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led)}

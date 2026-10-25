@@ -6,7 +6,8 @@ and credits nothing from a verdict the evidence carries.
 The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs without a C-Flock proof of an H1 window: it
 answers as the Lean verifier does, one ``VERDICT`` line a session, and accepts a session only when its proof is the
 SHA-512 of every file it was handed (the circuit file, the public file, the program, the partition object and the
-``--registered`` file) and the units its session drew. `prove` makes those proofs with the files a prover would hold,
+``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
+session drew. `prove` makes those proofs with the files a prover would hold,
 the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
 verifier the files the prover proved against. `sampled_proofs/tests/test_proofs.py` holds the real verifier to
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
@@ -43,6 +44,7 @@ a = sys.argv[1:]
 opt = {{a[i]: a[i + 1] for i in range(len(a) - 1) if a[i].startswith("--") and a[i] != "--session"}}
 sessions = a[a.index("--session") + 1:]
 files = [Path(opt[k]).read_bytes() for k in ("--circuit", "--public", "--program", "--partition", "--registered")]
+files[3:] = [json.dumps(json.loads(f), sort_keys=True).encode() for f in files[3:]]
 bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
 reg = json.loads(files[4])
 for s in sessions:
@@ -87,14 +89,21 @@ def _bind(base: Path, files: list[bytes], drew: list[int]) -> None:
         {"unit_draw": {"units": drew}, "proof": hashlib.sha512(bound + json.dumps(drew).encode()).hexdigest()}))
 
 
+def _max_tokens(d: dict) -> list[int] | None:
+    """The max_tokens the window's period's open committed (`credit.committed_length`), None when it commits none."""
+    opens = [e["body"] for e in map(json.loads, d["ledger"]) if e["kind"] == "period-open"]
+    length = opens[0].get(Cr.LENGTH_FIELD) if opens else None
+    return length.get("max_tokens") if isinstance(length, dict) else None
+
+
 def live_reads(d: dict, s: int, m: int | None = None) -> dict:
-    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, and the
-    manifest's m_s (or `m`)."""
+    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, the
+    manifest's m_s (or `m`) and the max_tokens its period's open committed."""
     raw, live = bytes.fromhex(d["descriptor"]), Cr.live_of(bytes.fromhex(d["live"]["descriptor"]))[0]
     program, prefix, steps = hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), len(d["rounds"])
     roots = {e["value"]: e["root"] for e in d["entries"]}
     ms = m if m is not None else d["calls"][s * (len(d["calls"]) // steps)][Cr.SERVED_ROWS]
-    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix)
+    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix, _max_tokens(d))
 
 
 def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
@@ -114,8 +123,8 @@ def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
         (base / "circuit.txt").write_bytes(LIVE_CIRCUIT)
         (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": [s]}}).encode() + b"\n")
         reg = live_reads(d, s, (m or {}).get(s))
-        _bind(base, [LIVE_CIRCUIT, base.joinpath("pub.bin").read_bytes(), raw, json.dumps(partition).encode(),
-                     json.dumps(reg).encode()], [0])
+        _bind(base, [LIVE_CIRCUIT, base.joinpath("pub.bin").read_bytes(), raw,
+                     json.dumps(partition, sort_keys=True).encode(), json.dumps(reg, sort_keys=True).encode()], [0])
         out.append({"round": s, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
                     "sessions": [str(base / "session")]})
     return {"descriptor": desc, "statements": out}
@@ -157,7 +166,8 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
         reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"], len(d["rounds"]), d["salt"])
         assert why is None, why
         files = [base.joinpath("circuit.txt").read_bytes(), base.joinpath("pub.bin").read_bytes(), raw,
-                 json.dumps(Cr.partition_of(program, shape)).encode(), json.dumps(reg).encode()]
+                 json.dumps(Cr.partition_of(program, shape), sort_keys=True).encode(),
+                 json.dumps(reg, sort_keys=True).encode()]
         bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
         drew = list(range(len(units)))
         (base / "session" / "session.json").write_text(json.dumps(
@@ -274,8 +284,9 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
         roots.setdefault(e["value"], []).append(e["root"])
     reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"],
                                 len(d["rounds"]), d["salt"])
-    files = [Path(s["circuit"]).read_bytes(), pub.read_bytes(), raw, json.dumps(Cr.partition_of(program, shape)).encode(),
-             json.dumps(reg).encode()]
+    files = [Path(s["circuit"]).read_bytes(), pub.read_bytes(), raw,
+             json.dumps(Cr.partition_of(program, shape), sort_keys=True).encode(),
+             json.dumps(reg, sort_keys=True).encode()]
     bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
     p = Path(s["sessions"][0]) / "session.json"
     rec = json.loads(p.read_text())
@@ -315,7 +326,8 @@ def _rebind(d: dict, s: dict, reg: dict) -> None:
     raw = bytes.fromhex(d["descriptor"])
     program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
     files = [Path(s["circuit"]).read_bytes(), Path(s["public"]).read_bytes(), raw,
-             json.dumps(Cr.partition_of(program, shape)).encode(), json.dumps(reg).encode()]
+             json.dumps(Cr.partition_of(program, shape), sort_keys=True).encode(),
+             json.dumps(reg, sort_keys=True).encode()]
     bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
     p = Path(s["sessions"][0]) / "session.json"
     rec = json.loads(p.read_text())
@@ -591,7 +603,8 @@ def test_live_evidence_carrying_outcomes_or_no_committed_file_is_refused(seed, t
     partition = {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
                  "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1],
                            "params": {"templates": [Cr.live_of(raw)[0]["unit"]]}}}
-    _bind(pub.parent, [LIVE_CIRCUIT, pub.read_bytes(), raw, json.dumps(partition).encode(), json.dumps(reg).encode()], [0])
+    _bind(pub.parent, [LIVE_CIRCUIT, pub.read_bytes(), raw, json.dumps(partition, sort_keys=True).encode(),
+                       json.dumps(reg, sort_keys=True).encode()], [0])
     got, refused = credit(d, statements)
     assert got is None and refused[0] == "live" and f"proved units [{steps}], not unit 0" in refused[1], refused
 

@@ -455,3 +455,18 @@ def test_a_slack_read_cut_short_skips_the_doorbells_and_still_posts(relay, monke
     relay.log_text["text"] = line("run-1") + "\n"
     relay.once()
     assert len(relay.posts) == 1 and relay.wrote == []
+
+
+def test_a_holder_held_unread_is_posted_and_rings_top(relay):
+    """top, 24 Oct 21:50Z: a holder that sat in a streaming worker's call for an hour rings @top."""
+    top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
+    co = PROOFS_INBOX["holder"]
+    relay.log_text["text"] = json.dumps(
+        {"kind": "held_unread", "agent": co, "name": "verity: proofs", "run": "run-u", "since": "2026-10-24T17:25:00Z",
+         "minutes": 60, "status": "RUNNING", "action": "cancelled and continued", "new_run": "run-n", "owner": "top",
+         "handle": "proofs", "reason": "a doorbell rang at 2026-10-24T17:40:00Z"}) + "\n"
+    relay.once()
+    (post,) = relay.posts
+    assert post.startswith(f"{top} *Agent watch:* ") and "did nothing itself for 60 min since 2026-10-24T17:25:00Z" in post
+    assert "(a doorbell rang at 2026-10-24T17:40:00Z); the watch cancelled and continued" in post
+    assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]

@@ -6,13 +6,14 @@ hold to what it signed, with ⌈W/g⌉ openings coins, each released after its d
 from __future__ import annotations
 
 import copy
+import dataclasses
 from fractions import Fraction
 
 import pytest
 
 from test_remote_bandwidth import N, SCHEDULE, Entropy, drive, params, store  # noqa: F401
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, timing
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, ledger, timing
 from verity.core.protocols.remote_bandwidth.audit import Session, SessionError
 
 SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
@@ -142,13 +143,18 @@ def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(
 
 
 def test_the_last_draw_may_hold_fewer_windows(store) -> None:
-    """Three windows two a coin: windows 0 and 1 are one draw, window 2 the other alone."""
+    """Three windows two a coin: windows 0 and 1 are one draw, window 2 the other alone.  The record's `samples` is
+    each draw's request, so the memory line's δ charges the draw's rejection at two draws' `samples`, not three."""
     p, c = shared(store, 2, windows=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     assert all(v.accepted for v in finish_draws(s, prover, passes, clock))
     assert s.coins.afters(coins.OPENINGS) == (s.windows[1].roots[-1], s.windows[2].roots[-1])
     assert len(s.windows[0].draws) + len(s.windows[1].draws) == len(s.windows[2].draws) == p.samples
-    assert audit.pooled_windows(s.record())[0] == [(7 * N, p.samples), (3 * N, p.samples)]
+    r = s.record()
+    assert audit.pooled_windows(r)[0] == [(7 * N, p.samples), (3 * N, p.samples)]
+    assert r.samples == p.samples and ledger.rejection(r) == 2 * p.samples * 2.0 ** -ledger.REJECTION_LOG2
+    with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
+        dataclasses.replace(r, samples=p.samples - 1)
 
 
 def skipping(window: int):

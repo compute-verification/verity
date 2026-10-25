@@ -91,14 +91,20 @@ for k in $FIRST $WS; do
   "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/row_dirs.txt"
 import json, sys
 from pathlib import Path
+from verity_vllm.pipeline import deferred_rows as DR
 d, k = Path(sys.argv[1]), sys.argv[2]
 w = d / "windows" / f"w{k}"
 v = json.loads((w / "commit" / "verdict.json").read_text())
 m = json.loads((w / "manifest.json").read_text()) if (w / "manifest.json").exists() else {}
+sw = DR.of_record(v["replay_deferred"]["bundles"][0]["path"], str(w)).ctx["served_window"]
+line = next((json.loads(x) for x in (d / "windows.jsonl").read_text().splitlines() if json.loads(x).get("window") == int(k)), {})
+srw = sw.get("served_rows") or {}
 print(json.dumps({"window": int(k), "row_dir": str(w), "bundle": str(w / "commit" / "replay_bundle_p0"), "run_root": v.get("run_root"),
                   "commit_scheme": v.get("commit_scheme"), "manifest_sha256": v["replay_deferred"]["bundles"][0]["manifest_sha256"],
                   "registration": str(d / "advice" / f"w{k}" / "registration.json"), "programs": len(m.get("requests") or {}),
-                  "builds": sorted(p.name for p in w.glob("build_request*"))}))
+                  "builds": sorted(p.name for p in w.glob("build_request*")),
+                  "ctx_served_rows": {key: srw.get(key) for key in ("schema", "binding", "root", "count", "n_bits", "statics", "error") if key in srw} or srw,
+                  "ctx_step_input_port": sw.get("step_input_port"), "port_layout": (line.get("sealed") or {}).get("port_layout")}))
 EOF
   "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/identities.txt"
 import json, sys

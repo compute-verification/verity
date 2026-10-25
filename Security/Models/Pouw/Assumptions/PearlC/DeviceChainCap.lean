@@ -1,4 +1,5 @@
 import Models.Pouw.Assumptions.PearlC.TTOut
+import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # The cap on the chain's share (trusted; definitions and the named `Prop`)
@@ -13,6 +14,10 @@ included, is `pearlCProtocolDev`'s and `pearlCTilesDev`'s.
 
 It is stated at any device record. The panel's line is v2 (`devSm120v2`, G = 0) at ρ = 1/1,000. At G > 0 the same
 construction on rev1's protocol is the analogue, not staged.
+
+At W1 (`TTOutPearlCDevChainCapW1`, `TTOutTilePearlCDevChainCapW1`) the cost model is the term `W1.w1Priced dv salt`:
+`TTOutW1`'s and `TTOutTileW1`'s game at the chain-share cap's protocol and tiles. They are stated here, not in
+`Definitions`, because the protocol is.
 -/
 
 namespace Pouw.PearlC
@@ -66,5 +71,18 @@ def TTOutTilePearlCDevChainCap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype 
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTile CM (pearlCProtocolDevChainCap d sem ρ) (pearlCTilesDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400)
     εPearlC
+
+/-- **TT_OUT(1/400) with the cap on the chain's share, at W1 on `dv`**: `TTOutPearlCDevChainCap` with its cost model the
+term `W1.w1Priced dv salt` (`TTOutW1`). -/
+def TTOutPearlCDevChainCapW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
+    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
+  TTOutW1 dv salt (pearlCProtocolDevChainCap d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+
+/-- **TT_OUT(1/400) per audit tile with the cap on the chain's share, at W1 on `dv`**: `TTOutTilePearlCDevChainCap` at
+`W1.w1Priced dv salt` (`TTOutTileW1`). -/
+def TTOutTilePearlCDevChainCapW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
+    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
+  TTOutTileW1 dv salt (pearlCProtocolDevChainCap d sem ρ) (pearlCTilesDevChainCap d sem ρ) (pearlCDomainDev d)
+    (1 / 400) εPearlC
 
 end Pouw.PearlC.Assumptions

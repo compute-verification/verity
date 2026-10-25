@@ -584,10 +584,6 @@
    "descriptor_id": "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=false,BN=16,CAP={\"f64\":\"0x1.9000000000000p+5\"},DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},CHECK=true,TANH={\"fn\":\"MufuTanh_v2\"},EX2={\"fn\":\"MufuEx2Ftz_v2\"}}",
    "digest": "723799a0476cd13b06b6dfc59d37859c82898e5aeecd9bfebf11b4374e0c5802689eec4ab30897bedbdcdd1bf6c9d0cf9bbef62ffee006e18d9a898b28b24973"
   },
-  "AttnBlock_v11{D=16,NVIS=1,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}": {
-   "descriptor_id": "AttnBlock_v11{D=16,NVIS=1,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=true}",
-   "digest": "1efaea3693c7deb9b4ff356d4fa6d7e24dd75e1fb1f9217a4d05b75c153ea533044aed84caf1fac1b1c368ebc31ab81ae69ce2cad5dcb7b53cc3b77e01cfa070"
-  },
   "AttnBlock_v11{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=False}": {
    "descriptor_id": "AttnBlock_v11{D=16,NVIS=16,FIRST=false,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=false}",
    "digest": "b51fc9301928ea074a0bd8633d2c83017ac86d19caa912710ea9b0a117771d9a112c58bf4db016a1f4c2e472c1bfc1818a66cc1ec23d5edaf7259b8181a40e99"
@@ -595,14 +591,6 @@
   "AttnBlock_v11{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}": {
    "descriptor_id": "AttnBlock_v11{D=16,NVIS=16,FIRST=false,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=true}",
    "digest": "c639a5cfc34db665ad002b7092dd286160a021a92f631599f3a9b6c27fda5bfd2df2afb56a3c7589504f68de6a13be164b8d1feee7b6723fabbd7f1c756ef8e2"
-  },
-  "AttnBlock_v11{D=16,NVIS=5,FIRST=True,BN=16,DOT=AmpereBF16TcDot16_v2,CHECK=True}": {
-   "descriptor_id": "AttnBlock_v11{D=16,NVIS=5,FIRST=true,BN=16,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"},CHECK=true}",
-   "digest": "25d8a2366a1cac1814002451a41390775b81fb60d704e351f7f5ce5ecea860be5ea5e692101b43da8ee544556d4d1b0661ffbc52cd6a6c98d37aa5be47e225fa"
-  },
-  "AttnBlock_v11{D=16,NVIS=8,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}": {
-   "descriptor_id": "AttnBlock_v11{D=16,NVIS=8,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=true}",
-   "digest": "146e0cf2eec0d1f248c3e917db42310ccbd4e1e99762b60fc012dbfee2248cb506840c5995d755dbc2d142e4db900cf55f4c5815164478c1bdd32ca991ea04c4"
   },
   "AttnBlock_v4{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=False}": {
    "descriptor_id": "AttnBlock_v4{D=16,NVIS=16,FIRST=false,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=false}",
@@ -623,10 +611,6 @@
   "AttnBlock_v5{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}": {
    "descriptor_id": "AttnBlock_v5{D=16,NVIS=16,FIRST=false,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=true}",
    "digest": "86e509436b2feb2ba6c62138481745b6ef7a914226bd7a0be552c73a8ee8b03d7d9c59428007d3dd0e6e8a998f5b62047f299ce35e3b59d64df7dba71139fb9b"
-  },
-  "AttnBlock_v5{D=16,NVIS=8,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}": {
-   "descriptor_id": "AttnBlock_v5{D=16,NVIS=8,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},CHECK=true}",
-   "digest": "990a846a12b1b0d980998824378c78f49ac2a6a6e6ca0862bed4385825819c612a3ea39eef325d129d2b44766d86604ae60387ed7e998ce3c6a6f709feb0a17d"
   },
   "AttnBlock_v6{D=16,NVIS=1,FIRST=True,BN=16}": {
    "descriptor_id": "AttnBlock_v6{D=16,NVIS=1,FIRST=true,BN=16}",
@@ -1396,11 +1380,8 @@
    "AttnBlock_v10{D=16,NVIS=16,FIRST=False,BN=16}",
    "AttnBlock_v10{D=16,NVIS=4,FIRST=True,BN=16}",
    "AttnBlock_v10{D=16,NVIS=5,FIRST=True,BN=128}",
-   "AttnBlock_v11{D=16,NVIS=1,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}",
    "AttnBlock_v11{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=False}",
    "AttnBlock_v11{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}",
-   "AttnBlock_v11{D=16,NVIS=5,FIRST=True,BN=16,DOT=AmpereBF16TcDot16_v2,CHECK=True}",
-   "AttnBlock_v11{D=16,NVIS=8,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}",
    "AttnBlock_v12{D=16,NVIS=1,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1}",
    "AttnBlock_v12{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1}",
    "AttnBlock_v12{D=16,NVIS=5,FIRST=True,BN=16,DOT=AmpereBF16TcDot16_v2}",
@@ -1446,7 +1427,6 @@
    "AttnBlock_v4{D=16,NVIS=8,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}",
    "AttnBlock_v5{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=False}",
    "AttnBlock_v5{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}",
-   "AttnBlock_v5{D=16,NVIS=8,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v1,CHECK=True}",
    "AttnBlock_v6{D=16,NVIS=1,FIRST=True,BN=16}",
    "AttnBlock_v7{D=16,NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2}",
    "AttnBlock_v8{D=16,NVIS=1,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=True}",

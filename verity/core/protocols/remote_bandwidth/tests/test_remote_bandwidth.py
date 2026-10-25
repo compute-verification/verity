@@ -185,7 +185,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
                           "post_seed": [0, 0, 0], "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
                           "registration": store.registration.digest.hex(), "released": 0, "rows": 16,
-                          "span_ns": 3000 + A}
+                          "samples": 7, "span_ns": 3000 + A}
     assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A
@@ -302,6 +302,20 @@ def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) ->
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
     assert s.receive(0, 0, bytes(64), runs, step=0) == audit.Verdict(0, False, "plan")
+
+
+def test_a_pass_that_would_take_its_window_to_the_receipt_limit_rejects(store) -> None:
+    """A window's receipts stay below `RECEIPT_LIMIT`: over a store appended to its codec's `max_blocks`, every pass of
+    all of it is kept until the one that would take window 0's receipts to the limit, which rejects with `plan`."""
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
+    s.start()
+    top = s.params.codec.max_blocks
+    s.append(bytes(64), top - s.extent)
+    last = -(-audit.RECEIPT_LIMIT // top) - 1
+    for i in range(last):
+        assert s.receive(0, i, bytes([1]) * 64, ((0, top),), step=i) is None
+    assert sum(p.length for p in s.windows[0].plans) == last * top < audit.RECEIPT_LIMIT
+    assert s.receive(0, last, bytes([1]) * 64, ((0, top),), step=last) == audit.Verdict(0, False, "plan")
 
 
 def test_receipts_committed_under_another_plan_reject(store) -> None:

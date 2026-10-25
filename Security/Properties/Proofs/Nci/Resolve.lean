@@ -13,9 +13,10 @@ it (`step_ok`) and resolution ends before its bound (`resolve_lt`). Every operan
 resolution (`operands_spec`), started below the primitive node it reads for (`start_ok`), so it is an earlier gate
 (`gate_operands_lt`).
 
-What that needs of each body the walk reaches is `BodyOk`, a named `Prop` here, open (`BodiesOk`): its references name
-parameters and earlier nodes at a leaf, and the indices resolution reads through each node are in range, which
-`Flock.Program.decode` and `Prog.orderViolation` check. `operandsEarlier_of` gives `Walk.OperandsEarlier` from it.
+What that needs of each body the walk reaches is `BodyOk` (`BodiesOk`, a named `Prop` here, which `bodiesOk` proves in
+`Properties.Proofs.Nci.BodiesOk`): its references name parameters and earlier nodes at a leaf, and the indices
+resolution reads through each node are in range, which `Flock.Program.decode` and `Prog.orderViolation` check.
+`operandsEarlier_of` gives `Walk.OperandsEarlier` from it.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Resolve
@@ -556,9 +557,10 @@ theorem gate_operands_lt {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate 
 
 end
 
-/-- **Open: the bodies resolution reaches hold their references in range.** On a Program `Desc.evaluate` reads, the body
-of every activation `Good` reaches is `BodyOk`: its nodes' arguments name its parameters and earlier nodes, and its
-return its nodes, each at a leaf, and the members and leaves resolution reads through each node are in range. -/
+/-- **The bodies resolution reaches hold their references in range** (`bodiesOk`, `Properties.Proofs.Nci.BodiesOk`). On
+a Program `Desc.evaluate` reads, the body of every activation `Good` reaches is `BodyOk`: its nodes' arguments name its
+parameters and earlier nodes, and its return its nodes, each at a leaf, and the members and leaves resolution reads
+through each node are in range. -/
 def BodiesOk : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
