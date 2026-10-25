@@ -130,7 +130,7 @@ POOL_CARRY_BYTES = 20 << 30
 
 
 def c2_programs_forecast(programs_root: str | None, program_dir: str | None, factor: float = C2_PROGRAMS_OBJECT_FACTOR) -> dict[str, Any]:
-    """[R17 fp8, F-fp8-C2PROG] EMPIRICAL FORECAST of the host bytes the C2 sampled replay's loaded Programs take in this process: the
+    """[F-fp8-C2PROG] EMPIRICAL FORECAST of the host bytes the C2 sampled replay's loaded Programs take in this process: the
     instance files it will load (`build_request_*/instances.json.gz` under --programs-root, or --program-dir's), streamed and counted
     (rows = `{"i": ` occurrences, json bytes = decompressed size; nothing is parsed or kept), x `factor` json byte -> object bytes.  One
     calibration point (B8, 7,853,122 rows, 628 B/row json, 9,387 B/row objects); the run measures the real number (C2 PROGRAMS FREED)."""
@@ -173,7 +173,7 @@ def c2_programs_forecast(programs_root: str | None, program_dir: str | None, fac
 
 
 def cgroup_mem_current() -> dict[str, int | None]:
-    """[R17 fp8] the container's memory accounting (what the OOM-killer reads): current / peak / max of the cgroup, bytes (None outside one)."""
+    """The container's memory accounting (what the OOM-killer reads): current / peak / max of the cgroup, bytes (None outside one)."""
     out: dict[str, int | None] = {"current": None, "peak": None, "max": None}
     for k, paths in (("current", ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory/memory.usage_in_bytes")),
                      ("peak", ("/sys/fs/cgroup/memory.peak", "/sys/fs/cgroup/memory/memory.max_usage_in_bytes")),
@@ -256,7 +256,7 @@ def admission_lag(wl: dict) -> int:
 
 
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
-    """[rev M-0485; R17-1 / DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
+    """[DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
     checkpoint's generation_config / config + the workload's sampling block (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
@@ -289,14 +289,14 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
 
 
 def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], caps: dict[str, int]) -> dict:
-    """[R16 compiled, H100 B8] The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
+    """The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
     order as the collector recorded it (which requests ran in which step); a request's OBSERVED arrival is the first committed step it ran
     in.  The serving loop admits a request once the engine's forwards reach its declared arrive_step (`arrivals.ForwardCounter`: the
     bookkeeping iteration after the last request finishes runs no forward pass) OR immediately when the engine is idle (nothing running),
     so on a workload with gaps (r0's cap shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
-    fails by name.  [R17-1 / F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
+    fails by name.  [F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
     served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record), no longer the bare cap."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
@@ -366,7 +366,7 @@ def _process_state() -> dict[str, Any]:
 
 
 def cuda_census() -> dict[int, tuple[int, str]]:
-    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (R16 sys hot worker: the post-job residue audit
+    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (the hot worker's post-job residue audit
     diffs this against the census taken right after the engine build; storage held only from C++ is invisible here, so a residue that shows
     in torch.cuda.memory_allocated but not in the census points at a native holder)."""
     out: dict[int, tuple[int, str]] = {}
@@ -541,7 +541,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
 def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None,
                    finish_reasons: dict | None = None) -> dict[str, Any]:
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
-    -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
+    -- together the executed prefix of record every population consumer is placed over (F-moe-r17-03)."""
     """R14 BIND-01: the binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
@@ -740,7 +740,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
 
 
 def _positions_digest(positions) -> str | None:
-    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest (rev F-r17b-13)."""
+    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest."""
     pos = sorted({(int(s), int(i)) for s, i in (positions or [])})
     if not pos:
         return None
@@ -748,7 +748,7 @@ def _positions_digest(positions) -> str | None:
 
 
 def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, tokens_ref: dict | None = None) -> dict[str, Any]:
-    """R13 P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
+    """The P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
     open the challenge positions (+ forced picks: a leaf of the prefill step, a leaf inside an FA2 hidden `fa2.m1/` row, a leaf of the last
     step) and verify each against the ORIGINAL roots.  Value bytes come from the host copy when the committer retained one (`--retain host`),
     otherwise from a REPLAY: the same workload is executed again under the collector (values kept on host for this run only); BI determinism
