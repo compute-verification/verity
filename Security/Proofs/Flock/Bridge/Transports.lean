@@ -283,12 +283,36 @@ theorem vbOf_bit_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU
   dsimp only [vbOf, HmRowsZX.bindingZ, LayoutZ.bindingZ, ZkHidden.rsZHJ, ZkHidden.layZHJ, LayoutZ.ofShadow,
     ZkHidden.layShHJ, HiddenExec.keyLayoutH, Discharge.Layout.Readers.layout, Discharge.Layout.ofBits,
     HiddenExec.keyReadersH, Discharge.Layout.Readers.ofRows]
-  rw [h]
-  unfold FlockSoundness.Discharge.Layout.BitVal.get
   split
-  · rfl
-  · rename_i hk
-    exact absurd (lt_of_lt_of_le k.isLt hle) hk
+  · rename_i heq
+    simp only [Option.some.injEq, Prod.mk.injEq, Sigma.mk.inj_iff] at heq
+    obtain ⟨rfl, rfl, heq⟩ := heq
+    rw [heq_iff_eq] at heq
+    subst heq
+    simp only [FlockSoundness.Discharge.Layout.BitVal.get, lt_of_lt_of_le k.isLt hle, ↓reduceDIte]
+    try rfl
+  · rename_i heq
+    simp at heq
+
+/-- The session's value binding's registered leaf at a row: hm96's leaf of the public file's `b ‖ c` there. -/
+theorem vbOf_cs_inl (R : Reg) (u : Fin n) (q : Fin c.ports.size) :
+    (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).cs R (Sum.inl (u, q) : PosH c hU n) =
+      ((Sum.inl (u, q) : PosH c hU n), H512 (K512.leafPrefix ++ (pub.digest u.val q.val c.ports.size).data.toList)) :=
+  rfl
+
+/-- The session's value binding's leaf of an opening at a row: hm96's leaf of its port's bytes (`encPortH`). -/
+theorem vbOf_com_inl (u : Fin n) (q : Fin c.ports.size) (v : ValH c) (y : List UInt8) :
+    (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com ((Sum.inl (u, q) : PosH c hU n), v, y) =
+      ((Sum.inl (u, q) : PosH c hU n), H512 (hm96Input (HiddenExec.encPortH c.ports[q.val]! v) y)) :=
+  rfl
+
+theorem vbOf_com_fst (p : PosH c hU n) (v : ValH c) (y : List UInt8) :
+    ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com (p, v, y)).1 = p :=
+  rfl
+
+theorem vbOf_val (p : PosH c hU n) (v : ValH c) (y : List UInt8) :
+    (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).val (p, v, y) = v :=
+  rfl
 
 /-- **A registered opening of a row's commit string is a leaf equation**: its hm96 leaf under the port's bytes
 (`encPortH`) is the registered leaf of the public file's `b ‖ c` there. -/
@@ -298,9 +322,12 @@ theorem vbOf_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
       (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).cs R ((vbOf dj y₀ ht hc hscope hU hpub hpt).pos g)) :
     H512 (hm96Input (HiddenExec.encPortH c.ports[q.val]! v) y) =
       H512 (K512.leafPrefix ++ (pub.digest u.val q.val c.ports.size).data.toList) := by
-  rw [vbOf_pos_row h] at he
-  have hp : p = Sum.inl (u, q) := congrArg Prod.fst he
+  rw [vbOf_pos_row h, vbOf_cs_inl] at he
+  have hp : p = Sum.inl (u, q) := by
+    have := congrArg Prod.fst he
+    rwa [vbOf_com_fst] at this
   subst hp
+  rw [vbOf_com_inl] at he
   exact congrArg Prod.snd he
 
 /-- **The deployed layout's rows** at a C-Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
@@ -322,7 +349,7 @@ theorem transports_shaped (R : Reg)
     (hy : y.length = saltLen)
     (he : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com (p, v, y) =
       (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).cs R ((vbOf dj y₀ ht hc hscope hU hpub hpt).pos g)) :
-    ∃ d : Msg, (commitDep ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) (rowsOf c hU n) c n
+    ∃ d : Claims.Msg, (commitDep ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) (rowsOf c hU n) c n
         (rootsOf c pub n)).Opens sha512Msg (rootsOf c pub n)
       ⟨posOf ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) g,
         (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
@@ -336,9 +363,7 @@ theorem transports_shaped (R : Reg)
     rw [hv2.1, hv2.2]
     rfl
   rw [henc] at hl
-  have hb : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
-      ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).val (p, v, y)) g = v.get k.val := vbOf_bit_row hx v
-  rw [hb]
+  rw [vbOf_val, vbOf_bit_row hx v]
   exact ⟨_, opens_commitDep _ (rowsOf c hU n) c pub n (r := ⟨q.val, u.val, Discharge.Layout.portRowW c q, k.val⟩)
     (by rw [rowOfPos_posOf]; simp [rowsOf, hx]) q.isLt u.isLt (by simp [Discharge.Layout.portRowW]) k.isLt
     (fun q' hq' => hroots q.val q' hq' q.isLt) hle hv hvw hy hl⟩
