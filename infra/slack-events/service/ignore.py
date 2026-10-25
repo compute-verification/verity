@@ -1,10 +1,11 @@
 """Vercel's `ignoreCommand` (vercel.json): exit 0 skips the build, 1 builds.  A Git deployment builds only for `main`, and
-only when the service's inputs changed since the deployment before it (VERCEL_GIT_PREVIOUS_SHA, else the commit before),
-so a landing that touches the service deploys itself and nothing else deploys.  Git deployments were off from 19 Oct,
+only when the service's inputs changed since the deployment before it (VERCEL_GIT_PREVIOUS_SHA), so a landing that touches
+the service deploys itself and nothing else deploys.  Git deployments were off from 19 Oct,
 after 286 failed builds of branches that lacked the root; every deploy since went through console by hand.
 
-A deployment with no Git branch (console's `vercel deploy --prod`) always builds, and so does one whose diff git can't
-answer (a base the clone doesn't have): skipping is the one outcome that needs proof."""
+A deployment with no Git branch (console's `vercel deploy --prod`) always builds, and so do a branch's first deployment
+(no previous SHA: the commit before may be the top of a train whose service change sits lower) and one whose diff git
+can't answer (a base the clone doesn't have): skipping is the one outcome that needs proof."""
 from __future__ import annotations
 
 import os
@@ -31,7 +32,9 @@ def decide(env: Mapping[str, str], diff: Callable[[str], bool | None] = changed)
         return 1, "not a Git deployment: build"
     if ref != BRANCH:
         return 0, f"branch {ref}: only {BRANCH} deploys"
-    base = env.get("VERCEL_GIT_PREVIOUS_SHA") or "HEAD^"
+    base = env.get("VERCEL_GIT_PREVIOUS_SHA") or ""
+    if not base:
+        return 1, "no deployment before this one to diff against: build"
     got = diff(base)
     if got is False:
         return 0, f"no change to the service's inputs since {base[:12]}: skip"
