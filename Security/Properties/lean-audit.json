@@ -144,17 +144,9 @@
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
   },
-  "Properties.RemoteAudit.Line.DrawFits": {
-   "owner": "@memory-accounting",
-   "digest": "b3df7200c96c282901664960d96af55080ae0ff96123cd4436dff28ad6fa9dd4"
-  },
   "Properties.RemoteAudit.Line.Registered": {
    "owner": "@memory-accounting",
    "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
-  },
-  "Properties.RemoteAudit.Line.SizesOfRecord": {
-   "owner": "@memory-accounting",
-   "digest": "4d25e1fae521c6611ec822848d016e43e3fc908c195a8dadbf7bc48aa97dcc2a"
   },
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
@@ -1703,14 +1695,13 @@
     "      Exists fun sc =>",
     "        Exists fun passes =>",
     "          Exists fun b =>",
-    "            And (Eq (RemoteAudit.Schedule.check sc blocks passes (appended c y)) (Except.ok b))",
-    "              (And (instLENat.le b a)",
-    "                (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
-    "                  (Option.some (sent c y))))) :",
+    "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
+    "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
+    "                (Option.some (sent c y)))) :",
     "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
    ],
    "assumptions": [],
-   "type_hash": "4e358457f3de756afd27e88d100c8d705b63a32bcc50f94c95384171a013debf"
+   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
