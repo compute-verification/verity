@@ -17,7 +17,7 @@ from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class
 
 from verity.ml.windows import interface as IF
 
-GRAIN = Grain(gemm_words=512, rows=8, select=64)
+GRAIN = Grain(gemm_words=512, rows=9, select=64)
 CLASS = WindowClass(2, 4, 2)
 #: q0's prompt of 4 at step 0, q1's prompt of 3 chunked 2 then 1 across steps 0 and 1; each keeps two outputs
 WINDOW = ([(4, 2, {**S.GREEDY, "max_tokens": 2}), (3, 2, {**S.GREEDY, "max_tokens": 2})],
@@ -180,8 +180,8 @@ def test_what_the_class_doesnt_take_is_refused_by_name(monkeypatch):
                           (many, "2 prompt ids and 3 outputs, past its class's 4 and 2"), (stoch, "a stochastic request")):
         with pytest.raises(Unexpressible, match=match):
             refused(window)()
-    with pytest.raises(Unexpressible, match=r"a gather of 8 rows of \[8\] words: rows of one width, at most 2"):
-        refused(WINDOW, grain=Grain(gemm_words=512, rows=2, select=64))()
+    with pytest.raises(Unexpressible, match=r"a gather of 8 rows of \[8\] words: rows of one width, at most 2 \(with its"):
+        refused(WINDOW, grain=Grain(gemm_words=512, rows=3, select=64))()
     monkeypatch.setattr(WC, "KEYS", 4)
     with pytest.raises(Unexpressible, match="a head of 5 keys, past the 4"):
         refused(WINDOW)()
@@ -190,11 +190,36 @@ def test_what_the_class_doesnt_take_is_refused_by_name(monkeypatch):
             class_circuit(reg, CLASS, n, GRAIN)
 
 
+def _unit_rows(circuit) -> dict[str, int]:
+    """Each template's rows in and out under the circuit's cuts, as C-Flock's `UnitStager` takes them
+    (`interface.unit_rows`)."""
+    return {_label(fn): sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates}
+
+
+def test_no_unit_holds_more_rows_in_and_out_than_the_grain():
+    """C-Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
+    2^27-bit block with at most 256 rows in and out, and a gather of 256 parts (257 rows) is refused when staged. The cut
+    counts a gather's output row: SiluMul's 1,024 gate/up slices are gathered 128 at a time (8 gathers, not 4 of 256), and
+    the fused norm's 512 down slices 128 at a time (4, not 2 of 256), its 128 o-proj slices 32 at a time. TINY at 16 rows is
+    the same case, 32 gate/up slices and 16 down: 8 at a time, where 16 a gather would make 17 rows. No unit of the circuit
+    holds more than the grain's rows, and at the test grain's 9 the largest hold exactly 9."""
+    assert WC._cut(("SiluMul_v2", "gu"), {1024: 16}, 255, 256) == 8
+    assert WC._cut(("RMSNormFusedCuda_v2", "x"), {128: 16, 512: 16}, 252, 256) == 4
+    circuit = _circuit(WINDOW, Grain(gemm_words=512, rows=16, select=64))
+    label = {IF.descriptor_id(fn): _label(fn) for fn, _ in circuit.templates}
+    assert {label[t]: c for t, c in circuit.cuts.items() if not label[t].startswith("AllGather")} == {
+        "RMSNormFusedCuda_v2{N=64}": {"x": 2}, "RoPEHead_v1{D=16}": {"x": 2}, "SiluMul_v2{I=128}": {"gu": 4},
+        COMBINE: {"idx": 4}}
+    rows = _unit_rows(circuit)
+    assert max(rows.values()) <= 16 and max(c["parts"] for c in circuit.cuts.values() if "parts" in c) == 8
+    assert max(_unit_rows(_circuit(WINDOW)).values()) == GRAIN.rows
+
+
 def test_a_token_select_is_its_function_at_the_grains_chunk():
     """At 128 logits a chunk, each of the circuit's ten token selects is two `TokenSelectChunk_v2{C=128}` units, each reading
     16 LM-head slices through one gather, and a `TokenSelectCombine_v2{V=256, C=128}`: the Program's own body (chunks of 64)
     at another C."""
-    circuit = _circuit(WINDOW, Grain(gemm_words=512, rows=16, select=128))
+    circuit = _circuit(WINDOW, Grain(gemm_words=512, rows=17, select=128))
     n = {_label(fn): k for fn, k in circuit.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (20, 10)

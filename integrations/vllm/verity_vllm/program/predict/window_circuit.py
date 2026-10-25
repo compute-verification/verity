@@ -30,16 +30,17 @@ doesn't take and emits the class's circuit at its Program count.
 - `RMSNormTriton_v5`, `RMSNormFusedCuda_v2` and `SiluMul_v2` are one unit each.
 
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
-divides every use's row count, holds at most ``grain.rows`` rows, and makes the fewest gather units, a use's rows gathered
-``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part). Every wire and read is stated per node as
-a pattern and `interface.coalesce`d, so the circuit's description grows with the Programs' nodes, not their units.
+divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
+a use's rows gathered ``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part, so a gather of
+``m / d`` parts holds ``m / d + 1`` rows with its output). Every wire and read is stated per node as a pattern and
+`interface.coalesce`d, so the circuit's description grows with the Programs' nodes, not their units.
 
 Refused by name (`Unexpressible`): a window past its class (more requests than slots, a prompt past the cap, more outputs
 than the cap), a request whose Program would read more than its prompt and the weights (a stochastic request's seed, a
 prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries in or out, byte ingress, a family this
-lowering doesn't know, a weight whose leaves aren't whole u16 words, and a row form the cut rule can't state. The circuit is
-completeness only: that it computes what serving ran is held by the units' proofs on their committed rows, never by this
-lowering.
+lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a unit of more
+than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran is held by the units' proofs on
+their committed rows, never by this lowering.
 """
 from __future__ import annotations
 
@@ -99,9 +100,10 @@ KEYS = 136
 @dataclass(frozen=True)
 class Grain:
     """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
-    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`), no unit reads a port as more than ``rows`` rows nor
-    gathers more than ``rows``, and a token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256, each
-    chunk's row past one SHA-512 block)."""
+    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`), no unit holds more than ``rows`` rows in and out (C-Flock's
+    composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256: a gather
+    of at most 255 parts), and a token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256, each chunk's
+    row past one SHA-512 block)."""
     gemm_words: int = 32768
     rows: int = 256
     select: int = 768
@@ -162,8 +164,9 @@ class _Builder:
         if rows in self.gathered:
             return self.gathered[rows]
         w = {r.words for r in rows}
-        if len(w) != 1 or len(rows) > self.grain.rows:
-            raise Unexpressible(f"a gather of {len(rows)} rows of {sorted(w)} words: rows of one width, at most {self.grain.rows}")
+        if len(w) != 1 or len(rows) >= self.grain.rows:
+            raise Unexpressible(f"a gather of {len(rows)} rows of {sorted(w)} words: rows of one width, at most "
+                                f"{self.grain.rows - 1} (with its output, a unit's {self.grain.rows} rows)")
         tid, u = self.unit(bind(AllGather, WORLD=len(rows), N=w.pop()))
         self.cuts.setdefault(tid, {})["parts"] = len(rows)
         self._wire(tid, "parts", u, 1, rows)
@@ -189,29 +192,43 @@ class _Builder:
             j = k
 
     def settle(self) -> None:
-        """Each feed's port cut (`_cut`), its rows gathered to the cut's, and wired."""
+        """Each feed's port cut (`_cut`) within the rows its reader has left, its rows gathered to the cut's, and wired;
+        refused where a unit would hold more than ``grain.rows`` rows in and out."""
         uses: dict[tuple[str, str], dict[int, int]] = {}
         for f in self.feeds:
             m = uses.setdefault((f.tid, f.port), {})
             m[len(f.rows)] = m.get(len(f.rows), 0) + 1
-        cut = {k: _cut(k, ms, self.grain.rows) for k, ms in uses.items()}
-        for (tid, port), d in cut.items():
+        for (tid, port), ms in uses.items():
+            cuts = self.cuts.get(tid, {})
+            d = _cut((tid, port), ms, self.grain.rows - _rows(self.fns[tid], cuts) + cuts.get(port, 1), self.grain.rows)
             if d > 1:
                 self.cuts.setdefault(tid, {})[port] = d
         for f in self.feeds:
-            d = cut[f.tid, f.port]
+            d = self.cuts.get(f.tid, {}).get(f.port, 1)
             g = len(f.rows) // d
             self._wire(f.tid, f.port, f.at, f.count, [self.gather(f.rows[i * g:(i + 1) * g]) for i in range(d)])
+        for tid, fn in self.fns.items():
+            if (n := _rows(fn, self.cuts.get(tid))) > self.grain.rows:
+                raise Unexpressible(f"{fn.id}: {n} rows in and out under its cuts {self.cuts.get(tid)}, past a unit's "
+                                    f"{self.grain.rows}")
 
 
-def _cut(key: tuple[str, str], uses: dict[int, int], most: int) -> int:
-    """The cut of a port its feeds read as ``uses`` (row count -> feeds): a divisor ``d`` of every count, at most ``most`` and
-    leaving at most ``most`` rows a gather, with the fewest gather units (``d`` for each feed of more than ``d`` rows)."""
+def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
+    """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot C-Flock's composer gives it
+    (`interface.unit_rows`)."""
+    lay = IF.layout(fn)
+    return len(lay.cut(cuts)) + len(lay.outs)
+
+
+def _cut(key: tuple[str, str], uses: dict[int, int], room: int, most: int) -> int:
+    """The cut of a port its feeds read as ``uses`` (row count -> feeds): a divisor ``d`` of every count, at most ``room`` (the
+    rows its reader has left) and leaving at most ``most - 1`` rows a gather (its output row is its last of ``most``), with
+    the fewest gather units (``d`` for each feed of more than ``d`` rows)."""
     g = math.gcd(*uses)
-    ok = [d for d in range(1, min(g, most) + 1) if g % d == 0 and max(uses) // d <= most]
+    ok = [d for d in range(1, min(g, room) + 1) if g % d == 0 and max(uses) // d < most]
     if not ok:
-        raise Unexpressible(f"{key[0]} {key[1]}: read as {sorted(uses)} rows, which no cut of at most {most} rows a port and a "
-                            "gather divides")
+        raise Unexpressible(f"{key[0]} {key[1]}: read as {sorted(uses)} rows, which no cut of at most {room} rows a port and "
+                            f"{most - 1} a gather divides")
     return min(ok, key=lambda d: (sum(n * d for m, n in uses.items() if m > d), -d))
 
 
