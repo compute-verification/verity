@@ -1892,6 +1892,7 @@
   "Proofs.Flock.ZeroKnowledgeHidden",
   "Proofs.Flock.Masked",
   "Proofs.Pouw.PearlC.FlockTile",
+  "Proofs.Accounting.JointBridge.Guarantees",
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
   "PouwWindow.OwnPorts",
