@@ -106,6 +106,40 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
     assert all("top_p" not in x["body"] for x in varied)
 
 
+def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_least_minutes_cover_its_traffic(
+        tmp_path, capsys):
+    """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
+    --warden-run` refuses any other of), which the scan's class serves, on the gate's arrivals at the gate's sampling;
+    for every request count the gate takes, at its lowest height, `warden_minutes` covers the id traffic's last arrival,
+    its tail, the rest of the window it ends in, the origin's delay and 30 s for the key and the check."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
+    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    assert args.ids and not args.fake and ws._params(args) == sz.PARAMS
+    sz.CLASS.serves(ws._params(args))
+    assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
+    assert sz.main(["schedule"]) == 0 and capsys.readouterr().out.split() == list(A.SCAN_SCHEDULE)
+    traffic = ws.traffic_of(args, "m")
+    assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(0.6, 0.9)}
+    drawn = ws.id_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED, max_tokens=(1, 64))
+
+    def rest(t):
+        return [{**x, "ids": {k: v for k, v in x["ids"].items() if k not in ("temperature", "top_p")}} for x in t]
+    assert rest(traffic) == rest(drawn) and {x["ids"]["top_p"] for x in drawn} == {1.0}
+    plain = ws.parser().parse_args(A.warden_command({"requests": 7, "scan": True}, tmp_path, "http://h:1")[2:])
+    assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in ws.traffic_of(plain, "m")} == {(0.0, 1.0)}
+
+    window_s = sz.PARAMS.window * sz.PARAMS.bucket_ms / 1000
+    most = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+                         max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
+        took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+
+
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     """Over loopback: the request's bytes reach the endpoint, which answers a chunked event stream and closes; the
     response parses to the endpoint's tokens, its finish reason and usage, and a cut response isn't complete."""

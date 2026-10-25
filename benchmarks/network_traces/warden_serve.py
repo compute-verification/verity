@@ -27,10 +27,11 @@ id (`release`), which `deployment.json` names (`run_id`).
 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
-its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`):
-warden-form id requests (`active.id_request`, offset 0), each answered by the fake endpoint as an id-form response
-(`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`, at most `egress_cells` − 1 ids), what
-`scan_zk.py prove --warden-run` proves.
+its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
+at the same sampling when given): warden-form id requests (`active.id_request`, offset 0), each answered by the fake
+endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`, at most
+`egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
+the peer's endpoint, at scan_zk's schedule.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
 
@@ -169,17 +170,23 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
 
 
 def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
-               max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0) -> list[dict]:
+               max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0, temperature: float | None = None,
+               top_p: float | None = None) -> list[dict]:
     """n warden-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids": its
     fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform, and
-    the sampling drawn as `varied_traffic` draws it. The scan (`ingress_scan`) reads exactly these."""
+    the sampling drawn as `varied_traffic` draws it (top_p 1), or `temperature` and `top_p`, when given, every
+    request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
+    exactly these."""
     rng = random.Random(seed)
     at, out = start_s, []
     for i in range(n):
         length = round(math.exp(rng.uniform(*map(math.log, prompt_tokens))))
-        fields = {"model": model, "user": f"user-{i}", "prompt": [rng.randrange(128_256) for _ in range(length)],
-                  "max_tokens": round(math.exp(rng.uniform(*map(math.log, max_tokens)))),
-                  "temperature": rng.choice(TEMPERATURES), "top_p": 1.0, "seed": rng.randrange(1 << 31)}
+        prompt = [rng.randrange(128_256) for _ in range(length)]
+        most = round(math.exp(rng.uniform(*map(math.log, max_tokens))))
+        drawn = rng.choice(TEMPERATURES)
+        fields = {"model": model, "user": f"user-{i}", "prompt": prompt, "max_tokens": most,
+                  "temperature": drawn if temperature is None else temperature,
+                  "top_p": 1.0 if top_p is None else top_p, "seed": rng.randrange(1 << 31)}
         out.append({"at": round(at, 3), "ids": fields})
         at += rng.expovariate(rate)
     return out
@@ -875,7 +882,8 @@ def table(result: dict) -> str:
 def traffic_of(args, model: str) -> list[dict]:
     if getattr(args, "ids", False):
         return id_traffic(args.requests, model=model, rate=args.rate, seed=args.seed, prompt_tokens=(16, args.prompt_max),
-                          max_tokens=(1, min(args.max_tokens, args.egress_cells - 1)))
+                          max_tokens=(1, min(args.max_tokens, args.egress_cells - 1)), temperature=args.temperature,
+                          top_p=args.top_p)
     return varied_traffic(args.requests, model=model, rate=args.rate, seed=args.seed,
                           prompt_tokens=(16, args.prompt_max), max_tokens=(16, args.max_tokens),
                           temperature=args.temperature, top_p=args.top_p)

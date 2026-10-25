@@ -14,7 +14,7 @@ first coin.
                                            | --traffic varied [--rate R] [--prompt-range LO:HI] [--seed S]
                                              [--eos-ids ID,...] [--compact B])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
-                                       [--temperature T] [--top-p P]
+                                       [--temperature T] [--top-p P] [--scan]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -138,7 +138,12 @@ first coin.
   `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
-  `warden_minutes` of its requests and height is refused, with the least that fits. Its request carries `device: warden`; it
+  `warden_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
+  it is the scan's rehearsal, the warden run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
+  scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `warden_serve.py`'s default, which
+  the scan's class doesn't serve) and the traffic the same arrivals of warden-form id requests (`rehearse --ids`, at
+  the sampling below), so the endpoint must answer each id-form (`io_tie.id_event`s, then `io_tie.TRAILER`): the
+  warden frames what the server sends, and the check and the scan refuse a response that isn't by name. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
@@ -249,6 +254,11 @@ WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
+#: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
+#: `scan_zk.py prove --warden-run` takes, as `warden_serve.py`'s flags
+SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "21", "--lanes", "4",
+                 "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
+                 "--egress-cells", "65")
 #: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
 #: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone
 WARDEN_PUBLIC = ("deployment.json", "cells.jsonl")
@@ -997,7 +1007,8 @@ def warden_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1]) -> int:
 def parse_warden(argv: list[str], host: Host) -> dict:
     """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
     `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
-    request asks for (`warden_serve.py`'s 256 otherwise), the sampling (`sampling`) and the key's height."""
+    request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic), the sampling
+    (`sampling`) and the key's height."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate warden-rehearse", exit_on_error=False, add_help=False,
                                 allow_abbrev=False)
     p.add_argument("--peer", required=True)
@@ -1005,11 +1016,13 @@ def parse_warden(argv: list[str], host: Host) -> dict:
     p.add_argument("--minutes", required=True)
     p.add_argument("--requests", default="100")
     p.add_argument("--tokens", default=None)
+    p.add_argument("--scan", action="store_true")
     a = _parse_rehearsal(p, argv, host)
     port = bounded("--port", a.port, 1024, 65535)
     minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
     requests = bounded("--requests", a.requests, *WARDEN_REQUESTS)
-    given = {} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}
+    given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
+        ({"scan": True} if a.scan else {})
     if minutes < (least := warden_minutes(requests, a.height)):
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
                       f"second, a {WARDEN_TAIL_S} s tail, the window they end in, the check and the key at height "
@@ -1089,7 +1102,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--traffic varied [--rate R] [--prompt-range LO:HI] [--seed S] [--eos-ids ID,...] [--compact B]: "
          "no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
-         "[--top-p P] (a lane's own gate key, or vy-admin) "
+         "[--top-p P] [--scan] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -1538,13 +1551,15 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[st
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
-    and the most tokens a request asks for only when the request has it."""
+    for a scan rehearsal id requests (`--ids`) at the scan's schedule (`SCAN_SCHEDULE`), and the most tokens a
+    request asks for only when the request has it."""
+    scan = ["--ids", *SCAN_SCHEDULE] if req.get("scan") else []
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
-            *given]
+            *scan, *given]
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a

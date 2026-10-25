@@ -17,8 +17,8 @@ t. A link-window's buckets are chained in one registration, every row of every u
   takes its slot at 22. Link-window 0 of each link is committed by the warden and its head signed by a test-size LMS
   key (`warden_rows.attest`); each registration is read back by the verifier (`warden_rows.check_registration`).
 * **A warden's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
-  the gate's ``warden-rehearse``'s with its witness under ``witness/``) at `PARAMS` (``scan_zk.py schedule``) carrying
-  the scan's traffic (``rehearse --ids``). The verifier reads ``deployment.json`` (the warden's public key, the session,
+  the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at `PARAMS` (``scan_zk.py schedule``)
+  carrying the scan's traffic (``rehearse --ids``). The verifier reads ``deployment.json`` (the warden's public key, the session,
   the schedule and its digest) and each link's window-0 registration in ``cells.jsonl``, its head's signature verified
   under that key; the prover's rows are the records under ``cells.salts``, held to that head. Each is refused by name
   where it doesn't hold, as is a schedule the class doesn't serve and a response that isn't id-form.
@@ -197,7 +197,7 @@ def synthetic(out: Path) -> SimpleNamespace:
 
 def _found(run: Path, name: str) -> Path:
     """A warden run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/`` (the gate's
-    `warden-rehearse`)."""
+    `warden-rehearse --scan`)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
             return d / name
@@ -220,7 +220,8 @@ def warden_run(run: Path) -> SimpleNamespace:
     try:
         CLASS.serves(params)
     except ValueError as e:
-        raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS)")
+        raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
+                         "gate's warden-rehearse --scan)")
     key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {name: [WS.ar.unpack_record(b, params.cell_bytes) for b in WS.ar.read_blobs(_found(run, f"{name}.records"))]
                for name in WS.CERTIFIED}
