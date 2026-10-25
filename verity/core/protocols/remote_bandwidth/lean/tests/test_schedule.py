@@ -66,7 +66,7 @@ def inputs(draw) -> dict:
     passes = [(s, list(sc.plan(blocks, s))) for s in sc.steps]
     appends = [list(a) for a in sc.append_runs(blocks)]
     fault = draw(st.sampled_from([None] * 6 + ["plan", "step", "pass", "append", "extent", "free", "steps",
-                                                "registered", "cap", "malformed"]))
+                                                "registered", "malformed", "plan", "malformed"]))
     if fault == "plan" and passes:
         k = draw(st.integers(0, len(passes) - 1))
         runs = passes[k][1]
@@ -96,7 +96,11 @@ def inputs(draw) -> dict:
         bits = sc.bits
     except ValueError:  # a block freed before its write has no encoding; the check refuses it before reading the cap
         bits = 0
-    cap = draw(st.integers(0, bits - 1)) if fault == "cap" else bits + draw(st.sampled_from([0, 0, 1, 8, 2 ** 70]))
+    cap = bits
+    if fault is None and draw(st.sampled_from([False] * 5 + [True])):
+        fault, cap = "cap", draw(st.integers(0, bits - 1))
+    elif fault is None:
+        cap += draw(st.sampled_from([0, 1, 8, 2 ** 70]))
     v = as_json(blocks, cap, sc, passes, appends)
     if fault == "malformed":
         bad = draw(st.sampled_from([-1, None, True, "1", [], {}, [1, 2, 3]]))
