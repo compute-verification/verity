@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.RemoteSketchLine
+import Definitions.Accounting.Guarantees.RemoteSketchLine
 import Proofs.Pouw.Prob
 
 /-!

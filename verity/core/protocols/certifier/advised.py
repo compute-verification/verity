@@ -92,7 +92,7 @@ reopens phase 6's acausal release), nor is a verdict it delivers (REDTEAM phase 
 advice's digest, every window accepted, reopened it through the verifier of record), so `LinkAdvice` carries none. The
 tie is only IoTieRequest's verdict from the verifier's own tie source (`tie_service.Ties`), on the link and the
 ingress registrations it holds, so a verdict on another link or ingress record isn't reused, built from the
-IoTieRequest proofs the verifier of record verified on its own statements (`tie_service.IngressTie.tie`). No proof of
+IoTieRequest proofs the verifier of record verified on its own lanes (`tie_service.IngressTie.tie`). No proof of
 an unpinned size class is accepted, and the served size isn't pinned, so there every advised link is refused
 (PROTOCOL.md, fail closed). The floor's syncs are held the same way: a δ below the one the window's traffic was
 certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a window the certifier ran at δ = 1 accepted

@@ -90,9 +90,9 @@ def fp(t) -> list[int]:
 
 
 def run_class():
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
-    from verity_vllm.protocol_options.pouw_pearl_c_host import _put, _zeros
-    from verity_vllm.protocol_options.pouw_pearl_c_screen import scatter_into
+    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity_vllm.protocols.pouw.pearl_c.host import _put, _zeros
+    from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 
     class DedupRun(PPD.PearlCDeviceRun):
         """The served run with the arms' calls: `use` picks the arm; a dedup call omits `A_STEPS` (but ``rowdig_a`` under
@@ -221,7 +221,7 @@ def run_class():
 
         def _record(self, w, sh, pipe, index, m, tiles, y, d) -> dict:
             """An eager call's buffers as its steps left them: fingerprints of each, and for the calls in `keep` their bytes."""
-            from verity_vllm.protocol_options.pouw_pearl_c_host import _bytes
+            from verity_vllm.protocols.pouw.pearl_c.host import _bytes
             rec = {"w": w, "index": index, "m": m, "m16": sh.m16, "mp": sh.mp, "mode": d[0] if d else None,
                    "fp": {"x": fp(sh.xa[:m]), "y": fp(y[:m])}}
             if not self.hashing:
@@ -344,7 +344,7 @@ def same_calls(a: dict, b: dict) -> dict:
 def check(run, forward, x0, W: dict, fixture, m: int, keep: frozenset) -> dict:
     """The check at m, before any timing (module docstring)."""
     import torch
-    from verity_vllm.protocol_options.pouw_pearl_c_device import ROW_ALIGN
+    from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
     out: dict = {"m": m}
     m16 = -(-m // ROW_ALIGN) * ROW_ALIGN
     passes = {}
@@ -472,7 +472,7 @@ def main() -> int:
     args = ap.parse_args()
 
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     from verity.core.protocols.pouw.audit import weights_root
     from verity.core.protocols.pouw import verifier

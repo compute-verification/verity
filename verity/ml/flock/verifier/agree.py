@@ -1,7 +1,7 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
-        --public F [--registered F] [--tables DIR] [--zk] [--session-tables J] [--expect FILE]... [--lean-refuses WHY] \
+        --public F [--registered F] [--tables DIR] [--stratified K] [--zk] [--session-tables J] [--expect FILE]... [--lean-refuses WHY] \
         [--lean-refuses-drawn WHY] [--lean-refuses-drawless WHY] [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
@@ -109,6 +109,8 @@ def lean_cmd(a, public, registered=None):
         cmd += ["--registered", archived(a, registered)]
     if a.coins:
         cmd += ["--coins", a.coins]
+    if getattr(a, "stratified", None):
+        cmd += ["--stratified", a.stratified]
     if a.upstream != LIVE and not getattr(a, "zk", False):
         cmd += ["--upstream-plain"]
     return cmd + modes(a) + ["--session"]
@@ -199,6 +201,8 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v0)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
+    ap.add_argument("--stratified", default=None, metavar="K",
+                    help="the verifier's own K, for sessions drawn by the stratified law (Lean only; upstream reads the draw)")
     ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")
     ap.add_argument("--session-tables", default=None, help="the tables of every session")
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")

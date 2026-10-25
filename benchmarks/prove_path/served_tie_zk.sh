@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# The routed served-rows tie in zero knowledge (served_tie_zk.py) on a sealed served window, on a CPU machine, on
+# The served-rows tie in zero knowledge (served_tie_zk.py, or served_statics_zk.py) on a sealed served window, on a CPU machine, on
 # hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
 # frame and the sampled-proofs verifier built in the tree. From a clone:
 #   research run --on vy-nebius-cpu-2 --project verity --cwd clone --timeout 180m --env STZK_MEM_GB=56 \
 #     --env STZK_RUN=/workspace/research/network-accounting/vllm-serve-seal/RUN --env STZK_WINDOW=5 -- \
 #     bash benchmarks/prove_path/served_tie_zk.sh
 # env: STZK_MEM_GB (what job.sh's stages may take, within the slot's)  STZK_RUN, STZK_WINDOW (the sealed run and window)
-#      STZK_ARGS (served_tie_zk.py prove's other flags: --g, --blocks, --per)  STZK_CACHE (the build cache, kept across
-#      runs where writable; default pouw-hidden-zk's)  STZK_DRY=1 (the window and its references only)
+#      STZK_FORM (tie, the default: served_tie_zk.py, the routed tie; statics: served_statics_zk.py, the rows held to
+#      their Programs' statics)  STZK_ARGS (the driver's prove flags: --g, and the routed form's --blocks, --per)
+#      STZK_CACHE (the build cache, kept across runs where writable; default pouw-hidden-zk's)  STZK_DRY=1 (the window
+#      and its references only)
 # Kept in $OUT/stzk: the driver's records and logs, the public files and everything the verifier received; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
@@ -25,9 +27,11 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "stzk: no firewall frame"; exit 7; }
 
-log "stzk: proving ${STZK_RUN:?} w${STZK_WINDOW:?} ${STZK_ARGS:-}${STZK_DRY:+, dry}"
+DRIVER=benchmarks/prove_path/served_${STZK_FORM:-tie}_zk.py
+[ -f "$DRIVER" ] || { log "stzk: no driver $DRIVER (STZK_FORM is tie or statics)"; exit 2; }
+log "stzk: proving ${STZK_RUN:?} w${STZK_WINDOW:?} with $DRIVER ${STZK_ARGS:-}${STZK_DRY:+, dry}"
 # shellcheck disable=SC2086
-"$PY" benchmarks/prove_path/served_tie_zk.py prove --serve-run "$STZK_RUN" --window "$STZK_WINDOW" ${STZK_ARGS:-} \
+"$PY" "$DRIVER" prove --serve-run "$STZK_RUN" --window "$STZK_WINDOW" ${STZK_ARGS:-} \
   --bin "$BIN" --lean "$LEAN" --out "$W/stzk" ${STZK_DRY:+--dry} 2>&1 | tee -a "$OUT/stzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/stzk"

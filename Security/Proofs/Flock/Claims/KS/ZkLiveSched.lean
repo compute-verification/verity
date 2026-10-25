@@ -91,75 +91,6 @@ end Sched
 
 /-! ## The masked simulator -/
 
-section Zk
-
-variable {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
-  (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : zkTape x)
-
-include hJ h0 in
-/-- **The simulator's submission after `k + 1` messages**, `k < zkN x`, is on stream `zkStream (k + 1)`. -/
-theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
-    (hk : k + 1 ≤ zkN x) :
-    ∃ s : SubmitJ J, (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 = some s ∧
-      2 * s.tab.val + s.rep.val = zkStream spec sts (k + 1) := by
-  have hlt := zkStream_lt (spec := spec) h0 (k + 1)
-  have e : (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 =
-      some ⟨⟨zkStream spec sts (k + 1) / 2, by omega⟩,
-        ⟨zkStream spec sts (k + 1) % 2, Nat.mod_lt _ (by norm_num)⟩,
-        ⟨(zkDepMsg sha512 P x ω (Claims.coinSeq (zkSimCoins x spec sts u hist)) (k + 1)).tail.toArray⟩,
-        zkCnt x spec sts (k + 1)⟩ := by
-    show zkSub J _ = _
-    simp only [zkSim, Claims.OC.eval]
-    unfold zkMsg
-    rw [hl, ite_eq_right (Nat.succ_ne_zero k), ite_eq_left hk]
-    exact zkSub_round J _ _ _ _ (zkCnt_le x spec sts (Nat.succ_ne_zero k))
-  exact ⟨_, e, by dsimp only; omega⟩
-
-
-
-include hJ h0 in
-/-- **The simulator's bytes prover keeps `SchedKJ`** after `k + 1` messages, on the streams of the deployed rounds from
-`k + 1` on. -/
-theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
-    (hS : (zkStreams spec sts).length = zkN x) :
-    ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
-      hist.length = k + 1 → k + n = zkN x →
-      SchedKJ spec.dg rootB pts n rs ((zkStreams spec sts).drop k)
-        (toStrat _ (roundsIf (zkW J spec hw x) spec.dg rootB pts n rs)
-          (stratOf sha512 (zkSim P x spec sts) x (ω, u) _ _ hist none))
-  | 0, _, _, k, _, hk => by
-    show (zkStreams spec sts).drop k = []
-    exact List.drop_eq_nil_of_le (by omega)
-  | n + 1, rs, hist, k, hl, hk => by
-    obtain ⟨s, ho, hrep⟩ := zkSim_sub hJ h0 hw P ω u hist k hl (by omega)
-    refine schedKJ_some spec.dg rootB pts (zkW J spec hw x) sha512 (zkSim P x spec sts) x (ω, u) n rs _ hist
-      (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 _ ((zkW J spec hw x).sub_le _) s ho
-      ((zkStreams spec sts).drop (k + 1)) ?_ fun c => ?_
-    · rw [hrep, zkStream, Nat.add_sub_cancel,
-        List.getD_eq_getElem (l := zkStreams spec sts) (n := k) (d := 0) (by omega)]
-      exact List.drop_eq_getElem_cons (by omega)
-    · exact schedKJ_zk rootB pts hS n _ _ (k + 1) (by simp [hl]) (by omega)
-
-
-
-include hJ h0 in
-/-- **The masked simulator's live strategy submits its rounds on `zkStreams`** at every link point. -/
-theorem zkLive_sched (pts : Fin 2 → Fin spec.mPts → 𝔽) (hS : (zkStreams spec sts).length = zkN x) :
-    SchedLJ spec.dg (liveStrat (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
-        (zkSim P x spec sts) x (ω, u)).1 pts (zkN x) (fun _ _ => []) (zkStreams spec sts)
-      ((liveStrat (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
-        (zkSim P x spec sts) x (ω, u)).2 pts) :=
-  schedLJ_of_schedKJ' spec.dg _ pts
-    (liveStrat_fst (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
-      (zkSim P x spec sts) x (ω, u)) (zkN x) _ _ _ _
-    (liveStrat_snd_heq (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
-      (zkSim P x spec sts) x (ω, u) pts)
-    (schedKJ_zk hJ h0 hw P ω u _ pts hS (zkN x) _ _ 0 rfl (Nat.zero_add _))
-
-
-
-end Zk
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -228,6 +159,45 @@ theorem zkLive_sched (pts : Fin 2 → Fin spec.mPts → 𝔽) (hS : (zkStreams s
 end Zk
 
 end Gen
+
+section Zk
+
+variable {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
+  (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : zkTape x)
+
+include hJ h0 in
+/-- **The simulator's submission after `k + 1` messages**, `k < zkN x`, is on stream `zkStream (k + 1)`. -/
+theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
+    (hk : k + 1 ≤ zkN x) :
+    ∃ s : SubmitJ J, (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 = some s ∧
+      2 * s.tab.val + s.rep.val = zkStream spec sts (k + 1) :=
+  letI : ZkSetup := S₀
+  Gen.zkSim_sub hJ h0 hw P ω u hist k hl hk
+
+include hJ h0 in
+/-- **The simulator's bytes prover keeps `SchedKJ`** after `k + 1` messages, on the streams of the deployed rounds from
+`k + 1` on. -/
+theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
+    (hS : (zkStreams spec sts).length = zkN x) :
+    ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
+      hist.length = k + 1 → k + n = zkN x →
+      SchedKJ spec.dg rootB pts n rs ((zkStreams spec sts).drop k)
+        (toStrat _ (roundsIf (zkW J spec hw x) spec.dg rootB pts n rs)
+          (stratOf sha512 (zkSim P x spec sts) x (ω, u) _ _ hist none)) :=
+  letI : ZkSetup := S₀
+  Gen.schedKJ_zk hJ h0 hw P ω u rootB pts hS
+
+include hJ h0 in
+/-- **The masked simulator's live strategy submits its rounds on `zkStreams`** at every link point. -/
+theorem zkLive_sched (pts : Fin 2 → Fin spec.mPts → 𝔽) (hS : (zkStreams spec sts).length = zkN x) :
+    SchedLJ spec.dg (liveStrat (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
+        (zkSim P x spec sts) x (ω, u)).1 pts (zkN x) (fun _ _ => []) (zkStreams spec sts)
+      ((liveStrat (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
+        (zkSim P x spec sts) x (ω, u)).2 pts) :=
+  letI : ZkSetup := S₀
+  Gen.zkLive_sched hJ h0 hw P ω u pts hS
+
+end Zk
 
 /-! ## The streams of the deployed rounds -/
 

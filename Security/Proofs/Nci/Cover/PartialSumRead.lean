@@ -1,7 +1,7 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Proofs.Nci.Cover.Area
 import Proofs.Nci.Cover.FanOutWalk
-import Models.Nci.Guarantees.CoverPartialSum
+import Definitions.Nci.Guarantees.CoverPartialSum
 
 /-!
 # The partial-sum bounds: partial sums are read
