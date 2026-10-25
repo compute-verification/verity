@@ -80,9 +80,9 @@ and `sketch_outside` every F the run's sessions were charged at.
 `error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its five
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
-commitment's hiding terms n·2^-191, δs, the sketch's, and the draw's rejection Σ_t k_t/2^64 (the hiding and the
-rejection added to the total of a record whose ledger didn't charge them), plus
-the windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no number and are in no total. The
+commitment's hiding terms n·2^-191, δs, the sketch's, and the draw's rejection Σ_t k_t/2^64, k_t the session's
+`samples` (the hiding and the rejection added to the total of a record whose ledger didn't charge them), plus the
+windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no number and are in no total. The
 line at each T, and the line of record over every T (`credit`'s `error`), fail with at most the sum of their credited
 sessions' totals: the least share is read off whichever session the run made least, so the union bound holds where a
 maximum wouldn't.
@@ -427,9 +427,10 @@ def session_error(session: dict) -> dict:
     adds them, or there is no line (`Disagree`); one written before them gives the profile δ from its windows
     (`recorded_windows`) and the slack from its passes at the slack its ledger was charged at (its `inputs`'
     `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger that didn't charge the
-    hiding or the rejection (no such part) has it added to its total, from its windows (`recorded_windows`, as
-    `ledger.hiding` and `ledger.rejection` read them). Each in floats and exact beside them
-    (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
+    hiding or the rejection (no such part) has it added to its total: the hiding from its windows
+    (`recorded_windows`, as `ledger.hiding` reads them), the rejection at its windows' requested draws (the session's
+    `samples` in each, as `ledger.rejection` reads them off the record's `samples`). Each in floats and exact beside
+    them (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total."""
     lg = session["ledger"]
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
@@ -456,7 +457,8 @@ def session_error(session: dict) -> dict:
         hiding = Fraction(ledger.hiding_over(len(V.recorded_windows(session)[0])))
         total += hiding
     if rejection is None:
-        rejection = Fraction(sum(s for _, s in V.recorded_windows(session)[0]), 2 ** ledger.REJECTION_LOG2)
+        windows = len(V.recorded_windows(session)[0])
+        rejection = Fraction(windows * session["samples"], 2 ** ledger.REJECTION_LOG2)
         total += rejection
     exact = {"delta_profile": profile, "delta_slack": slack, "delta_hiding": hiding, "delta_sketch": sketch,
              "delta_rejection": rejection, "total": total}

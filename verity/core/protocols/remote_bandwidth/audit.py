@@ -734,8 +734,10 @@ class Record:
     them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
-    (`RequirementLink.mapped`).  `public` is what acceptance makes public;
-    `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
+    (`RequirementLink.mapped`), and the receipts every draw requested (`Params.samples`, None in a record no session
+    made): a draw of U receipts drew min(`samples`, U), so `samples` is the k_t of the draw's rejection Σ_t k_t/2^64
+    (`ledger.rejection`), which a draw opening all its receipts doesn't show.  `public` is what acceptance makes
+    public; `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
     and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
     Given how many land in a window, they are uniform over its receipts, so its own reading holds at its share's
@@ -758,11 +760,24 @@ class Record:
     appends: bytes | None = None
     pace: Pace | None = None
     groups_per_coin: int = 1
+    samples: int | None = None
 
     def __post_init__(self) -> None:
         if self.pace is not None and self.pace.in_flight == 1 and any(
                 a > w.released_ns for v, w in zip(self.windows, self.windows[1:]) for a in v.arrived_ns):
             raise ValueError("at one window in flight a window's challenge leaves after the window before's last root")
+        if self.samples is None:
+            return
+        if type(self.samples) is not int or self.samples < 1:
+            raise ValueError("a record's samples, the receipts every draw requested, is a positive integer")
+        g = self.groups_per_coin
+        for a in range(0, len(self.windows), g):
+            ws = self.windows[a:a + g]
+            u, drawn = sum(w.receipts for w in ws), sum(w.profile.drawn["receipt"] for w in ws)
+            if drawn != min(self.samples, u):
+                what = f"window {ws[0].window}" if g == 1 else f"the draw of windows {ws[0].window}…{ws[-1].window}"
+                raise ValueError(f"{what} drew {drawn} of its {u} receipts, not min({self.samples}, {u}) at the "
+                                 "record's samples")
 
     @property
     def start_ns(self) -> int:
@@ -802,7 +817,7 @@ class Record:
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
                 "receipt": self.receipt, "receipts": [w.receipts for w in self.windows],
                 "registration": self.registration.hex(), "released": self.released, "rows": self.rows,
-                "span_ns": self.span_ns}
+                "samples": self.samples, "span_ns": self.span_ns}
 
     def profile(self) -> dict:
         return {"windows": [w.to_json() for w in self.windows]}
@@ -1288,7 +1303,8 @@ class Session:
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
-                      self.params.lifetime, self._head, self.params.pace, self.params.groups_per_coin)
+                      self.params.lifetime, self._head, self.params.pace, self.params.groups_per_coin,
+                      self.params.samples)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"

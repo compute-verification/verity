@@ -949,7 +949,7 @@ class Pair:
         if self.lean is None:
             return self.s.record()
         return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
-                            self.s.params.delta)
+                            self.s.params.delta, self.s.params.samples)
 
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]

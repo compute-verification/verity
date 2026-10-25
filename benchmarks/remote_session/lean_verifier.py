@@ -220,10 +220,11 @@ def summary_json(rec: audit.Record) -> dict:
                         for w in rec.windows]}
 
 
-def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float) -> audit.Record:
+def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Record:
     """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
-    registration its digest names, the coin commitment's root `coins`, and each window's openings law at `delta` over
-    the Lean's lengths and draws (`audit.window_profile`)."""
+    registration its digest names, the coin commitment's root `coins`, each window's openings law at `delta` over
+    the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's draws
+    must be min(samples, U_t) at (`audit.Record`)."""
     if j["registration"] != registration.digest.hex():
         raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
                          f"{registration.digest.hex()[:16]}…")
@@ -237,7 +238,7 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
         registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
         j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
         None if pace is None else audit.Pace(pace["k"], pace["window_ns"], pace.get("in_flight", 2)),
-        j.get("groups_per_coin", 1))
+        j.get("groups_per_coin", 1), samples=samples)
 
 
 def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
