@@ -141,6 +141,7 @@ import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.VerdictRows
 import Proofs.Flock.Claims.Recursion.DecodeTiesVals
 import Proofs.Flock.Claims.Recursion.DecodeTiesW
+import Proofs.Flock.Claims.Recursion.DecodeTies
 import Proofs.Flock.Claims.Recursion.VerdictParts
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
