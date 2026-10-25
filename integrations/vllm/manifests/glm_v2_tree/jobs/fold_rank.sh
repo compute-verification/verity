@@ -27,7 +27,8 @@ OUT=$O PARTS=$LEGS_PARTS EXCLUDE="/match/capture/log[.]rank[^$RANK][.]jsonl[.]gz
 source "$J/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" || fail "tree_guard refused this job's tree" 2
 (cd "$TREE/integrations/vllm" && WORK=$W0 VENV=$W0/venv312 HF_HOME=$W0/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$O/bootstrap") \
   >"$O/bootstrap.log" 2>&1 || { tail -30 "$O/bootstrap.log"; fail "the CPU bootstrap failed" 5; }
-export PY=$W0/venv312/bin/python HF_HOME=$W0/hf HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=
+# row_tp's form of record: the library default (runs, v1) writes a B8 rank's instances.jsonl at ~410 GB, against ~28 GB here
+export PY=$W0/venv312/bin/python HF_HOME=$W0/hf HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES= VERITY_INSTANCES_FORM=progressions
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/integrations/vllm:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src
 tp=${ROW#*__tp} tp=${tp%%__*}
 (cd "$TREE/integrations/vllm" && "$PY" - "$D" "$RANK" "$tp" "workloads/$ROW.json" "derived_${ROLE}_tp$tp" "${FOLD_TIMEOUT:-86400}" "$O/fold_rank.json" <<'EOF'
