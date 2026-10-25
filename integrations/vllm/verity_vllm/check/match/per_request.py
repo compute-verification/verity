@@ -10,6 +10,7 @@ from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import prefix_reads as PX
+from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.match.attribution import Attribution
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.program.compact import n_max_producer as _n_max_producer, n_producers as _n_producers
@@ -24,7 +25,7 @@ class RequestFacts:
     shared_loc: dict[int, dict[str, tuple[str, int, int]]]
     exec_pop: int
     unexercised: int
-    proj: dict[str, BD.Projection]
+    proj: dict[str, PJ.Projection]
     comps: dict[str, SEQ.Prog]
     engine_step_of: dict[int, int]
     dep_viol: list[dict]
@@ -64,7 +65,7 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     exec_pop = 0
     unexercised = 0
     A_cache: dict[str, SEQ.Prog] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
-    proj: dict[str, BD.Projection] = {}
+    proj: dict[str, PJ.Projection] = {}
     comps: dict[str, SEQ.Prog] = {}
     xstep_specs: collections.Counter = collections.Counter()
     weight_readers: set[str] = set()
@@ -292,7 +293,7 @@ def addressed_instances(A: SEQ.Prog) -> int:
     return len(A.inst) + int(getattr(A, "n_splits_consts_bound", 0))
 
 
-def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: BD.Projection, A: SEQ.Prog | None,
+def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: PJ.Projection, A: SEQ.Prog | None,
                        cd: str | None, LP: int, out: dict) -> dict:
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
     every executed fold instance."""
