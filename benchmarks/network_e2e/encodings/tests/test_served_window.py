@@ -1,6 +1,6 @@
 """vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): the replay is the served scheduler on
 every step, every window opens on a drained engine, ReplayStep_v1 is the scheduler on windows 212 and 1 under the served
-async engine, `replay_vectors --slice` builds the compile slice's w212 fixtures and its async w1 fixture from the run's
+async engine, `replay_vectors --slice` builds the compile slice's w212 fixtures and its async w1 fixtures from the run's
 own records, and the certifier's charge chain is `code_v1`'s charge on every window."""
 from __future__ import annotations
 
@@ -183,6 +183,20 @@ def test_the_async_class_fixture_is_w1s(recs, tmp_path):
     assert got["arrivals"] == [[4, 78, 5, 1], [5, 190, 4, 0], [6, 157, 37, 0], [7, 196, 2, 0]]
     assert got["decisions"] == [1, 1, 1] and got["steps"] == len(got["rows"]) == len(got["served"]) == 38
     assert [len(s) for s in got["served"]] == [len(r) for r in got["rows"]]
+
+
+def test_the_async_own_fixture_is_w1s(tmp_path):
+    """At w1's own statics (4, 1, 5) `--slice 1 --AS 1` writes `compile_slice_w1.json`: Q 4, D 3, P 38, K 4, and the
+    class fixture's engine, arrivals, decisions, units, rows and seal."""
+    out = tmp_path / "w1.json"
+    RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "1", "--served", str(RUN / "seal-w1.jsonl"), "--R", "4",
+             "--W", "1", "--A", "5", "--AS", "1", "--out", str(out)])
+    got, cls = json.loads(out.read_text()), json.loads(SLICE.with_name("compile_slice_w1_class.json").read_text())
+    assert got == json.loads(SLICE.with_name("compile_slice_w1.json").read_text())
+    assert {k: got[k] for k in ("R", "W", "A", "Q", "D", "P", "K")} == {"R": 4, "W": 1, "A": 5, "Q": 4, "D": 3, "P": 38,
+                                                                       "K": 4}
+    same = ("engine", "IW", "arrivals", "decisions", "steps", "rows", "served", "ids")
+    assert {k: got[k] for k in same} == {k: cls[k] for k in same}
 
 
 def test_the_seal_is_placed_by_unit():

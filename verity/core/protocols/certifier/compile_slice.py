@@ -13,15 +13,17 @@ chain splits it into one unit a step.
 - ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`: K slots of valid, id, P, O) and ``tok``,
   each slot's first CU·B certified token ids (its prompt, then its outputs; zero past them), a row the verifier holds to
   the certified record's commitment (its b‖c);
-- ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`), a
-  row the verifier holds by its b‖c to the window's row of the served rows' registration (`served_rows`), committed on
-  the Commit side before the draw;
+- ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
+  each step's rows at the runner's batch positions), a row the verifier holds by its b‖c to the window's row of the
+  served rows' registration (`served_rows`), committed on the Commit side before the draw;
 - ``cin`` and ``cout``, the charge's carry-in and carry-out (`charge_chain.encode`'s 96 bits): the window's reads of
   rows 0 and 1 of its `charge_chain.VALUE` value, which the verifier holds by their b‖c to the session's carry chain
   (`charge_chain.check_chain`);
 - ``wit``, the witness: the state rows S_1 … S_{P+1} and the window row W_1 (`replay_chain`'s layouts), each step's
   arrivals ``arr`` and decision bits ``bits``, each step's prefix hits ``hit`` (its W + A candidates') and the cache rows
-  C_0 … C_P (`cache_step.cache_fields`: the table and each running slot's walk entry).
+  C_0 … C_P (`cache_step.cache_fields`: the table and each running slot's walk entry), and at AS = 1 each step's
+  ``map`` from batch positions to slots (R rows of R bits, bit s of row b set iff served row b is slot s's;
+  `slot_map`).
 
 **The circuit.** `replay_chain.ReplayLoad` from the session's empty rows (S_0 and W_0, constants) to S_1 and W_1 with
 ``cert``'s arrivals and ``adv``'s decisions. Then per step u = 1 … P: `replay_step.ReplayStep_v1` on S_u's state with
@@ -32,7 +34,13 @@ them to W_1 at S_u's heads and S_{u+1} to the step's next state. The step's `cac
 lookup of the first candidate left waiting. Each call's units are its request's tokens in ``cert``, selected by the
 request's id, so neither the table's tokens nor a hit's are witness; C_0 is all zero and C_{u+1} is the calls' table and
 next slots (C_u on an idle step). Each step's rows (valid, request, kind, start, n), zero on an idle step, packed in
-`_out_fields`' order (`rows_bits`), are held equal to ``srv``'s. The charge is `charge_chain.ChargeLink_v1{D}`
+`_out_fields`' order (`rows_bits`), are held equal to ``srv``'s: slot for slot at AS = 0, and by request at AS = 1,
+where the runner's batch isn't the scheduler's slots (it can order a step's rows otherwise, and a request holds its
+slot with no row while its last output is in flight). There ``map`` is held one-to-one from the batch positions onto
+the slots with rows (at most one bit set in each of its rows and columns, and column s's set iff slot s has a row, so
+none on an idle step), and each served row to its slot's row, zero where its row of ``map`` is. So
+the map is unique, the identity where the batch is in slot order, and the served rows are the step's in some order.
+The charge is `charge_chain.ChargeLink_v1{D}`
 (`build_link`) on ``pub``'s book, ``cin`` and ``cout``, over ``adv``'s decisions with en_i = i < ``count``: the window
 charges the decisions it commits, in commit order (advice v1). ReplayLoad appends them after the decisions the last
 window left unread, and ReplayAdvance reads the window row's in turn, so the scan reads them in that order; it only
@@ -41,7 +49,7 @@ consumes them, and `replay_chain.ReplayClose` refuses a session that leaves one 
 **The verdict** (16 bits, the unit's one output; `ACCEPT` = 0x3F): bit 0 ``load``, ReplayLoad's ok; bit 1 ``steps``,
 every ReplayAdvance's ok (with each active step's ReplayStep ok); bit 2 ``code``, ChargeLink_v1's ok (the book's model
 and the count in range, and ``cout`` the charge's carry' from ``cin``); bit 3 ``charge``, its bits ≤ c; bit 4 ``rows``,
-the steps' rows are ``srv``'s; bit 5 ``cache``, C_0 empty and every active step's calls ok with C_{u+1} their output.
+the steps' rows are ``srv``'s (through ``map`` at AS = 1); bit 5 ``cache``, C_0 empty and every active step's calls ok with C_{u+1} their output.
 The rest are 0.
 
 **The reference** is `check`, the flags the circuit's pieces' references give any unit's rows; `case` builds the rows of
@@ -69,7 +77,6 @@ which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry`
   clear recompile's and ``rows`` refuses;
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count, so ChargeLink_v1 codes the
   window's other counts as 0 (`arith_encode.ZERO_COUNTS`);
-- *sync scheduling*: ReplayStep_v1 models no async step;
 - *one window*: the slice is a window mid-session from the empty rows, so the decisions its steps leave unread carry
   (`replay_chain`'s load) and no `ReplayClose` follows it;
 - *the binding of ``adv``, ``cert``, ``srv``, ``cin`` and ``cout``*: their rows' b‖c, which the verifier checks
@@ -96,7 +103,9 @@ ANDs and the unit about 7.6M, past circuit-check's lowering: its circuit = refer
 (`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at vLLM
 8eb1's engine class (no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s 97,159 and its 5,509 copies of the words it
 carries among them, `charge_chain.size`'s ``carry``), and at the corpus class the run's staged verdict words are the
-reference's.
+reference's. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in
+place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; 8eb1's async window 1 at its own statics, 314,936,
+and at its engine class 1,021,302, of them 123,120 the map's).
 """
 from __future__ import annotations
 
@@ -144,7 +153,8 @@ def fields(S) -> dict[str, list[tuple[str, int, int]]]:
             "cin": [("carry", 1, CC.ROW_BITS)],
             "cout": [("carry", 1, CC.ROW_BITS)],
             "wit": [("state", S.P + 1, RC.width(Sc)), ("window", 1, RC.window_width(Sc)),
-                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A)] + (cached if S.PC else [])}
+                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A)] + (cached if S.PC else [])
+                   + ([("map", S.P * S.R, S.R)] if S.AS else [])}
 
 
 def row_bits(S) -> dict[str, int]:
@@ -161,6 +171,49 @@ def step_row_bits(S) -> int:
 
 def _consts(bits: Sequence[int]) -> list:
     return [ONE if b else ZERO for b in bits]
+
+
+def _by_slot(S, flat: Sequence) -> list[list]:
+    """One step's rows packed field by field (`rows_bits`' layout) as R rows (valid, request, kind, start, n)."""
+    Z = RS.widths(step_statics(S))
+    out, at = [[] for _ in range(S.R)], 0
+    for wd in (1, S.IW, 1, Z.LW, Z.TW):
+        for p in range(S.R):
+            out[p] += list(flat[at:at + wd])
+            at += wd
+    return out
+
+
+def _over_one(C, xs: Sequence) -> list:
+    """Wires one of which is 1 iff more than one of `xs` is."""
+    seen, bad = xs[0], []
+    for x in xs[1:]:
+        both = C.AND(seen, x)
+        bad.append(both)
+        seen = seen ^ x ^ both
+    return bad
+
+
+def _build_map(C, S, rep: Sequence, srv: Sequence, m: Sequence[Sequence]) -> list:
+    """The mismatch wires of one step's served rows `srv` (by batch position) against the scan's rows `rep` (by slot)
+    through the witnessed map `m` (m[b][s] = 1: served row b is slot s's): every wire 0 iff each row and each column of
+    `m` holds at most one 1, column s holds one iff slot s has a row, and each served row is its slot's (zero where its
+    row of `m` is)."""
+    R = S.R
+    bad = [x for b in range(R) for x in _over_one(C, m[b])]
+    bad += [x for s in range(R) for x in _over_one(C, [m[b][s] for b in range(R)])]
+    for s in range(R):
+        col = ZERO
+        for b in range(R):
+            col = col ^ m[b][s]
+        bad.append(col ^ rep[s][0])
+    for b in range(R):
+        sel, valid = [ZERO] * (len(rep[0]) - 1), ZERO
+        for s in range(R):
+            valid = valid ^ m[b][s]
+            sel = [x ^ C.AND(m[b][s], y) for x, y in zip(sel, rep[s][1:])]
+        bad += [x ^ y for x, y in zip(srv[b], [valid] + sel)]
+    return bad
 
 
 def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
@@ -181,7 +234,7 @@ def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
         caches = w["cache"]
     cache_ok = [RC._zero(C, caches[0])] if S.PC else []
 
-    steps_ok, rows = [], []
+    steps_ok, rows, mism = [], [], []
     for u in range(S.P):
         cur, nxt, arr, bits = states[u], states[u + 1], w["arr"][u], w["bits"][u]
         r, fa = RC._split(cur, RC.row_fields(Sc)), RC._split(arr, RC.front_fields(Sc))
@@ -204,7 +257,11 @@ def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
                                        out["used"][0], nxt)
         act = active[0]
         steps_ok.append(ok[0])
-        rows += [C.AND(act, x) for name in ROW_FIELDS for e in out[name] for x in e]
+        mine = [C.AND(act, x) for name in ROW_FIELDS for e in out[name] for x in e]
+        if S.AS:
+            mism += _build_map(C, S, _by_slot(S, mine), _by_slot(S, v["rows"][u]), w["map"][u * S.R:(u + 1) * S.R])
+        else:
+            rows += mine
         if S.PC:
             quiet = C.AND(or_reduce(C, [e[0] for e in r["run_valid"]]).inv(), r["wait_valid"][0][0].inv())
             forced = C.AND(quiet, fa["arr_valid"][0][0])
@@ -217,7 +274,7 @@ def _build(C, S, pub, adv, cert, srv, cin, cout, wit):
     code_ok, charged = CC.build_link(C, S.D, book, ci["carry"][0], co["carry"][0], en, [e[0] for e in a["dec"]])
     charge_ok = RC._lt(C, p["c"][0], charged).inv()
 
-    rows_ok = RC._eq(C, rows, [x for e in v["rows"] for x in e])
+    rows_ok = RC._zero(C, mism) if S.AS else RC._eq(C, rows, [x for e in v["rows"] for x in e])
 
     flags = [load_ok, and_reduce(C, steps_ok), code_ok, charge_ok, rows_ok, and_reduce(C, cache_ok)]
     return [flags + [ZERO] * (16 - len(flags))]
@@ -263,6 +320,16 @@ def demo() -> tuple[dict, Slice]:
     return st, Slice(((0, 9, 8), (1, 11, 4), (2, 6, 3)), (0, 0, 1, 0, 0), 4, tokens)
 
 
+def demo_async() -> tuple[dict, Slice]:
+    """The asynchronous demonstration class's statics and slice: `DEMO_ENGINE` at two sequences under async scheduling
+    without prefix caching (AS = 1, so ``wit`` has a ``map``), (R 2, W 1, A 2), three arrivals (id, P, O, cap), two
+    decisions and six units. Units 0 to 3 run two rows each, so a served batch in another order than the slots is a
+    map other than the identity."""
+    engine = {**DEMO_ENGINE, "max_num_seqs": 2, "enable_prefix_caching": False, "async_scheduling": True}
+    st = statics(2, 1, 2, engine, 3, Q=3, D=2, P=6, K=3)
+    return st, Slice(((0, 9, 3, 0), (1, 6, 2, 0), (2, 5, 2, 1)), (1, 1), 6)
+
+
 # --- the specification -------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -293,13 +360,15 @@ class Case:
     hits: tuple = ()
 
 
-def _state(row: RC.Row) -> RS.State:
-    return RS.State(tuple(RS.Req(*x) for x in row.running), tuple(RS.Req(*x) for x in row.waiting), row.free)
+def _state(Sc: RC.Shape, row: RC.Row) -> RS.State:
+    """A state row's entries as ReplayStep_v1's requests, by the chain's names at its shape (AS = 1 adds cap and fin)."""
+    return RS.State(tuple(RS.Req(**dict(zip(RC.running_names(Sc), x))) for x in row.running),
+                    tuple(RS.Req(**dict(zip(RC.waiting_names(Sc), x))) for x in row.waiting), row.free)
 
 
-def _row(st: RS.State) -> RC.Row:
-    return RC.Row(tuple((r.id, r.P, r.O, r.out, r.comp) for r in st.running), tuple((r.id, r.P, r.O, r.out) for r in st.waiting),
-                  st.free)
+def _row(Sc: RC.Shape, st: RS.State) -> RC.Row:
+    return RC.Row(tuple(tuple(getattr(r, k) for k in RC.running_names(Sc)) for r in st.running),
+                  tuple(tuple(getattr(r, k) for k in RC.waiting_names(Sc)) for r in st.waiting), st.free)
 
 
 def rows_bits(S, rows: Sequence[tuple[int, int, int, int, int]] | None) -> list[int]:
@@ -323,6 +392,40 @@ def srv_row(S, steps: Sequence) -> list[int]:
     return bits + [0] * (row_bits(S)["srv"] - len(bits))
 
 
+def slot_map(S, rows: Sequence[tuple] | None, served: Sequence[tuple] | None) -> list[list[int]]:
+    """The ``map`` a prover puts in for one step at AS = 1 (m[b][s] = 1: served row b is slot s's): each served row (b,
+    request, …) at the slot of the scan's row (`rows`, by slot) for its request, and none for a request without one."""
+    at = {x[1]: x[0] for x in rows or ()}
+    m = [[0] * S.R for _ in range(S.R)]
+    for x in served or ():
+        if x[1] in at:
+            m[x[0]][at[x[1]]] = 1
+    return m
+
+
+def _mapped(S, rows: Sequence[tuple] | None, m: Sequence[Sequence[int]]) -> tuple | None:
+    """A step's rows (`RS.Out.rows`, by slot; None on an idle step) at the batch positions the map `m` gives them, or None
+    where `m` isn't one-to-one from batch positions onto the slots with rows."""
+    if any(sum(r) > 1 for r in m) or any(sum(c) > 1 for c in zip(*m)):
+        return None
+    by = {x[0]: x for x in rows or ()}
+    if {s for s in range(S.R) if any(r[s] for r in m)} != set(by):
+        return None
+    return tuple((b, *by[s][1:]) for b, r in enumerate(m) for s in range(S.R) if r[s])
+
+
+def _rows_ok(S, out_rows: Sequence, srv: Sequence[int], maps: Sequence | None) -> bool:
+    """``rows``: the active steps' rows are ``srv``'s, slot for slot at AS = 0, and at AS = 1 at the batch positions the
+    witnessed map gives them (`_mapped`)."""
+    n = RC._bits_of(fields(S)["srv"])
+    if S.AS:
+        out_rows = [_mapped(S, r, [[int(x) for x in maps[u * S.R + b]] for b in range(S.R)])
+                    for u, r in enumerate(out_rows)]
+        if None in out_rows:
+            return False
+    return srv_row(S, out_rows)[:n] == [int(b) for b in srv[:n]]
+
+
 def _bits(v: int, w: int) -> list[int]:
     if v < 0 or v >> w:
         raise ValueError(f"{v} doesn't fit {w} bits")
@@ -338,8 +441,9 @@ def _inputs(S, arr: Sequence[RC.Arrival], bits: Sequence[int], hit: Sequence[int
     """ReplayStep_v1's inputs at a step: the arrivals, bits and hits (0 unless `hit`), the evictable and returned
     counts 0 (the stand-in)."""
     zero = (0,) * (S.W + S.A)
-    return RS.Inputs(tuple(RS.Req(*a) for a in arr), tuple(bits), tuple(hit) if hit is not None else zero, zero,
-                     (0,) * S.R)
+    names = RC.arrival_names(chain(S))
+    return RS.Inputs(tuple(RS.Req(**dict(zip(names, a))) for a in arr), tuple(bits),
+                     tuple(hit) if hit is not None else zero, zero, (0,) * S.R)
 
 
 def _fabricated(S, cache: CST.Cache, entries: Sequence[CST.Entry]) -> CST.Cache:
@@ -386,13 +490,13 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
             continue
         for _round in range(S.W + S.A + 2):
             h = tuple((hits or {}).get(u, h))
-            out = RS.reference(St, _state(cur), _inputs(S, arr, bits, h))
+            out = RS.reference(St, _state(Sc, cur), _inputs(S, arr, bits, h))
             if not out.ok:
                 raise ValueError("the step refuses: the slice's class can't take it")
             if not S.PC:
                 got = SimpleNamespace(cache=cache, hits=h)
                 break
-            got = CST.scan_step(S, cache, _state(cur), _inputs(S, arr, bits, h), out, toks, derive=True)
+            got = CST.scan_step(S, cache, _state(Sc, cur), _inputs(S, arr, bits, h), out, toks, derive=True)
             if got is None:
                 raise ValueError("the cache refuses: the slice's class can't take it")
             if u in (hits or {}) or got.hits == h:
@@ -404,7 +508,7 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
         caches.append(cache)
         hit_rows.append(h)
         taken, used = (consume or {}).get(u, (out.taken, out.used))
-        stepped = _row(out.state)
+        stepped = _row(Sc, out.state)
         nxt = RC.Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, cur.dh + used, cur.steps - 1)
         asks += bits[:used]
         steps.append(out.rows)
@@ -447,10 +551,9 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     Sc, St = chain(S), step_statics(S)
     F = fields(S)
     p, a, w = (RC._split(rows[r], F[r]) for r in ("pub", "adv", "wit"))
-    served = RC._bits_of(F["srv"])
     states = [RC.decode(e, Sc) for e in w["state"]]
     win = RC.decode_window(w["window"][0], Sc)
-    cert = RC._items(RC._unflatten(rows["cert"], RC.arrival_fields(Sc))[0], "a", ("id", "P", "O"))
+    cert = RC._items(RC._unflatten(rows["cert"], RC.arrival_fields(Sc))[0], "a", RC.arrival_names(Sc))
     toks = _cert_tokens(S, rows["cert"]) if S.PC else {}
     crow = [[int(b) for b in e] for e in w["cache"]] if S.PC else []
     hit = [_int(e) for e in w["hit"]] if S.PC else [0] * (S.P * (S.W + S.A))
@@ -468,7 +571,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     steps_ok, out_rows = True, []
     for u in range(S.P):
         cur, nxt = states[u], states[u + 1]
-        arr = RC._items(RC._unflatten(w["arr"][u], RC.front_fields(Sc))[0], "arr", ("id", "P", "O"))
+        arr = RC._items(RC._unflatten(w["arr"][u], RC.front_fields(Sc))[0], "arr", RC.arrival_names(Sc))
         bits = [int(b) for b in w["bits"][u]]
         if not cur.steps:
             steps_ok &= nxt == cur
@@ -476,22 +579,21 @@ def check(S, rows: dict) -> dict[str, bool | None]:
             out_rows.append(None)
             continue
         inp = _inputs(S, arr, bits, hit[u * (S.W + S.A):(u + 1) * (S.W + S.A)])
-        out = RS.reference(St, _state(cur), inp)
+        out = RS.reference(St, _state(Sc, cur), inp)
         if not out.ok:
             flags.update(steps=False, rows=None, cache=None)
             return {f: flags[f] for f in FLAGS}
-        want = RC.advance(Sc, win, cur, True, _row(out.state), arr, bits, out.taken, out.used)
+        want = RC.advance(Sc, win, cur, True, _row(Sc, out.state), arr, bits, out.taken, out.used)
         steps_ok &= want is not None and want == nxt
         if S.PC:
             try:
                 held = CST.decode_cache(S, crow[u], len(cur.running))
             except ValueError as e:
                 raise RC.MalformedRow(str(e)) from None
-            got = CST.scan_step(S, held, _state(cur), inp, out, toks)
+            got = CST.scan_step(S, held, _state(Sc, cur), inp, out, toks)
             cache_ok &= got is not None and CST.encode_cache(S, got.cache) == crow[u + 1]
         out_rows.append(out.rows)
-    flags.update(steps=steps_ok, rows=srv_row(S, out_rows)[:served] == [int(b) for b in rows["srv"][:served]],
-                 cache=cache_ok)
+    flags.update(steps=steps_ok, rows=_rows_ok(S, out_rows, rows["srv"], w.get("map")), cache=cache_ok)
     return {f: flags[f] for f in FLAGS}
 
 
@@ -512,13 +614,15 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
          advice: Sequence[int] | None = None, served: Sequence | None = None, charge: int | None = None,
          window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None,
          hits: dict[int, Sequence[int]] | None = None, consume: dict[int, tuple[int, int]] | None = None,
-         tokens: Sequence[Sequence[int]] | None = None, fabricate: dict[int, Sequence[CST.Entry]] | None = None) -> Case:
+         tokens: Sequence[Sequence[int]] | None = None, fabricate: dict[int, Sequence[CST.Entry]] | None = None,
+         maps: dict[int, Sequence[Sequence[int]]] | None = None) -> Case:
     """A unit's rows for the prover's run of `sl` (`scan`'s, with `window`, `cert`, `hits`, `consume`, `tokens` and
     `fabricate`) under the registered `book` (its JSON), and `check`'s verdict on them. `carry` is the carry-in it puts
     in ``cin`` (default the book's priors, the session's first window's), `advice` the decisions it commits in ``adv``
     (default `sl`'s), `cout` the carry-out it puts in ``cout`` (default the charge's carry' on the advice from `carry`),
-    `served` the window's step rows it puts in ``srv`` (default the run's own) and `charge` ``pub``'s (default the
-    advice's charge, ``length``)."""
+    `served` the window's step rows it puts in ``srv`` (default the run's own), `charge` ``pub``'s (default the
+    advice's charge, ``length``) and, at AS = 1, `maps` step u -> the map it puts in ``map`` for step u (default
+    `slot_map`'s)."""
     Sc = chain(S)
     cb, first = AE.charge_book(book, S.D)
     carry = first if carry is None else carry
@@ -531,10 +635,11 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
         raise ValueError("the charge refuses the advice from the carry-in")
     cout = nxt if cout is None else cout
     sc = scan(S, sl, window, cert, hits=hits, consume=consume, tokens=tokens, fabricate=fabricate)
+    served = sc.steps if served is None else served
     width = row_bits(S)
     rows = {"pub": _pack(S, "pub", {"c": [length if charge is None else charge], **CC.book_values(cb)}),
             "adv": _pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
-            "srv": srv_row(S, sc.steps if served is None else served),
+            "srv": srv_row(S, served),
             "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
     cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
@@ -549,6 +654,9 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
     if S.PC:
         wit += [b for h in sc.hits for v in h for b in _bits(v, RS.widths(step_statics(S)).HW)]
         wit += [b for c in sc.caches for b in CST.encode_cache(S, c)]
+    if S.AS:
+        mine, theirs = (list(x) + [None] * (S.P - len(x)) for x in (sc.steps, served))
+        wit += [b for u in range(S.P) for r in (maps or {}).get(u, slot_map(S, mine[u], theirs[u])) for b in r]
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
     assert all(len(rows[r]) == width[r] for r in ROWS)
     flags = check(S, rows)
