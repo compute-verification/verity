@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Ligerito
+import Definitions.Flock.Ligerito
 import Proofs.Flock.Soundness.Game.Interleave
 
 /-!

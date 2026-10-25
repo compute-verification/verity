@@ -2,7 +2,8 @@
 the layout a credited pass reads is the verifier's function of the schedule and moves only with it, and the ledger
 credits no appended block without the session's own verdict.  The check refuses the collapse that makes
 `SteeredLayout`'s `a` empty (every layout steered through the coins themselves, `a` = their bits): at a fixed
-schedule every layout but one is refused, whatever the coins."""
+schedule every layout but one is refused, whatever the coins.  And it holds the schedule to the cap on its bits the
+session committed before its coins, which is what the ledger credits: a schedule's own bits can follow the coins."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import itertools
 
 import pytest
 
-from test_appends import HONEST_SCHEDULE, N, P512, Run, Verdict, honest_session, salts, store
+from test_appends import CAP, HONEST_SCHEDULE, N, P512, Run, Verdict, honest_session, salts, store
 from test_deferred_map import STEPS, deferred, drive, history
 from test_memory_map import page, serving
 from verity.core.protocols.remote_bandwidth import audit, memory_map, schedule
@@ -42,15 +43,59 @@ def runs(blocks: list[int]) -> tuple[tuple[int, int], ...]:
     return tuple((f, c) for f, c in out)
 
 
-def test_the_honest_session_s_plans_are_its_schedule_s_and_the_verdict_counts_its_bits(honest) -> None:
+def test_the_honest_session_s_plans_are_its_schedule_s_and_the_verdict_carries_the_cap(honest) -> None:
     """Each pass's plan is `HONEST_SCHEDULE.plan` at its step and the appends its `append_runs`; the verdict names the
-    session and carries the encoding's bits, 25 bytes."""
+    session and carries the cap its parameters committed, within which the encoding's 25 bytes are."""
     r, _ = honest
     assert [p for _, p in passes_of(r)] == [HONEST_SCHEDULE.plan(N, s) for s in HONEST_SCHEDULE.steps]
     assert r.s.appended == HONEST_SCHEDULE.append_runs(N) == ((N, 4), (N + 4, 2))
     v = r.s.scheduled(HONEST_SCHEDULE)
     rec = r.s.record()
-    assert v.of(rec) and v.bits == HONEST_SCHEDULE.bits == 8 * len(HONEST_SCHEDULE.encode()) == 200
+    assert v.of(rec) and v.cap == r.p.schedule_cap == CAP
+    assert HONEST_SCHEDULE.bits == 8 * len(HONEST_SCHEDULE.encode()) == 200 <= CAP
+
+
+def test_the_cap_committed_before_the_coins_is_credited_and_a_schedule_over_it_is_refused(honest) -> None:
+    """RD-18 (note:20261024T2155Z-report-redteam-5): the schedule is published after the coins, so its length can
+    follow them.  `padded` gives every pass the honest plan, as `HONEST_SCHEDULE` does, at 264 bits (registered block
+    7 freed at step 2^40, after every pass), so a prover may publish either on the same plans, as the coins say.
+    Credited at its own schedule's bits, its 200-bit sessions would read a `SteeredLayout` bound that holds only at
+    the longest schedule's.  So the ledger credits the cap the session committed before its coins, 256, whatever the
+    schedule it published within it, and refuses a schedule over it, as the Lean does; a session that committed 264
+    takes `padded` and is credited 264."""
+    r, _ = honest
+    rec = r.s.record()
+    padded = Schedule(HONEST_SCHEDULE.registered + ((7, 1, 2**40),), HONEST_SCHEDULE.appends, HONEST_SCHEDULE.steps)
+    assert [padded.plan(N, s) for s in padded.steps] == [HONEST_SCHEDULE.plan(N, s) for s in HONEST_SCHEDULE.steps]
+    assert (HONEST_SCHEDULE.bits, padded.bits, CAP) == (200, 264, 256)
+    v = r.s.scheduled(HONEST_SCHEDULE)
+    assert audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == CAP
+    with pytest.raises(Refused) as e:
+        r.s.scheduled(padded)
+    assert str(e.value) == "the schedule is 264 bits, over the cap of 256 committed before the coins"
+    wide = honest_session(schedule_cap=264)
+    assert [x.accepted for x in wide.finish()] == [True, True]
+    for sc in (HONEST_SCHEDULE, padded):
+        assert audit.ledger(wide.s.record(), **COMMON, credit_post_seed=Verdict(True),
+                            schedule=wide.s.scheduled(sc)).steering == 264
+    assert schedule.check(padded, N, 264, passes_of(wide), wide.s.appended) == 264
+    with pytest.raises(Refused, match="the schedule is 200 bits, over the cap of 199 committed before the coins"):
+        schedule.check(HONEST_SCHEDULE, N, 199, passes_of(wide), wide.s.appended)
+
+
+def test_a_session_that_commits_no_cap_credits_no_appended_block(honest) -> None:
+    """The default commits no cap (`Params.schedule_cap` None): the session gives no schedule verdict, so the ledger
+    credits no appended block, and without a property verdict its ledger is the capped session's, the default
+    unchanged."""
+    r = honest_session(schedule_cap=None)
+    assert [x.accepted for x in r.finish()] == [True, True]
+    with pytest.raises(audit.SessionError, match="commit no cap on its schedule's bits"):
+        r.s.scheduled(HONEST_SCHEDULE)
+    rec = r.s.record()
+    with pytest.raises(ValueError, match="schedule check"):
+        audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True))
+    none = audit.ledger(rec, **COMMON)
+    assert none.steering is None and none.to_json() == audit.ledger(honest[0].s.record(), **COMMON).to_json()
 
 
 def test_at_a_fixed_schedule_every_coin_steered_layout_but_the_schedule_s_is_refused(honest) -> None:
@@ -66,7 +111,7 @@ def test_at_a_fixed_schedule_every_coin_steered_layout_but_the_schedule_s_is_ref
         held = [0, 1, *range(3, 9), *(j for j, keep in zip(range(10, 14), y) if keep)]
         steered = passes[:3] + [(3, runs(held))] + passes[4:]
         try:
-            accepted.append((y, schedule.check(HONEST_SCHEDULE, N, steered, appends)))
+            accepted.append((y, schedule.check(HONEST_SCHEDULE, N, CAP, steered, appends)))
         except Refused as e:
             assert str(e) == "pass 3's plan is not the schedule's at step 3"
     assert accepted == [((True, True, True, True), 200)]
@@ -104,7 +149,7 @@ def test_a_layout_the_session_accepts_is_refused_credit_unless_the_schedule_give
     late = Schedule(HONEST_SCHEDULE.registered, (HONEST_SCHEDULE.appends[0], ((3, None), (2, None))),
                     HONEST_SCHEDULE.steps)
     v = r.s.scheduled(late)
-    assert v.bits == late.bits == 200 and audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == 200
+    assert late.bits == 200 and audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == CAP
 
 
 def test_the_ledger_refuses_a_verdict_on_another_session_or_not_the_check_s(honest) -> None:
@@ -114,8 +159,8 @@ def test_the_ledger_refuses_a_verdict_on_another_session_or_not_the_check_s(hone
     r, _ = honest
     rec = r.s.record()
     v = r.s.scheduled(HONEST_SCHEDULE)
-    for bad in (audit.Scheduled(bytes(64), v.coins, v.bits), audit.Scheduled(v.registration, bytes(64), v.bits),
-                type("Scheduled", (), {"bits": 0, "of": lambda self, record: True})()):
+    for bad in (audit.Scheduled(bytes(64), v.coins, v.cap), audit.Scheduled(v.registration, bytes(64), v.cap),
+                type("Scheduled", (), {"cap": 0, "of": lambda self, record: True})()):
         with pytest.raises(ValueError, match="schedule check"):
             audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=bad)
     assert audit.ledger(rec, **COMMON, schedule=v).steering is None
@@ -164,7 +209,7 @@ def test_the_schedule_of_a_memory_map_gives_the_plans_replay_takes() -> None:
     sched = memory_map.schedule(head, steps, run.s.appended, passes)
     assert sched.registered == ((4, 2, 0), (6, 1, 3))
     assert sched.appends == (((0, 3), (0, 5), (0, 3)), ((3, None), (3, None)), ((5, 6),))
-    assert run.s.scheduled(sched).bits == sched.bits
+    assert sched.bits <= CAP and run.s.scheduled(sched).cap == CAP
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 3])
@@ -173,10 +218,10 @@ def test_the_schedule_of_a_deferred_map_with_withdrawals_and_re_keys_is_accepted
     the schedule `memory_map.schedule` makes of it passes the check, each withdrawn block never resident."""
     oracle, encodes, appends, _ = history(seed)
     dm = deferred(oracle, encodes, 0, N)
-    run = Run(store(), samples=40, deferred=True)
+    run = Run(store(), samples=40, deferred=True, schedule_cap=8 * 1024)
     assert drive(run, dm, appends, STEPS, boundaries=(STEPS // 2,)) is None
     sched = memory_map.schedule(Header(run.store.registration.digest, N), dm, run.s.appended,
                                 [s for w in run.s.windows for s in w.steps])
     blocks = {j: b for (first, _), a in zip(run.s.appended, sched.appends) for j, b in enumerate(a, start=first)}
     assert all(blocks[j] is None for s in dm for j in s.withdrawn)
-    assert run.s.scheduled(sched).bits == sched.bits
+    assert sched.bits <= 8 * 1024 and run.s.scheduled(sched).cap == 8 * 1024

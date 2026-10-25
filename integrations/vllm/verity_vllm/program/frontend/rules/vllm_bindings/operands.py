@@ -6,7 +6,7 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc, refuse
-from verity_vllm.program.frontend.torch_frontend import _permute
+from verity_vllm.program.frontend.strided_views import _permute
 from verity_vllm.program.frontend.rules.common import dtype_is, shape
 
 
@@ -40,7 +40,7 @@ def _untransposed(ctx, b, K: int, N: int, hint: str) -> Coll:
     `b` is literally an `aten.t` / 2-D `transpose` node (the common case: a parameter), else by permuting the references back."""
     if isinstance(b, torch.fx.Node) and b.target in (aten.t.default, aten.transpose.int, aten.numpy_T.default) and shape(ctx, b.args[0]) == (N, K):
         return ctx.coll(b.args[0])
-    from verity_vllm.program.frontend.torch_frontend import FrontendError
+    from verity_vllm.program.frontend.errors import FrontendError
     try:
         return _permute(ctx.coll(b), [1, 0], hint)
     except FrontendError as e:
