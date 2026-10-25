@@ -4,7 +4,8 @@ CUDA graph's last step, which screens the call's rows into the pass and copies i
 Both run ``screen_row``, one row's screen.
 
 A row's screen is an FP64 sum of the squares at positions ≡ 0 (mod 8), the band's bounds rounded to FP32 as `screen` rounds
-them, the dead and in-band counts, and the noise floor from the row's α and ρ.  Its sum's order is not torch's, so a row can
+them, the dead and in-band counts, and the noise floor from the row's α and ρ; ``scatter`` with ``GATHER`` screens program
+p's row at ``at[p]`` of x, α and ρ into flag pair p.  Its sum's order is not torch's, so a row can
 come out unsure in one and decided in the other; both leave only rows within the band undecided, and `excluded` decides those
 exactly, so the records are the same.
 """
@@ -37,19 +38,24 @@ def screen_row(x, alpha, aux, out, row, k, k8, sigma, band, BLOCK: tl.constexpr)
     floor = tl.where(tl.load(aux + 2 * row + 1).to(tl.float64) * tl.load(alpha + row).to(tl.float64) < sigma, 1, 0)
     sure_fail = tl.where(64 * d > k, 1, 0)
     sure_pass = tl.where(64 * (d + b) <= k, 1, 0)
-    tl.store(out + 2 * row, tl.maximum(floor, sure_fail).to(tl.uint8))
-    tl.store(out + 2 * row + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
+    tl.store(out, tl.maximum(floor, sure_fail).to(tl.uint8))
+    tl.store(out + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
 
 @triton.jit
 def screen(x, alpha, aux, out, k, k8, sigma, band, BLOCK: tl.constexpr):
-    screen_row(x, alpha, aux, out, tl.program_id(0), k, k8, sigma, band, BLOCK)
+    row = tl.program_id(0)
+    screen_row(x, alpha, aux, out + 2 * row, row, k, k8, sigma, band, BLOCK)
 
 @triton.jit
-def scatter(x, alpha, aux, rows, k, k8, sigma, band, flags_to, leaves, leaves_to, root, roots_to, offs, n_leaves, n_root,
-            BLOCK: tl.constexpr):
+def scatter(x, alpha, aux, rows, k, k8, sigma, band, flags_to, leaves, leaves_to, root, roots_to, offs, n_leaves, n_root, at,
+            BLOCK: tl.constexpr, GATHER: tl.constexpr):
     p, b0 = tl.program_id(0), tl.cdiv(n_leaves, BLOCK)
     if p < rows:
-        screen_row(x, alpha, aux, flags_to + tl.load(offs + 1), p, k, k8, sigma, band, BLOCK)
+        if GATHER:
+            row = tl.load(at + p)
+        else:
+            row = p
+        screen_row(x, alpha, aux, flags_to + tl.load(offs + 1) + 2 * p, row, k, k8, sigma, band, BLOCK)
     elif p < rows + b0:
         i = (p - rows) * BLOCK + tl.arange(0, BLOCK)
         tl.store(leaves_to + tl.load(offs) + i, tl.load(leaves + i, mask=i < n_leaves), mask=i < n_leaves)

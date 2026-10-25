@@ -1,6 +1,7 @@
 import Definitions.Pouw.PearlC.DevicePrices
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DeviceFp4
+import Definitions.Pouw.PearlC.DeviceFp4Issue
 import Definitions.Pouw.PearlC.Sha512
 
 /-!
@@ -73,7 +74,11 @@ the salt; online, `sha512` is the one place W1 charges a compression.
 `W1Prices.toPrices` is the coarse record `Device.Prices` that `creditDev` and `wrefDev` read: the FP32 add, the BF16 MAC,
 and the forming per element, `fs = 32·mac(E4M3) + cvt/2` (the k32 noise atom and half a cast) and `qa = ⌈fp32/8⌉` (one
 FFMA per 8 elements). At `h100`, `sm120` and `sm120Loop` it is `Prices.h100`, `Prices.sm120` and `Prices.sm120Loop`
-(`Proofs.Pouw.PearlC.W1Checks`).
+(`Proofs.Pouw.PearlC.W1Checks`). `W1Prices.toFp4Prices pr p` is the FP4 record's `Fp4Prices` at a block-scale path
+`p`: the BF16 MAC, `fs = 64·mac(E2M1) + p.fixed + p.fp32Ops·fp32/16 + fp32 + cvt/2` (the k64 noise atom, the block
+scale, and the cast's FMUL and half an `F2FP`) and `qa = fp32 + fp32/8` (the noisy amax and ρ's accumulate on every 8th
+element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm120` at `lut256`. The scale path's
+`fixed` part (an `LDS` and `PRMT`s per block) is the record's own, not a W1 price.
 
 **Where the model is narrower than W1**, each a named gap for the restatement:
 - the opcode set is the list above: an opcode outside it (MUFU, IMAD.WIDE, HADD2, warp shuffles and votes, atomics)
@@ -171,6 +176,13 @@ def W1Prices.fp4Sm120 (sha fetch : ℚ) : W1Prices :=
 `fs = ⌈32·mac(E4M3) + cvt/2⌉` (the noise atom's 32 MACs and half a cast) and `qa = ⌈fp32/8⌉` (ρ's FFMA on every 8th). -/
 def W1Prices.toPrices (pr : W1Prices) : Prices :=
   ⟨pr.fp32, pr.mac .bf16, ⟨⌈32 * pr.mac .e4m3 + pr.cvt / 2⌉₊, ⌈pr.fp32 / 8⌉₊⟩⟩
+
+/-- **The FP4 coarse record** `creditFp4` and `wrefFp4` read, at the block-scale path `p`: the BF16 MAC, the forming
+per element `fs = 64·mac(E2M1) + p.fixed + p.fp32Ops·fp32/16 + fp32 + cvt/2` (the k64 noise atom, the block scale per
+16, and the cast's FMUL and half an `F2FP`), and `qa = fp32 + fp32/8` (the noisy amax's FMNMX and ρ's FFMA on every
+8th). -/
+def W1Prices.toFp4Prices (pr : W1Prices) (p : Fp4ScalePath) : Fp4Prices :=
+  ⟨pr.mac .bf16, 64 * pr.mac .e2m1 + p.fixed + p.fp32Ops * pr.fp32 / 16 + pr.fp32 + pr.cvt / 2, pr.fp32 + pr.fp32 / 8⟩
 
 /-- **A W1 device**: its prices, its captured tensor-core steps (E4M3 and BF16 as a `Pipeline`, E2M1 as an `Fp4Atom`),
 and the fragments it has. A fragment it lacks is a no-op that costs nothing. -/

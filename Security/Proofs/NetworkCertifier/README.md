@@ -61,8 +61,8 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
                                          committed gate at one bit leaves every step's egress as it was
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
-Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftest runs, equal to the
-                               definitions above: four theorems, not guarantees (below)
+Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
+                               definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
                                (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean), and
                                Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
@@ -89,9 +89,9 @@ as `docs/…` and `internal/…` name network accounting's project store, where 
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
 record, a kernel replay, and the guarantees' records, whose meaning it follows through those three (`meaning`) and the
-certifier program's modules. The difftest (`runs` in the certifier program's own `lean-audit.json`) checks that on 10,000
-random instances the program gives what the Python audit gives; `Code.lean` proves the program equal to these
-definitions.
+certifier program's modules. The difftests (`runs` in the certifier program's own `lean-audit.json`) check that on 10,000
+random instances the program gives what the Python audit gives, and on 4,000 that its advice v1 charge gives what
+`arith_encode.reference_charge` gives; `Code.lean` proves the program equal to these definitions.
 When a changed record lands on `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
 
 ## The model
@@ -202,8 +202,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   ingress, the faulty units' committed bits and the choice of faulty set. An accepted sampled audit reaches it except
   with probability `δ + ε_ks + ε_bind`.
 
-**The program's agreements, proved and audited, not guarantees.** Four theorems tie the difftest to these definitions
-(`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
+**The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
+(`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge reference
 to the certifier program (`verity/core/protocols/certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
@@ -216,7 +216,9 @@ definitions, relating them by their fields, since `security` requires nothing bu
   the same values (`accepted`);
 - `CodeStatusComplete`: `NetworkCertifier.StatusComplete` is `StatusComplete` for observations with the same complete statuses
   (`complete`);
-- `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`).
+- `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`);
+- `CodeChargesV1`: `NetworkCertifier.AdviceV1.charges` of the windows' decision streams is `AdviceV1.charges` for books
+  with the same fields (the charge difftest's `charges`), the charge `BitsCount` for advice v1 is proved of.
 
 They aren't guarantees because `four_names` holds every `NetTiming` guarantee to `SecurityProofs.G : Guarantees.G`,
 and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every

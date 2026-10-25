@@ -14,7 +14,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
 2. the round trip, measured by pings;
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
-   (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
+   (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
+   session so the prover re-keys in time); the coin commitment sent first, then
    σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
    `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
@@ -925,7 +926,7 @@ class Pair:
 
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
+                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
                  ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
@@ -1117,12 +1118,15 @@ class Verifier:
         `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
         the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
         the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
-        allowances of its coin."""
+        allowances of its coin.  The lifetime cap, unless `lifetime` states it, is the windows of T in 30 s, or paced,
+        the groups of their nominal length, the stretch over its groups (`audit.lifetime_windows`)."""
         reg, K = self.registration, None if pace is None else pace["k"]
         W = self.W if pace is None else pace["groups"] * (pace["windows"] + 1)
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
+        life = self.lifetime if self.lifetime is not None else audit.lifetime_windows(
+            self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
+                              receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         appends = self.appends_of()
@@ -1400,6 +1404,7 @@ class Verifier:
                 break
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
+               "lifetime": params.lifetime,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,
@@ -1579,8 +1584,10 @@ def main() -> int:
     ap.add_argument("--delta-log2", type=float, default=-40.0)
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
-    ap.add_argument("--lifetime", type=int, default=audit.LIFETIME,
-                    help="L: windows an appended block may stay in plans after the window it joined")
+    ap.add_argument("--lifetime", type=int,
+                    help="L: windows (a paced session's groups) an appended block may stay in plans after the window "
+                         "it joined (default: those of the window, or of the nominal group, in 30 s, "
+                         "`audit.lifetime_windows`)")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes checking openings (0: one thread of the verifier's own)")

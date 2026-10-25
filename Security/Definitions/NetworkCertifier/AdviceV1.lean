@@ -26,8 +26,10 @@ run) is committed across windows and chained from the book's priors (#3801, `cha
 starts from `priors` and passes each window's carry on.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `window` is not proved in Lean. circuit-check holds the circuit
-to the Python reference, and these definitions are held to that reference by a comparison on random cases (1,200 windows
-and 400 sessions, accepted and refused, with no mismatch).
+to the Python reference, and these definitions are held to that reference by the charge difftest: the certifier
+program's `NetworkCertifier.AdviceV1`, which `Proofs.NetworkCertifier.Code` proves equal to these (`CodeChargesV1`), gives
+what `reference_charge` gives on 4,000 random instances, accepted and refused (`runs` in the certifier program's
+`lean-audit.json`).
 
 **Refusals.** Each reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
 returns `none` there. On the states a window reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are

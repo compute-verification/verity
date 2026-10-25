@@ -348,7 +348,16 @@ serves at a public fixed length, ignore_eos at each slot's public max_tokens, wh
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
 a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
-`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`).
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
+credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
+signs before window 0's first coin (`--length`), commits each request's public max_tokens and stop `fixed`
+(`credit.committed_length`), and each step's served rows m_s, which its manifest rows fix under `calls_root` before the
+draw coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
+decode row for each request whose max_tokens is past s. A round serving more ran a request past its public max_tokens and
+one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a period with no fixed length
+credits nothing (`no-fixed-length`). The served rows are the prover's word until the per-round live proofs bind them, and
+the per-request live bound (`PouwLiveSlots_v1`) caps each slot's decode rows at its hidden entry's cap, which no public
+check yet ties to the public max_tokens.
 
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
@@ -1098,7 +1107,10 @@ GPU 5's RTX PRO 6000 design. It is Pearl-C with the FP8 product replaced by `mma
   cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
   scales make honest zero codes reliable.
 The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane and proposed, not proved, so
-the certificate names no γ_0. The module's docstring states every step and rounding.
+the certificate names no γ_0. The module's docstring states every step and rounding. TT_OUT-FP4 is stated at the W1
+machine on `W1Device.fp4Sm120` (`Security/Definitions/Pouw/Assumptions/PearlC/TTOutFp4W1.lean`), and the headline γ
+guarantees conclude at that cost model. Its domain rule D-SK reads `B̃`'s lines from the oracle, which a W1 program
+can't call, so it says nothing about the deployment until D-SK is stated over SHA-512.
 
 ~~~text
 rows      k BF16 words per row of either operand

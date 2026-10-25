@@ -469,8 +469,7 @@ append nothing, derive them as before.
 
 **The lifetime cap.** \(L\) here is the lifetime cap of §1's carrier term, not a pass's length \(L_{t,i}\). An
 appended block joins the window of the next root received after its append, and no plan of a window \(L\) or more
-after that one may hold it (`Params.lifetime`, `LIFETIME`: 60 windows, an hour at the stated window). A plan that does
-rejects with `lifetime`. So every post-seed block leaves the credited store within \(L\) windows, and the stacked
+after that one may hold it (`Params.lifetime`, a duration's windows, below). A plan that does rejects with `lifetime`. So every post-seed block leaves the credited store within \(L\) windows, and the stacked
 stock the carrier term charges is the input rate times \(L\) (§1, §8). A block the prover keeps longer, a prefix
 cache's for instance, is re-keyed: released, and its payload appended again at the store's next fresh index, which
 draws a fresh coin and so gives it a fresh bound key (§3), so its encoding is computed anew. A re-key's free is the
@@ -482,9 +481,33 @@ block appended in window \(w\), the one its append joined, is resident from \(w\
 a step before the first pass of window \(w + L\), therefore falls at age \(L - 1\) at the latest. At \(L = 1\) that is
 the window it was appended in, before it may be resident, and a block whose encode lands after the boundary is never
 credited. So a session that defers residency has \(L \ge 2\) (`Params.deferred`; the verifier refuses one at \(L = 1\)).
-Counting the lifetime from residency instead of from the append would allow \(L = 1\); that is a later decision, and it
-would change the Lean port's lifetime check and the property `LifetimeCapped`. The record names \(L\) (`lifetime`), and
-the remote session sends it with the session, so the prover re-keys in time.
+The record names \(L\) (`lifetime`), and the remote session sends it with the session, so the prover re-keys in time.
+
+\(L\) is a duration's whole windows: \(L = \max(L_{\min}, \lfloor D/T \rfloor)\) at \(D = 30\) s (`LIFETIME_NS`,
+`lifetime_windows`), \(L_{\min}\) 2 for a session that defers residency and 1 otherwise. That is 1 window at the stated
+60 s (2 deferred), 2 at 20 s deferred, and 30 at 1 s. The vLLM serving store defers residency and its hello says so
+(`StoreBackend.deferred`), and its map re-keys a window ahead, so a serving session refuses \(L < 2\) (`Serving`): at
+\(L = 1\) every line would re-key every live block. A served session at the stated window therefore has \(L = 2\). A
+paced session's windows are its groups, and its \(L\) counts them at their nominal length, the stretch over its groups
+(the verifier's; `Params` alone counts a group as the pace's stated window, the fewest the life allows): 353 for k = 1
+at 85 ms over a 60 s stretch (706 groups), and 6 for k = 82 at 61 ms (12 groups). The duration is what the carrier term
+needs. A carrier of a declared circuit's may work on a block from its append's coin until the block leaves, so what the
+carriers may hold grows with the passes in \(L\) windows: `Accounting.Guarantees.DeclaredCircuitRequirement` charges
+\(\lceil 1024 \cdot L c P N \cdot 4096 / E \rceil\) bits a pass for it, \(128\, L P c / E\) of the store, at the
+property's cap \(c\) a certified byte. A count of 60 windows was an hour at the stated window, which put that share at
+916% for 8B (\(c\) = 0.442, eight engines) and 190% for 70B (TP8, 0.0918), so the guarantee said nothing. Over 30 s of
+61 ms passes the share is 7.6% and 1.6%, and the guarantee's ε a session 8.6% and 2.6%
+(note:20261024T1630Z-report-carrier-life), at a session whose passes a window are fixed (paced, \(P = k\)) and whose
+windows draw at least 2,773 openings. No deployed KV-credited session is such a session yet: the gate's k = 1 groups
+draw fewer. A window longer than \(D\) still holds a block for \(L_{\min}\) windows: at the stated 60 s, 8B's ε is 16%,
+and 31.5% for a deferring prover such as the serving store (70B: 4.2% and 7.3%), so 10% at 8B needs windows or groups
+of at most about 35 s (17 s deferred). The cost of the short life is re-keys at the cap, about 5 GPU-µs a block at k = 3. At the served models'
+page lives, 30 s re-keys about 0.004 GPU a GPU at 8B and 0.05 at 70B (note:20261018T0745Z-report-kv-credit-frontier).
+Each pass still reads every live block, and the memory line, which credits registered blocks, doesn't read \(L\).
+Counting the life from residency instead of from the append would allow \(L = 1\) under deferred residency, but it
+would buy the carrier term nothing: a carrier's work starts at the append's coin, so the term charges the windows from
+the append whenever the count starts, and since the prover chooses when a block becomes resident, a count from
+residency would let it lengthen the life the term has to charge.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
@@ -878,7 +901,8 @@ A paced session (`Params.pace`, `Pace(k, window_ns)`) releases a live coin every
 of at most \(k\) passes under a challenge of its own, from the indexed challenger like every window's, with its own
 openings coin, and the last, the closing window, follows at least one other. The stated window doesn't hold between a
 paced session's windows (`Params.window_ns` is then the least time from a challenge to the next, 1 ns in the drivers):
-`Pace.window_ns` is the stated \(T\) its γ is declared over ("Declared outputs"). Window \(t\)'s boundary message is
+`Pace.window_ns` is the stated \(T\) its γ is declared over ("Declared outputs"), and the lifetime cap \(L\) counts
+groups (§4, "The lifetime cap"). Window \(t\)'s boundary message is
 due once \(t\) has \(k - 1\) roots, so that the pass in flight is its last
 (at \(k = 1\), once window \(t - 1\) has its root, and window 0's at once), and leaves at the latest at
 \(\max(b_{t-1} + (k - 1) A, D_{t-1})\) (`Session.next_boundary_ns`). So the honest prover never waits on a coin, and a
@@ -930,6 +954,17 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the sketch's (`timing.sketch_failure`).
+
+  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
+  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
+  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
+  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
+  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
+  computed), and the line of record says it is conditional on it (`auditor_line.json`'s
+  `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
+  node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
+  credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
+  of the boundary links over its span show other ingress.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).

@@ -351,14 +351,16 @@ class SoWindow(DO.Window):
         self.t_b0 = self.t_after_end = 0.0
 
     def _a_step_set(self) -> None:
-        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows and its scales' run of
-        `scale_all`; `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
+        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows, c = `DO.a_chunks` (K) leaves a
+        row (the group read K / c bytes a leaf), and its scales' run of `scale_all` (a scale every c leaves);
+        `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
         ks, t, tabs, at = sorted(self.a_calls), self.t, [], 0
         for k in ks:
-            n = len(self.a_calls[k])
-            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), n * t, {"step": (1, 0)}), n * t,
-                            data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
-                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
+            n, c = len(self.a_calls[k]), DO.a_chunks(k)
+            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), c * n * t, {"step": (1, 0)}), c * n * t,
+                            data=self.slot_groups[k].view(torch.uint8), stride=k // c, body=k // c, length=k // c + 4,
+                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, chunks=c,
+                            lab=(f"a/{k}@", "")))
             at += n
         v = os.environ.get(A_LVF_ENV)
         lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
@@ -366,6 +368,7 @@ class SoWindow(DO.Window):
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
+        self.ev_a = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
 
     def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
         if self.put_async:
@@ -374,9 +377,12 @@ class SoWindow(DO.Window):
             super()._put(dst, src)
 
     def a_step_build(self) -> None:
-        """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
+        """On the current stream, after the forward: the step's K tables and each call's a-step leaf (between `ev_a`,
+        the step's a_tables_ms)."""
+        self.ev_a[0].record()
         self.c.build(self.pre["ak"], self.stepv[0:1])
         self.a_leaves.copy_(self.pre["ak"].roots.view(-1, 8).index_select(0, self.a_gidx))
+        self.ev_a[1].record()
 
     def _epoch(self) -> None:
         self._start()
@@ -964,10 +970,15 @@ class SoWindow(DO.Window):
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
               "coin_late_ms": 1e3 * t_late}
+        if self.a_step:
+            ph["a_tables_ms"] = self.ev_a[0].elapsed_time(self.ev_a[1])
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
-            ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
-            ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
+            # under TAIL=2 the root came from the tail's own word, which the host can read before the stream is past
+            # ev_w[2] and ev_w[3]: a step whose stream isn't there yet has no tail times
+            if not zc or self.ev_w[3].query():
+                ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
+                ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
             if self.hmark:
                 ph["h_tail_ms"] = self.ev_w[1].elapsed_time(self.ev_h[0])
                 ph["h_read_ms"] = self.ev_w[3].elapsed_time(self.ev_h[1])

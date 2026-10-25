@@ -22,8 +22,8 @@ advice and only the disclosure (`stubs`, `_registered`) changed.
 The fix (NET-E2E, stacked on #3788), which these cases now hold as regressions: every adopted arm's advice is held by
 content (`chain.held_to`): its root is the registered root, and the registration's opening opens it to the report's
 advice of the window (`chain.opens`), which the report's `ok` requires; the bit count never passes. `at_serve_time` is
-read off the registration's own time against the window's close in the endpoint's trace (`chain.closes`), never the
-job's flag.
+read off the registration's own time, before the arm's draw (its `advice_before_draw` receipt) and no later than the next
+window's close in the endpoint's trace (`chain.closes`), never the job's flag.
 """
 from __future__ import annotations
 
@@ -46,15 +46,18 @@ def _served(ep=EP):
     return info, b
 
 
-def _serve_arm(d, name, w, bits, advice_root, *, forged=False):
+def _serve_arm(d, name, w, bits, advice_root, *, forged=False, before_draw=None):
     """A `--serve-run` arm of the endpoint's Commit window ``w`` whose committed advice has root ``advice_root`` and v0
-    bit count ``bits``. Its serve detail self-declares the endpoint's own (public) run id and root for ``w``."""
+    bit count ``bits``, and whose rank's `advice_before_draw` is ``before_draw`` (absent when None). Its serve detail
+    self-declares the endpoint's own (public) run id and root for ``w``."""
     c = next(x for x in chain._jsonl(EP / "windows.jsonl") if int(x["window"]) == w)
     adv = {"root": advice_root, "bits": bits}
     rank = {"ok": True, "audit": {"accepted": not forged, "wrong_units": None if forged else {"bound": 3}},
             "population": 10, "draw": [1, 2], "seconds": 1.5, "source": "stand-in", "negatives": {"a": True}}
     if forged:
         rank["forged"] = {"ok": True}
+    if before_draw is not None:
+        rank["advice_before_draw"] = {"ok": before_draw}
     s = {"ok": True, "forged": forged, "world": 1, "advice": adv, "ranks": {"0": rank}, "run_root": c["run_root"],
          "serve": {"ok": True, "codes": [], "window": w,
                    "detail": {"window": w, "run_id": c["run_id"], "published_root": c["run_root"], "advice": adv}}}
@@ -117,14 +120,15 @@ def test_the_content_tie_is_opens_and_every_adopted_arm_takes_it(tmp_path):
 
 def test_at_serve_time_is_read_off_the_registration_never_the_job(tmp_path):
     """`--prove-path-registered`'s `at_serve_time` is no say: the same registration reads the same whatever the job
-    claims, after serving when its time is after its window's close in the endpoint's trace and at serve time when not."""
+    claims, after serving when its time is after the next window's close in the endpoint's trace and at serve time when
+    it is before its draw (the arm's own receipt) and not after that close."""
     ep = tmp_path / "ep"
     shutil.copytree(EP, ep)
     info, b = _served(ep)
     cnt = {x["window"]: x for x in b["commit_windows"]}[1]["v0_bits"]
     own = json.loads((ep / "advice/w1/registration.json").read_text())["binding"]["advice"]["root"]
     d = tmp_path / "arm"
-    _serve_arm(d, "served", 1, cnt, own)
+    _serve_arm(d, "served", 1, cnt, own, before_draw=True)
     closed = chain.closes(chain._jsonl(ep / "advice_trace.jsonl"))[1]
     lie = {"1": {"by": "the lane", "at_serve_time": True}}
 
@@ -139,12 +143,15 @@ def test_at_serve_time_is_read_off_the_registration_never_the_job(tmp_path):
     assert g_late["bound"] is True and g_lie["bound"] is True and g_late["ok"] == g_lie["ok"] is True
     late, lied = (g["arms"]["w1 served"]["commit"]["registered"] for g in (g_late, g_lie))
     assert late["at_serve_time"] is lied["at_serve_time"] is False and late["at"] == lied["at"] != _LATE["1"]["at"]
-    assert "after serving, by the lane, 14.2 min after its Commit window closed" in pp_stub(g_lie)
-    assert chain._registered(lied) == "after serving, by the lane, 14.2 min after its Commit window closed"
+    late_text = ("after serving, by the lane, 852.0 s after its Commit window closed, 851.3 s after the next window "
+                 "closed")
+    assert late_text in pp_stub(g_lie)
+    assert chain._registered(lied) == late_text
 
     os.utime(ep / "advice/w1/registration.json", (closed - 1.0,) * 2)
     g = chain.prove_path([d], info, b["bound"], b, ep, _LATE)
     assert g["arms"]["w1 served"]["commit"]["registered"]["at_serve_time"] is True
     assert pp_stub(g) and "w1's advice was registered" not in pp_stub(g)
     assert chain._registered(g["arms"]["w1 served"]["commit"]["registered"]) == (
-        "by the lane at serve time (r-reg), 1.0 s before its Commit window closed")
+        "by the lane at serve time (r-reg), 1.0 s before its Commit window closed, before its draw and 1.7 s before "
+        "the next window closed")

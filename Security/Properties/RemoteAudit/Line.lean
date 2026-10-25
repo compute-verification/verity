@@ -1,5 +1,6 @@
 import Definitions.Pouw.Basic.Prob
 import Models.Accounting.Assumptions.RemoteHeld
+import Models.Accounting.Assumptions.RemoteOutside
 import Models.Accounting.Assumptions.RemoteDraw
 import Properties.RemoteAudit.Line.Record
 import Properties.RemoteAudit.Line.Premises
@@ -15,17 +16,18 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
 * **LineHeld** (link-charged, `forms[1]`): on any node, trace and opening draw of `min(s, U_t)` receipts a window at
   the session's `samples` s, whose trace of record (`ofRecord`, the trace with the Lean verifier's verdict on the
   record as its own) meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`,
-  `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`, `SketchBound` at `δs`, and the draw's
-  `Live`, `Refused`, `Counted`) and the record's code-to-model premises (`Registered`, `SizesOfRecord`, `DrawFits`,
-  `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the record's session and the
-  line it reads off the Lean verifier's record (`lineOf`: its groups, windows and registered blocks the record's)
-  credits a stretch more than the trace held over its span (`Credits`) is at most `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t)`,
-  `δ` the one the line reads its pooled bound at (`Node.delta`, a nonnegative rational; the line computes at none
-  outside `(0, 1)`) and `adv_t` the advantage on `prf t` of window `t`'s distinguisher at that `δ`
-  (`Session.distinguisher`). The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` …
-  `Node.chipBlocks`), and the openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first
-  blocks `prf t` gives window `t`'s coin, at most `m < 2^448` receipts a window (`DrawFits`), the sampler's fallbacks
-  `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
+  `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`, `SketchBoundAt` at `δs` and
+  `NoOutsideCompute`, statement C in full: no device outside the node computes on a registered block or a receipt
+  during the session, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
+  (`Registered`, `SizesOfRecord`, `DrawFits`, `Properties.RemoteAudit.Line.Premises`), the probability that the Lean
+  verifier accepts the record's session and the line it reads off the Lean verifier's record (`lineOf`: its groups,
+  windows and registered blocks the record's) credits a stretch more than the trace held over its span (`Credits`) is
+  at most `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a
+  nonnegative rational; the line computes at none outside `(0, 1)`) and `adv_t` the advantage on `prf t` of window
+  `t`'s distinguisher at that `δ` (`Session.distinguisher`). The rates are the node's in the model's units, a tick a
+  nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings are the deployed draw's (`Accounting.Remote.Draw`:
+  `Key.subset` on the first blocks `prf t` gives window `t`'s coin, at most `m < 2^448` receipts a window (`DrawFits`),
+  the sampler's fallbacks `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
 They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`, the line's W covering
@@ -119,12 +121,13 @@ advantage on `prf t` of window `t`'s distinguisher at it. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (n m κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m (fun _ => node.params.samples) κ X)
-    (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ),
+    (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ) (O : Outside (ofRecord T node rec)),
     Links (ofRecord T node rec) node.link node.linkBurst →
     SquaringCeiling (ofRecord T node rec) node.squarings node.encode node.rebuildBurst →
     Disks (ofRecord T node rec) node.disk node.diskBurst → ChipCeiling (ofRecord T node rec) node.chipBlocks →
     Routed (ofRecord T node rec) → Paced (ofRecord T node rec) (recordPace node rec) → Covers (ofRecord T node rec) →
-    SketchBound (ofRecord T node rec) δs → DrawFits m → Live D → Refused D prf rest (ofRecord T node rec) →
+    SketchBoundAt (ofRecord T node rec) O δs → NoOutsideCompute (ofRecord T node rec) O →
+    DrawFits m → Live D → Refused D prf rest (ofRecord T node rec) →
     Counted D (ofRecord T node rec) → Registered (ofRecord T node rec) node →
     SizesOfRecord D (ofRecord T node rec) node rec →
     Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ HeldAt (ofRecord T node rec) ω node (rec ω) 1) ≤
@@ -136,12 +139,13 @@ block coming in over the node's boundary links (`Identity`) in place of their ce
 def LineHeldIdentity : Prop :=
   ∀ (node : Node) (n m κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m (fun _ => node.params.samples) κ X)
-    (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ),
+    (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ) (O : Outside (ofRecord T node rec)),
     Identity (ofRecord T node rec) →
     SquaringCeiling (ofRecord T node rec) node.squarings node.encode node.rebuildBurst →
     Disks (ofRecord T node rec) node.disk node.diskBurst → ChipCeiling (ofRecord T node rec) node.chipBlocks →
     Routed (ofRecord T node rec) → Paced (ofRecord T node rec) (recordPace node rec) → Covers (ofRecord T node rec) →
-    SketchBound (ofRecord T node rec) δs → DrawFits m → Live D → Refused D prf rest (ofRecord T node rec) →
+    SketchBoundAt (ofRecord T node rec) O δs → NoOutsideCompute (ofRecord T node rec) O →
+    DrawFits m → Live D → Refused D prf rest (ofRecord T node rec) →
     Counted D (ofRecord T node rec) → Registered (ofRecord T node rec) node →
     SizesOfRecord D (ofRecord T node rec) node rec →
     Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ HeldAt (ofRecord T node rec) ω node (rec ω) 0) ≤

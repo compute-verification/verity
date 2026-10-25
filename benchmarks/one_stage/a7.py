@@ -101,6 +101,9 @@ NR = TB + TABLE_ROWS // RPB
 VW = RU.value_bits(SLOTS)
 REQUESTS, ACTIVE, PAUSE = 10, 4, 0.15
 WINDOWS = 4
+#: the remote session's lifetime cap in windows (the memory-map unit's `life`, a U16): more than it has, so no block
+#: re-keys
+LIFE = 60
 #: each written value's epochs in the layout row: its production block's and one re-key's
 EPOCHS = 2
 #: the remote session's draws a window, each proved by check 3's unit (`opening`); at 2 the seeded run draws registered
@@ -316,7 +319,8 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
     rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
-    p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512)
+    p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
+                     lifetime=LIFE)
     clock = Clock()
     s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                    not_before_ns=0, clock=clock)
@@ -890,7 +894,7 @@ def main() -> int:
     sp, sm = SimpleNamespace(**SP), SimpleNamespace(**SM)
     plan_rows, map_rows = RU.plan_rows(sp), RU.memory_map_rows(sm)
     pi = RU.pass_words(sm, session_passes(req.steps))
-    pa, ma = instances(sd, layout, store, sp, sm, plans, pi, audit.LIFETIME)
+    pa, ma = instances(sd, layout, store, sp, sm, plans, pi, LIFE)
     if [RU.plan_match(sp, **{k: x[k] for k in ("count", "regmask", "kvmask", "gmask", "lam", "plan", "tok")}) for x in pa] != [1] * a.steps:
         raise SystemExit("a step's plan instance is refused by the reference")
     if [RU.memory_map(sm, **x) for x in ma] != [1] * a.steps:
