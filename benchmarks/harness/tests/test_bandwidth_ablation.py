@@ -40,8 +40,7 @@ def test_the_ablations_are_bandwidth_arms_with_the_top_up_off_and_spans_on(modul
         arm = getattr(ablation, name)
         assert isinstance(arm, bench_arm.BandwidthArm)
         assert (arm.id, arm.encoded, arm.control, arm.resident) == (arm_id, encoded, bench_arm.PLAIN.id, False)
-        assert arm.settings() == {"topup": False, "spans": True, "kv_receipts": True, "codec_rounds": 3,
-                                  "topup_sms": 0}
+        assert arm.settings() == {"topup": False, "spans": True, "kv_receipts": True, "codec_rounds": 3}
         assert arm_id not in bench_arm.CREDITED
         judged = bench_arm.credit(arm_id, topup=False, spans=True, empty_runs=0)
         assert judged["passes"] and not judged["credited"]
