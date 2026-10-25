@@ -23,7 +23,8 @@
 #      or H1S_OPENED (an extract's private openings: one node's share of the lanes, H1L_LANES, the negatives skipped
 #      with H1S_SKIP=tampered-zy,other-call-a); H1S_EXTRACT_ONLY=FILE: keep the extract's openings there (0600) and stop
 #      or H1S_OPENED_AT=FILE: a node path (a private directory) the openings are copied to while prepare lowers the lane
-#      circuit, waited for up to H1S_WAIT seconds (14400), then moved into the scratch
+#      circuit, waited for up to H1S_WAIT seconds (14400), then moved into the scratch; with H1S_DESCRIPTOR, prepare's
+#      lane statement is the one derived from that window Program (served.py prepare --descriptor)
 #      H1L_SESSION_GB, H1L_STAGGER (60): admit a firewalled session only with that much free in the cgroup
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
 #      H1L_VERIFY_EACH (1)
@@ -110,8 +111,11 @@ fi
 
 # ---- the statements ------------------------------------------------------------------------------------------------------
 log "h1-served: K=$K tile=${H1_TILE:-v1} firewall $FW, sessions $PAR at a time, Lean $LPAR at a time"
+DESC=()
+[ -z "${H1S_SMOKE:-}" ] && [ -n "${H1S_DESCRIPTOR:-}" ] && DESC=(--descriptor "$H1S_DESCRIPTOR")
 $TIME "$OUT/prepare.time" "$PY" "$H/served.py" prepare --opened "$OP" --work "$WK" --jobs "${H1L_JOBS:-8}" \
   --lanes "${H1L_LANES:-all}" --skip "${H1S_SKIP:-}" --name "h1-served-${RESEARCH_RUN_ID:-local}" --k "$K" \
+  ${DESC[@]+"${DESC[@]}"} \
   ${H1S_OPENED_AT:+--wait "${H1S_WAIT:-14400}"} > "$OUT/prepare.out" 2> "$OUT/prepare.err"
 rc=$?
 if [ -n "${H1S_OPENED_AT:-}" ] && [ $rc = 0 ]; then mv "$H1S_OPENED_AT" "$W/opened.json"; OP=$W/opened.json; fi

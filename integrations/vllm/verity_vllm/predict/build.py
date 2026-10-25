@@ -37,7 +37,7 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
-from verity_vllm.program.prune import dead_free
+from verity_vllm.program.prune import dead_free as dead_free_form
 
 from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
@@ -708,12 +708,13 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
 
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True, C: int = 0) -> BuildResult:
+                  with_desc: bool = True, C: int = 0, dead_free: bool = False) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
     value rows a `prefix` input holds after the request's own; the prefill computes rows C..LP-1. A request on one rank drops its dead
-    units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads."""
+    units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
+    `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
@@ -771,7 +772,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     B.ret_type = out.type
-    body = dead_free(B.finish(out))[0] if wrapper == "request" and world == 1 else B.finish(out)
+    body = dead_free_form(B.finish(out))[0] if wrapper == "request" and (world == 1 or dead_free) else B.finish(out)
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
     if world > 1:

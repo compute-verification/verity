@@ -298,7 +298,10 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
             errors[nm] = err
     names = [*arms, *stocks]
 
+    at = run.epoch_calls()
+
     def fresh(nm):
+        run.repeat_at = at          # every compared pass from one call index, so their commitments can repeat
         run.end_pass()
         run.hashing, run.whole_defer = arms[nm][0], arms[nm][1]
 
@@ -416,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         gam = {r: float(glm53.gamma(glm53.scheme(f, a.scheme), n, k)) for r, f in glm53.FADD_READINGS.items()}
         for m in ms:
             x = torch.randn(m, k, device=dev, generator=gen).to(torch.bfloat16)
-            ys = {}
+            ys, at = {}, run.epoch_calls()
 
             def pearlc(nm: str, hashing: bool, schedule: str, graphs: bool, x=x, w=w, W=W):
                 """The arm's call, and before it a fresh pass under `hashing`, `schedule` and `graphs` (the open pass
@@ -425,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
                     ys[nm] = run.gemm(w, x, W, None)
 
                 def before():
+                    run.repeat_at = at      # every compared pass from one call index, so their commitments can repeat
                     run.end_pass(schedule=schedule)
                     run.hashing, run.graphs = hashing, graphs
                 return f, before, run.end_pass
@@ -468,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
             want, y_want = ends["pearlc"][0], ys["pearlc"].clone()
             agree = {}
             for nm, (sc, g) in pearls.items():
+                run.repeat_at = at
                 run.end_pass(schedule=sc)
                 run.hashing, run.graphs = True, g
                 run.poison()

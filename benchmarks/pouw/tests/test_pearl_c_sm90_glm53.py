@@ -249,6 +249,10 @@ class Run:
         self.card, self.order, self.device = card, order, "cuda"
         self.graphs, self.hashing, self.whole_defer, self.leak = True, True, False, None
         self.log, self._whole, self.units, self.ran, self.poisoned = [], None, 0, [], False
+        self.repeat_at = None
+
+    def epoch_calls(self):
+        return self.units
 
     def whole_key(self):
         return (self.hashing, self.whole_defer and self.hashing) if self.graphs else None
