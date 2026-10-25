@@ -174,9 +174,21 @@ def _time(fn, *a) -> float:
     return time.perf_counter() - t
 
 
+def p2_decode(blocks: bytes, salt: bytes) -> None:
+    """P2 v4's decode of whole blocks of segment 0 (`pous.schemes.p2.decode_segment`'s arithmetic and keys, without its
+    codeword check, which random blocks fail): what a certifier that commits the decoded weights pays first."""
+    from verity.core.protocols.pous.schemes import p2 as P2
+    params = P2.P2Params(*P2.POINT)
+    f, keys = P2._field(params), P2.segment_keys(params, salt, 0)
+    for j in range(len(blocks) // P2_BLOCK):
+        k, t = keys(j)
+        c = int.from_bytes(blocks[P2_BLOCK * j:P2_BLOCK * (j + 1)], "big") % f.p
+        (f.sq(f.sigma(f.sq(c), k)) - t) % f.p
+
+
 def per_core(rows: int, blocks: int) -> dict:
     """One process's rates: µs a 256-byte row of the certifier's commitment, its parts, µs a 2,056-byte P2 block of the
-    store's root, raw SHA-512 and the generator."""
+    store's root and of its decode, raw SHA-512 and the generator."""
     rng = np.random.default_rng(os.getpid())
     data = rng.integers(0, 256, (rows, ROW_BYTES), dtype=np.uint8)
     dom = G.domain(PROGRAM, "w", ROW_WORDS, rows)
@@ -193,6 +205,8 @@ def per_core(rows: int, blocks: int) -> dict:
     sl = store_leaves(store, st)
     t_sleaves = time.perf_counter() - t0
     t_snodes = _time(rfc6962, sl)
+    dec = max(1, blocks // 4)
+    t_dec = _time(p2_decode, store[:dec * P2_BLOCK], os.urandom(24))
     buf = os.urandom(64 << 20)
     t_raw = min(_time(lambda: hashlib.sha512(buf).digest()) for _ in range(3))
     us = 1e6
@@ -201,7 +215,7 @@ def per_core(rows: int, blocks: int) -> dict:
             "hm96_parts_us": {"salt": t_salt / rows * us, "mask": t_mask / rows * us,
                               "leaves (x, mask, c, hm96 leaf, frame leaf)": t_leaves / rows * us,
                               "nodes": t_nodes / rows * us},
-            "store_block_us": (t_sleaves + t_snodes) / blocks * us,
+            "store_block_us": (t_sleaves + t_snodes) / blocks * us, "p2_decode_block_us": t_dec / dec * us,
             "raw_sha512_mb_s": len(buf) / t_raw / 1e6, "raw_compression_ns": t_raw / (len(buf) / 128) * 1e9,
             "urandom_mb_s": rows * INST.salt_bytes / t_salt / 1e6}
 
@@ -232,6 +246,7 @@ def extrapolate(sh: dict, one: dict, runs: list[dict]) -> dict:
     native_row = 12 * c + 0.384 + INST.salt_bytes / one["urandom_mb_s"]
     native_block = 20 * c
     out = {"hm96_core_s": rows * one["hm96_row_us"] / 1e6, "store_core_s": blocks * one["store_block_us"] / 1e6,
+           "p2_decode_core_s": blocks * one["p2_decode_block_us"] / 1e6,
            "hm96_native_core_s_est": rows * native_row / 1e6, "store_native_core_s_est": blocks * native_block / 1e6,
            "hm96_one_value_padded_core_s": (rows * one["hm96_row_us"]
                                             + (sh["one_value_padded_rows"] - rows) * one["hm96_parts_us"]["nodes"] * 2)
@@ -273,7 +288,8 @@ def main(argv=None) -> int:
           f"({ROW_BYTES / one['hm96_row_us']:.1f} MB/s), store {one['store_block_us']:.2f} µs/block "
           f"({P2_BLOCK / one['store_block_us']:.0f} MB/s), raw SHA-512 {one['raw_sha512_mb_s']:.0f} MB/s; "
           f"core-s: hm96 {e['hm96_core_s']:,.0f} (native est. {e['hm96_native_core_s_est']:,.0f}), "
-          f"store {e['store_core_s']:,.0f} (native est. {e['store_native_core_s_est']:,.0f})", flush=True)
+          f"store {e['store_core_s']:,.0f} (native est. {e['store_native_core_s_est']:,.0f}), P2 decode "
+          f"{one['p2_decode_block_us']:.1f} µs/block, {e['p2_decode_core_s']:,.0f}", flush=True)
     for p, r in e["by_procs"].items():
         print(f"LOAD procs {p}: hm96 {r['hm96_s']:,.0f} s ({r['hm96_gb_s']:.2f} GB/s), store {r['store_s']:,.0f} s "
               f"({r['store_gb_s']:.2f} GB/s)", flush=True)
