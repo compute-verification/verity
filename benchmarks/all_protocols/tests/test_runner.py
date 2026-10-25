@@ -9,7 +9,7 @@
 * `TABLE` names every onsite component once, a leg is its file in `legs/`, and onsite's components are read from
   `CoreOnsite.lean` as written;
 * the horizon's union bound over periods, vacuous at the sum of δ reaching 1;
-* the loop's period keeps only the window's public files, and its circuit is the one registered before it ran.
+* the loop's period keeps only the window's public files, and its circuit is the one registered before it ran (slow).
 """
 from __future__ import annotations
 
@@ -208,6 +208,7 @@ def test_the_horizon_is_a_union_bound_over_periods():
     assert h["composed"] == "reject"
 
 
+@pytest.mark.slow
 def test_the_loop_period_keeps_only_public_files(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"})
     d, loop = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
