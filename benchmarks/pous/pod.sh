@@ -21,6 +21,8 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-scale [SCALE_STAGES=gpu,audit] [SCALE_LOG2=19,25] [FIT_PYTHON=<vLLM's python>
 #          FIT_CPUS=... FIT_MODEL=<id, or a snapshot directory when the HF cache has no refs>]   # p2_v1/scale.py into $OUT:
 #          the device encode rate, the store of 2^e blocks audited, vLLM beside it
+#   ... -- gpu-lease 8 -- bash benchmarks/pous/pod.sh IMPL=p2-encode ENCODE_ARGS='--salt HEX --segments S --shards A:B
+#          [--descending] [--blocks N] [--write DIR] [--stop-file PATH]'   # p2_v1/encode_store.py into $OUT, a worker per GPU
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
@@ -119,7 +121,7 @@ case "$GPU" in                                            # the census id is the
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
   *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
-  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<benchmarks/census/hardware.json id>"; exit 2; } ;;
+  *) [ -n "${HW:-}" ] || [ "$IMPL" = p2-encode ] || { echo "no census id for GPU '$GPU': pass HW=<benchmarks/census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}; P2_ARM=${P2_ARM:-p2-v3-gpu}
@@ -219,7 +221,7 @@ elif [ "$IMPL" = band-gpu ]; then
   clocks after
   exit $RC
 elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ] \
-     || [ "$IMPL" = p2-scale ]; then
+     || [ "$IMPL" = p2-scale ] || [ "$IMPL" = p2-encode ]; then
   gpu_env || exit 3
   record_host
   # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
@@ -246,6 +248,14 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
+  if [ "$IMPL" = p2-encode ]; then
+    "$PY" -c 'import gmpy2' 2>/dev/null || uv pip install -q --python "$PY" gmpy2 || exit 3
+    # shellcheck disable=SC2086  # ENCODE_ARGS is encode_store.py's arguments, split on spaces
+    "$PY" benchmarks/pous/p2_v1/encode_store.py --p2-lib "$P2LIB" --out "${OUT:-$O/bench}" ${ENCODE_ARGS:-}
+    RC=$?
+    clocks after
+    exit $RC
+  fi
   if [ "$IMPL" = p2-scale ]; then
     SO=${OUT:-$O/bench}; SC=$(mktemp -d); trap 'rm -rf "$SC"' EXIT; RC=0
     case ",${SCALE_STAGES:-gpu,audit}," in *,gpu,*)
