@@ -1,6 +1,6 @@
 """Autotune equivalence of an Inductor kernel's candidate launch configs -- shown on the committed data, in the treatment process.
 
-Daniel (R15 DECISIONS-3, R16 BRIEF §6 Compiled): "if the autotune choice affects the numerics, it is part of the specialization identity and
+Daniel's rule for compiled kernels: "if the autotune choice affects the numerics, it is part of the specialization identity and
 must be pinned; if it does not, show it (same outputs bit-for-bit) and record it".  Inductor's pointwise heuristic offers more than one
 launch config (XBLOCK x num_warps) and benchmarks them ONCE per process, keeping the winner -- so two processes (the control and the
 treatment arm, or the production run and a later one) may execute two different specializations of the SAME generated source (Qwen L40S B8
