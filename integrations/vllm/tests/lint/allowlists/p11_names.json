@@ -352,7 +352,6 @@
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/engine/profiles/family_facts.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2},
     {"file": "verity_vllm/engine/profiles/gen_dense_softcap_patterns.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2},
     {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "doc-round", "symbol": "MoEFusedExpertsPadded", "detail": "R1N"},
     {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "doc-round", "symbol": "_root_name", "detail": "R1N"},
