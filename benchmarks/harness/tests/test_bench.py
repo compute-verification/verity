@@ -1004,9 +1004,10 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
     class Run:
-        def __init__(self, y):
+        def __init__(self, y, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
             self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            self.commits = {"weights_root": "ab" * 64, **commits}
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
@@ -1023,13 +1024,20 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         def end(self):
             return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
 
-    run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
+    def exact_y(x, W):
+        return (x.float() @ W.float().T).to(torch.bfloat16)
+
+    run = Run(exact_y)
     exact = runner._pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
+    assert exact["coins"] == {"source": "in-process"}
     assert run.stepped
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
+    session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
+    live = runner._pearl_c_gate(Run(exact_y, coin_source="challenger", session=session))
+    assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "salt_after": "ab" * 64}
 
 
 def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
