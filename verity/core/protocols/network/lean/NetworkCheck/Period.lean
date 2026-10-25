@@ -295,16 +295,17 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
 def scheduleOf (j : Json) : V Schedule := do
   exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "lanes", "queue",
     "slots", "window"] "schedule"
-  let pos := fun (k : String) => do
+  let pos : String → V Nat := fun k => do
     let x ← Flock.J.nat j k "schedule"
     unless 1 ≤ x do throw s!"schedule: {k} is a positive integer"
     pure x
-  let s : Schedule := { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
-    egressCells := ← pos "egress_cells", ingressBuckets := ← pos "ingress_buckets",
-    ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
-    window := ← pos "window" }
+  let s : Schedule :=
+    { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
+      egressCells := ← pos "egress_cells", ingressBuckets := ← pos "ingress_buckets",
+      ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
+      window := ← pos "window" }
   unless cellHeader + 1 < s.cellBytes do throw s!"schedule: a cell holds its {cellHeader}-byte header and a byte"
-  unless s.cellBytes < 2 ^ 32 && s.allocation < 2 ^ 32 && s.window < 2 ^ 32 do
+  unless s.cellBytes < 2 ^ 32 ∧ s.allocation < 2 ^ 32 ∧ s.window < 2 ^ 32 do
     throw "schedule: B, S = lanes · slots and T = window are u32s"
   pure s
 
@@ -340,9 +341,10 @@ def paramsOf (j : Json) : V Params := do
   unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
   let program ← Flock.J.str j "program" "the object"
   unless isDigest program do throw "program: not a SHA-512 digest (128 lowercase hex digits)"
-  let form ← if keysOf j == paramsKeys then Form.clock <$> syncSetOf (← Flock.J.get j "sync_set" "the object") else do
-    let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
-    pure (Form.rows s (← s.digest) (← auditOf (← Flock.J.get j "scan" "the object") "scan"))
+  let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
+    else do
+      let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
+      pure (Form.rows s (← s.digest) (← auditOf (← Flock.J.get j "scan" "the object") "scan"))
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
@@ -394,8 +396,8 @@ def windowOf (j : Json) (ctx : String) : V Window := do
   unless clock do exactly j ["answer", "certificates", "registrations"] ctx
   let answer ← Core.Answer.ofJson (← Flock.J.get j "answer" ctx) s!"{ctx}.answer"
   let certificates ← (← Flock.J.arr j "certificates" ctx).mapM (certificateOf · s!"{ctx}.certificates")
-  let shown ← if clock then Shown.clock <$> certificateOf (← Flock.J.get j "clock" ctx) s!"{ctx}.clock"
-    else Shown.rows <$> (← Flock.J.arr j "registrations" ctx).mapM (rowsOf · s!"{ctx}.registrations")
+  let shown ← if clock then do pure (Shown.clock (← certificateOf (← Flock.J.get j "clock" ctx) s!"{ctx}.clock"))
+    else do pure (Shown.rows (← (← Flock.J.arr j "registrations" ctx).mapM (rowsOf · s!"{ctx}.registrations")))
   pure { answer, certificates, shown }
 
 def evidenceOf (b : ByteArray) : V Evidence := do
@@ -508,7 +510,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
     refuse s!"{what}: not the link's {d.value} rows at window {w}"
   unless r.parameters == Flock.hexOf sd do refuse s!"{what}: another schedule's digest than the bound one"
   unless r.cellBytes == B && r.rows == T && r.words == S * B / 2 && r.wordBits == outBits && r.rowSchema == rowSchema &&
-      r.layout == { buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } do
+      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } : Layout) do
     refuse s!"{what}: not the schedule's rows"
   let .ok dom := rowsDomain s sd p.session p.link d w | refuse s!"{what}: no domain"
   unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the link-window's domain"
