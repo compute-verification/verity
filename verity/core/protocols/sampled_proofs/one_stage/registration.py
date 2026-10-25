@@ -31,7 +31,7 @@
 * **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what serving
   committed (`served`) or a fresh commitment to values captured from serving (`stand-in`, whose link to the served root
   is provenance, not proof).
-* **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the
+* **Served domains** (`served_domain`, `verity.ml.commitments.served`'s): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
@@ -75,9 +75,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.served import SERVED_DOMAIN, served_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
@@ -88,7 +86,6 @@ FORMAT = "verity/registration/v1"
 FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
-SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
@@ -98,12 +95,6 @@ _HEX = re.compile(r"[0-9a-f]+")
 
 def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
-
-
-def served_domain(program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
-    binding = identity_digest_sha512(SERVED_DOMAIN, {"program": program, "partition": partition, "port": port, "schema": schema,
-                                                     "leaves": int(leaves), "run": run})
-    return CommitmentDomain(binding, -1, RangeIndexedDomain(0, int(leaves)), hash="sha512").domain_id.hex()
 
 
 def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],

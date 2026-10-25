@@ -149,12 +149,13 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     challenger's coins (or a sampler) under the expanded design, with a work draw's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
-  served root's commitment domain.
+  served root's commitment domain (`verity.ml.commitments.served`'s, which a serving stack commits under).
 - `draw`: `parse_law` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
   holds the proved units to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
-  and the population programs `population_program` and `mixed_population_program`.
+  and the population programs `population_program` and `mixed_population_program` (`verity.ml.circuits.population`'s,
+  which a serving stack builds its window's program with).
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
