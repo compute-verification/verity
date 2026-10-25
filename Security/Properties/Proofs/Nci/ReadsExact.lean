@@ -8448,6 +8448,68 @@ theorem downShape_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     (hScan : ∀ fuel, CalleeShape c fuel → CarryShape c fuel → ScanShape c fuel) : DownShape c :=
   fun fuel => (shapes c sc hd hB hA hAP hL0 hR hT hBatch hScan fuel).1
 
+/-- A batch's piece of one row and any other stride, position by position through `down`: `ShapeOk` segments. -/
+theorem batchPts_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
+    {segs : Array Seg} (h : batchPts c fuel q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  unfold batchPts at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  rw [range'_size] at h
+  have hpt : ∀ t, pos { q with base := q.at t, stride := 1, len := 1 } = [(q.tgt, q.at t)] := by
+    intro t
+    simp [pos, h1]
+  exact loop_mem _ (fun t => Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 }) (List.range q.len)
+    (fun t htm segs hs => by
+      have hm := at_mem_pos h1 (List.mem_range.1 htm)
+      exact hD _ segs (by simp [Desc.Piece.count, h1])
+        (by rw [hpt t]; intro x hx; simp only [List.mem_singleton] at hx; subst hx; exact hq _ hm)
+        (by rw [hpt t]; intro x hx; simp only [List.mem_singleton] at hx; subst hx; exact hf _ hm)
+        (by rw [hpt t]; intro x hx i hi; simp only [List.mem_singleton] at hx; subst hx; rw [ht] at hi; cases hi)
+        hs) segs h
+
+/-- **`BatchShape` from its cases**: a batch of a composite's piece row by row and position by position through
+`down` (`byRows_shape`, `batchPts_shape`), and in its one-run, stride-1 and whole-member-stride cases wherever those
+give `ShapeOk` segments. -/
+theorem batchShape_of (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel)
+    (hAff : ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → affineOf c k node q = some p → ShapeOk c.P c.d (Seg.one p))
+    (hOne : ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
+      q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
+      ∀ s ∈ segs.toList, ShapeOk c.P c.d s)
+    (hStride : ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 →
+      (q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0) →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchStride c fuel k node q = .ok segs →
+      ∀ s ∈ segs.toList, ShapeOk c.P c.d s) :
+    BatchShape c fuel := by
+  intro q segs k node ht hn hform hp h0 hff hq hf h
+  by_cases hL : (c.P.defs[node.fn]!).outLeaves = 0
+  · exact absurd h (down_batch0 c fuel q ht hff hn hform hp hL h0 segs)
+  rcases ha : affineOf c k node q with _ | p
+  · by_cases hr : q.rows > 1
+    · rw [down_batch_rows c fuel q ht hff hn hform hp hL h0 ha hr] at h
+      exact byRows_shape c fuel hD q (Nat.pos_of_ne_zero h0) hq hf
+        (fun x hx i hi => by rw [mem_pos_tgt hx, ht] at hi; cases hi) h
+    by_cases hs : q.stride = 1
+    · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
+      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) hs hq hf h
+    by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
+    · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
+      exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) hcp hq hf h
+    rw [down_batch_pts c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
+    exact batchPts_shape c fuel hD q ht (rows_one h0 hr) hq hf h
+  · rw [down_batch_affine c fuel q ht hff hn hform hp hL h0 ha] at h
+    simp only [Except.ok.injEq] at h
+    subst h
+    intro s hs
+    simp only [List.mem_singleton] at hs
+    subst hs
+    exact hAff q k node p ht hn hform hp hL h0 hq hf ha
+
 /-- A scan's ys `[lo, hi)`, `yl` leaves to an iteration, through `fromCallee` iteration by iteration: `ShapeOk`
 segments. -/
 theorem ys_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
