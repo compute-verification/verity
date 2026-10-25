@@ -8,7 +8,7 @@ lowered from (that is `verity_vllm.correspondence.runtime`, read by `acquire.cor
 The runner is not built on the meta path; its facts are declared (`runner.source`) -- the two facts `NativeHostCommitter.install` /
 `_select_modules` read from a live engine: the runner exposes `sample()` (True) and whether its `sampler` attribute is an nn.Module
 (`--sampler-module`; default False: the pinned vLLM's live engine shows no such module -- m1_capture's runtime_tree.json on the l40s
-b64 reference row, 2026-09-23 -- so the class tables' `runner.sampler` forward hook is not registered there either).
+b64 reference row -- so the class tables' `runner.sampler` forward hook is not registered there either).
 A live engine's tree carries the observed facts; `--runner-facts <live runtime_tree.json>` copies them.
 """
 from __future__ import annotations
