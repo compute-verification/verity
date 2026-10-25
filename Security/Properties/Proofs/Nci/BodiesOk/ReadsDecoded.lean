@@ -2,11 +2,16 @@ import Properties.Proofs.Nci.BodiesOk.ForReads
 import Properties.Proofs.Nci.ReadsExact
 
 /-!
-# `ReadsExact.Decoded`, `ReadsExact.RetParts` and `ReadsExact.ScanOut`, proved
+# `ReadsExact.Decoded`, `ReadsExact.RetParts`, `ReadsExact.ScanOut` and `ReadsExact.RootFacts`, proved
 
 `ReadsExact.PartNonneg` is `BodiesOk.PartNonneg` (`partNonneg_iff`), so `ForReads.decoded` is `ReadsExact.Decoded` of
 every decoded Program (`decoded_reads`), and `BodyFacts`' return is `ReadsExact.RetParts` (`retParts_reads`). `buildNode`'s `Shape` of a scan node is `ReadsExact.ScanOut` of every body
 (`scanOut_of_ok`, `scanOut_reads`).
+
+With the root a composite without parameters (`decode_root`), every callee decoded before its caller (`BodyFacts`)
+and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program whose order passes (`rootFacts`), so
+`Novel.ReadsExact` holds wherever its two open statements do, `ReadsExact.RootGates` and `ReadsExact.RootSet`
+(`readsExact_of_gates_set`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
@@ -66,5 +71,32 @@ theorem scanOut_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decod
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   exact scanOut_of_ok P hok memo d
+
+/-- **The decoder's facts `ReadsExact.RootSegs` reads hold of every decoded Program whose order passes**: no reached
+Definition calls the root, each reached one being at most the root (`reached_spec`) and each callee before its caller. -/
+theorem rootFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) : ReadsExact.RootFacts P := by
+  obtain ⟨hr, hp, hp0⟩ := decode_root bytes P hdec
+  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
+  have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  have hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d :=
+    fun d hd k hk => ((hok d hd).2.1 k hk).1
+  refine ⟨hr, hp, hp0, decoded_reads bytes P hdec, retParts_reads bytes P hdec,
+    fun m d => scanOut_reads bytes P hdec m d, hcf, fun d hd hrd k hk => ?_,
+    fun d _ hrd => (bodyOk_reached bytes P hdec hov d hrd).2⟩
+  have hle : d ≤ P.root := (reached_spec P (fun d => d ≤ P.root) (Nat.le_refl _)
+    (fun d' hd' _ k' hk' => by
+      show _ ≤ P.root
+      have hd'' : d' ≤ P.root := hd'
+      have := hcf d' (by omega) k' hk'
+      omega)).2 d hrd
+  have := hcf d hd k hk
+  omega
+
+/-- **`Novel.ReadsExact` from its two open statements**, `ReadsExact.RootGates` and `ReadsExact.RootSet`, with the
+decoder's facts (`rootFacts`). -/
+theorem readsExact_of_gates_set (hG : ReadsExact.RootGates) (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
+  ReadsExact.readsExact_of_rootReads
+    (ReadsExact.rootReads_of (ReadsExact.rootSegs_of (fun bytes P hd ho => rootFacts bytes P hd ho) hG) hS)
 
 end NciCheck.Properties.SecurityProofs.BodiesOk
