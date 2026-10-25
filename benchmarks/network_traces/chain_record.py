@@ -240,7 +240,7 @@ def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
             * any(not w.get("as_expected") for w in wins)
             + [f"network {'accepted' if net.get('accepted') else 'refused'}"]
             * (net.get("accepted") != (name == "honest") and escape is None)
-            + ["a witness piece in what the verifier received"] * bool(rec.get("leaked") or rec.get("verifier_found"))
+            + [f"witness pieces leaked to the verifier: {rec.get('leaked')}"] * bool(rec.get("leaked"))
             + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) holds "
                f"{(rec.get('control') or {}).get('blobs_found')} of {(rec.get('control') or {}).get('of')} pieces, "
                "so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
@@ -265,7 +265,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
                          "windows": len(wins), "accepted_windows": sum(bool(w.get("accepted")) for w in wins),
                          "lean_proved": sum(bool((w.get("proof") or {}).get("proved")) for w in wins),
                          "as_expected": sum(bool(w.get("as_expected")) for w in wins),
-                         "leaked": (m.get("received") or {}).get("leaked"), "ok": m.get("ok"),
+                         "leaked": (m.get("received") or {}).get("leaked"),
+                         "structured": (m.get("received") or {}).get("structured"), "ok": m.get("ok"),
                          "prove_s": round(sum((w.get("prove") or {}).get("session_s") or 0 for w in wins), 1),
                          "verify_s": round(sum(w.get("verify_s") or 0 for w in wins), 1)}
     honest = members.get("honest") or {}
@@ -419,7 +420,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
 
 def leak_markdown(doc: dict) -> str:
     d1, d2 = (f"{d:g}" for d in LEAK_DELTAS)
-    pct = lambda x: f"{100 * x:.3g}%"
+    pct = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:,.3g}×"
     lines = ["| period | machines | `prog` | K pooled, δ = 1% | share | K pooled, δ = 1e-6 | share | K per period "
              "| share | a link-window |", "|---|---|---|---|---|---|---|---|---|---|"]
     for r in doc["rows"]:

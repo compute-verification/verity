@@ -179,16 +179,23 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         return str(tmp_path / f"{name}.json")
 
-    steps.n2 = [run("honest", {"windows": [window] * 2, "network": {"accepted": True}}, [1, 2]),
+    structured = {"leaked": [], "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"},
+                  "control": {"holds_all": True}}
+    steps.n2 = [run("honest", {"windows": [window] * 2, "network": {"accepted": True}, "received": structured}, [1, 2]),
                 run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [1, 2])]
     got = cr.report(steps)
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
+    assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
+    steps.n2[0] = run("honest", {"windows": [window] * 2, "network": {"accepted": True},
+                                 "received": {**structured, "leaked": ["head egress 45 @320"]}}, [1, 2])
+    got = cr.report(steps)["steps"]["n2"]
+    assert got["why"].startswith("honest: witness pieces leaked to the verifier: ['head egress 45 @320']")
 
 
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
