@@ -187,7 +187,7 @@ theorem RowsAt.vals_eq {s : RecVStar.SchedRound} {rs : List ByteArray} {vs vs' :
   cases hb : s.2.2.2
   · rw [h.2.2 hb, h'.2.2 hb]
   · have e := h.2.1.symm.trans h'.2.1
-    rw [if_pos hb, if_pos hb] at e
+    rw [ite_eq_left hb, ite_eq_left hb] at e
     exact colBytes_inj (by simpa using congrArg Array.toList (ByteArray.mk.inj (List.cons.inj e).1))
 
 /-- **Two fits of one rep's rows with one skeleton have one rep's frames.** -/
@@ -312,7 +312,7 @@ theorem repReadsBack_of (hE : RepFits) : RepReadsBack := by
   have hx : ∃ pT : Flock.Proof × F128, FitsRep c (repRows c p T) pT.1 pT.2 := ⟨(p, T), hf⟩
   obtain ⟨h1, h2⟩ := fitUnique c _ p _ T _ hs.2.1 hf (Classical.choose_spec hx) p
   unfold readRep
-  rw [dif_pos hx, h1, absorbedFrom_self, h2]
+  rw [dite_eq_left hx, h1, absorbedFrom_self, h2]
 
 theorem rowsOf_rows {rs : List ByteArray} (h : RowsFit rs) : rowsOf (joinR (rs.map rowMsg)) = some rs := by
   rw [rowsOf_joinR (by rw [List.length_map]; exact h.1) (by
@@ -369,7 +369,7 @@ theorem linkR_capRows {sts : Array Stmt} {caps : Array (Array ByteArray)} (hs : 
   have hsum : (level0Lens sts).sum = (capRows caps).length := by
     rw [← capLens hs hc, capRows, List.length_flatten]
   unfold linkR
-  rw [if_pos hsum, cutLens_capRows hs hc]
+  rw [ite_eq_left hsum, cutLens_capRows hs hc]
 
 /-- **Rep `k` reads its table's level-0 cap among the honest round 0's rows.** -/
 theorem cap0_capRows {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {caps : Array (Array ByteArray)}
@@ -420,7 +420,7 @@ theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
       some (ps, ((List.range ps.size).map fun k =>
         framesOf (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)).flatten) := by
     unfold readPs
-    rw [if_pos hif, ← hlens, cutLens_flatten_eq, ← hps, hm]
+    rw [ite_eq_left hif, ← hlens, cutLens_flatten_eq, ← hps, hm]
     simp only [Option.map_some, List.map_map, Function.comp_def, range_map_getElem!]
   have hhead : (honestMsgs caps reps last).head? = some (joinR ((capRows caps).map rowMsg)) := rfl
   have hlast : (honestMsgs caps reps last).getLast? = some last := List.getLast?_concat
