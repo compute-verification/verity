@@ -27,7 +27,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/AdviceV1.lean  trusted: advice v1's charge, `ChargeCount_v1{N}`'s reference one for one: the
                                counting arithmetic coder (Tally, countStep), the book's KT estimate at min(run, 2),
                                a window's charge (window) and a run's (charges), the streams no window refuses (Streams)
-../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
+../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
 ../../Models/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: the leak bound through the wire with advice v1's charge
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
                                (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
@@ -158,7 +158,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 ## The records
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarantees.lean`, the leak bound's three
-(`Guarantees/AdviceString.lean`), advice v1's four (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean` and
+(`Guarantees/AdviceString.lean`), advice v1's four (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean` and
 `Guarantees/AdviceV1.lean`), the warden's three (`Guarantees/Warden.lean`) and the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
 by the lemma of the same statement whose name it spells in UpperCamelCase. All 33 are under `shape.frozen` as

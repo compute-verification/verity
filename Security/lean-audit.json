@@ -17047,7 +17047,7 @@
     "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
    ]
   },
-  "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
+  "Definitions.NetworkCertifier.Guarantees.AdviceV1Kraft": {
    "digest": "1fcd28e8fa747deab3ac260e1821914295e91618c53951b48551742430ce30bd",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1": "f72da5d22ba00982d6046c15c5368b06f2bf7fedb093fb209872842e438f8b8b",
