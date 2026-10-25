@@ -60,6 +60,42 @@ def pytest_collection_modifyitems(items) -> None:
             item.add_marker(sweep)
 
 
+_PROBE = os.environ.get("VLLM_MEM_PROBE")
+_probe_f = []
+
+
+def _probe_write(rec):
+    import json
+    if not _probe_f:
+        w = os.environ.get("PYTEST_XDIST_WORKER", "main")
+        _probe_f.append(open(os.path.join(_PROBE, f"{w}-{os.getpid()}.jsonl"), "a", buffering=1))
+    _probe_f[0].write(json.dumps(rec) + "\n")
+
+
+def _probe_rss():
+    with open("/proc/self/statm") as f:
+        return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+
+
+if _PROBE:
+    import resource
+    import time
+
+    def pytest_collection_finish(session):
+        _probe_write({"ev": "collected", "t": time.time(), "n": len(session.items), "rss": _probe_rss(),
+                      "maxrss": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024})
+
+    @pytest.hookimpl(hookwrapper=True)
+    def pytest_runtest_protocol(item, nextitem):
+        t0, r0 = time.time(), _probe_rss()
+        m0 = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+        c0 = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024
+        yield
+        _probe_write({"ev": "test", "id": item.nodeid, "t0": t0, "t1": time.time(), "rss0": r0, "rss1": _probe_rss(), "max0": m0,
+                      "max1": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+                      "cmax0": c0, "cmax1": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024})
+
+
 @pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
     """The row driver's sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
