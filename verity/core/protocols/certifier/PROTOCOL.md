@@ -1301,8 +1301,13 @@ and proves that at most `2^c` decision streams are charged `c` bits or fewer ove
 `2^bits`; a scaling keeps the weight, a decision's two outcomes split it, and the finish charges no more than the weight
 pays for, so the weights `2^(−charge)` sum to at most 1. So with advice v1 the advice string's bounds hold with no
 assumption on the charge (`SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`,
-`SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). The windows covered are decision-only: their four counts
-are sent as 0, which is `ChargeCount_v1`'s scope. Which slots ask (`en`) is not charged because it is not advice: the
+`SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). The windows these cover are decision-only: their four
+counts are sent as 0, which is `ChargeCount_v1`'s scope. Windows that send nonzero counts are covered once each is
+charged its decisions' charge plus a count code's length for its counts, under any count code whose lengths meet
+Kraft's inequality, as every prefix-free code's do (`SecurityProofs.EncardChargedLeCounted` and the three bounds
+`…V1Counted`): a window's weights are the decisions' times the counts', each summing to at most 1. The code is the
+same in every window and carries nothing across windows, and it is a parameter: a separate code, which is not how
+advice v1 sends counts (`code_v1` codes them inside the arithmetic coder, `ChargeCount_v2`'s window). Which slots ask (`en`) is not charged because it is not advice: the
 compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned by that
 slice's scan, and the carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`). The
 one hypothesis left is that `ChargeCount_v1`'s circuit computes Lean's `window`. circuit-check holds the circuit to the

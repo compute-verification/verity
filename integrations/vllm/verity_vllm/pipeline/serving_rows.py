@@ -19,7 +19,7 @@ The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "l
 cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window draws by the work table `work_table_of` derives from the
 registered compiler's transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest
 drawn as the stratified law draws it.  The members are its templates in order, each instance count read off the Build's
-Programs; the population program over them (``commit.serving_rows.population_program``: ``TemplatePopulations`` for several
+Programs; the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
 templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
@@ -100,7 +100,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
 
 so ``RoPEHead_v2{D=..}`` and ``GemmCoordinate_v4{K=..}``, the Boolean versions, are a RoPE head's and a GEMM coordinate's.
 
-Units go in request order, then Program row index, then head or coordinate (``commit.serving_rows.ORDER``).  In a prefill step the Program lists
+Units go in request order, then Program row index, then head or coordinate (``ml.windows.rows.ORDER``).  In a prefill step the Program lists
 a layer's q rows for every token before its k rows, so RoPE's heads are q heads for every prefill token, then k heads.
 """
 from __future__ import annotations

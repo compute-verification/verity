@@ -1,4 +1,4 @@
-"""The row tables of a serving-rows window (`commit.serving_rows.RowTable`), as serving commits them step by step and PoUW binds
+"""The row tables of a serving-rows window (`ml.windows.rows.RowTable`), as serving commits them step by step and PoUW binds
 ``pouw.roots`` to them.
 
 One row table per int8 quantize output: the token rows of one linear at one engine step, one ``hm96-sha512/row-seg/v1`` leaf each

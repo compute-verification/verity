@@ -110,10 +110,10 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   (`drawn`) and a select on a registration the stream never received (`unknown`), each refused before any coin is read.
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
   registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
-  (`commit.serving_rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
+  (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
   table's (below). `a5_warden.py` is their stand-in.
-* **Row tables** (`commit.serving_rows.Window.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
+* **Row tables** (`ml.windows.rows.Window.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
   (`service.ROOTS`, ``over``). Each chunk's public file is a shared-row file, its header's ``shared_rows`` held to the
@@ -393,8 +393,9 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
 
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
     """A drawn chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
-    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its value's root
-    replaced, and (a value of more than one row) every unit reading the next row."""
+    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
+    value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
+    ports' reads as registered."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port = next(iter(honest["ports"]))
@@ -408,7 +409,8 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
         alt = {x: y for x, y in st.items() if x != "registered_file"}
         if change is not None:
             alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps({**honest, "ports": {port: {**honest["ports"][port], **change}}}, sort_keys=True))
+            alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], port: {**honest["ports"][port], **change}}},
+                                                         sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
     return out
