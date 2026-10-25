@@ -84,7 +84,7 @@ def _lean(args: list[str]) -> int:
         source = _snapshot(Path(tmp))
         try:
             p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []), "--project", "verity",
-                                  "--source", str(source), "--cwd", "clone", "--wait", "--",
+                                  "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
                                   "python3", "tools/verity/lean/lean_changed.py", "--try", file],
                                  cwd=ROOT, stderr=subprocess.PIPE, text=True)
             said = []
