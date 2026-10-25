@@ -122,7 +122,7 @@ proofs is filing; TODO(proofs): link its Asks page. Until A is proved, the page 
   log2 of the at most Σ_{j ≤ bound} C(n, j) faulty sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
-**The `--zk` chain (2a)**, on main at 169118abc1. "Shared" marks a link the plain chain uses as it is. proofs has the
+**The `--zk` chain (2a)**, on main at e743d6d146. "Shared" marks a link the plain chain uses as it is. proofs has the
 last word on every Lean name and status in both tables.
 
 | Link | Lean name | Status, owner, date | File |
