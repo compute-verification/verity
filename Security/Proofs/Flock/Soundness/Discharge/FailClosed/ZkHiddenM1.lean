@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.Link
@@ -29,7 +29,8 @@ A refused hidden-output table carries the reference setup's regions and `contra`
   (`ksClosedM1`, `rateM1`), whenever `2^23 < ek`.
 * `DrawSetupZHJ.tabAt_M1W`, `table_M1W`, `refused_M1W`, `tableZHJ_M1W`, `planZHJ_M1W`: every table of `planZHJ` is at
   `M1W` (`Stmt.setupHidden`'s `checkInRange`, `Zk.schedule`'s `schedule_m1`, the inner code's `innerN_pow`), and
-  `ksAvgStrictZ_planZHJ_le_m1`, `ksAvgStrictZ_planZHJ_le_closed` and `rateZ_planZHJ_le` read the bounds at that plan.
+  `ksAvgStrictZ_planZHJ_le_m1` and `ksAvgStrictZ_planZHJ_le_closed` read the bounds at that plan (its rate cap is
+  `ZkHidden.hr_planZHJ_23`).
 * `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `δ_link` (`linkBoundZC`), is at most the largest
   `Σ_{u ∈ S} |io u|` over draws `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
   at most `k_d·r` at draws of `k_d` units with `|io u| ≤ r`.
@@ -100,7 +101,7 @@ theorem padTableError_le_of_check_wide (s : Schedule) (st : Stmt) (hst : st.InRa
       (padRepError_nonneg m k0 l₀ l₁ rest ext t e sbar hp hs st)).trans ?_
     have h := Rat.cast_le (K := ℝ) |>.2 hc
     refine h.trans (le_of_eq ?_)
-    first | norm_num | (push_cast; ring)
+    norm_num
 
 /-- The rational check at 1026 regions for `25 ≤ m ≤ 33`. -/
 theorem m1_check_wide_le_33 : ∀ m, 25 ≤ m → m ≤ 33 →
@@ -167,7 +168,7 @@ theorem sqrt_cast_le_of_le_mul {n r : ℕ} (h : n ≤ r * r) : Real.sqrt n ≤ r
   Real.sqrt_le_iff.2 ⟨Nat.cast_nonneg _, by rw [sq]; exact_mod_cast h⟩
 
 /-- **The hash sum at C-Flock ZK's schedules**: `Σ_{1 ≤ ℓ ≤ L} √(2^{log N_ℓ}·Q_ℓ·x) ≤ 25638·√x`. -/
-theorem hashSum_le_m1 (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) {x : ℝ} (hx : 0 ≤ x) :
+theorem hashSum_le_m1 (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) (x : ℝ) :
     ∑ ℓ ∈ Finset.Icc 1 (m1Schedule m).levels.length,
         Real.sqrt (2 ^ (lvOf (m1Schedule m) ℓ).logLen * (lvOf (m1Schedule m) ℓ).queries * x) ≤
       25638 * Real.sqrt x := by
@@ -180,7 +181,8 @@ theorem hashSum_le_m1 (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) {x : ℝ} (hx : 
         have e : (2 : ℝ) ^ (lvOf (m1Schedule m) ℓ).logLen * ((lvOf (m1Schedule m) ℓ).queries : ℝ) * x =
             (hashArg (m1Schedule m) ℓ : ℝ) * x := by
           unfold hashArg
-          first | (push_cast; ring) | push_cast
+          push_cast
+          ring
         rw [e, Real.sqrt_mul (Nat.cast_nonneg _)]
         exact mul_le_mul_of_nonneg_right (sqrt_cast_le_of_le_mul (hr ℓ hℓ)) (Real.sqrt_nonneg _)
     _ = (hashUp (m1Schedule m) : ℝ) * Real.sqrt x := by
@@ -229,9 +231,9 @@ theorem TabZK.bound_le_m1w (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (h
     · rw [ENNReal.ofReal_of_nonpos h.le]
       simp
   have hpt : l + r ^ 2 ≤ (3 : ℝ) / 2 ^ 206 := by
-    have := padTableError_le_m1_wide m h1 h2 _ hst
-    rw [← hsch, ← ht, ← he] at this
-    exact this
+    have e : padTableError T.sch (T.S.shape mPts) T.t T.e = l + r ^ 2 := rfl
+    rw [← e, hsch, ht, he]
+    exact padTableError_le_m1_wide m h1 h2 _ hst
   have hb : b ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(114 : ℝ))) := by
     rw [hbdef, hq]
     exact εInner_le_m1 hF hN hδ
@@ -306,13 +308,12 @@ theorem ksStrictZm1_le_closed (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT
   unfold ksStrictZm1 ksClosedM1
   obtain ⟨m, h1, h2, hsch, -, -, -, hN, -, -⟩ := hT
   set x := qF ^ 2 / 2 ^ (513 : ℝ) with hxdef
-  have hx : 0 ≤ x := by positivity
   have hsx := Real.sqrt_nonneg x
   have hH : ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
       Real.sqrt (2 ^ (lvOf (ts.get j).sch ℓ).logLen * (lvOf (ts.get j).sch ℓ).queries * x) ≤
         2 * 25638 * Real.sqrt x := by
     rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, hsch]
-    have := hashSum_le_m1 m h1 h2 hx
+    have := hashSum_le_m1 m h1 h2 x
     push_cast
     linarith
   have hNt : ∑ _r ∈ Finset.range 2, Real.sqrt ((ts.get j).N * (ts.get j).N * x) ≤ 2 ^ 14 * Real.sqrt x := by
@@ -361,7 +362,7 @@ theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : 
 
 section Qs
 
-variable {K : Type} [Field K] [Fintype K] [DecidableEq K] (A : Arith F K) {C : Audit.Circuit} {n : ℕ}
+variable {K : Type} [Field K] (A : Arith F K) {C : Audit.Circuit} {n : ℕ}
   (P : Audit.Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
@@ -484,14 +485,8 @@ theorem tableZHJ_M1W (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableZHJ dj y₀
 theorem planZHJ_M1W :
     ∀ S (R : Reg) (j : Fin (planZHJ (Reg := Reg) dj y₀ S R).length), ((planZHJ dj y₀ S R).get j).M1W := by
   intro S R j
-  simp only [planZHJ, List.get_ofFn]
+  rw [planZHJ_get dj y₀ S R j]
   exact tableZHJ_M1W dj y₀ S _
-
-/-- **Every table of the hidden-output plan has level-0 rate at most `rateM1 k`**, the `ρ` the link and count theorems
-take (`hr`). -/
-theorem rateZ_planZHJ_le (k : ℕ) :
-    ∀ S (R : Reg) (j : Fin (planZHJ (Reg := Reg) dj y₀ S R).length), rateZ (planZHJ dj y₀ S R) j k ≤ rateM1 k :=
-  fun S R j => rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) k
 
 /-- **`ε_ks` at the hidden-output plan is at most `ksAvgStrictZm1`** (`ksAvgStrictZ_le_m1w` at `planZHJ_M1W`). -/
 theorem ksAvgStrictZ_planZHJ_le_m1 (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
