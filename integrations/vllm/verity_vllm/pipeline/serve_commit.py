@@ -9,7 +9,8 @@ the step's rows, and at each close `served_record.Record.absorb` reads the windo
 `RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
 ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
-those are the committed ids' prefix. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
+those are the committed ids' prefix. The finish says who ended it: ``by`` ``client``, or ``server`` for a request still
+running when the server stopped or failed. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
 sent none). Each committed step gets a line of ``step_trace.jsonl`` at its window's close: its root, when its engine step ended,
 its rows and the committer's trace. ``marks`` hears each window's open and close (the scheduler step trace's window records,
 `engine.step_trace.StepTrace.window`).
@@ -36,7 +37,7 @@ import os
 import shutil
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -184,8 +185,11 @@ class CommitWindows:
                  clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time,
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
-                 on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None) -> None:
+                 on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
+                 request_cap: int = 0) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
+        self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
         self.served = dict(served) if served is not None else None   # the compile slice's statics: commit every window's rows
         self.arrivals: dict[str, int] = {}               # every admitted engine id -> its arrival id, in admission order
@@ -221,29 +225,39 @@ class CommitWindows:
             led.finished = True
             led.finish = {"reason": finish_reason, "stop_reason": stop_reason}
 
-    def aborted(self, engine_id: str) -> None:
+    def aborted(self, engine_id: str, by: str) -> None:
+        """The request ended unfinished, ``by`` its client (it went away) or the server (it stopped or failed)."""
+        if by not in ("client", "server"):
+            raise ValueError(f"an abort is by the client or the server, not {by!r}")
         led = self.ledgers.get(engine_id)
         if led is not None:
             led.finished = True
-            led.finish = {"reason": "abort", "stop_reason": None, "k": len(led.streamed)}
+            led.finish = {"reason": "abort", "stop_reason": None, "k": len(led.streamed), "by": by}
 
     def idle(self) -> None:
         """The engine has nothing to run: close the open window once it holds ``idle_close_steps`` steps."""
         if self.is_open and int(self.com._step_index) >= self.idle_close_steps:
             self.close()
 
-    def before_step(self) -> None:
+    def before_step(self, live: Iterable[str] = ()) -> None:
+        """``live``: the engine ids the next step may run. With ``request_cap``, the open window closes before a step that
+        would bring its distinct requests past the cap; the engine loop holds ``live`` to the cap, so the next window
+        opens within it."""
+        live = set(live)
         if self.is_open and (int(self.com._step_index) >= self.window_steps
-                             or (self.window_bytes and committed_bytes(self.com) >= self.window_bytes)):
+                             or (self.window_bytes and committed_bytes(self.com) >= self.window_bytes)
+                             or (self.request_cap and len(self.in_window | live) > self.request_cap)):
             self.close()
         if not self.is_open:
             self.open()
+        self.in_window |= live
 
     # -- windows
     def open(self) -> None:
         t0 = self.clock()
         self.window += 1
         self.step_t = {}
+        self.in_window = set()
         self.com.reset()
         self.com.install()
         self.open_s = self.clock() - t0
