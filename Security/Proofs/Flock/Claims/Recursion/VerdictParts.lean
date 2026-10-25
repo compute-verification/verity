@@ -12,8 +12,8 @@ no part would have to hold off any witnesses (`hrest`). Neither holds.
 
 `lastSplitP` is the split with the verdict replaced by pieces of the code side's choice (`pieces`, `pholds`), each one a
 part can own, and one obligation, `hpieces`: wherever the reading holds, the other four checks of `VerdictR` do and
-every piece does, the verdict holds. Those four stay as they are (`VerdictP.base`). `ownP` gives the base checks and the pieces their
-owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the lowering facts are then one per piece.
+every piece does, the verdict holds. Those four stay as they are (`VerdictP.base`). `ownP` gives the base checks and
+the pieces their owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the lowering facts are then one per piece.
 
 `staged_rep_drawn` is the coin side of a `rec-residuals` piece: at a staged part whose statement shows coins `c`,
 the rep that check 5 builds (`RecCoins.Inner.rep`, whose `verifierRows` give the `v` it pins) has, at each round `m`,
