@@ -3,8 +3,8 @@
 whose binding records name the templates by descriptor id. v0 of each, which names only the counts, is kept for the records
 made with it (`POPULATION_VERSIONS`).
 
-Sampled proofs' one-stage protocol applies its template queries to them (`one_stage.partition`, which names them too), and a
-serving stack builds its window's program with them: both sides build the same program from the same templates and counts.
+Sampled proofs' one-stage protocol applies its template queries to them (`one_stage.partition`, which names them too), and an
+integration builds its window's program with them: both sides build the same program from the same templates and counts.
 """
 from __future__ import annotations
 
