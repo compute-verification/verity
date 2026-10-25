@@ -725,21 +725,22 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             if m not in attn_bodies:
                 attn_bodies.append(m)
             st = c.statics
-            a = attn.setdefault((step_of(c.id), m), {"rows": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
+            a = attn.setdefault((step_of(c.id), m), {"rows": 0, "end": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
             a["rows"] += 1
+            a["end"] = max(a["end"], corr.rows.get(c.id, -1) + 1)     # the launch runs the query rows `dead_free` dropped (`runtime_rows`)
             a["T_max"] = max(a["T_max"], int(st.get("T", 0)))
     tap = "fa3.m1" if (hidden_family or "")[:3] == "fa3" else "fa2.m1"
     for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
-        layer = attn_bodies.index(mod)
+        layer, rows = attn_bodies.index(mod), max(a["rows"], a["end"])
         if hidden_family[:3] == "fa3":
-            geo = fmt.fa3_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq)
+            geo = fmt.fa3_geometry(a["T_max"], rows, a["NH"], a["KVH"], a["D"], n_seq)
         else:
             win = (attn_obs.get(impl(mod)) or attn_obs.get(mod) or {}).get("sliding_window")
             w0 = win[0] if isinstance(win, (list, tuple)) and win else (win if isinstance(win, int) else -1)
-            geo = fmt.fa2_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
+            geo = fmt.fa2_geometry(a["T_max"], rows, a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
         HB, M, NB, BN, gname = geo
         add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, fmt.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
-            geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": a["rows"]}, attention_module=impl(mod))
+            geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": rows}, attention_module=impl(mod))
 
     # --- MoE block planes (kernel geometry, v1's): per (MoE body, step) ----------------------------------------------------------------
     moe_layers: set[int] = set()
