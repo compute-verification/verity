@@ -1,6 +1,6 @@
 """H1's served rows as their ``hm96-sha512/row/v2`` bit rows' u16 words (`pouw_h1_served`'s tables): a call's A rows
-(`row_words`), a step's input ids (`ids_words`), a call's receipts (`receipt_words`) and its z/y records (`record_words`,
-`zy_words`)."""
+(`row_words`, as K's chunks `chunk_words`), a step's input ids (`ids_words`), a call's receipts (`receipt_words`) and its
+z/y records (`record_words`, `zy_words`)."""
 from __future__ import annotations
 
 from typing import Sequence
@@ -20,6 +20,18 @@ def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
     b = b.reshape(len(b), -1)
     s = np.ascontiguousarray(np.asarray(scales, "<f4").reshape(len(b))).view(np.uint8).reshape(len(b), 4)
     return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
+
+
+def chunk_words(codes: np.ndarray, scales: np.ndarray, n: int) -> np.ndarray:
+    """int8 code rows ``(r, K)`` and their f32 scales ``(r,)`` as ``n`` leaves a row (`weights.chunks` (K), SPLITK):
+    leaf ``n·i + c`` row i's codes ``[c·K/n, (c + 1)·K/n)`` then its scale, `row_words` of the codes' ``(n·r, K/n)``
+    view and each scale n times, ``(n·r, K/(2n) + 2)``. At n = 1 it is `row_words`. ValueError on an n that doesn't
+    divide K into whole u16 words."""
+    c = np.ascontiguousarray(np.asarray(codes, dtype=np.int8))
+    r, k = c.shape
+    if type(n) is not int or n < 1 or k % (2 * n):
+        raise ValueError(f"K = {k} is not {n} chunks of whole u16 words")
+    return row_words(c.reshape(n * r, k // n), np.repeat(np.asarray(scales, "<f4").reshape(r), n))
 
 
 def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
@@ -68,4 +80,4 @@ def zy_words(records: np.ndarray, rows: int, n: int, slots: int, tile: tuple[int
     return record_words(*ZR.split(records, rows, n), slots, tile)
 
 
-__all__ = ["EMPTY_ID", "ids_words", "receipt_words", "record_words", "row_words", "zy_words"]
+__all__ = ["EMPTY_ID", "chunk_words", "ids_words", "receipt_words", "record_words", "row_words", "zy_words"]

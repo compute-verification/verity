@@ -149,7 +149,7 @@ class TickingBackend(prover.CpuBackend):
 
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
-        read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
+        read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
         then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
         binding=None, **kv):
@@ -304,7 +304,8 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
     passes under each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th
     root arrives (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
     holds k passes, none discarded; γ is declared over the fixed windows of T from the first challenge to the last
-    deadline, and the session declares all three memory forms."""
+    deadline, and the session declares all three memory forms.  Its lifetime cap counts groups, those of their nominal
+    length (the stretch over its groups) in 30 s."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     T = 10**9
     pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k)
@@ -312,6 +313,7 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
     (r,), (pr,) = run("honest", paces=[pace])
     assert r["accepted"] and pr["accepted"] and r["windows"] == 6 and r["pace"] == pace
     assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T}
+    assert r["lifetime"] == r["record"]["public"]["lifetime"] == audit.lifetime_windows(T // 2) == 60
     assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
     assert [(w["released_ns"], w["boundary_ns"], w["arrivals_ns"]) for w in r["windows_seen"]] == [
         (s, b, list(a)) for s, b, a in schedule]
@@ -567,7 +569,8 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     pages, in HBM.  At a draw of every receipt the floor is 0, so each window credits the weights every pass holds,
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
-    credited only on the property's verdict, then less its carriers; the share and residual are of the node's HBM.
+    credited only on the property's verdict and the session's schedule check (its verdict stood in here: the check's
+    own tests are `remote_bandwidth`'s), then less its carriers; the share and residual are of the node's HBM.
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -608,8 +611,14 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
         assert x["credited"]["weights"] == pytest.approx(8 * B - x["lost_blocks"] * B)
         assert x["epsilon"] == pytest.approx(x["lost_blocks"] * B / x["basis"])
         assert x["credited"]["hbm"] == pytest.approx((1 - x["epsilon"]) * x["basis"])
-    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
-    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), **kw)
+    with pytest.raises(ValueError, match="schedule check"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
+    other = audit.Scheduled(record.registration, bytes(len(record.coins)), 0)
+    with pytest.raises(ValueError, match="schedule check"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), schedule=other, **kw)
+    checked = audit.Scheduled(record.registration, record.coins, 0)
+    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), schedule=checked, **kw)
+    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), schedule=checked, **kw)
     assert whole["kv_credited"] and whole["credited_bytes"] >= mem["credited_bytes"]
     for w, c, posts in zip(whole["windows"], carried["windows"], (w.post_seed for w in record.windows)):
         lost = w["lost_blocks"] * B
@@ -737,6 +746,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
         reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:
         if isinstance(x, dict):
@@ -879,6 +889,38 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
     with pytest.raises(ValueError, match="not one of each for each of"):
         al.auditor_seen(log(0, False)[:-4], seen)
+
+
+def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
+    """`verifier.recorded_inputs`: the line's groups' passes, windows and registered blocks are the Lean verifier's
+    record of the session (`lean_record`, which a run from before sessions kept it reads back from its `record` and
+    `windows_seen`, field for field), and its line is the line of the same groups and windows given. The pooled
+    bound's inputs its record's profile gives (`recorded_windows`) are the ones the line reads off the Lean's record
+    and the session. A record of another registration, or windows seen that aren't the record's, is refused."""
+    line = verifier.line
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    assert r["accepted"] and r["verdict"] == "lean" and r["lean_record"]["registration"] == got["reg"]["digest"]
+    old = {k: v for k, v in r.items() if k != "lean_record"}
+    assert verifier.lean_record(old) == r["lean_record"]
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    mem = r["ledger"]["memory"]
+    windows = [(sum(w["lengths"]), w["drawn"]) for w in r["lean_record"]["windows"]]
+    given = line.inputs_json(
+        verifier.paced_groups(mem, r["windows_seen"], block_bytes=mem["block_bytes"]), per=r["pace"]["groups"],
+        blocks=got["reg"]["blocks"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+        node_bytes=mem["hbm_bytes"], delta=r["delta"], rates=rates, windows=windows)
+    want = line.run_json(given)
+    assert "refused" not in want
+    for s in (r, old):
+        assert verifier.recorded_windows(s) == (windows, s["delta"])
+        assert line.record_run_json(verifier.recorded_inputs(s, got["reg"], host_bytes=0, rates=rates)) == want
+        assert verifier.recorded_line(s, got["reg"], host_bytes=0, rates=rates).to_json() == want
+    with pytest.raises(ValueError, match="of registration"):
+        verifier.recorded_inputs(r, {**got["reg"], "digest": "00" * 64}, host_bytes=0, rates=rates)
+    with pytest.raises(ValueError, match="not its record's"):
+        verifier.lean_record({**old, "windows_seen": old["windows_seen"][:-1]})
 
 
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
@@ -1025,7 +1067,7 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
         verifier.regions_of(layout, 16)
 
 
-def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
+def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
             plan: str = "honest", verdict: str = verifier.VERDICT
             ) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
     """A prover of `plan` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with
@@ -1066,11 +1108,12 @@ def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None, drop: t
 def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_window():
     """The hello says whether the prover defers an appended block's residency to its encode: a block appended in window
     w is then resident from w or w + 1, so its re-key falls at age L − 1, and under L = 1 the verifier refuses it with
-    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it."""
+    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it, and so does
+    the default, whose count of windows (`audit.lifetime_windows`) is at least 2 for a prover that defers."""
     v, refused, heard = greeted(1, True)
     assert refused is not None and "lifetime of at least 2 windows, not 1" in str(refused)
     assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
-    for lifetime, deferred in ((2, True), (1, False)):
+    for lifetime, deferred in ((2, True), (1, False), (None, True), (None, False)):
         v, refused, heard = greeted(lifetime, deferred)
         assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
 
@@ -1081,12 +1124,12 @@ def test_only_a_hello_whose_plan_appends_nothing_reserves_no_append_coins():
     a verifier given `appends` keeps its own.  A hello whose `appends` isn't a bool is refused with `bye`."""
     for plan, drop, appends in (("honest,skip:0.25", (), 0), ("honest,kv:2", (), coins.APPENDS),
                                 ("serve", (), coins.APPENDS), ("honest", ("appends",), coins.APPENDS)):
-        v, refused, heard = greeted(audit.LIFETIME, False, plan=plan, drop=drop)
+        v, refused, heard = greeted(None, False, plan=plan, drop=drop)
         assert refused is None and heard == [] and v.appends_of() == appends, plan
-    v, refused, _ = greeted(audit.LIFETIME, False, plan="honest")
+    v, refused, _ = greeted(None, False, plan="honest")
     v.appends = 8
     assert v.appends_of() == 8
-    v, refused, heard = greeted(audit.LIFETIME, False, hello={"appends": "no"})
+    v, refused, heard = greeted(None, False, hello={"appends": "no"})
     assert refused is not None and "true or false" in str(refused) and heard == [f"refused: {refused}"]
     assert v.registry.drawn(b"test-node") == 0
 
@@ -1096,7 +1139,7 @@ def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused_under_each_verdi
     """A hello asking that its receipts bind PoUW's tile outputs (`bind`): the Lean covers receipts of blocks alone, so
     both registries refuse it before drawing a registration (`audit.Registry.register` as `Registry.register` does),
     and the prover reads why in its `bye`."""
-    v, refused, heard = greeted(audit.LIFETIME, False, hello={"bind": True}, verdict=verdict)
+    v, refused, heard = greeted(None, False, hello={"bind": True}, verdict=verdict)
     assert refused is not None and "tile outputs" in str(refused)
     assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
 

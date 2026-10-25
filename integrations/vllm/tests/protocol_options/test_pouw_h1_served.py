@@ -16,6 +16,7 @@ receipt sink and ``ok``) keeps the Program small."""
 from __future__ import annotations
 
 import hashlib
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -25,6 +26,7 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
+from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
@@ -63,7 +65,8 @@ OUT = Record(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):
-    return ((("a", Array(S.R, Z.ROW(S.K))), ("b", Array(S.C, Z.ROW(S.K))), ("zy", Z.RECORD(S.R, S.C)),
+    n = Wt.chunks(S.K)
+    return ((("a", Array(n * S.R, Z.ROW(S.K // n))), ("b", Array(n * S.C, Z.ROW(S.K // n))), ("zy", Z.RECORD(S.R, S.C)),
              ("salt", Array(4, V1)), ("position", V16), ("roots", Array(2, Array(4, V16)))), OUT)
 
 
@@ -98,9 +101,9 @@ def _weights(seed: int = 0, shapes=SHAPES):
     return [(_codes(rng, n, k), torch.rand(n, 1, generator=g) + 0.5) for n, k in shapes]
 
 
-def _period(ws, shapes=SHAPES):
+def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS):
     """The period's `Weights` over `ws`, registered under the declared Program's digest with `WKEY`."""
-    circuit = P.program_digest(SV.declared(shapes, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit()))
+    circuit = P.program_digest(SV.declared(shapes, modules, T, STEPS, TILE, blocks, unit=_unit()))
     return SV.register_weights(circuit, shapes, {w: (c.numpy(), s.numpy().reshape(-1)) for w, (c, s) in enumerate(ws)},
                                WKEY)
 
@@ -120,8 +123,10 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     ws = _weights(seed, shapes) if ws is None else ws
     got = {}
     for s in range(served):
-        x = _codes(rng, SERVED, shapes[0][1])
-        inputs = [x, x] + [_codes(rng, SERVED, k) for _n, k in shapes[2:]]
+        xs = {}
+        for b, (_n, k) in zip(blocks, shapes):
+            xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
+        inputs = [xs[b] for b in blocks]
         for w in range(len(inputs)) if order is None else order:
             a, (wt, sw) = inputs[w], ws[w]
             wt = changed if (s, w) == (1, 0) and changed is not None else wt
@@ -486,7 +491,7 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
     period = _period(ws)
     assert sorted(period.registered) == list(KS)
     for k, r in period.registered.items():
-        assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", CR.b_words(k))
+        assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", Wt.leaf_words(k))
         assert r.domain.domain_id == G.domain(period.circuit, r.value, r.words, r.leaves).domain_id
     rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
     assert period.registered[16].root.hex() == _tree(period.registered[16], rows, WKEY, SV.B_NONCE)
@@ -503,7 +508,6 @@ def test_the_periods_weights_under_the_registrations_key_are_the_auditors_regist
     under its own salt key, and the served path registers the served rows under that key (``model-key``,
     `register_weights`): the same rows, salts and domains, so each K's root, entry and the weights' root are the
     registration's."""
-    from verity.core.protocols.pouw import weights as Wt
     ws = _weights()
     period = _period(ws)
     linears = [(n, k) for n, k in SHAPES]
@@ -812,5 +816,157 @@ def test_receipts_off_the_units_receipt_width_are_refused():
     nothing, and `trees` says why."""
     run, _ws, _got = _window(W1, receipts=_Receipts(np.uint32, 2))
     assert any("its receipts are 4 rows of 4 u16 words, not its 4 units' receipts of 1" in r for r in run.served.refused)
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(run)
+
+
+#: Llama-3.1-8B's two contractions on a small slice of it: up_proj's K = 4096, one leaf a row, and down_proj's
+#: K = 14336, 4 chunk leaves a row (SPLITK)
+LLAMA = {"shapes": [(64, 4096), (32, 14336)], "modules": {0: "up_proj", 1: "down_proj"}, "blocks": (0, 1)}
+
+
+def _chunk_rows(rows: list[bytes], k: int) -> list[bytes]:
+    """Whole rows (each its K codes, then its f32 scale's 4 bytes) as SPLITK's leaves: row r's chunk c, at leaf n r + c,
+    is ``codes[c K_c : (c + 1) K_c] ‖ scale``, n = `weights.chunks` (K) and K_c = K / n."""
+    n = Wt.chunks(k)
+    kc = k // n
+    return [row[c * kc:(c + 1) * kc] + row[k:] for row in rows for c in range(n)]
+
+
+@pytest.mark.parametrize("k, n", [(64, 1), (4096, 1), (5120, 2), (6144, 2), (14336, 4), (16384, 4)])
+def test_chunk_words_are_the_specs_leaf_bytes(k, n):
+    """SPLITK §1: `chunk_words` at n = `weights.chunks` (K) gives row r's chunk c at leaf n r + c, its words the bytes
+    ``codes[r, c K_c : (c + 1) K_c] ‖ scale[r]`` little-endian, `weights.leaf_words` (K) of them; at K <= 4096 it is
+    `row_words`, and word for word core's `h1zy.chunk_words`. An n that doesn't cut K into whole u16 words is refused."""
+    rng = np.random.default_rng(k)
+    codes, scales = rng.integers(-128, 128, (3, k), dtype=np.int8), (rng.random(3) + 0.5).astype("<f4")
+    got = SV.chunk_words(codes, scales, Wt.chunks(k))
+    assert Wt.chunks(k) == n and got.dtype == np.uint16 and got.shape == (3 * n, Wt.leaf_words(k))
+    rows = [codes[r].tobytes() + scales[r].tobytes() for r in range(3)]
+    assert [w.astype("<u2").tobytes() for w in got] == _chunk_rows(rows, k)
+    assert got.tolist() == Z.chunk_words(rows, k)
+    assert (n == 1) == np.array_equal(got, SV.row_words(codes, scales))
+    with pytest.raises(ValueError, match="chunks of whole u16 words"):
+        SV.chunk_words(codes, scales, 3 if k % 3 else 7)
+
+
+def test_k_up_to_4096_roots_are_unchanged():
+    """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
+    from a seeded torch, have the roots they had before chunk rows (pinned from 12afaa3f69, #3509's head, without this
+    change)."""
+    with torch.random.fork_rng():
+        torch.manual_seed(0)
+        ws = _weights()
+        period = _period(ws)
+        run, _ws, _got = _window(W1, weights=period)
+    got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
+    assert period.root().hex()[:32] == "b13d326fd1047f67c7981396b4b65156"
+    assert got == {SV.PREFIX + v: h for v, h in {
+        "a/16@0": "5f173d832fee3e3bd52ff128b2c32023", "a/16@1": "f1e0c408b7c261e2bdfdba32dfe500d6",
+        "a/32@0": "fc273f9145df0611d6daf4d4633ed36e", "a/32@1": "8b0fc9c2aaefbf95fcd4ebe001d312c1",
+        "b/16": "743121b755ff9a0b55d5a101e86a0f1a", "b/32": "46ce3580838d89e8869932d15afc0ac2"}.items()}
+
+
+#: kernels' SPLITK vectors (#3467's ``tests/vectors/splitk_rows.json`` at 7f83d860b6, `splitk_rows_vectors`): their
+#: inputs from SHAKE256 of `VECTORS_LABEL`, each case (case, value, K, rows, nonce, binds the window) and its pinned
+#: (leaves, words, domain, root)
+VECTORS_LABEL = b"verity/pouw/splitk-rows-vectors/v1"
+VECTORS = [
+    ("a-14336-s0", "a/14336@0", 14336, 64, (1 << 61) + (1 << 42), True, 256, 1794,
+     "8acce5e4bf00be8d31e84814e2b349dd5e0906103d55748662898e15e1501c93a50a993b29b5add3c21e89a8e984942ec4a943b0ee4df17e5ea4e239bee20e56",
+     "b2e05799b4fad2b3795b165d5e262d2b35e8776ef3d41eabc132aa160a0fbed537e53927727063f844054ddcce12cb1a5e0e941e4442a4ba50231f7ab72cc369"),
+    ("b-6144", "b/6144", 6144, 64, Wt.B_NONCE, False, 128, 1538,
+     "ee06cb8014a9ea97fa6e3c319a61ac9094dfa6727b6a8bca92c9c6daf8098080499f505edeb236c03264fb695e79f2f2c9985ae9250712ae33de36591fbf5358",
+     "f93f07478d0900b061ffc2a6d6b24aa342a7b0247380bd95b2aa3f80fffc8567bed58d4be497b41321d288a33bdd910062e394dbf70444582a7e8f014b49e7ad"),
+]
+
+
+def _shake(part: bytes, n: int) -> bytes:
+    return hashlib.shake_256(b"\0".join((VECTORS_LABEL, part))).digest(n)
+
+
+def _vector_rows(case: str, k: int, rows: int) -> tuple[np.ndarray, np.ndarray]:
+    """A vector case's int8 codes (rows, K) and f32 scales: row r the r-th K + 4 bytes of SHAKE256(label, NUL, case),
+    its scale's bits set into [2^-7, 2^-6)."""
+    b = np.frombuffer(_shake(case.encode(), rows * (k + 4)), np.uint8).reshape(rows, k + 4)
+    bits = 0x3C000000 | (np.ascontiguousarray(b[:, k:]).view("<u4").reshape(rows) & 0x007FFFFF)
+    return np.ascontiguousarray(b[:, :k]).view(np.int8), bits.astype("<u4").view("<f4")
+
+
+@pytest.mark.parametrize("case", VECTORS, ids=[c[0] for c in VECTORS])
+def test_the_served_paths_chunk_leaves_are_kernels_vectors(case):
+    """kernels' two SPLITK vectors (#3467) through the served path's own code: ``a/14336@0`` (64 rows, n = 4) is
+    `Served.a_words` of the rows over a 64-slot table, committed as `Served` commits a step's A table (at call 0's A
+    nonce, `nonce`, binding the window), and ``b/6144`` (64 rows, n = 2) is `register_weights`' ``b/<K>`` (at `B_NONCE`,
+    binding none); each has the vectors' leaves, words, domain and root."""
+    name, value, k, rows, nonce, windowed, leaves, words, domain, root = case
+    codes, scales = _vector_rows(name, k, rows)
+    program, window, key = _shake(b"program", 64).hex(), _shake(b"window", 64).hex(), _shake(b"key", 32)
+    if windowed:
+        assert SV.nonce(0, "a") == nonce
+        served = SV.Served()
+        served.m = rows
+        reg = NR.commit(program, value, served.a_words(SimpleNamespace(k=k), codes, scales), key, nonce, window=window)
+    else:
+        reg = SV.register_weights(program, [(rows, k)], {0: (codes, scales)}, key, prefix="").registered[k]
+    assert (reg.value, reg.leaves, reg.words) == (value, leaves, words)
+    assert (reg.domain.domain_id.hex(), reg.root.hex()) == (domain, root)
+
+
+def _llama(ws=None, edit=None):
+    """`LLAMA`'s window over its period's weights (`_period`), down_proj's served codes ``edit`` of them when given."""
+    ws = _weights(0, LLAMA["shapes"]) if ws is None else ws
+    period = _period(ws, **LLAMA)
+    served = ws if edit is None else [ws[0], edit(ws[1])]
+    run, _ws, got = _window(W1, ws=served, weights=period, **LLAMA)
+    return run, ws, got, period
+
+
+def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it():
+    """SPLITK §4 on a Llama-shaped window: up_proj at K = 4096 keeps one leaf a row, down_proj at K = 14336 is 4.
+    Each step's ``a/<K>@<s>`` is M·|calls|·n leaves of `weights.leaf_words` (K) words, credit's `table_rows`, its root
+    the spec's leaf bytes of the served rows; ``b/<K>`` is the period's n·Σn leaves (`register_weights`), its root
+    the chunk leaves of the weights, and `Weights.matches` holds a served linear to them. Core's credit ties the window:
+    `_a_link` (each table whole under its round's root, at the layout's rows) and `_weights` (the period's entries,
+    under the window's open root)."""
+    run, ws, got, period = _llama()
+    served, pre = run.served, SV.PREFIX
+    assert not served.refused
+    layout = CR.layout_of(SV.descriptor(served.program))[0]
+    rows = CR.table_rows(layout, STEPS, pre)
+    for s, k, cs in CR.step_tables(layout, STEPS):
+        ra = served.registered[pre + f"a/{k}@{s}"]
+        assert (ra.leaves, ra.words) == (rows[ra.value], Wt.leaf_words(k)) == (Wt.chunks(k) * T * len(cs), Wt.b_words(k // Wt.chunks(k)))
+        whole = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
+        assert ra.root.hex() == _tree(ra, _chunk_rows(whole, k), run._key, SV.nonce(cs[0], "a"))
+    b4, b14 = served.registered[pre + "b/4096"], served.registered[pre + "b/14336"]
+    assert (b4.leaves, b4.words, b14.leaves, b14.words) == (64, 2050, 4 * 32, 1794)
+    assert b14 is period.registered[14336] and b4 is period.registered[4096]
+    whole = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[1:] for j in range(len(w))]
+    assert b14.root.hex() == _tree(b14, _chunk_rows(whole, 14336), WKEY, SV.B_NONCE + 1)
+    assert period.at == {0: (4096, 0), 1: (14336, 0)} and period.matches(1, ws[1][0].numpy(), ws[1][1].numpy())
+    assert CR._a_link(run.round_log, served.entries(), len(run.calls), rows) is None
+    requests, session = hashlib.sha512(b"requests").digest(), "llama-session"
+    window = {"root": PS.window_open_root(period.root(), requests, session).hex()}
+    assert CR._weights(window, layout, served.entries(), requests.hex(), session, served.program_digest, pre) == (
+        period.root(), None)
+    whole = [e if e["value"] != pre + "b/14336" else {**e, "leaves": 32, "words": Wt.b_words(14336)}
+             for e in served.entries()]
+    assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
+        "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
+
+
+def _last_chunk_code(w):
+    codes = w[0].clone()
+    codes[3, 14335] ^= 1
+    return codes, w[1]
+
+
+def test_a_chunked_window_serving_a_code_off_its_periods_weights_is_refused():
+    """`Weights.matches` at n = 4 reads down_proj's rows from leaf n·lo: one code in a row's last chunk other than the
+    period's refuses the window at the call that completes K = 14336, and `trees` says why."""
+    run, _ws, _got, _period_w = _llama(edit=_last_chunk_code)
+    assert any("linears [1]' codes or s_w are not their rows of the period's registered h1/b/14336" in r
+               for r in run.served.refused), run.served.refused
     with pytest.raises(ValueError, match="trees were refused"):
         SV.trees(run)
