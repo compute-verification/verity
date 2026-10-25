@@ -21,8 +21,15 @@ committed row longer than one SHA-512 block.
   output; written to `DIR/pouw` under a one-stage registration in PoUW's window form, at all-protocols' PoUW parameters.
   `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
   `core_check` and Lean's `pouw-check`. Its gaps are in `pouw.py`'s docstring.
+- `verity_torch_loop/block_pouw.py`: the H200 block's PoUW window, the same pinned tile over a public subset of whole
+  output cells of the frozen shape's static INT8 linears (one 4 × 8 cell of each linear in each layer, and the head's),
+  from a capture of one step's operands (`take`, or a seeded stand-in). It writes the verifier's parameters
+  (`params.json`, which `pouw_audit.py --params` reads), since its tile count needs the declared range up to 2^17. Its
+  tiles are computed by `verity_torch_loop/h1batch.py`, `h1tile.reference` batched. Why a subset, and its gaps, are in
+  its docstring.
 - `tests/`: the loop's outputs are the Definition's, unit by unit; its H1 tiles carry its linears and core's PoUW check
-  registers its PoUW window; core's registration check passes the written window and
+  registers its PoUW window; the block's cells are the pinned tile's and carry their accumulators, and core registers
+  the block's window; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
