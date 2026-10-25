@@ -20,6 +20,7 @@ from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.pipeline import cli
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import sampler_geometry as SG
+from verity_vllm.records.global_match import GlobalMatch
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -402,6 +403,9 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
     assert g7["boundary_probes"] > 0 and g7["boundary_probe_failures"] == 0
     assert res["x09"]["verdict"] == "PASS"
     assert not res["eos_truncated_requests"]
+    written = json.loads(json.dumps(res, default=str))                     # as the CLI writes it
+    rec = GlobalMatch.of(written, "global_match.json")                     # the record the account link reads
+    assert rec.dump() == written and rec.verdict == "PASS" and rec.check("G6").lengths_by_request is not None
 
 
 @pytest.mark.slow
