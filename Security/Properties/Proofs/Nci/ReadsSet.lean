@@ -268,15 +268,17 @@ theorem rootRead_eq (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program
 /-- **Node `k` of Definition `f`'s body reads outside itself exactly the gates its positions name there**, in every
 activation of `f` whose gates are located: `RootSet` at the root's. -/
 def NodeSet (P : Prog) (memo : Array Desc.Summary) (f k : Nat) : Prop :=
-  ∀ sc : Flock.Program.Scope, sc.d = f → Located P sc → ∀ node, (ctxOf P memo f).node k = .ok node → ∀ a : Nat,
-    ((∃ x ∈ nodePos (ctxOf P memo f) node k, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) ↔
-      (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a)
+  ∀ sc : Flock.Program.Scope, sc.d = f → Resolve.Good P sc → Located P sc → ∀ node,
+    (ctxOf P memo f).node k = .ok node →
+    (∀ a : Nat, ((∃ x ∈ nodePos (ctxOf P memo f) node k, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) ↔
+      (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a)) ∧
+    ∀ i (p : Int), (Tgt.ref true i, p) ∈ nodePos (ctxOf P memo f) node k → ∃ a, den P sc (.ref true i, p) = .ok a
 
 /-- **Definition `f`'s summarized parameter reads (`used`) are what its activations read outside themselves**: in an
 activation `sc` whose gates are located, a gate reading a gate outside `sc` reads parameter `i`'s leaf `j` there, `j`
 in `used[i]`, and each such leaf is read so by a gate of `sc`. -/
 def UsedExact (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
-  ∀ sc : Flock.Program.Scope, sc.d = f → Located P sc →
+  ∀ sc : Flock.Program.Scope, sc.d = f → Resolve.Good P sc → Located P sc →
     (∀ g ops a, sc.off ≤ g → g < sc.off + (P.defs[f]!).gates → LocR P sc g ops → a ∈ ops →
       ¬ (sc.off ≤ a ∧ a < sc.off + (P.defs[f]!).gates) →
       ∃ i j, Width.inIvs (((memo[f]!).used[i]?.getD #[]).toList) j ∧
@@ -687,7 +689,7 @@ member `m`'s gates read outside the member the leaves of its parameters its call
 theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
     (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
-    (hU : UsedExact P memo ((P.defs[sc.d]!).body.nodes[k]!).fn) (a : Nat) :
+    (hgood : Resolve.Good P sc) (hU : UsedExact P memo ((P.defs[sc.d]!).body.nodes[k]!).fn) (a : Nat) :
     (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a) ↔
       ((∃ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∃ i j,
         Width.inIvs (((memo[((P.defs[sc.d]!).body.nodes[k]!).fn]!).used[i]?.getD #[]).toList) j ∧
@@ -717,7 +719,8 @@ theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sco
     rw [← e] at hc
     have hle := Nat.mul_le_mul_right (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates hm
     rw [Nat.succ_mul] at hle
-    obtain ⟨i, j, hij, hr⟩ := (hU (P.child sc k m) rfl (located_child P hL hk hp hm hend hloc)).1 g ops a
+    obtain ⟨i, j, hij, hr⟩ := (hU (P.child sc k m) rfl (Resolve.good_child P hgood hk rfl hp hm rfl)
+      (located_child P hL hk hp hm hend hloc)).1 g ops a
       (by show _ + _ + _ ≤ g; omega) (by show g < _ + _ + _ + _; omega) hc ha (fun ⟨h1, h2⟩ => by
         change sc.off + (P.defs[sc.d]!).body.offsets[k]! +
           m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ a at h1
@@ -729,7 +732,8 @@ theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sco
   · rintro ⟨⟨m, hm, i, j, hij, hr⟩, hout⟩
     refine ⟨?_, hout⟩
     obtain ⟨g, hg1, hg2, ops, hgl, a', ha', hr'⟩ :=
-      (hU (P.child sc k m) rfl (located_child P hL hk hp hm hend hloc)).2 i j hij
+      (hU (P.child sc k m) rfl (Resolve.good_child P hgood hk rfl hp hm rfl)
+        (located_child P hL hk hp hm hend hloc)).2 i j hij
     rw [hr] at hr'
     obtain rfl := Except.ok.inj hr'
     change sc.off + (P.defs[sc.d]!).body.offsets[k]! +
@@ -950,7 +954,7 @@ theorem compSet_of (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sc
     (hk : k < (P.defs[sc.d]!).body.nodes.size) {node : Flock.Program.Node}
     (hg : (P.defs[sc.d]!).body.nodes[k]! = node) (hp : (P.defs[node.fn]!).prim = false)
     (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
-    (hU : UsedExact P memo node.fn)
+    (hgood : Resolve.Good P sc) (hU : UsedExact P memo node.fn)
     (hbig : ∀ i j, Width.inIvs (((memo[node.fn]!).used[i]?.getD #[]).toList) j → i < node.args.size)
     (hArg : ∀ i < node.args.size, ∀ a, (∃ x ∈ argPos (ctxOf P memo sc.d) k node i, den P sc x = .ok a) ↔
       ∃ m j, ArgB node ((memo[node.fn]!).used[i]?.getD #[]) i m j ∧
@@ -962,7 +966,7 @@ theorem compSet_of (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sc
     ((∃ x ∈ nodePos (ctxOf P memo sc.d) node k, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) ↔
       (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a) := by
   subst hg
-  rw [compReads P memo hL hk hp hend hloc hU a]
+  rw [compReads P memo hL hk hp hend hloc hgood hU a]
   have hp' : ((ctxOf P memo sc.d).P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false := hp
   unfold nodePos
   simp only [hp', Bool.false_eq_true, ↓reduceIte]
@@ -2241,7 +2245,7 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
     (hk : k < (P.defs[sc.d]!).body.nodes.size) {node : Flock.Program.Node}
     (hn : (ctxOf P memo sc.d).node k = .ok node) (hp : (P.defs[node.fn]!).prim = false)
     (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
-    (hU : UsedExact P memo node.fn) (hRet : RetOk P memo node.fn)
+    (hgood : Resolve.Good P sc) (hU : UsedExact P memo node.fn) (hRet : RetOk P memo node.fn)
     (hD : DownSpec (ctxOf P memo sc.d) sc Flock.Steps.FUEL) (hC : CalleeSpec (ctxOf P memo sc.d) sc Flock.Steps.FUEL)
     (hT : ThroughSpec (ctxOf P memo sc.d) sc Flock.Steps.FUEL)
     {rs : Array Seg} (hrs : Desc.nodeReads (ctxOf P memo sc.d) k = .ok rs)
@@ -2282,7 +2286,8 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
       rw [child_eq (ctxOf P memo sc.d) sc rfl hn m]; rfl
     have hp2 : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false := by rw [hg]; exact hp
     have hm2 : m < ((P.defs[sc.d]!).body.nodes[k]!).members := by rw [hg]; exact hm
-    obtain ⟨g, -, -, ops, -, a, -, hr⟩ := (hU (P.child sc k m) hd' (located_child P hL hk hp2 hm2 hend hloc)).2 i j hij
+    obtain ⟨g, -, -, ops, -, a, -, hr⟩ := (hU (P.child sc k m) hd'
+      (Resolve.good_child P hgood hk rfl hp2 hm2 rfl) (located_child P hL hk hp2 hm2 hend hloc)).2 i j hij
     exact ⟨a, hr⟩
   obtain ⟨hok, hcr⟩ := nodeReads_comp_ok (ctxOf P memo sc.d) k node hn hp hrs hm0
   have hlv : ∀ i < node.args.size, (((P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0) =
@@ -2290,7 +2295,7 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
     intro i hi
     rw [hprm, Array.getElem?_eq_getElem (by omega), getElem!_pos _ i (by omega)]
     rfl
-  refine compSet_of P memo hL hk hg hp hend hloc hU (fun i j hij => by have := (hused i j hij).1; omega)
+  refine compSet_of P memo hL hk hg hp hend hloc hgood hU (fun i j hij => by have := (hused i j hij).1; omega)
     (fun i hi a => ?_) (fun a => ?_) a
   · exact argSet_of (ctxOf P memo sc.d) sc rfl hD hn (hA i hi) (hR i hi) hm0 (hok i hi) (hlv i hi)
       (fun j hj => (hused i j hj).2) (hL0 i hi) (hlo i hi) (htile i hi)
