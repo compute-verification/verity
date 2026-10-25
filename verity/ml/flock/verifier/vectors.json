@@ -3991,16 +3991,27 @@
        "name": "lig-query-nonce",
        "rep": 0,
        "expect": {
-        "accepted": true,
-        "why": ""
+        "accepted": false,
+        "why": "grinding_nonce \u2260 0",
+        "upstream_accepted": true
        }
       },
       {
        "name": "lig-claim-nonce",
        "rep": 0,
        "expect": {
-        "accepted": true,
-        "why": ""
+        "accepted": false,
+        "why": "claim_batch_grinding_nonce \u2260 0",
+        "upstream_accepted": true
+       }
+      },
+      {
+       "name": "lig-consistency-nonce",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "consistency_batch_grinding_nonce \u2260 0",
+        "upstream_accepted": true
        }
       },
       {

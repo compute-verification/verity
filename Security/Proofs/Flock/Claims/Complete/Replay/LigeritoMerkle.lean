@@ -402,10 +402,9 @@ theorem KRuns.pow {L : ℕ} (nonce : ℕ → ℕ → UInt64) (kind : ℕ) (k : �
     KRuns L (powP nonce kind) k k fun _ => True := by
   refine KRuns.still (fun st t l => ?_) k
   rcases kind with _ | _ | kind
-  · exact ⟨(), { st with qn := st.qn.push (nonce 0 st.qn.size) }, pN (nonce 0 st.qn.size), rfl, trivial⟩
-  · exact ⟨(), { st with cn := st.cn.push (nonce 1 st.cn.size) }, pN (nonce 1 st.cn.size), rfl, trivial⟩
-  · exact ⟨(), { st with cbn := st.cbn.push (nonce (kind + 2) st.cbn.size) }, pN (nonce (kind + 2) st.cbn.size), rfl,
-      trivial⟩
+  · exact ⟨(), { st with qn := st.qn.push 0 }, pN 0, rfl, trivial⟩
+  · exact ⟨(), { st with cn := st.cn.push 0 }, pN 0, rfl, trivial⟩
+  · exact ⟨(), { st with cbn := st.cbn.push 0 }, pN 0, rfl, trivial⟩
 
 theorem KRuns.sampleVec {L : ℕ} (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (k : ℕ) :
     KRuns L (liftT (sampleVecP (asksS resp) n)) k (k + 1) fun v => v = (Array.range n).map (coinOf (resp (L + k))) := by
