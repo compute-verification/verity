@@ -2476,6 +2476,7 @@
    "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Bridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
    "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
