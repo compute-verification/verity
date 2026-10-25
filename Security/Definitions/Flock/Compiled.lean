@@ -10,14 +10,14 @@ openings enter no round, so the prover chooses them after all coins of both reps
 last message here (`Opens`, per rep, level and query). The verifier then checks every path
 against its level's cap and computes the consistency values from the opened rows.
 
-The model follows `Model.Ligerito` step for step. The running claim and the round polynomial are
+The model follows `Definitions.Flock.Ligerito` step for step. The running claim and the round polynomial are
 affine in the consistency values, so the compiled verifier carries them as functions of the
 openings (`LigStateC.s`, `LigStateC.q`) and evaluates them once the openings arrive; every query
 records its request (`Req`) for the path checks.
 
 **Salted leaves.** `tableCL` is `tableC` under a leaf scheme (`Merkle.Leaf`): the last message carries the openings
-and their salts (`Salts`), and each path verifies from its row's leaf under its salt (`OpensOKL`). At `Leaf.plain`,
-`OpensOKL` is `OpensOK` (`opensOKL_plain`).
+and their salts (`Salts`), and each path verifies from its row's leaf under its salt (`OpensOKL`). That at
+`Leaf.plain` `OpensOKL` is `OpensOK` (`opensOKL_plain`) is in `Proofs.Flock.Soundness.Model.Compiled`.
 -/
 
 namespace FlockSoundness.Model
