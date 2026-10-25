@@ -486,8 +486,8 @@ theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x :
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
     (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
     GoodTableAt (deployZk rel) (wordLenJ true) x j C :=
-  Gen.good_of_committed_zkJ (S := S₀) (rel := rel) (x := x) (j := j) (s := s) (hs := hs) (i := i) (hN := hN) (C := C)
-    (hw := hw) (S := S) (hwit := hwit) (hc := hc)
+  letI : ZkSetup := S₀
+  Gen.good_of_committed_zkJ rel x j s hs i hN C hw S hwit hc
 
 namespace Gen
 
