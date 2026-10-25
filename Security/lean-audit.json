@@ -18127,7 +18127,7 @@
     "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
-  "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
+  "Definitions.NetworkCertifier.Guarantees.AdviceV1Kraft": {
    "digest": "92990b9f172352984e1d68f31611b5608d746222be1e12753d8ce0ed1392da39",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1": "f72da5d22ba00982d6046c15c5368b06f2bf7fedb093fb209872842e438f8b8b",
@@ -18158,7 +18158,7 @@
    },
    "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
-  "Definitions.NetworkCertifier.Guarantees.WindowCharge": {
+  "Definitions.NetworkCertifier.Guarantees.WindowChargeKraft": {
    "digest": "516819ba57a508f074ec7863f284230f1e5bf3fe58eb800676afa2182e1f25c4",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Whole": "118ff56ce7733923e01b3c2ac8593a501507aba95a7f7b806715c173a220ca21",
