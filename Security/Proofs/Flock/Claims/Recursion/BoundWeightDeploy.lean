@@ -87,7 +87,8 @@ about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor an
 (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (hwE : ∀ x, wE x ≤ (FlockDeploy.deployPlainTrim rel).weight x) :
@@ -105,7 +106,7 @@ theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.F
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -113,7 +114,7 @@ theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.F
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
     KSBoundCover rel relO b L nextE colsE wE join rowIn final := by
   intro _ _ _ hP1 hBinds hLB hF hst hT hL hRRP
-  exact ksBoundRoute rel relO b L nextE colsE wE join rowIn final (wCover rel) hP1 hBinds
+  exact ksBoundRoute rel relO b L hRows nextE colsE wE join rowIn final (wCover rel) hP1 hBinds
     (weightCovers_bdCover rel nextE colsE wE join rowIn final hwE) hLB hF hst hT hL hRRP
 
 end RecDeploy

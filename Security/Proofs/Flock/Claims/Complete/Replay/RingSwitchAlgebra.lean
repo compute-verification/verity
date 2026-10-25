@@ -423,7 +423,7 @@ theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 2
 /-- The record's link points have `m_pts` coordinates: `Record.decodeWith` checks it (S9). -/
 theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
     (h : Record.decodeWith hs spec text = .ok sess) : ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
-  unfold Record.decodeWith at h
+  unfold Record.decodeWith Record.decodeJWith at h
   dsimp only at h
   split at h
   rotate_left

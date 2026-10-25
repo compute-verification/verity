@@ -4,14 +4,15 @@ import Definitions.Pouw.Eps1.M3
 # Dither's CUDA-core lower bounds in model M3 (trusted)
 
 EPS1-QSTAR's proved lower bounds (note:20261017T0344Z-draft-eps1-qstar, (b)), over `Pouw.Eps1`'s model M3, each
-proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`. `ClassPPacked` isn't proved yet, so `lean-audit.json`
-lists it under `shape.frozen` as `unstated`, not under `guarantees`:
+proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`:
 
 * `WordLocalZero`: Theorem B at the zero instance, a word-local program costs at least 4 instructions a word;
 * `WordLocalGeneral`: Theorem B at a general instance, at least 8 a word (met by dp4a's 8 IDP.4A);
-* `ClassPPacked`: Theorem C, a radix-packed program costs at least `1 + 28/27 ≈ 2.04` a word;
 * `ClassPSlots`: Theorem C's count over issue slots, with each writer's creations `w` a parameter, at least
   `1 + (32 − w)/(65·d)` slots a word when a slot writes at most `d` words.
+
+Theorem C's packed form, `(1 + 28/27)·L·m·n` instructions, is retired: its paper proof caps a writer's creations at 4,
+and a writer can create 8 (note:20261018T0230Z-draft-floors). `ClassPSlots` takes the cap as its parameter `w`.
 
 Free words (functions of one side alone) cost nothing, and the fold is not counted. M3 has no data-dependent
 addressing and each instruction writes one 32-bit word from at most three, so these bound the gather-free `q*` in
@@ -36,14 +37,6 @@ def WordLocalGeneral : Prop :=
     (blk : Fin G → Tau m n Lseg),
     P.Computes (fun A B => (∀ i l p, Int8Valid (A i l p)) ∧ ∀ j l p, Int8Valid (B j l p)) genOut →
     P.WordLocal blk → 8 * (Lseg * m * n) ≤ G
-
-/-- **Theorem C.** A class-P (radix-packed) M3 program that computes Dither's prefix words at the zero instance has at
-least `(1 + 28/27)·L·m·n` instructions. `G` counts M3 instructions, each writing one 32-bit word, so it counts
-destination words: read in sm_120 issue slots, an IMAD.WIDE (two destination words in one slot) counts two. -/
-def ClassPPacked : Prop :=
-  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
-    (pk : Fin G → Option (Packing m n Lseg)),
-    P.Computes (fun _ U => ColsValid U) zeroOut → ClassP P pk → (1 + 28 / 27 : ℝ) * (Lseg * m * n) ≤ G
 
 /-- **Theorem C's count over issue slots.** A class-P M3 program that computes Dither's prefix words at the zero
 instance, whose output writers each create at most `w` incidences, run in `S` issue slots (`slot`) that each write at

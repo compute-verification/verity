@@ -61,7 +61,7 @@ QK_HEAD = [{"D": 128, "EPS": 1e-6, "XBLOCK": 2, "R0_BLOCK": 128, "NUM_WARPS": 2}
            {"D": 128, "EPS": 1e-6, "XBLOCK": 64, "R0_BLOCK": 64, "NUM_WARPS": 16}]
 
 
-@pytest.mark.parametrize("S", LAYOUTS, ids=lambda S: f"N{S['N']}-R{S['R0_BLOCK']}-W{S['NUM_WARPS']}")
+@pytest.mark.parametrize("S", [pytest.param(S, marks=pytest.mark.slow) if S is LLAMA else S for S in LAYOUTS], ids=lambda S: f"N{S['N']}-R{S['R0_BLOCK']}-W{S['NUM_WARPS']}")
 def test_the_norm_twins_are_the_definitions(S: dict) -> None:
     rng = np.random.default_rng(S["N"])
     N = S["N"]

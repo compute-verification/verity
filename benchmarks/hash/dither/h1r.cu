@@ -15,6 +15,8 @@
 //               Version 3 (`h1b_unit`) runs the same unit on a block of five warps: four hash the noise and build the
 //               operands, one folds.  Version 4 (`h1s_unit`) splits it six ways: two warps hash a chunk ahead, two
 //               build the segments, and the fold is split in two by the fx1 + duo chains it feeds.
+//               `h1r_launch_j10r` runs version 1 under J10-R's call-scale noise (`h1r_seeds_jr`, `h1r_units_jr_k`;
+//               RT-ALGO-16's verifier form, #3574): the served J10-R units' receipts reference.
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
 // base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (a unit is live iff its
@@ -165,6 +167,26 @@ extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncall
   if (!C.live[u / C.ncb]) return;
   u64 s[8];
   unit_seed(C, C.base + (step_base ? *step_base : 0ULL) + u, salt, kind ? rt0 : st0, kind ? rt1 : st1, kind ? rt2 : st2, s);
+  u64* o = seeds + ((long long)(C.seed0 + u) * 2 + kind) * 8;
+#pragma unroll
+  for (int j = 0; j < 8; ++j) o[j] = s[j];
+}
+
+// h1r_seeds under J10-R (h1r_launch_j10r): kind 0 seed_c (`seeds.call_seed`, tag ct at the call's first position
+// C.base + *step_base, the same for every unit of the call), kind 1 σ_R at the unit's own position
+extern "C" __global__ void h1r_seeds_jr(const H1Call* __restrict__ calls, int ncalls, const u64* __restrict__ salt,
+                                        const u64* __restrict__ step_base, u64 ct0, u64 ct1, u64 ct2, u64 rt0, u64 rt1,
+                                        u64 rt2, u64* __restrict__ seeds) {
+  const int c = blockIdx.y;
+  if (c >= ncalls) return;
+  const H1Call C = calls[c];
+  const int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= 2 * C.units) return;
+  const int u = i >> 1, kind = i & 1;
+  if (!C.live[u / C.ncb]) return;
+  const u64 call = C.base + (step_base ? *step_base : 0ULL);
+  u64 s[8];
+  unit_seed(C, kind ? call + u : call, salt, kind ? rt0 : ct0, kind ? rt1 : ct1, kind ? rt2 : ct2, s);
   u64* o = seeds + ((long long)(C.seed0 + u) * 2 + kind) * 8;
 #pragma unroll
   for (int j = 0; j < 8; ++j) o[j] = s[j];
@@ -345,10 +367,13 @@ __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4],
 // each), sdw (24 words) and, for V 2, nzw (2 * 32 * NZ words)
 // band > 1 (V 1 only; h1r_launch_band, the banded gates' receipts reference): the rows from the band leader's seed_j,
 // unit ri ncb + (cj / band) band's, read from the seeds buffer
+// jrm > 0 (V 1 only; h1r_launch_j10r, J10-R's receipts reference): the seeds' first 8 words are the call's seed_c and the
+// unit reads its call's stream at call scale, Layout(jrm, N, K): row 32 ri + l's blocks at (32 ri + l) RB, column
+// 32 cj + l's at jrm RB + (32 cj + l) RB; a live unit whose row block lies past jrm gets all-ones words (no such unit)
 template <int V, class E = NoEpi>
 __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8_t* Xs, uint8_t* Ws, u64* sdw, u32* nzw,
                                          const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2, u32* __restrict__ out,
-                                         int nowrite, const E& ep = E(), int band = 1) {
+                                         int nowrite, const E& ep = E(), int band = 1, int jrm = 0) {
   static_assert(!E::PEEL, "the warp form serves the dithered product only");
   int ri, cj;
   if constexpr (V >= 2) {
@@ -366,6 +391,12 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
     if (!nowrite)
       for (int i = lane; i < 2 * sets; i += 32) o[i] = 0;
     if constexpr (E::ON) ep.dead(ri, cj, lane);
+    return;
+  }
+  const bool jr = V == 1 && jrm > 0;
+  if (jr && 32 * (ri + 1) > jrm) {
+    if (!nowrite)
+      for (int i = lane; i < 2 * sets; i += 32) o[i] = 0xFFFFFFFFu;
     return;
   }
   const int g = lane >> 2, q = lane & 3;
@@ -388,7 +419,8 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
     __syncwarp();
   }
   const int nb = KS / 16, RB = nb + 1;
-  const u64 rowb = (u64)lane * RB, colb = (u64)32 * RB + (u64)lane * RB;
+  const u64 rowb = jr ? (u64)(32 * ri + lane) * RB : (u64)lane * RB;
+  const u64 colb = jr ? (u64)jrm * RB + (u64)(32 * cj + lane) * RB : (u64)32 * RB + (u64)lane * RB;
   auto noise = [&](u64 t, u32 h[16]) {
     if constexpr (V >= 2)
       nblock_mid(mid, sj, t, nt0, nt1, nt2, h);
@@ -1610,6 +1642,24 @@ __global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1C
               NoEpi(), band);
 }
 
+// h1r_units_k's version 1 under J10-R at call layout jrm (h1r_launch_j10r)
+template <int NW>
+__global__ void __launch_bounds__(32 * NW, 1) h1r_units_jr_k(const H1Call* __restrict__ calls, int ncalls,
+                                                             const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2,
+                                                             u32* __restrict__ out, int nowrite, int jrm) {
+  __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
+  __shared__ u64 sd[NW][24];
+  __shared__ u32 nzs[1][2][32 * NZ];
+  const int c = blockIdx.y;
+  if (c >= ncalls) return;
+  const H1Call C = calls[c];
+  const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
+  const int v = blockIdx.x * NW + wid;
+  if (v >= C.units) return;
+  h1r_unit<1>(C, v, lane, smem[wid][0], smem[wid][1], sd[wid], nzs[0][0], seeds, nt0, nt1, nt2, out, nowrite, NoEpi(), 1,
+              jrm);
+}
+
 __global__ void __launch_bounds__(BTH, 2) h1r_unitsb_k(const H1Call* __restrict__ calls, int ncalls,
                                                        const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2,
                                                        u32* __restrict__ out, int nowrite) {
@@ -1688,6 +1738,26 @@ extern "C" int h1r_launch_band(const H1Call* calls_dev, int ncalls, int max_unit
   tag3("verity/pouw/noise/v1", nt);
   h1r_units_k<NW, 1><<<dim3((max_units + NW - 1) / NW, ncalls), 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0],
                                                                                     nt[1], nt[2], out_dev, nowrite, band);
+  return (int)cudaGetLastError();
+}
+
+// h1r_launch's version 1 under J10-R (J10R's PouwH1Tile_v5 receipt; the served J10-R units' receipts reference, measured
+// only): seed_c at each call's first position (h1r_seeds_jr), every unit's noise from its call's stream at call scale
+// Layout(m, N, K) (h1r_units_jr_k), its fold keys its own σ_R's; m a multiple of 32, the call's layout rows (its slot T,
+// or its live rows rounded up to 32), no call's live row block past it
+extern "C" int h1r_launch_j10r(const H1Call* calls_dev, int ncalls, int max_units, const int* ks, const u64* salt_dev,
+                               const u64* step_base, u64* seeds_dev, u32* out_dev, int nowrite, int m, cudaStream_t stream) {
+  for (int i = 0; i < ncalls; ++i)
+    if (ks[i] % 512 || ks[i] < 512) return 1;
+  if (m < 32 || m % 32) return 1;
+  u64 ct[3], rt[3], nt[3];
+  tag3("verity/pouw/call-seed/v1", ct);
+  tag3("verity/pouw/receipt/v1", rt);
+  tag3("verity/pouw/noise/v1", nt);
+  h1r_seeds_jr<<<dim3((2 * max_units + 127) / 128, ncalls), 128, 0, stream>>>(calls_dev, ncalls, salt_dev, step_base, ct[0],
+                                                                             ct[1], ct[2], rt[0], rt[1], rt[2], seeds_dev);
+  h1r_units_jr_k<NW><<<dim3((max_units + NW - 1) / NW, ncalls), 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0],
+                                                                                    nt[1], nt[2], out_dev, nowrite, m);
   return (int)cudaGetLastError();
 }
 

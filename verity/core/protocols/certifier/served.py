@@ -1,8 +1,9 @@
 """N2's served profile: on a served link, whose egress end has no public occupancy profile, the egress counts derived
 from the ingress counts under the declared clock sync, zero-knowledge. A Boolean Definition, a gated part of N2's
-served proof unit (`service`'s `NetworkServedLinkWindow` v2), which runs on every link-window; its one output is the ok
-bit. That unit's Program holds it as one gate (`gate`), and N2's verifier of record runs its `reference`, which the tests
-hold to the circuit.
+served proof unit (`service`'s `NetworkServedLinkWindow` v4), which runs on every link-window; its one output is the ok
+bit. That unit's Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar
+and held to the Definition by circuit-check; N2's verifier of record reads its output from the unit's proof, and the
+in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the circuit.
 
     NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}
         (ingress: Array<T, Array<4, Byte>>, egress: Array<T, Array<4, Byte>>, sync: Array<3, Array<16>>) -> Value<1>
@@ -64,6 +65,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
@@ -73,7 +75,8 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, compres
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
-from verity.core.protocols.certifier.head_check import BIT, BYTE, _coll, _Consts, _gate_only, _part, _refs, ands
+from verity.core.protocols.certifier.head_check import (BIT, BYTE, _coll, _Consts, _part, _refs, ands, gate_of,
+                                                        pinned_digest)
 from verity.core.protocols.certifier.grid import released
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, handing_buckets
 
@@ -447,19 +450,21 @@ NetworkServedCounts = CompositeDefinition(
         "bucket 0 the certifier's own (`served.derive`)")
 
 
+NetworkServedCounts.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`gate`)
+#: the circuit digests circuit-check pins (`head_check.pinned_digest`)
+PINS = Path(__file__).with_name("served.circuit-check.json")
+
+
 def unit(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int):
     return bind(NetworkServedCounts, T=T, FOUT=F, FIN=FIN, R=R, RIN=RIN, OWN=OWN)
 
 
 @lru_cache(maxsize=None)
 def gate(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> PrimitiveDefinition:
-    """`unit(…)` as one gate of N2's served proof unit (`service.LinkWindows.unit`): its signature, under an id that
-    names it, as `head_check.gate` holds the head check."""
+    """`unit(…)` as one gate of N2's served proof unit (`service.LinkWindows.unit`) that names the Definition and its
+    pinned circuit digest, `Gate[NetworkServedCounts_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check."""
     d = unit(T, F, FIN, R, RIN, OWN)
-    params, ret = d.signature()
-    return PrimitiveDefinition(f"Gate[{d.id}]", 1, params, ret, _gate_only(d.id), register=False,
-                               doc=f"{d.id}, N2's served counts, as one gate: the Definition is registered and "
-                                   "circuit-checked")
+    return gate_of(d, pinned_digest(d, PINS), "N2's served counts")
 
 
 # --- the arguments ----------------------------------------------------------------------------------------------------
@@ -487,5 +492,5 @@ def size(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> int:
     return ands(unit(T, F, FIN, R, RIN, OWN))
 
 
-__all__ = ["NetworkServedCounts", "SYNC_BITS", "ServedProfile", "anchors", "arguments", "derive", "evaluate", "gate",
-           "reference", "size", "sync_words", "unit"]
+__all__ = ["NetworkServedCounts", "PINS", "SYNC_BITS", "ServedProfile", "anchors", "arguments", "derive", "evaluate",
+           "gate", "reference", "size", "sync_words", "unit"]

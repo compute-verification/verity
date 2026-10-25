@@ -36,7 +36,7 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
         S.in_pool("gpu", "x", ["true"])
         raise AssertionError("an unknown pool must be refused")
     except ValueError as e:
-        assert "the pools are proofs, research" in str(e)
+        assert "the pools are network, proofs, research" in str(e)
     from research.cli import main
     for argv, why in ((["--pool", "research", "--", "true"], "needs --on MACHINE and --source"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--", "true"], "needs a lane"),
@@ -51,21 +51,22 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
 
 def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp_path, monkeypatch, capsys):
     """INF-61 (cpu-3, 18 Oct): a `--pool` run's --mem-gb reserved at launch and held that through its wait in the slot line, beside
-    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot's mem= admits it."""
+    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot admits it, with the
+    run's --mem-gb when that is more than its mem= (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)."""
     from research import remote
     from research.cli import main
 
     seen = []
 
     def launch(**kw):
-        seen.append(kw["mem_gb"])
+        seen.append((kw["mem_gb"], kw["env"].get("CHECK_RUN_MEM_GB")))
         return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
 
     monkeypatch.setattr(remote, "launch", launch)
     argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
             "--pool", "proofs", "--as", "proofs"]
     assert main([*argv, "--mem-gb", "96", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
-    assert seen == [None, None] and "--mem-gb 96 is dropped" in capsys.readouterr().err
+    assert seen == [(None, "96"), (None, None)] and "--mem-gb 96 goes to the slot" in capsys.readouterr().err
 
 
 def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monkeypatch, tmp_path, capsys):

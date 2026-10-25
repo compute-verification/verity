@@ -46,7 +46,7 @@ def _program(pos=POS, rows: int = len(TABLE), unread: bool = False) -> Program:
 def _ports(prog: Program) -> dict:
     part = P.partition(prog, Q)
     n = P.units(prog, Q)
-    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-served")}
+    return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-served")}
             for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", n))}
 
 
@@ -113,7 +113,7 @@ def test_a_32_bit_tree_names_its_width():
     assert sr.registered == [reg.entry()] and reg.entry()["word_bits"] == 32
     assert {(e["word_bits"], e["reads"] == list(POS)) for e in sr.ports.values()} == {(32, True)}
     part = P.partition(prog, q)
-    ports = {"x": {"leaves": len(POS), "domain": R.served_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
+    ports = {"x": {"leaves": len(POS), "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
                                                                   len(POS), "r-served")}}
     rec = R.record(prog, q, LAW, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
     assert R.check(rec, prog, q, LAW, SCHEME, ports, registered=sr.values).ok
@@ -127,7 +127,7 @@ def test_an_earlier_outputs_tree_keeps_its_port():
     prog = _program()
     reg, _ = _tree(prog)
     part = P.partition(prog, Q)
-    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
     first, ports = _record(prog, [reg.entry()])
     earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom}], {**SERVED, "row": 6}, registered=[reg.entry()])
@@ -149,7 +149,7 @@ def test_an_earlier_outputs_tree_keeps_its_port():
 
 
 def test_a_reused_tree_takes_an_earlier_records_registered_value():
-    """A tree an earlier record registered as one of its values (H1's `a/<K>@<c>` as a Commit's AROW, say) registers under
+    """A tree an earlier record registered as one of its values (H1's `a/<K>@<s>` as a Commit's AROW, say) registers under
     that entry's domain and root with no tree of its own; R7 accepts it with the returned `outputs`, and a tree whose root,
     domain or rows aren't the entry's, or which the log doesn't hold, is refused."""
     prog = _program()
@@ -286,7 +286,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
     sr = register_served(wide, q, [ServedTree.of(reg)])
     assert {e["row_schema"] for e in sr.ports.values()} == {G.SCHEMA_V2}
     part = P.partition(wide, q)
-    ports = {"x": {"leaves": len(POS), "domain": R.served_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
+    ports = {"x": {"leaves": len(POS), "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
                                                                   len(POS), "r-served")}}
     rec = R.record(wide, q, LAW, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
     assert R.check(rec, wide, q, LAW, SCHEME, ports, registered=sr.values).ok

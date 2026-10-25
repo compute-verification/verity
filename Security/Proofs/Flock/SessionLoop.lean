@@ -1,5 +1,44 @@
 import Proofs.Flock.SessionLoop.Statement
 import Proofs.Flock.Claims.ZK.FrameUnrefused
+import Proofs.Flock.SessionLoop.Link
+import Proofs.Flock.SessionLoop.RepSrc
+import Proofs.Flock.SessionLoop.Tables
+import Proofs.Flock.SessionLoop.FinishParts
+import Proofs.Flock.SessionLoop.FinCommits
+import Proofs.Flock.SessionLoop.FinPoints
+import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.FinRep
+import Proofs.Flock.SessionLoop.FinRepView
+import Proofs.Flock.SessionLoop.FinRepXs
+import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.FinHmkLive
+import Proofs.Flock.SessionLoop.FinRepRows
+import Proofs.Flock.SessionLoop.FinRepTau
+import Proofs.Flock.SessionLoop.FinL0Vals
+import Proofs.Flock.SessionLoop.FinRepCm
+import Proofs.Flock.SessionLoop.FinRepPads
+import Proofs.Flock.SessionLoop.FinRepErasedAt
+import Proofs.Flock.SessionLoop.FinRepErasedOf
+import Proofs.Flock.SessionLoop.FinHmkCut
+import Proofs.Flock.SessionLoop.FinRepErasedCut
+import Proofs.Flock.SessionLoop.FinPiopRet
+import Proofs.Flock.Claims.ZK.FinishFc
+import Proofs.Flock.Claims.ZK.FinishLigEnd
+import Proofs.Flock.Claims.ZK.FinishInnerAt
+import Proofs.Flock.Claims.ZK.FinishSwFc
+import Proofs.Flock.SessionLoop.FinHmkFc
+import Proofs.Flock.SessionLoop.FinHmkFw
+import Proofs.Flock.SessionLoop.FinishIsOf
+import Proofs.Flock.Claims.ZK.FinishInnerRet
+import Proofs.Flock.SessionLoop.FinHmkRet
+import Proofs.Flock.SessionLoop.FinPrevFw
+import Proofs.Flock.SessionLoop.FinRepMsgsFw
+import Proofs.Flock.SessionLoop.FinRepLanesFw
+import Proofs.Flock.SessionLoop.FinishIsRet
+import Proofs.Flock.SessionLoop.FinRepFinal
+import Proofs.Flock.SessionLoop.FinRepOpen
+import Proofs.Flock.SessionLoop.FinRepTarget
+import Proofs.Flock.SessionLoop.FinRepL0
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
@@ -9,7 +48,10 @@ at the deployed relation and at the hiding gap of hm96-sha512's pinned key (`CRO
 at the loop's own tables (`Loop.realOf`, whose tables are `Count.RealTabs`: `Loop.realTabs_realOf`), its `FinalRoundEq`
 from `FinishIs`, the loop's frames refusing every coin fault (`LeanRelease.frameUnrefused_ofLoop`) and the tables
 admitting unrefused coins (`LeanRelease.finalRoundEq_ofLoop`). `SessionLoopZKDeployed` is it at the deployed tables,
-which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`).
+which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the loop's own link and `Finish`
+(`LeanRelease.ofLoopLink`),
+whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
+(`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`).
 -/
 
 namespace Claims.ZKServer.Loop
@@ -54,9 +96,14 @@ theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
       (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE hEf Vs θ hk Ev
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
 
-/-- **C-Flock's zero knowledge at the session loop's own frames, at the deployed tables**: `SessionLoopZK` at
-`Masked.dataE`, whose tables admit unrefused coins. -/
-theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed :=
-  SessionLoopZK _ Claims.ZKServer.LeanRelease.tablesAdmitUnrefused_dataE
+/-- **C-Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
+`Masked.dataE`, whose tables admit unrefused coins, and the release `withFiles (withLink L₀ src) src`, whose
+`LinkRoundEq` is `linkRoundEq_ofLoopLink`. -/
+theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed := by
+  intro vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hScope hSrc hFin hE hEf Θ Vs θ hk Ev
+  exact SessionLoopZK _ Claims.ZKServer.LeanRelease.tablesAdmitUnrefused_dataE vs t ht hS hV hD hc hsc hT
+    (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src) src real hreal wk x w hR hServe hL0
+    (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src real hScope hR hSrc.1.linkLevel0) hFin hE hEf Vs θ hk
+    Ev
 
 end Flock.SecurityProofs

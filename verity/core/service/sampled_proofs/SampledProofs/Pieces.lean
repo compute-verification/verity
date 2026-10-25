@@ -4,6 +4,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 
 * `decode`: a case's three decoders run independently (`answer` stops at the first refusal);
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
+* `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
+  layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
@@ -62,6 +64,7 @@ import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
 import SampledProofs.Produced
 import SampledProofs.HiddenDraw
+import SampledProofs.PartitionRef
 
 namespace SampledProofs.Pieces
 
@@ -102,6 +105,24 @@ def partition (j : Json) : V Json := do
     ("strata", orNull (fun ss => Json.arr (ss.map fun (t, rs) => Json.arr #[Json.str t, Json.arr (rs.map range)]))
       (Partition.strata v.program v.query)),
     ("law", orNull id (Draw.derive v.program v.query v.law v.workTable))]
+
+/-- `{"program", "X"}`, a program object and a natural number, to `[[definition, bits, bits by walk], …]`: per distinct
+Definition `Q_call` v1 at X cuts (`Flock.Qcall.evaluate`), its units' committed bits read off its layout
+(`Partition.committedBits`) and by the walk of its own that replaced (`Partition.committedBitsRef`); refused where
+`Q_call` is. -/
+def committedBits (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let some X := nat? (getD j "X") | throw "X is not a natural number"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let mut seen : Array Nat := #[]
+  let mut out : Array Json := #[]
+  for c in ← Flock.Qcall.evaluate p.prog X do
+    if seen.contains c.d then continue
+    seen := seen.push c.d
+    let units := c.c.units.map fun u => (u.lo, u.hi)
+    out := out.push (Json.arr #[Json.str (p.prog.defs[c.d]!).key, Lean.toJson (Partition.committedBits c.c.gates units),
+      Lean.toJson (← Partition.committedBitsRef p.prog c.d units)])
+  return Json.arr out
 
 /-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
@@ -489,7 +510,8 @@ def run (j : Json) : V Json := do
             coins := getD j "coins" }
 
 def table : List (String × (Json → V Json)) :=
-  [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
+  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
+   ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),

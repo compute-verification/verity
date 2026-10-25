@@ -19,8 +19,8 @@ service statement cites them without these definitions reaching into its own:
 * `GrindPremium`: the two together, with the commitment's binding a parameter. `R q` is what the cheater realizes
   through query `q`, and it equals the oracle's gain `g q` off an event `Break` of probability at most `δb` (opening a
   root two ways after its seed, at the same `T`). Some query realizes a gain of at least `π` with probability at most
-  `T·M·e^{-θπ} + δb`. For proofs' `SteerBound` (note:proofs/20261018T0343Z-draft-pouw-gap7-statement) it is the
-  instance `Steer := {π ≤ gain}`, `μ^m := M·e^{-θπ}`, relative to the stage's savings (RT4's change 2).
+  `T·M·e^{-θπ} + δb`. It is gap (7)'s steer bound (note:proofs/20261018T0343Z-draft-pouw-gap7-statement) at
+  `Steer := {π ≤ gain}`, `μ^m := M·e^{-θπ}`, relative to the stage's savings (RT4's change 2).
 * `GrindPremiumAt`: `GrindPremium` at the premium `π* = ln(T·M/δ)/θ`, so the grind is priced into ε by `π*` a seed group
   and the bound holds outside `δ + δb`. With `M = 1` and `θ = h·ln 2` a unit of work, `π* = log₂(T/δ)/h` units.
 * `GrindMass`: the expectation form. The `T` queries' moments sum to at most `T·M` in mean, so by Markov and Jensen

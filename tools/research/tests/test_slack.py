@@ -1868,6 +1868,11 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 0 and out == "decided no thread -\n"
     assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve", {"choice": "no", "note": "needs changes"})
     assert run(capsys, "ask-daniel", "resolve", "42")[0] == 2
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--provisional")
+    assert route.requests[-1][2] == {"choice": "a", "provisional": True}
+    note = "Provisionally accepted (Daniel, 19 Oct 21:59Z standing rule): a. Page: https://app.notion.com/p/x"
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--note", note)
+    assert route.requests[-1][2] == {"choice": "a", "note": note, "provisional": True}
     route.answer = (403, {"error": "not_your_card"})
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no")
     assert rc == 2 and "only a card's own asker" in err
@@ -2166,6 +2171,33 @@ def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs
 
 
 ASK_TEAM = "C0CA1JZSYNR"
+
+
+def test_traffic_replay_reads_the_people_s_channels_and_keeps_a_chat_s_text_out(fake, registry, routes_dirs, people_d, capsys):
+    """19-23 Oct the Slack events service routed nothing in the people's channels while five daily replays were clean:
+    the replay read only the front door (COMM-61)."""
+    people_d.mkdir()
+    (people_d / "luke.json").write_text(json.dumps(chat_person("chat-luke", LUKE, "Luke Example")))
+    chat = "CCHATLUKE"
+    circuits, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    missed = fake.add(ASK_TEAM, text="@circuits when does the sweep land?", user=human)
+    rang = fake.add(ASK_TEAM, text="@circuits is node 2 free?", user=human)
+    fake.add(COORD, text=slack.doorbell("daniel", rang["ts"], rang["ts"], rang["text"], channel="ask-the-team"),
+             username="router", bot_id=BOT, thread_ts=circuits)
+    lost = fake.add(ASK_TEAM, text="what is the TP8 status?", user=human)              # names no one, and nothing rang
+    secret = fake.add(chat, text="the private question, no lane named", user=LUKE)
+    routed = fake.add(chat, text="another one, no lane named", user=LUKE)
+    fake.add(COORD, text=slack.doorbell("luke", routed["ts"], routed["ts"], "", channel="chat-luke", private=True),
+             username="router", bot_id=BOT, thread_ts=top)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {(x.get("channel"), x["ts"]): x for x in json.loads(out)["replay"]}
+    assert rc == 0 and set(rep) == {("ask-the-team", missed["ts"]), ("ask-the-team", lost["ts"]), ("chat-luke", secret["ts"])}
+    assert rep[("ask-the-team", missed["ts"])]["missed"] == ["circuits"] and rep[("ask-the-team", lost["ts"])]["missed"] == ["top"]
+    assert rep[("chat-luke", secret["ts"])] == {"ts": secret["ts"], "by": "luke", "channel": "chat-luke", "missed": ["top"],
+                                                "extra": [], "first": ""}
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
+    assert f"REPLAY #chat-luke {secret['ts']} by @luke: missed @top (private)" in out and "private question" not in out
 
 
 def unreadable_ask_team(monkeypatch):

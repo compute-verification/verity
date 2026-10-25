@@ -224,15 +224,15 @@ def seen_at(s: dict, released: list[int], arrived: list[int]) -> dict:
                                   for g, w in enumerate(s["windows_seen"])]}
 
 
-def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, ingress: tuple[float, ...],
+def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, rates: dict,
            passes: list[int] | None = None) -> dict:
     t = replay(rec, rtt_ns, passes)
     v, a = seen_at(s, t["R"], t["A"]), seen_at(s, t["Ra"], t["Aa"])
     return {"rtt_ms": rtt_ns / 1e6, "series": t, "L_verifier_ms": al.q(al.group_l(v["windows_seen"])),
             "L_auditor_ms": al.q(al.group_l(a["windows_seen"])), "passes_s": (t["A"][-1] - t["R"][0]) / 1e9,
             "pass_ms": al.q(rec.pure if passes is None else passes), "waits": waits(rec, t, rtt_ns),
-            "shares_verifier_clock": al.shares(v, reg, host_bytes, ingress),
-            "shares_auditor_clock": al.shares(a, reg, host_bytes, ingress)}
+            "shares_verifier_clock": al.shares(v, reg, host_bytes, rates, clock="replay"),
+            "shares_auditor_clock": al.shares(a, reg, host_bytes, rates, clock="replay")}
 
 
 def identity(rec: Record, at_r0: dict, row: dict) -> dict:
@@ -255,7 +255,10 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
     accepted paced sessions replayed under each pass model (`pass_models`) at its own round trip and at each of
     `rtt_ms`, with `prover` the prover's record."""
     grid = [(m, ms) for m in pass_models(pass_scale, pass_ms) for ms in (None, *rtt_ms)]
-    host_bytes, ingress = doc["host_bytes"], tuple(doc["ingress"])
+    if "rates" not in doc:
+        raise SystemExit("gate_whatif: the line of record was written before its forms' rates (its `ingress`): run "
+                         "this tree's auditor_line.py on the run again and pass its output as --line")
+    host_bytes, rates = doc["host_bytes"], doc["rates"]
     v = json.loads((out / "verifier.json").read_text())
     reg, tau = v["registration"], v["rtt"]["median_ns"] // 2
     by_k = {p["k"]: p for p in prover["sessions"]}
@@ -276,7 +279,7 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
         except Refused as e:
             got["refused"] = str(e)
             continue
-        own = row_at(s, reg, rec, rec.r0, host_bytes, ingress)
+        own = row_at(s, reg, rec, rec.r0, host_bytes, rates)
         net = rec.net
         got.update(tau_ms=tau / 1e6, r0_ms=rec.r0 / 1e6, net_ms=al.q(net),
                    excess_ms=al.q([x - rec.r0 for x in net]), challenger_ms=al.q(rec.P), step_ms=al.q(rec.step),
@@ -284,7 +287,7 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
                    identity=identity(rec, own, row),
                    rows=[{"pass": m, "own_rtt": ms is None, **{k: x for k, x in r.items() if k != "series"}}
                          for m, ms, r in ((m, ms, row_at(s, reg, rec, rec.r0 if ms is None else round(ms * 1e6),
-                                                         host_bytes, ingress, passes_of(rec, m.get("scale"),
+                                                         host_bytes, rates, passes_of(rec, m.get("scale"),
                                                                                         m.get("ms"))))
                                           for m, ms in grid)])
         got["own"] = {k: x for k, x in own.items() if k != "series"}
@@ -292,14 +295,14 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
     for t in sorted({r["T"] for r in rows}):
         ok = [r for r in rows if r["T"] == t and r["credited"] and "rows" in r]
 
-        def worst(i: int, b: float) -> dict:
-            return min(({"k": r["k"], **{f: r["rows"][i]["shares_auditor_clock"][f"{b:.1e}"][f] for f in al.SHARES},
-                         "l_max_ms": r["rows"][i]["shares_auditor_clock"][f"{b:.1e}"]["worst_l_max_ms"],
+        def worst(i: int, form: str) -> dict:
+            return min(({"k": r["k"], **{f: r["rows"][i]["shares_auditor_clock"][form][f] for f in al.SHARES},
+                         "l_max_ms": r["rows"][i]["shares_auditor_clock"][form]["worst_l_max_ms"],
                          "waits": r["rows"][i]["waits"]} for r in ok),
                        key=lambda x: x["time"], default=dict.fromkeys(al.SHARES, 0.0))
 
         doc_line[t] = {"credited_sessions": [r["k"] for r in ok], "rows": [
-            {"pass": m, "rtt_ms": "own" if ms is None else ms, **{f"{b:.1e}": worst(i, b) for b in ingress}}
+            {"pass": m, "rtt_ms": "own" if ms is None else ms, **{form: worst(i, form) for form in al.line.FORMS}}
             for i, (m, ms) in enumerate(grid)]}
     return {"registration": reg["digest"], "peer": doc.get("peer"), "line_of_record": doc["line"],
             "credit": doc["credit"], "cross_check": {r["k"]: r.get("cross_check") for r in doc["sessions"]},

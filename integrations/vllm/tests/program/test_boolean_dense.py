@@ -257,8 +257,8 @@ def test_the_one_word_rows_on_every_word(d) -> None:
     _agree(_row(d, 1), EVERY.reshape(-1, 1))
 
 
-@pytest.mark.parametrize("d", [BD.SquareF32, BD.AddScalarF32, BD.ScaleRowF32, BD.MulVecF32]
-                         + [pytest.param(d, marks=pytest.mark.slow) for d in (BD.AddWidenedBf16, BD.ScaleRowBf16, BD.Bf16MulScalarTensor)],
+@pytest.mark.parametrize("d", [BD.SquareF32, BD.AddScalarF32, BD.ScaleRowF32, BD.MulVecF32, BD.AddWidenedBf16]
+                         + [pytest.param(d, marks=pytest.mark.slow) for d in (BD.ScaleRowBf16, BD.Bf16MulScalarTensor)],
                          ids=lambda d: d.name)
 def test_the_two_word_rows_on_specials_random_and_edges(d) -> None:
     """`_operands` at N = 1 (a row with a bf16 operand reads every bf16 word against 8 specials: slow, about 15 s)."""

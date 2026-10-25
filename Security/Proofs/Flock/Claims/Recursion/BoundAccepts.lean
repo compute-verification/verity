@@ -122,10 +122,11 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
     (hShows : Claims.Recursion.VStarB.VstarShowsB (deployRec I.V ivScope { b with rd := L.readers }) I L shape decC
       shows cmt)
     (hChk : ∀ s, Claims.Recursion.VStarB.PartChecksB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
-      shows chk s)
+      shows cmt chk s)
     (hOpen : ∀ s, Claims.Recursion.VStarB.PartOpensB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
       shows cmt s)
     (hDec : Claims.Recursion.VStarB.DecompB H (deployRec I.V ivScope { b with rd := L.readers }) I.V L shape chk)
+    (hRows : L.ReadsRows H)
     (hRRP : ReadersRunPlayed H I.V { b with rd := L.readers } DO) :
     Claims.Recursion.VStarAccepts H (deployRec I.V ivScope { b with rd := L.readers }) I DO shape := by
   intro x st hst hf Ω P ω r hacc ws ho htrue
@@ -190,7 +191,7 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
     rcases hChk s x st hst hf _ ws[s] (ho.2 s hsw) hts with hck | hck
     swap
     · exact absurd hck (hpc' s hsw)
-    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_)
+    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_) ?_ ?_
     · have hi1 : i + 1 < L.rounds x := by
         by_contra hne
         have hil : i = I.V.k (xIOf x) - 1 := by omega
@@ -211,6 +212,9 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
+    · intro i hi1 _ _
+      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)

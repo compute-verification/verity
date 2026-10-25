@@ -42,17 +42,17 @@ from typing import Any
 from verity.core.protocols.pouw.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
 
 from .pouw_pearl_c_graphs import SLOT_BYTES
-from .pouw_pearl_c_host import _event
+from .pouw_pearl_c_host import _event, _stream
 
 #: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
 #: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``;
-#: ``form_ep_a`` (E' and the forming in one launch) is ``forming``
+#: ``form_ep_a`` (E' and the forming in one launch) is ``forming``, and so is ``form_epw_a`` (those and A'F_B's windows)
 STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
                "seeds_a": "row_seeds", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
                "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "row_seeds",
-               "rows_a": "row_seeds", "tree_seed_a": "a_tree", "form_ep_a": "forming"}
+               "rows_a": "row_seeds", "tree_seed_a": "a_tree", "form_ep_a": "forming", "form_epw_a": "forming"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  The tile hashing reads C~ and U; A's tree (``tree_seed_a``, only where the pipeline splits A's commitment,
@@ -130,11 +130,12 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
 
 class LaneCalls:
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
-    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``key_table``, ``eager_only``, ``roots``, ``roots_buf``,
+    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``,
     ``_side_turn`` and ``_side_cache``, and its
     graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``); where a whole capture cuts a
     call's steps (`_call_cuts`, `_call_tree`, `_call_stats`, from ``entry`` and `_call_names`); and a lagged end's readback
-    (`settle`: ``_lagged``, ``commits``) and tree aside (`_end_aside`: ``_end_side``, ``leaves``)."""
+    (`settle`: ``_lagged``, ``commits``) and tree aside (`_end_aside`: ``_end_side``, ``leaves``); and a call's A words
+    (`_stage_a`)."""
 
     def _call_cuts(self, pipe: Any) -> tuple[int, int]:
         """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
@@ -195,6 +196,19 @@ class LaneCalls:
         got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True) for t in (roots, flags)]
         side.wait_stream(torch.cuda.current_stream())
         return staged.data_ptr(), side, got
+
+    def _stage_a(self, sh: Any, x2: Any, m: int, filled: int) -> None:
+        """A call's A words on the current stream: x2's m rows widened to FP32 into ``sh.xa`` and its rows m to `filled` - 1
+        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill."""
+        import torch
+        dev, k = self.kernel.dev, x2.shape[-1]
+        if (self.device.type == "cuda" and x2.dtype == torch.bfloat16 and x2.is_contiguous() and x2.data_ptr() % 16 == 0
+                and k % 8 == 0 and getattr(dev, "has", lambda _: False)("widen_a")):
+            self.kernel.run.widen_a(dev, x2.data_ptr(), sh.xa.data_ptr(), m, max(filled, m), k, stream=_stream(self.device))
+            return
+        sh.xa[:m].copy_(x2)
+        if filled > m:
+            sh.xa[m:filled].zero_()
 
     def _ended(self, out: dict[str, Any], roots_a: bytes, root: bytes, flags: list[int], units: int, count: int) -> None:
         out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),
@@ -258,11 +272,8 @@ class LaneCalls:
                 caller.wait_event(sh.done[j])
                 waited = True
             stream = caller if self.uploads.cuda else None
-            if self.eager_only:
-                self.key_table.put(keys, w, self.roots[w], index, sh.m16, raw, stream)
-            else:
-                data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
-                self.uploads.put(keys, data, stream)
+            data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
+            self.uploads.put(keys, data, stream)
         if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
             main.event.record(caller)
             lane.wait_event(main.event)
@@ -285,9 +296,9 @@ class LaneCalls:
                     for f in side[:side_cut]:
                         f()
                 if g is None:
-                    size, nb = pipe.size["tree_a"], self.nb
+                    size, nb, p = pipe.size["tree_a"], self.nb, index - self.cur.base
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
-                        self.roots_buf[nb * index:nb * (index + 1)].copy_(sh.buf("tree_a")[size - nb:size])
+                        self.roots_buf[nb * p:nb * (p + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
                     to.tree_event.record(tl.stream)
             if side:

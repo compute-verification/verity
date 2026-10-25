@@ -1,60 +1,78 @@
 {
  "definitions": {
   "PouwMask32_v2": {
-   "and": 32
+   "and": 32,
+   "type": "7b8a2f21cba45a6e332c4db129dcb79c47de0d3a2a9ee4ddaeab01764a1a80ae913fc0cbaea087d8df915f8729e0d0d8c47809807cb39e1bc64938272ae81a5c"
   },
   "PouwOneStream2_v2": {
-   "and": 24
+   "and": 24,
+   "type": "9b0e69f29b32aa2cca35546dd7b83be9d5ad33c89c50b5eb7b81111e9f0a4aee05b78f131bf213e6105b1dab6d230d85692607dfa40f3bc53107aef5e396bc9b"
   },
   "PouwOneStream3_v2": {
-   "and": 41
+   "and": 41,
+   "type": "a7ce2575038865e8bdd26eb84176d00299b57b1632eaf6eba1a8a4de8fe8e16a9bb9f78d1f0b2751a0e565c78f7629648639cabe3d31d26aeb3e4d52b88dc95b"
   },
   "PouwOrBit_v2": {
-   "and": 1
+   "and": 1,
+   "type": "d51dffa61a74c24be7f8b10c9c28934550204facbd9d50908bb92e1eedb3b0fd8ddb588edc630a91dd14505ab4b87e4eda1bd200e8fc27d692144e3e8d9539b5"
   },
   "PouwPeelSeg_v2": {
-   "and": 1563
+   "and": 1563,
+   "type": "30247f79b25c422a1d6d2a27d3cc4978755663f9ec2a54bc140c09b1880c5dd51d508f2fc40a35c9c3fef090cc24eeac983d535bf16a2940a7148a6675cec7d7"
   },
   "PouwU129_v2": {
-   "and": 14
+   "and": 14,
+   "type": "b1d6775a92084838b071fbd975c9928cb436e2f0e30eef4ef6b84ec214accae4bba42767b610a95bf2bc62670c521f2194341f5dcc99b9e635f8f397ffc51bfa"
   },
   "PouwWrapBits_v2": {
-   "and": 9
+   "and": 9,
+   "type": "e76b8c3eb4d836e6a9c251219352e62046221d7e6d17a4169429479e00dc592a9c3418722055097e47eb27d3a5a28bba7af071a746e459120ab833dacf083b3c"
   },
   "PouwWrapSeg_v2": {
-   "and": 614
+   "and": 614,
+   "type": "00a0ea502f2a0f21ca4f7464d503b31672a7ae06e99482033164463cecee3682d1e907a0405af91a845243ba633d1385a3862f08979b1001a1797e10581a3a10"
   },
   "PouwXWrap_v2": {
-   "and": 8
+   "and": 8,
+   "type": "738e76f1150f4d76f6d81b8db8fdbb595120e3c3108ed70bc5e2ee0f791a4df59ae0db0dd3f11cd66eb7d024207b9a5b68704bb02cae613ed045e5c6bdcca457"
   }
  },
  "pieces": {
   "PouwMask32_v1": {
-   "and": 32
+   "and": 32,
+   "type": "94c33bebd6207c173bf442fc084667cbf73c5001d3070f3e61536677f378227d6ea8c4266ae413b4673f25d3ad665dd63abb02b79794b96d836ab966f221cbe9"
   },
   "PouwOneStream2_v1": {
-   "and": 24
+   "and": 24,
+   "type": "f948895faa3ab813682747e0a3540dd6bb093d837d5ed4e463bc232fd9f2e8071d326e3ffba7eb96f2caa8fa545e11f34a4a41dfc3859c435ce24d97171a406b"
   },
   "PouwOneStream3_v1": {
-   "and": 41
+   "and": 41,
+   "type": "e2b354d8f56177459ea9debc3f8d12a2206026d69cbf728d78872afe1d237ada38d5c5f3f3368e53b537f540d6085050e3e5fb6713289277878177a28035a084"
   },
   "PouwOrBit_v1": {
-   "and": 1
+   "and": 1,
+   "type": "d51dffa61a74c24be7f8b10c9c28934550204facbd9d50908bb92e1eedb3b0fd8ddb588edc630a91dd14505ab4b87e4eda1bd200e8fc27d692144e3e8d9539b5"
   },
   "PouwPeelSeg_v1": {
-   "and": 1563
+   "and": 1563,
+   "type": "84b865f68b8608ab9913140bd54c0612c2d69fde5616068a79dcd40f8da6bc4b2ff331c24d0958178afb203dfb416264c2f8b3713f8f11166a8ab9629682e6cd"
   },
   "PouwU129_v1": {
-   "and": 14
+   "and": 14,
+   "type": "fa3121c93849874fceaae0a41d7d6cc8138ca480efabc45e347eadb534ffb0683ad9b0625402172ad70453339d277337c694788b4ffba5680ec946811cf55831"
   },
   "PouwWrapBits_v1": {
-   "and": 9
+   "and": 9,
+   "type": "65e692d2eeada389b354f9b49f75974794e96520c110f1a4cc8ec7cc03309ec7b641764f8f3c9da91eac11e3c72a4d97268a8974cbe2af104fe3b160f2d1c8a7"
   },
   "PouwWrapSeg_v1": {
-   "and": 626
+   "and": 626,
+   "type": "5463d2e4a49d087586c35d90e6c78980a583bb1e85fb61bdb3f4e0ac6bedc7cc9fcbe63111da432001ec112e84b5ef1f9accb5ea8a07fbbc66131bbc7db234b0"
   },
   "PouwXWrap_v1": {
-   "and": 8
+   "and": 8,
+   "type": "016f3731b034bdd02874a8013228cc24f30489b283d4dd1a6d553901224b49885bb50349a125a970ff9281af37850c2fb1de8b43d06fd1b3b100660e87a91cfa"
   }
  }
 }

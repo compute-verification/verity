@@ -103,7 +103,7 @@ def cmd_set(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research keeper set", allow_abbrev=False,
                                  description="keep N chunks of CMD leased on MACHINE until UTC, a fresh {seed} each")
     ap.add_argument("name", help="the target's name: lower case, digits and -, at most 40")
-    ap.add_argument("--on", required=True, metavar="MACHINE", help="the Nebius node (vy-nebius-1 or vy-nebius-2)")
+    ap.add_argument("--on", required=True, metavar="MACHINE", help="the Nebius node (vy-nebius-2)")
     ap.add_argument("--project", required=True)
     ap.add_argument("--n", type=int, required=True, help="the chunks to keep live, running or waiting for their lease")
     ap.add_argument("--until", required=True, metavar="UTC", help=f"start none after this (e.g. 2026-10-05T12:00Z; at most {MAX_AHEAD_H} h ahead)")

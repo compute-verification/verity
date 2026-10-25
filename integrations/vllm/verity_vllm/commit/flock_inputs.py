@@ -1,4 +1,4 @@
-"""M0's input files for a serving-rows window's member (``serving_rows.write``'s window): the public file
+"""C-Flock's input files for a window's member (``serving_rows.write``'s window): the public file
 ``m<k>-pub-<n>.bin`` (``rows: false``) and the prover's ``m<k>-inst-<n>.bin``, each the window's bodies under the header
 ``verity_flock.circuit.write`` gives the circuit the verifier composed for the member's template.  A chunked template's chunks
 are all staged under one circuit, whose META, pin and class (`FlockCircuit`) are read off it once."""
@@ -72,6 +72,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
             "circuit_sha512": c.pin, "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]
+    if mem.get("registered"):
+        head["registered"] = mem["registered"]
     o.mkdir(parents=True, exist_ok=True)
     pub = (d / f"m{k}-public.bin").read_bytes()
     got = {"circuit_sha512": c.pin, "class": c.cls}

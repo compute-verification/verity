@@ -15,7 +15,7 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from .pouw_pearl_c_host import _bytes, _put, _write, _zeros, write_manifest
+from .pouw_pearl_c_host import _bytes, _linked, _put, _write, _zeros, write_manifest
 from .pouw_pearl_c_manifest import MANIFEST_SCHEMA
 
 
@@ -30,14 +30,15 @@ class _Pass:
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
+    base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
 
 
 class PassEnds:
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
     ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
-    ``lag_ends`` and ``_lagged``, and its ``stream``, ``join_sides``, ``begin``, ``settle``, ``_end_aside`` and
-    ``_ended``."""
+    ``lag_ends``, ``_lagged`` and ``_weight_files``, and its ``stream``, ``join_sides``, ``begin``, ``settle``,
+    ``_end_aside`` and ``_ended``."""
 
     def end(self, lag: bool = False) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
@@ -47,7 +48,8 @@ class PassEnds:
         import torch
         self.settle()
         cur, K = self.cur, self.kernel
-        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing, "schedule": self.schedule.name}
+        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing,
+                               "schedule": self.schedule.name} | ({"base": cur.base} if cur.matmuls else {})
         if self.hashing and cur.matmuls:
             self.join_sides()
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
@@ -116,13 +118,13 @@ class PassEnds:
             wt = self.weights[w]
             size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
             weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                               "rows": _write(wd / f"{w}.rows.bf16", _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8)),
-                                              digest=False),
-                               "tree": _write(wd / f"{w}.tree", _bytes(wt.b["tree_b"][:size]))}
+                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False,
+                                               data=lambda wt=wt: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))),
+                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
         matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
-                    "root_a": roots_a[self.nb * u.index:self.nb * (u.index + 1)].hex(), **f}
-                   for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
+                    "root_a": roots_a[self.nb * p:self.nb * (p + 1)].hex(), **f}
+                   for p, (u, r, f) in enumerate(zip(cur.matmuls, cur.records, cur.files))]
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),

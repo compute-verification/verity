@@ -106,6 +106,7 @@ def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
     assert LE.build_fixtures(index, tmp_path, {"record"}, carried={"new": dict(carried["old"], row=101)})[1]["new"]["oracle"] == "/o/new"
 
 
+@pytest.mark.slow
 def test_append_keeps_the_existing_text_and_refuses_a_known_key(tmp_path, monkeypatch):
     import json
     fx = tmp_path / "fixtures.toml"
