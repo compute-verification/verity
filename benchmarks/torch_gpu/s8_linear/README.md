@@ -7,7 +7,7 @@ The linear `ScaledMmS8Coordinate_v1{K, DOT}` defines, DOT the card's s8 step (`G
 Two exact kernels, each with that epilogue fused in that order (run.py's `--kernel`):
 
 - **sm_90a: `s8_wgmma.cu`** (`wgmma.py` launches it on torch tensors; `wgmma.linear(x_s8, sx_f32, w_s8, sw_f32)` is
-  `benchmarks/torch_gpu/s8_simple`'s signature). Pearl-C's sm_90a plain GEMM (`benchmarks/pouw/pearl_c_sm90`) on the s8
+  the signature of KS8-SIMPLE's simple path, HASH-11). Pearl-C's sm_90a plain GEMM (`benchmarks/pouw/pearl_c_sm90`) on the s8
   atom: persistent and warp-specialized (one TMA producer warpgroup, one or two consumer warpgroups), `wgmma
   m64nNk32 .s32.s8.s8` into one s32 accumulator over all of K, the epilogue after the main loop. Its grid is a set of SMs
   (`Cfg` cN: at most N CTAs), the producer its own warpgroup role, and the main loop issues no integer work but counters,

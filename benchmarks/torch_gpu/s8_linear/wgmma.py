@@ -3,7 +3,7 @@
 `scaled_mm(xq, s_a, w, s_w, y, cfg)` launches `s8mm_<TM>x<BN>` on torch's current stream: xq [M, K] int8, s_a [M] float32,
 w [N, K] int8 (row-major), s_w [N] float32 -> y [M, N] bf16, in place. It allocates nothing and a CUDA graph captures it (the
 tensor maps are kernel parameters, encoded on the host and cached by address and shape); `linear(x_s8, sx_f32, w_s8, sw_f32)`
-is the same with y allocated, benchmarks/torch_gpu/s8_simple's signature. A config (`Cfg`, text
+is the same with y allocated, the signature of KS8-SIMPLE's simple path (HASH-11). A config (`Cfg`, text
 "128x256:c0:g8") is the tile (TM x BN), the CTAs (c0: the fewest that keep the tiles' rounds over every SM, `Lib.grid`; cN: at
 most N, so the GEMM holds N SMs and leaves the rest) and the raster group (tile rows a group). The cubin is $S8_WGMMA_CUBIN,
 else build/s8_wgmma.cubin here; loading it checks its `s8mm_layout` (Params' layout, each tile's shared memory and stages)
@@ -214,7 +214,7 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
 
 
 def linear(x_s8: torch.Tensor, sx_f32: torch.Tensor, w_s8: torch.Tensor, sw_f32: torch.Tensor) -> torch.Tensor:
-    """s8_simple's signature: y [M, N] bf16 of x_s8 [M, K], sx_f32 [M], w_s8 [N, K] and sw_f32 [N]."""
+    """The simple path's signature (HASH-11): y [M, N] bf16 of x_s8 [M, K], sx_f32 [M], w_s8 [N, K] and sw_f32 [N]."""
     y = torch.empty((x_s8.shape[0], w_s8.shape[0]), dtype=torch.bfloat16, device=x_s8.device)
     scaled_mm(x_s8, sx_f32.reshape(-1), w_s8, sw_f32.reshape(-1), y)
     return y
