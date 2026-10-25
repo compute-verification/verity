@@ -215,26 +215,27 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     return _verdict(ok, {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")})
 
 
-def leak_count(circuit: Mapping[str, Any], bits: int) -> dict[str, Any]:
+def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
     ``other_inputs`` is #(otherInputs \\ registered): #4044's ``otherInputs`` (``SampledCharge.lean``), the circuit's input
-    gates no step lists as ingress, less the inputs the registration fixes. The circuit record's input gates are each
-    member's parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per unit, or once
-    per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs (``wired``, which
-    a5's wiring check holds). The records list no steps and register no input (a row table's registered reads are refused,
-    `verifier_window`), so none is ingress or registered yet: ``external`` ports are reported, not subtracted, until a
-    layout lists the ingress at its steps. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
-    inputs = wired = external = 0
-    ext = set(circuit.get("external") or ())
-    for m in circuit["members"]:
-        tables, wires = dict(map(tuple, m.get("tables") or ())), {p for p, _o, _ws in m.get("wired") or ()}
-        for p, words in m["rows"]:
-            n = 16 * int(words) * int(tables.get(p, m["n"]))
+    gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
+    verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
+    unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
+    (``wired``, which a5's wiring check holds). The records list no steps and register no input (a row table's registered
+    reads are refused, `verifier_window`), so none is ingress or registered yet: the ``external`` ports are reported, not
+    subtracted, until a layout lists the ingress at its steps. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the
+    charge."""
+    inputs = wired = ext_bits = 0
+    ext = set(external)
+    for m in members:
+        tables, wires = dict(m.tables), {p for p, _o, _ws in m.wired}
+        for p, words in m.rows:
+            n = 16 * int(words) * int(tables.get(p, m.n))
             inputs += n
             wired += n if p in wires else 0
-            external += n if f"{m['template']}/{p}" in ext and p not in wires else 0
+            ext_bits += n if f"{m.template}/{p}" in ext and p not in wires else 0
     other = inputs - wired
-    return {"inputs": inputs, "wired": wired, "ingress": 0, "registered": 0, "external": external, "other_inputs": other,
+    return {"inputs": inputs, "wired": wired, "ingress": 0, "registered": 0, "external": ext_bits, "other_inputs": other,
             "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
 
 
@@ -243,7 +244,7 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
     compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
     compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
-    the compiler's output (``held["output"]``, the compile check's, its first member one unit short)."""
+    the compiler's output (``held["output"]``, the compile check's, its first template one unit short)."""
     cases = {"registration-naming-another-circuit": {**w, "circuit": "00" * 64},
              "registration-naming-another-run": {**w, "run": "00" * 64}}
     if held.get("compiler") is None:
@@ -262,8 +263,8 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
         v, _ = compile_check(circuit, w, op, held["compilers"], scratch, held.get("repo"))
         out["opening-under-another-salt"] = v
         if (theirs := held.get("output")) is not None:
-            m0 = theirs["members"][0]
-            short = {**theirs, "members": [{**m0, "n": m0["n"] - 1}, *theirs["members"][1:]]}
+            (t0, n0), *rest = theirs["templates"]
+            short = {**theirs, "templates": [[t0, n0 - 1], *rest]}
             out["circuit-record-not-the-compilers-output"] = {"ok": IF.circuit_of(theirs) == IF.circuit_of(short),
                                                               "codes": ["circuit"]}
     return {name: {"refused": not v["ok"], "codes": v["codes"]} for name, v in out.items()}
@@ -399,7 +400,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
-    row["leak"] = leak_count(doc, int((held["advice"] or {}).get("bits", 0)))
+    row["leak"] = leak_count(mine.members, doc.get("external") or (), int((held["advice"] or {}).get("bits", 0)))
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
     if a.challenger:

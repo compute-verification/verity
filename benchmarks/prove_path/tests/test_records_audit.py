@@ -20,6 +20,7 @@ import hashlib
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,7 +32,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
-from verity.ml.windows import interface as IF
+from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -114,7 +115,7 @@ def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(wri
     assert v["ok"] and bound == written.bound and v["detail"]["bits"] == 8 * len(ADVICE)
     assert IF.circuit_of(json.loads((tmp_path / "c" / "compiled.json").read_text())) == IF.circuit_of(doc)
     other = dict(op, salts=[("00" if op["salts"][0][:2] != "00" else "01") + op["salts"][0][2:], *op["salts"][1:]])
-    short = {**doc, "members": [{**doc["members"][0], "n": 3}, *doc["members"][1:]]}
+    short = {**doc, "templates": [[TID, 4]]}
     for name, (compilers, window, opening), codes in (
             ("a compiler the verifier doesn't hold", ({}, w, op), ["compiler", "code", "compiles", "circuit", "length"]),
             ("another digest", (_compilers(tmp_path, doc), {**w, "compiler": {**COMPILER, "digest": "00" * 64}}, op),
@@ -228,17 +229,16 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     1,687 declared advice bits: vacuous. A wired port isn't an input, a shared-row port counts its table's rows, and an
     external port is reported but not subtracted until a layout lists the ingress at its steps."""
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
-    got = RA.leak_count(written.doc, 8 * len(ADVICE))
+    mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
+    got = RA.leak_count(mine.members, doc["external"], 8 * len(ADVICE))
     assert got == {"inputs": 5 * per_unit, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
                    "other_inputs": 5 * per_unit, "advice_bits": 8 * len(ADVICE), "bound": "vacuous"}
-    assert RA.leak_count(written.doc, 5 * per_unit)["bound"] == "within the charge"
-    silu = {"external": [], "members": [{"template": "SiluMul_v2{I=8192}", "n": 8, "rows": [["g", 8192], ["u", 8192]]}]}
-    assert RA.leak_count(silu, 1687)["other_inputs"] == 2_097_152 and RA.leak_count(silu, 1687)["bound"] == "vacuous"
-    m0, m1 = written.doc["members"]
-    x = 16 * dict(map(tuple, m0["rows"]))["x"]
-    doc = {**written.doc, "external": [f"{TID}/wrow"],
-           "members": [{**m0, "wired": [["x", "o0", [0, 1, 2, 3]]]}, {**m1, "tables": [["x", 3]]}]}
-    got = RA.leak_count(doc, 0)
+    assert RA.leak_count(mine.members, (), 5 * per_unit)["bound"] == "within the charge"
+    silu = [CS.Member("SiluMul_v2{I=8192}", (("g", 8192), ("u", 8192)), (("o0", 8192),), 8)]
+    assert RA.leak_count(silu, (), 1687)["other_inputs"] == 2_097_152 and RA.leak_count(silu, (), 1687)["bound"] == "vacuous"
+    m0, m1 = mine.members
+    x = 16 * dict(m0.rows)["x"]
+    got = RA.leak_count([replace(m0, wired=(("x", "o0", (0, 1, 2, 3)),)), replace(m1, tables=(("x", 3),))], [f"{TID}/wrow"], 0)
     assert (got["wired"], got["inputs"]) == (4 * x, 5 * per_unit + 2 * x)
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
 

@@ -1,7 +1,8 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
-commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, and
-the verifier's window is rebuilt from the circuit record alone. A window written under core's registration, and
+commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, a
+wire pattern wires whole members unit by unit under its writers' salts, and the verifier's window is rebuilt from the
+circuit record alone, its members stated by cap and wires. A window written under core's registration, and
 `of_records` against it, are the records audit's tests (`benchmarks/prove_path/tests/test_records_audit.py`), since these
 may not import core."""
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -19,7 +21,7 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.windows import interface as I, rows as CS
+from verity.ml.windows import interface as I, rows as CS, wiring as WI
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -161,15 +163,126 @@ def test_the_verifiers_window_is_the_circuit_records(templates):
 
 
 def test_a_circuit_record_its_templates_dont_make_is_refused():
-    doc = json.loads(I.circuit_bytes(I.Window(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4).circuit_record()))
+    win = I.Window(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4)
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "rec", [(TID, 10)])))
     with pytest.raises(ValueError, match="not the partition's units"):
-        I.window_of_record({**doc, "templates": [[TID, 11]]}, LAW, BY_ID.__getitem__)
-    with pytest.raises(ValueError, match="not the ones its templates make"):
-        I.window_of_record({**doc, "partition": "00" * 64}, LAW, BY_ID.__getitem__)
+        I.window_of_record({**listed, "templates": [[TID, 11]]}, LAW, BY_ID.__getitem__)
+    for bad in ({**doc, "templates": [[TID, 11]]}, {**doc, "partition": "00" * 64}, {**listed, "partition": "00" * 64}):
+        with pytest.raises(ValueError, match="not the ones its templates make"):
+            I.window_of_record(bad, LAW, BY_ID.__getitem__)
     with pytest.raises(ValueError, match="resolves"):
         I.window_of_record(doc, LAW, lambda t: ACC)
     with pytest.raises(ValueError, match="window-circuit"):
         I.window_of_record({**doc, "format": "x"}, LAW, BY_ID.__getitem__)
+
+
+GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
+GID = descriptor_id(GEMM)
+REQUESTS, STEPS, LAYERS = 2, 2, 2
+
+
+def chain() -> I.Circuit:
+    """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (layer, step, request)
+    order: layer 1 reads layer 0's output at its step and request, layer 0 at step s + 1 reads layer 1's output at step s,
+    and layer 0's input at step 0 (the embedding) is external."""
+    layer = REQUESTS * STEPS
+    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",),
+                     wires=(I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
+                            I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer,
+                                   step=(REQUESTS, 1))))
+
+
+def chain_values(seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output."""
+    rng = np.random.default_rng(seed)
+
+    def bf16(a: np.ndarray) -> np.ndarray:
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    w = [bf16(rng.standard_normal((16, 16)) / 4) for _ in range(LAYERS)]
+    x = {(0, 0, r): bf16(rng.standard_normal(16)) for r in range(REQUESTS)}
+    y = {}
+    for s in range(STEPS):
+        for layer in range(LAYERS):
+            for r in range(REQUESTS):
+                if (layer, s) != (0, 0):
+                    x[layer, s, r] = y[0, s, r] if layer else y[1, s - 1, r]
+                y[layer, s, r] = np.asarray(evaluate_batch(GEMM, x[layer, s, r][None], w[layer][None], kernel="reference"),
+                                            dtype=np.uint16).reshape(16)
+    order = [(layer, s, r) for layer in range(LAYERS) for s in range(STEPS) for r in range(REQUESTS)]
+    return [np.stack([x[k] for k in order]), np.stack([w[k[0]] for k in order])], [np.stack([y[k] for k in order])]
+
+
+def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_salts():
+    """Each member's wired port reads, unit by unit, the writer the pattern gives it; the committed rows' public strings are
+    the writers' (a5's wiring check), a wire moved to other writers is refused there, and a reader row that isn't its
+    writer's output doesn't commit."""
+    win = I.Window(chain(), RUN, LAW, 2)
+    assert [(m.base, m.n, m.wired) for m in win.window.members] == [
+        (0, 2, ()), (2, 2, (("x", "o0", (4, 5)),)), (4, 2, (("x", "o0", (0, 1)),)), (6, 2, (("x", "o0", (2, 3)),))]
+    ins, outs = chain_values()
+    win.record(GEMM, ins, outs, {"chain": 0})
+    assert win.mismatches() == {}
+    c = win.close(salt_key=bytes(32))
+    publics = {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
+    assert WI.check(win.window.members, publics) == {}
+    moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in win.window.members]
+    assert set(WI.check(moved, publics)) == {m.key for m in moved if m.wired}
+    bad = I.Window(chain(), RUN, LAW, 2)
+    x = ins[0].copy()
+    x[2, 0] ^= 1
+    bad.record(GEMM, [x, ins[1]], outs)
+    with pytest.raises(ValueError, match="is not the o0 row"):
+        bad.close(salt_key=bytes(32))
+
+
+def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
+    win = I.Window(chain(), RUN, LAW, 2)
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    by_id = {GID: GEMM}.__getitem__
+    assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
+    mine = I.window_of_record(doc, LAW, by_id)
+    assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
+    assert I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, doc["wires"][1]]}, LAW, by_id).members \
+        != win.window.members
+    for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
+                     ({**doc, "wires": [{**doc["wires"][0], "radix": 2}]}, "radix and step lists"),
+                     ({**doc, "wires": [{**doc["wires"][0], "extra": 0}]}, "a wire's record"),
+                     ({**doc, "cap": 3}, "covers part of"), ({**doc, "cap": 0}, "at least one unit")]:
+        with pytest.raises(ValueError, match=why):
+            I.window_of_record(bad, LAW, by_id)
+    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)])))
+    assert "cap" not in listed and I.window_of_record(listed, LAW, by_id).members == win.window.members
+    with pytest.raises(ValueError, match="stated with a cap"):
+        I.circuit_record(win.window, "chain", [(GID, 8)], wires=chain().wires)
+
+
+def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once():
+    """A wire's checks are per wire: its ends are its templates' ports, its reader and writer units are among theirs, it reads
+    a row of its writer's words (a gathered row is refused), and no reader unit's port is wired twice. A step of 0 is a
+    fan-out."""
+    w = {"reader": GID, "port": "x", "writer": GID, "out": "o0", "at": 4, "radix": (2, 2), "base": 0, "step": (2, 1)}
+    I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),))
+    for edit, why in [({"writer": TID}, "templates of the circuit"), ({"port": "o0"}, "parameters"), ({"out": "x"}, "outputs"),
+                      ({"port": "w"}, "gathered from several writers"), ({"at": 5}, "reader units"),
+                      ({"base": 5}, "writer units"), ({"step": (-2, 1)}, "writer units"), ({"radix": ()}, "at least one digit"),
+                      ({"step": (2,)}, "one integer step a digit"), ({"at": True}, "a first reader unit")]:
+        with pytest.raises(ValueError, match=why):
+            I.Circuit("bad", ((GEMM, 8),), wires=(I.Wire(**{**w, **edit}),))
+    with pytest.raises(ValueError, match="both wire units from 5"):
+        I.Circuit("twice", ((GEMM, 8),), wires=(I.Wire(**w), I.Wire(**{**w, "at": 5, "radix": (1, 2)})))
+    fan = I.Wire(GID, "x", GID, "o0", at=4, radix=(2, 2), base=1, step=(0, 2))
+    assert fan.writers(4, 4).tolist() == [1, 3, 1, 3] and fan.span() == (1, 3)
+
+
+def test_the_boundary_is_carried_as_given():
+    b = {"format": "verity/boundary/v1", "egress": {"template": GID}}
+    win = I.Window(I.Circuit("b", ((GEMM, 2),), boundary=b), RUN, LAW, 2)
+    assert json.loads(I.circuit_bytes(win.circuit_record()))["boundary"] == b
+    assert "boundary" not in I.Window(I.Circuit("b", ((GEMM, 2),)), RUN, LAW, 2).circuit_record()
+    with pytest.raises(ValueError, match="JSON object"):
+        I.Circuit("b", ((GEMM, 2),), boundary=["egress"])
 
 
 def test_an_advice_binding_is_well_formed():
