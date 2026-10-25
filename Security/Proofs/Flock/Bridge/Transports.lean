@@ -131,7 +131,7 @@ theorem find?_portsOf_sep (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q :
   obtain ⟨hpx, j, hj, hxj, hbefore⟩ := (Array.find?_eq_some_iff_getElem).mp hx
   have hjq : j ≤ q := by
     by_contra hlt
-    exact absurd hp (hbefore q (by omega))
+    exact absurd (hbefore q (by omega)) (by simp [hp])
   have hjx : x = portAt c nl roots j := by
     rw [← hxj]
     simp [portsOf_eq]
