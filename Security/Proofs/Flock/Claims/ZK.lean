@@ -179,6 +179,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
 import Proofs.Flock.Claims.ZK.RepLog
 import Proofs.Flock.Claims.ZK.CutPrefix
 import Proofs.Flock.Claims.ZK.PiopFree
+import Proofs.Flock.Claims.ZK.RepFree
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -718,6 +719,9 @@ import Proofs.Flock.Claims.ZK.PiopFree
   size both return or neither does, with the same log size and switched claims (**`piopCut_src_free`**,
   `piopCut_sws_eq`), and where the firewall's rep returned, the cut PIOP from any source does
   (**`Masked.piopCut_of_repFwC`**).
+* `RepFree`: the cut opening returns on its coins alone. Two runs of the opening, the firewall's `ligeritoPZk` and the
+  cut's `ligeritoCut` from any source, at logs of one size, both return with equal message, challenge and OOD counts
+  and equal log sizes, or the firewall's doesn't return (**`ligeritoPZk_cut_fw`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
