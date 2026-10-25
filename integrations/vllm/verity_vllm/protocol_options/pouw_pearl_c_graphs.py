@@ -36,10 +36,10 @@ the serial capture's.
 With ``whole_defer_a`` too, where the kernel's pipeline splits A's commitment (``rows_a``, then ``tree_seed_a``, A's tree;
 `pouw_pearl_c_lanes`' ``deferred-a`` split, with no padding rows' E_A lines), a whole capture forks each call's A tree
 after its per-row keying onto a tree stream of the run's own, beside the call's forming and GEMM, which read nothing the
-tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps, whose scatter copies
-A's root to the pass (with `TILES_BESIDE_TREE`, only the scatter: the tile hashing reads nothing the tree writes), and a
-retained capture's copy of A's tree to its stage; and so a call joining the side steps of a call of its shape joins that
-call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps' scatter, which copies
+A's root to the pass (the tile hashing before it reads nothing the tree writes, and runs beside it: `TILES_BESIDE_TREE`),
+and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a call of its shape joins
+that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
 With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persistent CTA fewer (the pipeline's ``beside``),
 since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
 computed as before, by another CTA.
@@ -72,10 +72,11 @@ GRAPH_ROWS = 256
 SLOT_BYTES = 176
 #: a lane graph's slot (`_lane_graph`): dom_a ‖ unit padded to `SLOT_BYTES`, then the call's three offsets
 LANE_SLOT_BYTES = SLOT_BYTES + 24
-#: a probe: PEARLC_TILES_BESIDE_TREE=1 has a whole capture's side steps join the A trees forked so far only before the
-#: scatter, the one step that reads A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree
-#: (alone it lost: r20261025-015411-7d73)
-TILES_BESIDE_TREE = os.environ.get("PEARLC_TILES_BESIDE_TREE", "0") == "1"
+#: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
+#: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's
+#: ``tiles_group``) so that its CTAs leave pd_commit's and pd_tree's whole SMs free (beside the tree a CTA a tile, and
+#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  PEARLC_TILES_BESIDE_TREE=0 joins them first
+TILES_BESIDE_TREE = os.environ.get("PEARLC_TILES_BESIDE_TREE", "1") != "0"
 
 
 def _capturing() -> bool:
@@ -588,7 +589,11 @@ class GraphCalls:
                             g.steps[i]()
                 finally:
                     pipe.beside = 0
-                self._fork(sh, g.steps[b:], raw)
+                pipe.tiles_group = t is not None and TILES_BESIDE_TREE
+                try:
+                    self._fork(sh, g.steps[b:], raw)
+                finally:
+                    pipe.tiles_group = False
                 if len(self._whole) == len(self.order):
                     self._join()
                     self._join_tree()
