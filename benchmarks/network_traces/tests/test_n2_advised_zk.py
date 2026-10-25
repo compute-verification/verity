@@ -295,3 +295,26 @@ def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_bu
     assert held_kept and all(kept[k] in wit for k in held_kept)
     assert {k for k in kept if k.rsplit(" @", 1)[0] in held} - held_kept == {
         f"head {end} {w} @2208" for end in n2.ENDS for w in range(n2.WINDOWS)}
+
+
+def test_the_prover_s_other_subset_is_another_k_subset_of_the_period():
+    """`n2_zk.other_subset`, the ``other_subset`` member's windows: K of the period's, ascending, not the draw's units
+    (the undrawn windows first), and the draw's own at K = n, where no other subset exists."""
+    for n, k, units in ((26, 8, [3, 8, 10, 11, 15, 18, 19, 23]), (4, 3, [0, 1, 3]), (5, 1, [0]), (3, 2, [1, 2])):
+        got = n2.Z.other_subset({"population": n, "k": k, "units": units})
+        assert len(got) == len(set(got)) == k and got == sorted(got) and got != units and set(got) <= set(range(n))
+    assert n2.Z.other_subset({"population": 26, "k": 8, "units": [3, 8, 10, 11, 15, 18, 19, 23]}) == [0, 1, 2, 4, 5,
+                                                                                                    6, 7, 9]
+    assert n2.Z.other_subset({"population": 4, "k": 4, "units": [0, 1, 2, 3]}) == [0, 1, 2, 3]
+
+
+def test_a_sampled_period_adds_the_other_subset_member_and_an_unsampled_one_refuses_it(tmp_path):
+    """``--draw K`` (K < n) adds ``other_subset``, the honest records, whose expected window verdicts are honest's; a
+    period with every window proved has no other K-subset to prove, so asking for it is refused."""
+    assert n2.main(["prove", "--dry", "--draw", "2", "--members", "honest,other_subset", "--out", str(tmp_path)]) == 0
+    s = json.loads((tmp_path / "summary.json").read_text())
+    assert set(s["members"]) == {"honest", n2.OTHER} and "draw" in s["changed"][n2.OTHER]
+    assert s["members"][n2.OTHER]["reference"] == s["members"]["honest"]["reference"]
+    assert s["draw"]["law"] == "subset:2" and s["draw"]["population"] == n2.WINDOWS
+    with pytest.raises(SystemExit, match="needs --draw"):
+        n2.main(["prove", "--dry", "--members", "honest,other_subset", "--out", str(tmp_path / "all")])
