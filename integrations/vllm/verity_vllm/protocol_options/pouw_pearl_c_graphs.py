@@ -36,9 +36,18 @@ the serial capture's.
 With ``whole_defer_a`` too, where the kernel's pipeline splits A's commitment (``rows_a``, then ``tree_seed_a``, A's tree;
 `pouw_pearl_c_lanes`' ``deferred-a`` split, with no padding rows' E_A lines), a whole capture forks each call's A tree
 after its per-row keying onto a tree stream of the run's own, beside the call's forming and GEMM, which read nothing the
-tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps, whose scatter copies
-A's root to the pass, and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a
-call of its shape joins that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps' scatter, which copies
+A's root to the pass (the tile hashing before it reads nothing the tree writes, and runs beside it: `TILES_BESIDE_TREE`),
+and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a call of its shape joins
+that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persistent CTA fewer (the pipeline's ``beside``),
+since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
+computed as before, by another CTA.
+
+With ``whole_fork_stats`` too (deferring), a whole capture forks each call's A scales (``stats_a``, which reads A's words
+alone and writes its shape's alpha, beta, ia and aux) onto a stats stream before the call's A commitment, which reads and
+writes none of them, and the capturing stream joins it in its place, before the forming steps that read them.  Nothing
+past that join is reordered, so the same kernels write the same bytes.
 
 With a `statement` enabled (and hashing), a whole capture also copies each call's A words to the statement's stage, and
 `whole_replayed` launches its commitment of the forward's rows after the replay; its key says so.
@@ -63,6 +72,12 @@ GRAPH_ROWS = 256
 SLOT_BYTES = 176
 #: a lane graph's slot (`_lane_graph`): dom_a ‖ unit padded to `SLOT_BYTES`, then the call's three offsets
 LANE_SLOT_BYTES = SLOT_BYTES + 24
+#: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
+#: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's
+#: ``tiles_group``) so that its CTAs leave pd_commit's and pd_tree's whole SMs free (beside the tree a CTA a tile, and
+#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  False joins them first (e8ea036243's
+#: PEARLC_TILES_BESIDE_TREE=0 arm)
+TILES_BESIDE_TREE = True
 
 
 def _capturing() -> bool:
@@ -83,6 +98,8 @@ class _Graph:
     #: where a deferred-a whole capture forks A's tree (`_call_tree`: ``tree_seed_a``, the step before ``cuts[0]``), or None
     #: where the call's pipeline doesn't split A's commitment
     tree_at: int | None = None
+    #: where a whole capture forking A's scales takes ``stats_a`` from (`_call_stats`, between the cuts), or None
+    stats_at: int | None = None
     #: a lane graph's (`_lane_graph`): the side lane's graph and steps, and the slot both lanes read (dom_a ‖ unit, then the
     #: call's offsets at `SLOT_BYTES`, `offs`; its address `slot_ptr`).  Where A's tree is off the main lane, the main
     #: graph records `ev_tree` (an external event) before step `cut`, and the side steps before `side_cut` (A's tree and
@@ -152,6 +169,13 @@ class GraphCalls:
     whole_defer_a: bool = False
     _tree_open: bool = False
     _tree_stream: Any = None
+    #: with ``whole_defer``, whether a whole capture also forks each call's A scales (``stats_a``, which reads A's words
+    #: alone) beside its A commitment, joined where the call's forming reads them; and the stats stream
+    whole_fork_stats: bool = False
+    _stats_stream: Any = None
+    #: with ``whole_defer_a``, whether a call's GEMMs beside its forked A tree leave the tree's CTA its SM (the pipeline's
+    #: ``beside``)
+    whole_tree_sm: bool = False
     #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
     #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
     #: `after(calls, tiles_at)` on the replaying stream (benchmarks/pouw/served_zk/statement.py's `Statement`)
@@ -205,6 +229,8 @@ class GraphCalls:
         retained = self.cur.retain is not None if retained is None else retained
         key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
         key = (*key, "a_tree") if self._defers_a() else key
+        key = (*key, "tree_sm") if self._defers_a() and self.whole_tree_sm else key
+        key = (*key, "stats") if self._forks_stats() else key
         return (*key, "statement") if self._statement_on() else key
 
     def _defers(self) -> bool:
@@ -214,6 +240,10 @@ class GraphCalls:
     def _defers_a(self) -> bool:
         """Whether a whole capture forks each call's A tree beside its forming and GEMM (`whole_defer_a`, deferring)."""
         return self.whole_defer_a and self._defers()
+
+    def _forks_stats(self) -> bool:
+        """Whether a whole capture forks each call's ``stats_a`` beside its A commitment (`whole_fork_stats`, deferring)."""
+        return self.whole_fork_stats and self._defers()
 
     def _statement_on(self) -> bool:
         """Whether forwards replayed whole commit `statement`'s rows too (it is set and enabled, with hashing)."""
@@ -231,6 +261,9 @@ class GraphCalls:
         if self._defers_a() and self._tree_stream is None:
             import torch
             self._tree_stream = torch.cuda.Stream(device=self.device)
+        if self._forks_stats() and self._stats_stream is None:
+            import torch
+            self._stats_stream = torch.cuda.Stream(device=self.device)
 
     def whole_capture_end(self) -> tuple[WholeCall, ...]:
         """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
@@ -488,7 +521,7 @@ class GraphCalls:
                 g.leaves.fill_(self.cur.poison)
             pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
             steps = self._call_steps(pipe)
-            g.cuts, g.tree_at = self._call_cuts(pipe), self._call_tree(pipe)
+            g.cuts, g.tree_at, g.stats_at = self._call_cuts(pipe), self._call_tree(pipe), self._call_stats(pipe)
             if self.hashing:
                 steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
             g.steps = steps
@@ -529,7 +562,9 @@ class GraphCalls:
         place, before the weight's next call rewrites it.  Deferred (`_defers`), the call joins the call before's side steps
         after its A tree and forks its own after its GEMM; the forward's last call (every weight called once) joins them.
         Deferring A's trees (`_defers_a`, where the call's graph has one, ``tree_at``), the call forks its tree after its
-        per-row keying, then joins the call before's side steps; the last call joins the tree stream too."""
+        per-row keying, then joins the call before's side steps; the last call joins the tree stream too.  Forking A's
+        scales (`_forks_stats`, ``stats_at``), the call forks ``stats_a`` before its A commitment and joins it in its
+        place, before the forming steps that read it."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -544,14 +579,28 @@ class GraphCalls:
             else:
                 a, b = g.cuts
                 t = g.tree_at if self._defers_a() else None
+                s = g.stats_at if self._forks_stats() else None
+                if s is not None:
+                    self._fork_stats(g.steps[s], raw)
                 for f in g.steps[:a if t is None else t]:
                     f()
                 if t is not None:
                     self._fork_tree(g.steps[t:a], raw)
                 self._join()
-                for f in g.steps[a:b]:
-                    f()
-                self._fork(sh, g.steps[b:], raw)
+                pipe.beside = int(t is not None and self.whole_tree_sm)
+                try:
+                    for i in range(a, b):
+                        if i == s:
+                            self._join_stats()
+                        else:
+                            g.steps[i]()
+                finally:
+                    pipe.beside = 0
+                pipe.tiles_group = t is not None and TILES_BESIDE_TREE
+                try:
+                    self._fork(sh, g.steps[b:], raw)
+                finally:
+                    pipe.tiles_group = False
                 if len(self._whole) == len(self.order):
                     self._join()
                     self._join_tree()
@@ -574,6 +623,24 @@ class GraphCalls:
             self.kernel.dev.stream = raw
         self._tree_open = True
 
+    def _fork_stats(self, step: Any, raw: int) -> None:
+        """`step` (the call's ``stats_a``) on the stats stream, after everything the capturing stream has launched so far
+        (the call's A words); `_join_stats` joins it before the call's forming."""
+        import torch
+        stats = self._stats_stream
+        stats.wait_stream(torch.cuda.current_stream(self.device))
+        self.kernel.dev.stream = stats.cuda_stream
+        try:
+            with torch.cuda.stream(stats):
+                step()
+        finally:
+            self.kernel.dev.stream = raw
+
+    def _join_stats(self) -> None:
+        """The capturing stream waits for the call's ``stats_a``, in its place among the call's steps."""
+        import torch
+        torch.cuda.current_stream(self.device).wait_stream(self._stats_stream)
+
     def _tree_joined(self, stream: Any = None) -> None:
         """`stream` (torch's current one when None) waits for the A trees forked so far, if a call forked one: before
         anything reads A's root or tree."""
@@ -589,17 +656,21 @@ class GraphCalls:
         self._tree_open = False
 
     def _fork(self, sh: Any, steps: list, raw: int) -> None:
-        """`steps` on the side stream, after everything the capturing stream has launched so far and the A trees forked so far
-        (the scatter copies A's root), with torch's current stream the side's too (the scatter is a Triton launch); the next
-        `_join` makes the capturing stream wait for them."""
+        """`steps` on the side stream, after everything the capturing stream has launched so far, the last (with hashing, the
+        scatter, which copies A's root) after the A trees forked so far too (`TILES_BESIDE_TREE`), with torch's current stream
+        the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them."""
         import torch
         side = self._side_stream
         side.wait_stream(torch.cuda.current_stream(self.device))
-        self._tree_joined(side)
+        cut = len(steps) - 1 if TILES_BESIDE_TREE and self.hashing and steps else 0
+        if not cut:
+            self._tree_joined(side)
         self.kernel.dev.stream = side.cuda_stream
         try:
             with torch.cuda.stream(side):
-                for f in steps:
+                for i, f in enumerate(steps):
+                    if cut and i == cut:
+                        self._tree_joined(side)
                     f()
         finally:
             self.kernel.dev.stream = raw

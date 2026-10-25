@@ -12,6 +12,7 @@
 # remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
 # a host run's directory as vy-auditor-1 ships it (`vy-verifier-gate fetch`, out/ beside request.json): the sessions'
 # challenger peer is the record's (verifier.json's, else request.json's --challenger-peer), and PEER overrides it.
+# LOCKDOWN, if set, is infra's record of the provider's lockdown of the gate node (auditor_line.py --lockdown).
 #
 #   research run --queue --on vy-nebius-cpu-5 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
 #     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \
@@ -60,7 +61,7 @@ else
 fi
 uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
   --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
-  "${MAIN[@]}" \
+  "${MAIN[@]}" ${LOCKDOWN:+--lockdown "$LOCKDOWN"} \
   --table "$OUT/credit.md" > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md"

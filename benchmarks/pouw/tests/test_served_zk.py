@@ -195,7 +195,7 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
     assert Wd.window_problem([e.row() for e in entries], work, params["entries"], root_h3) is None
     _, _, part = SC.population(K, work.n)
     (wroot,) = [r for r in public["roots"] if r["port"] == SC.PORT]
-    assert wroot["domain"] == R.served_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
+    assert wroot["domain"] == R.window_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
                                               params["context"])
     for e in (0, 2):
         for side in "ab":
@@ -320,6 +320,25 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
     assert json.loads((tmp_path / "salt.json").read_text()) == controller.open("salt", after).to_json()
     with pytest.raises(SystemExit, match="no challenger state"):
         SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")])
+
+
+def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
+    """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
+    instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
+    it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    import e2e
+    for source in (os.urandom, random.Random(0).randbytes):
+        with pytest.raises(Ch.CoinError, match="coins-without-claim"):
+            e2e.Coins(0, source)
+    state = tmp_path / "state"
+    state.write_bytes(random.Random(1).randbytes(512))
+    assert e2e.Coins(0, e2e.state_entropy(str(state))).challenger.claim == SC.PV.CLAIM == "uniform/io-getrandombytes"
+    monkeypatch.setattr(SC.PV, "coins", random.Random(2).randbytes)
+    (tmp_path / "params.json").write_text("{}")
+    with pytest.raises(SystemExit, match="coins-without-claim"):
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log"])
+    assert not (tmp_path / "log" / "coins.json").exists()
 
 
 @LEAN

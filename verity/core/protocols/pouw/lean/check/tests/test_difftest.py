@@ -307,6 +307,8 @@ def registered_file(case: dict) -> dict:
                                           case["steps"], case["salt"])
         if refused is None and all(t["j10r"] for t in shape["tiles"].values()):
             CREDITED["registered-file accept j10r"] += 1
+            if any(t["n"] > 1 for t in shape["tiles"].values()):
+                CREDITED["registered-file accept j10r chunked"] += 1
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
                                                                    "partition": Cr.partition_of(program, shape)}
@@ -368,7 +370,8 @@ def test_credit(pass_server):
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
     assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
-            "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r"} <= set(CREDITED)
+            "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
+            "registered-file accept j10r chunked"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",

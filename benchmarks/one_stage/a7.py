@@ -104,6 +104,9 @@ WINDOWS = 4
 #: the remote session's lifetime cap in windows (the memory-map unit's `life`, a U16): more than it has, so no block
 #: re-keys
 LIFE = 60
+#: the cap on its schedule's bits the remote session commits before its coins (`audit.Params.schedule_cap`): its
+#: schedule check refuses a schedule over it, and a ledger crediting appended blocks credits it as the steering
+SCHEDULE_CAP = 1 << 16
 #: each written value's epochs in the layout row: its production block's and one re-key's
 EPOCHS = 2
 #: the remote session's draws a window, each proved by check 3's unit (`opening`); at 2 the seeded run draws registered
@@ -320,7 +323,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
     rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
-                     lifetime=LIFE)
+                     lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
     s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                    not_before_ns=0, clock=clock)
@@ -1062,9 +1065,10 @@ def main() -> int:
     uncert = uncertified(result, rrec, rs.view, store, req, link, common, members)
     if uncert.get("credit_bytes"):
         link = replace(link, epsilon=min(1.0, uncert["uncertified_bytes"] / uncert["credit_bytes"]), delta=a.delta)
-    scheduled, schedule_why = None, None
+    scheduled, schedule_why, schedule_bits = None, None, None
     try:
         sched = MM.schedule(rs.header, rs.record, rs.session.appended, [s for w in rrec.windows for s in w.steps])
+        schedule_bits = sched.bits
         scheduled = rs.session.scheduled(sched)
     except (MM.MemoryMapError, SC.Refused) as e:
         schedule_why = str(e)
@@ -1085,7 +1089,8 @@ def main() -> int:
                        "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
                        "epsilon": link.epsilon, "delta": link.delta,
                        "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
-                       "schedule": {"bits": None if scheduled is None else scheduled.bits, "refused": schedule_why},
+                       "schedule": {"bits": schedule_bits, "cap": None if scheduled is None else scheduled.cap,
+                                    "refused": schedule_why},
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
                                        "credited_bytes": round((1 - v["terms"]["timing"]) * whole)} for k, v in ledgers.items()}}

@@ -36,10 +36,12 @@ from verity.core.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
     rows_domain,
+    salt_of,
     transcript_domain,
     weight_binding,
     weights_root,
 )
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
@@ -1112,6 +1114,59 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
     with pytest.raises(DomainError, match="recorded before epoch coins"):
         PPD.manifest_epoch({**recorded, "schema": PPD.MANIFEST_SCHEMA_RECORDED, **{k: man[k] for k in ("coins", "salt_opening")}},
                            commitment)
+
+
+def live_coin(after: bytes, entropy: int = 7):
+    """A live session's coin commitment and its salt coin opened after `after`, from a seeded in-process live challenger
+    (the auditor host's session as `pouw_h1_window.open_session` returns it)."""
+    ch = Wd.live_challenger(0, 1, random.Random(entropy).randbytes)
+    return ch.commitment, ch.open(Wd.SALT, 0, after)
+
+
+def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root(device_run):
+    """A live session's salt coin opened after the weights' root salts the device run's epoch (`audit.salt_of`, as H1's), and
+    the run records the session's coins; one opened after another root (before the weights were committed), one bound to
+    another session's commitment, and a live opening against an in-process commitment or the reverse are refused."""
+    _, kernel, weights, roots, _ = device_run
+    root = weights_root(roots)
+
+    def make(c, o):
+        return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
+                                   capacity=1 << 12, salt_key=SALT_KEY)
+    c, o = live_coin(root)
+    run = make(c, o)
+    assert run.epoch.salt == salt_of(c, o.coin, root) and run.commits["coins"] == c.to_json()
+    assert run.commits["salt_opening"] == o.to_json()
+    with pytest.raises(DomainError, match="not opened after"):
+        make(*live_coin(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])})))
+    with pytest.raises(DomainError, match="does not open against"):
+        make(live_coin(root, entropy=8)[0], o)
+    with pytest.raises(DomainError, match="pouw/draw coin 0, not its pouw/salt coin 0"):
+        ch = Wd.live_challenger(0, 1, random.Random(7).randbytes)
+        make(ch.commitment, ch.open(Wd.DRAW, 0, root))
+    in_process = salt_coin(roots)
+    for pair in ((in_process[0], o), (c, in_process[1])):
+        with pytest.raises(DomainError, match="live coin commitment, and nothing else"):
+            make(*pair)
+
+
+def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessions_commitment():
+    roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
+    work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
+    c, o = live_coin(weights_root(roots))
+    epoch = PPD.epoch_of(work, roots, c, o)
+    man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0},
+                                                      {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
+           "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
+           "coins": c.to_json(), "salt_opening": o.to_json(), "salt": epoch.salt.hex()}
+    assert PPD.manifest_epoch(man, c) == (epoch, "coin")
+    with pytest.raises(DomainError, match="not the epoch's"):
+        PPD.manifest_epoch(man, live_coin(weights_root(roots), entropy=8)[0])
+    with pytest.raises(DomainError, match="not the epoch's"):
+        PPD.manifest_epoch(man, salt_coin(roots)[0])
+    early = {**man, "salt_opening": {**o.to_json(), "after": weights_root({0: roots[0], 1: bytes(32)}).hex()}}
+    with pytest.raises(DomainError, match="not opened after"):
+        PPD.manifest_epoch(early, c)
 
 
 @pytest.mark.slow
@@ -2303,13 +2358,13 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         full.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
     assert [(n, st) for n, st, *_ in kernel.dev.log if st in sides and n.startswith("pd_")] == [
         (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_979", tree), ("pd_tiles_979", tiles))]
-    by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "eprime",
+    by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "form_s5_ep",
                                                                           "gemm_pearlc_d", "pd_tiles_851")}
     ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
     for c, j in enumerate((0, 1, 0)):
         (cp, ci), (tp, ti) = by["pd_commit_851"][c], by["pd_tree_851"][c]
         assert ci == (32, 1024, 1, 64) and ti == (32, 0, 0, 64)
-        assert cp[2] == tp[2] == ptr(j, "tree_a") and cp[12] == sh.b["ea_codes"].data_ptr() == by["eprime"][c][0][0]
+        assert cp[2] == tp[2] == ptr(j, "tree_a") and cp[12] == sh.b["ea_codes"].data_ptr() == by["form_s5_ep"][c][0][2]
         assert tp[12] == 0
         assert (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
         assert cp[6] == tp[6] == ptr(j, "keys") and cp[5] == tp[5] == ptr(j, "keys") + nb
@@ -2521,9 +2576,9 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
 def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_per_row_keying(sm90_run, monkeypatch):
     """A lane graph's main steps (`_main_steps`) run ``stats_a``, which reads only A's words, and the screen's scatter where
     A's tree is aside, on the run's fork lane: it starts behind an event recorded on the lane at its start, and the lane
-    waits for stats_a before eprime and for the whole fork at its end, so the per-row keying's end moves one step (the
-    fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on the lane; without the
-    driver (no graphs) the steps are as they were."""
+    waits for stats_a before E' (``form_ep_a``, under FORM_EP) and for the whole fork at its end, so the per-row keying's
+    end moves one step (the fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on
+    the lane; without the driver (no graphs) the steps are as they were."""
     from verity_vllm.protocol_options import pouw_pearl_c_graphs as PPG
     make, kernel, *_ = sm90_run
     run = make()
@@ -2536,7 +2591,14 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     monkeypatch.setattr(PPG, "_event", iter(["start", "first", "end", "start2", "first2", "end2"]).__next__)
     run.driver = Driver()
     pipe, *_ = run._pipe(0, run._shape(32, 256, 1024))
-    assert pipe.main_names == ("rows_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc")
+    assert pipe.main_names == ("rows_a", "stats_a", "form_ep_a", "af", "pa", "gemm_pearlc")
+    # from a cubin with form_s5_epw, A'F_B's windows are in the forming launch (run.WORDS_FORM)
+    monkeypatch.setattr(kernel.dev, "has", lambda name: name == "form_s5_epw", raising=False)
+    other = make()
+    other.driver = Driver()
+    words, *_ = other._pipe(0, other._shape(32, 256, 1024))
+    assert words.main_names == ("rows_a", "stats_a", "form_epw_a", "pa", "gemm_pearlc")
+    monkeypatch.delattr(kernel.dev, "has")
 
     def step(name):
         return lambda: calls.append((name, kernel.dev.stream))

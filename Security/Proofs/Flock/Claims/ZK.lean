@@ -145,6 +145,8 @@ import Proofs.Flock.Claims.ZK.FinishStopAt
 import Proofs.Flock.Claims.ZK.FinishSwSrc
 import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishSwMk
+import Proofs.Flock.Claims.ZK.FinishSwMkAny
+import Proofs.Flock.Claims.ZK.FinishFwL0
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FinishSwLigE
@@ -179,6 +181,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
 import Proofs.Flock.Claims.ZK.RepLog
 import Proofs.Flock.Claims.ZK.CutPrefix
 import Proofs.Flock.Claims.ZK.PiopFree
+import Proofs.Flock.Claims.ZK.RepFree
+import Proofs.Flock.Claims.ZK.RepReplay
+import Proofs.Flock.Claims.ZK.RepInner
+import Proofs.Flock.Claims.ZK.RepCutFw
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -692,6 +698,12 @@ import Proofs.Flock.Claims.ZK.PiopFree
   index (`Masked.valsFw`: the passed values below `zp 64`, level 0's opening's from there on), that is `repCut_fw`'s
   `hmk` below `zp 64` (**`Masked.swSrcE_hmk`**) and the opening's values plus the pads up to `h_ab`
   (**`Masked.swSrcE_l0`**).
+* `FinishSwMkAny`: the same masked values with no rows: the shifted view adds `v - vals` to the pad, so rep `r`'s
+  masked value is the passed value plus the session's pad whether or not the rows hold
+  (**`Masked.swSrcE_masked_pad_any`**).
+* `FinishFwL0`: level 0's values from the firewall's own run: where `repFwC` returns, its proof's out-of-domain value,
+  lane messages and pair's sums are `l0Clear` at the coins from the round its PIOP ends at, on its packed table and its
+  PIOP's basis, plus the pads (**`Finish.repFwC_l0`**).
 * `FinishSwFrame`: those at the firewall's own request. Where the passed values are the request's, its draws the
   release's frame draws on the tape, and the session's tape has the pads of the tape of those draws (`tapeOfDraws`), the
   session's pads are the request's below `h_ab` (`Masked.pads_frame`), so the masked values below `zp 64` are the
@@ -718,6 +730,16 @@ import Proofs.Flock.Claims.ZK.PiopFree
   size both return or neither does, with the same log size and switched claims (**`piopCut_src_free`**,
   `piopCut_sws_eq`), and where the firewall's rep returned, the cut PIOP from any source does
   (**`Masked.piopCut_of_repFwC`**).
+* `RepFree`: the cut opening returns on its coins alone. Two runs of the opening, the firewall's `ligeritoPZk` and the
+  cut's `ligeritoCut` from any source, at logs of one size, both return with equal message, challenge and OOD counts
+  and equal log sizes, or the firewall's doesn't return (**`ligeritoPZk_cut_fw`**).
+* `RepReplay`: the cut rep's replay returns on its own rounds, its fold at the coins (**`replay_cut_ok`**), and a
+  returned replay folds at the coins it read (**`replay_fold_coins`**).
+* `RepInner`: the cut's inner proof returns where the firewall's does, from any commitment, value and source
+  (**`innerP_cut_fw`**).
+* `RepCutFw`: the cut rep returns on its coins alone. Where the firewall's rep returned and the cut's rank check passes,
+  the cut rep from any hash, commitments and source returns, with a log of the firewall's size
+  (**`CutFree.repCut_of_repFwC`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies

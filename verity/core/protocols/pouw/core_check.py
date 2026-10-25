@@ -98,7 +98,7 @@ CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
 _DIGEST = re.compile(r"[0-9a-f]{128}")
-#: one-stage's served domain (`registration.served_domain`), the window root's
+#: one-stage's window domain (`registration.window_domain`), the window root's
 SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 #: a tile proof's first two rows: its A row and its B row, each side's fp8-p row schema
 #: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
@@ -612,7 +612,7 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
 # ---- a unit's opening ------------------------------------------------------------------------------------------------------
 
 def window_domain(p: dict, rec: dict) -> CommitmentDomain:
-    """The window root's domain: one-stage's served domain (`registration.served_domain`) of the registered program and
+    """The window root's domain: one-stage's window domain (`registration.window_domain`) of the registered program and
     partition, over the check's P entries in the window's context."""
     n = p["check"]["entries"]
     binding = identity_digest_sha512(SERVED_DOMAIN, {"program": rec["program"], "partition": rec["partition"],

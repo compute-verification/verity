@@ -1,4 +1,5 @@
-"""The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
+"""The Pearl-C device path's host helpers (`pouw_pearl_c_device`): the epoch of the challenger's salt coin, held in this
+process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
 their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
@@ -15,7 +16,21 @@ from typing import Any, ClassVar
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
-from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_kernel_constants, rows_domain
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.audit import (
+    HM96,
+    Epoch,
+    Workload,
+    activation_binding,
+    hm96_kernel_constants,
+    rows_domain,
+    salt_of,
+    weights_root,
+)
+from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+from verity.core.protocols.pouw.protocol import DomainError
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
@@ -56,6 +71,32 @@ def _constants(scheme: Any, device: Any, salt_key: bytes | None) -> Any:
 def _constant_keys(t: Any) -> dict[str, int]:
     p = t.data_ptr()
     return {"salt_key": p, "hm": p + 256}
+
+
+#: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
+SaltCoins = CoinCommitment | LiveCommitment
+SaltOpening = CoinOpening | LiveOpening
+
+
+def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening) -> Epoch:
+    """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
+    `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
+    (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
+    commitment a live epoch's (`window.live_epoch_reason`), and the opening its salt coin, opening against it after the
+    weights' root (`challenger.live_reason`).  Either is refused with `DomainError`; a live salt is `audit.salt_of`'s, as
+    H1's and ncp-v2's are."""
+    live = isinstance(coins, LiveCommitment), isinstance(opening, LiveOpening)
+    if not any(live):
+        return Epoch.start(workload, roots, coins, opening)
+    if not all(live):
+        raise DomainError("a live session's salt coin opens against that session's live coin commitment, and nothing else")
+    if set(roots) != set(workload.weights()):
+        raise DomainError("every weight of the workload is committed, and only those")
+    root = weights_root(roots)
+    why = Wd.live_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, root)
+    if why is not None:
+        raise DomainError(f"the salt's {why}")
+    return Epoch(workload, dict(roots), salt_of(coins, opening.coin, root))
 
 
 class _TorchStream:
