@@ -14,9 +14,10 @@ service's answer. The check gives no partial credit (`Properties.Pouw.Check.Acce
 accepted the window's every drawn unit), so its verdict is every drawn proof's (`checkedRun`). The period is credited up
 to its first window the check refuses (`Windows.prefixLen`), on those windows' live words (`checkedLive`).
 
-It is parametric in the deployed unit: the scheme `Sc`, the declared circuit `Cd`, the population `N_p` and the draw size
-`K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its tile work). An instance
-(H1's tile unit, or ncp-v2's on the loop's linears) fixes them.
+It is parametric in the deployed unit and names no device: the scheme `Sc`, the declared circuit `Cd`, the population
+`N_p` and the draw size `K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its
+tile work), and the relation `rel` is the statement the service proves of each unit, whatever it is. An instance fixes
+them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
 
 * `Accepts`: the check accepts the window.
 * `Windows`, `Windows.AcceptedUpTo`, `Windows.prefixLen`, `checkedLive`: each window's registration and the service's
@@ -31,6 +32,10 @@ It is parametric in the deployed unit: the scheme `Sc`, the declared circuit `Cd
 * `CheckedWorkPeriod`, `CheckedCreditPeriod`: `CircuitWorkPeriod`'s and `CircuitCreditPeriod`'s conclusions at the
   check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `DrawIsCoin` and
   `ServiceSound`.
+* `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditPeriod`: H1's instance. Each window's salt
+  is its round's live coin; the staged statement the leg proves pins the pinned flat tile at one salt; the unit's
+  relation, the staged statement at the window's salt; its rightness, the flat tile's at the window's coin; and
+  `CheckedCreditPeriod` at the torch loop's counts with those two in place of `Pins`.
 
 *What the check discharges.* The accepted prefix (`PeriodRun.Credited`, `prefixLen`) and the credited words are the
 check's, defined from `protocol.check` and nothing else. `JointSound` at the checked run is about the model's drawn
@@ -50,12 +55,15 @@ check doesn't discharge it:
   `Accounting.Guarantees.Compose.BindingOfECR`), per prover.
 * `ServiceSound δks`: C-Flock's soundness at each drawn unit under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
   for one session) with one-stage's acceptance (`Properties.SampledProofs.AcceptMeans`) and the check's
-  (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the registered unit Program's relation.
+  (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
+  leg: the window's staged statement, `stagedAt`).
 * `DrawIsCoin`: the service's `subset:K′` draw from the challenger's draw coin (`SampledProofs.Select.select`) read as
   the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
   published draw `K′` distinct units below `N`; `Properties.Served.DrawMissesSubset` bounds its misses by the model's).
-* `Pins` (`rel` gives `right`): the registered unit Program's relation pins the declared tile's rightness, a fact of the
-  Program and its Definition, with `UnitsOfLayout`'s tie of `Cd` to it.
+* `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
+  fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
+  a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
+  between the two, and H1's instance splits it into `StagedPins` and `SaltIsLiveCoin`.
 * `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `periodMode`: the named claims, as in
   `CircuitWorkPeriod`. On H1's unit they are (H-μ) at `μ = 3/4` (#2482), B′ at `r_B = 1/2` and the guess bound at
   `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
@@ -65,8 +73,39 @@ check doesn't discharge it:
 refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
 `Credit.window`'s verdict; a period it credits is one whose windows are all accepted, `Windows.prefixLen = n`.
 
+*H1's tile unit on the torch loop* (`H1CheckedCreditPeriod`; all-protocols' PoUW leg, #4351). The loop's W8A8
+two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and each linear's `K = 128` is two pinned H1
+tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
+halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
+words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them drawn at the leg's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
+Every tile's noise reads the window's one salt (its public row, `PouwCheck.publicBc`), so the window is one round
+(`Cd.rounds = 1`, `w_max = 1`): a coin a decode step would need a salt a step, which the pinned tile and the check don't
+take. At H1's lucks (`p = 7/8`, `p0 = ½`, the floors `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` claim), `a = b = 1`
+and `SplitRateClosed`'s rate there, `Λ = max(67/8, 67/32) = 67/8`, an accepted period is credited `(1 − ε(j))₊` of its
+prefix's live words with `ε(j) = Λ·ln(1/δ_s)/j` (`D₀ = 0`, every real tile live): `ε(j) ≥ 1` through 38 accepted windows
+at `δ_s = 1%` and through 115 at `10⁻⁶`, and `ε(j) < 1%` from 3,857 and 11,571 windows (`SplitRateExp`'s sharp
+`Λ = 7.489`: 34, 103, 3,449 and 10,347). Pooled over a monitoring period of any length, the uncredited words are at most
+`Λ·ln(1/δ_s)` windows' worth, 38.6 at `1%` and 115.7 at `10⁻⁶`.
+
+What H1's instance takes that the deployed path doesn't give, each a named premise:
+* `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
+  its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
+  `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
+  `LayerCommitted` fail of the circuit it runs). CMP-81's per-epoch live salt is its fix's shape
+  (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1.
+* `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
+  reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
+  and `StagedPins` is what links it to the flat tile's rightness, which the lucks are claims of (`flatAtCoin`). No Lean
+  function of either side exists yet, so both are parameters.
+
+What it doesn't give: any link from the H1 window to the values integrity's window commits. The tiles' roots are tags
+(SHA-512 of the run root and of the layer's weights), not the rows' commitments, and that the tiles' A rows are the
+loop's activations rests on the loop's own assertion (`H1Loop.run`). Its credit is the H1 window's committed tiles' words;
+tying them to integrity's values is the joint statement's.
+
 It is stated, not proved. Its proof is `CircuitWorkPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
-`K_d > 0`, and `JointSound` from `ServiceSound` and `DrawIsCoin` by monotonicity.
+`K_d > 0`, and `JointSound` from `ServiceSound` and `DrawIsCoin` by monotonicity; H1's instance is `CheckedCreditPeriod`
+at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiveCoin` and `StagedPins`.
 -/
 
 namespace Properties.Pouw.Period
@@ -231,5 +270,78 @@ def CheckedCreditPeriod : Prop :=
       (periodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) a b Λ δs) ≤ δs + n * (δbind + δks)
+
+/-! ## H1's tile unit on the torch loop -/
+
+/-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
+salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
+every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
+round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
+in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
+coin mode, so the window is seeded. CMP-81's per-epoch live salt is its fix's shape (`Properties.Pouw.LiveSalt`,
+`PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. -/
+def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
+    (enc : C → ByteArray) : Prop :=
+  ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
+
+/-- **The staged statement pins the flat tile**: at every salt `s`, values of a unit `t` that satisfy the statement
+the service proves of it (`staged s t`, the window's staged statement, which the leg's proofs are of) satisfy the
+pinned flat tile's rightness there (`flat s t`, `PouwH1Tile_v1`'s function at salt `s`, the circuit `core_check.opening`
+reads and the lucks are claims of). Nothing proves it yet, and neither side has a Lean function, so both are
+parameters of the statements that take it. -/
+def StagedPins {Np : ℕ} {V : Type} (staged flat : ByteArray → Fin Np → (ℕ → V) → Prop) : Prop :=
+  ∀ s t v, staged s t v → flat s t v
+
+/-- **H1's unit relation**: window `w`'s unit `t` satisfies the staged statement at the window's salt. -/
+def stagedAt {Ω V : Type} {n Np : ℕ} (salt : Paths Ω n → Fin n → ByteArray)
+    (staged : ByteArray → Fin Np → (ℕ → V) → Prop) : Paths Ω n → Fin n → Fin Np → (ℕ → V) → Prop :=
+  fun x w => staged (salt x w)
+
+/-- **H1's tile rightness**: window `w`'s tile `t` is the flat tile's function at the window's round-0 coin. -/
+def flatAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray)
+    (flat : ByteArray → Fin Np → (ℕ → V) → Prop) : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop :=
+  fun x w => flat (enc (coinAt (coinAt x w).1 ⟨0, hm⟩))
+
+/-- **(L)'s credit over the windows the deployed check accepts, at H1's tile unit on the torch loop.**
+`CheckedCreditPeriod` at the all-protocols leg's window (module docstring): one round a window (`Cd.rounds = 1`,
+`w_max = 1`, every tile's noise reads the window's one salt), a population of `N_p = 144` of which `K_d = 24` are
+drawn, every tile's share of the words at most `1/128` (`ρ = 8/9`: 128 equal real tiles, the 16 fillers wordless),
+H1's lucks `p = 7/8`, `p0 = ½`, the word line `a = b = 1` and `SplitRateClosed`'s rate `Λ = 67/8`. The unit's relation
+is the staged statement at the window's salt (`stagedAt`), which `ServiceSound` is about, and its rightness the flat
+tile's at the window's coin (`flatAtCoin`); `Pins` is replaced by the window's salt being its live coin
+(`SaltIsLiveCoin`) and the staged statement pinning the flat tile (`StagedPins`). Then, except with probability
+`δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the
+windows before the check's first refusal, `ε(j) = (67/8)·ln(1/δ_s)·N_w/N_live` (`creditPrefix`). -/
+def H1CheckedCreditPeriod : Prop :=
+  ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
+    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
+    (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params)
+    (ws : Windows (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
+    (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ℕ → ℕ → V)
+    (salt : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ByteArray) (enc : C → ByteArray)
+    (staged flat : ByteArray → Fin 144 → (ℕ → V) → Prop)
+    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
+    (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
+    (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ) (δs δbind δks : ℝ),
+    Scope Sc Cd δs →
+    (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * shareCone Sc Cd 144 t ≤ 1) →
+    (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
+    (∀ t : Fin 144, 0 < shareCone Sc Cd 144 t → tileLuck Sc Cd 144 t ≤ 7 / 8 ∧ tileLuck0 Sc Cd 144 t ≤ 1 / 2) →
+    Pl.game = periodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 Wp →
+    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd 144 live) →
+    PrefixOf (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)) Pl.game →
+    (∀ w, prob (fun x =>
+      (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)).MovedIn x w) ≤ δbind) →
+    DrawIsCoin hK prm ws → ServiceSound prm ws opened (stagedAt salt staged) δks →
+    SaltIsLiveCoin hr salt enc → StagedPins staged flat →
+    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    UnitFixed Pl (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat))
+      (periodMode Cd Wp (checkedRun hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)))
+      (fun _ t => (tileWords Sc Cd 144 t : ℝ)) folded →
+    prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
+      creditPrefix Sc Cd 144 (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) 1 1 (67 / 8) δs) ≤
+        δs + n * (δbind + δks)
 
 end Properties.Pouw.Period
