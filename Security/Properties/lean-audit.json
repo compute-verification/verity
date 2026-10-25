@@ -8507,7 +8507,7 @@
    ]
   },
   "Properties.RemoteAudit.Live": {
-   "digest": "0a6d389208922b0a686f3d29a02194fe82da58848e8e8b98e15aabd239caba66",
+   "digest": "8ae8df90bbd5e70afe1aa0ecc28159128fae1fd80c0e18c71174f10ee5f05305",
    "definitions": {
     "Properties.RemoteAudit.Live.Answer": "250a061dcc59a1c6c8ac2c20623702e3bde86d74f98ddc873247b19e863dcc9a",
     "Properties.RemoteAudit.Live.Answer.casesOn": "39d9c6218e16d26c6bb1bba6220166c4adc7899051f99a99d115694e0ef3970a",
@@ -8533,7 +8533,7 @@
     "Properties.RemoteAudit.Live.Req.settle": "a4da87116887ca0260db4db5c5435a0029545b4d050b7860280f039ea3facef0",
     "Properties.RemoteAudit.Live.Req.verify": "f4062ee54d707a0c2f340405c409f163c8843419913d5d1ef984653aeaeeca4f",
     "Properties.RemoteAudit.Live.run": "d65128ed5d31631a0f6bfcced96ac690b4ff426f94c93b8add1ece1e8e8b9deb",
-    "Properties.RemoteAudit.Live.step": "e824c5bb56098e8062dbcd5821ebbd4eeeed3b527f9d579e8cd32cd59879e9bd",
+    "Properties.RemoteAudit.Live.step": "e6cdaee71d8ecb0456ce1b59c83f9dbfd6b36473706657b4a3542ce71fe8ab24",
     "Properties.RemoteAudit.Live.step._sparseCasesOn_5": "d83c00b80e5e08aadf4f6419f324568dda7953c037f4ba261fd189abe883760e",
     "Properties.RemoteAudit.LiveIsRun": "897367ff6c57ea9e672dc5ea7dbca0bca4a9c628c86ed1a4b92843e2bcb5dccf"
    },
@@ -9197,16 +9197,16 @@
    ]
   },
   "RemoteAudit.Verifier": {
-   "digest": "edac9b168a3286da9c12bd0aa1113e55c44394cc8c67c08bdf11fb4ed280a22e",
+   "digest": "7c3bfdae221653ad961a2aac4457c03fabb1e158b6ea3c7704b36990892b4668",
    "definitions": {
-    "RemoteAudit.Verifier.eventOn": "8a7703a5d2c8d79a3537af75df0d9c99ebd78823dd32419cd5d923b9fcb4af7e",
-    "RemoteAudit.Verifier.unset": "1c79eb4a305182bd7aabec7dce3c91083069ccf5094090efc3fafe3aadd70fab",
+    "RemoteAudit.Verifier.eventOn": "99f10cb9262375306d1fb6b0df144759c8635fe27a13dd5d626f4303b0c48b7e",
+    "RemoteAudit.Verifier.unset": "b1c6b3c9e79d22180af87fc108c5c055da018dd3c56cb814015b47ff83eae587",
     "RemoteAudit.Verifier.unset._sparseCasesOn_1": "891465d9b2afbe0d44c09c4be7675fdd7c80769a27389c396eba93f1e547af61",
     "RemoteAudit.Verifier.unset._sparseCasesOn_2": "dbf14f58d31ad80f631951c2e021c1fe0e7c8b443ee20a2f0e6ae667f3dd1578",
     "RemoteAudit.Verifier.unset._sparseCasesOn_3": "218c89d89bc182e2870d873c0042a0a89974828d5d5428fb35b7fb299b77b108",
     "RemoteAudit.Verifier.unset._sparseCasesOn_4": "40e73f8706fcd786cc36c38f4c0f3ad33b5b599284872de308898df8ff5aa2c0",
     "RemoteAudit.Verifier.windowCheck": "69dcf74a2651cd9df52b7ed84e9552cc830380ef2df8156974ba9f7ba042bece",
-    "RemoteAudit.Verifier.withCoin": "e68b97486c7e485256c65b7ccf9da0db7ee3c5371dd63583899ed54986033110",
+    "RemoteAudit.Verifier.withCoin": "77926544acfd80f380702ca0b8ed4a78147ad12bcd29338ab58c464050923695",
     "RemoteAudit.Verifier.withCoin._sparseCasesOn_3": "7e5672aa5433d6c08663db95ca83fb768425748418e7dde938f69e4f6b3edfef"
    },
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
