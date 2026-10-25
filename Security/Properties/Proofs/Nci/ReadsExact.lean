@@ -28,7 +28,7 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`);
 * on the circuit's side, a gate's operands are its node's references resolved (`operands_mem`), and a gate of a
   primitive root node reads its member's operands in the root activation (`reads_rootPrim`);
-* toward the core of the open statements, that `down` keeps the gate each position names in an activation (`den`): its
+* toward the core of the statements below, that `down` keeps the gate each position names in an activation (`den`): its
   base cases, a gate's or parameter's piece (`down_gate`, `down_param`), a primitive node's (`down_prim`, `den_prim`)
   and a batch of a primitive's (`down_batchPrim`, `den_batchPrim`), and resolution through a step (`resolve_inl`,
   `resolve_inr`);
@@ -96,11 +96,11 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here:
 `RootSegs`, that every read `Seg.split` makes of a segment `down` or `carriesRead` gives a root node names gates
-of one root node with their widths, and `RootSet`, open, that the positions the node reads (`rootRead`) name exactly the
+of one root node with their widths, and `RootSet` (`BodiesOk.rootSet`), that the positions the node reads (`rootRead`) name exactly the
 gates outside the node that its gates read; a composite's segment `keep` keeps is then one outside the node
 (`keep_iff`). `RootSegs` holds wherever the decoder's facts do (`RootFacts`) and those reads name gates of one
 root node with their widths (`RootGates`) (`rootSegs_of`): every segment is `ShapeOk` (`rootShape`; a scan's carries'
-by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` holds wherever, open, every such
+by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` holds wherever every such
 segment is `SegNodes`, its gates of their widths, each piece's in one root node and a shifting segment's copies' in
 one (`RootNodes`, `rootGates_of`).
 -/
@@ -1696,7 +1696,7 @@ theorem nodeOf_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k a : Nat} (hk 
   exact nodeOf_eq (rootOffs P) (nodeCount P) a k hsz h0 hmono hk ((DescAgree.mem_nodeGates P k a).1 ha)
 
 
-/-- **Open: `nodeReads`' segments at the root, as the positions they name.** On a Program `Desc.evaluate` reads, with
+/-- **`nodeReads`' segments at the root, as the positions they name.** On a Program `Desc.evaluate` reads, with
 its summaries `memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments `rs` (`Desc.nodeReads`) have
 pieces naming gates only, every segment of positive count has pieces of positive count and names gates `a` of width
 `c.w[a]` of one root node; and the gates the segments of positive count name are exactly the gates outside node `k`
@@ -2204,7 +2204,7 @@ def RootSegs : Prop :=
       ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
         FromCarry (rootCtx P memo) k node s) → ∀ g ∈ (Seg.split s).toList, SegGood P c g
 
-/-- **Open: the positions a root node reads.** With `RootSegs`' premises: the gates the positions root node `k` reads
+/-- **The positions a root node reads.** With `RootSegs`' premises: the gates the positions root node `k` reads
 name (`rootRead`), outside the node where its callee is a composite, are exactly the gates outside the node that its
 gates read. -/
 def RootSet : Prop :=
@@ -4926,7 +4926,7 @@ theorem scanYs_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC 
     rw [this]
     exact List.Forall₂.nil
 
-/-- **Open: a scan node's output**, as the decoder computes it (`buildNode`, `(carry, array n y)`): the final carry's
+/-- **A scan node's output**, as the decoder computes it (`buildNode`, `(carry, array n y)`): the final carry's
 leaves, then `n` iterations' `y` leaves. -/
 def ScanOut (c : Desc.Ctx) : Prop :=
   ∀ k node (carry y : Flock.Program.Ty), c.node k = .ok node → node.form = .scan →

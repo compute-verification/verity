@@ -974,7 +974,7 @@ theorem gate_reads_of (P : Prog) (hb : Desc.bodiesLaidOut P = true) {g p : ℕ} 
     show (P.defs[a'.d]!).prim = false
     rw [hd']; exact hp
 
-/-- **Open: operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
+/-- **Operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
 visits, every primitive node's members' operands resolve (`Flock.Program.resolve` within its fuel, past no scan of no
 iterations). Only a primitive node's: `Prog.gate` resolves no other node's operands, and a composite node's arguments
 may name a scan of no iterations that no gate reads. -/
@@ -986,7 +986,7 @@ def OperandsResolve : Prop :=
         ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
           Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e
 
-/-- **Open: every operand is an earlier gate.** On such a Program, each operand `Prog.gate` locates for a gate is a gate
+/-- **Every operand is an earlier gate.** On such a Program, each operand `Prog.gate` locates for a gate is a gate
 before it. -/
 def OperandsEarlier : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
