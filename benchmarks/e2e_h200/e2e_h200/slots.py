@@ -56,7 +56,7 @@ INST = hm96.SHA512
 
 
 @dataclass(frozen=True)
-class Shape:
+class SlotShape:
     """The frozen decoder's KV shape and request class (CMP-92: MQA, one KV head of 64, context 32, 8 + 24 bytes)."""
 
     slots: int
@@ -165,7 +165,7 @@ class SlotKV:
 
     ``admit`` caps admissions a step (default ``slots // steps``: 1,024 slots over a 31-step request admit 33 a step)."""
 
-    def __init__(self, shape: Shape, device: str | torch.device = "cpu", admit: int | None = None) -> None:
+    def __init__(self, shape: SlotShape, device: str | torch.device = "cpu", admit: int | None = None) -> None:
         self.shape, self.device = shape, torch.device(device)
         self.admit = max(1, shape.slots // shape.steps) if admit is None else admit
         if self.admit < 1:
@@ -427,5 +427,5 @@ def verify_row(o: RowOpening, root: bytes, *, slots: int, row_bits: int, run: st
     return _fold(sdom, sdom.leaf(o.slot, o.slot, ROOTS_SCHEMA, o.slot_root), o.slot, o.step_path) == root
 
 
-__all__ = ["K", "V", "STANDIN_TAG", "Shape", "Request", "StepPlan", "StepRows", "KVRowRef", "Finished", "SlotKV",
+__all__ = ["K", "V", "STANDIN_TAG", "SlotShape", "Request", "StepPlan", "StepRows", "KVRowRef", "Finished", "SlotKV",
            "RowOpening", "StepCommitment", "commit_step", "verify_row"]

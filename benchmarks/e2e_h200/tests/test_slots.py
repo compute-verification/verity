@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from check_slots import reference, requests, run
-from slots import K, V, Request, Shape, SlotKV, StepPlan, StepRows, commit_step, verify_row
+from e2e_h200.slots import K, V, Request, SlotKV, SlotShape, StepPlan, StepRows, commit_step, verify_row
 
-SHAPE = Shape(slots=4, layers=3, ctx=8, head_dim=4, prompt=3, generate=4)
+SHAPE = SlotShape(slots=4, layers=3, ctx=8, head_dim=4, prompt=3, generate=4)
 
 
 def test_requests_are_admitted_fifo_into_the_lowest_free_slots_and_their_slots_reused():
@@ -59,7 +59,7 @@ def test_kv_rows_and_outputs_equal_each_request_run_alone():
 
 
 def test_refs_open_every_row_the_attention_read_from_the_steps_that_committed_it():
-    shape = Shape(slots=4, layers=3, ctx=8, head_dim=4, prompt=3, generate=4, row_words=2)
+    shape = SlotShape(slots=4, layers=3, ctx=8, head_dim=4, prompt=3, generate=4, row_words=2)
     reqs = requests(shape, 9, seed=2)
     kv = SlotKV(shape, admit=2)
     commits = {}
@@ -105,7 +105,7 @@ def test_a_tampered_opening_fails():
 
 
 def test_rows_keep_every_bf16_bit_pattern():
-    shape = Shape(slots=2, layers=1, ctx=4, head_dim=4, prompt=2, generate=2)
+    shape = SlotShape(slots=2, layers=1, ctx=4, head_dim=4, prompt=2, generate=2)
     kv = SlotKV(shape)
     kv.submit([Request(1, b"ab")])
     kv.begin()
@@ -116,7 +116,7 @@ def test_rows_keep_every_bf16_bit_pattern():
 
 def test_refusals():
     with pytest.raises(ValueError, match="past the context"):
-        Shape(slots=1, ctx=8, prompt=4, generate=6)
+        SlotShape(slots=1, ctx=8, prompt=4, generate=6)
     kv = SlotKV(SHAPE, admit=2)
     with pytest.raises(ValueError, match="not the class's 3"):
         kv.submit([Request(1, b"ab")])
