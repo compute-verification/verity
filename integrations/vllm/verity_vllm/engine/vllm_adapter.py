@@ -120,7 +120,7 @@ ACCEPTED_TOKENS: dict[str, list[int]] = {
 
 
 def execution_of_workload(workload: dict | None) -> str | None:
-    """[R15 EXEC-02] The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
+    """The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
     schema carries one, else the last `__` token of `sweep.row_id` (`…__greedy__bi-eager` -> 'bi-eager'); None for a workload that is not
     a sweep row (no row id: the caller's default applies and the header records `declared_execution: null`)."""
     if not isinstance(workload, dict):
