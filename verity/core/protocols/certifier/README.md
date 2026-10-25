@@ -183,29 +183,37 @@ Calibration, from a JSON trace of honest runs:
 uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
-## Not yet zero-knowledge
+## Zero knowledge: what N2's verdict reads, and what's open
 
-Every protocol is to be zero-knowledge, and the network audit isn't yet. Its claim today is counts only: N2 holds each
-window's per-bucket counts to the occupancy profile on every link-window (on a served link, to the ones its ingress
-counts derive under the declared sync), beside the proved timing bound, while N3, the
-content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 no longer compares the grid in the clear
-(`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
-this is closed:
-- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
-  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts.
+Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
+counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
+the declared sync), beside the proved timing bound, while N3, the content check, is the design (Daniel's provisional
+call on ASK-70, 19 Oct).
 
-A proof of the unit is held to its circuit already. Each gate names its Definition's circuit digest
+N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
+(`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of C-Flock's Lean
+verifier accepts the proof, the proof's public row opens to its own copy of the unit's public arguments, the output
+row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`), and
+the window's sync is declared. It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
+certifier-serve run's link-windows this way through the link's own stream, and scans what the verifier received. The
+in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
+- **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
+  device, beside the proof service, whose public kinds have none for a trusted device's signature over a hiding
+  commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
+- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
+  its verdict `"decided_by": "clear"`), which is never zero-knowledge.
+
+A proof of the unit is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
 `served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the unit's Program, which the
-spec and each registration bind, binds both circuits, and `LinkWindows.verify`, given a proof's findings, refuses one
-that names any other Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
+spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any other
+Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
 
 The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
 (`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
-Each end's head check holds R to the head it opens and D to R under `salt_c`, so once N2's unit is proved the
-certificates' check reads nothing of the heads; until then the verifier of record checks that link on the host too,
-over the opening (`CertifiedRecord.verify`).
+Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing
+of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

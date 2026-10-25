@@ -69,8 +69,8 @@ reads requests from outside).
   fit goes to the next window's first bucket, which admission takes behind the salt frame. The plan's `model_release`
   is the admission's (`active_replay.model_releases(admission=…)`), and a D at which admission would hold one of the
   plan's requests past the window it was sent in doesn't fit. The check reads each window's served counts in the clear
-  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict of record shows only
-  accept or reject.
+  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict shows only accept or
+  reject.
 
 **The varied plan** (`plan --traffic varied`, `varied_plan`) drops every premise of the served plan's on the traffic:
 no fixed response length, no fixed request size, no request-major order, no window that must end idle, no min_tokens
@@ -135,8 +135,9 @@ certified, the I/O, the audit and the salt accept.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
-  and committed records, N2's verdict of record through `LinkWindows` (commit, register, select, deliver, outcome) on
-  the certified records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
+  and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
+  `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
+  records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
@@ -1067,7 +1068,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
         draw = stream.select(registration)
         try:
             outcome = (stream.deliver(draw, [lw.session(opening, draw)])
-                       or lw.outcome(stream, draw, opening, syncs))
+                       or lw.unproved_outcome(stream, draw, opening, syncs))
         except ValueError as err:
             row["n2"] = f"no verdict: {err}"
             break
