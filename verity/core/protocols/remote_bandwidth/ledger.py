@@ -124,8 +124,8 @@ def sketch(record: audit.Record, node: Node) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
     compression the prover could make over the span a guess or a key: Q = F·C, C the node's over the span and F its
     `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind. It is the δs of the memory line's
-    `SketchBoundAt` premise (`LineHeld`): `Accounting.Guarantees.Remote.SketchBoundLine` derives `SketchBoundAt` at it
-    on the line's coins, from `SketchBoundDeployed`'s premises on the line's trace."""
+    `SketchBoundAt` premise (`LineHeld`): `SketchBoundDeployed` gives the sketch bound at it on the line's trace read on
+    the sketch outcomes, and `Accounting.Guarantees.Remote.SketchBoundLine` carries it to the line's coins."""
     if record.receipt != receipts.SKETCH_SHA512:
         return 0.0
     return float(timing.sketch_failure(compressions(record, node), record.passes, record.rows, blocks=record.blocks,

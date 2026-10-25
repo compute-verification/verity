@@ -960,8 +960,8 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
   block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
   takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed, which `Accounting.Guarantees.Remote.SketchBoundLine` derives on the line's coins at the sketch's δs from
-  `SketchBoundDeployed`'s premises), and the line of record says it is conditional on it (`auditor_line.json`'s
+  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is conditional on it (`auditor_line.json`'s
   `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
   node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
   credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
