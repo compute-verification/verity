@@ -24,9 +24,10 @@ the Commit process; the verdict, the row's records and the research run's publis
 A grouped Commit (`commit_group`: the Commits of several rows of one engine in one process) holds one lease: its first row's
 ``acquire`` takes it, its later rows keep it and the devices it set (``LEASED``), and only its last row's last run releases it.
 A TP Commit (`pipeline.tp.lease`) takes all its GPUs with one ``acquire`` and gives them back together after its last run's
-finalize, its ranks off their devices first (``keep`` and ``let_go`` are the two ends either release comes to). A TP Match's capture
-and its control (`row_tp.TpRow.match`) each take all their GPUs the same way, right before their engine, and hold them to their exit
-(their record in ``match/lease/<leg>/``); the Match's check, its served-shape derives and its fold Match see no device and hold no lease.
+finalize, its ranks off their devices first (``give_back`` is either release, over the engine in this process or over the ranks).
+A TP Match's capture and its control (`row_tp.TpRow.match`) each take all their GPUs the same way, right before their engine, and
+hold them to their exit (their record in ``match/lease/<leg>/``); the Match's check, its served-shape derives and its fold Match see
+no device and hold no lease.
 A single-GPU Match (`row_stages.SingleRow.match`) runs as its two phases: the GPU phase (``match --phase gpu``: the capture, the
 control and the rest of `match.GPU_STAGES`) takes the lease the same way and holds it to its exit (its record in ``match/lease/``),
 and the CPU phase over that record runs after it with no device and no lease.
@@ -356,35 +357,87 @@ def _no_device() -> Any:
     return hooks.patch(torch.cuda, "is_available", lambda: False)
 
 
+def give_back(tl: Any, holders: Any, *, after: str, wait: Callable[[float], Any]) -> bool:
+    """A leased Commit's GPUs back, at any world size, once the run of stage ``after`` was its last device work. ``holders`` is what
+    holds them besides this process's own context: the engine in this process (`_InProcess`) or a TP Commit's ranks
+    (`pipeline.tp.lease`). Each step below is theirs; the order, the record and the lease's two ends are this function's:
+
+    1. ``holders.kept()``: why they still need their devices, which keeps the lease to the exit (`keep`);
+    2. ``holders.off()``: they leave their devices (``shutdown_s``), or say why they could not;
+    3. ``holders.reset()``: their own contexts reset, or why one stays; then this process's (``holders.driver()``), and nvidia-smi
+       must list nothing on the leased GPUs (`_gone`), all in ``reset_s``. An error among ``holders.fails`` here keeps the lease
+       with ``holders.failed`` and the error;
+    4. the lease let go (`let_go`) with ``holders.done()``, or kept naming why; ``holders.error()`` (their teardown's error) and
+       ``holders.record()`` (their own fields) go on the record either way."""
+    environ = _HELD[0][4]
+    tl.start("gpu_lease.release", after=after)
+    why = holders.kept()
+    if why is not None:
+        return keep(tl, why, after=after)
+    drv, t0 = None, time.perf_counter()
+    why = holders.off()
+    t1 = time.perf_counter()
+    if why is None:
+        try:
+            why = holders.reset()
+            if why is None:
+                drv = holders.driver()
+                drv.reset()
+                why = _gone(drv, uuids(environ), wait)
+        except holders.fails as e:
+            why = f"{holders.failed}: {e!r}"[:300]
+    spans = {"shutdown_s": round(t1 - t0, 3), "reset_s": round(time.perf_counter() - t1, 3)}
+    err, fields = holders.error(), holders.record()
+    if why is not None:
+        return keep(tl, why, after=after, shutdown_error=err, **fields)
+    let_go(tl, drv, after=after, shutdown_error=err, spans=spans | fields, done=holders.done())
+    return True
+
+
+class _InProcess:
+    """A one-GPU Commit's holders (`give_back`): vLLM's engine in this process and the committers on it."""
+
+    failed = "the CUDA context could not be reset"
+    fails: tuple[type[BaseException], ...] = (OSError, RuntimeError)
+
+    def __init__(self, eng: Any, coms: list[Any], args: Any, environ: MutableMapping[str, str], bundle: bool) -> None:
+        self.eng, self.coms, self.args, self.environ, self.bundle = eng, coms, args, environ, bundle
+        self.err: str | None = None
+
+    def kept(self) -> str | None:
+        return kept_reason(self.args, self.coms, self.eng, self.environ, bundle=self.bundle)
+
+    def off(self) -> None:
+        for c in self.coms:             # a thread that used the device ends while its context lives: its exit after the reset opens one
+            getattr(c, "_stop_worker", lambda: None)()
+        self.err = _shut_down(self.eng)
+
+    def reset(self) -> None:
+        """The engine's context is this process's, which `give_back` resets."""
+
+    def driver(self) -> Any:
+        return DRIVER()
+
+    def error(self) -> str | None:
+        return self.err
+
+    def record(self) -> dict[str, Any]:
+        return {}
+
+    def done(self) -> str:
+        return f"engine shut down{' (' + self.err + ')' if self.err else ''}, CUDA context reset"
+
+
 def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after: str, bundle: bool,
             wait: Callable[[float], Any] = time.sleep) -> bool:
     """Give a leased Commit's GPU back once ``last`` (the run of stage ``after`` was its last device work): the engine shut down,
     the device's context reset, nothing left on the leased GPU, then the lease's locks closed, the holder told (EOF) and waited for,
-    and ``gpu_lease.released`` written with the time and ``after``. Kept to the exit (``kept_reason``, or a context that did not go)
-    the file names why instead. ``bundle``: ``replay_bundle.start`` began the bundle's write. Returns whether the GPU was released."""
+    and ``gpu_lease.released`` written with the time and ``after`` (`give_back`). Kept to the exit (``kept_reason``, or a context
+    that did not go) the file names why instead. ``bundle``: ``replay_bundle.start`` began the bundle's write. Returns whether the
+    GPU was released."""
     if not _HELD or not last:
         return False
-    environ = _HELD[0][4]
-    tl.start("gpu_lease.release", after=after)
-    why, err, drv = kept_reason(args, coms, eng, environ, bundle=bundle), None, None
-    spans: dict[str, float] = {}
-    if why is None:
-        t0 = time.perf_counter()
-        for c in coms:                  # a thread that used the device ends while its context lives: its exit after the reset opens one
-            getattr(c, "_stop_worker", lambda: None)()
-        err = _shut_down(eng)
-        t1 = time.perf_counter()
-        try:
-            drv = DRIVER()
-            drv.reset()
-            why = _gone(drv, uuids(environ), wait)
-        except (OSError, RuntimeError) as e:
-            why = f"the CUDA context could not be reset: {e!r}"[:300]
-        spans = {"shutdown_s": round(t1 - t0, 3), "reset_s": round(time.perf_counter() - t1, 3)}
-    if why is not None:
-        return keep(tl, why, after=after, shutdown_error=err)
-    let_go(tl, drv, after=after, shutdown_error=err, spans=spans, done=f"engine shut down{' (' + err + ')' if err else ''}, CUDA context reset")
-    return True
+    return give_back(tl, _InProcess(eng, coms, args, _HELD[0][4], bundle), after=after, wait=wait)
 
 
 def keep(tl: Any, why: str, *, after: str, shutdown_error: str | None = None, **fields: Any) -> bool:

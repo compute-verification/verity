@@ -1,9 +1,8 @@
-"""A serving-rows window's wiring across statements (`verifier/PROTOCOL.md` §16.13 ``Wiring``): a wired member
-(``serving_rows.Member.wired``, one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's
-``port`` row is global unit ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one
-string.  Lean's links hold inside one statement; these join statements (a w13 coordinate's K-chunks, `pipeline.kchunk_rows`:
-chunk c's ``acc`` is chunk c - 1's output; a sparse-MLA row's split partials, `pipeline.split_rows`: the combine's ``in0.s`` and
-``in1.s`` are split s's lse and partial), so the verifier holds them on the public bodies the leaf layer binds, before the draw
+"""A window's wiring across statements (`verifier/PROTOCOL.md` §16.13 ``Wiring``): a wired member (``serving_rows.Member.wired``,
+one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's ``port`` row is global unit
+``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
+inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
+a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, before the draw
 (`check`), and a drawn unit's input is the committed output of the unit that wrote it."""
 from __future__ import annotations
 

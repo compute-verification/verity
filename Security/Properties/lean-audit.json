@@ -21,7 +21,13 @@
   "Properties.Nci.Baseline",
   "Properties.Proofs.Nci.BaselineSteps",
   "Properties.Proofs.Nci.Baseline",
+  "Properties.Proofs.Nci.BodiesOk",
+  "Properties.Proofs.Nci.OperandsResolve",
+  "Properties.Proofs.Nci.Agrees",
   "Properties.NciDesc",
+  "Properties.NciDesc.Verdict",
+  "Properties.NciDesc.Cover",
+  "Properties.Proofs.Nci.DescVerdict",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
   "Properties.Pous",
@@ -59,6 +65,7 @@
   "Properties.Proofs.RemoteAudit.Order",
   "Properties.RemoteAudit.Shared",
   "Properties.Proofs.RemoteAudit.Shared",
+  "Properties.Proofs.RemoteAudit.SharedLink",
   "Properties.RemoteAudit.Pooled",
   "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
@@ -138,6 +145,10 @@
    "owner": "@lean",
    "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
+  "NetTiming.DeviceIntact": {
+   "owner": "@network-accounting",
+   "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
+  },
   "Pous.P2.Assumptions.CoinCommitHides": {
    "owner": "@memory-accounting",
    "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
@@ -145,6 +156,14 @@
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+  },
+  "Properties.RemoteAudit.Line.Registered": {
+   "owner": "@memory-accounting",
+   "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
+  },
+  "Properties.RemoteAudit.ScheduleLayoutGap": {
+   "owner": "@memory-accounting",
+   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -257,13 +276,16 @@
     "Mathlib",
     "Definitions.Core",
     "Definitions.Nci",
+    "Models.Nci.Assumptions.Baseline",
+    "Models.Nci.Assumptions.Cover",
     "NciCheck.Check",
+    "NciCheck.Baseline",
     "NciCheck.Desc",
     "Properties.Nci",
     "Properties.NciDesc"
    ],
    "except": [],
-   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Models.Nci.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.CertifierDevice": {
@@ -1372,14 +1394,14 @@
    "assumptions": [],
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c"
   },
-  "Properties.Pouw.LiveSalt.creditDistinct": {
-   "owner": "@compute-accounting"
-  },
   "Properties.Pouw.LiveSalt.acceptMeans": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.LiveSalt.acceptMeans : Properties.Pouw.LiveSalt.AcceptMeans PouwCheck.liveSaltCheck"],
    "assumptions": [],
    "type_hash": "08ffebe48af4af15238fe6dff6acba886d81b463b52ce075c4ac2481e6477319"
+  },
+  "Properties.Pouw.LiveSalt.creditDistinct": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.LiveSalt.epochRootBinding": {
    "owner": "@compute-accounting",
@@ -1595,6 +1617,12 @@
    "assumptions": [],
    "type_hash": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae"
   },
+  "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.sessionDrawsRecords : Properties.RemoteAudit.Shared.SessionDrawsRecords"],
+   "assumptions": [],
+   "type_hash": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773"
+  },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
@@ -1732,6 +1760,27 @@
    "signature": ["Properties.RemoteAudit.scheduleFixesLayout : Properties.RemoteAudit.ScheduleFixesLayout"],
    "assumptions": [],
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e"
+  },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
+    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
+    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
+    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
+    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  (checked :",
+    "    ∀ (c : Pfx) (y : Y),",
+    "      Exists fun sc =>",
+    "        Exists fun passes =>",
+    "          Exists fun b =>",
+    "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
+    "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
+    "                (Option.some (sent c y)))) :",
+    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+   ],
+   "assumptions": [],
+   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
@@ -1942,7 +1991,8 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Models.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises"
+   "Properties.RemoteAudit.Line.Premises",
+   "Properties.RemoteAudit.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -2959,6 +3009,14 @@
    "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.steered_of_checked": {
+    "function": "RemoteAudit.Schedule.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
+    "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2968,14 +3026,21 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from three open statements: OperandsResolve (Properties.Proofs.Nci.Walk) and BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), from which operandsEarlier_of proves OperandsEarlier and gatesLocated_of GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and ReadsExact (Desc.analyze's reads per root node are the unrolled operands outside it), from which novelExact_of proves NovelExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
+   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_readsExact (Properties.Proofs.Nci.Agrees) proves it from ReadsExact (Properties.Proofs.Nci.Novel: Desc.analyze's reads per root node are the unrolled operands outside it), the one open statement: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from OperandsResolve (Properties.Proofs.Nci.Walk), BodiesOk and ReadsExact, bodiesOk (Properties.Proofs.Nci.BodiesOk) proves BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), operandsResolve_of (Properties.Proofs.Nci.OperandsResolve) proves OperandsResolve from it, and novelExact_of proves NovelExact from ReadsExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)"
+   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
+   "NciCheck.Properties.DescReports": "unstated: descReports_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Reports, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescWitnesses": "unstated: descWitnesses_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Witnesses, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottles": "unstated: descThrottles_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Throttles (Proofs.Nci.Verdict, so descThrottles_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottlesDark": "unstated: descThrottlesDark_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDark (Proofs.Nci.Verdict, so descThrottlesDark_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottlesSlots": "unstated: descThrottlesSlots_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and ThrottlesSlots (Proofs.Nci.Verdict, so descThrottlesSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.DescThrottlesDarkSlots": "unstated: descThrottlesDarkSlots_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDarkSlots (Proofs.Nci.Verdict, so descThrottlesDarkSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.CheckedCoverTraining": "unstated: checkedCoverTraining_of_descAgrees (Proofs.Nci.Cover.Checked) proves it from DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4432,7 +4497,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
-    "Properties.RemoteAudit.pooledCoversSession"
+    "Properties.RemoteAudit.pooledCoversSession",
+    "Properties.RemoteAudit.steered_of_checked"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -4957,6 +5023,7 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -5228,6 +5295,7 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -5307,6 +5375,7 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -6203,6 +6272,13 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
   },
+  "Models.Accounting.Assumptions.Stacking": {
+   "digest": "71fa7fa9649ff2d2a9f6bfd4bee2a65fbd7e17992301591760ca451abbde9525",
+   "definitions": {
+    "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
+   },
+   "guarantees": ["Properties.RemoteAudit.steered_of_checked"]
+  },
   "Models.Nci.Assumptions.Baseline": {
    "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
    "definitions": {
@@ -6348,7 +6424,7 @@
    ]
   },
   "NciCheck.Desc": {
-   "digest": "5758797300cbab2eaac39af049c0fc5ee71bf8e1edea48897c48fdb34e4841f5",
+   "digest": "f37bd7593e3127cba699c231b55c004ec5228621f82a03f983c52667eb07be7b",
    "definitions": {
     "NciCheck.Desc.Chain": "c56251016e6ab9c082b7fcec3000e638afb07e0cb4e002fb2fe64b469d9f836c",
     "NciCheck.Desc.Chain.at": "158fc743edceeb48e0afad687e2f4bdbfbfb1dd740c53b5f068ed59a3481b927",
@@ -6412,6 +6488,7 @@
     "NciCheck.Desc.Seg.reps": "f915fdd8762698c6a729f2646ac00af9627b45d085b4916d5f16ed173bfc0527",
     "NciCheck.Desc.Seg.shift": "15f4fde4a88d6d148c1343bd229a374e96c275fd84e8de87d75fece425268d6a",
     "NciCheck.Desc.Seg.slice": "da8da8772d562751b9c130b9fd0b17f152745d9de0b8d688c6d40d34ccb956bb",
+    "NciCheck.Desc.Seg.split": "c45a36e6f563b91d934ef79a306f350cf3520089e0f7bc525e488bda80eadd35",
     "NciCheck.Desc.Summary": "8dfb76b38fab69317897cf18095ed37105c8b8afd8bff978329745d1f57f8a9f",
     "NciCheck.Desc.Summary.ret": "6f1ac1a24843c528e94ceafecc01fa524bf88d3274f05d9c251bea6dff0da0e3",
     "NciCheck.Desc.Summary.used": "d53cbb05bc2862864a04ed1157e6c3a366be33dabedf66ce2f8d38e948937336",
@@ -6472,12 +6549,13 @@
     "NciCheck.Desc.memberRows": "e37f422865d2508bc77ceb0f1c1c6f05e968d4214a2f8931a4933e9801a69eaa",
     "NciCheck.Desc.memberSpans": "1d19f5b80e22efff22c68108f731ce6b0c4e019fe286e72cec1666f28685f3c2",
     "NciCheck.Desc.nodeOf": "c92ff44220306440255ee32730c133280de9b7ea658beba4a9d145bee07ba15a",
-    "NciCheck.Desc.nodeReads": "64028149f314a0599e555495f747429c5d5f07f9b9f27f6fb453ad1741c264fd",
+    "NciCheck.Desc.nodeReads": "6921d30cf4958f99304a5727487e542cc95aaa455354834d449eb0288b49e0bf",
     "NciCheck.Desc.novelWidth": "e294912916a01244e19deb1c4ed6b69223e1b526d005d1bf7e74744da62814b6",
     "NciCheck.Desc.ofPart": "a4316478ad29446d33f80f1e382b2e9600c761758686506d6821cbc76abf5eef",
     "NciCheck.Desc.ofSeq": "fd54f7d2dec50a4d40145bc5da5cfb9c942f938f1f023ce0449ab0802331b4b6",
     "NciCheck.Desc.ownerStep": "b247cfb93a8d6803a811254ae52d476cbfcf2a82113c6f8551731f1fd9befc83",
     "NciCheck.Desc.reached": "9b353be85fc68f150b007ce70da623c1943373c9e73d61a57f113b46b1e3aba6",
+    "NciCheck.Desc.resolvable": "0dda23a2b49c7f1d504ab1508fbe25ee1955dbab5b525d82e7c2c9c2d09acd66",
     "NciCheck.Desc.retAt": "e8d8a4bbc339bc115592ab103264462c92e8c8ce3c09593a166bd916f53c9655",
     "NciCheck.Desc.rootLaidOut": "b1902101d4cde10a5b199931558c9e1a5fde5dea774e32e031fe955fd529d4dc",
     "NciCheck.Desc.shiftGates": "14320918e6ee17e7433a2aeea55ed33320243459d2b944fbe3718cf0b6d9aba6",
@@ -6491,7 +6569,7 @@
     "NciCheck.Desc.throughPS": "d0011ba4cf88ddb0b79e5f6ba18d6b99065c1fd7ab82af39d1a8b79529ff4963",
     "NciCheck.Desc.walkAtMost": "3a7a02fe16ac01d705876c9972e138069890ef1c630a111e4b2df1b3c67790f7",
     "NciCheck.Desc.walkBound": "a9ad0f30e30cd9a9dbc37cd48dfba1de1610bab347ef6525fdaa40141376bbe7",
-    "NciCheck.Desc.walkable": "626588493d929df1ba49a8fc5c1fbb7bc2af0371a093fafab5d99d82c700aa2e",
+    "NciCheck.Desc.walkable": "9844cfcf9a4ddbc632a2e48a7e44db1b807af2ef16261284921b8ac233e4f9a1",
     "NciCheck.Desc.widthIn": "b1ad339e819a283eb749f0740c582df78ecc2d18a2827bd3fbf4dde78c5b9948"
    },
    "guarantees": ["NciCheck.Properties.SecurityProofs.BaselineProvenance"]
@@ -8624,6 +8702,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.recordKeptAfterDraw"
@@ -8712,7 +8791,7 @@
    ]
   },
   "Properties.RemoteAudit.Live": {
-   "digest": "0a6d389208922b0a686f3d29a02194fe82da58848e8e8b98e15aabd239caba66",
+   "digest": "8ae8df90bbd5e70afe1aa0ecc28159128fae1fd80c0e18c71174f10ee5f05305",
    "definitions": {
     "Properties.RemoteAudit.Live.Answer": "250a061dcc59a1c6c8ac2c20623702e3bde86d74f98ddc873247b19e863dcc9a",
     "Properties.RemoteAudit.Live.Answer.casesOn": "39d9c6218e16d26c6bb1bba6220166c4adc7899051f99a99d115694e0ef3970a",
@@ -8738,7 +8817,7 @@
     "Properties.RemoteAudit.Live.Req.settle": "a4da87116887ca0260db4db5c5435a0029545b4d050b7860280f039ea3facef0",
     "Properties.RemoteAudit.Live.Req.verify": "f4062ee54d707a0c2f340405c409f163c8843419913d5d1ef984653aeaeeca4f",
     "Properties.RemoteAudit.Live.run": "d65128ed5d31631a0f6bfcced96ac690b4ff426f94c93b8add1ece1e8e8b9deb",
-    "Properties.RemoteAudit.Live.step": "e824c5bb56098e8062dbcd5821ebbd4eeeed3b527f9d579e8cd32cd59879e9bd",
+    "Properties.RemoteAudit.Live.step": "e6cdaee71d8ecb0456ce1b59c83f9dbfd6b36473706657b4a3542ce71fe8ab24",
     "Properties.RemoteAudit.Live.step._sparseCasesOn_5": "d83c00b80e5e08aadf4f6419f324568dda7953c037f4ba261fd189abe883760e",
     "Properties.RemoteAudit.LiveIsRun": "897367ff6c57ea9e672dc5ea7dbca0bca4a9c628c86ed1a4b92843e2bcb5dccf"
    },
@@ -8758,21 +8837,28 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "c36ff3974b283161f0292f0fb552b43ae93c6f2e053fabcd4db7b970441fbb1b",
+   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
    "definitions": {
-    "Properties.RemoteAudit.ScheduleChecked": "e6ca67e811aaaa94f42cd880be7e620ea0be19ff38996dc4bfce884988ccea24",
-    "Properties.RemoteAudit.ScheduleFixesLayout": "0e02152b247e6ca4f53271b0659a4ab4d1e8d0ecb744b452041044129a541cd5"
+    "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
+    "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
+    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
    },
-   "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+   "guarantees": [
+    "Properties.RemoteAudit.scheduleChecked",
+    "Properties.RemoteAudit.scheduleFixesLayout",
+    "Properties.RemoteAudit.steered_of_checked"
+   ]
   },
   "Properties.RemoteAudit.Shared": {
-   "digest": "691bc299c37faf179a0ed805709419debab20a3dc2fcd1049651b8867abab76d",
+   "digest": "5fec81c7d594ad0a321c567035b6a15eba68d4bfb0252e0104453f326491bf01",
    "definitions": {
     "Properties.RemoteAudit.Shared.AcceptDrawsOpenable": "65753d764bfe2d2c6c3c7486bd8d9be8247eb6220f954081ce3c1450b17aede7",
     "Properties.RemoteAudit.Shared.DrawIsSubset": "5e1391418f19c4953e71bddf5ceffb7540df4c8c18484a4f0243361eec42f4ff",
     "Properties.RemoteAudit.Shared.OpeningsUnreadUntilDrawn": "a96403019f2e4d40479cb0376b77513e672e3e93372da4dab71018fc58f13a23",
     "Properties.RemoteAudit.Shared.RecordKeptAfterDraw": "28b329c724115229b6cdb4dd0dfa086a0c8f3b5ed9624eb000f9070bca774d7d",
+    "Properties.RemoteAudit.Shared.SessionDrawsRecords": "83b570c39165754acd0a3695338670ed63089cc5d5d635541856dfd1434eeaea",
     "Properties.RemoteAudit.Shared.drawLengths": "39d8453df51fe66de43380186e5c0a223d9e7d2a37155c3c9f2b0feb05ce917e",
+    "Properties.RemoteAudit.Shared.drawRecords": "a7fc2f6a62e1bb91e012500cb885a33aa0654e3a976132079d28ebb77edb7cf3",
     "Properties.RemoteAudit.Shared.drawWindows": "a886097f0567a1ce1a0ee77b30b2999ebbe6a91216848035fe8dadbbc4d55be9",
     "Properties.RemoteAudit.Shared.lengthsOf": "a513bbe2b2c975d42200c7ed0592c3dd5fd34e9625589017b44b456d9e1c5752",
     "Properties.RemoteAudit.Shared.passCount": "31cc2541472556de7eea915e3142f8c57ba7655e16d37005585ac0a761dc342a",
@@ -8784,7 +8870,8 @@
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
-    "Properties.RemoteAudit.Shared.recordKeptAfterDraw"
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords"
    ]
   },
   "Properties.SampledProofs": {
@@ -8919,6 +9006,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8985,6 +9073,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -9111,6 +9200,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -9209,6 +9299,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -9227,7 +9318,7 @@
    ]
   },
   "RemoteAudit.Schedule": {
-   "digest": "f9134c0e0c8b48c213be0ac1893cf7d36c18f0c661aa5274189a05abdc2fc27f",
+   "digest": "2459e8378b3b7614fecb10fa735209004adccb9786038d95957fd56e7ab98939",
    "definitions": {
     "RemoteAudit.Schedule.Block": "1578971260af18cb33cc15d9fcdb29364f80d5df5df3d0174c27266afb640bfe",
     "RemoteAudit.Schedule.STEP_LIMIT": "43c3940b0e86acea846c9da637f9a815b206b375925f44f64c5562efc92d2792",
@@ -9239,7 +9330,7 @@
     "RemoteAudit.Schedule.appendsDiffer": "484021fcaf5024c5afebe02c0d2909db7ade180c7ae5f63977d98c05bdf2ffc7",
     "RemoteAudit.Schedule.bits": "428283decfa3bc5adfc0c287a5ecb392ad292ce9fbe75b23a6424333a12314a9",
     "RemoteAudit.Schedule.blockCode": "5fa8140671d868703fd8624d23601d1b8ea5c2c2d2f46c1e497edec220e90e1c",
-    "RemoteAudit.Schedule.check": "10bb0ef9f5b011fd7852b178ed7c181180ea0999a6e6434a8afe513faa57cc3c",
+    "RemoteAudit.Schedule.check": "581834feee03ae81ebe33239763a778b256f5b38b9cfa103fa202e96d7eddd19",
     "RemoteAudit.Schedule.check._sparseCasesOn_1": "b389bb19ce9deedd1c30e68173d86a9a53bad7ab0b33627711cb3bd2483341d2",
     "RemoteAudit.Schedule.encode": "cae3039d29b21907e855b90e65eadca457a6a8d3b3d6b535381b994a94a18531",
     "RemoteAudit.Schedule.malformed": "291aee05e822de11a2294a53d50c892e9eb9b9bd92389eb5e3c3f5c94b577269",
@@ -9252,7 +9343,11 @@
     "RemoteAudit.Schedule.spans": "3e888bfd47428be7c9ef0fb32baf300c6990f04a2b5c367b5a0f17b175cac271",
     "RemoteAudit.Schedule.varint": "0d20f517bea3fac822dd927ccc639844dad1637da8e4b124268c5317d94faf43"
    },
-   "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+   "guarantees": [
+    "Properties.RemoteAudit.scheduleChecked",
+    "Properties.RemoteAudit.scheduleFixesLayout",
+    "Properties.RemoteAudit.steered_of_checked"
+   ]
   },
   "RemoteAudit.Session": {
    "digest": "533385e84d8860d8961fd4483864439e2aca1418de34aec4a40794c414e17538",
@@ -9370,6 +9465,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
@@ -9396,20 +9492,21 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.liveIsRun"
    ]
   },
   "RemoteAudit.Verifier": {
-   "digest": "edac9b168a3286da9c12bd0aa1113e55c44394cc8c67c08bdf11fb4ed280a22e",
+   "digest": "7c3bfdae221653ad961a2aac4457c03fabb1e158b6ea3c7704b36990892b4668",
    "definitions": {
-    "RemoteAudit.Verifier.eventOn": "8a7703a5d2c8d79a3537af75df0d9c99ebd78823dd32419cd5d923b9fcb4af7e",
-    "RemoteAudit.Verifier.unset": "1c79eb4a305182bd7aabec7dce3c91083069ccf5094090efc3fafe3aadd70fab",
+    "RemoteAudit.Verifier.eventOn": "99f10cb9262375306d1fb6b0df144759c8635fe27a13dd5d626f4303b0c48b7e",
+    "RemoteAudit.Verifier.unset": "b1c6b3c9e79d22180af87fc108c5c055da018dd3c56cb814015b47ff83eae587",
     "RemoteAudit.Verifier.unset._sparseCasesOn_1": "891465d9b2afbe0d44c09c4be7675fdd7c80769a27389c396eba93f1e547af61",
     "RemoteAudit.Verifier.unset._sparseCasesOn_2": "dbf14f58d31ad80f631951c2e021c1fe0e7c8b443ee20a2f0e6ae667f3dd1578",
     "RemoteAudit.Verifier.unset._sparseCasesOn_3": "218c89d89bc182e2870d873c0042a0a89974828d5d5428fb35b7fb299b77b108",
     "RemoteAudit.Verifier.unset._sparseCasesOn_4": "40e73f8706fcd786cc36c38f4c0f3ad33b5b599284872de308898df8ff5aa2c0",
     "RemoteAudit.Verifier.windowCheck": "69dcf74a2651cd9df52b7ed84e9552cc830380ef2df8156974ba9f7ba042bece",
-    "RemoteAudit.Verifier.withCoin": "e68b97486c7e485256c65b7ccf9da0db7ee3c5371dd63583899ed54986033110",
+    "RemoteAudit.Verifier.withCoin": "77926544acfd80f380702ca0b8ed4a78147ad12bcd29338ab58c464050923695",
     "RemoteAudit.Verifier.withCoin._sparseCasesOn_3": "7e5672aa5433d6c08663db95ca83fb768425748418e7dde938f69e4f6b3edfef"
    },
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
@@ -9515,6 +9612,7 @@
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
