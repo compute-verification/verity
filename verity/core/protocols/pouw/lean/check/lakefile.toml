@@ -29,7 +29,7 @@ text = true
 
 [[lean_lib]]
 name = "PouwCheck"
-roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest"]
+roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest", "PouwCheck.VerifiedDifftest"]
 needs = ["models"]
 
 [[lean_exe]]
