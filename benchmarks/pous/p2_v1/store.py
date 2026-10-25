@@ -6,9 +6,10 @@ decode a kernel's `decode_layer` matches byte for byte.
     store.py toy [--out store-toy] [--width 64] [--layers 2] [--ff 64] [--per-segment 11] [--workers N]
     store.py toy --plain [--out store-toy]
 
-`toy` writes the toy fixture (`store-toy/`): `toy.json`, `spot.json` and `c-star.bin`, which are tracked, and `w.bin`
-and `staging.bin`, which are not (each is pinned by its digest in `toy.json`). `toy --plain` writes those two in under a
-second with no encoding.
+`layout` writes the real store's layout, which Git doesn't track (`LAYOUT_SHA512` pins it). `toy` writes the toy
+fixture (`store-toy/`): `toy.json`, `spot.json`, `spot-c.bin` and `c-star.bin`, which are tracked, and `w.bin` and
+`staging.bin`, which are not (`toy.json` pins each by its digest). `toy --plain` writes those two in under a second with
+no encoding.
 
 **Layout.** The tensors, all s8 `[N, K]` row-major as `ScaledMmS8Coordinate` reads them, in this order: for each layer
 `l`, `model.layers.{l}.self_attn.qkv_proj.weight` (rows: the query heads, then K, then V), `...self_attn.o_proj.weight`,
@@ -57,6 +58,8 @@ from verity.core.protocols.pous.schemes.p2 import POINT, P2Params, encode_segmen
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE / "store-layout.json"
+LAYOUT_SHA512 = "45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783"
+"""`store.py layout`'s output: the test regenerates it and holds it to this."""
 TOY_DIR = HERE / "store-toy"
 SCHEMA = "verity-pous/p2-store-layout/v1"
 TOY_SCHEMA = "verity-pous/p2-store-toy/v1"
@@ -246,6 +249,18 @@ def patch(c_star: bytes, block: int, c: bytes) -> bytes:
     return c_star[:len(c) * block] + c + c_star[len(c) * (block + 1):]
 
 
+def negative(neg: dict, c_star: bytes, params: P2Params) -> bytes:
+    """`c_star` with a negative's block in place: its `c` in hex, `"p"` for `p` itself, or `C*`'s own block with byte
+    `xor[0]` xored by `xor[1]`."""
+    nb, i = params.block_bytes, neg["block"]
+    if "xor" in neg:
+        c = bytearray(c_star[nb * i:nb * (i + 1)])
+        c[neg["xor"][0]] ^= neg["xor"][1]
+    else:
+        c = params.p.to_bytes(nb, "big") if neg["c"] == "p" else bytes.fromhex(neg["c"])
+    return patch(c_star, i, bytes(c))
+
+
 def staging_of(store: Store, w: bytes, layer: int) -> bytes:
     """Layer `layer`'s staging buffer from the plaintext `W`: what `decode_layer` must give."""
     out = bytearray(store.staging_bytes(layer))
@@ -302,8 +317,9 @@ def _dump(doc: dict) -> str:
 
 def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> dict[str, bytes]:
     """The toy fixture's files: `toy.json` (the store at `shape`, its salt, root, digests and negative blocks),
-    `spot.json` (blocks at the real store's indices under the toy's salt), `c-star.bin`, and `toy_plain`'s two; encoded
-    by the registered codec in a process pool, and every file checked against the reference decode before it is written."""
+    `spot.json` and `spot-c.bin` (blocks at the real store's indices under the toy's salt), `c-star.bin`, and
+    `toy_plain`'s two; encoded by the registered codec in a process pool, and every file checked against the reference
+    decode before it is written."""
     store = build(shape, blocks_per_segment)
     params = store.params
     plain = toy_plain(store)
@@ -328,7 +344,7 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
     for sp, c in zip(spots, blocks):
         if _sha(decode_block(real, real_prefix, sp["i"], c)) != sp["m_sha512"]:
             raise RuntimeError(f"spot vector {sp['id']!r} doesn't decode back")
-        sp["c"] = c.hex()
+    spot_c = b"".join(blocks[:len(spots)])
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt, segments)
     layers, start = [], 0
     for l in sorted({t.layer for t in store.tensors}):
@@ -337,25 +353,22 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
             raise RuntimeError(f"layer {l} doesn't decode to its tensors")
         layers.append([l, start, len(buf), _sha(buf)])
         start += len(buf)
-    nb = params.block_bytes
-    flipped = bytearray(c_star[nb * 8:nb * 9])
-    flipped[1000] ^= 1
     negatives = [{"id": "padding", "layer": 0, "block": last, "flag": 3, "c": blocks[-1].hex(),
                   "why": "the true payload with its last byte, past the tensor's end, xor 1"},
-                 {"id": "not-below-p", "layer": 0, "block": 0, "flag": 2,
-                  "c": reference.DEPLOYMENT.p.to_bytes(nb, "big").hex(), "why": "c = p"},
-                 {"id": "flipped", "layer": 0, "block": 8, "flag": 2, "c": bytes(flipped).hex(),
+                 {"id": "not-below-p", "layer": 0, "block": 0, "flag": 2, "c": "p", "why": "c = p"},
+                 {"id": "flipped", "layer": 0, "block": 8, "flag": 2, "xor": [1000, 1],
                   "why": "C*'s block 8 with byte 1000 xor 1: decodes to more than 16,432 bits"}]
     for neg in negatives:
-        if refusal(store, patch(c_star, neg["block"], bytes.fromhex(neg["c"])), salt, neg["layer"]) != neg["flag"]:
+        if refusal(store, negative(neg, c_star, params), salt, neg["layer"]) != neg["flag"]:
             raise RuntimeError(f"negative block {neg['id']!r} doesn't raise flag bit {neg['flag']}")
     doc = {"schema": TOY_SCHEMA, "layout": store.to_json(), "source": TOY_SOURCE.hex(), "commitment": commitment.hex(),
            "salt": salt.hex(), "prefix": prefix.hex(), "root": vk.root.hex(), "w_sha512": _sha(w),
            "c_star_sha512": _sha(c_star), "staging_sha512": _sha(staging), "staging_columns": ["layer", "start", "bytes", "sha512"],
            "staging": layers, "negatives": negatives}
     spot = {"schema": SPOT_SCHEMA, "params": real.manifest(), "salt": salt.hex(), "prefix": real_prefix.hex(),
-            "vectors": spots}
-    return {"toy.json": _dump(doc).encode(), "spot.json": _dump(spot).encode(), "c-star.bin": c_star} | plain
+            "c": "spot-c.bin: vector j's block at byte 2056 j", "c_sha512": _sha(spot_c), "vectors": spots}
+    return {"toy.json": _dump(doc).encode(), "spot.json": _dump(spot).encode(), "spot-c.bin": spot_c,
+            "c-star.bin": c_star} | plain
 
 
 def _spots(real: Store, salt: bytes) -> list[dict]:

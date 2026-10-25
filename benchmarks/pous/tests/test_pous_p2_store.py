@@ -1,5 +1,5 @@
 """The encoded weights store (`p2_v1/store.py`, CMP-95 item 2): the real store's layout JSON and the toy fixture
-(`p2_v1/store-toy/`) regenerate as tracked, `W` and the staging buffers by their pinned digests; the toy's `C*` decodes,
+(`p2_v1/store-toy/`) regenerate as pinned, the layout, `W` and the staging buffers by their digests; the toy's `C*` decodes,
 layer by layer, to its `W`'s tensors by `reference.decode`, by the registered codec and by `layout.decode_tensor`,
 passes the public-encoder setup with the pinned root, and refuses each negative block with its flag; the spot vectors
 decode at the real store's indices."""
@@ -41,7 +41,8 @@ def _segments(c_star: bytes = C_STAR) -> list[list[bytes]]:
 
 
 def test_layout_json_regenerates():
-    assert S.LAYOUT_JSON.read_text() == S._dump(S.build(S.MQA16K).to_json()), "rerun `store.py layout`"
+    doc = S._dump(S.build(S.MQA16K).to_json())
+    assert hashlib.sha512(doc.encode()).hexdigest() == S.LAYOUT_SHA512, "a layout change: pin the new digest"
 
 
 def test_real_layout():
@@ -108,7 +109,7 @@ def test_toy_public_setup():
 def test_toy_refusals():
     assert S.refusal(STORE, C_STAR, SALT, 0) is None
     for neg in TOY["negatives"]:
-        bad = S.patch(C_STAR, neg["block"], bytes.fromhex(neg["c"]))
+        bad = S.negative(neg, C_STAR, STORE.params)
         assert S.refusal(STORE, bad, SALT, neg["layer"]) == neg["flag"], neg["id"]
         assert S.refusal(STORE, bad, SALT, 1) is None
     other = bytes(SALT[:-1]) + bytes([SALT[-1] ^ 1])
@@ -124,12 +125,14 @@ def test_spot_vectors():
     assert prefix.hex() == SPOT["prefix"]
     ref = reference.Params(real.w, real.c0, real.payload_bytes, real.blocks_per_segment, real.segments)
     sha = lambda b: hashlib.sha512(b).hexdigest()  # noqa: E731
+    spot_c = (S.TOY_DIR / "spot-c.bin").read_bytes()
+    assert sha(spot_c) == SPOT["c_sha512"] and len(spot_c) == NB * len(SPOT["vectors"])
     assert [v["id"] for v in SPOT["vectors"]] == ["w-first", "qkv0-last", "down51-first", "head-last", "w-last"]
-    for v in SPOT["vectors"]:
+    for j, v in enumerate(SPOT["vectors"]):
         assert divmod(v["i"], real.blocks_per_segment) == (v["s"], v["v"])
         k, t, attempt = reference.keys_after(prefix, ref, v["s"], v["v"])
         assert (sha(k.to_bytes(NB, "big")), sha(t.to_bytes(NB, "big")), attempt) == (v["K_sha512"], v["t_sha512"], v["t_attempt"])
-        m = S.decode_block(real, prefix, v["i"], bytes.fromhex(v["c"]))
+        m = S.decode_block(real, prefix, v["i"], spot_c[NB * j:NB * (j + 1)])
         assert m == S.spot_payload(v["i"], v["used"], real.payload_bytes) and sha(m) == v["m_sha512"]
 
 
