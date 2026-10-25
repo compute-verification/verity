@@ -10370,13 +10370,25 @@ def CarriesShape (c : Desc.Ctx) : Prop :=
   ∀ k node segs, c.node k = .ok node → node.form = .scan → 2 ≤ node.n →
     Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- **`Desc.carriesRead`'s segments are `ShapeOk`** wherever the scans' steps' summaries hold `RetOk`, and
-`fromCallee`'s, `throughArg`'s and `down`'s of a piece `throughPS` gives are `ShapeOk`. -/
-theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
-    (hCS : CalleeShape c Flock.Steps.FUEL) (hTS : ThroughShape c Flock.Steps.FUEL)
+/-- **`Desc.carriesRead`'s segments hold `Q`** wherever the scans' steps' summaries hold `RetOk`, and the segments
+a scan's `fromCallee` gives of its steps' returns, `throughArg` of its initial carry's leaves in range, and `down` of a
+piece `throughPS` gives hold `Q`. -/
+theorem carriesRead_of (Q : Seg → Prop) (c : Desc.Ctx)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hCS0 : ∀ k node, c.node k = .ok node → node.form = .scan → ∀ m a b segs, m < (c.body.nodes[k]!).members →
+      (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
+      Desc.fromCallee c Flock.Steps.FUEL k m a b = .ok segs → ∀ s ∈ segs.toList, Q s)
+    (hI : ∀ k node, c.node k = .ok node → 0 < node.members → ∀ lo hi segs,
+      (∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
+        j < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves) →
+      Desc.throughArg c Flock.Steps.FUEL k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo } =
+        .ok segs → ∀ s ∈ segs.toList, Q s)
     (hPS : ∀ k node i p bp segs, c.node k = .ok node → Desc.throughPS (c.arg k i) p = some bp →
-      Desc.down c Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s) : CarriesShape c := by
+      Desc.down c Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, Q s) :
+    ∀ k node segs, c.node k = .ok node → node.form = .scan → 2 ≤ node.n →
+      Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs → ∀ s ∈ segs.toList, Q s := by
   intro k node segs hn hform hn2 h
+  have hCS := hCS0 k node hn hform
   unfold Desc.carriesRead at h
   obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
   rw [hn] at hn'
@@ -10395,11 +10407,11 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
     intro h j' hx
     have := (hpos _ (List.mem_of_getElem? hx)).2.2 0 rfl
     exact ⟨this.1, by have h2 : ((j' : Nat) : Int) < _ := this.2; exact_mod_cast h2⟩
-  have hinit : ∀ lo hi v, (∀ j, lo ≤ j → j < hi → G j) → init lo hi = .ok v → ∀ s ∈ v.toList, ShapeOk c.P c.d s :=
-    fun lo hi v hlv hv => init_shape c hn hTS hm0 hlv hv
+  have hinit : ∀ lo hi v, (∀ j, lo ≤ j → j < hi → G j) → init lo hi = .ok v → ∀ s ∈ v.toList, Q s :=
+    fun lo hi v hlv hv => hI k node hn hm0 lo hi v hlv hv
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
-  have hfa := forIn_app (ShapeOk c.P c.d) _ _ ?_ out0 segs h'
+  have hfa := forIn_app Q _ _ ?_ out0 segs h'
   · obtain ⟨out, hout, hQ⟩ := hfa
     rw [hout]
     intro s hs
@@ -10412,7 +10424,7 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
   simp only [pure, Except.pure, Except.ok.injEq] at hy
   subst hy
   rw [← Array.forIn_toList] at hv
-  have hfa := forIn_app (ShapeOk c.P c.d) _ _ ?_ r' v hv
+  have hfa := forIn_app Q _ _ ?_ r' v hv
   · obtain ⟨segs', hsegs', hA2⟩ := hfa
     exact ⟨segs', by rw [hsegs'], hA2⟩
   intro x hx r'' y hy
@@ -10427,7 +10439,7 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
   simp only [pure, Except.pure, Except.ok.injEq] at hy
   subst hy
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hv
-  have hfa := forIn_app (ShapeOk c.P c.d) _ _ ?_ r'' v hv
+  have hfa := forIn_app Q _ _ ?_ r'' v hv
   · obtain ⟨segs', hsegs', hA2⟩ := hfa
     exact ⟨segs', by rw [hsegs'], hA2⟩
   intro j _ o y hy
@@ -10446,12 +10458,12 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
     rw [← hlenR]
     exact (List.getElem?_eq_some_iff.1 this).1
   have hjp : ∀ sn y, (∀ l ∈ sn, G l) → jp () sn = .ok y →
-      ∃ segs, y = .yield (o ++ segs) ∧ ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+      ∃ segs, y = .yield (o ++ segs) ∧ ∀ s ∈ segs.toList, Q s := by
     intro sn y hG hy
     simp only [jp] at hy
     obtain ⟨v1, hv1, hy⟩ := Walk.except_bind_ok hy
     rw [← Array.forIn_toList] at hv1
-    obtain ⟨sA, hsA, hQA⟩ := forIn_app (ShapeOk c.P c.d) _ _ (fun l hl o' y' hy' => by
+    obtain ⟨sA, hsA, hQA⟩ := forIn_app Q _ _ (fun l hl o' y' hy' => by
         obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
         simp only [pure, Except.pure, Except.ok.injEq] at hy'
         subst hy'
@@ -10459,8 +10471,8 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
         rw [show j' = l by omega]
         exact hG l (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (qsort_mem (fun x => x) _ hl)))) o v1 hv1
     subst hsA
-    have hfin : ∀ extra, y = .yield (o ++ sA ++ extra) → (∀ s ∈ extra.toList, ShapeOk c.P c.d s) →
-        ∃ segs, y = .yield (o ++ segs) ∧ ∀ s ∈ segs.toList, ShapeOk c.P c.d s :=
+    have hfin : ∀ extra, y = .yield (o ++ sA ++ extra) → (∀ s ∈ extra.toList, Q s) →
+        ∃ segs, y = .yield (o ++ segs) ∧ ∀ s ∈ segs.toList, Q s :=
       fun extra hy hE => ⟨sA ++ extra, by rw [hy, Array.append_assoc], fun s hs => by
         rw [Array.toList_append, List.mem_append] at hs
         exact hs.elim (hQA s) (hE s)⟩
@@ -10483,11 +10495,11 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
               obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
               simp only [pure, Except.pure, Except.ok.injEq] at hy
               simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv'
-              obtain ⟨sB, hsB, hQB⟩ := forIn_app (ShapeOk c.P c.d) _ _ (fun it hit o' y' hy' => by
+              obtain ⟨sB, hsB, hQB⟩ := forIn_app Q _ _ (fun it hit o' y' hy' => by
                   obtain ⟨v'', hv'', hy'⟩ := Walk.except_bind_ok hy'
                   simp only [pure, Except.pure, Except.ok.injEq] at hy'
                   subst hy'
-                  refine ⟨v'', rfl, hCS k it _ _ v'' ?_ (fun _ => by rw [hnode]; exact hbound q hq0) hv''⟩
+                  refine ⟨v'', rfl, hCS it _ _ v'' ?_ (fun _ => by rw [hnode]; exact hbound q hq0) hv''⟩
                   rw [List.mem_range'_1] at hit
                   rw [hnode, hmem]
                   omega) _ v' hv'
@@ -10496,7 +10508,7 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
           · obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
             simp only [pure, Except.pure, Except.ok.injEq] at hy
             exact hfin v' hy.symm
-              (hCS k 0 _ _ v' (by rw [hnode]; exact hm0) (fun _ => by rw [hnode]; exact hbound q hq0) hv')
+              (hCS 0 _ _ v' (by rw [hnode]; exact hm0) (fun _ => by rw [hnode]; exact hbound q hq0) hv')
       · simp only [pure, Except.pure, Except.ok.injEq] at hy
         exact hfin #[] (by rw [← hy, Array.append_empty]) (by simp)
     · simp only [pure, Except.pure, Except.ok.injEq] at hy
@@ -10539,6 +10551,14 @@ theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
       rw [show t - 1 + 1 = t by omega] at this
       exact hcarry _ _ this
   · exact hjp s1 y hG1 hy
+
+/-- **`Desc.carriesRead`'s segments are `ShapeOk`** wherever the scans' steps' summaries hold `RetOk`, and
+`fromCallee`'s, `throughArg`'s and `down`'s of a piece `throughPS` gives are `ShapeOk` (`carriesRead_of`). -/
+theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hCS : CalleeShape c Flock.Steps.FUEL) (hTS : ThroughShape c Flock.Steps.FUEL)
+    (hPS : ∀ k node i p bp segs, c.node k = .ok node → Desc.throughPS (c.arg k i) p = some bp →
+      Desc.down c Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s) : CarriesShape c :=
+  carriesRead_of _ c hR (fun k _ _ _ => hCS k) (fun _ _ hn hm0 _ _ _ hlv h => init_shape c hn hTS hm0 hlv h) hPS
 
 /-- **Every segment `down` gives a piece of a root node's argument, one `Desc.memberRows` gives, or one
 `Desc.carriesRead` gives, is `ShapeOk`** (`piece_shape`, `throughPS_shape`, `carriesRead_shape`). -/
@@ -12776,5 +12796,117 @@ theorem memoOf_retW (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok m
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
   locW_unique h (locW_root hc hg)
+
+/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: segments naming the body's gates with their
+widths, the argument naming references. -/
+theorem piece_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (hA : ArgOk c k i)
+    (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t))
+    {lo hi : Nat} {q : Piece} (hq : q ∈ (c.arg k i).pieces lo hi) {segs : Array Seg}
+    (h : Desc.down c fuel q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  have hq' := Array.mem_toList_iff.2 hq
+  have hmem : ∀ x ∈ pos q, ∃ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      x = refPos (((c.body.nodes[k]!).args[i]!).seq.get t) := by
+    intro x hx
+    have : x ∈ posAll ((c.arg k i).pieces lo hi) := List.mem_flatMap.2 ⟨q, hq', hx⟩
+    rw [pieces_pos _ hA.1 lo hi] at this
+    have := mem_sl this
+    rw [hA.2] at this
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 this
+    exact ⟨t, List.mem_range.1 ht, rfl⟩
+  have hcnt : 0 < q.count := by
+    unfold Desc.PS.pieces at hq'
+    rw [Array.toList_flatMap, List.mem_flatMap] at hq'
+    obtain ⟨g, hg, hq'⟩ := hq'
+    rw [Array.toList_flatMap, List.mem_flatMap] at hq'
+    obtain ⟨m, -, hq'⟩ := hq'
+    exact shiftGates_count _ _ (psSlice_ok _ hA.1 hP lo hi g hg).2.2 q hq'
+  exact hD q segs hcnt
+    (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem x hx; simp [refPos])
+    (fun x hx k' hk' => by
+      obtain ⟨t, ht, rfl⟩ := hmem x hx
+      simp only [refPos, Tgt.ref.injEq] at hk'
+      obtain ⟨hp', rfl⟩ := hk'
+      have := ((hR t ht).2 hp').2
+      simp only [refPos]
+      exact_mod_cast this)
+    (fun x hx i' hi' => by
+      obtain ⟨t, ht, rfl⟩ := hmem x hx
+      simp only [refPos, Tgt.ref.injEq] at hi'
+      obtain ⟨hp', rfl⟩ := hi'
+      have := (hR t ht).1 hp'
+      simp only [refPos]
+      exact ⟨this.1, by exact_mod_cast this.2⟩)
+    (fun w p hx => by
+      obtain ⟨t, -, he⟩ := hmem _ hx
+      simp [refPos] at he) h
+
+/-- The root's callees' summaries name their gates with their widths (`memoOf_retW`). -/
+theorem root_retW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    (hWF : WidthFacts P) : ∀ k node, (rootCtx P memo).node k = .ok node → RetW P memo node.fn := by
+  obtain ⟨hr, hp, -, hDec, hRP, hSO, hcf, hnr, hB⟩ := hF
+  intro k node hn
+  have hk := node_lt hn
+  have hg := node_get hn
+  change k < (P.defs[P.root]!).body.nodes.size at hk
+  change (P.defs[P.root]!).body.nodes[k]! = node at hg
+  have hlt := hcf P.root hr k hk
+  rw [← hg]
+  exact (memoOf_retW P memo hm hRP hDec hWF hcf hnr hB hSO _ (by omega)
+    (reached_closed P hcf P.root (reached_root P hr) hp k hk) (by omega)).2
+
+/-- **Every segment `down` gives a piece of a root node's argument, one `Desc.memberRows` gives, or one
+`Desc.carriesRead` gives, names the root's gates with their widths** (`piece_w`, `throughPS_w`, `carriesRead_of`). -/
+theorem rootW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    (hWF : WidthFacts P) {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
+    (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
+      FromCarry (rootCtx P memo) k node s) : GateW P P.root s := by
+  have hR := root_retOk P memo hm hF
+  have hRW := root_retW P memo hm hF hWF
+  obtain ⟨hr, hp, -, hDec, -, -, -, -, hB⟩ := hF
+  have hBr := hB P.root hr (reached_root P hr)
+  rw [rootCtx_eq] at hn hs hR hRW
+  have hW := widths_decoded P memo hr hp hDec hWF hBr hR hRW Flock.Steps.FUEL
+  have hA := argOk_decoded P memo hr hDec
+  have hPS : ∀ k node i p bp segs, (ctxOf P memo P.root).node k = .ok node →
+      Desc.throughPS ((ctxOf P memo P.root).arg k i) p = some bp →
+      Desc.down (ctxOf P memo P.root) Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, GateW P P.root s := by
+    intro k node i p bp segs hn hp hd
+    have hk := node_lt hn
+    by_cases hi' : i < ((ctxOf P memo P.root).body.nodes[k]!).args.size
+    · exact throughPS_w _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P memo P.root k i hk hi') ((hBr.1 k hk).2.1 i)
+        hp hd
+    · rw [throughPS_empty (ctxOf_arg_ge P memo P.root k i hi')] at hp
+      cases hp
+  have hk := node_lt hn
+  rcases hs with ⟨i, lo, hi, q, hq, segs, hd, hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd, hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
+  · by_cases hi' : i < ((ctxOf P memo P.root).body.nodes[k]!).args.size
+    · exact piece_w _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P memo P.root k i hk hi') ((hBr.1 k hk).2.1 i) hq hd
+        s (Array.mem_toList_iff.2 hs)
+    · rw [pieces_empty (ctxOf_arg_ge P memo P.root k i hi')] at hq
+      simp at hq
+  · obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
+    exact hPS k node i p' p segs hn hp' hd s (Array.mem_toList_iff.2 hs)
+  · refine carriesRead_of (GateW P P.root) _ hR ?_ ?_ hPS k node segs hn hfs hn2 hc s (Array.mem_toList_iff.2 hs)
+    · intro k' node' hn' hf' m a b segs' hm' _ h'
+      refine hW.2.1 k' m a b segs' hm' ?_ h'
+      have hk' := node_lt hn'
+      have hg : (P.defs[P.root]!).body.nodes[k']! = node' := node_get hn'
+      exact (((hWF P.root hr).2 hp).2.2 k' hk').2 (Or.inr (by rw [hg]; exact hf'))
+    · intro k' node' hn' hm0 lo hi' segs' hlv h'
+      exact init_w _ hn' hW.2.2.1 hm0 hlv h'
+
+/-- **The gates a root node's reads name have their widths in `circuitOf`'s circuit** (`SegNodes`' first part):
+`rootW`, each gate in the root's range (`locW_lt`), and `w_of_locW`. -/
+theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hm : memoOf P = .ok memo)
+    (hc : circuitOf P = .ok c) (hF : RootFacts P) (hWF : WidthFacts P) {k : Nat} {node : Flock.Program.Node}
+    (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
+    (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
+      FromCarry (rootCtx P memo) k node s) : ∀ w p, (Tgt.gate w, p) ∈ segPos s → w = c.w[p.toNat]! := by
+  intro w p hp
+  have hL := rootW P memo hm hF hWF hn hs w p hp
+  obtain ⟨hLd, hlast, -⟩ := (hWF P.root hF.1).2 hF.2.1
+  exact w_of_locW hc (locW_lt hL hLd hlast) hL
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
