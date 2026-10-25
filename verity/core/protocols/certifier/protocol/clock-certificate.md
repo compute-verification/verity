@@ -59,7 +59,13 @@ makes that source the certifier's signed record.
 - **The opening is on the host, not yet in the unit** (PROTOCOL.md's named gap, "The clock's opening"): the verifier
   of record opens each window's clock on the host, as the in-the-clear check opens a record over
   `CertifiedRecord.verify`. On an accepted window the sync it opens is the declared one, a public output already; on a
-  refused one it is the sync the certifier ran, which the unit's opening would keep hidden.
+  refused one it is the sync the certifier ran, which the unit's opening would keep hidden. The design: the unit takes
+  each window's clock opening as witness, checks it against the certificate's signed digest (the clock digest and its
+  salted digest, two SHA-512s of a few blocks, as the head check computes a head's signed digest), and computes the
+  floor from the opened syncs inside the unit, so the floor leaves the public row and the verifier reads no sync. It
+  is a circuit change to N2's advised unit (its Definition, pinned digest and public row, with its `circuit-check`
+  report), not a Lean one: the network certifier's Lean issuer already signs the salted form
+  (`CertifierDevice.Issuer.clock`).
 - **What it rests on** is what the record certificate rests on: LMS's unforgeability (`euf-cma/lms-sha512-n64`), and a
   certifier that is the auditor's device, on a host the prover doesn't control. A certifier run on the prover's own
   machine (a rehearsal's against an endpoint on its own loopback) signs whatever that machine runs, so there its signed
