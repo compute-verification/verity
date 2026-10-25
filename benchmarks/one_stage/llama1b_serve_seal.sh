@@ -9,7 +9,10 @@
 # endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`.
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
-#     gpu-lease 1 --wait --mem-gb 64 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+#     gpu-lease 1 --wait --mem-gb 256 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+# Windows are sealed off the engine loop and close at WINDOW_GB committed; the server refuses to start, and later stops taking
+# requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each window and at
+# any stop.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -48,9 +51,12 @@ fi
 
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
-  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 > "$OUT/serve.log" 2>&1 &
+  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "${DISK_FLOOR_GB:-300}" \
+  --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
+stop() { kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; cp "$D/summary.json" "$OUT/" 2>/dev/null; exit 143; }
+trap stop TERM INT
 for _ in $(seq 1 600); do
   grep -q "SERVE-OPENAI listening" "$OUT/serve.log" && break
   kill -0 "$SRV" 2>/dev/null || { tail -40 "$OUT/serve.log"; echo "SERVER EXITED before listening"; exit 10; }
@@ -123,7 +129,8 @@ echo "READY $D" | tee -a "$OUT/steps.txt"
 
 end=$(date -u -d "today $UNTIL" +%s)
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
+trap - TERM INT
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
-cp "$D/summary.json" "$D/windows.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
+cp "$D/summary.json" "$D/windows.jsonl" "$D/seals.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
 tail -3 "$OUT/serve.log"
 exit $rc

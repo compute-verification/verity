@@ -18,11 +18,22 @@ each committed value as the row's Programs read it (`served_binder`: a Linear's 
 shared module's layer-N path through. The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
 the window closed.
+
+A window is sealed off the engine loop (`Sealer`): at its close the committer is frozen (`freeze`: the window's own per-step
+state, and the pinned blocks its values sit in lent out of the committer's pool until the seal has read them), the registered
+tensors' bytes are read (`extras_of`), and `seal_window` runs over the frozen view on the sealer's thread while the engine
+serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps the serve dir's
+filesystem above a floor: a window whose seal would take it under is not sealed.
 """
 from __future__ import annotations
 
+import copy
+import functools
 import json
+import shutil
+import threading
 import time
+from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import SimpleNamespace
@@ -186,12 +197,12 @@ def served_binder(manifest: Mapping[str, Any], steps: Sequence[int], sources: Se
 
 def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: list[dict[str, Any]],
                 request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
-                label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None, extras: Any = None) -> dict[str, Any]:
     """Seal one closed window into the row dir ``d`` as a declared Commit with ``--replay-deferred`` seals its run: the binding map
     (`binding.build_binding_map` over the window's layouts and step roots, its request rows by name), the store and weights tree
-    (`replay_bundle.write_store`), then `replay_bundle.seal_all` over the window's one run, its sampled replay and linkage deferred
-    to the bundle; ``commit/runs.jsonl`` and ``commit/verdict.json`` are the record it is opened against. Returns what the
-    window's line in windows.jsonl records of it."""
+    (`replay_bundle.write_store`, with ``extras`` the registered tensors' bytes `extras_of` read, else read here), then
+    `replay_bundle.seal_all` over the window's one run, its sampled replay and linkage deferred to the bundle; ``commit/runs.jsonl``
+    and ``commit/verdict.json`` are the record it is opened against. Returns what the window's line in windows.jsonl records of it."""
     from verity_vllm.commit import binding as B
     from verity_vllm.pipeline import replay_bundle as RB
 
@@ -210,7 +221,7 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     (out / "binding_map_p0.json").write_text(json.dumps({k: v for k, v in bmap.items() if k != "entries"} | {"entries": bmap["entries"]},
                                                         separators=(",", ":"), default=str))
     hashed: dict[str, str] = {}
-    RB.write_store(out, 0, com, rc, digests=hashed)
+    RB.write_store(out, 0, com, rc, digests=hashed, extras=extras)
     scheme = getattr(com, "commit_scheme", "vllm-v1")
     sr, bl = RB.deferred_records(RB.path(out, 0))
     row = {"pair": 0, "arm": "instrumented", "label": label, "served_window": {"schema": SERVED_WINDOW, **{k: rec.get(k) for k in ("window", "run_id")}},
@@ -245,3 +256,147 @@ class _Null:
 
     def __exit__(self, *_a: object) -> None:
         return None
+
+
+# ---------------------------------------------------------------------------------------------------------------- off the loop
+
+#: what a committer's `reset` rebinds for its next window: the closed window's per-step state, as its seal reads it
+WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_streams", "_levels", "_padding", "_salts", "_done", "row_keys")
+GB = 10 ** 9
+
+
+def freeze(com: Any) -> Any:
+    """The closed window's committer as its seal reads it while the committer runs the next window (`pipeline.commit`'s frozen
+    view): a shallow copy, never installed, holding the window's own per-step state (`WINDOW_STATE`, each dict copied) and its
+    sampler inputs' rows (`served_record.served_rows`), with the pinned blocks its values and levels sit in lent out of the
+    committer's pool (`PinnedPool.lend`) until `thaw`. Taken after the window's finalize, before the next window's reset."""
+    from verity_vllm.commit.served_record import SamplerInputsSource
+
+    frozen = copy.copy(com)
+    frozen.installed = True
+    for k in WINDOW_STATE:
+        if isinstance(getattr(com, k, None), dict):
+            setattr(frozen, k, dict(getattr(com, k)))
+    frozen.sources = [_own_rows(s) if isinstance(s, SamplerInputsSource) else s for s in getattr(com, "sources", None) or ()]
+    for metas in frozen._layouts.values():
+        iter(metas)                     # a plan's TensorMetas built once, here, rather than by the seal and the next window at once
+    pool = getattr(com, "pool", None)
+    frozen.lent = pool.lend() if hasattr(pool, "lend") else []
+    return frozen
+
+
+def _own_rows(src: Any) -> Any:
+    c = copy.copy(src)
+    c.rows = dict(src.rows)
+    return c
+
+
+def thaw(frozen: Any) -> None:
+    """`freeze`'s lent blocks back to the committer's pool, once the seal has read them: free from the next window's reset."""
+    pool = getattr(frozen, "pool", None)
+    if frozen.lent and hasattr(pool, "restore"):
+        pool.restore(frozen.lent)
+    frozen.lent = []
+
+
+def extras_of(com: Any, rc: Any) -> Any:
+    """The registered tensors' bytes a window's bundle carries (`replay_bundle.weights_extra`), read from the device on the engine
+    loop at the close; None without a weights tree (`write_store` then refuses the window by name)."""
+    from verity_vllm.pipeline import replay_bundle as RB
+
+    return RB.weights_extra(com, rc) if getattr(com, "weights_tree", None) else None
+
+
+def committed_bytes(com: Any) -> int:
+    """The bytes the open window's absorbed steps committed so far (its `StepCommitment`s), read while the committer's worker adds
+    steps: about what its seal writes (the retained values and their tree levels)."""
+    return sum(int(s.n_bytes) for s in list((getattr(com, "_done", None) or {}).values()))
+
+
+class Sealer:
+    """Seals closed windows off the engine loop: one thread runs each window's job (its seal, then its line in windows.jsonl) in
+    window order. `submit` returns at once while the windows awaiting their seal hold under ``hold_bytes`` of committed values
+    (the pinned host memory the double-buffered windows take), else it waits for room and says how long; `drain` waits for
+    every job. A job's own failure is its window's: the next one still runs."""
+
+    def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
+        self.hold_bytes, self.clock = int(hold_bytes), clock
+        self.held = 0                                    # committed bytes of the windows queued or sealing
+        self.errors: list[str] = []
+        self._cv = threading.Condition()
+        self._jobs: deque = deque()
+        self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
+        self.thread.start()
+
+    def submit(self, job: Callable[[float], Any], nbytes: int = 0) -> float:
+        """Queue ``job``, which holds ``nbytes`` of a window's values until it returns and is called with the seconds the caller
+        waited for room; returns them too."""
+        t0 = self.clock()
+        with self._cv:
+            while nbytes and self.held and self.held + nbytes > self.hold_bytes:
+                self._cv.wait()
+            waited = self.clock() - t0
+            self.held += int(nbytes)
+            self._jobs.append((functools.partial(job, waited), int(nbytes)))
+            self._cv.notify_all()
+        return waited
+
+    def _run(self) -> None:
+        while True:
+            with self._cv:
+                while not self._jobs:
+                    self._cv.wait()
+                job, nbytes = self._jobs[0]
+            if job is not None:
+                try:
+                    job()
+                except Exception as e:  # noqa: BLE001
+                    self.errors.append(f"{type(e).__name__}: {e}"[:300])
+            with self._cv:
+                self._jobs.popleft()
+                self.held -= nbytes
+                self._cv.notify_all()
+            if job is None:
+                return
+
+    def drain(self) -> None:
+        with self._cv:
+            while self._jobs:
+                self._cv.wait()
+
+    def close(self) -> None:
+        """Every job run, then the thread ended."""
+        with self._cv:
+            self._jobs.append((None, 0))
+            self._cv.notify_all()
+        self.thread.join()
+
+    def summary(self) -> dict[str, Any]:
+        return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
+
+
+class DiskFloor:
+    """The serve dir's filesystem kept above ``floor`` bytes free: a closed window is sealed only when its committed bytes (about
+    its bundle's size) and the bytes the seals still pending will write leave the floor free (`short`)."""
+
+    def __init__(self, path: str | Path, floor: int, usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
+        self.path, self.floor, self.usage = Path(path), int(floor), usage
+
+    def free(self) -> int:
+        return int(self.usage(self.path).free)
+
+    def short(self, nbytes: int, pending: int = 0) -> dict[str, Any] | None:
+        """None when a window of ``nbytes`` fits above the floor; else what was seen, for the window's record."""
+        free = self.free()
+        if free - int(pending) - int(nbytes) >= self.floor:
+            return None
+        return {"free_gb": round(free / GB, 1), "pending_gb": round(pending / GB, 1), "window_gb": round(nbytes / GB, 1),
+                "floor_gb": round(self.floor / GB, 1), "path": str(self.path)}
+
+    def refusal(self, window: int) -> str | None:
+        """Before serving: why the filesystem can't take one window of ``window`` bytes above the floor, else None."""
+        free = self.free()
+        if free >= self.floor + int(window):
+            return None
+        return (f"{self.path} has {free / GB:.0f} GB free, under the disk floor ({self.floor / GB:.0f} GB, --disk-floor-gb) plus one "
+                f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
