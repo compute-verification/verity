@@ -78,7 +78,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     assert "SMEM_BUDGET = 200 * 1024" in SOURCE and const("PEEL_ROW") == const("BK") == RUN.PEEL_ROW == 128
     names = {n for n, *_ in gemms()}
     assert names == {f"{g}{t}" for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s")
-                     for t in ("", "_n64", "_d", "_d32")} | {"gemm_words", "gemm_words_d", "gemm_words_win_d"}
+                     for t in ("", "_n64", "_d")} | {"gemm_words", "gemm_words_d", "gemm_words_win_d"}
     for name, mode, tm, bn, g in gemms():
         assert 48 * 1024 < tile_smem(tm, bn) <= H100_MAX_DYN, name
         assert RUN.gemm_tile(name) == (tm, bn) and RUN.gemm_threads(name) == 128 * (tm // 64 + 1), name
@@ -121,15 +121,10 @@ def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
     or y; with no filler rows, at another tile, under PEARLC_LIVE=0 (LIVE false) it is 0, all M; a given live is taken."""
     lives = []
     dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, i, **k: lives.append(i[4]))
-    pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1, "gemm_words_d": 1, "gemm_pearlc_d32": 1}, dev=dev, k=4096, beside=0,
-                           m_real=16, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d"), ("at", "fbT32"): RUN.gemm_tile("gemm_words_d")},
+    pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1, "gemm_words_d": 1}, dev=dev, k=4096, beside=0, m_real=16,
+                           boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d"), ("at", "fbT32"): RUN.gemm_tile("gemm_words_d")},
                            b=dict.fromkeys(("at", "bt", "fbT32", "c", "af", "tma"), 0))
     RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
-    pipe.boxes[("at", "bt")] = RUN.gemm_tile("gemm_pearlc_d32")
-    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d32", "at", "bt", 64, 4096)
-    pipe.boxes[("at", "bt")] = RUN.gemm_tile("gemm_pearlc_d")
-    assert lives == [16, 16] and RUN.gemm_tile("gemm_pearlc_d32") == RUN.gemm_tile("gemm_words_d") == (64, 32)
-    lives.clear()
     RUN.Pipeline.gemm(pipe, "gemm_words_d", "at", "fbT32", 64, 32, out=("af",))
     RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096, live=40)
     pipe.m_real = 64
@@ -137,19 +132,7 @@ def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
     pipe.m_real = 16
     monkeypatch.setattr(RUN, "LIVE", False)
     RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
-    assert lives == [0, 40, 0, 0]
-
-
-def test_a_64_row_chain_takes_64_by_32_tiles_where_64_by_64_leave_sms_idle(monkeypatch):
-    """D32: "narrow" gives a 64-row chain 64 x 32 tiles where n / 64 is fewer than the SMs (decode's o_proj, down and qkv
-    on an H200), "all" always, "0" never, and a cubin without gemm_pearlc_d32 keeps 64 x 64."""
-    def tile(policy, n, has=True):
-        monkeypatch.setattr(RUN, "D32", policy)
-        return RUN.Pipeline.d32(SimpleNamespace(dev=SimpleNamespace(sms=132, has=lambda name: has)), n)
-    assert [tile("narrow", n) for n in (4096, 6144, 8384, 8448, 28672)] == [32, 32, 32, 64, 64]
-    assert [tile("all", n) for n in (4096, 28672)] == [32, 32] and [tile("0", n) for n in (4096, 28672)] == [64, 64]
-    assert tile("all", 4096, has=False) == 64
-    assert RUN.tile_suffix(64, 32) == "_d32" and RUN.tile_suffix(64, 64) == "_d"
+    assert lives == [16, 0, 40, 0, 0]
 
 
 def test_operands_are_in_natural_order():
@@ -219,7 +202,7 @@ def test_a_programmatic_launch_waits_at_its_entry():
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head
     assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
-    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d", "gemm_pearlc_d32"}
+    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
     assert "#ifdef PD_PDL\n  asm volatile(\"griddepcontrol.launch_dependents;\"" in pd
@@ -287,7 +270,7 @@ def test_the_sm90a_build_passes_the_gate(tmp_path):
                                    env=env).stdout)
     funcs, problems = S.gate(ptxas.read_text(), sass.read_text())
     assert not problems, problems
-    for name in ("gemm_pearlc", "gemm_pearlc_n64", "gemm_pearlc_d", "gemm_pearlc_d32"):
+    for name in ("gemm_pearlc", "gemm_pearlc_n64", "gemm_pearlc_d"):
         assert funcs[name]["HGMMA"] == 4 and funcs[name]["QGMMA"] % 4 == 0
     assert H3_LAUNCHED | {"s512_pads", "lines"} <= set(funcs)
 
@@ -400,7 +383,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K, 10: 4 * 128}                 # Maps: A, B, P_A, P_B
-        base = name.removesuffix("_n64").removesuffix("_d32").removesuffix("_d")
+        base = name.removesuffix("_n64").removesuffix("_d")
         if base in ("gemm_plain", "gemm_fast"):
             need.update({4: 2 * M * N, 7: 4 * M, 8: 4 * N})
         elif base in ("gemm_ct", "gemm_words"):
@@ -624,15 +607,13 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert {ev["i"][0] for ev in launched if ev["name"] == "s512_row_segs"} == {1008, 1024, 40}   # A's real rows, B's
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert {(ev["i"][2], ev["i"][4]) for ev in lines_ea} == {(1024, 1008), (64, 40)}
-    # decode's 40 rows pad to 64, so the chain runs on 64-row tiles, 64 x 32 (D32 "narrow": n = 1024 is 16 tiles of 64
-    # columns, fewer than the SMs), and A'F_B on 64 x 32, a CTA a window (WORDS_WIN) that pa_w adds up: in A's forming launch
-    # (WORDS_FORM), and timed beside it on its own
+    # decode's 40 rows pad to 64, so the chain runs on 64 x 64 tiles and A'F_B on 64 x 32, a CTA a window (WORDS_WIN) that
+    # pa_w adds up: in A's forming launch (WORDS_FORM), and timed beside it on its own
     names = {ev["name"] for ev in launched}
-    assert {"gemm_pearlc_d32", "gemm_ct_d32", "gemm_words_win_d", "form_s5_epw", "pa_w", "gemm_words"} <= names
-    assert not {"gemm_pearlc_d", "gemm_ct_d"} & names
+    assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "form_s5_epw", "pa_w", "gemm_words"} <= names
     assert {ev["i"][0] for ev in launched if ev["name"] == "form_s5_epw"} == {64}
     # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
-    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d32", "pa_w", "form_s5_ep",
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep",
                                                                                            "form_s5_epw"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)

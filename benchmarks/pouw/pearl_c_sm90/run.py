@@ -28,11 +28,10 @@ libcuda.so.1, stdlib only, nothing built on the card).
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64-row GEMMs storing all m rows,
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
                                  PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
                                  PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_WORDS_FORM=0 for A'F_B's
-                                 windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly,
-                                 PEARLC_D32=0 or all for decode's 64 x 32 GEMMs never or always: D32)
+                                 windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -52,10 +51,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NAME_PREFIXES = ("NVIDIA H100", "NVIDIA H200")
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75, 76, 97, 1
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
-BM, BM_D, BN_N64, BN_D32, WORDS_N, RASTER = 128, 64, 64, 32, 32, 8
+BM, BM_D, BN_N64, WORDS_N, RASTER = 128, 64, 64, 32, 8
 PEEL_ROW = 128                  # the peel factors' bytes a row (64 BF16 words)
 VARIANT_G = {"h100": 4}
-#: the 64-row GEMMs store the real rows alone (i4 = m_real: a filler row's C~, U and y are left as the buffer holds them);
+#: the 64 x 64 GEMMs store the real rows alone (i4 = m_real: a filler row's C~, U and y are left as the buffer holds them);
 #: PEARLC_LIVE=0 stores all m rows, the same real rows
 LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 #: a promotion window's depth (pearl_c_sm90.cu's BK)
@@ -68,18 +67,13 @@ FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
 #: under FORM_EP and WORDS_WIN, A'F_B's windows in that launch too (form_s5_epw, the step `form_epw_a`), from a cubin with it;
 #: PEARLC_WORDS_FORM=0 runs gemm_words_win_d
 WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
-#: 64-row GEMMs on 64 x 32 tiles (_d32), from a cubin with them: "narrow" where n / 64 tiles leave SMs idle, "all", or "0"
-#: (64 x 64); each element's sum is the same, so the bytes are
-D32 = os.environ.get("PEARLC_D32", "narrow")
-if D32 not in ("narrow", "all", "0"):
-    raise ValueError(f"PEARLC_D32 is narrow, all or 0, not {D32!r}")
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
-#: read and write what they did (gemm_pearlc_d's and _d32's producer waits only before P_A, which alone of what it reads its
-#: launch before, pa_w or pa, writes): only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
+#: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
+#: before, pa_w or pa, writes): only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
 #: launches them plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
-PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d", "gemm_pearlc_d32"})
+PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
 PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK = 6, "pdl_waits"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
@@ -406,9 +400,7 @@ def depth(n: int) -> int:
 
 def gemm_tile(name: str) -> tuple[int, int]:
     """A GEMM kernel's CTA tile (rows, columns): gemm_words 128 x 32 and gemm_words_d 64 x 32; the _d kernels 64 x 64, the
-    _d32 ones 64 x 32, the _n64 ones 128 x 64, else 128 x 128."""
-    if name.endswith("_d32"):
-        return (BM_D, BN_D32)
+    _n64 ones 128 x 64, else 128 x 128."""
     rows = BM_D if name.endswith("_d") else BM
     if name.startswith("gemm_words"):
         return (rows, WORDS_N)
@@ -449,7 +441,7 @@ def widen_a(dev, src: int, out: int, rows: int, filled: int, k: int, stream=None
 
 def tile_suffix(bm: int, bn: int) -> str:
     """The chain's and the baselines' kernel suffix for a bm x bn tile."""
-    return {(BM, BM): "", (BM, BN_N64): "_n64", (BM_D, BM_D): "_d", (BM_D, BN_D32): "_d32"}[(bm, bn)]
+    return {(BM, BM): "", (BM, BN_N64): "_n64", (BM_D, BM_D): "_d"}[(bm, bn)]
 
 
 class Pipeline:
@@ -467,8 +459,8 @@ class Pipeline:
     of PD_STAMP_BYTES) pd_commit and pd_tree run as their PD_STAMP twins.  Past pd, `chain` (default PEARLC_CHAIN, else "pl") picks A's commit launches after its row digests:
     "pl", hash_prefill.cuh's (`pl_steps`: pl_leaves, pl_levels, pl_seed_a and pl_seeds, at most PL_MAX_ROWS rows; `pl`),
     or "h3", hash_h3.cuh's (`row_tree`'s, then s512_seeds); the steps' names and bytes are the same.  The chain and the
-    baselines run on 128 x 128 tiles when m and n are multiples of 128, on 128 x 64 when only m is, else on 64 x 64 or
-    under D32 64 x 32 (`d32`; `bm` and `bn` force a tile); the 32-column words on 128 x 32 tiles where their rows are a multiple of 128 (A'F_B's only at a
+    baselines run on 128 x 128 tiles when m and n are multiples of 128, on 128 x 64 when only m is, else on 64 x 64 (`bm`
+    and `bn` force a tile); the 32-column words on 128 x 32 tiles where their rows are a multiple of 128 (A'F_B's only at a
     128-row chain tile), else 64 x 32.  Every GEMM takes its operands by the tensor maps in the pipeline's own `tma`
     (MAPS), each map's box the tile's.  gemm_pearlc stores C~, U and y.
 
@@ -521,7 +513,7 @@ class Pipeline:
         self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.bm = bm or (BM if m % BM == 0 else BM_D)
-        self.bn = bn or (BM if self.bm == BM and n % BM == 0 else BN_N64 if self.bm == BM else self.d32(n))
+        self.bn = bn or (BM if self.bm == BM and n % BM == 0 else BN_N64 if self.bm == BM else BM_D)
         self.tile = tile_suffix(self.bm, self.bn)
         if m % self.bm or n % self.bn or k % 256 or k < 256:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of {self.bn} and k of 256, not {(m, n, k)}")
@@ -551,12 +543,6 @@ class Pipeline:
             dev.rs_heads = True
         self.boxes: dict[tuple[str, str], tuple[int, int]] = {}
         self.encode_maps()
-
-    def d32(self, n: int) -> int:
-        """A 64-row chain's tile columns (D32): 32 under "all", or under "narrow" where n / 64 tiles leave an SM idle, from a
-        cubin with gemm_pearlc_d32; else 64."""
-        narrow = D32 == "all" or D32 == "narrow" and n // BM_D < self.dev.sms
-        return BN_D32 if narrow and getattr(self.dev, "has", lambda _: False)("gemm_pearlc_d32") else BM_D
 
     def words_rows(self, rows: int, small: bool = False) -> int:
         """The words GEMM's tile rows for an operand of `rows` rows: 128 where it divides them (and not `small`), else 64."""
@@ -742,8 +728,7 @@ class Pipeline:
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
              dg=0, key=0, live: int | None = None):
-        """`live`: the rows from 0 whose products are stored (i4; 0 all M), by default m_real at the chain's and baselines'
-        64-row tiles (LIVE)."""
+        """`live`: the rows from 0 whose products are stored (i4; 0 all M), by default m_real at 64 x 64 tiles (LIVE)."""
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -756,7 +741,7 @@ class Pipeline:
             raise ValueError(f"{name} takes {tm} x {bn} tiles, and ({a}, {b})'s maps are {self.boxes.get((a, b))}")
         tiles = (M // tm) * (N // bn) * (self.k // WINDOW if name.startswith("gemm_words_win") else 1)
         if live is None:
-            live = self.m_real if LIVE and tm == BM_D and not name.startswith("gemm_words") and self.m_real < M else 0
+            live = self.m_real if LIVE and (tm, bn) == (BM_D, BM_D) and self.m_real < M else 0
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, self.b["tma"] + MAP_SET * MAPS[(a, b)], key]
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
@@ -906,8 +891,7 @@ ALIASES = {"c2": "c"}
 #: windows into af)
 RERUN_AFTER = {"af": {"pa": "pa_t"}}
 #: the tiles the check re-runs every GEMM at, (tag, bm, bn): the fixture's m and n are multiples of 128, so each is forced
-#: (64 x 32 where the cubin has it)
-TILES = (("bm128", BM, BM), ("n64", BM, BN_N64), ("bm64", BM_D, BM_D), ("bm64n32", BM_D, BN_D32))
+TILES = (("bm128", BM, BM), ("n64", BM, BN_N64), ("bm64", BM_D, BM_D))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -1066,31 +1050,28 @@ LIVE_ROWS, LIVE_FILL = 40, 0xAB
 
 def check_live(dev: Dev, pipe: Pipeline, want) -> dict:
     """The A side's GEMMs of GEMM_RERUNS (all but bf, over B's rows, and af under `words_win`, whose windows and pa_w store
-    every row) at 64 x 64, and at 64 x 32 where the cubin has it (``/n32``), on LIVE_ROWS real rows (i4): each output's real
-    rows against the fixture's, and its filler rows as LIVE_FILL's memset left them."""
+    every row) at 64 x 64 on LIVE_ROWS real rows (i4): each output's real rows against the fixture's, and its filler rows as
+    LIVE_FILL's memset left them."""
     res = {}
-    for bn, tag in ((BM_D, ""), (BN_D32, "/n32")):
-        if bn == BN_D32 and not dev.has("gemm_pearlc_d32"):
+    p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, bm=BM_D,
+                  bn=BM_D, weight=pipe.weight)
+    steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
+    real = p_.gemm
+    p_.gemm = lambda *a, **kw: real(*a, **{**kw, "live": LIVE_ROWS})
+    for step, outs in GEMM_RERUNS:
+        if step == "bf" or step == "af" and p_.words_win():
             continue
-        p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, bm=BM_D,
-                      bn=bn, weight=pipe.weight)
-        steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
-        real = p_.gemm
-        p_.gemm = lambda *a, _real=real, **kw: _real(*a, **{**kw, "live": LIVE_ROWS})
-        for step, outs in GEMM_RERUNS:
-            if step == "bf" or step == "af" and p_.words_win():
-                continue
-            for o in outs:
-                dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), LIVE_FILL, pipe.size[o])
-            steps[step]()
-            dev.sync()
-            for o in outs:
-                w = want(ALIASES.get(o, o))
-                got, cut = dev.read(pipe.b[o], len(w)), LIVE_ROWS * (len(w) // pipe.m)
-                res[f"{o}@{step}/live{LIVE_ROWS}{tag}"] = {
-                    "ok": got[:cut] == w[:cut] and got[cut:] == bytes([LIVE_FILL]) * (len(w) - cut), "bytes": len(w)}
-        p_.gemm = real
-        p_.free()
+        for o in outs:
+            dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), LIVE_FILL, pipe.size[o])
+        steps[step]()
+        dev.sync()
+        for o in outs:
+            w = want(ALIASES.get(o, o))
+            got, cut = dev.read(pipe.b[o], len(w)), LIVE_ROWS * (len(w) // pipe.m)
+            res[f"{o}@{step}/live{LIVE_ROWS}"] = {"ok": got[:cut] == w[:cut] and got[cut:] == bytes([LIVE_FILL]) * (len(w) - cut),
+                                                  "bytes": len(w)}
+    p_.gemm = real
+    p_.free()
     return res
 
 
@@ -1140,8 +1121,6 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                 pipe.form_alt(tag, kernel)
                 res[f"{tag}t@{kernel}"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
         for tag, bm, bn in TILES:
-            if bn == BN_D32 and not dev.has("gemm_pearlc_d32"):
-                continue
             p_ = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=bm, bn=bn, weight=man["weight"])
             steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
             for grid in (None, 1, 3) if tag == "bm128" else (None, 3):
