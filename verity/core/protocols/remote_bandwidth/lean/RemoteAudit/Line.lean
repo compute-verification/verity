@@ -1,15 +1,18 @@
 import RemoteAudit.Pooled
+import RemoteAudit.Session
 
 /-!
 # The memory line held over time
 
-The line of record a gate run publishes (the verifier process's `line` request, which `auditor_line.py` holds to
+The line of record a gate run publishes (the verifier process's `line_record` request, which `auditor_line.py` holds to
 `line.py`'s): the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
 `Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
-rationals, every refusal the Python's word for word. The wrong receipts W are the pooled bound of the session's record
-(`RemoteAudit.Pooled.pooled`: its windows' receipts and draws at δ). `line.py`'s docstring has the form;
-`tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line`. Code: Lean core only.
+rationals, every refusal the Python's word for word. `lineOfRecord` reads the session's groups, its windows and its
+registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
+(`Seen`); `line` takes them given. The wrong receipts W are the pooled bound of the record's windows
+(`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). `line.py`'s docstring has the form; `tests/test_line.py`
+holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core only.
 -/
 
 namespace RemoteAudit.Line
@@ -186,6 +189,53 @@ def line (gs : Array Group) (per blocks blockBytes chipBytes nodeBytes : Nat) (w
   let ts ← stretches gs per blocks blockBytes chipBytes W t
   let ls ← stretches gs per blocks blockBytes chipBytes W l
   pure ⟨nodeBytes, #[⟨"time-held", t, ts⟩, ⟨"link-charged", l, ls⟩], W⟩
+
+/-- What the auditor saw of one window beside the Lean verifier's record of it: its coin's release and its last root's
+arrival (ns, on one clock), the registered blocks its least pass read, and the registered blocks its passes read in
+all, by kind. -/
+structure Seen where
+  releasedNs : Nat
+  lastNs : Nat
+  least : Nat
+  weights : Nat
+  hbm : Nat
+  host : Nat
+  deriving Inhabited
+
+deriving instance Inhabited for Session.WindowSummary
+
+/-- `U`, a window's receipts in the record: its passes' lengths summed. -/
+def receipts (w : Session.WindowSummary) : Nat := w.lengths.toList.sum
+
+/-- The groups and windows the line reads of an accepted session's record `sm` (`Session.State.summary`) and what the
+auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
+the auditor's, and window `t`'s receipts and draws are the record's, `(Σ lengths_t, drawn_t)`. Refused unless the
+auditor saw each of the record's windows and each window drew `min(s, U_t)` of its receipts at the session's `samples`
+`s`, as the verifier's draw does (`Session.draws`). -/
+def ofSummary (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
+    Except String (Array Group × Array (Nat × Nat)) :=
+  if seen.size ≠ sm.windows.size then
+    .error s!"the auditor saw {seen.size} windows, not the record's {sm.windows.size}"
+  else match sm.windows.findIdx? fun w => w.drawn != min samples (receipts w) with
+    | some t =>
+      .error (s!"window {t} drew {sm.windows[t]!.drawn} of its {receipts sm.windows[t]!} receipts, not "
+        ++ s!"min({samples}, {receipts sm.windows[t]!})")
+    | none =>
+      .ok ((Array.range sm.windows.size).map fun t =>
+          ({ releasedNs := seen[t]!.releasedNs, lastNs := seen[t]!.lastNs, passes := sm.windows[t]!.lengths.size,
+             least := seen[t]!.least, weights := seen[t]!.weights, hbm := seen[t]!.hbm,
+             host := seen[t]!.host } : Group),
+        sm.windows.map fun w => (receipts w, w.drawn))
+
+/-- The line of an accepted session's record `sm` on a node of `rates`, `nodeBytes` of memory and `chipBytes` of on-chip
+storage, at the session's `samples`: `line` at the record's groups and windows (`ofSummary`) and its registered blocks
+(`Summary.blocks`, the registration the session ran on), with W the pooled bound of those windows at `δ`; or why it
+has none. -/
+def lineOfRecord (sm : Session.Summary) (samples : Nat) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat)
+    (δ : Rat) (rates : Rates) : Except String Line :=
+  match ofSummary sm samples seen with
+  | .ok (gs, ws) => line gs per sm.blocks blockBytes chipBytes nodeBytes ws δ rates
+  | .error why => .error why
 
 private def digits? (s : String) : Option Nat :=
   if !s.isEmpty && s.all Char.isDigit then s.toNat? else none

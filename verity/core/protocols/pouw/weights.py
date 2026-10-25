@@ -20,6 +20,9 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   `_weights` checks.
 * `weights_root` is credit's fold of the roots: `tagged` of ``verity/pouw/h1/weights/v1`` and each ``K, root`` by
   ascending K.
+* **Chunk rows.** Past `CHUNK_MAX` codes a row of K is `chunks` (K) = n leaves, leaf n·r + c chunk c's K/n codes and
+  the row's s_w (`leaf_words` (K) words), and credit's `_weights` reads ``<prefix>b/<K>`` as n·Σn such leaves.
+  `weights_roots` and `entry` still commit whole rows, so at such a K their entry is not yet the one credit accepts.
 """
 from __future__ import annotations
 
@@ -81,6 +84,11 @@ def chunks(k: int) -> int:
             return n
     raise ValueError(f"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole {CHUNK_ALIGN}-bit "
                      f"noise blocks")
+
+
+def leaf_words(k: int) -> int:
+    """A leaf's 16-bit words at K: one chunk's K / `chunks` (K) codes, then the row's f32 s_w."""
+    return b_words(k // chunks(k))
 
 
 def value(prefix: str, k: int) -> str:
@@ -292,5 +300,5 @@ def weights_root(roots: Mapping[int, bytes]) -> bytes:
     return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
 
 
-__all__ = ["B_NONCE", "CHUNK_BYTES", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words", "chunk_bits", "entry", "ks",
-           "row_bytes", "row_words", "value", "weights_root", "weights_roots"]
+__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words",
+           "chunk_bits", "chunks", "entry", "ks", "leaf_words", "row_bytes", "row_words", "value", "weights_root", "weights_roots"]

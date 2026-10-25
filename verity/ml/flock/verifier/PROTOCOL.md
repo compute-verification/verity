@@ -1447,7 +1447,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   read positions `reads` from unit `reads_from` (default 0: unit `reads_from + i` reads `reads[i]`, every other unit
   nothing), `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows, and `row_schema`, the rows'
   format: `hm96-sha512/row/v1`, the default when absent, `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the last two
-  with `words`; a key beside the file's and a port's own refuses. `verity/registered-reads/v0` is still read: no
+  with `words`, and `param`, the template parameter the port reads when it is not named after it (below); a key beside
+  the file's and a port's own refuses. `verity/registered-reads/v0` is still read: no
   `reads_from`, and other keys ignored). Each port is checked in its own format: the port's row schema must be the one `F` names, a `row/v1`
   port's rows `sha512/row/v1` rows of their u16 words, padded to whole SHA-512 blocks, and a bit row (`row/v2`,
   `row-seg/v1`) exactly `words · word_bits` bits. A port is any row of the circuit: an input port's, or (§16.13) an
@@ -1458,7 +1459,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
   with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
   refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
-  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A port `F` names at
+  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. With the verifier's own
+  `--program`, `F` must also cover every registered input the program's root feeds the circuit's template: each
+  parameter of the template whose argument at a root instance reads a `RegisteredInput<w>_v1` node is read by a port of
+  `F`, under the parameter's name, as each row `name[i]` of an array of rows, or by a port whose `param` names it
+  (`reads_file`'s renamed ports); one that none reads, a registered-reading program under a partition that is no template
+  query, and a circuit whose META names no template refuse (`Registered.checkCover`, `checkCover_ok`). It reads the
+  descriptor's root nodes and their argument parts, never the unrolled circuit. A port `F` names at
   known content (`known`: each row's u16 words and its salt) refuses unless its root is the frame-v3-sha512 root of
   those rows (`Registered.checkKnownAll`), and, in the statement (`KnownRead.check`), unless the circuit names each of
   its ports once and has a port of each known name (`namesOk`), and its row is a `sha512/row/v2` row without segments of the known rows' words and each bit of its row is on a wire of the unit: at an
@@ -1857,6 +1864,9 @@ expectation):
   Lean verifier. So, too, a session without a draw (§16.15), which the Lean verifier alone refuses, and only once every
   check has passed: a set marked `lean_refuses_drawless` expects that refusal of each session without a draw that
   upstream accepts, and of every other session without a draw its own reason (`agree.py --lean-refuses-drawless`).
+  So, too, a session verified without the verifier's own program (`--program`, `ProvedScope.NO_PROGRAM`), which the
+  Lean verifier alone refuses, last: every session of a set with no program (upstream reads none) is compared as
+  accepted when refused for that alone (`agree.py`'s `NO_PROGRAM`).
   `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;

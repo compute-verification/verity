@@ -18,7 +18,9 @@ reads a finished window back from the committed bytes into one `RequestRecord` p
 `RequestRecord.check` holds that to the streamed I/O: with t = prompt ids + streamed ids, P prompt ids and K streamed,
 the committed inputs at every position in [hit, P + K - 1) are t's, the committed samples at every position in
 [P - 1, P + K - 1) are the next of t's, every seed is the one the request carried (the client's, or the served default,
-`engine.served_seed`), and a cached prefix [0, hit) is some other request's committed inputs. Rows past the finish
+`engine.served_seed`), and a cached prefix [0, hit) is other requests' committed inputs, each committed no later than the
+request's first row by a request whose committed ids agree with t up to there (`RequestRecord.prefix_cover`: a turn's
+prefix can be its first turn's prompt and its previous turn's suffix). Rows past the finish
 (positions from P + K - 1 on) are ``overrun``: computed and committed, never streamed, each input there the previous
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
 cut short can't pass with its missing ids taken for an overrun.
@@ -171,6 +173,7 @@ class RequestRecord:
     recomputed: int = 0
     end: int = 0                                            # positions computed so far
     conflicts: list[str] = field(default_factory=list)
+    first_at: dict[int, tuple[int, int]] = field(default_factory=dict)   # position -> (window, step) it was first committed
 
     def add(self, window: int, step: int, row: Row, ids: Sequence[int], sampled: int, seed: int | None) -> None:
         if self.hit is None:
@@ -183,6 +186,8 @@ class RequestRecord:
                 self.recomputed += 1
                 if self.inputs[p] != tok:
                     self.conflicts.append(f"position {p}: committed input {tok} at step {step}, {self.inputs[p]} before")
+            else:
+                self.first_at[p] = (window, step)
             self.inputs[p] = int(tok)
         if row.samples:
             if row.last in self.sampled and self.sampled[row.last] != sampled:
@@ -236,16 +241,49 @@ class RequestRecord:
                 break
         if seed is not None and self.seeds - {int(seed)}:
             problems.append(f"seeds: committed {sorted(self.seeds)}, the request carried {seed}")
-        source = None
+        spans: list[list[Any]] = []
         if hit:
-            source = next((rid for rid, r in (prefix_sources or {}).items()
-                           if rid != self.request and all(r.inputs.get(p) == t[p] for p in range(hit))), None)
-            if source is None:
-                problems.append(f"prefix cache: positions [0, {hit}) were read from cache, and no committed request holds those inputs")
-        return {"passed": not problems, "prompt_ids": P, "streamed_ids": K, "cache_hit": hit, "prefix_source": source,
+            spans, gap = self.prefix_cover(t, hit, prefix_sources or {})
+            if gap is not None:
+                problems.append(f"prefix cache: position {gap} of [0, {hit}) was read from cache, and no other request committed "
+                                "it by then with the served ids up to it")
+        return {"passed": not problems, "prompt_ids": P, "streamed_ids": K, "cache_hit": hit,
+                "prefix_source": spans[0][0] if spans else None, "prefix_spans": spans,
                 "rows": len(self.rows), "preemptions": self.preemptions, "recomputed_positions": self.recomputed,
                 "discarded_samples": len(self.discarded), "overrun_rows": len(over_s), "seeds": sorted(self.seeds),
                 "problems": problems[:8]}
+
+    def prefix_cover(self, t: Sequence[int], hit: int, sources: Mapping[str, RequestRecord]) -> tuple[list[list[Any]], int | None]:
+        """Who computed the cached prefix [0, ``hit``) of the served ids ``t``: spans ``[request, lo, hi)`` of other requests that
+        committed ``t``'s ids there no later than this request's first row, each with no committed id before ``hi`` that
+        differs from ``t``'s (a cached block's KV is its whole prefix's); the first position no span covers, else None. A
+        turn's prefix can be several requests' (its first turn's prompt, its previous turn's suffix)."""
+        first = tuple(self.rows[0][:2]) if self.rows else (0, 0)
+        reach: dict[str, int] = {}
+        for rid, r in sources.items():
+            if rid == self.request:
+                continue
+            reach[rid] = min((q for q, v in r.inputs.items() if q < hit and v != t[q]), default=hit)
+
+        def covers(rid: str, p: int) -> bool:
+            r = sources[rid]
+            return p < reach[rid] and p in r.inputs and r.first_at.get(p, first) <= first
+
+        spans: list[list[Any]] = []
+        p = 0
+        while p < hit:
+            best, best_hi = None, p
+            for rid in reach:
+                hi = p
+                while hi < hit and covers(rid, hi):
+                    hi += 1
+                if hi > best_hi:
+                    best, best_hi = rid, hi
+            if best is None:
+                return spans, p
+            spans.append([best, p, best_hi])
+            p = best_hi
+        return spans, None
 
     def to_json(self) -> dict[str, Any]:
         """The record as I3 publishes it: rows, and the committed ids by position."""
