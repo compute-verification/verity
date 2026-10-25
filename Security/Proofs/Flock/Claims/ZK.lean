@@ -180,6 +180,7 @@ import Proofs.Flock.Claims.ZK.RepLog
 import Proofs.Flock.Claims.ZK.CutPrefix
 import Proofs.Flock.Claims.ZK.PiopFree
 import Proofs.Flock.Claims.ZK.RepFree
+import Proofs.Flock.Claims.ZK.RepReplay
 
 /-!
 # Flock's zero knowledge against a malicious verifier
