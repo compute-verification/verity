@@ -153,11 +153,13 @@ DEV void pd_prefetch(const void* p) {   // the 128-byte line at p into L1
 // inputs K_i + W_i (rs_sched / rl_sched).
 DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
                   uint64_t kwi) {
-  // h and d are the e and a of three rounds back, so h + K_i W_i + d is summed off e's chain, which is then Σ1 and one add
-  const uint64_t hk = h + kwi, hkd = hk + d;
+  // h and d are the e and a of three rounds back, so h + K_i W_i + d is summed off e's chain.  a is e - d + T2, which is
+  // T1 + T2 without also holding h + K_i W_i (holding it spills in pd_commit_g_851)
+  const uint64_t hkd = h + kwi + d;
   const uint64_t s1 = rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), ch = (e & f) ^ (~e & g);
   const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
-  h = g; g = f; f = e; e = hkd + ch + s1; d = c; c = b; b = a; a = hk + ch + s1 + t2;
+  const uint64_t e1 = hkd + ch + s1, a1 = e1 - d + t2;
+  h = g; g = f; f = e; e = e1; d = c; c = b; b = a; a = a1;
 }
 DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
 #pragma unroll
