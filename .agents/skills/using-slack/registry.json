@@ -82,7 +82,8 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        ".cursor/"
+        ".cursor/",
+        ".python-version"
       ],
       "branch_suffixes": [
         "558b",
