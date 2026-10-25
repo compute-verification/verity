@@ -7,11 +7,12 @@ warden run's ingress record, each one unit, proved by C-Flock `prove --zk` behin
 * **The class** (`CLASS`): w63's, B 512, r 4, 4 lanes, C 47 cells a request, IDB 17, Programs started every 10
   buckets and the 12-bucket ingress bound (note:network-accounting/20261025T0830Z-report-net68-scan-router), about
   1.37M ANDs a unit; the warden at `PARAMS`, which the class serves (`Class.serves`: D 21).
-* **The run.** The warden itself, driven tick by tick on an injected clock (`test_network_certifier_warden`'s
-  harness), carries five warden-form id requests (`PROMPTS`, `ARRIVALS`): 1,500 prompt ids from bucket 0, 600 and
-  40 from bucket 2, 300 from bucket 12, and 100 from bucket 15, which waits in the queue until request 1's lane frees
-  past its egress and takes request 1's slot, free past its anchor (bucket 20). Its ingress record's rows
-  (`warden_rows.window_rows`) are scanned by the reference from the empty state (`ingress_scan.scan`).
+* **The run.** The warden's own ingress (`io_request.serve`: `warden.Warden._ingress` on the stand-in schedule, each
+  lane held D buckets past its connection's `END` in place of its egress, so no sooner free than the warden's) carries
+  five warden-form id requests (`PROMPTS`, `ARRIVALS`): 1,500 prompt ids from bucket 0, 600 and 40 from bucket 2, 300
+  from bucket 12, and 100 from bucket 15, which waits in the queue until a lane frees and takes request 1's slot, the
+  lowest free one past its anchor (bucket 20). Its ingress record's rows (`warden_rows.window_rows`, the rows the
+  stand-in ticked) are scanned by the reference from the empty state (`ingress_scan.scan`).
 * **The statement**: one template of n units, each a bucket's (row, S_{t−1}, S_t) on rows ``row`` (4,096 words),
   ``sin`` and ``sout`` (9,065 words each), and its output ``o0``, the ok bit. The units are the buckets in `HONEST`,
   then the negatives, each refused by the reference: ``swap`` (bucket 2's first two blocks swapped), ``end`` (request
@@ -31,7 +32,6 @@ warden run's ingress record, each one unit, proved by C-Flock `prove --zk` behin
 from __future__ import annotations
 
 import argparse
-import asyncio
 import hashlib
 import json
 import os
@@ -45,15 +45,14 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(REPO / "verity/core/protocols/certifier/tests"))
 
 import n2_zk as N2  # noqa: E402
-from test_network_certifier_warden import EOF, Server, drive  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.core.protocols.certifier import ingress_scan as IS  # noqa: E402
+from verity.core.protocols.certifier import io_request as Q  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import HEADER, id_request  # noqa: E402
-from verity.core.protocols.certifier.warden import DATA, END, PAD, WardenParams, cell, cells  # noqa: E402
+from verity.core.protocols.certifier.warden import DATA, END, PAD, WardenParams, cell  # noqa: E402
 
 B = 512
 CLASS = IS.Class(B=B, r=4, lanes=4, C=47, IDB=17, EVERY=10, WITHIN=12)
@@ -61,7 +60,7 @@ PARAMS = WardenParams(cell_bytes=B, slots=4, bucket_ms=100, delay=21, lanes=4, q
                       ingress_buckets=12, egress_cells=64)
 PROMPTS = ([(7 * k + 11) % 128_256 for k in range(1500)], [100_000 + k for k in range(600)],
            [131_071 - 3 * k for k in range(40)], [(k * k) % 128_256 for k in range(300)], [5_000 + k for k in range(100)])
-ARRIVALS = {0: [0], 2: [1, 2], 12: [3], 15: [4]}
+ARRIVALS = (0, 2, 2, 12, 15)
 #: the buckets proved first (then the reuse bucket): request 1's first, buckets with a new and a continuing block,
 #: request 1's END and the anchor
 HONEST = (0, 2, 3, 8, 12, 20)
@@ -77,16 +76,17 @@ def log(msg: str) -> None:
 
 def _request(i: int, prompt: list[int]) -> bytes:
     return id_request(model="unsloth/Llama-3.2-1B", user=f"user-{i}", prompt=prompt, max_tokens=16 + i, seed=7 * i,
-                      temperature=0.7, top_p=0.95, frame_bytes=B, lead=0)
+                      temperature=0.7, top_p=0.95, frame_bytes=B, offset=0)
 
 
 def run() -> SimpleNamespace:
-    """The warden's run at `PARAMS`, its ingress rows and the reference's scan of them."""
+    """The warden's ingress at `PARAMS`, its rows and the reference's scan of them."""
     CLASS.serves(PARAMS)
     reqs = [_request(i, p) for i, p in enumerate(PROMPTS)]
-    arrivals = {t: [cells(reqs[i], B) for i in ids] for t, ids in ARRIVALS.items()}
-    warden, _ = asyncio.run(drive(Server([[(1, b"a" * 20), (2, EOF)] for _ in reqs]), arrivals, params=PARAMS))
-    rows = WR.window_rows(next(r for r in warden.records if r.link == "requests"), PARAMS)
+    link = Q.serve(PARAMS, reqs, ARRIVALS, [1 << 20] * len(reqs), PARAMS.window, hold=PARAMS.delay)
+    rows = WR.window_rows(link.records[0], PARAMS)
+    if rows != [b"".join(r) for r in link.rows]:
+        raise SystemExit("the ingress record's rows aren't the rows the warden ticked")
     states = IS.scan(CLASS, rows)
     if states is None:
         raise SystemExit("the reference refuses the warden's own ingress rows")
