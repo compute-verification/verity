@@ -299,9 +299,13 @@ open Classical in
 and whether period `t` is short is fixed before its coins: every period is accepted with at least `M` short with
 probability at most `p^M`. -/
 theorem prCoin_forall_count_le_pow (A S : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hA : Adapted A)
-    (hS : Predictable S) {p : ℝ≥0∞} (hp : p ≤ 1)
+    (hS : Predictable S) {p : ℝ≥0∞}
     (h : ∀ t ω, prCoin (fun a : Ω t => A t (Function.update ω t a) ∧ S t (Function.update ω t a)) ≤ p) (M : ℕ) :
     prCoin (fun ω => (∀ t, A t ω) ∧ M ≤ (Finset.univ.filter fun t => S t ω).card) ≤ p ^ M := by
+  rcases le_or_gt p 1 with hp | hp
+  swap
+  · exact (prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans
+      ((by simp [prCoin, avg_const] : prCoin (fun _ : (i : Fin T) → Ω i => True) = 1).trans_le (one_le_pow₀ hp.le))
   have key := prCoin_forall_sum_le_pow A (fun t ω => if S t ω then 1 else 0) hA
     (fun t ω ω' hω => by simp only [hS t ω ω' hω]) hp (fun t ω => ?_) M
   · simpa only [Finset.card_filter] using key
