@@ -101,7 +101,8 @@ class TorchLoop:
     def run_root(self) -> str:
         """The run's root: SHA-512 of what the loop served (its model's seed and width, its requests and steps) and its id."""
         return hashlib.sha512(json.dumps({"loop": "torch-loop/mlp-w8a8", "h": self.model.h, "seed": self.model.seed,
-                                          "requests": self.requests, "steps": self.steps, "id": self.run_id}).encode()).hexdigest()
+                                          "requests": self.requests, "steps": self.steps,
+                                          "id": self.run_id}).encode()).hexdigest()
 
     def circuit(self) -> IF.Circuit:
         return IF.Circuit(f"torch-loop/mlp-w8a8-h{self.model.h}", ((template(self.model.h), self.units),))
