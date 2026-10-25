@@ -83,7 +83,7 @@ theorem finRepTarget (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
       _root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (Masked.ptsE (finCoins x ops) spec) := by
     have hmx : (_root_.Flock.Firewall.Finish.claimsOf q.xs).map (·.x) = q.xs := by
       apply Array.ext'
-      simp [_root_.Flock.Firewall.Finish.claimsOf]
+      simp [_root_.Flock.Firewall.Finish.claimsOf, Function.comp_def]
     rw [hmx, hqx]
     rfl
   have hxsz : (_root_.Flock.Firewall.Finish.claimsOf q.xs).size = spec.points * (Masked.stAt x j).regions.size := by

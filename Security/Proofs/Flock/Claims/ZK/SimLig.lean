@@ -1152,7 +1152,7 @@ private noncomputable abbrev layL (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.
   _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0
 
 /-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
-private noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
+noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     FlockSoundness.Model.Witness (tabC PE x j).S.m :=
   Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
 
