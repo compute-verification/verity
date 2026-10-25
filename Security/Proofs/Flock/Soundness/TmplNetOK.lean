@@ -12,7 +12,8 @@ keeps in place, and its committed constant row is the logical one read through `
 unit's committed net (`TmplUnit.netOK`), and of every net of a templated file's circuit (`parseTmpl_nets_ok`, through
 `nets_okPre`, `nets_ok` over `ParseFactsPre`). So do the facts `Discharge.Integrate.net_width` and
 `Discharge.Inst.portBits_nodup_net` give a flat file's nets: `A` and `B` stored at the slot's width, at most 32 lookup
-bits, distinct port bits (`ofRowsAt_width`, `nets_widthPre`, `parseTmpl_net_width`). They are facts of the committed nets the lincheck reads, whatever the
+bits, distinct port bits (`ofRowsAt_width`, `nets_widthPre`, `parseTmpl_net_width`). With them every pair Δ writes
+after its first loop is at an input bit of a net slot (`deltaIn_inBitPre`, `parseTmpl_deltaIn`). They are facts of the committed nets the lincheck reads, whatever the
 audit's unit for a templated statement. No verifier path reads this file.
 -/
 
@@ -161,5 +162,26 @@ theorem parseTmpl_net_width {tags : Flock.Tags} {bytes : ByteArray} {tables : Li
   refine nets_widthPre P (fun x hx => ?_) hi
   obtain rfl : x = ("unit", tu.net) := by simpa using hx
   exact unrollAt_width tu.unrolled
+
+/-- **`deltaIn_inBit` with nets `pre` first, of any kind**: every pair Δ writes after its first loop is at an input bit of
+a net slot, when `pre`'s nets fit their slots. -/
+theorem deltaIn_inBitPre {tags : Flock.Tags} {pre : Array (String × Net)} {c : Flock.Circuit}
+    (P : ParseFactsPre tags pre c)
+    (hpre : ∀ x ∈ pre.toList, NetOK x.2 ∧ 7 ≤ x.2.unitLog ∧ (x.2.unitLog ≤ 32 → ConstRow x.2)) (C : CheckFacts c)
+    {x : ℕ} (hx : DeltaIn c x) : InBit c x :=
+  deltaIn_inBit_of (fun n => (nets_okPre P hpre n).1.2.2) P.unitNet P.shaNet P.hmNet C hx
+
+/-- **A templated file's parse passed `HmRow.check`, and every pair Δ writes after its first loop is at an input bit of
+a net slot**, on the circuit before the unit is carried on it. -/
+theorem parseTmpl_deltaIn {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {c : Flock.Circuit} (h : HmOut.parseTmpl tags bytes tables = .ok c) :
+    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), c = { c₀ with tmpl := some tu } ∧ CheckFacts c₀ ∧
+      ∀ x, DeltaIn c₀ x → InBit c₀ x := by
+  obtain ⟨tu, c₀, P, -, he, -, -⟩ := TmplValue.parseTmpl_facts h
+  obtain ⟨ls, hck⟩ := P.check
+  have C := check_facts P.typed hck
+  refine ⟨tu, c₀, he, C, fun x hx => deltaIn_inBitPre P (fun y hy => ?_) C hx⟩
+  obtain rfl : y = ("unit", tu.net) := by simpa using hy
+  exact tu.netOK
 
 end FlockSoundness
