@@ -289,7 +289,7 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
     chunked = N: the chunked-prefill feature variant (max_num_batched_tokens N forces several prefill chunks; see the block above).
     dtype (`DTYPE_VARIANTS`): the numerical-format column -- `engine.args.dtype` makes the harness build `LLM(dtype=...)`;
     the requests (ids, token ids, lengths, arrivals) are identical to the bf16 workload of the same (profile, ctx, seed, replicate).
-    [integ 2026-09-17: the two feature variants compose -- `chunked=64,dtype=float16` is one workload with both keys, suffix `_ck64_f16`.]"""
+    The two feature variants compose: `chunked=64,dtype=float16` is one workload with both keys, suffix `_ck64_f16`."""
     draws = draw_lengths(profile, ctx, seed)
     prompt_seed = seed + 1000 * replicate if replicate else None
     reqs = build_requests(tok, draws, case=case, profile=profile, ctx=ctx, seed=seed, prompt_seed=prompt_seed)
