@@ -1943,7 +1943,7 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         assert body["name"] == "vllm worker ZKS10 (relaunch of 1111)", "a worker's name, never a coordinator's `verity: LANE`"
         assert "You are a worker, not a coordinator" in text and "`research msg send --as vllm --thread " in text
         assert "stopped mid-step (its last message: \u201cThe lock didn't change. Committing the fix" in text
-        assert "the agent watch rings your coordinator's inbox (`research msg ring-run`)" in text
+        assert "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`)" in text
         assert relaunches[0]["new_agent"] == "bc-77777777-7777-7777-7777-777777777777"
         new = json.loads((d / "workers.d" / "vllm-bc-77777777-7777-7777-7777-777777777777.json").read_text())
         assert new == {"agent_id": "bc-77777777-7777-7777-7777-777777777777", "lane": "vllm", "launched_by": NEW,
@@ -2346,3 +2346,70 @@ def test_a_lane_named_after_a_handle_belongs_to_that_handle():
     assert W.lane_handle("kernels-x-y", names) == "kernels-x"
     assert W.lane_handle("kernelsy", names) is None
     assert W.lane_handle("", names) is None
+
+
+def stream_worker(w, clock, run, minutes, cid="t1"):
+    """A worker the parent resumed in the foreground (a `task` call left open) streams its progress each minute for `minutes`."""
+    for _ in range(minutes):
+        clock.t += 60
+        w.on_event(run, "interaction_update", {"type": "tool-call-delta", "callId": cid, "taskUpdate": {}})
+        w.sweep(lambda r: None)
+
+
+def test_every_holder_a_registry_handle_names_counts_for_held_unread(tmp_path):
+    coordinators(tmp_path, [], {})
+    assert W.all_holders(tmp_path / "registry.json", tmp_path / "routes.d") == {CO: "circuits", LANE: "circuits", OLD: "vllm",
+                                                                                 NEW: "vllm"}
+
+
+def test_a_lane_holder_waiting_on_a_streaming_worker_for_an_hour_is_cancelled_and_continued(tmp_path):
+    """compute-accounting's research lane (the registry's second holder) sat 17:25-21:45Z on 24 Oct in a resumed worker's
+    stream: a long call to the watch, and not a coordinator, so nothing rang. Owner top; the worker runs on."""
+    run = {"status": "RUNNING", "createdAt": "2026-10-18T19:59:00Z", "updatedAt": "2026-10-18T19:59:00Z"}
+    api, clock, w = coordinators(tmp_path, [{"id": LANE, "status": "ACTIVE", "latestRunId": "run-l"}], {"run-l": run})
+    w.sweep(lambda r: None)
+    w.on_event("run-l", "tool_call", {"callId": "t1", "name": "task", "status": "running", "args": {"agentId": "bc-w"}})
+    since = clock.t
+    stream_worker(w, clock, "run-l", W.UNREAD_S // 60 - 1)
+    assert api.posts == [], "59 minutes: not yet"
+    stream_worker(w, clock, "run-l", 1)
+    assert [p for p, _ in api.posts] == ["/v1/agents/" + LANE + "/runs/run-l/cancel", "/v1/agents/" + LANE + "/runs"]
+    assert "while a worker it waits on streamed" in api.posts[1][1]["prompt"]["text"]
+    rec = next(r for r in records(tmp_path) if r["kind"] == "held_unread")
+    assert (rec["owner"], rec["handle"], rec["since"], rec["action"]) == ("top", "circuits", W.iso(since), "cancelled and continued")
+    assert rec["reason"] == "a lane of @circuits: nothing of its own for 60 min"
+
+
+def test_an_inbox_holder_is_held_unread_only_once_a_doorbell_waited_an_hour(tmp_path):
+    run = {"status": "RUNNING", "createdAt": "2026-10-18T19:59:00Z", "updatedAt": "2026-10-18T19:59:00Z"}
+    api, clock, w = coordinators(tmp_path, [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-v"}], {"run-v": run},
+                                 timers={})
+    w.sweep(lambda r: None)
+    w.on_event("run-v", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    stream_worker(w, clock, "run-v", W.UNREAD_S // 60 + 30)
+    assert api.posts == [], "no doorbell and no timer: nothing sits unread"
+    rang = clock.t
+    bells = lambda: {"t": W.iso(clock.t), "inboxes": {"vllm": {"agent": NEW, "last": f"{rang:.6f}"}}}
+    (tmp_path / "doorbells.json").write_text(json.dumps(bells()))
+    for _ in range(W.UNREAD_S // 60 - 1):
+        stream_worker(w, clock, "run-v", 1)
+        (tmp_path / "doorbells.json").write_text(json.dumps(bells()))
+    assert api.posts == [], "the doorbell has waited 59 min"
+    stream_worker(w, clock, "run-v", 1)
+    assert [p for p, _ in api.posts][0] == "/v1/agents/" + NEW + "/runs/run-v/cancel"
+    rec = next(r for r in records(tmp_path) if r["kind"] == "held_unread")
+    assert rec["reason"] == f"a doorbell rang at {W.iso(rang)}" and rec["owner"] == "top"
+
+
+def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
+    """No worker progress for `WORKER_LIVE_S`: the stall rules judge it, not this one."""
+    run = {"status": "RUNNING", "createdAt": "2026-10-18T19:59:00Z", "updatedAt": "2026-10-18T19:59:00Z"}
+    api, clock, w = coordinators(tmp_path, [{"id": LANE, "status": "ACTIVE", "latestRunId": "run-l"}], {"run-l": run})
+    w.sweep(lambda r: None)
+    w.on_event("run-l", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    stream_worker(w, clock, "run-l", 40)
+    for _ in range(25):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(lambda r: None)
+    assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]

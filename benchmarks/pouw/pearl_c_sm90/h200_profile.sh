@@ -21,12 +21,17 @@
 #                                                      GRAPHS=1: --graphs), in scratch
 #   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
 #   PROFILE 1 (default)                                glm53_profile.py run under nsys (the expert shapes at m 16 and 2,048), into $OUT/profile
-#   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py, its passes in scratch
+#   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py (its graphed arms too), its passes
+#                                                      in scratch
+#   GPROF   1 (default 0; as GROUPED)                  glm53_profile.py grouped --graphs (host and events, cProfile) into
+#                                                      $OUT/gprof/host.json, then its --nvtx calls under nsys into $OUT/gprof/prof
+#   GROUPED_PLACES PLACE ... (default base)            GROUPED's check and GPROF's nsys calls once per grouped.py PLACE
+#                                                      (PEARLC_GROUPED_PLACE; base none), into grouped[-PLACE] and gprof[-PLACE]
 # Then, the lease released: PASSES' replay (glm53_passes.py verify --fast) and full check of FULL_PASSES (default decode; full:
 # every tile and every served y word; their JSON and manifests into $OUT/passes), both under nice with FULL_JOBS jobs (default
 # 8 of the VM's 16 CPUs, which a GPU session beside them shares), each TILES shape's passes' scalar replay (glm53_passes.py verify without
 # --fast: every drawn tile on the reference chain; their JSON and manifests into $OUT/tiles/NxK), the profile's SQLite export
-# and report, and the grouped passes' replay (--fast).  VERITY_BENCH_VENV and
+# and report, GPROF's lanes report, and the grouped passes' replay (--fast).  VERITY_BENCH_VENV and
 # CUDA as h200.sh.  LANES' exports and lanes reports (glm53_profile.py lanes) run after the lease too, under nice.  Every
 # step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
@@ -37,9 +42,10 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 TIMING=${TIMING-2624:6144} TILES=${TILES-512:6144 3072:6144 6144:1536} PROFILE=${PROFILE:-1} GROUPED=${GROUPED:-0}
 SCHEDULES=${SCHEDULES:-serial} TIMING_M=${TIMING_M:-} GRAPHS=${GRAPHS:-} STAMPS=${STAMPS:-0} PASSES=${PASSES:-}
-HOST=${HOST:-0} LANES=${LANES:-} LANES_SHAPES=${LANES_SHAPES:-512:6144 4096:6144}
+HOST=${HOST:-0} LANES=${LANES:-} LANES_SHAPES=${LANES_SHAPES:-512:6144 4096:6144} GPROF=${GPROF:-0}
+GROUPED_PLACES=${GROUPED_PLACES:-base}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES HOST LANES LANES_SHAPES
+export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES HOST LANES LANES_SHAPES GPROF GROUPED_PLACES
 : > "$O/rc.txt"
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$IN/ship.tar" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"
@@ -94,10 +100,23 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
     nsys profile -t cuda,nvtx --sample=none --cpuctxsw=none --force-overwrite true -o "$O/profile/prof" "$PY" "$D/glm53_profile.py" run > "$O/profile/run.log" 2>&1
     echo "profile rc $?" >> "$O/rc.txt"
   fi
-  if [ "$GROUPED" = 1 ]; then
-    "$PY" "$D/grouped_check.py" --out "$O/grouped" --passes "$S/grouped" > "$O/grouped.log" 2>&1
-    echo "grouped rc $?" >> "$O/rc.txt"
-  fi'
+  for pl in $GROUPED_PLACES; do
+    x=${pl#base}; x=${x:+-$x}
+    if [ "$GROUPED" = 1 ]; then
+      PEARLC_GROUPED_PLACE=$pl "$PY" "$D/grouped_check.py" --out "$O/grouped$x" --passes "$S/grouped$x" > "$O/grouped$x.log" 2>&1
+      echo "grouped$x rc $?" >> "$O/rc.txt"
+    fi
+    if [ "$GPROF" = 1 ]; then
+      mkdir -p "$O/gprof$x"
+      if [ -z "$x" ]; then
+        "$PY" "$D/glm53_profile.py" grouped --graphs --out "$O/gprof/host.json" > "$O/gprof/host.log" 2>&1
+        echo "gprof host rc $?" >> "$O/rc.txt"
+      fi
+      PEARLC_GROUPED_PLACE=$pl nsys profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none --force-overwrite true \
+        -o "$O/gprof$x/prof" "$PY" "$D/glm53_profile.py" grouped --graphs --nvtx --calls 12 > "$O/gprof$x/run.log" 2>&1
+      echo "gprof$x nsys rc $?" >> "$O/rc.txt"
+    fi
+  done'
 echo "lease rc $?" >> "$O/rc.txt"
 if [ -f "$S/passes/capture.json" ]; then
   nice -n 19 "$PY" "$D/glm53_passes.py" verify --out "$S/passes" --fast --jobs "${FULL_JOBS:-8}" > "$O/verify.log" 2>&1
@@ -133,18 +152,26 @@ for r in "$O"/lanes/*/prof.nsys-rep; do
     nice -n 19 "$PY" "$D/glm53_profile.py" lanes "$S/lanes-$sc.sqlite" --out "$l/lanes.json" > "$l/lanes.txt" 2>&1
   echo "lanes report $sc rc $?" >> "$O/rc.txt"
 done
-for c in "$S"/grouped/*/capture.json; do
+for r in "$O"/gprof*/prof.nsys-rep; do
+  [ -f "$r" ] || continue
+  g=$(dirname "$r"); x=$(basename "$g")
+  nice -n 19 nsys export -t sqlite --force-overwrite true -o "$S/$x.sqlite" "$r" > "$g/export.log" 2>&1 &&
+    nice -n 19 "$PY" "$D/glm53_profile.py" lanes "$S/$x.sqlite" --out "$g/lanes.json" > "$g/lanes.txt" 2>&1
+  echo "$x report rc $?" >> "$O/rc.txt"
+done
+for c in "$S"/grouped*/*/capture.json; do
   [ -f "$c" ] || continue
-  sh=$(basename "$(dirname "$c")")
-  "$PY" "$D/glm53_passes.py" verify --out "$(dirname "$c")" --fast --jobs "$(nproc)" > "$O/grouped-verify-$sh.log" 2>&1
-  echo "grouped verify $sh rc $?" >> "$O/rc.txt"
-  cp "$(dirname "$c")/verify.json" "$O/grouped/$sh/verify.json" 2>/dev/null
+  t=$(dirname "$c"); sh=$(basename "$t"); x=$(basename "$(dirname "$t")")
+  "$PY" "$D/glm53_passes.py" verify --out "$t" --fast --jobs "$(nproc)" > "$O/$x-verify-$sh.log" 2>&1
+  echo "$x verify $sh rc $?" >> "$O/rc.txt"
+  cp "$t/verify.json" "$O/$x/$sh/verify.json" 2>/dev/null
 done
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
 grep -E "slowdown|no stock" "$O"/timing*.log 2>/dev/null
 tail -n 40 "$O/stamps.log" "$O"/host*.log "$O/capture.log" "$O/verify.log" "$O/full.log" 2>/dev/null
-tail -n 8 "$O"/tiles-*.log "$O/grouped.log" 2>/dev/null
+tail -n 8 "$O"/tiles-*.log "$O"/grouped*.log 2>/dev/null
 head -60 "$O/profile/report.txt" 2>/dev/null
-grep -hE "period|^  [a-z]" "$O"/lanes/*/lanes.txt 2>/dev/null
+grep -hE "period|^  [a-z]" "$O"/lanes/*/lanes.txt "$O"/gprof*/lanes.txt 2>/dev/null
+tail -n 40 "$O/gprof/host.log" 2>/dev/null
 ! grep -qv " rc 0$" "$O/rc.txt"

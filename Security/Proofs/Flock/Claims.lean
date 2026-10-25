@@ -118,6 +118,7 @@ import Proofs.Flock.Claims.Recursion.TopsStaged
 import Proofs.Flock.Claims.Recursion.FinOpen
 import Proofs.Flock.Claims.Recursion.RecRecord
 import Proofs.Flock.Claims.Recursion.RecOpen
+import Proofs.Flock.Claims.Recursion.OpenedPlain
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
@@ -164,6 +165,7 @@ import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployE
 import Proofs.Flock.Claims.DeployVK
 import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+import Proofs.Flock.Claims.Recursion.PlainK
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
