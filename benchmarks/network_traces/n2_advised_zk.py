@@ -5,8 +5,8 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
 (`LinkWindows.outcome(advice=…)`), through `n2_zk`'s statement and rounds (`n2_zk.stager`, `stage`, `member`).
 
     python benchmarks/network_traces/n2_advised_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in]] [--members honest,moved,...] [--jobs 2] [--debug-clear]
-      [--dry]
+      [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in] [--advice-from-io]] [--draw K [--coins local]]
+      [--delta D] [--members honest,moved,...] [--jobs 2] [--debug-clear] [--dry]
 
 * **The link** (`simulated`). The advised tests' simulated vLLM serving (`advised_traffic.serve`: varied prompt and
   output lengths, chunked prefill, prefix-cache hits, a preemption resumed from a hit, the async row past a finish, a
@@ -33,15 +33,23 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   refused unless ``--clock-stand-in`` takes `CertifierClocks` in their place, the syncs its certifier's proxy logged
   (``proxy.json.gz``), unsigned and labelled a stand-in. It is never the plan the prover declared. A run whose clock
   source gives fewer windows' syncs than are proved is refused too. The link's first ``--windows`` windows are
-  proved, by default every one.
+  proved, by default every one. A run with no endpoint advice and no ``report.json`` (a gate's rehearsal) takes
+  ``--advice-from-io``: the advice synthesized from its certified I/O (`from_io`), labelled so in ``traffic``.
 * **The tie** on either link is the stand-in, and the summary says so (``tie``): IoTieRequest is pinned at one size
-  class, `TIE_PINNED`, and neither link's ingress is in it. The summary's ``clocks`` names the clock source.
+  class, `TIE_PINNED`, and neither link's ingress is in it. The summary's ``clocks`` names the clock source, and for
+  signed clocks how many certificates there are and how many verify under the link's certifier key and session.
+* **The period** (``--draw K``): each member's windows are sampled rather than all proved. The prover commits every
+  window's salted root and the advice's digest, the challenger then draws K of the windows on its coins
+  (`LinkWindows.period_draw`; ``--coins local``, the verifier's own), and only the drawn windows are registered,
+  proved and decided; the network verdict is the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows
+  of the period's, ε = bound / n, at the stream's δ, ``--delta``). The summary's ``draw`` and ``sampled`` report them.
 * **Members.** One stream each, over the link's windows (``--members``: some of them): ``honest``, the session's
   advice and records; ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); ``short``, one
   request's output length one short (`advised_traffic.with_output_len`); on the simulated link ``extra``, one frame
   more handed to the egress certifier in its first busy bucket, the egress records certified anew; and on the served
   link ``tampered``, window 0's egress head with one count more and its certificate unchanged (`n2_zk.one_count`),
-  since the run's certifier key isn't the driver's. The advice is public and the heads are witness: moved and short
+  since the run's certifier key isn't the driver's, and ``tampered_all``, that change in every window
+  (`every_count`), which a sampled period refuses whatever it draws. The advice is public and the heads are witness: moved and short
   change the view the verifier computes, extra and tampered the egress heads the prover commits. Each advice negative
   and extra is the first of its kind that `advised.view` takes in every window, so the unit takes every window's
   instance, and that the advised counts refuse in some window: the proof's verdict bit refuses it, with both head
@@ -90,6 +98,7 @@ from verity.core.protocols.certifier.certificate import Direction, Issuer, param
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 
@@ -105,7 +114,7 @@ T, WINDOWS, OWN, SEED = 512, 4, 1, 7
 SHAPE = AT.Shape(T, WINDOWS, GridParams(T, AT.R, 1), GridParams(T, 4, 1),
                  tuple(range(T - 8, T + 8)) + tuple(range(3 * T - 8, 3 * T + 8)))
 MEMBERS = ("honest", "moved", "short", "extra")
-E2E_MEMBERS = ("honest", "moved", "short", "tampered")
+E2E_MEMBERS = ("honest", "moved", "short", "tampered", "tampered_all")
 #: IoTieRequest's one pinned size class (B, T, R, OWN): the only one whose ingress tie can be proved
 TIE_PINNED = (512, 4, 2, 1)
 
@@ -188,7 +197,12 @@ def clocks_label(lw: LinkWindows, declared) -> dict:
     else:
         by = {"source": "stand-in", "by": type(lw.clocks).__name__}
     got = list(lw.clock_source.syncs(lw.link)) if lw.clock_source is not None else []
-    return {**by, "syncs": [[s.delta, str(s.rho)] for s in got], "as_declared": got == list(declared)}
+    out = {**by, "syncs": [[s.delta, str(s.rho)] for s in got], "as_declared": got == list(declared)}
+    if lw.clock_certificates is not None:
+        out |= {"certificates": len(lw.clock_certificates),
+                "verified": sum(c.verify(lw.key, lw.certifier_session) for c in lw.clock_certificates),
+                "key": lw.key.key_id.hex()}
+    return out
 
 
 def standin_tie(ingress: GridParams, own: int) -> dict:
@@ -320,25 +334,54 @@ def joined(advices: list[ADV.Advice], frames: dict[str, list[int]]) -> ADV.Advic
     return ADV.Advice(tuple(requests), tuple(steps), release)
 
 
-def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False) -> SimpleNamespace:
+def from_io(io: list[dict]) -> ADV.Advice:
+    """A stand-in advice for a run whose endpoint kept none (``--advice-from-io``), synthesized from its certified I/O:
+    the certified requests in arrival order, each its id, prompt length, kept outputs and finish; one step that
+    prefills every whole prompt, sampling each request's first output, then step k one decode row for each request
+    with more than k outputs; each kept output released in the bucket its certified frame went out. `advised.view`
+    reads only the requests, the kept outputs and their releases, so the view is the one the endpoint's advice of the
+    same outputs gives; the steps are a schedule that replays to them, not the one serving ran, so nothing here
+    exercises I1's hold of the advice to the engine's steps."""
+    requests = tuple(ADV.RequestAdvice(r["user"], len(r["prompt"]), len(r["output"]), r["finish"]) for r in io)
+    steps = [ADV.StepAdvice(tuple(ADV.Row(i, "prefill", 0, q.prompt_len) for i, q in enumerate(requests)))]
+    for k in range(1, max(q.output_len for q in requests)):
+        steps.append(ADV.StepAdvice(tuple(ADV.Row(i, "decode", q.prompt_len + k - 1, 1)
+                                          for i, q in enumerate(requests) if q.output_len > k)))
+    frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
+    return joined([ADV.Advice(requests, tuple(steps), (0,) * sum(q.output_len for q in requests))], frames)
+
+
+def every_count(lw: LinkWindows, w: int, pair):
+    """Every window's egress head with one count more (`n2_zk.one_count`'s change, in each window): what a prover
+    that changed a count in every window commits, which a sampled period refuses whichever windows it draws."""
+    return Z.one_count(lw, 0, pair)
+
+
+def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False, advice_from_io: bool = False,
+        wanted=E2E_MEMBERS) -> SimpleNamespace:
     """network-e2e's run `run` on the advice profile as an advised link (the module docstring, "A served run's link"),
-    its first `windows` link-windows (0: every one): the link and its members (`E2E_MEMBERS`) on its certified records,
-    each (advice, [(egress, ingress)] per window, what was changed). `clock_stand_in`: `served_clocks`'s `stand_in`."""
+    its first `windows` link-windows (0: every one): the link and its members (`wanted`, of `E2E_MEMBERS`) on its
+    certified records, each (advice, [(egress, ingress)] per window, what was changed). `clock_stand_in`:
+    `served_clocks`'s `stand_in`. `advice_from_io`: the advice is `from_io`'s, for a run with no endpoint advice and no
+    report (a gate's rehearsal), labelled so in ``traffic``."""
     honest = run / "rehearsal" / "honest"
     plan, report, dep = (json.loads((honest / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                          "deployment.json"))
     if (plan.get("occupancy") or {}).get("kind") != "advice":
         raise SystemExit(f"{honest}: not a run on the advice profile")
-    bits = json.loads((run / "report.json").read_text())["chain"]["bits"]
-    bound = [c["window"] for c in bits["commit_windows"] if c["bound"] and c["rebuilt"]]
-    if not bound or not bits["bound"] or not bits["rebuilt"]:
-        raise SystemExit(f"{run}: the report binds no advice to the run and rebuilds none from its certified I/O")
     io = json.loads((honest / "io.json").read_text())["requests"]
     if any(len(r["frames"]) != len(r["output"]) for r in io):
         raise SystemExit("io.json's frames aren't one per kept output")
     frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
-    advice = joined([ADV.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" / "advice.json")
-                                              .read_text())) for w in bound], frames)
+    if advice_from_io:
+        bound, advice = None, from_io(io)
+    else:
+        bits = json.loads((run / "report.json").read_text())["chain"]["bits"]
+        bound = [c["window"] for c in bits["commit_windows"] if c["bound"] and c["rebuilt"]]
+        if not bound or not bits["bound"] or not bits["rebuilt"]:
+            raise SystemExit(f"{run}: the report binds no advice to the run and rebuilds none from its certified I/O")
+        advice = joined([ADV.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" / "advice.json")
+                                                  .read_text())) for w in bound], frames)
     if [q.id for q in advice.requests] != [r["user"] for r in io] or \
             any(q.output_len != len(frames[q.id]) for q in advice.requests):
         raise SystemExit("the bound advice's requests aren't the certified ones in arrival order, each its outputs")
@@ -361,19 +404,26 @@ def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False) -> SimpleName
     egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
     link = AD.LinkAdvice(advice, tuple(sum(c) - own for c in ingress))
     members = {"honest": (link, pairs[:windows], {})}
-    m = moved(lw, link, egress, ingress, syncs, windows * setup.egress_params.buckets)
-    if m is None:
-        raise SystemExit(f"the run's first {windows} windows have no moved release the views take and the advised "
-                         "counts refuse")
-    members["moved"] = (m[0], pairs[:windows], m[1])
-    m = short(lw, link, egress, ingress, syncs, windows)
-    if m is None:
-        raise SystemExit(f"the run's first {windows} windows have no output length one short the views take and the "
-                         "advised counts refuse")
-    members["short"] = (m[0], pairs[:windows], m[1])
+    if "moved" in wanted:
+        m = moved(lw, link, egress, ingress, syncs, windows * setup.egress_params.buckets)
+        if m is None:
+            raise SystemExit(f"the run's first {windows} windows have no moved release the views take and the advised "
+                             "counts refuse")
+        members["moved"] = (m[0], pairs[:windows], m[1])
+    if "short" in wanted:
+        m = short(lw, link, egress, ingress, syncs, windows)
+        if m is None:
+            raise SystemExit(f"the run's first {windows} windows have no output length one short the views take and "
+                             "the advised counts refuse")
+        members["short"] = (m[0], pairs[:windows], m[1])
     members["tampered"] = (link, [Z.one_count(lw, w, p) for w, p in enumerate(pairs[:windows])],
                            {"window": 0, "egress": "one count more, its certificate unchanged"})
-    traffic = {"run": str(run), "commit_windows": bound, "requests": len(advice.requests),
+    members["tampered_all"] = (link, [every_count(lw, w, p) for w, p in enumerate(pairs[:windows])],
+                               {"windows": "every one", "egress": "one count more, its certificate unchanged"})
+    traffic = {"run": str(run), "commit_windows": bound,
+               "advice": ("synthesized from the certified I/O (--advice-from-io, from_io): the run kept no endpoint "
+                          "advice") if advice_from_io else "the endpoint's, bound by the report",
+               "requests": len(advice.requests),
                "outputs": len(advice.release), "steps": len(advice.steps), "v0_bits": ADV.total_bits(advice),
                "received": list(link.received), "own": own, "max_released": max(max(c) for c in egress)}
     return SimpleNamespace(lw=lw, session=None, members=members, traffic=traffic, syncs=syncs, windows=windows,
@@ -420,16 +470,44 @@ def expected(name: str, fails: list[list[str]]) -> bool:
         return not any(fails)
     if name == "tampered":
         return "egress/signed" in fails[0] and set(fails[0]) <= {"egress/signed", "advised"} and not any(fails[1:])
+    if name == "tampered_all":
+        return all("egress/signed" in f and set(f) <= {"egress/signed", "advised"} for f in fails)
     return all(f in ([], ["advised"]) for f in fails) and ["advised"] in fails
 
 
 # --- the proofs -------------------------------------------------------------------------------------------------------
 
+def coins(a):
+    """The period draw's coins (``--coins``): ``local``, the verifier's own, the operating system's bytes as the Lean
+    verifier of record reads them (`sampled_proofs.service`'s default, `verifier.coins`), never the auditor's
+    challenger's; None when the period isn't sampled (``--draw 0``, every window)."""
+    if not a.draw:
+        return None
+    if a.coins != "local":
+        raise SystemExit(f"--coins {a.coins}: only local coins (the verifier's own) are wired here")
+    return S.V.coins
+
+
+def draw_label(a, windows: int) -> dict:
+    """The summary's ``draw``: how the period's windows are selected, with what coins, at what δ."""
+    if not a.draw:
+        return {"selection": "all", "k": windows, "population": windows, "coins": None,
+                "delta": a.delta or cs.DELTA}
+    if not 1 <= a.draw <= windows:
+        raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {windows} of the link's {windows} windows")
+    return {"selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": windows,
+            "coins": {"source": a.coins, "by": "the verifier's own: the operating system's bytes through the Lean "
+                                               "verifier of record (sampled_proofs verifier.coins), read only after "
+                                               "the period's commitment; not the auditor's challenger's gate coins"},
+            "delta": a.delta or cs.DELTA}
+
+
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    sim = e2e(Path(a.e2e), a.windows, a.clock_stand_in) if a.e2e else simulated(a.seed)
+    wanted = a.members.split(",") if a.members else E2E_MEMBERS
+    sim = e2e(Path(a.e2e), a.windows, a.clock_stand_in, a.advice_from_io, wanted) if a.e2e else simulated(a.seed)
     lw = sim.lw
     chosen = a.members.split(",") if a.members else list(sim.members)
     if not set(chosen) <= set(sim.members):
@@ -446,7 +524,9 @@ def prove(a) -> int:
                               "ingress": asdict(sim.ingress)},
                      "traffic": sim.traffic, "changed": {k: w for k, (_, _, w) in sim.members.items()},
                      "advice": {name: AD.digest(rd.advice) for name, rd in rounds.items()},
-                     "debug_clear": a.debug_clear, "received": {**Z.RECEIVED, "advice.json": "the link's advice"}}
+                     "debug_clear": a.debug_clear, "received": {**Z.RECEIVED, "advice.json": "the link's advice"},
+                     "draw": draw_label(a, sim.windows)}
+    log(f"draw: {summary['draw']}")
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():
         fails = [failed(x) for x in rd.windows]
@@ -482,7 +562,7 @@ def prove(a) -> int:
 
     def go(k: int, name: str) -> tuple[str, dict]:
         rd = rounds[name]
-        res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0)
+        res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0, coins=coins(a))
         (out / name / "verifier" / "advice.json").write_text(json.dumps(
             {"advice": ADV.to_json(rd.advice.advice), "received": list(rd.advice.received),
              "digest": AD.digest(rd.advice)}, sort_keys=True))
@@ -499,8 +579,15 @@ def prove(a) -> int:
                 and not rec["verifier_found"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good)
-        log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
-            f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
+        net = res["network"]
+        if "wrong_units" in net:
+            summary.setdefault("sampled", {})[name] = {"accepted": net["accepted"], "selection": net["selection"],
+                                                       "wrong_units": net["wrong_units"]}
+        log(f"member {name}: network {'accept' if net['accepted'] else 'refuse'} (refused windows {net['refused']}"
+            + (f"; drew {net['selection']['units']}, {net['selection']['k']} of {net['selection']['population']}: at "
+               f"most {net['wrong_units']['bound']} wrong, epsilon {net['wrong_units']['epsilon']:.4f} at delta "
+               f"{net['wrong_units']['delta']:.3g}" if "wrong_units" in net else "")
+            + f"), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
             f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
             f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the "
             f"public circuit or rows hold left out), control {rec['control']['blobs_found']}; "
@@ -533,6 +620,18 @@ def main(argv=None) -> int:
                    help="with --e2e, for a run without clocks.jsonl: its certifier's proxy log's syncs "
                         "(CertifierClocks, unsigned), labelled a stand-in, in place of the clock certificates; without "
                         "it such a run is refused")
+    p.add_argument("--advice-from-io", action="store_true",
+                   help="with --e2e, for a run with no endpoint advice and no report.json (a gate's rehearsal): the "
+                        "advice synthesized from its certified I/O (from_io), labelled so")
+    p.add_argument("--draw", type=int, default=0,
+                   help="K: each member's period sampled, K of its windows drawn after every window's root and the "
+                        "advice are committed, and only those proved (LinkWindows.period_draw); 0 (the default): every "
+                        "window, Selection All")
+    p.add_argument("--coins", default="local", choices=("local",),
+                   help="the period draw's coins: local, the verifier's own (the Lean verifier's OS bytes)")
+    p.add_argument("--delta", type=float, default=None,
+                   help="the stream's delta, at which a sampled verdict states its wrong units (default "
+                        "certifier_serve.DELTA, 2^-40)")
     p.add_argument("--members", help="comma-separated: the members proved (default every member of the link)")
     p.add_argument("--bin")
     p.add_argument("--lean")

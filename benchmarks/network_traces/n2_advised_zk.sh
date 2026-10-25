@@ -11,6 +11,10 @@
 #      with --send to $RESEARCH_RUN_DIR/inputs/)  N2_WINDOWS (--windows, with N2_E2E; every window by default)
 #      N2_CLOCK_STAND_IN=1 (--clock-stand-in, with N2_E2E: a run without clocks.jsonl is proved on its proxy log's
 #      syncs, a labelled stand-in, instead of refused)
+#      N2_ADVICE_FROM_IO=1 (--advice-from-io, with N2_E2E: a run with no endpoint advice, such as a gate's rehearsal,
+#      on an advice synthesized from its certified I/O, labelled so)
+#      N2_DRAW (--draw K: each member's period sampled, K of its windows drawn after the period is committed and only
+#      those proved; every window by default)  N2_COINS (--coins, local by default)  N2_DELTA (--delta)
 #      N2_MEMBERS (--members, comma-separated; every member by default)
 #      N2_JOBS (--jobs, members proved at once, 2 by default)  N2_PORT (--port; a free port a session by default)
 #      N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1 (--debug-clear)
@@ -42,10 +46,12 @@ if [ -f "$E2E" ]; then
   [ -n "$E2E" ] || { log "n2adv: $N2_E2E holds no rehearsal/honest/plan.json"; exit 7; }
   E2E=${E2E%/rehearsal/honest/plan.json}
 fi
-log "n2adv: proving, ${E2E:+e2e $E2E windows ${N2_WINDOWS:-all}${N2_CLOCK_STAND_IN:+ clock stand-in}, }seed" \
-  "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
+log "n2adv: proving, ${E2E:+e2e $E2E windows ${N2_WINDOWS:-all}${N2_CLOCK_STAND_IN:+ clock stand-in}${N2_ADVICE_FROM_IO:+ advice from io}, }seed" \
+  "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, draw ${N2_DRAW:-all}, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
 "$PY" benchmarks/network_traces/n2_advised_zk.py prove --seed "${N2_SEED:-7}" ${E2E:+--e2e "$E2E"} \
-  ${N2_WINDOWS:+--windows "$N2_WINDOWS"} ${N2_CLOCK_STAND_IN:+--clock-stand-in} ${N2_MEMBERS:+--members "$N2_MEMBERS"} \
+  ${N2_WINDOWS:+--windows "$N2_WINDOWS"} ${N2_CLOCK_STAND_IN:+--clock-stand-in} ${N2_ADVICE_FROM_IO:+--advice-from-io} \
+  ${N2_DRAW:+--draw "$N2_DRAW"} ${N2_COINS:+--coins "$N2_COINS"} ${N2_DELTA:+--delta "$N2_DELTA"} \
+  ${N2_MEMBERS:+--members "$N2_MEMBERS"} \
   --bin "$BIN" --lean "$LEAN" --out "$W/n2adv" \
   --jobs "${N2_JOBS:-2}" ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
   | tee -a "$OUT/n2adv.log" | cut -c1-4000

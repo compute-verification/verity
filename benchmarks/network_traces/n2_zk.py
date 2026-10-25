@@ -67,7 +67,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -418,21 +418,36 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int) -> dict:
+def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
+           coins=None) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
     firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
-    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free."""
+    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
+
+    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
+    advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`)."""
     lw = rd.lw
-    stream = lw.stream(budget=rd.plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins,
-                       clock=time.monotonic)
+    k = getattr(a, "draw", 0) or None
+    stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
+                       coins=cs._no_coins, clock=time.monotonic)
     env, av = firewall(M, sg), SimpleNamespace(bin=a.bin, lease=[], gpu=False)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
+    drawn, windows = None, rd.windows
+    if k is not None:
+        drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
+                               advice=None if rd.advice is None else AD.digest(rd.advice))
+        (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
+        windows = [rd.windows[u] for u in drawn["units"]]
+        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) after the period's "
+            f"commitment {drawn['commitment'][:16]}")
     previous, rows = None, []
-    for j, x in enumerate(rd.windows):
+    for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = lw.register(stream, lw.registration(x.opening, previous))
+        reg = lw.register(stream, lw.registration(x.opening, previous), drawn)
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
@@ -492,8 +507,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
-    network = lw.network_verdict(stream, rd.plan["windows"])
-    return {"windows": rows, "network": network}
+    network = lw.network_verdict(stream, rd.plan["windows"], drawn)
+    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn})}
 
 
 def _member_scan(M, sg, rd, out: Path) -> dict:
