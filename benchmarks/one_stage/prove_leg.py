@@ -633,6 +633,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
 
         gemm:M[:K]           Gemm_v2{K,N=1,DOT}, the unit of a Gemm_v2 row (``SLICES``), K the hidden size by default
         attention:M:T        Attention_v5, a decode row (one query row, non-causal) over T keys
+        attention-v18:M:T    Attention_v18 at Attention_v5's statics (`prune`'s rewrite of Attention_v5)
         rmsnorm-fused:M      RMSNormFusedCuda_v2{N=H,EPS}
         rmsnorm-triton:M     RMSNormTriton_v5{N=H,EPS} (`prune`'s rewrite of RMSNormTriton_v1)
         embedding:M[:V]      Embedding_v1{V,H}
@@ -655,8 +656,10 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
     if fam == "gemm":
         K = a or H
         return TG.gemm_spec(pro, K, 1), lambda rng, n: {"x": _gen(rng, n, K), "w": _gen(rng, n, K, 0.02)}
-    if fam == "attention":
+    if fam in ("attention", "attention-v18"):
         fn = TG.attention_spec(pro, a, L["NH"], L["KVH"], D, 1, row=0, own_rows=1)
+        if fam == "attention-v18":
+            fn = bind(DF.AttentionV18, **fn.bindings)
         return fn, lambda rng, n: {"q": _gen(rng, n, L["NH"] * D), "kc": _gen(rng, n, a * L["KVH"] * D),
                                    "vc": _gen(rng, n, a * L["KVH"] * D)}
     if fam == "rmsnorm-fused":
@@ -696,7 +699,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
             ang = pos * 500000.0 ** (-np.arange(0, D, 2) / D)
             return {"x": _gen(rng, n, heads * D), "cs": bf16(np.concatenate([np.cos(ang), np.sin(ang)], axis=1))}
         return bind(b1.RoPE, NHEADS=heads, D=D), rope
-    raise SystemExit(f"{shape}: no served family {fam!r} (gemm, attention, rmsnorm-fused, rmsnorm-triton, embedding, "
+    raise SystemExit(f"{shape}: no served family {fam!r} (gemm, attention, attention-v18, rmsnorm-fused, rmsnorm-triton, embedding, "
                      f"token-select, token-select-chunk, token-select-combine, rope)")
 
 

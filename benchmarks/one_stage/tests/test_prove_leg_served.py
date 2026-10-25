@@ -34,6 +34,7 @@ def test_units_for_is_the_fewest_units_stage_admits(k_log, per_block):
     ("gemm:8b:4096", f"Gemm_v2{{K=4096,N=1,{DOT}}}"),
     ("attention:1b:129", f'Attention_v5{{T=129,NH=32,KVH=8,D=64,BN=128,{DOT},INV={{"fn":"Fa2InvSum_v1"}},MASKED_FROM=1}}'),
     ("attention:8b:65", f'Attention_v5{{T=65,NH=32,KVH=8,D=128,BN=64,{DOT},INV={{"fn":"Fa2InvSum_v1"}},MASKED_FROM=1}}'),
+    ("attention-v18:1b:1", f'Attention_v18{{T=1,NH=32,KVH=8,D=64,BN=128,{DOT},INV={{"fn":"Fa2InvSum_v1"}},MASKED_FROM=0}}'),
     ("rmsnorm-fused:1b", f"RMSNormFusedCuda_v2{{N=2048,{EPS}}}"),
     ("rmsnorm-triton:8b", f"RMSNormTriton_v5{{N=4096,{EPS}}}"),
     ("embedding:1b:8", "Embedding_v1{V=8,H=2048}"),
