@@ -1,5 +1,5 @@
-"""Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "A serving stack is one integration among
-many"; ARCHITECTURE.md "Integrations"): another serving stack implements the same interface without changing ``verity/``.
+"""Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "Integrations are frontends";
+ARCHITECTURE.md "Integrations"): any serving stack plugs in without changing ``verity/``.
 Today some files do: C-Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
 equivalent yet, and core's difftests of the primitives and sigma hold the Lean to them (a benchmark may compose an
 integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site fails, and so does a

@@ -91,8 +91,7 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 - Nothing under `verity/` imports an integration, apart from the sites `KNOWN` lists in
-  `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "A serving stack is one integration among
-  many").
+  `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
 check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
@@ -184,11 +183,20 @@ the standing rulings stated nowhere else.
   honest serving passes. No guarantee rests on it (exfiltration security, infiltration security, work soundness), since
   each is stated about the registered circuit. The developer validates it empirically: circuit-check, the hardware
   captures, the served outputs. Nobody proves it, lists it as an assumption, or counts it as an open gap in a guarantee.
-- **A serving stack is one integration among many** (Daniel, 24 Oct). Verity meets serving at one stack-neutral
-  interface: a stack builds its workload's circuit from Verity's Definitions and silicon semantics, commits the values in
-  a `verity.ml.commitments` scheme, and closes and registers its windows with the proof service, which does the rest.
-  `integrations/vllm/` is the only implementation so far. Another stack implements the same interface without changing
-  `verity/`, and nothing under `verity/` imports an integration (the import rules, above).
+- **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
+  values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
+  schedulers, and none enters `verity/`. An integration hands Verity only:
+  - a circuit, partitioned into proof units, with its public layout (which gates are the system's external I/O, such as
+    the network frames the certifiers see), registered by digest;
+  - when the circuit depends on choices made at run time, a registered compiler (itself a circuit, with a public length
+    cap) and the advice it compiles: a bit string Verity never interprets, whose length is charged;
+  - the circuit's values, committed in a `verity.ml.commitments` scheme and registered with the circuit before any coin;
+  - on a draw, the drawn units' openings, to the prover behind the firewall.
+
+  What the circuit means, and how it was built, is the integration's; that it computes what is served is completeness
+  (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
+  so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
+  still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
 
 ## Tests
 
@@ -295,6 +303,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form.
   The verifier must refuse any form the proof doesn't cover, and it gains no new form ahead of its proof. Circuit inputs
   and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
+- **The math is modular** (Daniel, 24 Oct). Each layer of an end-to-end guarantee is proved once, over the guarantee of
+  the layer below as its hypothesis: a session verifier's knowledge soundness for sampling, sampling's for an audit, an
+  audit's for an accounting bound. Every configuration (zero-knowledge, plain, recursive) and every protocol instantiates
+  those theorems. A new configuration adds an instance, not a proof, and a proof that redoes a layer for one
+  configuration is refactored onto the shared one.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
