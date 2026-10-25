@@ -507,9 +507,10 @@ theorem hidden : I.tags.hiddenOutputs = false := by
 
 theorem count : I.count ≤ Tags.MAX_TABLES := by
   have hw := h.why
+  have hh := h.hidden
   unfold ProvedScope.plainTablesWhy at hw
   by_contra hc
-  simp [hc] at hw
+  simp [hh, hc] at hw
 
 theorem typed : I.tags.typed = false := Checks.typed h.checks
 

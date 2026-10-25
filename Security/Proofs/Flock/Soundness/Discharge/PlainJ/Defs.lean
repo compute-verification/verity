@@ -177,7 +177,7 @@ noncomputable def opnPJ (I : Inputs) (plan : Finset (Fin n) → Reg → List (Ta
   match Stmt.setupH (tagsAt I.tags I.count j.val) I.circuitFile I.publicFile I.coins I.tables
       (some (drawJ I (dj S) j.val)) I.partition I.program with
   | .ok st => match Flock.fast100 st.m with
-    | some sch => DecodeZL.opnOf (Setup.ofCircuit st) sch (DecodeZLJ.nXT ((plan S R).get j))
+    | some sch => opnOf (Setup.ofCircuit st) sch (DecodeZLJ.nXT ((plan S R).get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | none => default
   | .error _ => default
