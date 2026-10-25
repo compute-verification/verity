@@ -31,6 +31,7 @@ import Proofs.Flock.SessionLoop.FinHmkFw
 import Proofs.Flock.SessionLoop.FinishIsOf
 import Proofs.Flock.SessionLoop.FinRepFinal
 import Proofs.Flock.SessionLoop.FinRepOpen
+import Proofs.Flock.SessionLoop.FinRepL0
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
