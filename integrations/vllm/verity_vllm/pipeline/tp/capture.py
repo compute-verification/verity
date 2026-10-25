@@ -183,7 +183,7 @@ def main(args: Options) -> None:
         print(f"[tp2] live inventory of ranks {sorted(inv['ranks'])} -> {args.inventory_out}", flush=True)
 
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[tp2] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
 

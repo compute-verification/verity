@@ -86,7 +86,7 @@ def _engine_main(args) -> None:
                                                     "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))},
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[tp2match:{args.arm}] warm-up {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
     if instrumented:

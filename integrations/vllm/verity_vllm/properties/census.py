@@ -287,7 +287,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         return steps, tokens
 
     if warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         profiled_run(warm, "warmup")      # profiler + CUPTI warm-up too; discarded
         torch.cuda.synchronize()
     steps, tokens = profiled_run(wl["requests"], "census")

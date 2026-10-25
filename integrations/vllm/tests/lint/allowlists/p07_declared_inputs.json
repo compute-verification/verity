@@ -93,7 +93,6 @@
     {"file": "verity_vllm/observe/storage.py", "kind": "broad-except", "symbol": "_probe_weakrefs", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/engine/build.py", "kind": "broad-except", "symbol": "vllm_has_flashinfer", "detail": "except Exception"},
     {"file": "verity_vllm/engine/build.py", "kind": "environ", "symbol": "compilation_facts", "detail": "VLLM_DISABLE_COMPILE_CACHE"},
-    {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "seed-default", "symbol": "throwaway_requests", "detail": "seed"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "seed-default", "symbol": "compare", "detail": "seed"},
     {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
