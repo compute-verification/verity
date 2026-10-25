@@ -97,7 +97,7 @@ theorem decodesOnPJ_exec (L : Law n)
   obtain ⟨x, hx⟩ := ZkLink.drawSetup_of_setupH_g (I := inputsPJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) (typedPJ ht j.val) hst hf hD
     ((hdraw ω ⟨j.val, hjn⟩).1 D hD) hmP
-  obtain ⟨y, hyx, e⟩ := tablePJ_of ht dj x₀ x
+  obtain ⟨y, hyx, e⟩ := tablePJ_of ht dj x₀ (S := L.draw ω) (j := ⟨j.val, hjn⟩) x
   have hget : (planPJ (Reg := Reg) ht dj x₀ (L.draw ω) R).get j =
       (tablePJ ht dj x₀ (L.draw ω) ⟨j.val, hjn⟩).T :=
     List.get_ofFn _ j
