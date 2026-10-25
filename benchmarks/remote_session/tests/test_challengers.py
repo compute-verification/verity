@@ -327,19 +327,22 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
              pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
              model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None,
-             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None) -> dict:
+             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None,
+             lockdown: dict | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None), the Lean's `hold` answering `lean` (by default bound at the registration's root), the line held to `model`
     (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, each line
-    computed by the Lean verifier `line_by` (None: line.py alone), and its credit held to the certifiers' records
-    `boundary` (`read_boundary`'s; None: not checked)."""
+    computed by the Lean verifier `line_by` (None: line.py alone), its credit held to the certifiers' records
+    `boundary` (`read_boundary`'s; None: not checked), and its sessions' NoOutsideCompute grounded by `lockdown`
+    (`read_lockdown`'s; None: by nothing)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary)
+                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary,
+                      lockdown=lockdown)
 
 
 def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
@@ -681,6 +684,66 @@ def test_a_session_earns_no_credit_when_its_boundarys_certifiers_show_ingress_be
     path, _ = boundary(tmp_path / "pinned", VERIFIER_FRAMES)
     with pytest.raises(SystemExit, match="not the one --boundary-pin names"):
         al.read_boundary(path, "00" * 64)
+
+
+def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no_outside_compute(tmp_path, host,
+                                                                                                monkeypatch):
+    """RD-20: with infra's lockdown record (`--lockdown`), a gate session whose span as the challenger signed it (its
+    open's started_utc to its end's ended_utc) lies strictly inside an applied interval has its NoOutsideCompute
+    grounded by `ProviderLockdown`, and the line is conditional on that in its place. A span that starts or ends on
+    an interval's edge at whole seconds, a node that mounts a shared filesystem, or no record leaves it conditional
+    on NoOutsideCompute. It changes no credit, and the line's label names what the file names (`line_label`). A
+    record not of `read_lockdown`'s form is refused."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+
+    def record(name: str, intervals: list[tuple[str, str]], shared: bool | None = None) -> Path:
+        p = tmp_path / f"{name}.json"
+        p.write_text(json.dumps({"node": "vy-nebius-2", "allow": [{"host": "vy-auditor-1", "ip": "81.85.1.145"}],
+                                 "intervals": [{"applied_utc": a, "lifted_utc": b, "records": ["art:" + "0" * 64]}
+                                               for a, b in intervals], "shared_filesystem": shared}))
+        return p
+
+    def locked(name: str, intervals: list[tuple[str, str]], shared: bool | None = None) -> dict:
+        return analysed(out, host, sessions, reg, desc, line_by=None,
+                        lockdown=al.read_lockdown(record(name, intervals, shared)))
+
+    doc = analysed(out, host, sessions, reg, desc, line_by=None)
+    (s,) = doc["sessions"]
+    start, end = s["no_relay"]["span_utc"]
+    assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and doc["conditional_on"] == al.CONDITIONAL_ON
+    assert doc["lockdown"] == {"read": False, "reason": "no lockdown record (--lockdown)"}
+    assert al.line_label(doc) == "python conditional on NoOutsideCompute"
+    before, after = A.later(start, -1), A.later(end, 1)
+    doc = locked("inside", [(A.later(start, -30), A.later(start, -20)), (before, after)])
+    (s,) = doc["sessions"]
+    assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] == "ProviderLockdown"
+    assert s["no_relay"]["interval"] == [before, after] and s["no_relay"]["shared_filesystem"] == "pending (infra)"
+    assert doc["conditional_on"] == al.GROUNDED and al.line_label(doc) == "python conditional on ProviderLockdown"
+    assert doc["lockdown"]["read"] and doc["lockdown"]["sha512"] == hashlib.sha512(
+        (tmp_path / "inside.json").read_bytes()).hexdigest()
+    assert f"no relay, session 0: ProviderLockdown, its span inside the lockdown applied {before} to {after}" in \
+        al.table(doc).splitlines()
+    for name, intervals, shared, why in (
+            ("at-start", [(start, after)], None, "lies inside no interval"),
+            ("at-end", [(before, end)], None, "lies inside no interval"),
+            ("shared", [(before, after)], True, "vy-nebius-2 mounts a shared filesystem")):
+        doc = locked(name, intervals, shared)
+        (s,) = doc["sessions"]
+        assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and why in s["no_relay"]["reason"]
+        assert doc["conditional_on"] == al.CONDITIONAL_ON
+    assert locked("answered", [(before, after)], False)["sessions"][0]["no_relay"]["shared_filesystem"] == \
+        "none mounted"
+    for bad in ({"node": "n", "allow": [], "intervals": [], "shared_filesystem": None},
+                {"node": "n", "allow": [{"host": "a", "ip": "1"}], "intervals": [
+                    {"applied_utc": after, "lifted_utc": before, "records": []}], "shared_filesystem": None},
+                {"node": "n", "allow": [{"host": "a", "ip": "1"}], "intervals": []}):
+        (tmp_path / "bad.json").write_text(json.dumps(bad))
+        with pytest.raises(SystemExit, match="is not a lockdown record"):
+            al.read_lockdown(tmp_path / "bad.json")
 
 
 def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
