@@ -98,9 +98,11 @@ So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads`
 `RootSegs`, that every read `Seg.split` makes of a segment `down` or `carriesRead` gives a root node names gates
 of one root node with their widths, and `RootSet`, open, that the positions the node reads (`rootRead`) name exactly the
 gates outside the node that its gates read; a composite's segment `keep` keeps is then one outside the node
-(`keep_iff`). `RootSegs` holds wherever the decoder's facts do (`RootFacts`) and, open, those reads name gates of one
+(`keep_iff`). `RootSegs` holds wherever the decoder's facts do (`RootFacts`) and those reads name gates of one
 root node with their widths (`RootGates`) (`rootSegs_of`): every segment is `ShapeOk` (`rootShape`; a scan's carries'
-by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`).
+by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` holds wherever, open, every such
+segment is `SegNodes`, its gates of their widths, each piece's in one root node and a shifting segment's copies' in
+one (`RootNodes`, `rootGates_of`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -2191,7 +2193,8 @@ def rootRead (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) 
 /-- **The segments `down` gives at the root, as reads.** On a Program `Desc.evaluate` reads, with its summaries
 `memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments (`Desc.nodeReads`) have pieces naming gates only,
 every read `Seg.split` makes of a segment `down` gives a piece of one of its arguments (or one `Desc.memberRows` gives),
-or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. Open past `rootSegs_of`: `RootGates`. -/
+or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. Open past `rootSegs_of` and `rootGates_of`:
+`RootNodes`. -/
 def RootSegs : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -10597,7 +10600,7 @@ theorem segGood_of {P : Prog} {c : Circuit} {s g : Seg} (hp0 : (P.defs[P.root]!)
       dsimp only at hp0'
       rw [← e1, Int.toNat_of_nonneg hp0']
 
-/-- **Open: the gates a root node's reads name are one root node's, with their widths.** On a Program `Desc.evaluate`
+/-- **The gates a root node's reads name are one root node's, with their widths.** On a Program `Desc.evaluate`
 reads, with its summaries `memo` and `circuitOf`'s circuit `c`: every read `Seg.split` makes of a segment `down` gives
 a piece of one of root node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's
 carries, of positive count, names gates `p` of width `c.w[p]` of one root node. -/
@@ -10609,6 +10612,69 @@ def RootGates : Prop :=
       ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
         FromCarry (rootCtx P memo) k node s) → ∀ g ∈ (Seg.split s).toList, g.count ≠ 0 →
         ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k'
+
+/-- A segment of the root's body whose gates have their widths in `c` and lie in root nodes as `Seg.split` reads them:
+each piece's in one root node, and, when its copies shift (`reps > 1`, `shift ≠ 0`), all its copies' in one. -/
+def SegNodes (P : Prog) (c : Circuit) (s : Seg) : Prop :=
+  (∀ w p, (Tgt.gate w, p) ∈ segPos s → w = c.w[p.toNat]!) ∧
+  (∀ q ∈ s.ps.toList, q.count ≠ 0 →
+    ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ pos q → p.toNat ∈ nodeGates P k') ∧
+  (1 < s.reps → s.shift ≠ 0 → s.count ≠ 0 →
+    ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos s → p.toNat ∈ nodeGates P k')
+
+/-- **Open: `RootGates` segment by segment.** With `RootGates`' premises, every segment `down` gives a piece of one of
+root node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries, is
+`SegNodes`. -/
+def RootNodes : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+    Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+    Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+    ∀ k < nodeCount P, ∀ node, (rootCtx P memo).node k = .ok node →
+      ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
+        FromCarry (rootCtx P memo) k node s) → SegNodes P c s
+
+/-- A read `Seg.split` makes of a `SegNodes` segment, of positive count, names gates of one root node with their
+widths. -/
+theorem split_nodes {P : Prog} {c : Circuit} {s g : Seg} (hs : SegNodes P c s) (hg : g ∈ (Seg.split s).toList)
+    (h0 : g.count ≠ 0) :
+    ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k' := by
+  have hx : ∀ x, x ∈ segPos g → x ∈ segPos s := fun x hx => (mem_segPos_split s x).1 ⟨g, hg, hx⟩
+  suffices H : ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → p.toNat ∈ nodeGates P k' by
+    obtain ⟨k', hk', h⟩ := H
+    exact ⟨k', hk', fun w p hp => ⟨hs.1 w p (hx _ hp), h w p hp⟩⟩
+  unfold Desc.Seg.split at hg
+  dsimp only at hg
+  split at hg
+  · rw [Array.toList_map, List.mem_map] at hg
+    obtain ⟨q, hq, rfl⟩ := hg
+    have hq' : q ∈ s.ps.toList := by
+      unfold Desc.Seg.alike at hq
+      split at hq <;> exact hq
+    have hc : q.count ≠ 0 := by simpa [Desc.Seg.count, Desc.Seg.one] using h0
+    obtain ⟨k', hk', h⟩ := hs.2.1 q hq' hc
+    exact ⟨k', hk', fun w p hp => h w p (by rwa [segPos_one] at hp)⟩
+  · rename_i hr
+    simp only [List.mem_singleton] at hg
+    subst hg
+    unfold Desc.Seg.alike at hr h0 ⊢
+    by_cases ha : (s.reps > 1 && s.shift == 0) = true
+    · rw [if_pos ha] at hr
+      simp at hr
+    · rw [if_neg ha] at hr h0 ⊢
+      simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, not_and] at ha hr
+      have h1 : 1 < s.reps := by
+        rcases Nat.lt_or_ge 1 s.reps with h | h
+        · exact h
+        · exfalso
+          apply h0
+          unfold Desc.Seg.count
+          rw [show s.reps = 0 by omega, Nat.zero_mul]
+      exact hs.2.2 h1 (ha h1) h0
+
+/-- **`RootGates` from `RootNodes`** (`split_nodes`). -/
+theorem rootGates_of (hN : RootNodes) : RootGates := by
+  intro bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs g hg h0
+  exact split_nodes (hN bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs) hg h0
 
 /-- **`RootSegs` from the decoder's facts and `RootGates`**: every segment is `ShapeOk` (`rootShape`), so each read
 `Seg.split` makes of it is `SegGood` (`segGood_of`). -/

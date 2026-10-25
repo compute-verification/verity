@@ -10,8 +10,8 @@ every decoded Program (`decoded_reads`), and `BodyFacts`' return is `ReadsExact.
 
 With the root a composite without parameters (`decode_root`), every callee decoded before its caller (`BodyFacts`)
 and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program whose order passes (`rootFacts`), so
-`Novel.ReadsExact` holds wherever its two open statements do, `ReadsExact.RootGates` and `ReadsExact.RootSet`
-(`readsExact_of_gates_set`).
+`Novel.ReadsExact` holds wherever its two open statements do, `ReadsExact.RootNodes` and `ReadsExact.RootSet`
+(`readsExact_of_nodes_set`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
@@ -93,10 +93,10 @@ theorem rootFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
   have := hcf d hd k hk
   omega
 
-/-- **`Novel.ReadsExact` from its two open statements**, `ReadsExact.RootGates` and `ReadsExact.RootSet`, with the
+/-- **`Novel.ReadsExact` from its two open statements**, `ReadsExact.RootNodes` and `ReadsExact.RootSet`, with the
 decoder's facts (`rootFacts`). -/
-theorem readsExact_of_gates_set (hG : ReadsExact.RootGates) (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
-  ReadsExact.readsExact_of_rootReads
-    (ReadsExact.rootReads_of (ReadsExact.rootSegs_of (fun bytes P hd ho => rootFacts bytes P hd ho) hG) hS)
+theorem readsExact_of_nodes_set (hN : ReadsExact.RootNodes) (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
+  ReadsExact.readsExact_of_rootReads (ReadsExact.rootReads_of
+    (ReadsExact.rootSegs_of (fun bytes P hd ho => rootFacts bytes P hd ho) (ReadsExact.rootGates_of hN)) hS)
 
 end NciCheck.Properties.SecurityProofs.BodiesOk
