@@ -1,16 +1,19 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-bandwidth-ablation"
-# Where PoUS's bandwidth audit's time over bandwidth-plain goes: llama31-8b-fp8-1gpu-bandwidth's two arms beside the
-# audit without its KV receipts, at one codec round where it runs three, and the audit and plain with their fillers
-# paused (`verity_bench.vllm.bandwidth_ablation`), each token-controlled by bandwidth-plain. bandwidth-plain is the
-# first arm and so the baseline: every ratio is to it. The same preset, KV pin, warm-up rule and receipts setting as
-# llama31-8b-fp8-1gpu-bandwidth, at 6 reps so drift cancels in the means.
-arms = ["bandwidth-plain", "bandwidth-audit", "bandwidth-audit-no-kv-receipts", "bandwidth-audit-k1",
-        "bandwidth-audit-no-filler", "bandwidth-plain-no-filler"]
+# Where PoUS's bandwidth audit's time over bandwidth-plain goes, by part (`verity-bench breakdown`):
+# llama31-8b-fp8-1gpu-bandwidth's two credited arms beside memory accounting's spans arms (each step timed by part) and
+# the same spans arms with the top-up off (`verity_bench.vllm.bandwidth_ablation`), whose difference is the top-up's
+# contention, which no span shows. Every arm but bandwidth-plain is token-controlled by it; only the two credited arms
+# are the audit's cost, the rest are uncredited ablations. bandwidth-plain is the first arm and so the baseline: every
+# ratio is to it. The same preset, KV pin, warm-up rule and receipts setting as llama31-8b-fp8-1gpu-bandwidth, at 6
+# reps so drift cancels in the means.
+arms = ["bandwidth-plain", "bandwidth-audit", "bandwidth-plain-spans", "bandwidth-audit-spans",
+        "bandwidth-plain-spans-no-topup", "bandwidth-audit-spans-no-topup"]
 arm_modules = ["benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT",
-               "verity_bench.vllm.bandwidth_ablation:AUDIT_NO_KV_RECEIPTS", "verity_bench.vllm.bandwidth_ablation:AUDIT_K1",
-               "verity_bench.vllm.bandwidth_ablation:AUDIT_NO_FILLER", "verity_bench.vllm.bandwidth_ablation:PLAIN_NO_FILLER"]
+               "benchmarks.vllm_encoded.bench_arm:PLAIN_SPANS", "benchmarks.vllm_encoded.bench_arm:AUDIT_SPANS",
+               "verity_bench.vllm.bandwidth_ablation:PLAIN_SPANS_NO_TOPUP",
+               "verity_bench.vllm.bandwidth_ablation:AUDIT_SPANS_NO_TOPUP"]
 sweep = "quick"
 reps = 6
 warmups = 2

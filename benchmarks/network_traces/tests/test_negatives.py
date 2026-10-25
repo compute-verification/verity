@@ -595,8 +595,8 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     assert sorted(records) == ["cmpl-1", "r0"]
     a = _advice()
     assert NG.id_requests(a, records, 404, "m") == [
-        id_request(model="m", user="r0", prompt=[1, 2, 3, 4, 5], frame_bytes=404, seed=0, **brought),
-        id_request(model="m", user="r1", prompt=[0, 0], max_tokens=2, frame_bytes=404)]
+        id_request(model="m", user="r0", prompt=[1, 2, 3, 4, 5], frame_bytes=404, seed=0, offset=0, **brought),
+        id_request(model="m", user="r1", prompt=[0, 0], max_tokens=2, frame_bytes=404, offset=0)]
     with pytest.raises(NG.NotApplicable, match="2-token prompt, the advice 5"):
         NG.id_requests(a, {"r0": records["cmpl-1"]}, 404)
     assert NG.link_framing(404, 5) == FRAMING
@@ -627,28 +627,28 @@ def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
     assert rows["prompt-split"]["untied"] == [] and rows["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]}
 
 
-def test_phase_6s_split_of_338_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
-    """REDTEAM phase 6's literal split at the link's 4096-byte frames: prompts of 338 and 16 tokens served (two
-    request frames, then one), advised as 16 and 338. The frames' total is honest's and the first request's end a
-    frame earlier, so N2's advised counts accept it under a tie the prover states (the acausal release); IoTieRequest's
-    reference on the certified ingress refuses it, and with it N2's advised view."""
+def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
+    """REDTEAM phase 6's split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
+    then one; phase 6's 338 is one cell at the warden's cut), advised as 16 and 339. The cells' total is honest's and
+    the first request's end a cell earlier, so N2's advised counts accept it under a tie the prover states (the acausal
+    release); IoTieRequest's reference on the warden's ingress refuses it, and with it N2's advised view."""
     pytest.importorskip(NG.IO_REQUEST_MODULE)
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     from verity.core.protocols.certifier.schedule import ClockSync
 
-    a = V.Advice((V.RequestAdvice("u0", 338, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
-                 (V.StepAdvice((V.Row(0, "prefill", 0, 338),)), V.StepAdvice((V.Row(0, "decode", 338, 1),
+    a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
+                 (V.StepAdvice((V.Row(0, "prefill", 0, 339),)), V.StepAdvice((V.Row(0, "decode", 339, 1),
                                                                              V.Row(1, "prefill", 0, 16)))),
                  (3, 3, 3))
-    framing = NG.link_framing(cs.FRAME_BYTES, 338)
-    assert (framing[15], framing[337]) == (1, 2)
+    framing = NG.link_framing(cs.FRAME_BYTES, 339)
+    assert (framing[15], framing[337], framing[338]) == (1, 1, 2)
     rows = NG.advice_suite(a, T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=framing, received=[3],
                            frame_bytes=cs.FRAME_BYTES)
     split = rows["prompt-split"]
     assert rows["honest"]["ok"] and rows["honest"]["request_tie"] == [True]
-    assert split["prompt_lens"] == {0: [338, 16], 1: [16, 338]} and split["untied"] == []
+    assert split["prompt_lens"] == {0: [339, 16], 1: [16, 339]} and split["untied"] == []
     assert split["codes"] == [NG.REQUEST_TIE, f"{NG.ADVISED}.view"] and split["request_tie"] == [False] and split["ok"]
 
 
@@ -727,6 +727,19 @@ def test_the_tie_reads_each_requests_sampled_ids_by_its_advice_id(tmp_path):
     (tmp_path / "served.jsonl").write_text("".join(json.dumps({"http_id": f"cmpl-{k}", "user": u, "streamed_ids": x})
                                                    + "\n" for k, (u, x) in enumerate([(None, [7]), *IDS.items()])))
     assert NG.read_ids(tmp_path / "served.jsonl") == {"cmpl-0": [7]} | IDS
+
+
+def test_the_tie_reads_the_requests_whose_clients_aborted_them(tmp_path):
+    """serve-openai writes a request its client aborted with ``finish`` null (or of reason ``abort``), ADVICE-SRC with
+    ``finish_reason`` ``abort``; a row with another finish, or with no finish field, isn't one."""
+    rows = [{"http_id": "cmpl-0", "user": "a", "streamed_ids": [1], "finish": None},
+            {"http_id": "cmpl-1", "user": None, "streamed_ids": [1], "finish": {"reason": "abort"}},
+            {"http_id": "cmpl-2", "user": "c", "streamed_ids": [1], "finish": {"reason": "length", "stop_reason": None}},
+            {"http_id": "cmpl-3", "user": "d", "streamed_ids": [1]},
+            {"request": "q0", "user": "e", "output_ids": [1], "finish_reason": "abort"},
+            {"request": "q1", "user": "f", "output_ids": [1], "finish_reason": "stop"}]
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert NG.read_aborted(tmp_path / "requests.jsonl") == {"a", "cmpl-1", "e"}
 
 
 def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index_bucket_and_id():
@@ -821,6 +834,20 @@ def test_the_tie_on_a_fixed_plans_runs_has_no_verdict_and_names_what_they_lack(r
         assert row["verdict"] == NG.NOT_APPLICABLE and row["codes"] == [] and row["id_events"] == 0
         assert row["held"] == {"egress": W, "ingress": W} and list(row["missing"]) == lacks
         assert NG.tie_ok(s, row) is None
+
+
+def test_the_tie_owes_the_extra_run_a_refusal_by_content_as_it_owes_token_and_drop():
+    """Extra's run is a shim tamper the fake upstream doesn't build (`TIE_RUN_PARTS`, not `TIE_PARTS`), and `tie_ok`
+    holds it to IoTieWindow.content's refusal as it holds token's and drop's: refused by content is the verdict it
+    owes, accepted or another part's refusal isn't, and a run with no verdict owes none."""
+    def row(verdict, *parts):
+        return {"verdict": verdict, "codes": [f"{NG.TIE}.{p}" for p in parts]}
+    assert NG.TIE_RUN_PARTS.keys().isdisjoint(NG.TIE_PARTS)
+    for name in ("extra", "token", "drop"):
+        assert NG.tie_ok(name, row("refused", "content")) is True
+        assert NG.tie_ok(name, row("accepted")) is False
+        assert NG.tie_ok(name, row("refused", "cells_root")) is False
+        assert NG.tie_ok(name, row(NG.NOT_APPLICABLE)) is None
 
 
 # --- the Commit record: a stand-in of I3 as drafted --------------------------------------------------------------------
