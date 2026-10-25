@@ -209,11 +209,12 @@ def endpoint_config(recs: list[dict], serve: dict, eos: list[int]) -> dict:
 
 def opens(reg: dict, opening: dict, adv) -> bool:
     """Whether a Commit window's opening opens its registered root (``reg``, its public registration) to ``adv``, its
-    window advice (`window_advice.Advice`): the opening's bytes are ``adv``'s encoding (`window_advice.encode`, I1 v0's
-    for a window that carries nothing), committed as `advice_windows.commit_advice` commits them (``row_bits`` rows, the
-    last zero-padded, under the binding of the scheme to the registered compiler)."""
+    window advice (`window_advice.Advice`, or an I1 v0 advice, a window that carries nothing): the opening's bytes are
+    ``adv``'s encoding (`window_advice.encode`, I1 v0's for a window that carries nothing), committed as
+    `advice_windows.commit_advice` commits them (``row_bits`` rows, the last zero-padded, under the binding of the
+    scheme to the registered compiler)."""
     data = bytes.fromhex(opening["advice"])
-    if data != WA.encode(adv) or opening.get("scheme") != reg["scheme"]:
+    if data != (I1.encode(adv) if type(adv) is I1.Advice else WA.encode(adv)) or opening.get("scheme") != reg["scheme"]:
         return False
     w = reg["row_bits"] // 8
     rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
