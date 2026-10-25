@@ -106,6 +106,9 @@ a `sys.path` entry another test file added: every suite runs alone.
   `integrations/vllm/tests/program/test_derive_neutrality.py`.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
+- **Skip on a third-party package, never on a module of this checkout.** `pytest.importorskip("torch")`, then import ours
+  plainly. The guard fails an `importorskip` whose missing module is ours, since that module moved and a skip would hide its
+  tests; one of ours that needs a missing third-party package still skips.
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is not
   reachable`. Under a recorded `check` (`VERITY_STORE_REQUIRED=1`) the guard fails that skip instead, so `check` never passes
   without it. Inside `check` the store is reachable only through the run's custody key (`$CHECK_STORE_CUSTODY`), so fetch
