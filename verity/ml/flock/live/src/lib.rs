@@ -37,6 +37,7 @@ pub mod firewall;
 pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
+pub mod record_text;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;

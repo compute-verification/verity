@@ -254,7 +254,10 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
   the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
-  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too.
+  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
+  stops below a PR that came onto `next` in the last three ticks; a rebuilt `next` with the same PRs at the same heads keeps
+  the check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner,
+  or one its owner withdrew, carries that change and doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
