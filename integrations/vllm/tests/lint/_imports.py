@@ -47,6 +47,7 @@ LAYER = {
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
+    "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
 }
 
 #: The property harnesses.

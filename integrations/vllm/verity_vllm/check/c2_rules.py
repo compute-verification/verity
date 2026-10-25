@@ -123,6 +123,9 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
                       f"row for row for one release) -- {str(cc.get('why') or cc)[:300]}")
     if chk.get("ok") is False:
         parts = []
+        refused = chk.get("manifest_refused")
+        if isinstance(refused, dict):
+            parts.append(f"required manifest refused, nothing reconciled ({refused.get('why')})")
         for k in ("vus_outside_query", "identities_without_rows", "rows_disagree"):
             c = chk.get(k) or {}
             if int(c.get("n") or 0) > 0:
