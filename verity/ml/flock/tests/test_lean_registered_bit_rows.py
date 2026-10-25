@@ -258,7 +258,8 @@ def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
 def test_a_circuit_naming_a_port_twice_is_refused(one_value, monkeypatch):
     """A registered read names its port by name, so under `--registered` a circuit naming a port twice is refused: x and cs
     are both 64-word `row/v2` rows, and the circuit with cs renamed x (its META alone; the gates as they are) is refused by
-    the statement writer and, staged with the honest port list, by flock-verify (`Registered.namesOnce`)."""
+    the statement writer and, staged with the honest port list, by flock-verify, whose hidden-output parse refuses a row
+    named twice (`HmOut.checkRows`) before the registered check's own refusal (`Registered.namesOnce`)."""
     head, line, rest = one_value.text.split("\n", 2)
     ports = json.loads(line[5:])["ports"]
     old = next(t for t in (json.dumps(ports), json.dumps(ports, separators=(",", ":"))) if t in line)
@@ -276,4 +277,4 @@ def test_a_circuit_naming_a_port_twice_is_refused(one_value, monkeypatch):
     monkeypatch.setattr(FC, "write", lambda *a, **k: real(*a, **{**k, "meta": honest}))
     public = _write(st, "staged", {p: (one_value.regs["rows"], r) for p, r in one_value.reads.items()})
     code, out = _statement(st, one_value.dir / "own.json", public)
-    assert code == 1 and want in out, out
+    assert code == 1 and out.startswith("setup: the rows are not the input rows") and out.endswith("each name once"), out
