@@ -14,6 +14,15 @@ from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
 ADDED = calendar.timegm((2026, 10, 24, 1, 0, 0))
+COMMIT = served_table.Protocol("Commit", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit")
+BY_SPEC = {
+    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served",),
+                                        "bandwidth-audit", None), COMMIT),
+    "factors": served_table.Protocol("conversion factor", ("llama31-8b-fp8-1gpu-compiled-full",), served_table.SERVED,
+                                     "stock-fp8"),
+    "live": (),
+}
+LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
 # Time per output token by arm; every arm slows by the same factor each rep, so the paired ratios are exact.
 SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@compiled": 1.2}
 
@@ -73,30 +82,58 @@ class Producer:
         self.config.write_text(f'[remote]\ntype = "fs"\npath = "{self.remote}"\n')
         self.store = LocalStore(tmp_path / "producer", config_path=self.config)
 
-    def ran(self, run: str, spec: str, point: str, doc: dict | None, *, validation="passed", rc=0) -> str | None:
+    def _tree(self, run: str, files: dict[str, str]) -> str:
+        root = self.tmp_path / "files" / run
+        for path, text in files.items():
+            (root / path).parent.mkdir(parents=True, exist_ok=True)
+            (root / path).write_text(text)
+        art = self.store.put_artifact("run-files/v1", {}, tree=root)
+        self.store.push(art)
+        return art
+
+    def _attempt(self, run: str, tool: str, params: dict, outputs: dict, *, validation, rc, machine=None) -> None:
         from research.store import canon
 
-        art = None
-        if doc is not None:
-            tree = self.tmp_path / "files" / run / "out"
-            tree.mkdir(parents=True)
-            (tree / "benchmark.json").write_text(json.dumps(doc))
-            files = self.store.put_artifact("run-files/v1", {}, tree=tree.parent)
-            art = self.store.put_artifact("verity-vllm-benchmark/v1", {"run_id": run}, {"run_files": files})
-            self.store.push(art)
-            self.store.push(files)
         start = f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"
         attempt = {
-            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "vllm_bench_point", "version": "0"},
-            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [],
-            "params": {"spec": served_table.spec_path(spec), "point": point, "identity": "1" * 64},
-            "key_params": ["identity"], "inputs": {}, "conditions": {}, "key_conditions": [],
-            "source": {"commit": "c" * 40, "dirty": False}, "closure": None, "execution": {"start_utc": start},
+            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": "0"},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": params,
+            "key_params": ["identity"] if "identity" in params else [], "inputs": {}, "conditions": {},
+            "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
+            "execution": {"start_utc": start, **({"machine": machine} if machine else {})},
             "cost": None, "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
-            "outputs": {"result": art} if art else {}, "telemetry": None,
+            "outputs": outputs, "telemetry": None,
         }
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
+
+    def ran(self, run: str, spec: str, point: str, doc: dict | None, *, validation="passed", rc=0) -> str | None:
+        art = None
+        if doc is not None:
+            files = self._tree(run, {"out/benchmark.json": json.dumps(doc)})
+            art = self.store.put_artifact("verity-vllm-benchmark/v1", {"run_id": run}, {"run_files": files})
+            self.store.push(art)
+        self._attempt(run, "vllm_bench_point",
+                      {"spec": served_table.spec_path(spec), "point": point, "identity": "1" * 64},
+                      {"result": art} if art else {}, validation=validation, rc=rc)
         return art
+
+    def table(self, runs, label: str) -> str:
+        """A table art whose meta names its runs, as the benchmarks lane's table arts do."""
+
+        path = self.tmp_path / "files" / f"table-{label}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(label)
+        art = self.store.put_artifact("verity-bench-table/v1", {"runs": runs}, file=path)
+        self.store.push(art)
+        return art
+
+    def live(self, run: str, summary: dict, stop: dict, *, rc=0) -> str:
+        """A kernels run: its run record holds sbench's summary and stop records under out/."""
+
+        record = self._tree(run, {"out/summary.json": json.dumps(summary), "out/stop.json": json.dumps(stop)})
+        self._attempt(run, "bash", {}, {"result": None, "run_record": record}, validation=None, rc=rc,
+                      machine="vy-dc-h200")
+        return record
 
     def label(self, target: str, key: str, value: str, ts: str) -> None:
         self.store.add_label(target, key, value, by="benchmarks", ts=ts)
@@ -130,7 +167,7 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
 
     logged = []
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
-                               log=logged.append)
+                               log=logged.append, **BY_SPEC)
 
     assert logged == [f"pulled 5 attempts started since r20261023 from {producer.store.remote.describe()} (0 of 5 were here)"]
     rows = _commit_rows(table)
@@ -147,6 +184,7 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     assert b32["over_served"]["time_per_output_token_s"]["mean"] == pytest.approx(1.2 * 1.1)
     assert table["skipped"] == [{"spec": COMMIT_SPEC, "point": "b32-p512-mixed", "run": "r20261024-030000-0005",
                                  "art": replaced, "why": "superseded by r20261024-020000-0004"}]
+    assert table["live"] == []
 
     others = [row for row in table["rows"] if row["protocol"] != "Commit"] + table["factors"]
     assert others and all(row["run"] is None and row["over_served" if "protocol" in row else "factor"] is None
@@ -167,8 +205,112 @@ def test_local_only_reads_the_catalog_alone(tmp_path):
     def never(spec):
         raise AssertionError("a local-only table reads no remote")
 
-    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, local_only=True, added=never)
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, local_only=True, added=never,
+                               **BY_SPEC)
     assert all(row["run"] is None for row in table["rows"])
+
+
+def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_stores_remote(tmp_path):
+    """A protocol's record replaces the newest-run lookup: its runs, named by id or by an art's `runs` meta (a list, or
+    a map from point to run, read in sweep order), are read from the remote without a catalog pull, every point of
+    each is a row, the record art's labels are caveats beside the run's, and a record run that isn't a passing point
+    run is listed with why rather than read."""
+
+    producer = Producer(tmp_path)
+    b32 = producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.1))
+    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
+    newer = producer.ran("r20261024-030000-0003", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 9.0))
+    producer.ran("r20261024-040000-0004", COMMIT_SPEC, "b8-p512-mixed", None, validation="failed", rc=3)
+    listed = producer.table(["r20261024-020000-0001"], "listed")
+    mapped = producer.table({"b8-p512-mixed": "r20261024-020000-0002", "b32-p512-mixed": "r20261024-020000-0001"},
+                            "mapped")
+    producer.label(listed, "label", "prices it, doesn't credit it", "2026-10-24T05:00:00Z")
+    protocols = (
+        served_table.Protocol("by art", (), "commit@compiled", "stock-fp8", own_arm="commit", record=(listed,)),
+        served_table.Protocol("by map", (), "commit@compiled", None, record=(mapped,)),
+        served_table.Protocol("by id", (), "commit@compiled", None,
+                              record=("r20261024-020000-0002", "r20261024-040000-0004")),
+    )
+
+    def never(spec):
+        raise AssertionError("a table of records pulls no catalog")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=never, protocols=protocols,
+                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8",
+                                                             record=(listed,)), live=())
+
+    rows = {(row["protocol"], row["point"]): row for row in table["rows"]}
+    art_row = rows["by art", "b32-p512-mixed"]
+    assert (art_row["run"], art_row["art"], art_row["record"], art_row["spec"]) == (
+        "r20261024-020000-0001", b32, listed, COMMIT_SPEC)
+    assert art_row["over_served"]["time_per_output_token_s"]["mean"] == pytest.approx(1.2 * 1.1)
+    assert art_row["over_eager"]["time_per_output_token_s"]["mean"] == pytest.approx(1.2 * 1.1)
+    assert [(c["target"], c["value"]) for c in art_row["caveats"]] == [(listed, "prices it, doesn't credit it")]
+    assert [point for protocol, point in rows if protocol == "by map"] == ["b8-p512-mixed", "b32-p512-mixed"]
+    assert rows["by map", "b8-p512-mixed"]["over_eager"] is None
+    by_id = rows["by id", "b8-p512-mixed"]
+    assert (by_id["run"], by_id["record"]) == ("r20261024-020000-0002", None)
+    assert by_id["run"] != newer and by_id["over_served"]["time_per_output_token_s"]["mean"] == pytest.approx(1.5)
+    assert rows["by id", "—"]["run"] is None
+    [failed] = table["skipped"]
+    assert (failed["run"], failed["spec"]) == ("r20261024-040000-0004", COMMIT_SPEC)
+    assert failed["why"].startswith("not a passing vllm_bench_point run (tool vllm_bench_point, validation failed, rc 3")
+    [factor] = table["factors"]
+    assert factor["factor"]["time_per_output_token_s"]["mean"] == pytest.approx(0.5)
+
+    markdown = served_table.render(table)
+    assert f"| r20261024-020000-0001 | `{b32[:16]}` (record `{listed[:16]}`) | prices it, doesn't credit it |" in markdown
+    assert "r20261024-040000-0004" in markdown.split("Passed over")[1]
+
+
+def _live_summary(steps, controls, *, live=True, tokens_equal=True):
+    """sbench's summary.json and stop.json for one PoUW arm beside its control, as kernels' runs write them."""
+
+    summary = {
+        "arms": ["exact", LIVE_CONTROL, LIVE_ARM], "b": 32, "gate_failed": [], "ref_of": {LIVE_ARM: "exact"},
+        "gate": {LIVE_ARM: {"check": {"ok": True, "complete": True, "t": 64, "form_basis": "measured only"}}},
+        "gate_tokens_equal_ref_arm": {LIVE_ARM: [True, True, True]},
+        "decode_tokens_vs_ref": {LIVE_ARM: [{"requests_equal": 32 if tokens_equal else 31, "first_diff": []}] * 3},
+        "per_arm": {LIVE_ARM: {"tpot_all": steps}, LIVE_CONTROL: {"tpot_all": controls}, "exact": {"tpot_all": [1.0]}},
+        "stop": {LIVE_ARM: {"error": None, "close_error": None,
+                            "end_verdict": {"ok": True, "live_ok": True} if live else None}},
+    }
+    coins = {"end": {"live": {"coins": {"source": "off-node", "ok": True}}}} if live else {}
+    return summary, {LIVE_ARM: {"stopped": True, **coins}}
+
+
+def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_stands_only_on_live_gated_runs(tmp_path):
+    """Kernels' live rows are read from each run's record, never typed: the ratio is the arm's median decode step over
+    its control's in the same run, the run's labels are its caveat, and a run whose coins weren't live off-node or whose
+    tokens differ from the int8-exact engine's is passed over with why."""
+
+    producer = Producer(tmp_path)
+    record = producer.live("r20261024-212837-2302", *_live_summary([16.44, 16.49, 16.48], [3.74, 3.744, 3.78]))
+    producer.live("r20261024-212644-f308", *_live_summary([14.53, 14.29, 14.52], [3.04, 3.06, 3.05], live=False))
+    producer.live("r20261024-212645-0001", *_live_summary([14.0, 14.0, 14.0], [3.0, 3.0, 3.0], tokens_equal=False))
+    producer.label("r20261024-212837-2302", "label", "H200 gated live: gamma 4.40", "2026-10-24T21:41:42Z")
+    runs = ("r20261024-212837-2302", "r20261024-212644-f308", "r20261024-212645-0001", "r20991231-000000-0000")
+    live = tuple(served_table.Live("H200", run, LIVE_ARM, LIVE_CONTROL) for run in runs)
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, protocols=(),
+                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"), live=live)
+
+    [row] = table["live"]
+    assert (row["run"], row["record"], row["machine"], row["batch"], row["t"], row["reps"], row["coins"]) == (
+        "r20261024-212837-2302", record, "vy-dc-h200", 32, 64, 3, "off-node")
+    assert (row["step_ms"], row["control_ms"]) == (16.48, 3.744)
+    assert row["ratio"] == pytest.approx(16.48 / 3.744)
+    assert [c["value"] for c in row["caveats"]] == ["H200 gated live: gamma 4.40"]
+    why = {s["run"]: s["why"] for s in table["skipped"]}
+    assert why["r20261024-212644-f308"] == ("no passing live window at the run's end (coins not live); coins absent, "
+                                            "not passing off-node coins")
+    assert why["r20261024-212645-0001"] == "timed tokens differ from exact's"
+    assert why["r20991231-000000-0000"] == "not in the store or on its remote"
+
+    markdown = served_table.render(table)
+    assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | "
+            f"r20261024-212837-2302 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
+    assert "per step, not per token" in markdown
 
 
 def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch, capsys):
@@ -177,6 +319,9 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "fresh"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(producer.config))
     monkeypatch.setattr(served_table, "spec_added", lambda root, spec: ADDED)
+    monkeypatch.setattr(served_table, "PROTOCOLS", BY_SPEC["protocols"])
+    monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
+    monkeypatch.setattr(served_table, "LIVE", BY_SPEC["live"])
 
     assert main(["served-table"]) == 0
     out = capsys.readouterr().out
@@ -185,6 +330,16 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     table = json.loads(capsys.readouterr().out)
     assert table["schema"] == served_table.SCHEMA
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-020000-0001"
+
+
+def test_every_record_names_runs_or_arts_and_every_live_row_a_run():
+    from research.store import ids
+
+    for protocol in (*served_table.PROTOCOLS, served_table.FACTORS):
+        assert not (protocol.record and protocol.specs), protocol.name
+        assert all(ids.is_run_id(entry) or ids.is_art(entry) for entry in protocol.record), protocol.name
+    assert all(ids.is_run_id(live.run) for live in served_table.LIVE)
+    assert len({(live.run, live.arm) for live in served_table.LIVE}) == len(served_table.LIVE)
 
 
 def test_every_protocol_row_names_arms_its_specs_run_and_an_eager_stock_only_where_the_spec_is_eager():

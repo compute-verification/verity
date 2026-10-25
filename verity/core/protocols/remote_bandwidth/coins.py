@@ -212,15 +212,16 @@ def local(registration: bytes, session: int, windows: int, entropy: Callable[[in
 
 
 def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
-                    signed: LiveCommitment, received: Mapping[str, Sequence[bytes]]) -> str | None:
+                    signed: LiveCommitment, received: Mapping[str, Sequence[bytes]], in_flight: int = 2) -> str | None:
     """Why the session's coins, `coins`, are not the challenger's as it signed them; None when they are.  `windows` is
     each released window's roots and `appends` each append's root, in the order the session received them; `signed` is
     the commitment the challenger signed and `received` the roots its signed release log shows it received, by family
     (`remote.trusted_session`, or `challenger.session_of` with no ledger).  Refused: another commitment; a family whose
     coins weren't opened in order, once, each after the root recorded for it, or whose recorded roots aren't the ones
-    the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's;
-    a draw's openings coin opened after anything but its last window's last root (so before it); an append's coin
-    after anything but its own root."""
+    the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's,
+    and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of windows
+    0 … t − 1 (R if they have none), so before a root of window t − 1; a draw's openings coin opened after anything
+    but its last window's last root (so before it); an append's coin after anything but its own root."""
     c = coins.commitment
     if signed != c:
         return "the challenger signed another coin commitment than the one the session's coins open against"
@@ -234,11 +235,15 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     challenges = coins.afters(CHALLENGE)
     if challenges and challenges[0] != coins.window:
         return "σ_0 was not opened after the session's window root R"
-    earlier = {coins.window}
+    earlier, last = {coins.window}, coins.window
     for t, after in enumerate(challenges[1:], 1):
-        earlier.update(windows[t - 1] if t - 1 < len(windows) else ())
+        before = windows[t - 1] if t - 1 < len(windows) else ()
+        earlier.update(before)
+        last = before[-1] if before else last
         if after not in earlier:
             return f"σ_{t} was opened after a root that is neither R nor an earlier window's"
+        if in_flight == 1 and after != last:
+            return f"σ_{t} was opened before window {t - 1}'s last root, at one window in flight"
     for c, after in enumerate(coins.afters(OPENINGS)):
         t = min((c + 1) * coins.per_coin, coins.windows) - 1
         if t >= len(windows) or not windows[t] or after != windows[t][-1]:
