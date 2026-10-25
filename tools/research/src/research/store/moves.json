@@ -1428,6 +1428,12 @@
     },
     {
       "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+      }
+    },
+    {
+      "paths": {
         "integrations/vllm/verity_vllm/program/registry/": "verity/ml/definitions/registry/",
         "integrations/vllm/verity_vllm/program/kernels/": "verity/ml/definitions/numerics/",
         "integrations/vllm/verity_vllm/program/boolean.py": "verity/ml/definitions/boolean.py",
