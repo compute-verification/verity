@@ -7,7 +7,7 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../../Security/lean-toolchain
 7f635cbaebed26f11d2673c27e952f2a19281528b5bd0b1f20ef10dcfa6d11fb  ../../../../../Security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
-0983bb53b2270eadbcc75affd8e54465e9cbee11cc8d8ed4b7db2c53cc0a0041  ../../../../../Security/Proofs/lakefile.toml
+8d237b0e824b140023009cc6d577ecafba9f499f206b6f7d2fe42ca99e2eb754  ../../../../../Security/Proofs/lakefile.toml
 dff5d799d07c5962dde6e0967f8925956561be6b011b7e0187188495fcbe8088  ../../../../../Security/Proofs/lake-manifest.json
 13ebe8f2454e2d12130d6f13a8459b436cbfaad3da5c843ae172a0ec9fecc5e9  ../../../../../Security/Definitions/Pous.lean
 3f874f0cb9116b2500a4beb3b4301cdb5f0100fd85d22768bb1aaf66ea33f40d  ../../../../../Security/Proofs/Pous/Statements.lean
