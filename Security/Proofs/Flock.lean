@@ -19,6 +19,7 @@ import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
+import Proofs.Flock.Bridge
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.SamplingScope
 
