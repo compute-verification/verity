@@ -1432,7 +1432,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
-    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -1445,15 +1446,16 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                         "[...]}}, not: {claim: why}}")]
     fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
     assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
-    found = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
-             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"]) and d["name"] not in assumptions}
+    preds = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
+             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"])}
+    found = {c: m for c, m in preds.items() if c not in assumptions}
     for c, m in sorted(found.items()):
         if c not in ws and c not in nots:
             fails.append(Failure("claims.no-witnesses", c, f"claims: {c} ({m}) is a claim definition with no witnesses: name "
                                  f"its `{c}_fails` (a theorem that it is false at a toy instance) and `{c}_meets` (its "
                                  f"checkable antecedents hold at each deployed record) under `claims.witnesses`, or list it "
                                  f"under `claims.not` with the reason it is no claim"))
-    for c in sorted((set(ws) | set(nots)) - set(found)):
+    for c in sorted((set(ws) | set(nots)) - set(preds)):
         fails.append(Failure("claims.stale", c, f"claims: {c} is listed under `claims` but is no predicate of the spec under "
                              f"{', '.join(rule['modules'])}; remove the entry"))
     for c, why in sorted(nots.items()):
