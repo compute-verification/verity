@@ -13,7 +13,7 @@ import pytest
 
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU

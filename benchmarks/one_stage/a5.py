@@ -164,14 +164,14 @@ from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
-from verity_vllm.commit import flock_inputs as FI, serving_rows as CS  # noqa: E402
+from verity.ml.windows import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_vllm.commit import row_tables as RTB  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
-from verity_vllm.commit import wiring as WI  # noqa: E402
+from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 

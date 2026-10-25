@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 
 #: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
