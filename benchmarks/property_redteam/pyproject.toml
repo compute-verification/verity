@@ -13,8 +13,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
-# PoUW's words) and vLLM's integer, gather and cast primitives (its program registry, which imports its kernel twins; their
-# kernel registry draws its check specialisations through vLLM's one challenge module, commit/challenge.py).
+# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity.ml.definitions.registry`, which imports
+# their twins in `numerics`), and the integration's quarantine, difftest and relation modules beside them.
 # The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
@@ -23,7 +23,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/circuit", "integrations/vllm/verity_vllm/__init__.py",
-          "integrations/vllm/verity_vllm/program/__init__.py", "verity/ml/definitions/registry",
+          "integrations/vllm/verity_vllm/program/__init__.py", "verity/ml/definitions/__init__.py", "verity/ml/definitions/registry",
           "verity/ml/definitions/numerics", "integrations/vllm/verity_vllm/commit/__init__.py",
           "integrations/vllm/verity_vllm/commit/challenge.py",
           "integrations/vllm/verity_vllm/program/quarantine",
