@@ -191,9 +191,10 @@ def test_the_case_is_the_period_checks(delta):
 
 
 @pytest.mark.slow
-def test_a_loop_period_registers_what_the_stub_serves(tmp_path):
-    a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={})
-    d, _ = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+def test_a_loop_window_registers_what_the_stub_serves(tmp_path):
+    a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={}, pouw=None,
+                  delta="1/100", session_jobs=1)
+    d, _ = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     units = L.loop_units(d)
     assert L.requests_of(d, units) == ([3, 7], STEPS, H)
     outputs = L.registered_outputs(units)
