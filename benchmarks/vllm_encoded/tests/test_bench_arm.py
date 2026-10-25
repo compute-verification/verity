@@ -13,7 +13,7 @@ import bench_arm
 import step_spans as SS
 
 SETTINGS = ("VERITY_VLLM_BENCH_TOPUP", "VERITY_VLLM_BENCH_SPANS", "VERITY_VLLM_BENCH_KV_RECEIPTS",
-            "VERITY_VLLM_BENCH_CODEC_ROUNDS")
+            "VERITY_VLLM_BENCH_CODEC_ROUNDS", "VERITY_VLLM_BENCH_TOPUP_SMS")
 OLD_SNAPSHOT = {"filler_bytes", "passes", "registered_weight_bytes"}
 OLD_EXTRAS = {"filler_bytes", "registered_weight_bytes", "filler_share", "receipt_passes", "filler_ctas"}
 
@@ -71,6 +71,17 @@ def _installed(*, encoded: bool = True, topup: bool = True, spans: bool = False)
     state.log = bench_arm._TopupLog(state.topup)
     state.started, state.closed, state.kernel = True, False, ""
     state.snapshots, state.run_start, state.measured, state.empty_runs = [], None, 0, 0
+    state.topup_sms, state.green, state.step_stream, state.off_step_runs = 0, None, None, 0
+    return state
+
+
+def _partitioned(*, confined: bool = True) -> bench_arm._Installed:
+    """An installed arm with the top-up on 8 of 188 SMs, as `green.partition` and `spread_checks` record it."""
+    state = _installed()
+    state.topup_sms = 8
+    state.green = {"fill_sms": 8, "step_sms": 180, "min_partition": 8, "alignment": 8, "device_sms": 188,
+                   "spread": {"step": 180, "step_graph": 180, "side": 180, "side_graph": 180 if confined else 188,
+                              "fill": 8, "device_graph": 188, "confined": confined}}
     return state
 
 
@@ -156,7 +167,8 @@ def test_the_ablations_run_under_ids_of_their_own_and_the_defaults_are_the_credi
     for name, (arm_id, control, encoded, topup, spans) in want.items():
         arm = getattr(bench_arm, name)
         assert (arm.id, arm.control, arm.encoded, arm.precision, arm.resident) == (arm_id, control, encoded, "fp8", False)
-        assert arm.settings() == {"topup": topup, "spans": spans, "kv_receipts": True, "codec_rounds": 3}, name
+        assert arm.settings() == {"topup": topup, "spans": spans, "kv_receipts": True, "codec_rounds": 3,
+                                  "topup_sms": 0}, name
 
 
 def test_the_environment_sets_only_what_an_arm_leaves_open(monkeypatch):
@@ -168,6 +180,39 @@ def test_the_environment_sets_only_what_an_arm_leaves_open(monkeypatch):
     monkeypatch.setenv("VERITY_VLLM_BENCH_TOPUP", "no")
     with pytest.raises(RuntimeError, match="VERITY_VLLM_BENCH_TOPUP must be 'on' or 'off'"):
         bench_arm.AUDIT.settings()
+
+
+def test_the_top_up_sms_are_the_arms_else_the_environments_else_interleaved(monkeypatch):
+    monkeypatch.delenv("VERITY_VLLM_BENCH_TOPUP_SMS", raising=False)
+    assert bench_arm.AUDIT.settings()["topup_sms"] == int(bench_arm.TOPUP_SMS)
+    monkeypatch.setenv("VERITY_VLLM_BENCH_TOPUP_SMS", "16")
+    assert bench_arm.AUDIT.settings()["topup_sms"] == bench_arm.PLAIN.settings()["topup_sms"] == 16
+    assert bench_arm.BandwidthArm("x", encoded=True, control=None, topup_sms=0).settings()["topup_sms"] == 0
+    for bad in ("-8", "eight", ""):
+        monkeypatch.setenv("VERITY_VLLM_BENCH_TOPUP_SMS", bad)
+        with pytest.raises(RuntimeError, match="VERITY_VLLM_BENCH_TOPUP_SMS must be a nonnegative integer"):
+            bench_arm.AUDIT.settings()
+
+
+def test_a_partition_passes_only_confined_and_with_every_run_on_the_steps_stream():
+    """Interleaved, the gate and extras say nothing of a partition; partitioned, they name it, and a stream of the
+    step's that ran outside its SMs, or a run whose current stream was not the step's, fails the gate."""
+    interleaved = _arm("bandwidth-audit", _installed()).gate(_line("bandwidth-audit"))
+    assert interleaved["topup_sms"] == 0 and "partition" not in interleaved
+    state = _partitioned()
+    arm = _arm("bandwidth-audit", state)
+    gate = arm.gate(_line("bandwidth-audit"))
+    assert gate["passed"] and gate["topup_sms"] == 8 and gate["partition"]["step_sms"] == 180
+    assert gate["partition"]["off_step_runs"] == 0
+    arm.spans(_line("bandwidth-audit"))
+    state.topup.chunk(0.0, 1.0)
+    arm.spans(_line("bandwidth-audit"))
+    extras = arm.extras(_line("bandwidth-audit"))
+    assert extras.keys() == OLD_EXTRAS | {"topup_sms", "step_sms"}
+    assert (extras["topup_sms"], extras["step_sms"]) == (8, 180)
+    state.off_step_runs = 1
+    assert not arm.gate(_line("bandwidth-audit"))["passed"]
+    assert not _arm("bandwidth-audit", _partitioned(confined=False)).gate(_line("bandwidth-audit"))["passed"]
 
 
 def test_a_run_with_the_top_up_off_never_yields_a_credited_line():

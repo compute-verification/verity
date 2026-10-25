@@ -49,11 +49,16 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
+    # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
+    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
+    # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
+    "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
-    # draws with them (`service.Stream.select`).
-    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "core.protocols.profile"},
+    # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
+    "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
+                                      "core.protocols.profile"},
     "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
@@ -326,9 +331,11 @@ def test_core_ml_edges_shrink_with_allowed() -> None:
 
 
 def _infra_packages() -> set[str]:
-    """The import packages of ``infra/``'s distributions, from each one's wheel configuration."""
+    """The import packages of ``infra/``'s distributions, from each one's wheel configuration.  A project with no wheel (the
+    Slack events service's suite, whose code Vercel deploys) has no package to import."""
     return {Path(p).name for pyproject in sorted((ROOT / "infra").glob("*/pyproject.toml"))
-            for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]}
+            for p in tomllib.loads(pyproject.read_text()).get("tool", {}).get("hatch", {}).get("build", {})
+            .get("targets", {}).get("wheel", {}).get("packages", [])}
 
 
 def test_nothing_outside_infra_imports_it() -> None:

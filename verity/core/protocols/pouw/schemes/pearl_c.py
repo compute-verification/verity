@@ -84,7 +84,7 @@ from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
 from verity.ml.circuits.silicon import fp32
 
-from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..registration import check_registration
 from ..serving import HASH_FORMATS
 from . import pearl_kw as P
@@ -164,9 +164,9 @@ def line_key(seed: bytes) -> bytes:
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
     """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
     row's 64-byte SHA-512 digest `leaf` (`row_digest`), H_"seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE)
-    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32.
-    `hash_h3.cuh`'s `s512_seeds` computes it."""
-    if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
+    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32
+    (`CALL_RANGE`). `hash_h3.cuh`'s `s512_seeds` computes it."""
+    if not (0 <= unit < CALL_RANGE and 0 <= row < 1 << 32):
         raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
     return unit_seed_a(salt, leaf, root_b, unit << 32 | row, hashing)
 

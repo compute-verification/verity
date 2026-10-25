@@ -611,21 +611,26 @@ def _read_json(path: Path):
         return None
 
 
-def served_ids(ep: Path, deployment: dict) -> dict[str, list[int]]:
-    """Each request's sampled ids by its ``user``, of the requests that reached the endpoint in a run's link-windows
-    (``deployment``'s origin and span, `SLACK_S`): its scheduler trace's ``arrive`` records by engine id, and
-    ``requests.jsonl``'s ``streamed_ids`` by the same. Every strategy of a rehearsal sends the same users, so a run's
-    ids are the ones that arrived in its own span; a user arriving twice in it is refused."""
+def served_rows(ep: Path, deployment: dict) -> dict[str, dict]:
+    """Each ``requests.jsonl`` row by its ``user``, of the requests that reached the endpoint in a run's link-windows
+    (``deployment``'s origin and span, `SLACK_S`): its scheduler trace's ``arrive`` records by engine id, and the rows
+    by the same. Every strategy of a rehearsal sends the same users, so a run's rows are the ones that arrived in its
+    own span; a user arriving twice in it is refused."""
     origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
     arrived = {r["request"] for r in _jsonl(ep / "advice_trace.jsonl")
                if r["kind"] == "arrive" and origin - SLACK_S <= r["t"] < origin + span}
-    out: dict[str, list[int]] = {}
+    out: dict[str, dict] = {}
     for r in _jsonl(ep / "requests.jsonl"):
         if r["engine_id"] in arrived and r.get("user"):
             if r["user"] in out:
                 raise ValueError(f"{r['user']} reached the endpoint twice in the run's link-windows")
-            out[r["user"]] = list(r["streamed_ids"])
+            out[r["user"]] = r
     return out
+
+
+def served_ids(ep: Path, deployment: dict) -> dict[str, list[int]]:
+    """Each request's sampled ids (``streamed_ids``) by its ``user``, of a run's `served_rows`."""
+    return {u: list(r["streamed_ids"]) for u, r in served_rows(ep, deployment).items()}
 
 
 def _output_stream(slot: bytes, compact: bool) -> int | None:
@@ -692,8 +697,9 @@ def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
 
 def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:
     """The I/O tie's verdict on each run (NEG's `tie_run`: IO-TIE's reference in the clear, on
-    `negatives.TIE_STAND_INS`), each run's sampled ids ``ids``' (`negatives.read_ids`, one map for every run) or else
-    the endpoint's records' ``ep`` for its own link-windows (`served_ids`), and whether it is the verdict the run owes
+    `negatives.TIE_STAND_INS`), each run's sampled ids and client aborts ``ids``' (`negatives.read_ids` and
+    `negatives.read_aborted`, one map for every run) or else the endpoint's records' ``ep`` for its own link-windows
+    (`served_rows`, `negatives.commit_aborted`), and whether it is the verdict the run owes
     (`negatives.tie_ok`): honest's accepted, a negative's it reads refused by its part, and token's (`TIE_OWED`) at
     exactly the link-windows its changed ids fall in (`changed_windows`). A run has no verdict when its ids don't cover
     its certified requests (`uncovered`), when it lacks what the tie opens, or when its tie raises; the row says why.
@@ -703,18 +709,23 @@ def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | Non
         return {"ran": False, "why": NG.TIE_MISSING["io-tie"]}
     if ids is None and ep is None:
         return {"ran": False, "why": f"no sampled ids ({why or 'neither --endpoint-run nor --ids given'})"}
-    given, rows = None if ids is None else NG.read_ids(ids), {}
+    given, rows = None if ids is None else (NG.read_ids(ids), NG.read_aborted(ids)), {}
     for name, d in runs.items():
         row = {"verdict": NG.NOT_APPLICABLE, "ok": None, "codes": [], "failing": {}, "windows": [], "unplaced": None,
                "changed": None, "requests": None, "outputs": None, "placed": None, "held": None, "missing": {},
                "why": None}
         try:
-            got = given if given is not None else served_ids(ep, json.loads((d / "deployment.json").read_text()))
+            if given is not None:
+                got, gone = given
+            else:
+                served = served_rows(ep, json.loads((d / "deployment.json").read_text()))
+                got = {u: list(r["streamed_ids"]) for u, r in served.items()}
+                gone = {u for u, r in served.items() if NG.commit_aborted(r)}
             lacking = uncovered(d, got)
             if lacking:
                 rows[name] = row | {"requests": len(got), "why": lacking}
                 continue
-            t = NG.tie_run(d, got)
+            t = NG.tie_run(d, got, aborted=gone)
             changed = changed_windows(d) if name in TIE_OWED else None
         except (OSError, KeyError, ValueError, struct.error) as err:
             rows[name] = row | {"why": repr(err)}

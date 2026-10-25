@@ -23,12 +23,14 @@ states the `rec-residuals` pieces' half.
   messages. `rowsRead_msgs` gives the second half of `hcopy` at the raw messages wherever a port is a carried row; the
   step to the opened messages reads `final`, the concrete statement's.
 
-**What stays open for `hpieces`.** `decompB_lastSplitP` also takes `hpieces`: wherever the reading holds and every
-piece does, `verifyJPWith` accepts. The `rec-residuals` pieces give the residuals of `GfResiduals`' groups, which is
-`AlgebraHolds` per rep (`FlockVBridge.algebraHolds_of_parts`). A rep's run (`verifyRepPWith`) needs more: the
-accumulator rows (`AccHolds`), the decoded proof's values being the parts' (`RunsFrom`'s decode fields), the Ligerito
-openings (`Opened`) and the rounds' frames (`FramedAt`), each a piece of its own owner. VBridge's chain
-(`FlockVBridge.Family.runs_of_files`) assembles them only at `sh.holo = false`, and the deployment is holo.
+**What stays open for `hpieces`.** `decompB_lastSplitP` also takes `hpieces`: wherever the reading and the four base
+checks hold and every piece does, `verifyJPWith` accepts. The `rec-residuals` pieces give the residuals of
+`GfResiduals`' groups, which is `AlgebraHolds` per rep (`FlockVBridge.algebraHolds_of_parts`). A rep's run
+(`verifyRepPWith`) needs more: the accumulator rows (`AccHolds`), the decoded proof's values being the parts'
+(`RunsFrom`'s decode fields) and the Ligerito openings (`Opened`), each a piece of its own owner. The rounds' frames
+(`FramedAt`) are custody's (`.after`: each recorded round retains its message, and `decR` reads the messages as the
+proof's framed bytes). VBridge's chain (`FlockVBridge.Family.runs_of_files`) assembles them at `sh.holo = false`, the
+only form the route covers (`SchedMatches`; `not_schedMatches_holo`).
 -/
 
 namespace RecDeploy
@@ -69,7 +71,8 @@ section Shares
 variable (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg → List Q)
   (pholds : Q → Msg → List Msg → List Coin → Prop)
   (hpieces : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ReadOkR rd x ms cs →
-    (∀ q ∈ pieces x, pholds q x ms cs) → holdsR H rd .verdict x ms cs)
+    (∀ b ∈ VerdictP.bases, holdsR H rd b x ms cs) → (∀ q ∈ pieces x, pholds q x ms cs) →
+      holdsR H rd .verdict x ms cs)
   (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
   (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
   (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
