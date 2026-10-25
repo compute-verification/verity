@@ -33,6 +33,17 @@ def bf16(x: torch.Tensor) -> torch.Tensor:
     return x.to(torch.bfloat16)
 
 
+def div_rn(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """RN(a / b) of f32s, through f64 (one f64 op then one rounding to f32 is the correctly rounded f32 result, as 53 >= 2·24 + 2):
+    torch's f32 division by a scalar may multiply by its reciprocal."""
+    return (a.to(torch.float64) / b.to(torch.float64)).to(torch.float32)
+
+
+def sqrt_rn(a: torch.Tensor) -> torch.Tensor:
+    """RN(sqrt(a)) of an f32, through f64: torch's f32 sqrt on the CPU (AVX-512) is not correctly rounded."""
+    return torch.sqrt(a.to(torch.float64)).to(torch.float32)
+
+
 def add(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return bf16(f32(a) + f32(b))
 
@@ -63,9 +74,9 @@ def rmsnorm(x: torch.Tensor, w: torch.Tensor, eps: float) -> Rms:
     padded[:, :nc] = chunks
     groups = seq_sum(padded.view(b, ng, RMS_GROUP))
     total = seq_sum(groups)
-    mean = total / torch.tensor(float(n), dtype=torch.float32, device=x.device)
-    root = torch.sqrt(mean + torch.tensor(eps, dtype=torch.float32, device=x.device))
-    rs = torch.ones_like(root) / root
+    mean = div_rn(total, torch.full_like(total, float(n)))
+    root = sqrt_rn(mean + torch.tensor(eps, dtype=torch.float32, device=x.device))
+    rs = div_rn(torch.ones_like(root), root)
     h = bf16(xf * rs[:, None])
     return Rms(bf16(f32(w)[None, :] * f32(h)), chunks, groups, rs)
 
@@ -85,8 +96,8 @@ def quantize(x: torch.Tensor, relu: bool = False) -> Quant:
         xf = torch.clamp_min(xf, 0.0)
     parts = xf.abs().view(b, k // AMAX_CHUNK, AMAX_CHUNK).amax(-1)
     amax = parts.amax(-1)
-    scale = torch.where(amax > 0, amax / torch.tensor(127.0, device=x.device), torch.ones_like(amax))
-    codes = torch.round(xf / scale[:, None]).clamp(-128, 127).to(torch.int8)
+    scale = torch.where(amax > 0, div_rn(amax, torch.full_like(amax, 127.0)), torch.ones_like(amax))
+    codes = torch.round(div_rn(xf, scale[:, None])).clamp(-128, 127).to(torch.int8)
     return Quant(codes, scale, bf16(amax), bf16(parts))
 
 
