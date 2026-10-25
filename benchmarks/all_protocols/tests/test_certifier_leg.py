@@ -10,13 +10,20 @@
   `network-period` is held to): accepted with K and eps at each δ, refused when N2 refused a link-window or the case
   names another first window;
 * a loop period's value files give its requests' prompt tokens, steps and width, and its registered outputs are the
-  stub's for those tokens (`torch_loop_stub.step_outputs`), so an honest certifier session's egress carries them (slow).
+  stub's for those tokens (`torch_loop_stub.step_outputs`), so an honest certifier session's egress carries them (slow);
+* ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
+  other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
+* the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
+  its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
+  and a stub's changed byte, extra id or lost id is no match;
+* only the warden session's public files are published, its certificates without the heads and salts they sign.
 """
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import importlib.util
+import json
 import sys
 from argparse import Namespace
 from fractions import Fraction
@@ -252,6 +259,98 @@ def test_only_the_sessions_public_files_are_published(tmp_path):
     L.publish({"dir": str(s), "strategies": ["honest", "extra"]}, out)
     got = sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
     assert got == sorted(f"{st}/{f}" for st in ("honest", "extra") for f in L.PUBLIC_SESSION)
+
+
+def test_the_path_is_certifier_paths_and_the_certifier_only_one_by_default(monkeypatch):
+    monkeypatch.setattr(L, "warden_leg", lambda *a: "warden")
+    monkeypatch.setattr(L, "certifier_leg", lambda *a: "certifier")
+    monkeypatch.delenv("CERTIFIER_PATH", raising=False)
+    assert L.leg(Path("p"), "node", Path("o")) == "certifier"
+    for path in L.PATHS:
+        monkeypatch.setenv("CERTIFIER_PATH", path)
+        assert L.leg(Path("p"), "node", Path("o")) == path
+    monkeypatch.setenv("CERTIFIER_PATH", "proxy")
+    with pytest.raises(RuntimeError, match="CERTIFIER_PATH"):
+        L.leg(Path("p"), "node", Path("o"))
+    assert L.STUBBED["warden"] == L.STUBBED["certifier"][1:]
+
+
+def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
+    monkeypatch.delenv("WARDEN_TAMPER", raising=False)
+    assert L.warden_tampers() == list(L.WARDEN_TAMPERS) and set(L.WARDEN_TAMPERS) <= set(S.TAMPERS)
+    monkeypatch.setenv("WARDEN_TAMPER", "")
+    assert L.warden_tampers() == []
+    monkeypatch.setenv("WARDEN_TAMPER", "extra,byte")
+    assert L.warden_tampers() == ["extra", "byte"]
+    monkeypatch.setenv("WARDEN_TAMPER", "drop")
+    with pytest.raises(RuntimeError, match="WARDEN_TAMPER"):
+        L.warden_tampers()
+
+
+def test_a_warden_run_is_the_gates_scan_rehearsal_at_the_scans_schedule(tmp_path):
+    import scan_zk
+    import warden_serve as WS
+
+    argv = L.warden_argv("http://127.0.0.1:8123", tmp_path / "run", tmp_path / "prompts.json", 6, STEPS, 7,
+                         L.scan_schedule())
+    a = WS.parser().parse_args(argv[2:])
+    assert (a.command, a.upstream, a.out, a.prompts) == ("rehearse", ("127.0.0.1", 8123), tmp_path / "run",
+                                                         tmp_path / "prompts.json")
+    assert a.ids and a.window_per_group and not a.fake
+    assert (a.requests, a.max_tokens, a.height, a.temperature, a.top_p) == (6, STEPS, 7, 0.0, 1.0)
+    assert WS._params(a) == scan_zk.PARAMS
+
+
+def test_a_warden_period_is_its_groups_link_windows():
+    for G in (1, 2):
+        groups = {"groups": [{"group": g, "requests": [2 * g, 2 * g + 1], "windows": [g * G, (g + 1) * G]}
+                             for g in range(3)]}
+        assert [L.warden_period_windows(groups, p, 2) for p in range(3)] == [
+            list(range(p * G, (p + 1) * G)) for p in range(3)]
+    with pytest.raises(RuntimeError, match="3 groups, not period 3's"):
+        L.warden_period_windows(groups, 3, 2)
+    with pytest.raises(RuntimeError, match="not period 1's 3"):
+        L.warden_period_windows(groups, 1, 3)
+
+
+def test_the_certified_ids_are_matched_to_the_registered_outputs():
+    model = S.L.Model(h=H)
+    outputs = {(f"r{i}", k): o for i, t in enumerate([3, 7]) for k, o in enumerate(S.step_outputs(model, t, STEPS))}
+    ids = {o: [S.scan_id(outputs[f"r{i}", k]) for k in range(STEPS)] for i, o in enumerate([5, 2])}
+    m = L.match_ids([5, 2], ids, outputs, STEPS)
+    assert m["equal"] and m["others"] == [] and [r["by"] for r in m["requests"]] == ["position", "position"]
+    assert [r["by"] for r in L.match_ids([2, 5], ids, outputs, STEPS)["requests"]] == ["content", "content"]
+    for tampered in (S.tampered([outputs["r1", k] for k in range(STEPS)], "byte"),
+                     S.tampered([outputs["r1", k] for k in range(STEPS)], "extra"), [outputs["r1", 0]]):
+        m = L.match_ids([5, 2], ids | {2: [S.scan_id(o) for o in tampered]}, outputs, STEPS)
+        assert not m["equal"] and [r["by"] for r in m["requests"]] == ["position", None]
+    m = L.match_ids([5, 2], ids | {9: [1]}, outputs, STEPS)
+    assert not m["equal"] and m["others"] == [9]
+    assert [r["by"] for r in L.match_ids([5, None], ids, outputs, STEPS)["requests"]] == ["position", "content"]
+    assert not L.match_ids([5, None], {5: ids[5]}, outputs, STEPS)["equal"]
+    with pytest.raises(ValueError, match="registered requests"):
+        L.match_ids([5], ids, outputs, STEPS)
+
+
+def test_only_the_warden_sessions_public_files_are_published(tmp_path):
+    s = tmp_path / "scratch" / L.WARDEN_SESSION
+    witness = ("cells.salts", "requests.records", "responses.records", "fails.records", "traffic.json",
+               "client.json", "check.json", "warden.json", "stalls.json", "serve.log", "client.log")
+    cert = {"digest": "aa", "direction": "egress", "key_id": "bb", "link": "warden", "signature": "cc", "window": 0}
+    for strategy in ("honest", "late"):
+        run = s / "rehearsal" / strategy
+        run.mkdir(parents=True)
+        for f in (*L.WARDEN_PUBLIC, *witness):
+            (run / f).write_text(f)
+        (run / "certified.jsonl").write_text(json.dumps({"certificate": cert, "head": "dd", "salt_c": "ee"}) + "\n"
+                                             + json.dumps({"refused": "signer", "head": "ff"}) + "\n")
+    (s / "prompts.json").write_text("[[3], [7]]")
+    out = tmp_path / "out" / L.WARDEN_SESSION
+    L.warden_publish({"dir": str(s), "strategies": ["honest", "late"]}, out)
+    got = sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
+    assert got == sorted(f"{st}/{f}" for st in ("honest", "late") for f in (*L.WARDEN_PUBLIC, "certificates.jsonl"))
+    assert [json.loads(x) for x in (out / "late" / "certificates.jsonl").read_text().splitlines()] == [
+        {"certificate": cert}, {"refused": "signer"}]
 
 
 @pytest.mark.slow

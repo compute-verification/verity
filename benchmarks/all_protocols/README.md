@@ -39,8 +39,12 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose tampered period must reject). The session stays in
   the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client certificates only,
   and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what the verdict still stands on: the
-  records are the certifier-only path's, not the network certifier's own cells, and the device runs beside the server,
-  not on the auditor's machine through the gate.
+  records are the certifier-only path's, not the network certifier's own cells; the device runs beside the server,
+  not on the auditor's machine through the gate; and the output tie is computed in the clear, not proved.
+  `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
+  --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
+  the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
+  `$OUT/warden-session/`. It stops short of a verdict until certifier/v0 has a form for those windows.
 - `verity_all_protocols/runner.py`: the periods, each report in `$OUT/p<P>/report.json` and `$OUT/reports.jsonl`, and one
   `ALLP` line per period. `--tamper P,...` makes those periods' loop record outputs that aren't its model's.
 
