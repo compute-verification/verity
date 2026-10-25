@@ -73,7 +73,7 @@ def _registered(prog: Program) -> G.Registered:
 def _record(prog: Program, reg: G.Registered, **kw):
     part = P.partition(prog, Q)
     n = P.units(prog, Q)
-    ports = {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
+    ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
              for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", n))}
     roots = [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
     return R.record(prog, Q, LAW, SCHEME, roots, SERVED, registered=[reg.entry()], **kw), ports
@@ -727,7 +727,7 @@ def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
     prog = _seeded(bits)
     q = P.template_instance_query(bind(SEEDED, BITS=bits).id)
     part, n = P.partition(prog, q), P.units(prog, q)
-    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
+    ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
@@ -974,7 +974,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     reg = _registered(prog)
     first, ports = _record(prog, reg)
     part = P.partition(prog, Q)
-    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
     earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom},
                                               {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
@@ -1054,7 +1054,7 @@ def test_pouw_roots_reads_an_arow_row_table_root():
     _, check, w, _ = _seeded_case()
     prog, q = check["program"], check["query"]
     part = P.partition(prog, q)
-    dom = R.served_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
+    dom = R.window_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
     ports = {**check["ports"], ROW_TABLE: {"leaves": 5, "domain": dom}}
     sup = {"pouw.roots": [[{"port": ROW_TABLE}, {"value": "W"}]] * 2}
     check = {**check, "ports": ports, "supplied": sup}

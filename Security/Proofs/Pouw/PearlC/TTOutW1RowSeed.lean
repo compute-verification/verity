@@ -122,8 +122,10 @@ def oneU : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ _ _
 /-- Activations of 0 everywhere. -/
 def zeroAct : ℕ → Codes := fun _ _ _ => 0
 
-/-- Unit 0's ticket word `(0, 0)` set to 1, the constant bank's one word: one free move. -/
-def ticketOne : W1.Prog := ⟨fun _ => [1], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) .done⟩
+/-- Unit 0's ticket word `(0, 0)` set to 1, the constant bank's one word: one free move, two nodes of text, within W1's
+bound. -/
+def ticketOne : W1.Prog := ⟨fun _ => [1], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) .done,
+  fun _ => by norm_num [W1.Code.size]⟩
 
 theorem ticketOne_ticket (dv : W1.W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) (σ : State) :
     (W1.final dv salt ticketOne U act σ).mem (W1.ticketAt 0 0 0) = 1 := by

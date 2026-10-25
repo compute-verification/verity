@@ -11,6 +11,7 @@ from typing import Any, Callable
 import numpy as np
 
 from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
+from verity_vllm.records.required_manifest import RequiredManifest
 
 
 #: the binding map's `encoding.dtype` is the collector's torch dtype name; the manifest's short names are accepted too
@@ -21,12 +22,14 @@ _ITEMSIZE = {"bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64":
 _NPDTYPE = {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}
 
 
-def alias_table(manifest: dict[str, Any] | None) -> dict[str, tuple[str, int]]:
+def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str, tuple[str, int]]:
     """[rel M-0367 / reqval] `manifest.op_path_aliases` as ONE table: Program op_path -> (canonical op_path, invocation).  Shared modules
     (vLLM's one RotaryEmbedding instance called by every layer) are addressed by the required manifest at the FIRST layer's path with
     invocation = layer order; the per-layer Program paths are recorded as aliases ('model.layers.7.self_attn.rotary_emb' ->
     ['model.layers.0.self_attn.rotary_emb', 7]).  The population reconciliation (`query_population._key`) and the committed store
     (`CommittedStore.words`) resolve through THIS table and no other -- the two never disagree on which identity a Program path names."""
+    if isinstance(manifest, RequiredManifest):
+        return {str(k): (str(v[0]), int(v[1])) for k, v in (manifest.op_path_aliases or {}).items()}
     return {str(k): (str(v[0]), int(v[1])) for k, v in ((manifest or {}).get("op_path_aliases") or {}).items()} if manifest is not None else {}
 
 
@@ -73,7 +76,8 @@ class CommittedStore:
         self.name_inv: dict[tuple[int, str], int] = _same_name_invocations(bmap)
 
     @classmethod
-    def of_record(cls, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], manifest: dict[str, Any] | None) -> "CommittedStore":
+    def of_record(cls, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
+                  manifest: RequiredManifest | dict[str, Any] | None) -> "CommittedStore":
         """The store the replay of record uses: the binding map read through the manifest's alias table (None manifest = no aliases: a
         shared module's layer-N path is then missing by name, never silently the lowest invocation)."""
         return cls(bmap, committed, alias_table(manifest))

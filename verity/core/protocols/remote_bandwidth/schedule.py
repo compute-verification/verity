@@ -6,8 +6,12 @@ word for word).
 Why.  The stacked guarantee (`Accounting.Guarantees.DeclaredCircuitRequirement`) lets a pass's layout follow the codec
 and the append coins through an `a`-bit summary (`Accounting.Assumptions.SteeredLayout`) and charges `2^a` for it.
 Every layout satisfies that premise at `a` = the coins' own bits, so `a` means something only once the layout is a fixed
-public function of something whose bits the verifier counts (`Accounting.ScheduleDeterministic`).  Here that is the
-schedule: the verifier computes each pass's plan from it, refuses any other, and returns its bits.
+public function of something whose bits are bounded whatever the coins (`Accounting.ScheduleDeterministic`).  Here that
+is the schedule: the verifier computes each pass's plan from it, refuses any other, and refuses a schedule over the
+cap `a` on its bits the prover committed before the session's first coin (`audit.Params.schedule_cap`).  The bits of
+the one schedule the prover publishes after the coins bound nothing: a prover whose schedule is 200 bits on most coins
+and 300 where it steers takes up to 2^200 + 2^300 layouts over the coins, so only `a` = 301 holds of it, whatever
+each session's own schedule's bits are.
 
 The schedule (`Schedule`; JSON `{"registered", "appends", "steps"}`):
 
@@ -21,10 +25,10 @@ The schedule (`Schedule`; JSON `{"registered", "appends", "steps"}`):
 A pass at step s reads the schedule's plan at s (`Schedule.plan`): the blocks resident then, as runs in store order,
 adjacent runs joined, which is the plan `memory_map.Replay` builds.  The appends are the schedule's, the first at N,
 each at the next fresh index (`Schedule.append_runs`).  `bits` is the size of the schedule's encoding (`encode`: LEB128
-integers, prefix-free, so fewer than 2^b schedules encode in b bits), the `a` of the layouts the schedule can give.
+integers, prefix-free, so fewer than 2^b schedules encode in b bits), at most the cap.
 
-The JSON form (`run_json`) is the Lean's: `{"blocks": N, "schedule", "passes": [[step, [[first, count], ...]], ...],
-"appends": [[first, count], ...]}` to `{"bits": b}` or `{"refused": why}`."""
+The JSON form (`run_json`) is the Lean's: `{"blocks": N, "cap": a, "schedule", "passes": [[step, [[first, count], ...]],
+...], "appends": [[first, count], ...]}` to `{"bits": b}` or `{"refused": why}`."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -169,13 +173,18 @@ class Schedule:
                 "registered": [list(r) for r in self.registered], "steps": list(self.steps)}
 
 
-def check(schedule: Schedule, blocks: int, passes: Sequence[tuple[int, Sequence[tuple[int, int]]]],
+def check(schedule: Schedule, blocks: int, cap: int, passes: Sequence[tuple[int, Sequence[tuple[int, int]]]],
           appends: Sequence[tuple[int, int]]) -> int:
-    """The schedule's bits, when each of the session's passes `(step, runs)`, its plan's runs as the verifier received
-    them, is at the schedule's step and its plan is the schedule's there, and its appends `(first, count)` are the
-    schedule's; refused (`Refused`) as the Lean refuses otherwise."""
+    """The schedule's bits, at most `cap`, the cap on them the prover committed before the session's first coin
+    (`audit.Params.schedule_cap`), when each of the session's passes `(step, runs)`, its plan's runs as the verifier
+    received them, is at the schedule's step and its plan is the schedule's there, and its appends `(first, count)`
+    are the schedule's; refused (`Refused`) as the Lean refuses otherwise."""
+    if type(cap) is not int or cap < 0:
+        raise ValueError(f"a schedule's cap is a nonnegative integer of bits, not {cap!r}")
     if (why := schedule.malformed(blocks)) is not None:
         raise Refused(why)
+    if cap < schedule.bits:
+        raise Refused(f"the schedule is {schedule.bits} bits, over the cap of {cap} committed before the coins")
     want = schedule.append_runs(blocks)
     if len(appends) != len(want):
         raise Refused(f"the session made {len(appends)} appends, the schedule {len(want)}")
@@ -224,23 +233,24 @@ def _block(x: object) -> Block:
     return _nat(x[0], "a write's step"), None if x[1] is None else _nat(x[1], "a free's step")
 
 
-def of_json(j: object) -> tuple[Schedule, int, list[tuple[int, tuple[tuple[int, int], ...]]], list[tuple[int, int]]]:
-    """The JSON form's schedule, registered blocks, passes and appends (`Malformed` if they aren't)."""
-    if not isinstance(j, Mapping) or not {"blocks", "schedule", "passes", "appends"} <= set(j):
-        raise Malformed("the schedule check's inputs are its blocks, schedule, passes and appends")
+def of_json(j: object) -> tuple[Schedule, int, int, list[tuple[int, tuple[tuple[int, int], ...]]],
+                                list[tuple[int, int]]]:
+    """The JSON form's schedule, registered blocks, cap, passes and appends (`Malformed` if they aren't)."""
+    if not isinstance(j, Mapping) or not {"blocks", "cap", "schedule", "passes", "appends"} <= set(j):
+        raise Malformed("the schedule check's inputs are its blocks, cap, schedule, passes and appends")
     passes = []
     for p in _list(j["passes"], "passes"):
         if type(p) is not list or len(p) != 2:
             raise Malformed(f"a pass is [step, runs], not {p!r}")
         passes.append((_nat(p[0], "a pass's step"), tuple(_pair(r, "a run") for r in _list(p[1], "a pass's runs"))))
-    return (Schedule.of_json(j["schedule"]), _nat(j["blocks"], "blocks"), passes,
+    return (Schedule.of_json(j["schedule"]), _nat(j["blocks"], "blocks"), _nat(j["cap"], "cap"), passes,
             [_pair(a, "an append") for a in _list(j["appends"], "appends")])
 
 
 def run_json(j: Mapping) -> dict:
     """The schedule check of the JSON form's inputs: `{"bits": b}`, or `{"refused": why}`."""
-    schedule, blocks, passes, appends = of_json(j)
+    schedule, blocks, cap, passes, appends = of_json(j)
     try:
-        return {"bits": check(schedule, blocks, passes, appends)}
+        return {"bits": check(schedule, blocks, cap, passes, appends)}
     except Refused as e:
         return {"refused": str(e)}
