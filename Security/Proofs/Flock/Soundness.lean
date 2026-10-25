@@ -17,7 +17,7 @@ import Definitions.Flock.Arith
 import Definitions.Flock.Statement
 import Definitions.Flock.Piop
 import Definitions.Flock.Ligerito
-import Proofs.Flock.Soundness.Model.Session
+import Definitions.Flock.Session
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Rounds
 import Proofs.Flock.Soundness.RepSound
@@ -48,7 +48,7 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.PadCode
 import Definitions.Flock.Accounting.Padded
 import Proofs.Flock.Soundness.Accounting.PaddedNumbers
-import Proofs.Flock.Soundness.Model.LigeritoPad
+import Definitions.Flock.LigeritoPad
 import Proofs.Flock.Soundness.LigeritoPadLevel0
 import Proofs.Flock.Soundness.LigeritoPadDecode
 import Proofs.Flock.Soundness.LigeritoPadQuery
