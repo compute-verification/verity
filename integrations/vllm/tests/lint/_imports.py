@@ -33,17 +33,17 @@ LAYER = {
     "verity_vllm.check": "check|properties",
     "verity_vllm.properties": "check|properties",
     "verity_vllm.acquire": "acquire",
-    "verity_vllm.protocol_options": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
+    "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
-    "verity_vllm.store": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
+    "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
     "verity.ml.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
-    "verity_vllm.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
-    "verity_vllm.collectives": "collectives",
+    "verity_vllm.program.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
+    "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
