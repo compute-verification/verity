@@ -122,19 +122,24 @@ def test_a_refused_audit_stays_refused_and_a_record_for_another_registration_is_
 
 def test_the_certified_text_is_matched_to_the_registered_outputs():
     outputs = {(f"r{i}", k): bytes([16 * i + k]) * 2 * H for i in range(2) for k in range(STEPS)}
-    text = {i: b"".join(outputs[f"r{i}", k] for k in range(STEPS)).hex().encode() for i in range(2)}
+    text = [b"".join(outputs[f"r{i}", k] for k in range(STEPS)).hex().encode() for i in range(2)]
+    events = [t[j:j + L.TOKEN_BYTES] for t in text for j in range(0, len(t), L.TOKEN_BYTES)]
     reqs = [{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}]
-    m = L.match_outputs(reqs, {1: text[0], 2: text[1]}, outputs, STEPS)
-    assert m["equal"] and [r["by"] for r in m["requests"]] == ["stream", "stream"]
-    m = L.match_outputs(reqs, {1: text[1], 2: text[0]}, outputs, STEPS)
+    m = L.match_outputs(reqs, events, FRAMES, outputs, STEPS)
+    assert m["equal"] and m["events"] == 2 * FRAMES and [r["by"] for r in m["requests"]] == ["position", "position"]
+    swapped = events[FRAMES:] + events[:FRAMES]
+    m = L.match_outputs(reqs, swapped, FRAMES, outputs, STEPS)
     assert m["equal"] and [r["by"] for r in m["requests"]] == ["content", "content"]
-    bad = bytearray(text[1])
-    bad[5] = ord("0") if bad[5] != ord("0") else ord("1")
-    m = L.match_outputs(reqs, {1: text[0], 2: bytes(bad)}, outputs, STEPS)
-    assert not m["equal"] and [r["by"] for r in m["requests"]] == ["stream", None]
-    assert not L.match_outputs(reqs, {1: text[0], 2: b"zz"}, outputs, STEPS)["equal"]
+    bad = list(events)
+    bad[FRAMES + 3] = (b"0" if bad[FRAMES + 3][:1] != b"0" else b"1") + bad[FRAMES + 3][1:]
+    m = L.match_outputs(reqs, bad, FRAMES, outputs, STEPS)
+    assert not m["equal"] and [r["by"] for r in m["requests"]] == ["position", None]
+    extra = events[:FRAMES] + [b"00"] + events[FRAMES:]
+    assert [r["by"] for r in L.match_outputs(reqs, extra, FRAMES, outputs, STEPS)["requests"]] == ["position", None]
+    assert not L.match_outputs(reqs, events + [b"00"], FRAMES, outputs, STEPS)["equal"]
+    assert not L.match_outputs(reqs, events[:-1], FRAMES, outputs, STEPS)["equal"]
     with pytest.raises(ValueError, match="plan requests"):
-        L.match_outputs(reqs[:1], {1: text[0]}, outputs, STEPS)
+        L.match_outputs(reqs[:1], events, FRAMES, outputs, STEPS)
 
 
 def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> dict:

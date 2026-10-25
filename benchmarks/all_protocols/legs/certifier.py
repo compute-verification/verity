@@ -13,11 +13,12 @@ the honest run, the same plan with the shim's `CERTIFIER_TAMPER` (``extra`` by d
 of record on every link-window of both runs, each proved ``--zk`` behind the Lean firewall (`n2_zk.py prove`). The
 session is one LMS key (height `CERTIFIER_HEIGHT`) and one certifier session per run, its leaf state kept across both.
 
-**A period** (`leg`): the certified outputs of its link-window (the egress records' canonical events, by stream) must be
-the period's registered outputs, the value files' last-linear outputs, request by request (`io`, the leg's own check,
-written to ``io.json`` beside the answer: a refusal there is the leg's error). The case (`case_of`) is the period's
-link-windows, each with its N2 registration, its one-stage answer from N2's outcome of record (Selection All: its one
-unit, `answer_of_outcome`), its two certificates and its clock certificate as the client kept them; and the period's
+**A period** (`leg`): the certified outputs of its link-window (the egress records' canonical events, each response F
+of them in the plan's order) must be the period's registered outputs, the value files' last-linear outputs, request by
+request (`io`, the leg's own check, written to ``io.json`` beside the answer: a refusal there is the leg's error). The
+case (`case_of`) is the period's link-windows, each with its N2 registration, its one-stage answer from N2's outcome of
+record (Selection All: its one unit, `answer_of_outcome`), its two certificates and its clock certificate as the client
+kept them; and the period's
 compute audit, the integrity leg's registration and audit record re-decided by one-stage's own bound at δ
 (`audit_answer`). Its answer is ``network-period check``'s at δ = 1/100 (`DELTAS`), and ``out/`` also holds the case
 and answer at δ = 10⁻⁶ and, for the tampered run, its case and answer (``tamper.*``), which must reject.
@@ -352,14 +353,14 @@ def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
 
 # --- the certified outputs -----------------------------------------------------------------------------------------------
 
-def certified_outputs(run: Path, frame_bytes: int, windows: Sequence[int]) -> dict[int, bytes]:
-    """Each egress stream's text in link-windows ``windows`` as the certifier recorded it: its canonical events' bytes in
-    record order (`active.event`), from ``responses.records``."""
+def certified_events(run: Path, frame_bytes: int, windows: Sequence[int]) -> list[bytes]:
+    """The egress's canonical events in link-windows ``windows`` as the certifier recorded them, each one's bytes
+    (`active.event`), in record order, from ``responses.records``: a fixed plan's one canonical stream."""
     sys.path.insert(0, str(TRACES))
     import active_replay as ar
     from verity.core.protocols.certifier.active import DATA, EVENT_HEAD, EVENT_TEXT, decode_frame
 
-    text: dict[int, bytearray] = {}
+    out = []
     for record in sorted((ar.unpack_record(b, frame_bytes) for b in ar.read_blobs(run / "responses.records")),
                          key=lambda r: r.window):
         if record.window not in windows:
@@ -368,12 +369,10 @@ def certified_outputs(run: Path, frame_bytes: int, windows: Sequence[int]) -> di
             for slot in row:
                 if slot is None:
                     continue
-                kind, stream, payload = decode_frame(slot)
-                if kind != DATA or not payload.startswith(EVENT_HEAD):
-                    continue
-                b64 = payload[len(EVENT_HEAD):len(EVENT_HEAD) + EVENT_TEXT].rstrip(b"\0")
-                text.setdefault(stream, bytearray()).extend(base64.b64decode(b64))
-    return {s: bytes(t) for s, t in text.items()}
+                kind, _, payload = decode_frame(slot)
+                if kind == DATA and payload.startswith(EVENT_HEAD):
+                    out.append(base64.b64decode(payload[len(EVENT_HEAD):len(EVENT_HEAD) + EVENT_TEXT].rstrip(b"\0")))
+    return out
 
 
 def _hex(text: bytes) -> bytes | None:
@@ -384,37 +383,36 @@ def _hex(text: bytes) -> bytes | None:
 
 
 def io(rw: Mapping[str, Any], period: int, windows: Sequence[int], outputs: Mapping[tuple[str, int], bytes],
-       steps: int) -> dict:
-    """The period's certified outputs against its registered ones, request by request: request ``r`` of the period is
-    the plan's request ``period · n + r``, whose egress stream in the period's link-windows carries its steps'
-    outputs as hex, 2H bytes a step (``by: stream``); else, for each request, a stream there that carries them
-    (``by: content``)."""
+       steps: int, frames: int) -> dict:
+    """The period's certified outputs against its registered ones (`match_outputs`), read off the egress events of
+    its link-windows."""
     sys.path.insert(0, str(TRACES))
     import certifier_serve as cs
 
     setup = cs.ar.Setup(rw["calibration"])
-    got = certified_outputs(rw["run"], setup.egress_params.frame_bytes, windows)
+    events = certified_events(rw["run"], setup.egress_params.frame_bytes, windows)
     per = len({r for r, _ in outputs})
-    return match_outputs(rw["plan"]["requests"][period * per:(period + 1) * per], got, outputs, steps)
+    return match_outputs(rw["plan"]["requests"][period * per:(period + 1) * per], events, frames, outputs, steps)
 
 
-def match_outputs(requests: Sequence[Mapping[str, Any]], got: Mapping[int, bytes],
+def match_outputs(requests: Sequence[Mapping[str, Any]], events: Sequence[bytes], frames: int,
                   outputs: Mapping[tuple[str, int], bytes], steps: int) -> dict:
-    """`io`'s comparison: the period's plan ``requests`` in order against its registered requests ``r0, r1, …``, each
-    stream's certified text ``got`` read as hex."""
-    got = {s: _hex(t) for s, t in got.items()}
+    """The period's plan ``requests`` against its registered requests ``r0, r1, …`` in order: the egress carries each
+    response as ``frames`` events, back to back in the plan's order, its text the hex of the request's step outputs,
+    2H bytes a step. ``by`` is ``position`` when the request's response there is its outputs, ``content`` when another
+    response is; ``equal`` when every request's is, and the egress holds exactly the period's responses."""
     reqs = sorted({r for r, _ in outputs}, key=lambda r: int(r.lstrip("r")))
     if len(requests) != len(reqs):
         raise ValueError(f"{len(requests)} plan requests for the period's {len(reqs)} registered requests")
+    texts = [_hex(b"".join(events[j * frames:(j + 1) * frames])) for j in range(-(-len(events) // frames))]
     want = {r: b"".join(outputs[r, k] for k in range(steps)) for r in reqs}
     rows = []
-    for q, r in zip(requests, reqs):
-        by = "stream" if got.get(q["stream"]) == want[r] else \
-            "content" if want[r] in got.values() else None
+    for j, (q, r) in enumerate(zip(requests, reqs)):
+        got = texts[j] if j < len(texts) else None
+        by = "position" if got == want[r] else "content" if want[r] in texts else None
         rows.append({"request": r, "session": q["session"], "stream": q["stream"], "by": by,
-                     "certified_bytes": len(got.get(q["stream"]) or b"")})
-    return {"equal": all(x["by"] for x in rows), "streams": {str(s): None if t is None else len(t)
-                                                            for s, t in sorted(got.items())},
+                     "certified_bytes": len(got or b"")})
+    return {"equal": all(x["by"] for x in rows) and len(events) == frames * len(reqs), "events": len(events),
             "requests": rows}
 
 
@@ -444,7 +442,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         missing = [w for w in ws if w not in rw["windows"]]
         if missing:
             raise RuntimeError(f"{strategy}: N2 decided no link-window {missing} of period {index}")
-        row = {"windows": ws, "io": io(rw, index, ws, outputs, sess["steps"])}
+        row = {"windows": ws, "io": io(rw, index, ws, outputs, sess["steps"], sess["frames"])}
         tag = "" if strategy == "honest" else "tamper."
         if strategy == "honest" and not row["io"]["equal"]:
             (out / "io.json").write_text(json.dumps(row["io"], indent=1, sort_keys=True))
@@ -467,6 +465,6 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["DELTAS", "PROTOCOL", "answer_of_outcome", "audit_answer", "case_of", "certified_outputs", "check", "io",
+__all__ = ["DELTAS", "PROTOCOL", "answer_of_outcome", "audit_answer", "case_of", "certified_events", "check", "io",
            "layout", "leg", "loop_units", "match_outputs", "period_windows", "registered_outputs", "requests_of",
            "session"]
