@@ -137,10 +137,12 @@ def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
         audit = subprocess.run(
             [sys.executable, "-m", "verity_torch_loop.pouw_audit", "--window", str(window / "pouw"), "--circuit",
              registered["pouw"], "--run", got["run"], "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"],
-             "--lean", t["flock-verify"], "--firewall", t["flock-firewall"], "--out", str(out / "pouw-audit")],
+             "--lean", t["flock-verify"], "--firewall", t["flock-firewall"], "--out", str(window / "pouw-audit")],
             cwd=ROOT, env=env, capture_output=True, text=True, check=False)
         (out / "pouw-audit").mkdir(parents=True, exist_ok=True)
         (out / "pouw-audit" / "log.txt").write_text(audit.stdout[-20000:] + "\n--- stderr\n" + audit.stderr[-20000:])
+        if (window / "pouw-audit" / "pouw.json").exists():
+            shutil.copy(window / "pouw-audit" / "pouw.json", out / "pouw-audit" / "pouw.json")
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "period": index, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law, "cap": a.cap,
