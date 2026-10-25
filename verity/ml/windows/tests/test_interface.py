@@ -117,6 +117,18 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
+def test_close_concatenates_each_templates_words_once(monkeypatch):
+    """Every member's rows are views of one array per port, not each a copy of its whole template's words: close's memory
+    was members × units (249 GB at the decoder's 353,092 units)."""
+    seen = []
+    monkeypatch.setattr(CS, "commit", lambda window, data, **kw: seen.extend(data))
+    win, *_ = window(10, 2)
+    win.close()
+    for p in ("x", "o0"):
+        group = "outs" if p == "o0" else "rows"
+        assert len({id(d[group][p].base) for d in seen}) == 1
+
+
 def test_a_window_closes_over_every_unit():
     win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4)
     ins, outs = values(10)
