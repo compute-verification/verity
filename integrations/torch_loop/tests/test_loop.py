@@ -1,7 +1,7 @@
 """The torch loop as an integration of Verity's (`verity.ml.windows.interface`): its model computes its template's function,
 its written window is the one core's registration check derives (and a port under another domain is refused), the
-verifier's window from its records alone is the loop's, the circuit it registers before running is the one it writes, a
-tampering loop's outputs are not its Definition's, and it loads no vLLM."""
+verifier's window from its records alone is the loop's, the circuit it registers before running is the one it writes, its
+unit composes into C-Flock's unit statement, a tampering loop's outputs are not its Definition's, and it loads no vLLM."""
 from __future__ import annotations
 
 import hashlib
@@ -9,6 +9,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.circuits.codec import descriptor_id
@@ -18,21 +20,21 @@ from verity_torch_loop import loop as L, serve as S
 LAW = D.parse_law("stratified:2")
 
 
-def served(tamper: bool = False, h: int = 64) -> tuple[L.TorchLoop, IF.Window]:
-    loop = L.TorchLoop(L.Model(h=h), [3, 7], steps=2, tamper=tamper)
+def served(tamper: bool = False) -> tuple[L.TorchLoop, IF.Window]:
+    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, tamper=tamper)
     return loop, loop.window(LAW, cap=16)
 
 
 def test_the_loops_outputs_are_its_templates():
     loop, win = served()
-    assert loop.units == 2 * 2 * 2 * 64 and win.window.population == loop.units
+    assert loop.units == 2 * 2 * 2 * L.H and win.window.population == loop.units
     assert win.mismatches() == {}
 
 
 def test_a_tampering_loops_outputs_are_not():
     _, win = served(tamper=True)
     (tid, bad), = win.mismatches().items()
-    assert tid == descriptor_id(L.template(64)) and len(bad) == win.window.population
+    assert tid == descriptor_id(L.template(L.H)) and len(bad) == win.window.population
 
 
 def test_core_accepts_the_written_window_and_the_verifier_rebuilds_it_from_the_records(tmp_path):
@@ -53,16 +55,31 @@ def test_core_accepts_the_written_window_and_the_verifier_rebuilds_it_from_the_r
 
 
 def test_the_circuit_it_registers_before_running_is_the_one_it_writes(tmp_path, capsys):
-    shape = ["--law", "subset:2", "--requests", "3", "--steps", "1", "--h", "64", "--cap", "32"]
+    shape = ["--law", "subset:2", "--requests", "3", "--steps", "1", "--cap", "32"]
     assert S.main(["--circuit-only", *shape]) == 0
     before = json.loads(capsys.readouterr().out)["circuit"]
     assert S.main(["--out", str(tmp_path), *shape]) == 0
     got = json.loads(capsys.readouterr().out)
     assert got["circuit"] == before == hashlib.sha512((tmp_path / "circuit.json").read_bytes()).hexdigest()
-    assert got["mismatched"] == {} and got["population"] == 128
+    assert got["mismatched"] == {} and got["population"] == 2 * L.H
     assert S.main(["--out", str(tmp_path / "t"), *shape, "--tamper"]) == 0
     tampered = json.loads(capsys.readouterr().out)
-    assert tampered["circuit"] == before and list(tampered["mismatched"].values()) == [128]
+    assert tampered["circuit"] == before and list(tampered["mismatched"].values()) == [2 * L.H]
+
+
+@pytest.mark.slow
+def test_its_unit_composes_into_c_flocks_unit_statement(tmp_path):
+    """The statement a drawn member is proved under, from the circuit record's rows (a5's composer does the same): C-Flock
+    refuses a unit none of whose rows is longer than one SHA-512 block, which only the end to end would otherwise find. ~12 s,
+    ~1.1 GB."""
+    from verity_flock.class_statement import UnitStager
+
+    _, win = served()
+    (tid, st), = win.circuit_record()["statements"].items()
+    s = UnitStager(L.template(L.H), "unit/window", [(p, sc, int(b), list(ps)) for p, sc, b, ps in st["in_rows"]],
+                   [(sc, tuple(ix)) for sc, ix in st["out_rows"]], circuit=tmp_path / "unit.circuit",
+                   bind={"partition": "ab" * 64, "program": "cd" * 64}, reads=st["reads"])
+    assert tid == descriptor_id(L.template(L.H)) and len(s.class_sha512) == 128 and (tmp_path / "unit.circuit").stat().st_size
 
 
 def test_the_loop_loads_no_vllm():

@@ -1,6 +1,6 @@
 """The torch loop's window, written for the audit from its records alone (`benchmarks/prove_path/records_audit.py`).
 
-    python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 64] [--cap 8] [--tamper]
+    python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--tamper]
     python -m verity_torch_loop.serve --circuit-only [the same shape]
 
 The first serves the requests (`loop.TorchLoop`), commits every unit and writes the window (``circuit.json``, the
@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--law", default="subset:2")
     ap.add_argument("--requests", default="3,7")
     ap.add_argument("--steps", type=int, default=2)
-    ap.add_argument("--h", type=int, default=64)
+    ap.add_argument("--h", type=int, default=L.H)
     ap.add_argument("--cap", type=int, default=8)
     ap.add_argument("--tamper", action="store_true")
     a = ap.parse_args(argv)

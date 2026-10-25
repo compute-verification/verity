@@ -27,6 +27,9 @@ from verity.ml.circuits.ops import gemm as G
 from verity.ml.windows import interface as IF
 
 LINEARS = ("up_proj", "down_proj")
+#: The MLP's width. C-Flock's unit statement needs a committed row longer than one SHA-512 block (over 111 bytes): at 128
+#: the s8 rows ``x`` and ``wrow`` are 128 bytes, at 64 no row is.
+H = 128
 
 
 def template(k: int):
@@ -57,7 +60,7 @@ class Layer:
 class Model:
     """The two-layer W8A8 MLP of width ``h``, its weights and a ``vocab``-row embedding drawn from ``seed``."""
 
-    def __init__(self, h: int = 64, vocab: int = 16, seed: int = 0) -> None:
+    def __init__(self, h: int = H, vocab: int = 16, seed: int = 0) -> None:
         g = torch.Generator().manual_seed(seed)
         self.h, self.seed = h, seed
         self.embed = torch.randn(vocab, h, generator=g)

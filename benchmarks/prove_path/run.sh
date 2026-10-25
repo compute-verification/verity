@@ -27,7 +27,7 @@
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
 #   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
-#     template ScaledMmS8Coordinate_v1{K=64}), honest and tampered (every output's bit 0 flipped), each audited from its records
+#     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
 #     alone (records_audit.py --circuit: the circuit's SHA-512 from the loop's shape, printed before it runs) under PP_LAW
 #     (default subset:2); the tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--cap N, ...).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
