@@ -403,22 +403,53 @@ def boot_ci(x, n=2000, seed=0):
     return s[int(0.025 * n)], s[int(0.975 * n)]
 
 
-def table(dirs):
+def load(dirs):
     recs = []
     for d in dirs:
         for f in sorted(glob.glob(os.path.join(d, "**", "result.json"), recursive=True)):
             r = json.load(open(f))
             r["run"] = r.get("run_id") or os.path.basename(os.path.normpath(d))
+            r.setdefault("every", r["log"][0]["step"] if r["log"] else 25)
+            r["arm_label"] = r["arm"] + (f" (headroom {r['headroom']:g})" if r.get("headroom", 1.0) != 1.0 else "")
             recs.append(r)
+    return sorted(recs, key=lambda r: (r["task"], r.get("every", 25), ARMS.index(r["arm"]), r.get("headroom", 1.0), r["lr"],
+                                       r["seed"]))
+
+
+def summary(dirs):
+    """One row per task, arm, lr and eval interval: the seeds' test exact and letters (mean, and the range), and the steps
+    and FLOPs at which val exact first reached 50% and 99% (median over seeds; a seed that never did counts as not reached)."""
+    groups = {}
+    for r in load(dirs):
+        groups.setdefault((r["task"], r["arm_label"], r["lr"], r.get("every", 25)), []).append(r)
+    rng = lambda xs: f"{sum(xs) / len(xs):.3f} ({min(xs):.3f}-{max(xs):.3f})" if len(xs) > 1 else f"{xs[0]:.3f}"
+
+    def med(xs):
+        xs = sorted(float("inf") if x is None else x for x in xs)
+        m = xs[(len(xs) - 1) // 2] if len(xs) % 2 else (xs[len(xs) // 2 - 1] + xs[len(xs) // 2]) / 2
+        return "not reached" if m == float("inf") else f"{m:.2g}"
+
+    print("| task | arm | Adam moments | lr | eval every | seeds | test exact | test letters | steps to 50% / 99% val exact | "
+          "FLOPs to 50% | FLOPs to 99% | runs |")
+    print("|" + "---|" * 12)
+    for (task, arm, lr, every), rs in groups.items():
+        steps = ", ".join(f"{r['steps_to_50'] or '–'}/{r['steps_to_99'] or '–'}" for r in rs)
+        mom = "none (sign descent)" if arm.startswith("nvfp4_store_sign") else "fp32"
+        print(f"| {task} | {arm} | {mom} | {lr:g} | {every} | {len(rs)} | {rng([r['test_exact'] for r in rs])} | "
+              f"{rng([r['test_letters'] for r in rs])} | {steps} | {med([r['flops_to_50'] for r in rs])} | "
+              f"{med([r['flops_to_99'] for r in rs])} | {', '.join(sorted({r['run'] for r in rs}))} |")
+
+
+def table(dirs):
+    recs = load(dirs)
     f = lambda x, p=3: "–" if x is None else f"{x:.{p}f}"
     e = lambda x: "not reached" if x is None else f"{x:.2g}"
     print("| task | arm | lr | seed | run | steps (eval every) | test exact [95% CI] | test letters | test nll | FLOPs to 50% | "
           "FLOPs to 99% | exact, bf16 arithmetic | val nll at step 0 | s/step |")
     print("|" + "---|" * 14)
-    for r in sorted(recs, key=lambda r: (r["task"], r.get("every", 25), ARMS.index(r["arm"]), r["lr"], r["seed"])):
+    for r in recs:
         lo, hi = boot_ci(r["test_exact_per_string"])
-        arm = r["arm"] + (f" (headroom {r['headroom']:g})" if r.get("headroom", 1.0) != 1.0 else "")
-        print(f"| {r['task']} | {arm} | {r['lr']:g} | {r['seed']} | {r['run']} | {r['steps']} ({r.get('every', 25)}) | {f(r['test_exact'])} "
+        print(f"| {r['task']} | {r['arm_label']} | {r['lr']:g} | {r['seed']} | {r['run']} | {r['steps']} ({r.get('every', 25)}) | {f(r['test_exact'])} "
               f"[{lo:.3f}, {hi:.3f}] | {f(r['test_letters'])} | {f(r['test_nll'])} | {e(r['flops_to_50'])} | {e(r['flops_to_99'])} | "
               f"{f(r.get('test_exact_bf16_arith'))} | {f(r['val_nll_step0'])} | {r['train_s'] / r['steps']:.2f} |")
 
@@ -439,13 +470,13 @@ def main():
     t.add_argument("--deadline-epoch", type=float, default=0.0)
     t.add_argument("--headroom", type=float, default=1.0, help="NVFP4 storage: the tensor scale's room above the initial amax")
     t.add_argument("--out", required=True)
-    tb = sub.add_parser("table")
-    tb.add_argument("dirs", nargs="+")
+    for mode in ("table", "summary"):
+        sub.add_parser(mode).add_argument("dirs", nargs="+")
     a = ap.parse_args()
     if a.mode == "train":
         train(a)
     else:
-        table(a.dirs)
+        {"table": table, "summary": summary}[a.mode](a.dirs)
 
 
 if __name__ == "__main__":
