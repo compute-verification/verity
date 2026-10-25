@@ -1,7 +1,8 @@
 {
  "definitions": {
   "IoTieIdsChain_v1{CB=3,D2=3}": {
-   "and": 318
+   "and": 318,
+   "type": "d9790beabd55abe5c45170d005cdbfe6e7e23f4adc6bba8d7cada726e58627203510e5fc2cbd8ccb03d3a092f89b01b21860a0c87d29682bd2c7529daf284d0c"
   },
   "IoTieIdsFirst_v1{CB=3}": {
    "and": 3,
