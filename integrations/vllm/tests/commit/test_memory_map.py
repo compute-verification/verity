@@ -15,7 +15,7 @@ import hashlib
 import pytest
 import torch
 
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth import codec
@@ -27,8 +27,8 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array, Record, Value
 from verity_vllm.commit import memory_map as MM
-from verity_vllm.predict.build import BF16, I32, build_program, decoder
-from verity_vllm.predict.common import _Peers
+from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
+from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.replay import replayer
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
