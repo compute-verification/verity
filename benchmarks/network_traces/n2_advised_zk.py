@@ -18,8 +18,8 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   service doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
   link's tie source is the tests' stand-in (`advised_traffic.StandInTie`) on the link's certified prompts, the
   verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's. Its clock
-  source is the verifier of record's: the certifier signs each window's sync (`Issuer.clock`), and the link takes
-  those clock certificates (`service.LinkWindows.clock_certificates`, `advised.SignedClocks`).
+  source is the verifier of record's: the certifier signs each window's sync salted (`Issuer.salted_clock`), and the
+  link opens those clock certificates (`service.LinkWindows.certified_clocks`, `advised.SignedClocks`).
 * **A served run's link** (`e2e`, ``--e2e RUN``): network-e2e's output directory of a run on the advice profile
   (``report.json``, the honest rehearsal's records under ``rehearsal/honest``, the endpoint's advice under
   ``endpoint/advice``), N2's link of its honest rehearsal (``served``: T = 60 on both ends, the egress allocation the
@@ -28,8 +28,11 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   the run and rebuilt from its certified I/O, joined into one (`joined`), its requests in the certified arrival order,
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
   ingress heads' request frames; the tie the same stand-in, on the certified prompts. Its clock source
-  (`served_clocks`) is the run's certifier's clock certificates (``clocks.jsonl``), the verifier of record's: any
-  entry of that name, a regular file or not, is them, and one that can't be read is refused. A run without one is
+  (`served_clocks`) is the run's certifier's salted clock certificates with their openings (the certifier's
+  ``clocks.jsonl``, witness, not the client's public copy), the verifier of record's: any entry of that name, a
+  regular file or not, is them, and one that can't be read, or holds an unsalted clock certificate, is refused. The
+  summary's ``clocks`` names the source and says whether its syncs are the declared ones, never the syncs. A run
+  without one is
   refused unless ``--clock-stand-in`` takes `CertifierClocks` in their place, the syncs its certifier's proxy logged
   (``proxy.json.gz``), unsigned and labelled a stand-in. It is never the plan the prover declared. A run whose clock
   source gives fewer windows' syncs than are proved is refused too. The link's first ``--windows`` windows are
@@ -161,15 +164,20 @@ class CertifierClocks:
 
 
 def served_clocks(run: Path, link: str, stand_in: bool = False) -> dict:
-    """A served run's clock source, as `LinkWindows` takes it: the certifier's clock certificates (``clocks.jsonl``,
-    `certifier_serve.read_clocks`), the verifier of record's. Any entry of that name is them, so one that isn't a file
-    to read (a dangling symlink, a directory) refuses the run rather than passing for a run without them. A run without
-    one is refused, unless `stand_in` (``--clock-stand-in``) takes `CertifierClocks`, the certifier's unsigned log."""
+    """A served run's clock source, as `LinkWindows` takes it: the certifier's salted clock certificates with their
+    openings (its ``clocks.jsonl``, witness, `certifier_serve.read_clocks`), the verifier of record's own read, never
+    the client's public copy. Any entry of that name is them, so one that isn't a file to read (a dangling symlink, a
+    directory) or holds a line that isn't a salted clock certificate's (an unsalted one, from before the salted form)
+    refuses the run rather than passing for a run without them. A run without one is refused, unless `stand_in` (``--clock-stand-in``) takes
+    `CertifierClocks`, the certifier's unsigned log."""
     f = run / "clocks.jsonl"
     if os.path.lexists(f):
         if not f.is_file():
             raise SystemExit(f"{f}: there, but not a file of clock certificates to read, so the run is refused")
-        return {"clock_certificates": tuple(cs.read_clocks(f))}
+        try:
+            return {"certified_clocks": tuple(cs.read_clocks(f))}
+        except (KeyError, TypeError, ValueError) as e:
+            raise SystemExit(f"{f}: {e}, so the run is refused") from None
     if not stand_in:
         raise SystemExit(f"{run}: no clocks.jsonl, the certifier's clock certificates, so the run is refused; "
                          "--clock-stand-in takes its proxy log's syncs (CertifierClocks, unsigned) in their place")
@@ -177,18 +185,20 @@ def served_clocks(run: Path, link: str, stand_in: bool = False) -> dict:
 
 
 def clocks_label(lw: LinkWindows, declared) -> dict:
-    """The summary's ``clocks``: where the link's syncs come from, the syncs its clock source gives, window by window,
-    and whether they are the ones declared."""
-    if lw.clock_certificates is not None:
-        by = {"source": "signed", "by": "the certifier's clock certificates (clocks.jsonl), advised.SignedClocks "
-                                        "under the link's certifier key and session"}
+    """The summary's ``clocks``: where the link's syncs come from, how many windows its clock source gives a sync, and
+    whether those are the ones declared, but never the syncs, which the certifier signed and are witness; for the
+    signed source, why each opening it took no sync from was refused."""
+    if lw.certified_clocks is not None:
+        by = {"source": "signed", "by": "the certifier's salted clock certificates (its clocks.jsonl), each opened by "
+                                        "advised.SignedClocks under the link's certifier key and session",
+              "refused": list(lw.clock_source.refused)}
     elif isinstance(lw.clocks, CertifierClocks):
         by = {"source": "stand-in", "by": "CertifierClocks: the certifier's proxy log (proxy.json.gz's syncs, its "
                                           "shaper's), unsigned, by --clock-stand-in for a run without clocks.jsonl"}
     else:
         by = {"source": "stand-in", "by": type(lw.clocks).__name__}
     got = list(lw.clock_source.syncs(lw.link)) if lw.clock_source is not None else []
-    return {**by, "syncs": [[s.delta, str(s.rho)] for s in got], "as_declared": got == list(declared)}
+    return {**by, "windows": len(got), "as_declared": got == list(declared)}
 
 
 def standin_tie(ingress: GridParams, own: int) -> dict:
@@ -274,13 +284,13 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
         certifier = cs.signer(keys / "certifier", height)
         try:
             issuer = Issuer(certifier, session)
-            clocks = [issuer.clock(AT.LINK, w, sync) for w, sync in enumerate(AT.SYNCS[:shape.windows])]
+            clocks = [issuer.salted_clock(AT.LINK, w, sync) for w, sync in enumerate(AT.SYNCS[:shape.windows])]
             if None in clocks:
                 raise SystemExit(f"the certifier refused to sign a window's sync: {issuer.refused}")
             lw = LinkWindows(AT.LINK, shape.egress, AT.SYNC_SET, certifier.public_key(), "n2-advised-zk", session,
                              ingress=shape.ingress, proof_deadline=cs.PROOF_DEADLINE_S,
                              advised=AD.AdvisedProfile(shape.windows, AT.FRAMING, own),
-                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows), clock_certificates=tuple(clocks))
+                             ties=AT.StandInTie(s.certified, AT.LINK, shape.windows), certified_clocks=tuple(clocks))
             ingress = [issuer.certify(r, Direction.INGRESS, shape.ingress, parameters_digest(shape.ingress))
                        for r in s.ingress]
 
