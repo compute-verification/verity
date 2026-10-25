@@ -40,6 +40,26 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Accounting.Assumptions.CircuitCarriers": {
+   "owner": "@compute-accounting",
+   "digest": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a"
+  },
+  "Accounting.Assumptions.EncodeChainHardness": {
+   "owner": "@compute-accounting",
+   "digest": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
+  },
+  "Accounting.Assumptions.KeyBinding": {
+   "owner": "@compute-accounting",
+   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+  },
+  "Accounting.Assumptions.SketchHashBudget": {
+   "owner": "@compute-accounting",
+   "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
+  },
+  "Accounting.Assumptions.SketchRank": {
+   "owner": "@compute-accounting",
+   "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
+  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
@@ -123,26 +143,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Accounting.Assumptions.CircuitCarriers": {
-   "owner": "@compute-accounting",
-   "digest": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a"
-  },
-  "Accounting.Assumptions.EncodeChainHardness": {
-   "owner": "@compute-accounting",
-   "digest": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
-  },
-  "Accounting.Assumptions.KeyBinding": {
-   "owner": "@compute-accounting",
-   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
-  },
-  "Accounting.Assumptions.SketchHashBudget": {
-   "owner": "@compute-accounting",
-   "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
-  },
-  "Accounting.Assumptions.SketchRank": {
-   "owner": "@compute-accounting",
-   "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
   }
  },
  "meaning": [
