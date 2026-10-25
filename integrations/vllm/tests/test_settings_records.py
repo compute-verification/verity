@@ -1,6 +1,7 @@
 """Records a reader fills from the environment, pinned at their bytes on `main` before the reader moves to `verity_vllm.settings`, so
-the move can't change them: the hot worker's key (`hot.env_identity`, `hot.so_identity`) and the fast Match's declared configuration
-(`global_match_fast.config`, on every result document's impl block)."""
+the move can't change them: the hot worker's key (`hot.env_identity`, `hot.so_identity`), the fast Match's declared configuration
+(`global_match_fast.config`, on every result document's impl block), and the Commit's reasons to run cold with the staging
+environment it hands its committers (`commit.hot_unsafe_reasons`, `commit.staging_environ`)."""
 from __future__ import annotations
 
 import hashlib
@@ -11,7 +12,7 @@ import pytest
 
 from verity_vllm.check.match import global_match as GM
 from verity_vllm.check.match import global_match_fast as GMF
-from verity_vllm.pipeline import hot
+from verity_vllm.pipeline import cli, hot
 
 
 def _digest(doc: object) -> str:
@@ -23,6 +24,15 @@ def env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     for k in list(os.environ):
         monkeypatch.delenv(k)
     return monkeypatch
+
+
+@pytest.fixture(scope="module")
+def commit():
+    """`pipeline.commit`, imported before `env` clears the environment: the import pins the engine's variables (`engine.env`)."""
+    pytest.importorskip("torch")
+    from verity_vllm.pipeline import commit
+
+    return commit
 
 
 def test_the_hot_key_takes_the_environment_as_before(env: pytest.MonkeyPatch) -> None:
@@ -45,3 +55,21 @@ def test_the_fast_match_declares_its_configuration_as_before(env: pytest.MonkeyP
     GMF.ops()
     config = {k: v for k, v in GMF.config.items() if k != "cpu_count"}
     assert _digest([config, GM.impl_banner(GMF)]) == digest
+
+
+@pytest.mark.parametrize(("values", "argv", "digest"), [
+    ({}, [], "28285790244bd016269ddf08993ba559"),
+    ({"VERITY_FAULT": " skip_copy:1 ", "VERITY_SWITCH": "0.001"}, ["--arms", "a,b", "--window-mb", "0"], "e7f7725d89caf134f7ea831181381df2"),
+    ({"VERITY_FAULT": "  ", "VERITY_SWITCH": ""}, ["--bounded-staging", "--retain", "host", "--retain-exclude", "fa3_hidden_m1",
+                                                   "--learn-budget-mb", "1024", "--window-mb", "256", "--window-slots", "4"],
+     "ce0b116482d3de00d51cf1c1a00a940f"),
+    ({"VERITY_FAULT": "", "VERITY_RETAIN": "device"}, ["--no-bounded-staging", "--retain", "none"], "ab1c19f50687282fe9ef2e4012560ec4"),
+])
+def test_the_commit_names_its_cold_reasons_and_stages_as_before(commit, env: pytest.MonkeyPatch, values: dict[str, str],
+                                                                 argv: list[str], digest: str) -> None:
+    for k, v in values.items():
+        env.setenv(k, v)
+    ns = cli.parse("commit", ["--out", "o", *argv], {})
+    reasons = commit.hot_unsafe_reasons(ns)
+    commit.staging_environ(commit.resolve_staging(ns))
+    assert _digest([reasons, {k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}]) == digest

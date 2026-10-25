@@ -60,6 +60,11 @@ def lowered(raw: str) -> str:
     return raw.strip().lower()
 
 
+def one(raw: str) -> bool:
+    """On exactly when the string is ``1``."""
+    return raw == "1"
+
+
 def not_zero(raw: str) -> bool:
     """On unless the stripped string is ``0`` (an A/B switch that reads ``false`` as on)."""
     return raw.strip() != "0"
@@ -126,12 +131,12 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- the Commit (pipeline/commit.py and its helpers)
     S("VERITY_ADMIT_HIDDEN_FACTOR", float, 1.05, VALUE, "admission: the planned hidden-class bytes' safety factor"),
     S("VERITY_ADMIT_OTHER_FACTOR", float, 2.0, VALUE, "admission: the other planned bytes' safety factor"),
-    S("VERITY_ADMIT_OVER_BOUND", flag, False, VALUE, "admission: run a Commit whose plan is over its bound (recorded as an override)"),
+    S("VERITY_ADMIT_OVER_BOUND", one, False, VALUE, "admission: 1 runs a Commit whose plan is over its bound (recorded as an override)"),
     S("VERITY_ADMIT_SLACK_GIB", float, 6.0, VALUE, "admission: GiB of host memory kept free"),
     S("VERITY_CENSUS_GPU_UTIL", float, None, VALUE, "the kernel census engine's gpu_memory_utilization"),
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
     S("VERITY_HOT_RESTART_REASON", str, None, WHERE, "why the hot worker restarted (it sets it for its child)"),
-    S("VERITY_HOT_SUBMIT", flag, False, WHERE, "the Commit submits itself to the pod's hot worker"),
+    S("VERITY_HOT_SUBMIT", one, False, WHERE, "1: the Commit submits itself to the pod's hot worker"),
     S("VERITY_SOURCE_IDENTITY_DIR", str, None, WHERE, "where the source identity is written (the Commit sets it)"),
     S("VERITY_SWITCH", float, None, DEBUG, "the interpreter's switch interval in seconds (a GIL-interference experiment)"),
     S("VERITY_TRACEDUMP", float, None, DEBUG, "every so many seconds, dump every thread's traceback"),
@@ -170,6 +175,9 @@ SETTINGS: dict[str, Setting] = _declare(
     S("X09_FORCE_DAG", str, None, VALUE, "1 runs X-09's DAG diagnostic even when the sequence criterion held, adding its fields to "
       "the record (diagnostic only, never on a row of record)"),
     # ---- the hot Commit worker (pipeline/hot.py) and the native builds it keys on
+    S("HOT_ROOT", str, "/workspace/cp/hot", WHERE, "the hot workers' directory (`hot --root`)"),
+    S("HOT_IDLE", float, 900.0, WHERE, "seconds a hot worker waits idle before it exits (`hot --idle`)"),
+    S("HOT_TIMEOUT", float, None, WHERE, "seconds a hot submit waits for its job; unset, no bound"),
     S("HOT_RELEASING_MARKER", str, "/workspace/cp/RELEASING", WHERE, "the marker pod_release.sh holds while it ships a release"),
     S("HOT_RELEASE_JSON", str, "/workspace/cp/RELEASE.json", WHERE, "the release (tag, commit) of the tree on the pod"),
     S("RELEASING_STALE_S", float, 900.0, WHERE, "seconds after which a release marker nobody refreshed is stale"),
@@ -189,6 +197,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("MAX_JOBS", str, None, VALUE, "parallel compile jobs of torch's extension builds; a tap build sets its own default"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
+    S("VLLM_BATCH_INVARIANT", str, None, VALUE, "vLLM's batch-invariant kernels, 1 as an engine profile's env sets it; the replay's "
+      "dependencies record it"),
 )
 del S
 
