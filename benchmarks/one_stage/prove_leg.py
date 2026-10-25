@@ -132,6 +132,15 @@ def free_port() -> int:
 #: `stage`'s bound stagers by unit and partition inside `reuse_lowerings`, else None
 _STAGERS: dict | None = None
 
+
+class OutsideShape(ValueError):
+    """A statement whose m (its block's log plus its block bits) is outside --zk's and flock-circuit's 25 .. `a7.M_MAX`:
+    its ``k_log`` and ``per_block`` (units a block) say how many units would fit (`units_for`)."""
+
+    def __init__(self, msg: str, k_log: int, per_block: int):
+        super().__init__(msg)
+        self.k_log, self.per_block = k_log, per_block
+
 def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of the first output word of each instance in ``m.forge`` flipped before the set is
     committed (`forged_proofs.stage_case`): its rows and ``b || c`` agree with the outputs it commits, so only the proof
@@ -184,7 +193,8 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
     k_log = st.meta["k_log"]
     nbl = max(3, (-(-m.n // st.meta["vus_per_block"]) - 1).bit_length())
     if not 25 <= k_log + nbl <= a7.M_MAX:
-        raise SystemExit(f"{m.name}: m = {k_log} + {nbl} is outside 25 .. {a7.M_MAX} (--zk and flock-circuit's shape)")
+        raise OutsideShape(f"{m.name}: m = {k_log} + {nbl} is outside 25 .. {a7.M_MAX} (--zk and flock-circuit's shape)",
+                           k_log, st.meta["vus_per_block"])
     d = sd / "statement"
     set_name = f"{st.iset.name}-{m.name}"
     indices = list(range(base, base + m.n))
@@ -721,12 +731,11 @@ def units_for(k_log: int, per_block: int) -> int:
     return 1 if b <= 3 else per_block * 2 ** (b - 1) + 1
 
 
-def served_member(shape: str, seed: int) -> tuple[Member, dict]:
-    """``shape``'s served unit as a member: its parameters the prover's rows, its outputs hidden, as few units as the --zk shape
-    admits (`units_for`, from its lowering), values seeded by ``seed``. Call inside `reuse_lowerings`."""
+def served_member(shape: str, seed: int, n: int = 1) -> tuple[Member, dict]:
+    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows, its outputs hidden, values seeded
+    by ``seed``."""
     import a11_kinds as K
     from verity.ml.circuits.codec import descriptor_id
-    from verity_flock import class_statement as CS
     from verity_vllm.pipeline import serving_rows as SRW
 
     fn, gen = served(shape)
@@ -735,24 +744,34 @@ def served_member(shape: str, seed: int) -> tuple[Member, dict]:
     params, ret = fn.signature()
     rows = [(nm, V2, K.leaf_bits(t), [nm]) for nm, t in params]
     out_rows = K.out_rows(len(ret.fields) if hasattr(ret, "fields") else 1)
-    name = shape.replace(":", "-")
-    t = time.time()
-    with K.no_cyclic_gc():
-        st = CS.UnitStager(tp.fn, f"unit/{name}", rows, out_rows)
-    meta = st.meta
-    n = units_for(meta["k_log"], meta["vus_per_block"])
-    counts = st.low.layout.counts
-    info = {"descriptor_id": did, "layout": tp.layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
-            "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "ands": counts["ands"], "k_log": meta["k_log"],
-            "vus_per_block": meta["vus_per_block"], "n": n, "lower_s": round(time.time() - t, 1),
-            "stage_py_maxrss_gb": maxrss_gb(resource.RUSAGE_SELF)}
-    log(f"{shape}: {did}, {counts['ands']} ANDs, k_log {meta['k_log']}, {meta['vus_per_block']} a block, {n} units, "
-        f"{info['lower_s']} s")
-    del st
     values = gen(np.random.default_rng(seed), n)
     if set(values) != {nm for nm, _t in params}:
         raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
-    return Member(name, tp.fn, rows, out_rows, values), info
+    info = {"descriptor_id": did, "layout": tp.layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
+            "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n}
+    return Member(shape.replace(":", "-"), tp.fn, rows, out_rows, values), info
+
+
+def prove_served(shape: str, tools: Tools, out: Path, seed: int) -> tuple[Member, dict, dict]:
+    """``shape``'s member through `prove_units`, one unit drawn by Lean: staged at one unit, and again at `units_for`'s when
+    one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the leg."""
+    import a11_kinds as K
+
+    m, info = served_member(shape, seed)
+    t = time.time()
+    with K.no_cyclic_gc():
+        try:
+            leg = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
+        except OutsideShape as ex:
+            n = units_for(ex.k_log, ex.per_block)
+            if n == 1:
+                raise
+            log(f"{shape}: k_log {ex.k_log}, {ex.per_block} a block: staged again at {n} units")
+            m, info = served_member(shape, seed, n)
+            leg = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
+    ml = leg["members"][m.name]
+    info.update(ands=ml["ands"], k_log=ml["k_log"], leg_s=round(time.time() - t, 1), stage_py_maxrss_gb=maxrss_gb(resource.RUSAGE_SELF))
+    return m, info, leg
 
 
 def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
@@ -783,24 +802,19 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
                 continue
             with reuse_lowerings():
                 try:
-                    m, info = served_member(shape, seed)
+                    m, info, honest = prove_served(shape, tools, out, seed)
                 except ValueError as ex:
-                    if "needs a block of" not in str(ex):
+                    if "needs a block of" not in str(ex) and not isinstance(ex, OutsideShape):
                         raise
                     rec["blocker"] = "; ".join(x for x in (rec.get("blocker"), f"C-Flock's stager refused it: {ex}") if x)
                     log(f"{shape}: {rec['blocker']}")
                     continue
                 rec.pop("blocker", None)
                 rec.update(info)
-                if info["k_log"] + 3 > a7.M_MAX:
-                    rec["blocker"] = f"k_log {info['k_log']}: m = k_log + 3 is past {a7.M_MAX} (flock-circuit's --zk shape)"
-                    continue
-                d = out / m.name
-                honest = prove_units([m], "lean", tools=tools, out=d / "honest", k=1)
                 rec["honest"] = {x: honest.get(x) for x in ("accepted", "audit", "members", "verdicts", "seconds", "firewall",
                                                             "refused")}
                 if negs:
-                    rec["negatives"] = negatives([m], "lean", None, tools, d / "negatives", honest, k=1)
+                    rec["negatives"] = negatives([m], "lean", None, tools, out / m.name / "negatives", honest, k=1)
         except Exception as ex:  # noqa: BLE001 -- recorded per shape, the rest still run
             rec["error"] = f"{type(ex).__name__}: {ex}"[:2000]
             log(f"{shape}: {rec['error']}")
