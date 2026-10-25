@@ -27,14 +27,41 @@ def fields(tp: Any) -> list[Any]:
     return [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
 
 
+def slot_tables(fn: Any) -> set[str]:
+    """The tables a lookup slot holds (`read_slots.SLOT_TABLES`: rsq, sqrt, rcp, ex2) that word Definition ``fn`` reads: those its
+    primitives declare (`PrimitiveDefinition.tables`), each Definition visited once and no Boolean Definition entered (its body
+    is gates and reads no table), so the walk is the descriptor's, never the unrolled circuit's."""
+    from verity_flock.read_slots import SLOT_TABLES
+
+    from verity.ml.circuits.defs import PrimitiveDefinition
+
+    seen, stack, out = set(), [fn], set()
+    while stack:
+        f = stack.pop()
+        if f.id in seen:
+            continue
+        seen.add(f.id)
+        if isinstance(f, PrimitiveDefinition):
+            out.update(n for n, _kind in f.tables if n in SLOT_TABLES)
+        elif getattr(getattr(f, "defn", f), "word", None) is None and getattr(f, "body", None) is not None:
+            stack.extend(n.fn for n in f.body.nodes)
+    return out
+
+
 def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
     once per statement) for a ``SPLITS`` part of at least one whole block (T >= BN: inline, step 16's 64-key part's EX2 reads
-    are 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots), else inline, as step 16's 16-key part and
-    five-split combine were proved. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
+    are 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole row whose word Definition reads
+    a table a slot holds (`slot_tables`: inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make
+    6.35e9 nonzeros for its 10.2M ANDs, 622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB, r20261025-072909-38b5;
+    in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND, k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean
+    with its three negatives refused, r20261025-094406-c40b), else inline, as step 16's 16-key part and five-split combine were
+    proved. A Boolean template's body reads no table (a ``_v2`` body's EX2 is gates), so it lowers flat either way."""
     from verity_vllm.pipeline import split_rows as SP
     from verity_vllm.query.program_view import spec_statics
 
+    if tp.layout == "row":
+        return "slots" if tp.word == tp.id and slot_tables(tp.fn) else "inline"
     if tp.layout != "split" or SP.combine(tp):
         return "inline"
     S = spec_statics(tp.word)
