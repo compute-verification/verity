@@ -561,6 +561,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
                  depth=depth, ov=ov, serve_prio=serve_prio, window_end=we, spill=spill)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
+        SO.hook_lm(llm, win)
         win.captures = SO.CAPTURES
         llm.dither_stats, llm.dither_win, llm.dither_mod = SO.stats(win), win, SO
         return llm

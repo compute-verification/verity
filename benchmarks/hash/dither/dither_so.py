@@ -230,6 +230,30 @@ TAIL_ENV = "DITHER_SO_TAIL"
 # units' event), h_wall_ms and h_cpu_ms (the root's return to the units' flag, wall and main's thread CPU), h_salt_ms
 # (dispatch_units' salt) and h_side_ms (SoSide.dispatch)
 HMARK_ENV = "DITHER_SO_HMARK"
+# "1" (without -ov; vLLM's V2 runner, whose sample_tokens calls compute_logits after the step hook's `after`): step s's
+# logits (lm_head) computed in step s's `after` on a stream of their own once step s - D + 1's units are done, so on the
+# SMs the units leave idle while the step's last trees and its root go out, and step s - D + 2's units launched after
+# them; the sampler's compute_logits takes them (`hook_lm`).  "2": as "1", the units' launch not waiting for them.  "3":
+# as "1", the host waiting for them before it launches the units, so the units' CTAs take their SMs before the next
+# forward's kernels are launched beside them (under "1" those can be placed first and split the units' SMs).  "4": as
+# soon as step s's forward is done, beside the step's tables on the serving SMs (the tables' SHA-512 bound by the ALU,
+# lm_head by memory), the units' launch not waiting for them.  The same logits: the engine's own compute_logits on the
+# same hidden states, the sampler after them
+LM_GAP_ENV = "DITHER_SO_LM_GAP"
+# with $DITHER_SO_LM_GAP: the serving stream held this many µs (a one-thread spin, torch.cuda._sleep, at the 2092 MHz SM
+# clock these RTXs run at) after it takes the logits, so the next forward's kernels reach the GPU after the units' CTAs
+# hold their SMs.  A screen of where the units' launch and the forward's meet; no value changes
+LM_HOLD_ENV = "DITHER_SO_LM_HOLD_US"
+# "1" (with $DITHER_SO_LM_GAP): the logits' stream at priority 0, the units', so the serving stream's tables are placed
+# before lm_head's CTAs; unset, at the serving stream's
+LM_LOW_ENV = "DITHER_SO_LM_LOW"
+# "1" (without -ov, $DITHER_SO_LM_GAP or $DITHER_SO_PREQ; vLLM's V2 runner): the units step s's `after` would dispatch,
+# their coin back, dispatched instead from the sampler's compute_logits once step s's lm_head is launched, their stream
+# waiting for it, so lm_head's blocks take every SM before the units' fill theirs (two units blocks fill an SM's
+# registers), and the next forward's kernels, launched after the sampler, find the units on their SMs.  A step whose
+# units are captured, and the window's last, dispatch as before; where no compute_logits comes, the next `before`
+# dispatches them.  The same receipts, under the same coin, after the same round
+LM_FIRST_ENV = "DITHER_SO_LM_FIRST"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -311,6 +335,26 @@ class SoWindow(DO.Window):
         self.clean_from: int | None = None
         self.dead_c: int | None = None
         self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
+        self.lm_gap = int(os.environ.get(LM_GAP_ENV) or 0)
+        if self.lm_gap not in (0, 1, 2, 3, 4) or (self.lm_gap and self.overlap):
+            raise RuntimeError(f"${LM_GAP_ENV}={self.lm_gap}: 0 to 4, and serves an -so arm without -ov")
+        # `hook_lm`'s: the runner, the engine's own compute_logits, the logits' stream; a step's logits for its sampler
+        self.lm_runner = self.lm_fn = self.lm_stream = None
+        self.lm_out: torch.Tensor | None = None
+        self.lm_done = torch.cuda.Event()
+        self.lm_wait = False
+        self.lm_n = {"after": 0, "taken": 0}
+        self.lm_hold_us = int(os.environ.get(LM_HOLD_ENV) or 0)
+        if self.lm_hold_us and not self.lm_gap:
+            raise RuntimeError(f"${LM_HOLD_ENV}: needs ${LM_GAP_ENV}")
+        self.lm_first = os.environ.get(LM_FIRST_ENV) == "1"
+        if self.lm_first and (self.lm_gap or self.overlap or os.environ.get(PREQ_ENV) == "1"):
+            raise RuntimeError(f"${LM_FIRST_ENV}=1 serves an -so arm without -ov, ${LM_GAP_ENV} or ${PREQ_ENV}")
+        # the step whose units wait for compute_logits, and the event after its lm_head their stream waits on
+        self.lm_defer: int | None = None
+        self.units_after: torch.cuda.Event | None = None
+        self.lm_ev = torch.cuda.Event()
+        self.lm_first_n = {"after_lm": 0, "flushed": 0}
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -553,6 +597,19 @@ class SoWindow(DO.Window):
         self.late_waits.append(1e3 * t)
         return t
 
+    def _lm_flush(self, ev: torch.cuda.Event | None) -> None:
+        """$DITHER_SO_LM_FIRST: the step's units `after` left for compute_logits, their stream waiting on ev (recorded
+        after step s's lm_head) where given."""
+        j, self.lm_defer = self.lm_defer, None
+        self.stashed.discard(j)
+        self.units_after = ev
+        try:
+            self.dispatch_units(j)
+        finally:
+            self.units_after = None
+        self.phase(None)
+        self.lm_first_n["after_lm" if ev is not None else "flushed"] += 1
+
     def _lag_finish(self) -> None:
         """$DITHER_SO_ROOT_LAG: the lagged step's round root, once its copy is out (the host waits here for what is left
         of the step's trees), sent as that step's round; its y check and units wait read."""
@@ -592,7 +649,7 @@ class SoWindow(DO.Window):
             pending = s1 - 1 - sd.ov.dispatched_upto
             sd.ov.drain()
         else:
-            self.deferred = None
+            self.deferred = self.lm_defer = None
             pending = len(self.stashed)
             for j in sorted(self.stashed):
                 self.stashed.discard(j)
@@ -742,6 +799,8 @@ class SoWindow(DO.Window):
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
+        if self.lm_defer is not None:
+            self._lm_flush(None)
         if self.root_lag == 1 or (self.lag is not None and self.ev_lag.query()):
             self._lag_finish()
         if not self.open:
@@ -770,6 +829,8 @@ class SoWindow(DO.Window):
 
     def drain(self) -> None:
         """Under -ov: every round handed to the sender sent, every step's units dispatched, the device idle."""
+        if self.lm_defer is not None:
+            self._lm_flush(None)
         self._lag_finish()
         if self.overlap and DA.SIDE:
             DA.SIDE[0].ov.drain()
@@ -781,11 +842,14 @@ class SoWindow(DO.Window):
         sd: SoSide = DA.SIDE[0]
         d = self.depth - 1
         main = torch.cuda.current_stream()
+        self.lm_out = None
         self.phase("forward_wait")
         if self.deferred is not None:
             self._forward_wait_deferred(main)
         main.synchronize()
         t_fwd = time.perf_counter()
+        if self.lm_gap == 4 and self.lm_runner is not None:
+            self._lm(None, "forward_wait")
         t_late = 0.0
         if self.deferred is not None and self.coin_async == 1:
             t_late = self._late_dispatch()
@@ -853,6 +917,8 @@ class SoWindow(DO.Window):
         j = s - d
         p = sd.dispatched.pop(j, None) if j >= self.s0 else None
         waited = p is not None
+        if self.lm_runner is not None and self.lm_gap and self.lm_gap != 4:
+            self._lm(sd.udone[p] if waited else None, "receipt_leaf")
         if p is None:
             lv.zero_()
         else:
@@ -954,6 +1020,8 @@ class SoWindow(DO.Window):
             if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
                 self.deferred = ju
                 self.deferrals["deferred"] += 1
+            elif self.lm_first and self.lm_runner is not None and s != self.end_at and self.cap_of.get(ju) is None:
+                self.lm_defer = ju
             else:
                 self.stashed.discard(ju)
                 t_coin = self.dispatch_units(ju)
@@ -1029,6 +1097,24 @@ class SoWindow(DO.Window):
         if bad:
             DA.SIDE[0].y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
         return bad
+
+    def _lm(self, units_done: torch.cuda.Event | None, back: str) -> None:
+        """$DITHER_SO_LM_GAP: step s's logits on the lm stream once the units before are done (`units_done`), its
+        forward already waited for, into `lm_out` for its sampler; under "1" and "3" the next units' launch after them.
+        The host's phase is `back` again after."""
+        st = self.lm_runner.execute_model_state
+        if st is None or st.hidden_states is None or st.input_batch.num_reqs == 0:
+            return
+        self.phase("lm_head")
+        ls = self.lm_stream
+        with torch.cuda.stream(ls):
+            if units_done is not None:
+                ls.wait_event(units_done)
+            self.lm_out = self.lm_fn(st.hidden_states[st.input_batch.logits_indices])
+            self.lm_done.record(ls)
+        self.lm_wait = self.lm_gap in (1, 3)
+        self.lm_n["after"] += 1
+        self.phase(back)
 
     def _step_end(self, s: int) -> None:
         if s == self.end_at:
@@ -1132,6 +1218,14 @@ class SoWindow(DO.Window):
                      "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None,
                      "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None)}
+        if self.lm_gap:
+            lm_n, self.lm_n = self.lm_n, dict.fromkeys(self.lm_n, 0)
+            doc["so"]["lm_gap"] = {"on": self.lm_gap, "units_wait": {1: "stream", 2: None, 3: "host", 4: None}[self.lm_gap], **lm_n,
+                                   "stream_priority": self.lm_stream.priority if self.lm_stream else None,
+                                   "hold_us": self.lm_hold_us}
+        if self.lm_first:
+            lm_n, self.lm_first_n = self.lm_first_n, dict.fromkeys(self.lm_first_n, 0)
+            doc["so"]["lm_first"] = lm_n
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -1563,8 +1657,15 @@ class SoSide(DA.Side):
             self.dispatched[j] = p
             self.unit_steps += 1
             return
+        if win.lm_wait and win.lm_gap == 3:
+            win.lm_done.synchronize()
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
+            if win.units_after is not None:
+                st.wait_event(win.units_after)
+            if win.lm_wait:
+                st.wait_event(win.lm_done)
+                win.lm_wait = False
             self.ev_u[p][0].record(st)
             self.ring_salt[p].copy_(self.salt_host[p], non_blocking=True)
             if g is not None:
@@ -2170,6 +2271,50 @@ def capture_at(priority: int) -> None:
             super().__init__(cuda_graph, pool, stream, *args, **kwargs)
 
     torch.cuda.graph = graph
+
+
+def hook_lm(llm, win: SoWindow) -> None:
+    """Under $DITHER_SO_LM_GAP, the engine's compute_logits takes the logits `SoWindow._lm` computed in the step's
+    `after` (the serving stream waiting for them), and computes any other itself (warmup, prompt logprobs).  Under
+    $DITHER_SO_LM_FIRST it computes them itself, then dispatches the units the step's `after` left (`_lm_flush`)."""
+    if not (win.lm_gap or win.lm_first):
+        return
+    env = LM_GAP_ENV if win.lm_gap else LM_FIRST_ENV
+    from verity_vllm.engine import engine_profile as prof
+    runner = prof.get_model_runner(llm)
+    if (type(runner).__module__ != "vllm.v1.worker.gpu.model_runner" or getattr(runner, "batch_sharder", None)
+            is not None or getattr(runner, "pcp_manager", None) is not None):
+        raise RuntimeError(f"${env}: needs vLLM's V2 runner (its sample_tokens computes the logits after the "
+                           f"step hook's `after`) without a batch sharder or PCP, not {type(runner).__module__}")
+    model = runner.model
+    orig = model.compute_logits
+
+    def compute_logits(h, *args, **kw):
+        if win.lm_first:
+            out = orig(h, *args, **kw)
+            if win.lm_defer is not None:
+                win.lm_ev.record()
+                win._lm_flush(win.lm_ev)
+            return out
+        out, win.lm_out = win.lm_out, None
+        if out is None:
+            return orig(h, *args, **kw)
+        if args or kw or out.shape[0] != h.shape[0]:
+            raise RuntimeError(f"${LM_GAP_ENV}: the step's logits are for {out.shape[0]} rows, its sampler asks for "
+                               f"{h.shape[0]}")
+        main = torch.cuda.current_stream()
+        main.wait_event(win.lm_done)
+        if win.lm_hold_us:
+            torch.cuda._sleep(2092 * win.lm_hold_us)
+        out.record_stream(main)
+        win.lm_n["taken"] += 1
+        return out
+
+    model.compute_logits = compute_logits
+    win.lm_runner, win.lm_fn = runner, orig
+    if win.lm_gap:
+        low = os.environ.get(LM_LOW_ENV) == "1"
+        win.lm_stream = torch.cuda.Stream(priority=0 if low else torch.cuda.current_stream().priority)
 
 
 def stats(win: SoWindow):
