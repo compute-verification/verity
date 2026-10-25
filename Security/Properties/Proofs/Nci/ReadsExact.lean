@@ -55,7 +55,10 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   its offset name in the parent what they name in the member (`agree_shift`), and agreements compose across the
   activations (`agree_trans`); so `fromCallee` one step up keeps what its callee's return leaves resolve to wherever
   the callees' summaries hold `RetOk`, `throughArg` one step down keeps what its parameters' leaves name (`ThroughSpec`)
-  and its segments are of a copy at least (`ThroughReps`, which `throughReps` proves) (`calleeSpec_succ`);
+  and its segments are of a copy at least (`ThroughReps`) (`calleeSpec_succ`);
+* every segment `down`, `fromCallee`, `throughArg` and `carry` give is of a copy at least, and of more than one only of
+  gates or of copies all alike (`RepsOk`, `reps_fuel`), followed through `Desc`'s code (`OkIs`, `reps_step`); so
+  `ThroughReps` holds (`throughReps`) and so does `RetOk`'s third part of every summary `memoOf` makes (`retOk_reps`);
 * `throughArg`'s step: a member's parameter leaves, read through its node's argument (whole, a batch member's spans, or
   a scan iteration's slice, or its carry through `carry`), keep the gates they resolve to in the member wherever
   `down` and `carry` do (`CarrySpec`, `one_agree`, `throughSpec_succ`);
@@ -4627,10 +4630,12 @@ def BatchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
 
 /-! ## Segments of a copy at least
 
-Every segment `down`, `fromCallee`, `throughArg` and `carry` return has a copy at least (`reps_fuel`, `throughReps`):
-`Seg.one`, a member's return segments of more than one copy, a summary's slice copies of one resolved, or what the calls
-one step down return, followed through `Desc`'s code (`OkIs`, `reps_step`), its scan case and `down`'s body copied out
-(`scanBranch`, `downBody`, `down_succ`). -/
+Every segment `down`, `fromCallee`, `throughArg` and `carry` return has a copy at least, and more than one only of
+gates or of copies all alike (`RepsOk`; `reps_fuel`, `throughReps`): `Seg.one`, a member's return segments of more than
+one copy (gates moved by `shiftGates`, `gates_shiftGates`), a summary's slice copies of one resolved (`shift = 0`), or
+what the calls one step down return, followed through `Desc`'s code (`OkIs`, `reps_step`), its scan case and `down`'s
+body copied out (`scanBranch`, `downBody`, `down_succ`). So every summary `memoOf` makes has return segments of that
+shape (`summarize_reps`, `memoOf_reps`), `RetOk`'s third part (`retOk_reps`). -/
 
 /-- `scanBranch` where the step returns `(ct, y)`. -/
 def scanTuple (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (ct y : Flock.Program.Ty) (q : Piece) :
@@ -4844,8 +4849,11 @@ theorem okIs_throw_bind {α β : Type} {I : β → Prop} {e : String} {f : α �
   intro w hw
   cases hw
 
-/-- Every segment of `segs` is of a copy at least. -/
-def AllReps (segs : Array Seg) : Prop := ∀ x ∈ segs.toList, x.reps ≠ 0
+/-- A segment of a copy at least, and of more than one only of gates or of copies all alike (`shift = 0`). -/
+def RepsOk (x : Seg) : Prop := x.reps ≠ 0 ∧ (x.reps > 1 → (∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w) ∨ x.shift = 0)
+
+/-- Every segment of `segs` is `RepsOk`. -/
+def AllReps (segs : Array Seg) : Prop := ∀ x ∈ segs.toList, RepsOk x
 
 theorem okIs_forIn_bind {β γ : Type} {J : γ → Prop} (f : β → Array Seg → Except String (ForInStep (Array Seg)))
     (l : List β) (acc : Array Seg) {g : Array Seg → Except String γ}
@@ -4887,15 +4895,43 @@ theorem allReps_append {a b : Array Seg} (ha : AllReps a) (hb : AllReps b) : All
   rw [Array.toList_append, List.mem_append] at hx
   exact hx.elim (ha x) (hb x)
 
-theorem allReps_single {s : Seg} (hs : s.reps ≠ 0) : AllReps #[s] := by
+theorem allReps_single {s : Seg} (hs : RepsOk s) : AllReps #[s] := by
   intro x hx
   simp at hx
   subst hx
   exact hs
 
-theorem allReps_push {a : Array Seg} {s : Seg} (ha : AllReps a) (hs : s.reps ≠ 0) : AllReps (a.push s) := by
+theorem allReps_push {a : Array Seg} {s : Seg} (ha : AllReps a) (hs : RepsOk s) : AllReps (a.push s) := by
   rw [Array.push_eq_append]
   exact allReps_append ha (allReps_single hs)
+
+theorem repsOk_one {s : Seg} (h : s.reps = 1) : RepsOk s := ⟨by omega, fun h' => by omega⟩
+
+theorem repsOk_alike {s : Seg} (hr : s.reps ≠ 0) (h0 : s.shift = 0) : RepsOk s := ⟨hr, fun _ => .inr h0⟩
+
+theorem repsOk_gates {s : Seg} (hr : s.reps ≠ 0) (hg : ∀ g ∈ s.ps.toList, ∃ w, g.tgt = .gate w) : RepsOk s :=
+  ⟨hr, fun _ => .inl hg⟩
+
+/-- `shiftGates` of pieces `p` finds gates names gates. -/
+theorem gates_shiftGates {p : Piece → Bool} {ps : Array Piece} (h : ps.all p = true)
+    (hp : ∀ g, p g = true → ∃ w, g.tgt = .gate w) (δ : Int) : ∀ g ∈ (Desc.shiftGates δ ps).toList, ∃ w, g.tgt = .gate w := by
+  intro g hg
+  unfold Desc.shiftGates at hg
+  rw [Array.toList_map, List.mem_map] at hg
+  obtain ⟨g0, hg0, rfl⟩ := hg
+  obtain ⟨w, hw⟩ := hp g0 (Array.all_eq_true_iff_forall_mem.1 h g0 (Array.mem_toList_iff.1 hg0))
+  exact ⟨w, by simp only [hw]⟩
+
+/-- `down`'s test that a batch's members return gates only, one copy to a segment, names its pieces' gates. -/
+theorem gates_flatMap {segs : Array Seg} {p : Piece → Bool} {b : Bool}
+    (h : ((segs.all fun s => decide (s.reps ≤ 1) && s.ps.all p) && b) = true) : (segs.flatMap (·.ps)).all p = true := by
+  rw [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem] at h
+  rw [Array.all_eq_true_iff_forall_mem]
+  intro g hg
+  obtain ⟨s, hs, hgs⟩ := Array.mem_flatMap.1 hg
+  have := h.1 s hs
+  rw [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem] at this
+  exact this.2 g hgs
 
 set_option hygiene false in
 /-- One step of `OkIs AllReps` through `Desc`'s code, its calls' segments by the hypotheses in scope named `hD`
@@ -4925,16 +4961,19 @@ macro "reps_step" : tactic => `(tactic| first
   | (with_reducible apply okIs_forIn) <;> try intro _ _ _ _
   | with_reducible apply okIs_pure
   | with_reducible exact allReps_empty
-  | exact allReps_single Nat.one_ne_zero
-  | exact Nat.one_ne_zero
+  | with_reducible apply allReps_single
+  | exact repsOk_one rfl
   | with_reducible apply allReps_append
   | with_reducible apply allReps_push
   | assumption
   | split
   | dsimp only [ForInStep.value]
   | (with_reducible refine allReps_range (fun _ _ _ => ?_) ‹_›)
-  | (apply allReps_single; (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega)
-  | ((try dsimp only); omega))
+  | (refine repsOk_alike ?_ rfl; (try dsimp only);
+      (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega)
+  | (refine repsOk_gates ?_ (gates_shiftGates (by first | exact ‹_› | exact gates_flatMap ‹_›)
+        (fun _ hg => by split at hg <;> first | exact ⟨_, ‹_›⟩ | cases hg) _);
+      (try dsimp only); (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega))
 
 -- one `repeat' reps_step` walks every case of `down`'s body, about 4x the default budget
 set_option maxHeartbeats 1000000 in
@@ -4992,7 +5031,65 @@ theorem reps_fuel (c : Desc.Ctx) : ∀ fuel, (∀ q, OkIs AllReps (Desc.down c f
 
 /-- **`throughArg`'s segments are each of a copy at least.** -/
 theorem throughReps (c : Desc.Ctx) : ThroughReps c :=
-  fun fuel k m i g segs h => (reps_fuel c fuel).2.2.1 k m i g segs h
+  fun fuel k m i g segs h x hx => ((reps_fuel c fuel).2.2.1 k m i g segs h x hx).1
+
+/-- `PS.of` keeps its segments of positive count. -/
+theorem allReps_of {segs : Array Seg} (h : AllReps segs) : AllReps (PS.of segs).segs := by
+  rw [of_segs]
+  intro x hx
+  simp only [Array.toList_filter, List.mem_filter] at hx
+  exact h x hx.1
+
+/-- **A summary's return segments are each `RepsOk`**: `Desc.summarize` lays `down`'s segments of its return end to
+end. -/
+theorem summarize_reps (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P memo d = .ok s) : AllReps s.ret.segs := by
+  unfold Desc.summarize at h
+  extract_lets defn body c ret0 acc0 at h
+  split at h
+  · simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact allReps_empty
+  · obtain ⟨ret, hret, h⟩ := Walk.except_bind_ok h
+    obtain ⟨acc, -, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have hD : ∀ q, OkIs AllReps (Desc.down c Flock.Steps.FUEL q) := (reps_fuel c _).1
+    have hret' : AllReps ret := by
+      refine (?_ : OkIs AllReps _) ret hret
+      repeat' reps_step
+    exact allReps_of hret'
+
+theorem memo_push_reps {memo : Array Desc.Summary} {x : Desc.Summary} (hm : ∀ f : Nat, AllReps (memo[f]!).ret.segs)
+    (hx : AllReps x.ret.segs) (f : Nat) : AllReps ((memo.push x)[f]!).ret.segs := by
+  by_cases hf : f < memo.size
+  · rw [getElem!_pos (memo.push x) f (by simp; omega), Array.getElem_push_lt hf, ← getElem!_pos memo f hf]
+    exact hm f
+  by_cases he : f = memo.size
+  · subst he
+    rw [getElem!_pos (memo.push x) memo.size (by simp), Array.getElem_push_eq]
+    exact hx
+  · rw [getElem!_neg (memo.push x) f (by simp; omega)]
+    exact allReps_empty
+
+/-- **Every summary `memoOf` makes has return segments each `RepsOk`**, so the third part of `RetOk` holds of every
+Definition: a segment of more than one copy names gates only or is copies all alike. -/
+theorem memoOf_reps (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo) (f : Nat) :
+    AllReps (memo[f]!).ret.segs := by
+  unfold memoOf at h
+  extract_lets seen memo0 at h
+  have h' := ok_bind_pure h
+  refine (okIs_forIn_range (I := fun m : Array Desc.Summary => ∀ f : Nat, AllReps (m[f]!).ret.segs) _ _ _
+    (fun t r hr => ?_) (fun f => by rw [getElem!_neg _ f (by simp [memo0])]; exact allReps_empty)) memo h' f
+  exact okIs_ite
+    (fun _ => okIs_bind_of (J := fun x : Desc.Summary => AllReps x.ret.segs) (fun v hv => summarize_reps P r t v hv)
+      (fun x hx => okIs_pure (memo_push_reps hr hx)))
+    (fun _ => okIs_bind_of (J := fun x : Desc.Summary => AllReps x.ret.segs) (okIs_pure allReps_empty)
+      (fun x hx => okIs_pure (memo_push_reps hr hx)))
+
+theorem retOk_reps (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo) (f : Nat) :
+    ∀ s ∈ (memo[f]!).ret.segs.toList, s.reps > 1 → (∀ g ∈ s.ps.toList, ∃ w, g.tgt = .gate w) ∨ s.shift = 0 :=
+  fun s hs => (memoOf_reps P memo h f s hs).2
 
 /-! ## The core's induction on fuel -/
 
