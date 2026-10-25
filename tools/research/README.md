@@ -142,7 +142,10 @@ it, naming the commit, retargets each whose base branch's tip is on it (stacks G
 head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
-bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
+bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun. When what landed touches
+a Lake package's lock or Lean sources (`queue.lean_change`), infra's `/data/infra/lean_publish.sh SHA` (`RESEARCH_LEAN_PUBLISH`:
+path, empty skips; absent off the control pod) starts the Lean cache's daily build on it, bounded at 120 s and never failing
+the landing; one line says whether it started, and the publish's own log is `/data/drive/lean-publish.log`.
 
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
