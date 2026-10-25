@@ -1,5 +1,5 @@
-import Proofs.Flock.Soundness.Model.Holo
-import Proofs.Flock.Soundness.Model.Compiled
+import Definitions.Flock.Holo
+import Definitions.Flock.Compiled
 
 /-!
 # The holographic table, compiled: caps, and the openings after the last coin
