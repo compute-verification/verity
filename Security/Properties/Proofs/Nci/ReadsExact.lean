@@ -8290,6 +8290,100 @@ theorem calleeShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
           exact ⟨h0, h1, h2⟩) r v hv
     exact ⟨segs', rfl, hA'⟩
 
+/-- A scan's initial carry's leaves `[lo, hi)`, each in range, through `throughArg`: `ShapeOk` segments. -/
+theorem init_shape (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hTS : ThroughShape c fuel) (hm0 : 0 < node.members) {lo hi : Nat}
+    (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
+      j < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves) {segs : Array Seg}
+    (h : Desc.throughArg c fuel k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo } = .ok segs) :
+    ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  have hnode := node_get hn
+  exact hTS k 0 0 _ segs (by rw [hnode]; exact hm0) rfl (fun x hx => by
+    rw [pos_carry, List.mem_map] at hx
+    obtain ⟨j, hj, rfl⟩ := hx
+    rw [List.mem_range'_1] at hj
+    rw [hnode]
+    have := hlv j hj.1 (by omega)
+    exact ⟨by simp, this.1, by show (j : Int) < _; exact_mod_cast this.2⟩) h
+
+/-- **`carry`'s shape step**: one step up, `carry`'s segments are `ShapeOk` wherever the step's summary holds `RetOk`
+and `fromCallee`'s and `throughArg`'s segments one step down are `ShapeOk`. -/
+theorem carryShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hCS : CalleeShape c fuel)
+    (hTS : ThroughShape c fuel) : CarryShape c (fuel + 1) := by
+  intro k m a b segs hform hm hb h
+  rw [Desc.carry.eq_2] at h
+  obtain ⟨node, hn, h⟩ := Walk.except_bind_ok h
+  dsimp only at h
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  rw [hnode] at hform hm hb
+  have hRk := hR k node hn
+  obtain ⟨hps, hpos, -, hag, hpp⟩ := hRk
+  have hlenR : (psPos (c.memo[node.fn]!).ret).length = (c.P.defs[node.fn]!).body.ret.count := by
+    have := (hag (c.P.child sc k 0) (by rw [child_eq c sc hd hn 0]; rfl)).length_eq
+    simpa using this
+  obtain ⟨hcov, hid⟩ := carryRuns_cover _ hps hpp a b (fun hab => by rw [hlenR]; exact hb hab)
+  have hm0 : 0 < node.members := by omega
+  have hcarry : ∀ h j' : Nat, (psPos (c.memo[node.fn]!).ret)[h]? = some (.ref true 0, (j' : Int)) →
+      0 < (c.P.defs[node.fn]!).body.params.size ∧ j' < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves := by
+    intro h j' hx
+    have := (hpos _ (List.mem_of_getElem? hx)).2.2 0 rfl
+    exact ⟨this.1, by have h2 : ((j' : Nat) : Int) < _ := this.2; exact_mod_cast h2⟩
+  have hfa := forIn_app (ShapeOk c.P c.d) _ _ ?_ #[] segs h'
+  · obtain ⟨out, rfl, hout⟩ := hfa
+    intro s hs
+    rw [Array.toList_append, List.mem_append] at hs
+    exact hs.elim (fun hs => by simp at hs) (hout s)
+  intro x hx r' y hy
+  split at hy
+  · rename_i hxid
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    exact ⟨v, rfl, init_shape c hn hTS hm0 (fun j h1 h2 => hcarry j j (hid x hx hxid j h1 h2)) hv⟩
+  · have hy := walkAtMost_bind _ _ _ hy
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+    obtain ⟨segs', hsegs', hA2⟩ := forIn_app (ShapeOk c.P c.d) _ _ (fun j _ r'' y' hy' => by
+        obtain ⟨ch, hch, hy'⟩ := Walk.except_bind_ok hy'
+        have hok := chainOf_ok _ j ch hch
+        split at hy'
+        · rename_i hcond
+          simp only [Bool.and_eq_true, decide_eq_true_eq, Option.isSome_iff_exists] at hcond
+          obtain ⟨⟨q0, hq0⟩, he⟩ := hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          obtain ⟨hsz, h0, hsc, hex, -⟩ := hok
+          obtain ⟨hq, -⟩ := hex q0 hq0
+          have hlt : ch.hist[ch.hist.size - 1]! < (c.P.defs[node.fn]!).body.ret.count := by
+            have := retAt_pos _ hps hpp hq
+            rw [← hlenR]; exact (List.getElem?_eq_some_iff.1 this).1
+          exact hCS k (m - (ch.hist.size - 1)) _ _ v' (by rw [hnode]; omega) (by rw [hnode]; intro; omega) hv'
+        · rename_i hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          have hs : ∀ s ≤ m, (psPos (c.memo[node.fn]!).ret)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := by
+            intro s hs
+            rcases hex : ch.exit with _ | q0
+            · obtain ⟨q, hq, ht, hb⟩ := chainAt_cyc hok hex s
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+            · have he : ¬ ch.hist.size - 1 ≤ m := fun he => hcond (by simp [hex, he])
+              obtain ⟨-, -, hsc, -, -⟩ := hok
+              obtain ⟨q, hq, ht, hb⟩ := hsc s (by omega)
+              rw [chainAt_lt ch (show s < ch.hist.size by omega), chainAt_lt ch (show s + 1 < ch.hist.size by omega)]
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+          exact init_shape c hn hTS hm0 (lo := ch.at (m + 1)) (hi := ch.at (m + 1) + 1)
+            (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv') r' v hv
+    exact ⟨segs', by rw [hsegs'], hA2⟩
+
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
 decoded Program has them (`BodiesOk.retParts_reads`). -/
