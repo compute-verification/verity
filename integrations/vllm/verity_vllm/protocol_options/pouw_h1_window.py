@@ -8,10 +8,10 @@ as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). An H1 window (`Window`) h
 (``session``: S) and, once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``)
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C
-install holds the same reserve answer and has the gate open S on the weights' root, its salt coin opened after that
-root (`salt_session`). ncp-v2's `session` is the gate's open answer, and opens its salt after the weights' root.
-Round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish` closes the session once the window has
-finished. The host opens a salt coin only after the root its session was opened on (serve.py's ``--root``,
+install holds the same reserve answer, for a session reserved with its salt coin alone (`window.SALT_FAMILIES`), and has
+the gate open S on the weights' root, its salt coin opened after that root (`salt_session`). ncp-v2's `session` is
+the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
+(`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the root its session was opened on (serve.py's ``--root``,
 RT4-INT-24), H1's R. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine the prover
 doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
 """
@@ -99,16 +99,18 @@ def reserved_of(raw: Any) -> dict[str, Any] | None:
     return dict(raw)
 
 
-def _live(entry: str, at: str, steps: int, given: Mapping[str, Any]) -> tuple[Any, LiveCommitment]:
-    """The session the gate's answer `given` opened on the challenger at `at` (`connect`) and its coin commitment, a live
-    epoch's with at least `steps` round coins; on a refusal the session is closed and ValueError raised."""
+def _live(entry: str, at: str, steps: int, given: Mapping[str, Any],
+          layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason) -> tuple[Any, LiveCommitment]:
+    """The session the gate's answer `given` opened on the challenger at `at` (`connect`) and its coin commitment, of the
+    layout `layout` refuses none of (a live epoch's, or Pearl-C's salt coin alone, `window.salt_epoch_reason`) with at
+    least `steps` round coins; on a refusal the session is closed and ValueError raised."""
     try:
         client = connect(at, given)
     except ValueError as e:
         raise ValueError(f"{entry}: {e}") from e
     c = client.commitment
-    why = Wd.live_epoch_reason(c)
-    if why is None and c.family(Wd.ROUND) < steps:
+    why = layout(c)
+    if why is None and steps and (c.family(Wd.ROUND) or 0) < steps:
         why = (f"its {c.family(Wd.ROUND)} round coins are fewer than the window's {steps} rounds (start it with SCHEME "
                f"{PHC.SCHEME} and FAMILIES {PHC.families(steps)})")
     if why is not None:
@@ -144,10 +146,12 @@ def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
 
 
 def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, named: str, tries: int = 1,
-           wait: Callable[[float], Any] = time.sleep) -> tuple[Any, LiveCommitment, LiveOpening, dict[str, Any]]:
+           wait: Callable[[float], Any] = time.sleep,
+           layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason
+           ) -> tuple[Any, LiveCommitment, LiveOpening, dict[str, Any]]:
     """Reserved session `sid` opened by `gate` on `root` (`named` names that root in a refusal), reached at `at`'s host on
-    the port the answer names (`at_port`; tried at most `tries` times while it refuses connections, `wait` between), a
-    live epoch's with at least `steps` round coins (`_live`), and its salt coin opened after `root`. Returns the session,
+    the port the answer names (`at_port`; tried at most `tries` times while it refuses connections, `wait` between), of
+    `layout` with at least `steps` round coins (`_live`), and its salt coin opened after `root`. Returns the session,
     its coin commitment, the salt coin's opening and the gate's answer. Refused (ValueError, the session closed when it
     was reached): an answer that isn't the gate's open of `sid` on `root`, or a challenger off it; `CoinError` is the
     challenger's."""
@@ -159,7 +163,7 @@ def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, n
         raise ValueError(f"{entry}: the gate's answer is not session {sid} opened on {named} {root.hex()[:16]}...")
     for i in range(tries):
         try:
-            client, c = _live(entry, at_port(at, answer.get("port")), steps, answer)
+            client, c = _live(entry, at_port(at, answer.get("port")), steps, answer, layout)
             break
         except ConnectionRefusedError:
             if i == tries - 1:
@@ -177,12 +181,13 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any]]:
     """The session an install's salt coin comes from, on the challenger at ``settings.challenger``, its salt coin opened
     after the weights' root `root`: when `opens` (Pearl-C's), the reserved session ``settings.session`` that
-    ``settings.gate`` opens on `root` (`opened`), else (ncp-v2's) the session the gate's open answer ``settings.session``
+    ``settings.gate`` opens on `root` (`opened`), its coins the salt coin alone (`window.salt_epoch_reason`, so it ends
+    complete once that coin is released), else (ncp-v2's) the session the gate's open answer ``settings.session``
     names (`session`). Returns the session, its coin commitment, the salt coin's opening, the epoch's salt
     (`audit.salt_of` over `root`) and the gate's answer as the run carries it (`pouw_h1_challenger.carried`)."""
     if opens:
         client, c, opening, given = opened(entry, settings.challenger, 0, settings.gate, settings.session["session"], root,
-                                           "the weights' root", TRIES)
+                                           "the weights' root", TRIES, layout=Wd.salt_epoch_reason)
     else:
         (client, c, opening, _, _), given = session(entry, settings.challenger, 0, root, settings.session), settings.session
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given)
@@ -190,13 +195,15 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
 
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, at: str = "127.0.0.1:0",
                  tries: int = TRIES, wait: Callable[[float], Any] = time.sleep
-                 ) -> tuple[Any, LiveCommitment, LiveOpening, LiveRecord, bytes, dict[str, Any]]:
+                 ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any]]:
     """Reserved session `sid` opened at infra's gate, as words (`gate_of`), on the weights' root `root`, reached at `at`'s
-    host on the port the answer names, and its salt coin opened after `root` (`opened`): the run whose salt follows the
-    weights' root (Pearl-C's device run, `pouw_pearl_c_host.epoch_of`). Returns `session`'s tuple and the gate's answer as
-    a run carries it (`pouw_h1_challenger.carried`)."""
-    client, c, opening, given = opened(entry, at, 0, gate_of(gate), sid, root, "the weights' root", tries, wait)
-    return client, c, opening, LiveRecord(client, Wd.ROUND), salt_of(c, opening.coin, root), PHC.carried(given)
+    host on the port the answer names, its coins the salt coin alone (`window.salt_epoch_reason`), and that coin opened
+    after `root` (`opened`): the run whose salt follows the weights' root (Pearl-C's device run,
+    `pouw_pearl_c_host.epoch_of`). Returns the session, its coin commitment, the salt coin's opening, the epoch's salt
+    (`audit.salt_of` over `root`) and the gate's answer as a run carries it (`pouw_h1_challenger.carried`)."""
+    client, c, opening, given = opened(entry, at, 0, gate_of(gate), sid, root, "the weights' root", tries, wait,
+                                       Wd.salt_epoch_reason)
+    return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given)
 
 
 def at_port(at: str, port: Any) -> str:

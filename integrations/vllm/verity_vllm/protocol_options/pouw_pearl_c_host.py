@@ -84,9 +84,9 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
     """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
     `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
     (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
-    commitment a live epoch's (`window.live_epoch_reason`), and the opening its salt coin, opening against it after the
-    weights' root (`challenger.live_reason`).  Either is refused with `DomainError`; a live salt is `audit.salt_of`'s, as
-    H1's and ncp-v2's are."""
+    commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
+    opening against it after the weights' root (`challenger.live_reason`).  Either is refused with `DomainError`; a live
+    salt is `audit.salt_of`'s, as H1's and ncp-v2's are."""
     live = isinstance(coins, LiveCommitment), isinstance(opening, LiveOpening)
     if not any(live):
         return Epoch.start(workload, roots, coins, opening)
@@ -95,7 +95,7 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
     if set(roots) != set(workload.weights()):
         raise DomainError("every weight of the workload is committed, and only those")
     root = weights_root(roots)
-    why = Wd.live_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, root)
+    why = Wd.salt_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, root)
     if why is not None:
         raise DomainError(f"the salt's {why}")
     return Epoch(workload, dict(roots), salt_of(coins, opening.coin, root))
@@ -313,8 +313,9 @@ def _write(path: Path, data: bytes, digest: bool = True) -> dict:
 
 def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
     """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the epoch's coin commitment
-    and its salt coin's opening, the salt, the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
-    levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
+    and its salt coin's opening, the salt, the live session that gave it if one did (`pouw_pearl_c_manifest.session_head`),
+    the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and
+    tree levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
     levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 64 bytes a node; the
     head also holds the prover's hm96 salt key."""
     path = d / "manifest.json"

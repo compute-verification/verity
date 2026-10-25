@@ -1,6 +1,6 @@
-"""The Pearl-C device path's manifest as a verifier reads it (`pouw_pearl_c_device`, which writes it): its schemas, and a
-retained pass's epoch re-started from it (`manifest_epoch`), from the epoch's coins or, for a pass recorded before them,
-from its beacon.
+"""The Pearl-C device path's manifest as a verifier reads it (`pouw_pearl_c_device`, which writes it): its schemas, the
+live session a pass names (`session_head`), and a retained pass's epoch re-started from it (`manifest_epoch`), from the
+epoch's coins or, for a pass recorded before them, from its beacon.
 """
 from __future__ import annotations
 
@@ -16,6 +16,16 @@ MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
 #: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it (`manifest_epoch`)
 MANIFEST_SCHEMA_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 MANIFEST_SCHEMAS = (MANIFEST_SCHEMA, MANIFEST_SCHEMA_RECORDED)
+#: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (the weights'
+#: root) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's secret
+SESSION_KEYS = ("session", "seq", "root", "commitment")
+
+
+def session_head(commits: dict) -> dict:
+    """The manifest head's ``session`` for a run whose salt a live session gave (``commits["session"]``, the gate's
+    answer as the run carries it, `pouw_h1_challenger.carried`): its `SESSION_KEYS` alone. None given, none named."""
+    s = commits.get("session")
+    return {} if s is None else {"session": {k: s[k] for k in SESSION_KEYS}}
 
 
 def manifest_schema(man: dict, recorded: bool = False) -> str:

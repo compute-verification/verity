@@ -1,15 +1,23 @@
 """Served Pearl-C's live coins (`protocol_options.pouw`'s install under the setting ``challenger``): the install has the
-gate open the session it reserved on the weights' root it committed, takes that session's salt coin after the root
-(`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`) and closes the session at release; refused, before any
-patch or any coin: no session, a session bound to another commitment or another root, an in-process coin beside the
-challenger's, and a mix of the two.
+gate open the session it reserved on the weights' root it committed, its coins the salt coin alone
+(`window.SALT_FAMILIES`), takes that coin after the root (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`)
+and closes the session at release, so the session ends closed and complete; refused, before any patch or any coin: no
+session, a session of H1's layout, a session bound to another commitment or another root, an in-process coin beside the
+challenger's, and a mix of the two. The verifier holds the pass to that session (`pouw_h1_challenger.session_reason`'s
+Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`): it counts only reserved salt-only and ended
+closed and complete, and the pass's coins and salt are read from the session, never from the pass.
 
-CPU only: the auditor host is `challenger_host.Host` in this process, and the device run a stand-in that starts its epoch
-through `pouw_pearl_c_device.epoch_of` (no GPU here).
+CPU only: the auditor host is `challenger_host.Host` or `challenger_host.Gate` in this process, and the device run a
+stand-in that starts its epoch through `pouw_pearl_c_device.epoch_of` (no GPU here).
 """
 from __future__ import annotations
 
+import itertools
+import json
 import random
+import shutil
+import socket
+import threading
 from types import SimpleNamespace
 
 import numpy as np
@@ -20,10 +28,13 @@ from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.ml.crypto import lms
 from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
+from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+from verity_vllm.protocol_options import pouw_pearl_c_manifest as PPM
 
 from tests.protocol_options import challenger_host as CH
 
@@ -34,6 +45,13 @@ ROOTS = {0: b"\x05" * 64}
 SID = CH.session_id(1)
 #: the gate's reserve answer for the install's session, which the install opens itself on the weights' root
 RESERVED = {"session": SID, "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
+#: the auditor's challenger key, its ledger's and its sessions' (five leaves a session: reserve, open, record, close, end)
+PRIVATE, KEY = CH.challenger_key(3, H=5)
+
+
+def salt_only(seed: int) -> LC.LiveChallenger:
+    """A Pearl-C session's challenger: the salt coin alone, drawn from `seed`."""
+    return LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(seed))
 
 
 class Apply:
@@ -64,8 +82,8 @@ class Run:
 
     def __init__(self, s, entry, kernel, weights, roots, coins, opening, **kw):
         self.epoch = PPD.epoch_of(Workload((Matmul(0, Shape(16, 1024, 128), 0),)), roots, coins, opening)
-        self.commits = {"scheme": s.name, "salt": self.epoch.salt.hex(), "coins": coins.to_json(),
-                        "salt_opening": opening.to_json()}
+        self.commits = {"scheme": s.name, "salt": self.epoch.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
+                        "coins": coins.to_json(), "salt_opening": opening.to_json()}
         self.details, self.finished = {}, False
         RUNS.append(self)
 
@@ -89,9 +107,10 @@ def _device_run_is_the_stand_in(monkeypatch):
     RUNS.clear()
 
 
-def _host(tmp_path, monkeypatch, seed=1):
-    """The auditor host's challenger over a live epoch, its session `SID` reserved on its ledger and reached at `AUDITOR`."""
-    host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(seed)), seed, SID, gated=True)
+def _host(tmp_path, monkeypatch, seed=1, challenger=None):
+    """The auditor host's challenger (by default Pearl-C's, its salt coin alone), its session `SID` reserved on its
+    ledger and reached at `AUDITOR`."""
+    host = CH.Host(tmp_path / "auditor", challenger or salt_only(seed), seed, SID, gated=True)
     monkeypatch.setattr(R.RemoteChallenger, "connect",
                         classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
     return host
@@ -132,7 +151,7 @@ def test_a_served_install_takes_the_sessions_salt_coin_after_the_weights_root(tm
     assert c["salt"] == run.epoch.salt.hex() == salt_of(coins, opening.coin, root).hex()
     assert answers == [{"session": SID, "seq": answers[0]["seq"], "root": root.hex(), "commitment": coins.root.hex()}]
     assert c["session"] == answers[0]
-    assert R.released_roots(host.directory / R.RELEASES, coins) == {Wd.SALT: (root,), Wd.DRAW: (), Wd.ROUND: ()}
+    assert R.released_roots(host.directory / R.RELEASES, coins) == {Wd.SALT: (root,)}
     _untouched(model)
 
 
@@ -164,7 +183,7 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
     assert "coins" in pouw.challenged({"pouw": {}}, (ENTRY,))["pouw"]
 
     root, workload = weights_root(ROOTS), Workload((Matmul(0, Shape(16, 1024, 128), 0),))
-    live = Wd.live_challenger(0, 1, CH.entropy(2))
+    live = salt_only(2)
     live_opening = LC.LiveRecord(live, Wd.SALT).record(root)
     own = Challenger(0, random.Random(0).randbytes)
     own_opening = own.open("salt", root)
@@ -183,6 +202,20 @@ def test_a_session_bound_to_another_commitment_is_closed_and_refused_before_its_
     with pytest.raises(ValueError, match=f"commits to coins {host.challenger.commitment.root.hex()[:16]}..., not "
                                          f"{'dd' * 8}..., the commitment the gate's answer gives session {SID}"):
         PO.install(model, _served(lambda sid, r: {**host.open(sid, r), "commitment": "dd" * 64}))
+    assert host.ended() is None and RUNS == []
+    assert R.released_roots(host.directory / R.RELEASES, host.challenger.commitment) == {Wd.SALT: ()}
+    _untouched(model)
+
+
+def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp_path, monkeypatch):
+    """A session reserved with H1's layout (salt, draw and round coins) would release only its salt coin under a Pearl-C
+    pass and end incomplete, which counts nothing: the install closes it before its salt coin and refuses, patching
+    nothing and starting no run."""
+    host, model = _host(tmp_path, monkeypatch, challenger=Wd.live_challenger(0, 1, CH.entropy(1))), _model()
+    with pytest.raises(ValueError, match=rf"{ENTRY}: the challenger at {AUDITOR} is not a live window's: the coin "
+                                         r"commitment's coins are \[\['pouw/salt', 1\], \['pouw/draw', 1\], "
+                                         r"\['pouw/round', 1\]\], not a Pearl-C salt session's \[\['pouw/salt', 1\]\]"):
+        PO.install(model, _served(host.open))
     assert host.ended() is None and RUNS == []
     assert R.released_roots(host.directory / R.RELEASES, host.challenger.commitment) == {
         Wd.SALT: (), Wd.DRAW: (), Wd.ROUND: ()}
@@ -205,3 +238,163 @@ def test_a_gate_answer_not_the_reserved_session_on_the_weights_root_is_refused_b
         PO.install(model, _served(lambda sid, r: given))
     assert RUNS == []
     _untouched(model)
+
+
+class _GateSession:
+    """Session `SID` of infra's gate `gate` (`challenger_host.Gate`, its ledger under `KEY`), reserved with `families`
+    and, once the gate opens it (`open`, the install's pouw setting ``gate``), served by `challenger` on a socket pair
+    with its record and close signed under `KEY` at the gate's next leaves, as serve.py's are. `end` has the gate end it
+    over its ``out/`` once its client has closed it; `tree` is its tree as the gate's ``fetch`` gives it."""
+
+    def __init__(self, tmp_path, monkeypatch, gate, families, challenger):
+        self.gate, self.challenger, self.monkeypatch = gate, challenger, monkeypatch
+        self.tree = tmp_path / "session"
+        self.directory = self.tree / "out"
+        self.reason = self.client = self._thread = None
+        gate.reserve(SID, families)
+
+    def open(self, sid, root):
+        assert sid == SID and self.client is None
+        reply = self.gate.open(sid, root)
+        self.directory.mkdir(parents=True)
+        (self.directory / R.HELLOS).write_text("")
+        session = R.open_session(self.challenger, KEY, f"{CH.HOST}.{sid}",
+                                 lambda m: lms.sign_at(PRIVATE, self.gate.take(), m).encode(), self.directory, sid)
+        ours, theirs = socket.socketpair()
+        self._thread = threading.Thread(target=self._serve, args=(ours, session))
+        self._thread.start()
+        self.client = R.RemoteChallenger(theirs)
+        self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
+        return {**reply, "commitment": self.challenger.commitment.root.hex()}
+
+    def _serve(self, sock, session):
+        with sock:
+            self.reason = R.serve(sock, session, itertools.count().__next__)
+
+    def end(self):
+        self._thread.join()
+        self.gate.end(SID, self.directory, self.reason is None)
+        return self.reason
+
+
+def _ended_over(out, families, root, end=True, **override):
+    """A ledger of one session `SID` reserved with `families`, opened on `root` and, with `end`, ended over `out` with its
+    end's fields replaced by `override`: what a gate would sign for a session served otherwise."""
+    g = CH.Gate(PRIVATE, KEY)
+    g.reserve(SID, families)
+    g.open(SID, root)
+    if end:
+        g.end(SID, out, **override)
+    return g.ledger()
+
+
+def _ended(gate):
+    """The body of the last end entry `gate`'s ledger signed."""
+    return next(e["body"] for e in map(json.loads, reversed(gate.lines)) if e["kind"] == "end")
+
+
+def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_complete(tmp_path, monkeypatch):
+    """CMP-81: the install's session, reserved with the salt coin alone and opened on the weights' root, ends closed and
+    complete with that one coin released, and the verifier holds the pass to it (`session_reason`'s Pearl-C branch): the
+    one session the ledger opened on the weights' root, read through the gate's fetch. The manifest head names it by its
+    `SESSION_KEYS` alone (`session_head`). The verifier's own weights' root, or the period's registered one, must be the
+    pass's."""
+    gate = CH.Gate(PRIVATE, KEY)
+    s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(5))
+    with PO.install(_model(), _served(s.open)) as comp:
+        c = comp.get("pouw").commitment()
+    root = weights_root(ROOTS)
+    assert s.end() is None and RUNS[0].finished
+    end = _ended(gate)
+    assert (end["closed"], end["complete"], end["released"]) == (True, True, {Wd.SALT: 1})
+    assert c["weights_root"] == c["session"]["root"] == root.hex() and c["session"]["commitment"] == end["commitment"]
+    ledger, fetch = gate.ledger(), {SID: s.tree}.get
+    assert PHC.session_reason(c, ledger, fetch) is None
+    assert PHC.session_reason(c, ledger, fetch, registered=root, commit=root.hex()) is None
+    assert PHC.session_reason(c, ledger, fetch, commit="cc" * 64) == (
+        f"the pass's weights' root {root.hex()[:16]}... is not {'cc' * 8}..., the one the verifier holds")
+    assert PHC.session_reason(c, ledger, fetch, registered=bytes(64)) == (
+        "the pass's weights' root is not the one the period registered")
+    assert PHC.session_reason({**c, "coin_source": "in-process"}, ledger, fetch).startswith(
+        "the window's coins were held in the serving process")
+    assert PPM.SESSION_KEYS == PHC.SESSION_FIELDS and PPM.session_head({}) == {}
+    assert PPM.session_head({**c, "session": {**c["session"], "secret": "ab" * 32}}) == {
+        "session": {k: c["session"][k] for k in PHC.SESSION_FIELDS}}
+
+
+def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_complete(tmp_path, monkeypatch):
+    """A session of H1's layout, as #3868's served Pearl-C passes reserved it, releases only its salt coin and ends
+    incomplete: refused, and refused too under an end that claimed it complete, for its reserve's layout. A salt-only
+    session never ended, ended without its client closing it, short of its coin, or having released any other family is
+    refused."""
+    gate = CH.Gate(PRIVATE, KEY)
+    s = _GateSession(tmp_path, monkeypatch, gate, Wd.live_families(1), Wd.live_challenger(0, 1, CH.entropy(6)))
+    root = weights_root(ROOTS)
+    answer = s.open(SID, root.hex())
+    opening = LC.LiveRecord(s.client, Wd.SALT).record(root)
+    s.client.close()
+    assert s.end() is None
+    coins = s.challenger.commitment
+    h1 = {"scheme": SCHEME, "coin_source": "challenger", "weights_root": root.hex(), "coins": coins.to_json(),
+          "salt_opening": opening.to_json(), "salt": salt_of(coins, opening.coin, root).hex(),
+          "session": PHC.carried(PHC.session_of(answer))}
+    released = {Wd.DRAW: 0, Wd.ROUND: 0, Wd.SALT: 1}
+    assert (_ended(gate)["complete"], _ended(gate)["released"]) == (False, released)
+    fetch = {SID: s.tree}.get
+    assert PHC.session_reason(h1, gate.ledger(), fetch) == (
+        f"session {SID} ended without releasing every coin of its families (released {released}): a refused window")
+    h1_layout = [list(f) for f in Wd.live_families(1)]
+    assert PHC.session_reason(h1, _ended_over(s.directory, Wd.live_families(1), root.hex(), complete=True), fetch) == (
+        f"session {SID} was reserved with {h1_layout}, not the salt coin alone [['pouw/salt', 1]]: a refused pass")
+
+    one = tmp_path / "salt-only"
+    one.mkdir()
+    gate = CH.Gate(PRIVATE, KEY)
+    s = _GateSession(one, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(7))
+    with PO.install(_model(), _served(s.open)) as comp:
+        c = comp.get("pouw").commitment()
+    assert s.end() is None and PHC.session_reason(c, gate.ledger(), {SID: s.tree}.get) is None
+    fetch = {SID: s.tree}.get
+
+    def over(**kw):
+        return PHC.session_reason(c, _ended_over(s.directory, Wd.SALT_FAMILIES, root.hex(), **kw), fetch)
+    assert over(end=False) == (
+        f"session {SID} never ended (the auditor's ledger has its open entry and no end): a refused window")
+    assert over(closed=False) == f"session {SID} ended without its client closing it (serve.py exited 1): a refused window"
+    assert over(complete=False, released={Wd.SALT: 0}) == (
+        f"session {SID} ended without releasing every coin of its families (released {{'pouw/salt': 0}}): a refused window")
+    assert over(released={Wd.SALT: 1, Wd.DRAW: 0}) == (
+        f"session {SID} released {{'pouw/draw': 0, 'pouw/salt': 1}}, not its one salt coin: a refused pass")
+
+
+def test_a_passs_salt_is_read_from_its_session_never_from_the_pass(tmp_path, monkeypatch):
+    """The pass's coins, salt opening and salt agree with one another under another salt-only challenger's commitment
+    (`epoch_of` takes them), but they are not the session's: the commitment is the one the session's challenger signed,
+    read from its files through the ledger, never the pass's word. A pass naming another commitment for its session, a
+    salt other than `audit.salt_of` of the session's coin, or another session's tree are refused."""
+    gate = CH.Gate(PRIVATE, KEY)
+    s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(8))
+    with PO.install(_model(), _served(s.open)) as comp:
+        c = comp.get("pouw").commitment()
+    assert s.end() is None
+    ledger, fetch, root = gate.ledger(), {SID: s.tree}.get, weights_root(ROOTS)
+    assert PHC.session_reason(c, ledger, fetch) is None
+    forged = salt_only(9)
+    opening = LC.LiveRecord(forged, Wd.SALT).record(root)
+    workload = Workload((Matmul(0, Shape(16, 1024, 128), 0),))
+    salt = PPD.epoch_of(workload, ROOTS, forged.commitment, opening).salt
+    own = {**c, "coins": forged.commitment.to_json(), "salt_opening": opening.to_json(), "salt": salt.hex()}
+    signed = s.challenger.commitment.root.hex()
+    assert PHC.session_reason(own, ledger, fetch) == (
+        f"the pass's coins {forged.commitment.root.hex()[:16]}... are not the coin commitment session {SID}'s "
+        f"challenger signed ({signed[:16]}...)")
+    assert PHC.session_reason({**c, "session": {**c["session"], "commitment": forged.commitment.root.hex()}},
+                              ledger, fetch) == (
+        f"session {SID}'s end entry records coin commitment {signed[:16]}..., not "
+        f"{forged.commitment.root.hex()[:16]}..., the window's (the gate's answer): a refused window")
+    assert PHC.session_reason({**c, "salt": "00" * 32}, ledger, fetch) == (
+        "the pass's salt is not audit.salt_of of its session's salt coin over its weights' root")
+    other = tmp_path / "other"
+    shutil.copytree(s.tree, other)
+    (other / "out" / R.RECORD).write_text((other / "out" / R.RECORD).read_text().replace(signed, "dd" * 64))
+    assert PHC.session_reason(c, ledger, {SID: other}.get).startswith(f"session {SID} is not trusted: ")

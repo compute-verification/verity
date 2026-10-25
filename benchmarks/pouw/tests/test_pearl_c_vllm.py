@@ -48,6 +48,7 @@ from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -289,6 +290,7 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     out = run.end()
     man = json.loads(Path(out["manifest"]).read_text())
     assert man["schema"] == PPD.MANIFEST_SCHEMA and man["scheme"] == SCHEME and man["salt"] == salt.hex()
+    assert "session" not in man, "in-process coins: no live session to name"
     assert [(u["m"], u["real_rows"], u["weight"]) for u in man["matmuls"]] == [(32, 20, 0), (32, 32, 1)]
     assert man["commitment"] == {"root": out["transcript_root"], "count": 6}
     assert {w: v["root"] for w, v in man["weights"].items()} == {str(w): r.hex() for w, r in roots.items()}
@@ -928,16 +930,21 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
 
 
 def live_coin(after: bytes, entropy: int = 7):
-    """A live session's coin commitment and its salt coin opened after `after`, from a seeded in-process live challenger
-    (the auditor host's session as `pouw_h1_window.open_session` returns it)."""
-    ch = Wd.live_challenger(0, 1, random.Random(entropy).randbytes)
+    """A live session's coin commitment, Pearl-C's salt coin alone (`window.SALT_FAMILIES`), and that coin opened after
+    `after`, from a seeded in-process live challenger (the auditor host's session as `pouw_h1_window.open_session`
+    returns it)."""
+    ch = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(entropy).randbytes)
     return ch.commitment, ch.open(Wd.SALT, 0, after)
 
 
-def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root(device_run):
+def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root(device_run, tmp_path):
     """A live session's salt coin opened after the weights' root salts the device run's epoch (`audit.salt_of`, as H1's), and
-    the run records the session's coins; one opened after another root (before the weights were committed), one bound to
-    another session's commitment, and a live opening against an in-process commitment or the reverse are refused."""
+    the run records the session's coins; a retained pass's manifest names the session the install carries by its id,
+    ledger seq, root and commitment alone (never the gate's hello secret or the rest of its answer, which core's check
+    of the pass reads from the ledger). One opened after another root (before the weights were committed), one bound to
+    another session's commitment, a session of H1's layout (salt, draw and round coins, which a Pearl-C pass leaves
+    unreleased, so its session never ends complete), and a live opening against an in-process commitment or the reverse
+    are refused."""
     _, kernel, weights, roots, _ = device_run
     root = weights_root(roots)
 
@@ -948,13 +955,19 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root
     run = make(c, o)
     assert run.epoch.salt == salt_of(c, o.coin, root) and run.commits["coins"] == c.to_json()
     assert run.commits["salt_opening"] == o.to_json()
+    named = {"session": "s20261020T110800Z-0001", "seq": 4, "root": root.hex(), "commitment": c.root.hex()}
+    run.commits["session"] = {**named, "port": 7811, "by": "vllm", "secret": "ab" * 32}
+    run.begin(retain=str(tmp_path))
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    assert man["session"] == named and man["coins"] == c.to_json() and man["salt"] == run.epoch.salt.hex()
     with pytest.raises(DomainError, match="not opened after"):
         make(*live_coin(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])})))
     with pytest.raises(DomainError, match="does not open against"):
         make(live_coin(root, entropy=8)[0], o)
-    with pytest.raises(DomainError, match="pouw/draw coin 0, not its pouw/salt coin 0"):
+    with pytest.raises(DomainError, match="not a Pearl-C salt session's"):
         ch = Wd.live_challenger(0, 1, random.Random(7).randbytes)
-        make(ch.commitment, ch.open(Wd.DRAW, 0, root))
+        make(ch.commitment, ch.open(Wd.SALT, 0, root))
     in_process = salt_coin(roots)
     for pair in ((in_process[0], o), (c, in_process[1])):
         with pytest.raises(DomainError, match="live coin commitment, and nothing else"):

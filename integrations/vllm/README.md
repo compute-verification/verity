@@ -328,8 +328,10 @@ PoUW is refused beside sampled proofs until its modeled circuit lands (its `trac
 after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
 `pouw.challenged`), `retain_steps` and `transcript_dir`. Under `ncp-v2` and Pearl-C, `challenger` (the auditor host's,
 `HOST:PORT`) and `session` replace `coins`: ncp-v2's session is the gate's open answer, and Pearl-C's the gate's reserve
-answer, which install opens on the weights' root through `gate` before its salt coin opens after that root
-(`pouw_h1_window.salt_session`). Its weight operands are formed per forward from the weight each call is handed, so
+answer for a session of its salt coin alone (`window.SALT_FAMILIES`), which install opens on the weights' root through
+`gate` before its salt coin opens after that root (`pouw_h1_window.salt_session`), so the session ends complete. The
+retained manifest names that session (`session`: its id, ledger seq, root and commitment), and
+`pouw_h1_challenger.session_reason` holds a pass to it. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.

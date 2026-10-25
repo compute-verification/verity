@@ -19,9 +19,10 @@ build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``defe
 ``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
-peers) are set: then it is a live session's on the auditor host, reserved at install, opened on the weights' root and its
-salt coin opened after it (`_LiveSession`), which the device run checks (`pouw_pearl_c_host.epoch_of`); the gate's result
-names the session (``coins``), and the arm's close ends it.
+peers) are set: then it is a live session's on the auditor host, reserved at install with its salt coin alone
+(`window.SALT_FAMILIES`), opened on the weights' root and its salt coin opened after it (`_LiveSession`), which the device
+run checks (`pouw_pearl_c_host.epoch_of`); the gate's result names the session (``coins``), and the arm's close ends it
+complete.
 """
 from __future__ import annotations
 
@@ -62,9 +63,9 @@ class _LiveSession:
     """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
-    construction (`commit_coins.Gate`: ``reserve --peer NAME``, a live epoch's layout with one round coin), opened on the
-    weights' root once they are committed, its salt coin opened after it (`pouw_h1_window.open_session`), closed with the
-    arm."""
+    construction (`commit_coins.Gate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
+    `window.SALT_FAMILIES`), opened on the weights' root once they are committed, its salt coin opened after it
+    (`pouw_h1_window.open_session`), closed with the arm, so it ends complete."""
 
     def __init__(self, gate: str, peer: str, epoch: int) -> None:
         import json
@@ -73,7 +74,7 @@ class _LiveSession:
         from verity_vllm.pipeline.commit_coins import Gate
 
         self.gate = Gate(gate)
-        families = json.dumps([list(f) for f in Wd.live_families(1)], separators=(",", ":"))
+        families = json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":"))
         self.reserved = self.gate.call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
                                        "--epoch", str(epoch))
         self.client = self.commitment = None
@@ -82,7 +83,7 @@ class _LiveSession:
     def open(self, entry: str, root: bytes) -> Any:
         from verity_vllm.protocol_options import pouw_h1_window as PHW
 
-        self.client, self.commitment, opening, _, _, self.carried = PHW.open_session(
+        self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root)
         return opening
 

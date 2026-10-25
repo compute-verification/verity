@@ -118,6 +118,7 @@ from .pouw_pearl_c_manifest import (  # noqa: F401 - the manifest's readers, kep
     MANIFEST_SCHEMAS,
     manifest_epoch,
     manifest_schema,
+    session_head,
 )
 from .pouw_pearl_c_screen import (
     excluded,
@@ -732,13 +733,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
-                "cubin_sha256": self.kernel.cubin_sha256,
+                **session_head(self.commits), "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256, "schedule": self.details["schedule"],
                 "records_root": PW.records_root(self.salt, epoch.weights_root,
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
-                "commitment": {"root": _bytes(tree[-self.nb:]).hex(), "count": count},
-                "leaves": _write(d / "leaves", _bytes(self.leaves[:self.nb * count])),
-                "tree_t": _write(d / "tree_t", _bytes(tree)), "hm96_salt_key": self.salt_key.hex()}
+                "commitment": {"root": _bytes(tree[-self.nb:]).hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
+                "leaves": _write(d / "leaves", _bytes(self.leaves[:self.nb * count])), "tree_t": _write(d / "tree_t", _bytes(tree))}
         return write_manifest(d, head, weights, matmuls)
 
     def finish(self) -> None:
