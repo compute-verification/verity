@@ -17,15 +17,15 @@ open FlockSoundness.Audit
 
 theorem designOf_subset (kd : ℕ) : Claims.Sampling.EndToEndDraw.SubsetDesign (designOf kd) kd := rfl
 
-theorem partOf_classes {C : Circuit} {n : ℕ} (P : Partition C n) :
+theorem partOf_classes {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
     (partOf P).classes = [[(List.finRange n).map fun u => [unitGates P u]]] := rfl
 
-theorem rus_length_partOf {C : Circuit} {n : ℕ} (P : Partition C n) : (partOf P).rus.length = n := by
+theorem rus_length_partOf {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) : (partOf P).rus.length = n := by
   simp [partOf, Claims.Sampling.Partition.rus]
 
 theorem partRus : PartRusTarget := fun P => rus_length_partOf P
 
-theorem pa_partOf {C : Circuit} {n : ℕ} (P : Partition C n) (kd : ℕ) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
+theorem pa_partOf {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf kd).Pa (partOf P) B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
   rw [Claims.Sampling.EndToEndDraw.Pa_subset (designOf_subset kd) (partOf_classes P), rus_length_partOf P,
     Claims.Sampling.EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
