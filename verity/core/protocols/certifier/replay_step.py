@@ -521,7 +521,8 @@ def _build(C, S, *elements, tap: dict | None = None):
     already made, so a composition binds them without new gates: ``run``, ``wait`` and ``arr`` (the slots' records,
     after a quiet step's arrival moves into waiting slot 0), ``forced``, ``free`` (the state's); per running slot
     ``needs``, ``backs``, ``avail`` (free plus the returns of the slots after it), ``upto`` (the needs up to it),
-    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok); the placed slots'
+    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, and ``at``, the
+    running count before it: its placed slot when admitted); the placed slots'
     records ``slots``; and per placed slot ``update`` (on, comp after the row, sampled before AS's fin mask, leave,
     held, keep)."""
     tap = {} if tap is None else tap
@@ -658,11 +659,12 @@ def _build(C, S, *elements, tap: dict | None = None):
             going = C.AND(going, present.inv() ^ go)
             k_wait = _add(C, k_wait, [admit], RC + 1)
         bad.append(C.AND(admit, _eq(C, cnt, const_bits(R, RC + 1))))
+        at = cnt
         cnt = _add(C, cnt, [admit], RC + 1)
         free = _sub(C, free, _sel(C, admit, _add(C, new, ev, BW)), BW)
         budget = _sub(C, budget, _sel(C, admit, _pad(n, TW)), TW)
         adm.append((admit, hb, _pad(n, TW)))
-        cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok})
+        cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok, "at": at})
     bad.append(going)
     tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
 
