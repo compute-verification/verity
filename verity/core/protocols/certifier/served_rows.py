@@ -102,7 +102,7 @@ def block_bits(S, window: Sequence[tuple[Row, ...] | None], G: int, j: int) -> l
 
 def leaf(S, record: Mapping, w: int, j: int) -> int:
     """Window w's block j's leaf: w·(P / G) + j."""
-    U = S.P // record.get("G", S.P)
+    U = S.P // _blocks(S, record.get("G", S.P))
     if not 0 <= j < U:
         raise ValueError(f"block {j} of a window of {U}")
     return w * U + j

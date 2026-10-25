@@ -109,6 +109,15 @@ def test_the_slices_block_rows_are_the_registered_leaves(x):
     assert honest.verdict == CS.ACCEPT and held.verdict == CS.ACCEPT & ~ROWS
 
 
+@pytest.mark.parametrize("G", [0, 2, 3, 8])
+def test_a_records_g_that_doesnt_divide_p_is_refused(x, G):
+    """REDTEAM phase 19 #3: the verifier indexes a unit's rows by the public record's G, which `register` holds to divide
+    P; a record whose G doesn't (2 or 3 on P = 7 floors to 3 or 2 blocks a window, 8 to none, 0 divides by zero) is
+    refused there too, rather than read as another G's leaves."""
+    with pytest.raises(ValueError, match="dividing P"):
+        SR.leaf(x.S, {**x.record, "G": G}, 1, 0)
+
+
 def test_the_record_is_public_only(x):
     text = json.dumps(x.record)
     private = [*x.served.registration.salts, *x.served.registration.rows]
