@@ -781,7 +781,8 @@ extern "C" __global__ void quant_s5(const Args a) {
 // (`pearl_c_sm90.run.widen`'s choice "fp8_block": a defined B, not the exact real one when code x scale doesn't fit FP32).
 // p0 source, p1 scales (widen_fp8_block), p2 out (rows x k FP32); i0 rows, i1 k (a multiple of 8).  A thread per 8 elements.
 // widen_a: a served call's A words (pouw_pearl_c_device's xa), widen_bf16's widening of its i0 rows, then rows i0 to i2 - 1
-// zero, in one launch; p2 out (i2 x k FP32).
+// zero, in one launch; p2 out (i2 x k FP32).  A PDL_KERNELS launch (pdl_entry), so the call's pd_commit, launched behind it,
+// is resident when it completes.
 DEV void widen8(const uint4* src, uint4* out, size_t g) {
   const uint4 v = src[g];
   const uint32_t w[4] = {v.x, v.y, v.z, v.w};
@@ -793,6 +794,7 @@ extern "C" __global__ void widen_bf16(const Args a) {
   if (g < (size_t)a.i[0] * a.i[1] / 8) widen8(reinterpret_cast<const uint4*>(a.p[0]), reinterpret_cast<uint4*>(a.p[2]), g);
 }
 extern "C" __global__ void widen_a(const Args a) {
+  pdl_entry();
   const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x, real = (size_t)a.i[0] * a.i[1] / 8;
   uint4* out = reinterpret_cast<uint4*>(a.p[2]);
   if (g < real)

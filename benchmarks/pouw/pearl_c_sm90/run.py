@@ -78,13 +78,8 @@ GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
 #: against the other k = 4096 calls' pd_commit_851 at ~81, r20261025-014522-4f0a; pearl_c_sm120's run.py made this cut,
 #: r20261024-104625-7b57).  PEARLC_ONE_COMMIT=0 launches the shape's variant
 ONE_COMMIT = os.environ.get("PEARLC_ONE_COMMIT", "1") != "0"
-#: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
-#: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
-#: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
-#: before, pa_w or pa, writes): only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
-#: launches them plainly
+#: PEARLC_PDL=0 launches PDL_KERNELS (below PD_SERVED) plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
-PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
 PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK = 6, "pdl_waits"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
@@ -354,6 +349,14 @@ PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851,
 #: and the stamps' layout: PD_SLOTS (timer, clock) pairs of u64 a row, a row a pd_commit CTA and the tail's after them
 PD_STAMP, PD_SLOTS = 32, 16
 PD_STAMPED = tuple(v | PD_STAMP for v in PD_SERVED)
+#: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
+#: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry, and
+#: hash_decode.cuh's pd_commit under PD_PDL), so they read and write what they did (gemm_pearlc_d's producer waits only
+#: before P_A, which alone of what it reads its launch before, pa_w or pa, writes): a call's widen_a behind the model's
+#: launch before it, and its pd_commit behind widen_a, each resident when the one before completes.  Only from a cubin whose
+#: kernels wait (its kernel PDL_MARK, `Dev.pdl`)
+PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d", "widen_a",
+                         *(f"pd_commit_{v}" for v in (*PD_SERVED, *PD_STAMPED))})
 PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 #: hash_prefill.cuh's launches past decode's rows (`Pipeline`'s chain "pl"), in the variant pearl_c_sm90.cu builds them
 #: (PL_INSTANCE): pl_leaves, A's level 0 at PL_ROWS rows a CTA; pl_levels, PL_LEVELS levels a launch; pl_seed_a; pl_seeds,

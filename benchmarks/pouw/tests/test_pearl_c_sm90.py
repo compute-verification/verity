@@ -183,7 +183,7 @@ def test_kernel_constants_match_the_reference():
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
-    read a stale line), the forming and pa_w first; and pd_commit lets the forming launch behind it.  The Pearl-C GEMMs
+    read a stale line), the forming, pa_w, widen_a and pd_commit first; and pd_commit then lets the forming launch behind it.  The Pearl-C GEMMs
     (LATE) read only P_A of what the launch before them (pa_w, pa) writes, so only their producer waits, before its first
     P_A box; pa_w waits at its entry, so what they read before that was written by launches that had completed."""
     def body(start):
@@ -202,14 +202,18 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert re.search(r"pdl_wait\(\) \{ asm volatile\(\"griddepcontrol\.wait;\"", SOURCE)
     assert re.search(r"pdl_launch\(\) \{ asm volatile\(\"griddepcontrol\.launch_dependents;\"", SOURCE)
     assert "cp.async.bulk.prefetch.tensor.2d.L2.global" in body("DEV void tma_prefetch_l2")
-    for b in (form, pa_w):
+    for b in (form, pa_w, body('void widen_a(')):
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head
     assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
-    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
+    commits = {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
+    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d", "widen_a"} | commits
     assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
-    assert "#ifdef PD_PDL\n  asm volatile(\"griddepcontrol.launch_dependents;\"" in pd
+    entry = pd[pd.index("DEV void pd_commit_t("):]
+    entry = entry[:entry.index("#endif")]
+    assert "#ifdef PD_PDL" in entry and 'asm volatile("griddepcontrol.wait;\\n\\tgriddepcontrol.launch_dependents;"' in entry
+    assert "a.p[" not in entry[:entry.index("#ifdef PD_PDL")]
 
 
 SASS_OK = "\n".join([
