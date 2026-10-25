@@ -75,8 +75,9 @@ leaving requests leave it; and the next state.
 
 **Not modeled.** The prefix-hash state (which blocks hold which tokens, the free queue's order, eviction):
 ENC-DERIVED's canonical source and hit rules carry it and supply h, the evictable count and the returns, which this
-circuit bounds but doesn't derive. Also priority scheduling, speculative decoding, LoRA, structured output, encoder
-inputs and KV connectors.
+circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
+`_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
+and KV connectors.
 
 **Composition** (the compile unit, all inside one ZK proof under the advice's hiding root; the certifier's PROTOCOL.md,
 "Advice v1"):
@@ -516,7 +517,22 @@ def _split(fields, elements) -> dict:
     return out
 
 
-def _build(C, S, *elements):
+def _build(C, S, *elements, tap: dict | None = None, derive=None):
+    """The step traced on `C`. A caller tracing it inline may pass `tap`, a dict the trace fills with wires it has
+    already made, so a composition binds them without new gates: ``run``, ``wait`` and ``arr`` (the slots' records,
+    after a quiet step's arrival moves into waiting slot 0), ``forced``, ``free`` (the state's); per running slot
+    ``needs``, ``backs``, ``avail`` (free plus the returns of the slots after it), ``upto`` (the needs up to it),
+    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, hb, n, and ``at``,
+    the running count before it: its placed slot when admitted), filled as the waiting loop goes; the placed slots'
+    records ``slots``; and per placed slot ``update`` (on, comp after the row, sampled before AS's fin mask, leave,
+    held, keep). With PC, a caller that computes the prefix layer's counts rather than reading them passes `derive`,
+    whose methods the trace calls where it reads them, so their wires can depend on the step's own:
+    ``returns(tap)`` once before the running loop (each running slot's returns were it freed after the slots past
+    it), ``running(tap)`` after it, ``hit(c, rec, ntok, tap)`` at candidate c's turn (its hit and evictable count),
+    ``candidates(tap)`` after the waiting loop, and ``leave(p, tap)`` per placed slot once ``update[p]`` has its
+    leave and held (its returns). The inputs ``hit``, ``evict`` and ``ret`` are then unread."""
+    tap = {} if tap is None else tap
+    derive = derive if S.PC else None
     Z = widths(S)
     LW, TW, BW, HW, RC, AC, LB = Z.LW, Z.TW, Z.BW, Z.HW, Z.RC, Z.AC, Z.LB
     NW = max(LW, TW) + 1
@@ -556,6 +572,7 @@ def _build(C, S, *elements):
     arr = [{k: (mux(C, forced, [nxt[k]], [cur[k]])[0] if k in one_bit else mux(C, forced, nxt[k], cur[k])) for k in keys}
            for cur, nxt in zip(arr, arr[1:] + [zero])]
     free = I["free"][0]
+    tap.update(run=run, wait=wait, arr=arr, forced=forced, free=free)
 
     def ret_of(p, held):
         if not S.PC:
@@ -580,15 +597,22 @@ def _build(C, S, *elements):
         needs.append(_sub(C, _cdiv(C, _add(C, r["comp"], n, LW + 1), LB, HW + 1), held, HW + 1))
         budget = _sub(C, budget, n, TW)
         ns.append(_pad(n, TW))
-    backs = [_sel(C, run[j]["valid"], ret_of(j, _cdiv(C, run[j]["comp"], LB, HW))) for j in range(R)]
+    if derive is not None:
+        rets = derive.returns(tap)
+        backs = [_sel(C, run[j]["valid"], rets[j]) for j in range(R)]
+    else:
+        backs = [_sel(C, run[j]["valid"], ret_of(j, _cdiv(C, run[j]["comp"], LB, HW))) for j in range(R)]
     after = [[ZERO] * SW]
     for j in range(R - 1, 0, -1):
         after.insert(0, _add(C, after[0], backs[j], SW))
-    room, upto, kept = _pad(free, SW), [ZERO] * SW, []
+    room, upto, kept, uptos, avail = _pad(free, SW), [ZERO] * SW, [], [], []
     for i in range(R):
         upto = _add(C, upto, needs[i], SW)
-        kept.append(C.AND(run[i]["valid"], _lt(C, _add(C, room, after[i], SW), upto).inv()))
+        avail.append(_add(C, room, after[i], SW))
+        uptos.append(upto)
+        kept.append(C.AND(run[i]["valid"], _lt(C, avail[i], upto).inv()))
     popped = [C.AND(run[j]["valid"], kept[j].inv()) for j in range(R)]
+    tap.update(needs=needs, backs=backs, avail=avail, upto=uptos, kept=kept, popped=popped)
     budget = const_bits(S.T, TW)
     run_n = []
     for j in range(R):
@@ -609,7 +633,10 @@ def _build(C, S, *elements):
     used = [ZERO] * AC
     taken = [ZERO] * AC
     taken[0] = forced
-    adm, looked = [], []
+    adm, looked, cands = [], [], []
+    tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
+    if derive is not None:
+        derive.running(tap)
     for c in range(W + A):
         is_arr = c >= W
         r = arr[c - W] if is_arr else wait[c]
@@ -618,7 +645,10 @@ def _build(C, S, *elements):
         reach = and_reduce(C, [going, present, or_reduce(C, budget), room])
         looked.append([reach])
         ntok = _add(C, r["P"], r["out"], LW)
-        h, ev = (I["hit"][c], I["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
+        if derive is not None:
+            h, ev = derive.hit(c, r, ntok, tap)
+        else:
+            h, ev = (I["hit"][c], I["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
         hb = _pad([ZERO] * LB + list(h), LW + 1)
         if S.PC:
             bad.append(C.AND(reach, OR2(C, _lt(C, h, ev), _lt(C, hb, ntok).inv())))
@@ -646,11 +676,15 @@ def _build(C, S, *elements):
             going = C.AND(going, present.inv() ^ go)
             k_wait = _add(C, k_wait, [admit], RC + 1)
         bad.append(C.AND(admit, _eq(C, cnt, const_bits(R, RC + 1))))
+        at = cnt
         cnt = _add(C, cnt, [admit], RC + 1)
         free = _sub(C, free, _sel(C, admit, _add(C, new, ev, BW)), BW)
         budget = _sub(C, budget, _sel(C, admit, _pad(n, TW)), TW)
         adm.append((admit, hb, _pad(n, TW)))
+        cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok, "at": at, "hb": hb, "n": _pad(n, TW)})
     bad.append(going)
+    if derive is not None:
+        derive.candidates(tap)
 
     # the admitted after the running list
     stage("place")
@@ -682,7 +716,8 @@ def _build(C, S, *elements):
     # close and update
     stage("update")
     O = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
-    keep, nxt = [], []
+    keep, nxt, upd = [], [], []
+    tap.update(slots=slots, update=upd)
     for p, s in enumerate(slots):
         n = s["n"]
         on = C.AND(s["valid"][0], or_reduce(C, n))
@@ -693,6 +728,7 @@ def _build(C, S, *elements):
         O["row_n"].append(_sel(C, on, n))
         comp = _add(C, s["comp"], n, LW)
         sample = C.AND(on, _lt(C, comp, _add(C, s["P"], s["out"], LW)).inv())
+        upd.append({"on": on, "comp": comp, "sampled": sample})
         if AS:
             sample = C.AND(sample, s["fin"][0].inv())
         out = _add(C, s["out"], [sample], LW)
@@ -701,11 +737,16 @@ def _build(C, S, *elements):
         # stopped the step before leaves
         leave = C.AND(s["valid"][0], s["fin"][0]) if AS else stop
         held = _cdiv(C, comp, LB, HW + 1)
-        back = ret_of(p, _pad(held, HW))
+        if derive is not None:
+            upd[p].update(leave=leave, held=held)
+            back = derive.leave(p, tap)
+        else:
+            back = ret_of(p, _pad(held, HW))
         if S.PC:
             bad.append(C.AND(leave, _lt(C, held, back)))
         free = _add(C, free, _sel(C, leave, back), BW)
         keep.append(C.AND(s["valid"][0], leave.inv()))
+        upd[p].update(leave=leave, held=held, keep=keep[p])
         pfx = []
         if EW:
             pfx = mux(C, on, I["row_pfx"][p], _sel(C, kept[p], I["run_pfx"][p]))
