@@ -107,6 +107,17 @@ theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup
   rw [StateT.run_pure]
   exact Ret.pure ⟨rfl, h⟩
 
+/-- **The honest rep's `finalC` is its zerocheck's at its `z`**: `repP`'s zerocheck is the prover's
+(`Replay.repP_zerocheck`), whose `finalC` is `round1c` at the coin of the reply to the rep's third send. What is left
+for `HonestRep.finalC` is that the reader's `z` is that coin. -/
+theorem repP_finalC (resp : ℕ → Claims.Msg) (hs : Hashes PS) {st : Setup} (sch : Schedule) (tr : Trace)
+    (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (hm : 14 ≤ st.m) (t₀ : Transcript) {l l' : Array Claims.Msg} {p : Proof} {t' : Transcript}
+    (h : ((repP (asksS resp) hs st sch tr t cm0 extras salt nonce).run t₀).go l = (.ok (p, t'), l')) :
+    p.zerocheck.finalC = dot (lagrange nodesL den6Inv (coinOf (resp (l.size + 2)) 0)) p.zerocheck.round1c := by
+  rw [(Replay.repP_zerocheck resp hs st sch tr t cm0 extras salt nonce hm t₀ l h).1]
+  rfl
+
 end FlockComplete.JsonRT
 
 namespace FlockDeploy
