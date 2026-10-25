@@ -1,5 +1,6 @@
 """Pearl-C (``pearl-c-sm120-v1-h3``) as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
-with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000.
+with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_KERNEL`` the tree's
+``benchmarks/pouw/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
 installed as `e2e.install` does (sites by type, the kernel directory's cubin, the weight roots, the epoch from a
@@ -13,8 +14,9 @@ arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), 
 RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative control changing the
 transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's),
-``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule), ``PEARLC_SCHEME``, ``PEARLC_BENCH_EPOCH``.
+Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
+build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
+``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``.
 """
 from __future__ import annotations
 
@@ -26,6 +28,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
+#: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
+KERNEL_SCHEMES = {"pearl_c_sm120": "pearl-c-sm120-v1-h3", "pearl_c_sm90": "pearl-c-h100-v1-h3"}
 
 
 class _Coins:
@@ -55,10 +59,13 @@ class PearlCArm:
     precision = "bfloat16"
     control = None
     resident = True
+    #: `PearlCDeviceRun`'s options beside the install's
+    run_options: dict[str, Any] = {}
 
     def __init__(self) -> None:
         self.kernel_dir = Path(os.environ.get("PEARLC_KERNEL", str(HERE.parent / "pearl_c_sm120")))
         self.cubin = os.environ.get("PEARLC_CUBIN") or None
+        self.scheme = os.environ.get("PEARLC_SCHEME") or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = os.environ.get("PEARLC_SCHEDULE", "deferred")
         self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
         self.run = self.stack = self.weights = None
@@ -77,7 +84,7 @@ class PearlCArm:
                 "max_num_batched_tokens": int(os.environ.get("PEARLC_STEP_TOKENS", "4096"))}
 
     def kernel_digest(self, target: Any) -> str | None:
-        path = Path(self.cubin) if self.cubin else self.kernel_dir / "pearl_c_sm120.cubin"
+        path = Path(self.cubin) if self.cubin else self.kernel_dir / f"{self.kernel_dir.name}.cubin"
         return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
 
     def _capacity(self, target: Any, tile: int, row_align: int, ns: list[int],
@@ -98,7 +105,7 @@ class PearlCArm:
         from verity_vllm.linear.api import PassSpec, Stack
         from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
-        scheme = os.environ.get("PEARLC_SCHEME", "pearl-c-sm120-v1-h3")
+        scheme = self.scheme
         sites = vllm_site.discover(target.model)
         weights = {site.weight_id: layer.weight.data for site, layer in sites}
         bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
@@ -113,7 +120,7 @@ class PearlCArm:
                                      [t.shape[0] for t in weights.values()], PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
         run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                   coins.commitment, opening, schedule=self.schedule,
-                                  capacity=tiles, flag_rows=rows, salt_key=salt_key)
+                                  capacity=tiles, flag_rows=rows, salt_key=salt_key, **self.run_options)
         stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
         bad = stack.refusals()
         if bad:
@@ -176,4 +183,74 @@ class PearlCArm:
             self.stack.activate(None)
 
 
+class PearlCWholeArm(PearlCArm):
+    """`PearlCArm` with each decode step replayed as one CUDA graph (`pouw_pearl_c_whole.WholeStep`, `e2e.py
+    --graphs --whole-step --whole-defer --whole-defer-a`): vLLM's FULL decode graphs at the preset's capture sizes, without
+    torch.compile, each captured with every call's graph steps inside it, each call's tile hashing beside the next call
+    and its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline splits A's
+    commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39, r20261024-130722-5c44),
+    so a decode step launches one graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each
+    call of at most `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one
+    pass per engine step as `PearlCArm`'s, and its gate is `PearlCArm`'s call check with the calls graphed, then
+    `e2e.whole_check`: a forward's calls captured whole and replayed, bit for bit the eager calls' commitment.
+
+    The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
+    the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
+    ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
+    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
+    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it).
+    A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
+
+    id = "pouw-pearl-c-whole"
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True}
+
+    def __init__(self) -> None:
+        super().__init__()
+        if os.environ.get("PEARLC_WHOLE_DEFER_A") == "0":
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_defer_a"}
+        self.schedule = "serial"
+        self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
+        # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
+        # decode graphs at compilation mode 0 (no torch.compile), which PoUW requires.
+        self.engine_label = "graphs-mode0" + ("" if self.vllm_execution == "compiled" else f"-{self.vllm_execution}")
+        self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
+
+    def engine_overrides(self, target: Any) -> dict[str, Any]:
+        sizes = os.environ.get("PEARLC_CAPTURE_SIZES")
+        self.capture = [int(x) for x in sizes.split(",")] if sizes else [1, 8, 32, 128]
+        return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.vllm_execution,
+                "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                       "cudagraph_capture_sizes": self.capture}}
+
+    def ready(self, target: Any) -> None:
+        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.protocol_options.pouw_pearl_c_whole import WholeStep
+
+        super().ready(target)
+        self.whole = WholeStep(self.run, self.stack, get_model_runner(target.engine.vllm), target.hooks)
+        self.whole.prepare()
+        self.totals = dict(self.whole.take())
+
+    def gate(self, target: Any) -> dict[str, Any]:
+        import importlib.util
+
+        got = super().gate(target)
+        spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
+        e2e = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(e2e)
+        whole = e2e.whole_check(self.run, self.weights, m=max(self.capture))
+        self.run.details["passes"].clear()
+        return {**got, "passed": bool(got["passed"] and whole.get("ok")), "whole": whole}
+
+    def spans(self, target: Any) -> dict[str, Any]:
+        """`PearlCArm`'s, and `WholeStep`'s counts since `ready` (the runner differences two reads around a run)."""
+        out = super().spans(target)
+        if self.whole is not None:
+            for k, v in self.whole.take().items():
+                self.totals[k] = self.totals.get(k, 0) + v
+            out.update({f"whole_{k}": float(v) for k, v in self.totals.items()})
+        return out
+
+
 PEARL_C = PearlCArm()
+PEARL_C_WHOLE = PearlCWholeArm()

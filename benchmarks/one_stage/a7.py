@@ -1,10 +1,10 @@
 """One-stage audit, run A7: the requirement's two proof units (I4), sampled in one audit and wired to the remote bandwidth
 audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
 `PlanMatches`) and
-`MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last read, each
-registered block freed at its values' last read, and each re-key's old block written below the cap the committed pass
-row and the public lifetime cap give), one instance of each per step (`verity.ml.circuits.requirement_units`), the
-layout row at two epochs a value.
+`MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
+reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
+the cap the committed pass row and the public lifetime cap give), one instance of each per step
+(`verity.ml.circuits.requirement_units`), the layout row at two epochs a value.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
@@ -16,7 +16,7 @@ layout row at two epochs a value.
   resident and no plan holds them), each
   active step producing a 2,048-byte KV value its request reads at its later steps. The values are seeded bytes, every
   64-byte piece's top byte zero (p512's words); the layout packs each step's values in fresh blocks of 2 slots in a seeded
-  order (private), the store frees each block, registered or written, at its values' last read. vllm's Store backend
+  order (private), the store frees each block, registered or written, at its values' last structural reader. vllm's Store backend
   replaces these.
 * **Commitments.** The values and the shared rows are committed once, outside the units, as frame-v3-sha512 trees of
   hm96-sha512/row/v2 rows under keyed salts (the canonical commitments, registered beside the statements' ports): the
@@ -79,7 +79,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
+from verity.core.protocols.remote_bandwidth import schedule as SC  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
@@ -170,7 +172,7 @@ def standin(steps: int, seed: int):
 
 def lay_out(req: RQ.Requirement, positions, seed: int):
     """The registered values at their public blocks; each step's values in fresh blocks of SLOTS slots, in a seeded order;
-    each block, registered or written, freed at its values' last read. Returns the layout and the store."""
+    each block, registered or written, freed at its values' last structural reader. Returns the layout and the store."""
     rng = random.Random(seed ^ 0x5A7)
     block, offset = {}, {}
     for v in range(WEIGHTS):
@@ -1056,11 +1058,20 @@ def main() -> int:
     uncert = uncertified(result, rrec, rs.view, store, req, link, common, members)
     if uncert.get("credit_bytes"):
         link = replace(link, epsilon=min(1.0, uncert["uncertified_bytes"] / uncert["credit_bytes"]), delta=a.delta)
-    ledgers = {"store": audit.ledger(rrec, **common).to_json(),
-               "store+post-seed": audit.ledger(rrec, **common, credit_post_seed=StandInPostSeed()).to_json()}
+    scheduled, schedule_why = None, None
+    try:
+        sched = MM.schedule(rs.header, rs.record, rs.session.appended, [s for w in rrec.windows for s in w.steps])
+        scheduled = rs.session.scheduled(sched)
+    except (MM.MemoryMapError, SC.Refused) as e:
+        schedule_why = str(e)
+    ledgers = {"store": audit.ledger(rrec, **common).to_json()}
+    if scheduled is not None:
+        ledgers["store+post-seed"] = audit.ledger(rrec, **common, credit_post_seed=StandInPostSeed(), schedule=scheduled).to_json()
     if link.holds and mapped:
         ledgers["linked"] = audit.ledger(rrec, **common, requirement=link).to_json()
-        ledgers["linked+post-seed"] = audit.ledger(rrec, **common, requirement=link, credit_post_seed=StandInPostSeed()).to_json()
+        if scheduled is not None:
+            ledgers["linked+post-seed"] = audit.ledger(rrec, **common, requirement=link, credit_post_seed=StandInPostSeed(),
+                                                       schedule=scheduled).to_json()
     whole = common["capacity_bytes_per_s"] * rrec.span_ns / 1e9
     summary["link"] = {"holds": link.holds, "mapped": mapped, "every_map_unit_proved": proved,
                        "appends": None if rrec.appends is None else rrec.appends.hex(),
@@ -1070,6 +1081,7 @@ def main() -> int:
                        "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
                        "epsilon": link.epsilon, "delta": link.delta,
                        "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
+                       "schedule": {"bits": None if scheduled is None else scheduled.bits, "refused": schedule_why},
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
                                        "credited_bytes": round((1 - v["terms"]["timing"]) * whole)} for k, v in ledgers.items()}}
@@ -1168,7 +1180,7 @@ def _rebound(m: dict, canons: dict, i: int, row: str, words: list[int]) -> dict:
 def rekey_negatives(members: list[dict], sd, layout, req, sm, canons: dict, rs) -> dict[str, dict]:
     """A re-key held by the map unit to the cap its committed pass row and lifetime cap L give: value v of block o, whose
     append joined window w ≥ 1, re-keyed at a step r whose first pass after is window w + age, by a forged instance of r
-    with one block more (v at its slot, its epoch-1 layout entry, the new block written at r and freed at v's last read).
+    with one block more (v at its slot, its epoch-1 layout entry, the new block written at r and freed at v's last structural reader).
     At L = age the unit accepts it; at L = age + 1 the re-key is one window early, and the unit refuses it. Two forged
     stale bounds at L = age + 1: o's write step forged below the cap in the map row (r's unit accepts, and o's writer,
     whose instance pins the step, refuses), and a pass row that dates r's window one later, window w + age's last pass
@@ -1289,7 +1301,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     f = _forged(plan_m, s0, dict(plan_m["args"][s0], count=len(short), plan=short + [0] * (sp.P - len(short))))
     neg["plan-misses-a-block-the-step-reads (PlanMatches)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "unit": f}
 
-    # the memory-map unit's clauses: a payload mismatch, a late free, an early free, on a block whose values' last read is
+    # the memory-map unit's clauses: a payload mismatch, a late free, an early free, on a block whose values' last structural reader is
     # at least two steps after its write and before the last step, so both frees fall inside the run after the write
     def block_last(a_s, j):
         return max(a_s["last"][i] for i in range(sm.K) if (a_s["present"] >> i) & 1 and a_s["lam"][2 * a_s["pos"][i]] == j)
@@ -1301,8 +1313,8 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     pay[j - a_t["first"]] ^= 1 << 1234
     f = _forged(map_m, t, dict(a_t, pay=pay))
     neg["payload-does-not-carry-its-value (Carries)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "step": t, "block": j, "unit": f}
-    for name, at in (("late-free (a block kept past its values' last read)", lastj + 1),
-                     ("early-free (a block freed before its values' last read)", lastj - 1)):
+    for name, at in (("late-free (a block kept past its values' last structural reader)", lastj + 1),
+                     ("early-free (a block freed before its values' last structural reader)", lastj - 1)):
         phi = list(a_t["phi"])
         phi[sm.N + 2 * (j - sm.N) + 1] = at
         f = _forged(map_m, t, dict(a_t, phi=phi))
@@ -1316,14 +1328,14 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     f = _forged(map_m, t, dict(a_t, phi=phi))
     neg["write-at-another-step (L4)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "unit": f}
 
-    # the registered blocks' frees: the expert's weight block, whose values' last read is mid-run, freed a step late or
+    # the registered blocks' frees: the expert's weight block, whose values' last structural reader is mid-run, freed a step late or
     # a step early in the map row (and the store), at the step whose instance names it in rfree
     jx = layout.block[EXPERT]
     lx = req.last[EXPERT]
     a_x = map_m["args"][lx]
     assert RU._bits(a_x["rfree"], sm.N)[jx] and a_x["phi"][jx] == lx
-    for name, at in (("registered-late-free (a registered block kept past its values' last read)", lx + 1),
-                     ("registered-early-free (a registered block freed before its values' last read)", lx - 1)):
+    for name, at in (("registered-late-free (a registered block kept past its values' last structural reader)", lx + 1),
+                     ("registered-early-free (a registered block freed before its values' last structural reader)", lx - 1)):
         phi = list(a_x["phi"])
         phi[jx] = at
         f = _forged(map_m, lx, dict(a_x, phi=phi))
@@ -1459,7 +1471,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
     # the sampled-proofs registration and draw, as A6 checks them
-    fewer = P.mixed_population_program([(plan_m["defn"], plan_m["n"] - 1), (map_m["defn"], map_m["n"])])
+    fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, D.parse_law(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,

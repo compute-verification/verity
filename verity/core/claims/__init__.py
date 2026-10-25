@@ -270,6 +270,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
+    # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
+    # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
+    # and its sm_120 instances) read the verifier's clock in the cost model
+    Entry("honest-clock", "assumption",
+          "Honest clock: the cost behind a transcript the verifier receives by the deadline is spent after the salt's "
+          "release and by the deadline, so the prover's computation stopped at the deadline outputs every transcript "
+          "received by then at no more cost than the run spent in that window and no more oracle calls than its online "
+          "phase. It fails if a transcript computed after the deadline can be stamped as received by it (a clock the "
+          "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
+          "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
+          "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
     # EPS1's tensor–scalar model (Security/Models/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Models/Accounting/Assumptions/Stages.lean)
@@ -482,6 +493,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "least the words of the units that are fixed under option A, computed, and with every unit steering them "
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
           "folds", "TS counts fixed", "conjectured"),
+    # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
+    # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
+    Entry("flock-firewall-os-src", "assumption",
+          "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
+          "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
+          "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
+          "The loop runs on the auditor-trusted host (trusted-nebius-host), whose operating system's random bytes are the "
+          "uniform draws the tape models", "Firewall OS source", "standard"),
 )}
 
 

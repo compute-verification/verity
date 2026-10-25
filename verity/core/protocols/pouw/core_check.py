@@ -69,6 +69,7 @@ from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -654,12 +655,47 @@ def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
     return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
 
 
+def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
+    """`public_row` as a ``row/v2`` row of 16-bit leaves: word w its bits 16 w .. 16 w + 15, low byte first."""
+    x = public_row(salt, position, roots)
+    return [x[i] | x[i + 1] << 8 for i in range(0, len(x), 2)]
+
+
 def public_row_salt(context: str, position: int) -> bytes:
     """The public row's hm96 salt, which anyone derives from the window's context and the unit's position: three SHA-512
     blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
     ctx = context.encode()
     head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
+
+
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`, #3124)
+OK_ROW = (1,)
+#: the ok row's hm96 salt tag (h1_prove's, #3124)
+OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
+
+
+def ok_salt(context: str, position: int) -> bytes:
+    """The ok row's hm96 salt, which anyone derives from the window's context and the unit's position: its content is
+    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    u64be(position), `SALT_BYTES` bytes."""
+    return hashlib.shake_256(OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+
+
+def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
+    """A ``--registered`` port's reads (`registered.READS_V1`) for a statement over one call's units from unit `u0`:
+    ``reads_from`` `u0` and ``reads`` the row each of the call's units reads, in unit order, trailing nones dropped, so
+    the file is as long as the call, not the window (Flock's `Registered.Port.readAt`: none below ``reads_from``)."""
+    rows = list(rows)
+    while rows and rows[-1] is None:
+        rows.pop()
+    return {G.READS_FROM: u0, "reads": rows}
+
+
+def port_reads(entry: dict[str, Any]) -> list[int | None]:
+    """The row every unit from unit 0 reads at a ``--registered`` port, of either format (Flock's
+    `Registered.Port.reads`): none below its ``reads_from`` (absent: 0), then its ``reads``."""
+    return [None] * entry.get(G.READS_FROM, 0) + list(entry["reads"])
 
 
 def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:

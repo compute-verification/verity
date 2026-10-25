@@ -54,6 +54,7 @@ def test_dry_run_gpu_phase():
     assert all(x[0] == "/pod/py311" for k, x in c.items() if k != "gpu_done")
 
 
+@pytest.mark.slow
 def test_dry_run_cpu_phase():
     c = dry("--phase", "cpu", "--laptop", "--tier-c", "--full-replay", "--seed", "12345")
     assert list(c) == ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring", "replay_a",
@@ -95,6 +96,7 @@ def test_dry_run_cpu_phase():
     assert all(x[0] == "/pod/py312" for k, x in c.items() if k != "gates")
 
 
+@pytest.mark.slow
 def test_dry_run_no_laptop_no_tier_c_and_skip():
     c = dry("--phase", "cpu", "--skip", "replay,census,nonint,golden")
     assert "replay_c" not in c and "--max-arg-leaves" not in c["fold"]
@@ -105,6 +107,7 @@ def test_dry_run_no_laptop_no_tier_c_and_skip():
     assert c["resolve"][0] == "/pod/py312" and c["compare"][0] == "/pod/py312"
 
 
+@pytest.mark.slow
 def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
     p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
                        cwd=ROOT)
@@ -114,6 +117,7 @@ def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
     assert c["replay_c"][c["replay_c"].index("--tier") + 1] == "c" and "--seed" not in c["replay_c"]
 
 
+@pytest.mark.slow
 def test_dry_run_all_and_snapshot_steps():
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--seed", "7")
     assert list(c)[:4] == ["capture", "control", "census", "nonint"]
@@ -125,6 +129,7 @@ def test_dry_run_all_and_snapshot_steps():
         dry("--snapshot-steps", "0,2")           # not contiguous from 0
 
 
+@pytest.mark.slow
 def test_dry_run_snapshot_caps_reach_the_capture_only():
     # D87 cap and the cov-moe dispatcher-call cap are capture flags.  [R16 global F-global-SNAP, rel r17-int-1] the D87 cap is no longer
     # absent by default: run_config DERIVES it (rows x widest row x 2 B, never below m1_capture's 32 MiB floor) so every prefill MLP row of a
@@ -139,6 +144,7 @@ def test_dry_run_snapshot_caps_reach_the_capture_only():
     assert all("--snapshot-max-bytes" not in c[st] for st in ("control", "census", "nonint"))
 
 
+@pytest.mark.slow
 def test_dry_run_existing_capture_paths():
     c = dry("--phase", "cpu", "--log", "/data/x/log.jsonl.gz", "--snapshots", "/data/x", "--control-tokens", "/data/ctl.json", "--other-log", "/data/y.jsonl.gz",
             "--seed", "7")
@@ -147,6 +153,7 @@ def test_dry_run_existing_capture_paths():
     assert c["fold_other"][c["fold_other"].index("--log") + 1] == "/data/y.jsonl.gz"
 
 
+@pytest.mark.slow
 def test_dry_run_writes_nothing(tmp_path):
     subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
                    capture_output=True, text=True, cwd=ROOT, check=True)

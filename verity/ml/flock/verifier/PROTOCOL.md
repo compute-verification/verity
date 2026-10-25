@@ -142,6 +142,11 @@ The pipeline:
 The record is UTF-8 JSON. The verifier reads only the fields below; it ignores every other field, including `verdict`
 (the live server's own opinion) and timing fields. Hex strings are lowercase, even-length.
 
+Every writer emits the record in its canonical text: Lean's `Json.compress` of it (keys in code-point order, no
+whitespace, Lean's string escapes and number printing), which `live/src/record_text.rs` (`canonical_json`) and
+`verity_flock.record_text` (`session_text`) write, both held to Lean's output by `live/src/record_text_vectors.json`. The
+agreement job re-renders the stored vectors that predate it (`verifier/ci.py`).
+
 | field | type | meaning |
 |---|---|---|
 | `kind` | string | must be `"flock-live-session/v1"` |
@@ -1357,6 +1362,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `Δ_A` entry `(q, col)`, summed over GF(2) as `addDelta` sums them. An entry twice cancels. `B` is the same.
   - Today only a tail stage's `Out` region is partial. On the GEMM coordinate it is 16 bits of a word, and the other 112
     columns are checked.
+- **The region-size check** (`checkRegionBytes`). The extra claims read each block's bytes of a region as its `2^|free|`
+  bits, so `setupH` and `setupHidden` refuse a statement in which any region's bytes in any of the `2^nbl` blocks are
+  another size (a public file whose `b ‖ c` or pinned `dummy.bc` is not 128 bytes, say), before any proof is read.
 - **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is

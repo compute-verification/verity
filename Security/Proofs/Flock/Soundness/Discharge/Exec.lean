@@ -21,6 +21,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 import Proofs.Flock.Soundness.Discharge.Exec.Live
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.Exec.Decode
 import Proofs.Flock.Soundness.Discharge.Exec.Emit
 import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
@@ -53,6 +55,8 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
 * `Retained`: every `hm96Rows` tag pinned today retains round bytes, so, without hidden outputs, every round of a
   record flock-verify accepts carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every
   stream satisfies `Refine/Frames.lean`'s `AllRetained` (`accepts_allRetained`);
+* `VerifyK`: what the acceptance walkers read of `verify`, at the verdict with its digest comparisons read through
+  `keep` (`AcceptsK`, `verifyK_ok_tables`, `decodeWithK_points`, `decodeWithK_allRetained`), `verify`'s at `keep := id`;
 * `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of

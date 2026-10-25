@@ -67,8 +67,10 @@ many reads of a node's registered blocks the node made in each window, from rece
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
-   only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's), and then charges what
-   their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
+   only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's) and the session's schedule
+   check (`schedule`, `Session.scheduled`: every pass's plan the published schedule's at its step, `schedule.py`), and
+   then charges what their carriers may hold (μ_carrier); without both, those receipts are certified but not
+   credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
@@ -92,6 +94,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
@@ -100,6 +103,8 @@ from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
+from . import pooled as _pooled
+from . import schedule as _schedule
 from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
@@ -116,7 +121,11 @@ PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
 NODE_BYTES = 64
 QUERIES_LOG2 = 64
-SLACK_LOG2 = 41
+SLACK_LOG2 = 67
+"""AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
+pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 passes they add at most 2^-50, 2^-10 of
+`DELTA`: an hour, six times the stated 10-minute horizon, of the node's 41.2 ms passes over 130,023,424 blocks
+(532.6 GB, gate runs 8 and 9's store) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -40
@@ -1140,6 +1149,19 @@ class Session:
             return "accepted"
         return None
 
+    @property
+    def appended(self) -> tuple[tuple[int, int], ...]:
+        """The session's appends as it numbered them, `(first, count)`, in order."""
+        return tuple((first, commitment.count) for first, _, commitment, _ in self._appends)
+
+    def scheduled(self, schedule: _schedule.Schedule) -> Scheduled:
+        """The schedule check (`schedule.check`, of record in `lean/RemoteAudit/Schedule.lean`) on this session's own
+        passes, each plan as received and the step it named, and its appends: its verdict, which `ledger` requires
+        before it credits an appended block, or `schedule.Refused` and why not."""
+        passes = [(s, plan.runs) for w in self.windows for s, plan in zip(w.steps, w.plans, strict=True)]
+        bits = _schedule.check(schedule, self.params.blocks, passes, self.appended)
+        return Scheduled(self.registration.digest, self.commitment.root, bits)
+
     def record(self) -> Record:
         """The session's record, once every window is accepted."""
         self._live()
@@ -1345,7 +1367,8 @@ class RequirementLink(Protocol):
     the proof units have shown, for every pass, that its plan holds every complete block the circuit reads at the
     pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
-    map, of a registered block or a written one, is at its values' last read (the memory-map unit, I4's).  The link
+    map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a
+    gather that may select one included (the memory-map unit, I4's; `memory_map.py`).  The link
     is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
     rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
     and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A
@@ -1376,6 +1399,23 @@ class RequirementLink(Protocol):
     def read_bits(self, step: int) -> int: ...
 
     def mapped(self, record: Record) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Scheduled:
+    """The schedule check's verdict on a session (`Session.scheduled`, `schedule.check`): every pass's plan was the
+    published schedule's at the pass's step and the appends were the schedule's, so each pass's layout is the verifier's
+    fixed function of the schedule (`Accounting.ScheduleDeterministic`), steered only through its `bits`.  It names its
+    session by its registration and its coin commitment's root, as the record does (`Record.registration`,
+    `Record.coins`).  `bits` is the `a` that `Accounting.Assumptions.SteeredLayout` reads for this session: fewer than
+    2^bits schedules encode in its bits, so the layout takes fewer than 2^bits values whatever the coins."""
+
+    registration: bytes
+    coins: bytes
+    bits: int
+
+    def of(self, record: Record) -> bool:
+        return self.registration == record.registration and self.coins == record.coins
 
 
 class _Terms:
@@ -1429,9 +1469,11 @@ class Ledger(_Terms):
     the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
     `linked`: whether the credit is the served circuit's (its reads at each pass's step, on a `RequirementLink`:
     `linked_bits`); without a link
-    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `error` is the
+    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `steering`: the
+    bits of the schedule the passes' layout was checked against when appended blocks are credited (`Scheduled.bits`,
+    the `a` of `SteeredLayout`), None when none are.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
-    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `RateAuditSketch`'s."""
+    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s."""
 
     timing: float
     sample: float
@@ -1447,6 +1489,7 @@ class Ledger(_Terms):
     error: float
     error_horizon: float
     linked: bool = False
+    steering: int | None = None
 
     @property
     def worst(self) -> WindowLedger:
@@ -1458,23 +1501,34 @@ class Ledger(_Terms):
 
     def to_json(self) -> dict:
         w, h = self.worst, self.worst_horizon
-        return {**self._json(), "linked": self.linked, "windows": [x.to_json() for x in self.windows],
+        return {**self._json(), "linked": self.linked, "steering_bits": self.steering,
+                "windows": [x.to_json() for x in self.windows],
                 "error": {"windows": self.error, "horizon": self.error_horizon},
                 "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
                           "window": w.window}}
 
 
-def _budget(record: Record) -> tuple[list[int], float]:
-    delta = record.windows[0].profile.delta
-    drawn = [w.profile.drawn["receipt"] for w in record.windows]
-    return drawn, -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
+def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
+    """The pooled bound's inputs (`pooled.bound`): each window's receipts U_t and draws s_t, and δ, the float's exact
+    value."""
+    return [(w.receipts, w.profile.drawn["receipt"]) for w in record.windows], Fraction(record.windows[0].profile.delta)
+
+
+def pooled_bound(record: Record) -> _pooled.Bound:
+    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
+    return _pooled.bound(*pooled_windows(record))
+
+
+def _up(q: Fraction) -> float:
+    """The least float at least `q`."""
+    x = float(q)
+    return math.nextafter(x, math.inf) if Fraction(x) < q else x
 
 
 def floors(record: Record) -> tuple[float, ...]:
     """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
-    at once, except with δ."""
-    drawn, budget = _budget(record)
-    return tuple(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
+    at once, except with δ.  Each is `pooled_bound`'s, rounded up."""
+    return tuple(_up(f) for f in pooled_bound(record).floors)
 
 
 def pooled(record: Record) -> tuple[float, float]:
@@ -1487,15 +1541,15 @@ def pooled(record: Record) -> tuple[float, float]:
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
-    min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states it for windows of one size; at unequal U_t it is the
-    same argument with each window's own."""
-    drawn, budget = _budget(record)
-    floor = max(floors(record))
-    wrong = 0.0
-    for w, s in sorted(zip(record.windows, drawn), key=lambda x: x[0].receipts / x[1], reverse=True):
-        f = min(1 - s / w.receipts, budget / s)
-        wrong, budget = wrong + f * w.receipts, max(0.0, budget - f * s)
-    return wrong, floor
+    min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
+    draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes
+    (`Accounting.Guarantees.Remote.PooledDraw`).
+
+    Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
+    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
+    the bound `PooledDraw` reads."""
+    b = pooled_bound(record)
+    return _up(b.wrong), _up(b.floor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1562,7 +1616,8 @@ def linked_bits(window: WindowRecord, requirement: RequirementLink, block_bytes:
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
-           credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None) -> Ledger:
+           credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None,
+           schedule: Scheduled | None = None) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record credits are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
@@ -1572,13 +1627,16 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     through.  All three are the same in every window: the record does not bound them.
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
-    approximation for a large store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose terms
-    add to the failure probability, not to γ: `timing.sketch_failure` of the prover's SHA-512 compressions over the
-    session (`PROTOCOL.md` §4).
+    approximation for a large store).  A sketch-sha512 record's receipts also rest on `SketchBound`
+    (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
+    `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
-    that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
-    its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
+    that fails is refused), and only with this session's schedule check (`schedule`, `Session.scheduled`): every
+    pass's plan the published schedule's at its step, so the layout the appended blocks are read at is the verifier's
+    function of the schedule, steered through its bits alone (`Ledger.steering`, the `a` of `SteeredLayout`).
+    Without it, or with another session's, crediting them is refused.  Crediting them charges μ_carrier, each pass the
+    least of the verdict's carrier bytes and its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
     memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
     circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
@@ -1590,6 +1648,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    if credit_post_seed is not None and (type(schedule) is not Scheduled or not schedule.of(record)):
+        raise ValueError("appended blocks are credited only on this session's schedule check (`Session.scheduled`): "
+                         "without it the layout they are read at may follow the coins and the encodings, and no "
+                         "SteeredLayout bound a has content")
     epsilon, link_delta = 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
@@ -1659,4 +1721,5 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
                   windows=tuple(windows), error=sum(w.profile.delta for w in record.windows) + beside,
-                  error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None)
+                  error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None,
+                  steering=schedule.bits if credit else None)

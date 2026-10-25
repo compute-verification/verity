@@ -791,6 +791,7 @@ pub fn prove_circuit(
     reuse: Reuse,
     native_sha: bool,
 ) -> Result<(R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]), String> {
+    st.c.gpu_nnz_ok()?;
     let t_setup = Instant::now();
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);

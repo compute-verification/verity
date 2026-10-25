@@ -38,14 +38,14 @@ theorem pads_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (
     (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.Firewall.Finish.RepIn)
     (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
     (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
-    (htape : (UE.tapeZk τ).h j.val r.val =
-      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val) :
+    (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
+      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k) :
     ∀ k < (layE x j).hab, (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! =
       (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]! := by
   intro k hk
   have hlen : (layE x j).len = (layE x j).tw + 1 := rfl
   have htw : (layE x j).tw = (layE x j).hab + 3 := rfl
-  rw [FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega), htape,
+  rw [FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega), htape k hk,
     ← FlockComplete.padsOf_get (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j) k
       (by omega) (by omega) (by omega),
     ← hlay, Claims.ZKServer.padsOf_drawsAt L x ρ t₀ rep j.val r.val hz, hq]
@@ -62,8 +62,8 @@ theorem swSrcE_hmk_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
     (hA : A j r = q.vals) (hq : q.draws = L.drawsAt x ρ (rep j.val r.val))
     (hlay : L.lay x (rep j.val r.val) = layE x j)
     (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
-    (htape : (UE.tapeZk τ).h j.val r.val =
-      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val)
+    (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
+      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
@@ -82,8 +82,8 @@ theorem swSrcE_l0_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ :
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.Firewall.Finish.RepIn)
     (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
     (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
-    (htape : (UE.tapeZk τ).h j.val r.val =
-      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val)
+    (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
+      (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :

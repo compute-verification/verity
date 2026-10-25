@@ -438,7 +438,7 @@ def test_the_graph_is_core_references_field_by_field(name):
     assert g.input_read.tolist() == [i for i, _q in ref.input_reads] and g.input_reader.tolist() == [q for _i, q in ref.input_reads]
 
 
-@pytest.mark.parametrize("name", CORPUS)
+@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.slow) if n == "moe-w13" else n for n in CORPUS])
 def test_the_cut_verdict_is_validate_unit_cuts_on_the_cut_and_on_broken_ones(name):
     """`word.cut_verdict` gives `validate_unit_cut`'s verdict, its codes, counts, listed gates and detail order, on the cut and on cuts
     broken every way it names: gates in no unit, a committed value dropped (an uncommitted read or output), a value committed that no

@@ -19,10 +19,62 @@ __device__ constexpr u64 IVC[8] = WT_SHA512_IV;
 
 __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
 
+// H1S_ROTF = R (0..6) puts R of each round's six Sigma rotations, and H1S_ROTFW = R (0..4) R of the schedule's four sigma
+// rotations, on the FMA pipe (rotr_f) instead of two funnel shifts on the ALU pipe: sm_90's ALU pipe (SHF, LOP3, IADD3)
+// is 16 lanes a sub-partition and its IMAD pipe another 16, and a unit's hashing is nearly all ALU-pipe work, so moving
+// some of it can raise the units' throughput where the ALU pipe binds (shabench.cu's V 12..16). Both 0 is the funnel
+// shifts' code as before. Served on the H200, R = 6 is slower than 0: Dither's T 64 step +20% with today's units, +6%
+// with J10-R's. rotr_f<N>: with lo and hi x's halves (swapped for N > 32), n = N mod 32 and m = 2^(32 - n)
+// read from constant memory (so ptxas can't fold it back into shifts), c = {lo >> n, lo << 32 - n} = {mul.hi(lo, m),
+// mul.lo(lo, m')} and the rotation is hi m + c (one mad.wide.u32): its words (hi << 32 - n) | (lo >> n) and
+// (hi >> n) | (lo << 32 - n) are sums of disjoint bits. m' is m from a second table, so ptxas can't merge the two
+// multiplies of lo into one IMAD.WIDE, whose halves land in the pair's other order.
+#ifndef H1S_ROTF
+#define H1S_ROTF 0
+#endif
+#ifndef H1S_ROTFW
+#define H1S_ROTFW 0
+#endif
+static_assert(H1S_ROTF >= 0 && H1S_ROTF <= 6 && H1S_ROTFW >= 0 && H1S_ROTFW <= 4, "H1S_ROTF is 0..6, H1S_ROTFW 0..4");
+#if H1S_ROTF || H1S_ROTFW
+#define H1S_P2_INIT                                                                                                  \
+  {1u,        2u,        4u,         8u,         16u,        32u,      64u,      128u,     256u,      512u,      \
+   1024u,     2048u,     4096u,      8192u,      16384u,     32768u,   65536u,   131072u,  262144u,   524288u,   \
+   1048576u,  2097152u,  4194304u,   8388608u,   16777216u,  33554432u, 67108864u, 134217728u, 268435456u,         \
+   536870912u, 1073741824u, 2147483648u}
+__constant__ u32 H1S_P2[32] = H1S_P2_INIT;
+__constant__ u32 H1S_P2B[32] = H1S_P2_INIT;
+template <int N>
+__device__ __forceinline__ u64 rotr_f(u64 x) {
+  constexpr int n = N > 32 ? N - 32 : N, k = 32 - n;
+  const u32 xl = (u32)x, xh = (u32)(x >> 32), lo = N > 32 ? xh : xl, hi = N > 32 ? xl : xh;
+  u64 r;
+  asm("{\n\t.reg .u32 cl, ch;\n\t.reg .u64 c;\n\t"
+      "mul.hi.u32 cl, %1, %2;\n\tmul.lo.u32 ch, %1, %3;\n\tmov.b64 c, {cl, ch};\n\t"
+      "mad.wide.u32 %0, %4, %2, c;\n\t}"
+      : "=l"(r) : "r"(lo), "r"(H1S_P2[k]), "r"(H1S_P2B[k]), "r"(hi));
+  return r;
+}
+template <int N, bool F>
+__device__ __forceinline__ u64 rot(u64 x) {
+  if constexpr (F) return rotr_f<N>(x);
+  return rotr(x, N);
+}
+
+__device__ __forceinline__ u64 S0(u64 a) {
+  return rot<28, (1 < H1S_ROTF)>(a) ^ rot<34, (3 < H1S_ROTF)>(a) ^ rot<39, (5 < H1S_ROTF)>(a);
+}
+__device__ __forceinline__ u64 S1(u64 e) {
+  return rot<14, (0 < H1S_ROTF)>(e) ^ rot<18, (2 < H1S_ROTF)>(e) ^ rot<41, (4 < H1S_ROTF)>(e);
+}
+__device__ __forceinline__ u64 s0(u64 w) { return rot<1, (0 < H1S_ROTFW)>(w) ^ rot<8, (2 < H1S_ROTFW)>(w) ^ (w >> 7); }
+__device__ __forceinline__ u64 s1(u64 w) { return rot<19, (1 < H1S_ROTFW)>(w) ^ rot<61, (3 < H1S_ROTFW)>(w) ^ (w >> 6); }
+#else
 __device__ __forceinline__ u64 S0(u64 a) { return rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39); }
 __device__ __forceinline__ u64 S1(u64 e) { return rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41); }
 __device__ __forceinline__ u64 s0(u64 w) { return rotr(w, 1) ^ rotr(w, 8) ^ (w >> 7); }
 __device__ __forceinline__ u64 s1(u64 w) { return rotr(w, 19) ^ rotr(w, 61) ^ (w >> 6); }
+#endif
 __device__ __forceinline__ u64 chf(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
 __device__ __forceinline__ u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
 
