@@ -104,9 +104,11 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
     is evidence for a manual analysis only.
   - The rule misses a leak written at a byte shift across fields.
-- The driver scans the witness pieces and the carry rows under it, and a ``leaked`` one fails the run. Runs before
-  this left out, by byte count, the pieces and carry rows with at most one nonzero byte, and checked those under the
-  rule after the run.
+- The driver scans under it, and a ``leaked`` piece or row fails the run. It scans each witness row cut whole
+  (`leak_scan.public_pieces`), and finds whole each row shorter than the 16-byte piece: the carry rows, and ``srv``
+  rows of a few steps (10 bytes at the demo's G = 2). Runs before this left out, by byte count, the pieces and carry
+  rows with at most one nonzero byte, and checked those under the rule after the run. The aligned cutter they used
+  skipped a row's last bytes past its last 16-byte boundary, and every row shorter than 16 bytes.
 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
 6e29d34e7c, with #3972's record; the w212 slice at the class).
