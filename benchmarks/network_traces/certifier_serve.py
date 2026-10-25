@@ -93,7 +93,7 @@ it adds `UPSTREAM_FIELDS` to each body so that every chunk carries its token ids
 first `--probes` requests are probed straight to the endpoint at their arrival times
 (`probe_varied`). From them the plan models every frame of every request as ready `delta0_buckets` + ⌊k/ρ0⌋ buckets
 after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
-token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
+token's latency, times `margin` and plus `--extra-s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
 frame is handed before its last window. N2's profile is `advice`: no egress profile, the counts are N2-ADVICE's to
 derive from the ingress head and the advice, and this check gives no N2 verdict.
@@ -468,7 +468,7 @@ def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None
     if api_key_env:
         headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
     data = None if body is None else json.dumps(body).encode()
-    with urllib.request.urlopen(urllib.request.Request(url.rstrip("/") + path, data, headers), timeout=60) as r:
+    with urllib.request.urlopen(urllib.request.Request(url.rstrip("/") + path, data, headers), timeout=300) as r:
         return json.loads(r.read())
 
 
@@ -1256,7 +1256,7 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
         report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
-                                   margin=getattr(args, "margin", 2.0))
+                                   margin=getattr(args, "margin", 2.0), extra_s=getattr(args, "extra_s", 0.5))
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
@@ -1370,6 +1370,10 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--margin", type=float, default=2.0,
                        help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
                             "under load the probes didn't meet needs more)")
+        q.add_argument("--extra-s", type=float, default=0.5,
+                       help="varied: seconds the plan adds to every probed token's latency, after the margin (an "
+                            "endpoint that pauses serving the probes may not meet, such as a window's seal, needs "
+                            "the pause)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):
