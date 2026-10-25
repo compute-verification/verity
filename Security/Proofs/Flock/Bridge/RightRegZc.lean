@@ -5,7 +5,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 `RightRegZ` asks of each committed wire some opening of its registered commit string that carries the evaluation; it
 places no constraint on the opening's value beyond its bit on the wire. `RightRegZc canon` asks the same of an opening
-whose value is canonical at the wire (`canon g`), so fewer units are right and more are wrong:
+that is canonical at the wire (`canon g`, which reads the whole opening: its value and its salt), so fewer units are
+right and more are wrong:
 
 * `RightRegZc`, `wrongRegZc`, `mem_wrongRegZc`;
 * `rightRegZ_of_rightRegZc`, `wrongRegZ_subset_wrongRegZc`: a unit wrong on the registration is wrong with canonical
@@ -28,14 +29,14 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Parti
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Val → Prop)
+  (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Opening → Prop)
 
 /-- **Unit `u` is right on the registration `R` with canonical openings**: `RightRegZ`, with each wire's opening
 canonical at the wire (`canon g`). -/
 def RightRegZc (R : Reg) (Xv : Fin C.N → Bool) (u : Fin n) : Prop :=
   P.Correct Xv u ∧ ∃ op : vb.Pos → vb.Opening, ∀ g ∈ P.io u,
     vb.com (op (vb.pos g)) = vb.cs R (vb.pos g) ∧ vb.bit (vb.val (op (vb.pos g))) g = C.eval Xv g ∧
-      canon g (vb.val (op (vb.pos g)))
+      canon g (op (vb.pos g))
 
 open Classical in
 /-- **The units wrong on the registration `R` with canonical openings**: those not right on it (`RightRegZc`). -/
@@ -65,7 +66,7 @@ committed wires' commit strings is canonical at the wire. -/
 def OpeningsCanon : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (tabOfZ planZ tab S R u).S.Satisfies
       (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
-    ∀ g ∈ P.io u, canon g (vb.val (vb.opening S R u M (vb.pos g)))
+    ∀ g ∈ P.io u, canon g (vb.opening S R u M (vb.pos g))
 
 variable {L : Law n}
 

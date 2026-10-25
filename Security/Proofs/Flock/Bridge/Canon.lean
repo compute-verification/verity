@@ -5,18 +5,21 @@ import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
 /-!
 # The bridge's targets with canonical openings (targets, not proved)
 
-A registered opening counts only when its value is canonical at its wire (`Bridge.canonRow`): the wire has a row
-(`rows g = some r`), and the value is a row (`RowShaped`) of the row's width. The game side counts the units wrong with
-canonical openings (`wrongRegZc`), and the bridge's targets read them:
+A registered opening counts only when it is canonical at its wire (`Bridge.canonOpen`): the wire has a row
+(`rows g = some r`), the opening's value is a row (`RowShaped`) of the row's width, and its salt is the `saltLen` bytes
+the deployed leaf takes. The game side counts the units wrong with canonical openings (`wrongRegZc`), and the bridge's
+targets read them:
 
 * `Bridge.canonRow rows g v`: `g` has a row `r`, `v` is `RowShaped` and `v`'s width is `r.width`;
+* `Bridge.canonOpen rows g v y`: `canonRow rows g v`, and the salt `y` has `saltLen` bytes;
 * `Bridge.OpeningsCanonTarget`: at `EndToEndHidden`'s session, a drawn unit's openings are canonical (`OpeningsCanon`
-  at `canonRow`), the conjunct `zk_flock_countC_regC` takes;
-* `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `wrongRegZc` at `canonRow`. It implies `EndToEndHidden`
+  at `canonOpen`), the conjunct `zk_flock_countC_regC` takes;
+* `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `wrongRegZc` at `canonOpen`. It implies `EndToEndHidden`
   (`wrongRegZ_subset_wrongRegZc`), and follows from `EndToEndHidden`'s argument at `zk_flock_countC_regC` and
   `OpeningsCanonTarget`;
 * `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings only;
-* `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport;
+* `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
+  `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
 * `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLive`.
 -/
 
@@ -26,6 +29,12 @@ namespace Flock.Bridge
 def canonRow {N W : ℕ} (rows : Fin N → Option RowAt) (g : Fin N) (v : FlockSoundness.Discharge.Layout.BitVal W) :
     Prop :=
   ∃ r, rows g = some r ∧ FlockSoundness.Discharge.Layout.RowShaped v ∧ v.1.val = r.width
+
+/-- **A canonical opening at wire `g`**: its value `v` is canonical at `g` (`canonRow`), and its salt `y` has the
+`saltLen` bytes the deployed leaf takes (`saltOf`). -/
+def canonOpen {N W : ℕ} (rows : Fin N → Option RowAt) (g : Fin N) (v : FlockSoundness.Discharge.Layout.BitVal W)
+    (y : List UInt8) : Prop :=
+  canonRow rows g v ∧ y.length = saltLen
 
 /-- **The row a layout builds of `16 k` bits is canonical**: at width `K = 16 k ≤ W`, `(widthOf W K, padBits b)` is
 `RowShaped` of width `K`. -/
@@ -67,8 +76,8 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **A drawn unit's openings are canonical**, at `EndToEndHidden`'s session: in every satisfying witness of a drawn
-unit, the opening of each of its committed wires' commit strings (`lay.row`'s value) is a row of its wire's row's width
-(`OpeningsCanon` at `Bridge.canonRow`). The game's rows are `(widthOf W (rowBits q), padBits b)`, canonical at
+unit, the opening of each of its committed wires' commit strings (`lay.row`'s value) is a row of its wire's row's width,
+and its salt (`lay.salt`) has `saltLen` bytes (`OpeningsCanon` at `Bridge.canonOpen`). The game's rows are `(widthOf W (rowBits q), padBits b)`, canonical at
 `rowBits q = 16·words ≤ W` (`Bridge.rowShaped_rowOf`). -/
 def _root_.Flock.Bridge.OpeningsCanonTarget : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -85,11 +94,11 @@ def _root_.Flock.Bridge.OpeningsCanonTarget : Prop :=
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    OpeningsCanon execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun g v => Bridge.canonRow rows g v)
+    OpeningsCanon execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun g o => Bridge.canonOpen rows g (vb.val o) o.2.2)
 
 open Classical in
 /-- **`EndToEndHidden` with canonical openings**: its setting and bound, with "wrong" the units wrong on the
-registration with canonical openings (`wrongRegZc` at `Bridge.canonRow`). -/
+registration with canonical openings (`wrongRegZc` at `Bridge.canonOpen`). -/
 def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -134,7 +143,8 @@ def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun g v => Bridge.canonRow rows g v) (reg σ)
+        K₀ ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+          (fun g o => Bridge.canonOpen rows g (vb.val o) o.2.2) (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -146,8 +156,8 @@ def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
 open Classical in
 /-- **The canonical registered openings open the deployed commitment** (`TransportsLive` at canonical openings): in
 `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o` of `g`'s registered
-commit string at the prover's registration whose value is canonical at `g` (`Bridge.canonRow`: `g` has a row, and the
-value is a row of its width), some data opens `g`'s claims position to `o`'s bit there, under the registration's roots
+commit string at the prover's registration that is canonical at `g` (`Bridge.canonOpen`: `g` has a row, the value is a
+row of its width, and the salt has `saltLen` bytes), some data opens `g`'s claims position to `o`'s bit there, under the registration's roots
 at SHA-512. -/
 def _root_.Flock.Bridge.TransportsLiveC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -181,7 +191,8 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
-    ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) → Bridge.canonRow rows g (vb.val o) →
+    ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
+      Bridge.canonOpen rows g (vb.val o) o.2.2 →
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
