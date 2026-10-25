@@ -62,8 +62,8 @@ def serve(args: argparse.Namespace) -> int:
     config["pouw"]["transcript_dir"] = str(passes)
     (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
-    from verity_vllm.pipeline.llm import LLM
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.llm import LLM
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     from vllm import SamplingParams
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)

@@ -30,8 +30,8 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
-from verity_vllm.predict.phi import Phi
-from verity_vllm.predict.steps import Registered, compile_steps
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.steps import Registered, compile_steps
 
 C = ADV.registered_compiler("test-compiler", "ab" * 64)
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,

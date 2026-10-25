@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.RemoteBinding
+import Definitions.Accounting.Guarantees.RemoteBinding
 import Proofs.Accounting.TS.Drawn
 import Proofs.Hash.RowBinding
 

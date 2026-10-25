@@ -1,9 +1,9 @@
 import Proofs.Accounting.RemoteHeld.Window
 import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Accounting.RemoteHeld.Outside
-import Properties.Proofs.RemoteAudit.Line
-import Properties.Proofs.RemoteAudit.Pooled
-import Properties.Proofs.RemoteAudit.Session
+import Proofs.Properties.RemoteAudit.Line
+import Proofs.Properties.RemoteAudit.Pooled
+import Proofs.Properties.RemoteAudit.Session
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
@@ -17,7 +17,7 @@ receipts' sketch holds and the trace's wrong receipts are at most the session's 
 stretch of the line read off the record credits what the trace held (`heldAt_of`), its groups one for each of the
 session's windows and its registered blocks the node's (`record_summary`):
 
-* the arithmetic link (`stretchBound`, `Properties.Proofs.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
+* the arithmetic link (`stretchBound`, `Proofs.Properties.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
 * `heldOverWindow_of` bounds that by what the trace held over the span: the stretch's paced session is the record's
   (`recordPace`, `Paced`) from group `m·per` on, `spanStart` is its first group's end or coin, and the form's charge is
