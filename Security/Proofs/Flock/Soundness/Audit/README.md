@@ -50,7 +50,12 @@ probability at most $2^{-20}$, by exact arithmetic. **A block's share** (`Audit/
 $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \cap B$ is a uniform $j$-subset of $B$
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
-`share_escape_total`). `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
+`share_escape_total`). **The horizon escape** (`Audit/Horizon.lean`): over $T$ periods, each a fresh uniform
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
+escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
+$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
+reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`horizon_escape_log`, in `Claims.Pr`).
+`subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
 executable `Flock.Draw.subset k n` returns a draw missing $B$ with probability at most `subset_escape`'s
 $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its `HashMap` Fisher–Yates and its `Array.qsort`.
