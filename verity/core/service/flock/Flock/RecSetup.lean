@@ -37,13 +37,22 @@ def notOwnFormat : String :=
     "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the link's roots " ++
     "and points, at json.dumps' indent=1)"
 
+/-- Each round of the coin server's record as its JSON reads it (`tr`, its parse), in the record's round order: its
+stream, its round number, and its coins hex-parsed (`f128OfHex`, as `Record.decode` parses the inner session record's). -/
+def jsonRounds (tr : Json) : V (List (Option (List UInt8) × Option Nat × List F128)) :=
+  ((tr.getObjValAs? (Array Json) "rounds").toOption.getD #[]).toList.mapM fun x => do
+    let coins ← (RecVStar.coinsOf x).toList.mapM f128OfHex
+    pure ((x.getObjValAs? String "stream").toOption.map (·.toUTF8.toList), (x.getObjValAs? Nat "k").toOption, coins)
+
 /-- **The record read in its own format is the record its JSON readers read**: at the verifier's inner shape `i`, the
 inner transcript's bytes `tt` read in the coin server's format (`RecRecord.readFull`, the reader the recursion's
 transcript model reads back), and they hold what the JSON readers took of them (`tr`, its parse): Hello's one table, the
 table's `root_B` and the link points (`RecVStar.innerLink`), the rounds the schedule's in its order, each with its
-stream, round, coin count and counts (`RecVStar.checkSchedule`'s), and each rep's salted tops and `c_k` with their
-rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`). The JSON readers run first, so a record they refuse is
-refused as before. -/
+stream, round, coin count and counts (`RecVStar.checkSchedule`'s), each rep's salted tops and `c_k` with their
+rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`), and every round, with its stream and round, its coins
+(`jsonRounds`: the values `innerCommits` holds the inner session record's coins to). The JSON readers run first, so a
+record they refuse is refused as before. Bytes that repeat a key read two ways (`Json.parse` keeps the last, `readFull`
+the first), and the coins are refused unless both read the same. -/
 def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) (cs : RecVStar.InnerCommits) :
     V Unit := do
   let lk ← RecVStar.innerLink tr record
@@ -66,6 +75,9 @@ def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) 
       throw s!"{at_}rep {x}'s salted tops other than its JSON's"
     if repCommits r s != (cs.reps.getD x #[]).toList.map fun (k, c) => (k, [c.toList]) then
       throw s!"{at_}rep {x}'s c_k other than its JSON's"
+  let jr ← (jsonRounds tr).mapError (s!"{at_}a round whose coins its JSON doesn't read as coins: " ++ ·)
+  if r.rounds.map (fun x => (some x.stream, some x.k, x.coins)) != jr then
+    throw s!"{at_}rounds other than its JSON's (stream, round and coins)"
 
 /-- META's `registration` (`inner_registered.REGISTRATION_KEY`): the digest of the circuit registration it binds
 (one-stage `registration.digest`), or none when META names none; and META's `stacked` (`RecVStar.stackedShapeOf`), the

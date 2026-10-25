@@ -18,6 +18,11 @@ import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
 import Proofs.Accounting.DeclaredCircuit
+import Proofs.Accounting.DeclaredCircuit.Tiles
+import Proofs.Accounting.DeclaredCircuit.Credit
+import Proofs.Accounting.DeclaredCircuit.Slack
+import Proofs.Accounting.DeclaredCircuit.Session
+import Proofs.Accounting.DeclaredCircuit.Requirement
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
