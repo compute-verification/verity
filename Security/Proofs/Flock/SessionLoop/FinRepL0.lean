@@ -579,12 +579,14 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
   have hP := Masked.FinRep.repCut_opens0 (coin := fun k i => Masked.slotAt (finCoins x ops) k i) (n := refK x)
     (resp := Masked.FinRep.respOf (finCoins x ops)) (fun k => Masked.FinRep.coinOf_respOf _ k)
     _ _ _ _ _ _ _ _ _ _ _ hm14V (by rw [hsj1]; exact hn) (by rw [hsj1]; exact hk0) (by rw [hsj1]; exact hq0) rfl hv'
-  rw [hsj1, hmsV, Masked.FinRep.coinOf_respOf, hslot] at hP
+  have hco : ∀ N, FlockComplete.coinOf (Masked.FinRep.respOf (finCoins x ops) N) =
+      fun i => Masked.slotAt (finCoins x ops) N i := fun N => Masked.FinRep.coinOf_respOf (finCoins x ops) N
+  rw [hsj1, hmsV, hco, hslot] at hP
   have hQ := Masked.FinRep.repFwC_open0 (coin := fun k i => Masked.slotAt (finCoins x ops) k i) (n := refK x)
     (resp := Masked.FinRep.respOf (finCoins x ops)) (fun k => Masked.FinRep.coinOf_respOf _ k)
     _ _ _ _ _ _ _ _ _ _ _ _ _ _ hm14F (by rw [hsc2]; exact hn) (by rw [hsc2]; exact hk0)
     (by rw [hsc2]; exact hL2) (by rw [hsc2]; exact fun i hi => (hlv i hi).q_ne_zero) rfl (l0_go_of_fst hrun)
-  rw [hpz, ← hst2, hsc2, Masked.FinRep.coinOf_respOf, hslot] at hQ
+  rw [hpz, ← hst2, hsc2, hco, hslot] at hQ
   -- the views' commitment
   have hq' : FlockComplete.quietS.R
       ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
