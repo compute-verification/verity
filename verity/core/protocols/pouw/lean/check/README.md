@@ -22,7 +22,7 @@ Python reference held to it.
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
-| `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its weights' root and ended complete |
+| `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt epoch's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
@@ -55,8 +55,8 @@ whose `Pc8TileSide` K = 4096 circuit was c7aaeee4…).
 `passEpoch` re-starts the window's pass's epoch from its manifest under the challenger's own coin commitment: a pass
 salted by epoch coins carries the challenger's commitment and its salt coin, opened after the weights' root; a live
 Pearl-C pass, whose manifest's coins are a live session's, is read only through its verifier's `live` inputs (`{key,
-ledger, main, pins, session}`): the salt-only session the auditor's ledger reserved, opened on the pass's weights' root
-and ended complete, the session and its commitment taken from the ledger and the session's files, never the manifest
+ledger, main, pins, session}`): the salt-only session the auditor's ledger reserved, opened on the pass's salt epoch's
+root (`epochOpenRoot` of its weights' root and its `pass_index`, computed by the check) and ended complete, the session and its commitment taken from the ledger and the session's files, never the manifest
 (`livePassSalt`, `liveSaltCheck`, LIVESALT2); a pass recorded before epoch coins (read only in a replay) carries a
 beacon; either way the manifest's salt is the epoch's, and
 the window's context names the pass by its SHA-512. A certified window's verifier holds the network certifier's salt for
