@@ -23,9 +23,20 @@
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
-#     `prove_path.py compiler` prints).
+#     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
+#     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
+#     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
+#   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
+#     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
+#     alone under PP_LAW (default subset:2), in members of PP_TORCH_LOOP_CAP units (default 8), each arm a run of its own
+#     (--run-id): once against the circuit's SHA-512 from the loop's shape and run, printed before it runs
+#     (records_audit.py --circuit), and once with its schedule committed
+#     as advice under its compiler (verity_torch_loop.compile, run by the audit as a command: --opening, --compilers); each
+#     tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--requests, --steps).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
-#     honest subset:4, forged subset:8 (every unit drawn).
+#     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
+#   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
+#     draw, until proofs' multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
@@ -36,7 +47,10 @@
 #   PP_TRANSFER_GATES='RoPEHead_v1{D=64}' PP_SETS=rope-head/d64/bf16, its forged run PP_FORGED_PARTITION=benchmarks/prove_path/
 #   llama32_1b_tg_l0_step24.json PP_FORGE=0:0 (a RoPE head, drawn because every one is).
 #   PP_CHALLENGER=local: each window drawn on a local challenger session's coins (--challenger local, a5_coins), not the
-#   verifier's own, pinned on main's first-parent history fetched from the clone's origin.
+#   verifier's own, pinned on main's first-parent history fetched from the clone's origin. PP_CHALLENGER=gate:USER@HOST:
+#   vy-challenger-1's, through infra's gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
+#   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
+#   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY).
 #   research run --on vy-nebius-cpu-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
 #     --env PP_LLAMA=art:f74282995892011346dbf7ec656b3651ca35b48e8c26cea4d4796b36afadce7f -- bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
@@ -93,7 +107,13 @@ if [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
     && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
   CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
+  case $PP_CHALLENGER in gate:*)
+    [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
+    [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
+    CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
+  esac
 fi
+PLAIN=(); LAW=subset; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
@@ -121,14 +141,41 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
     --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $O/$name/commit.log 2>&1 || { tail -30 $O/$name/commit.log; return 1; }
   for d in $W/$name-windows/rank*; do   # serving's public files, never a private body
     mkdir -p $O/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $O/$name/windows/$(basename $d)/
+    [ ! -e $d/circuit.json ] || cp $d/circuit.json $O/$name/windows/$(basename $d)/
   done
   cp $W/$name-windows/commit.json $O/$name/windows/
+  if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
+    records $name $part $forged
+    local rc=$?
+    keep $name
+    return $rc
+  fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
-    ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" \
+    ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
     --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   keep $name
+  return $rc
+}
+records() {  # NAME PARTITION [--forged]: records_audit.py on the served window REC_RUN's window REC_K, the registered compiler
+             # the served one as a command (prove_path.py circuit), the run root the one windows.jsonl publishes
+  local name=$1 part=$2 forged=${3:-}
+  $PY -c 'import json, sys
+c = json.load(open(sys.argv[1]))
+print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
+    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --row-dir $D \
+    ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
+  local root law
+  root=$($PY -c 'import json, sys
+print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
+  law=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
+  $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
+    --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
+    ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+  local rc=$?
+  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   return $rc
 }
 
@@ -155,8 +202,10 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
     $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
+    REC_NAME=$1 REC_RUN=$2 REC_K=$3
     run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
     run $1-forged "$src" - ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
+    REC_RUN=
   }
   if [ -n "${PP_SERVE_RUN:-}" ]; then
     SR=$PP_SERVE_RUN
@@ -173,13 +222,53 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
+elif [ -n "${PP_TORCH_LOOP:-}" ]; then
+  TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}
+  TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
+  export PYTHONPATH=$REPO/integrations/torch_loop
+  # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
+  # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
+  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP \
+    > $O/torch-loop-compilers.json || exit 8
+  loop() {  # NAME [--compiled] [--tamper]: the torch loop's window, audited from its records alone against the circuit
+            # registered before it ran, or (--compiled) against its compiler's output on its committed schedule. Each arm is
+            # a run of its own (--run-id), so a root of its own: infra's gate opens a root's coins once
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 serve=() held=() c; shift
+    for x in "$@"; do
+      case $x in
+        --tamper) forged=--forged; serve+=(--tamper);;
+        --compiled) serve+=(--opening $W/$name-opening.json)
+                    held=(--opening $W/$name-opening.json --compilers $O/torch-loop-compilers.json);;
+      esac
+    done
+    mkdir -p $O/$name
+    if [ ${#held[@]} = 0 ]; then   # the circuit registered for the run before it runs, from its shape and id alone
+      c=$($TL --run-id $id --circuit-only | tee $O/$name/circuit-before.json | $PY -c 'import json, sys; print(json.load(sys.stdin)["circuit"])') \
+        || return 1
+      held=(--circuit $c)
+    fi
+    $TL --run-id $id --out $W/$name-window "${serve[@]}" | tee $O/$name/serve.json || return 1
+    local run; run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/serve.json) || return 1
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW "${held[@]}" \
+      --run $run ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    local rc=$?
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    keep $name
+    return $rc
+  }
+  loop torch-loop || rc=1
+  [ "${PP_ONLY:-}" = honest ] || loop torch-loop-tampered --tamper || rc=1
+  loop torch-loop-compiled --compiled || rc=1
+  [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
 else
   S=$W/served
-  (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law subset:4 --deferred) \
+  (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
   mkdir -p $O/standin && cp $S/workload.json $O/standin/ && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8
-  echo '{"templates": ["SiluMul_v2{I=256}"], "law": "subset:8"}' > $W/all.json
+  echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$LAW:8\"}" > $W/all.json
   SI="--tp-commit $S/commit --build-root $S/build"
   run standin "$SI" $W/advice.bin $S/partition.json "${PP_RANKS:-}" || rc=1
   run standin-forged "$SI" $W/advice.bin $W/all.json "${PP_FORGED_RANKS:-0}" --forge $FORGE || rc=1

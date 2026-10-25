@@ -8,7 +8,8 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape

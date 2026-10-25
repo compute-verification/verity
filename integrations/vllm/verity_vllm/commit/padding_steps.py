@@ -35,6 +35,9 @@ from typing import Any, Iterable
 from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
 from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
 from verity_vllm.commit import scheme
+from verity_vllm.records.declared_stop import DeclaredStop
+from verity_vllm.records.fields import RecordError
+from verity_vllm.records.served_tokens import ServedTokens
 
 PADDING_RULES_VERSION = "padded-v1"                 # LIFTING-SPEC v0.7 B8: the padded request Program's rules version
 PADDED_MAP_SCHEMA = "padded-binding-map/1"
@@ -457,7 +460,8 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     rd = Path(record_dir)
     man = json.load(gzip.open(rd / "manifest.json.gz", "rt"))
     bmap = json.load(gzip.open(rd / "commit" / "binding_map_p0.json.gz", "rt"))
-    wp = json.loads((rd / "build_workload" / "workload_program.json").read_text())
+    wp_path = rd / "build_workload" / "workload_program.json"
+    wp = json.loads(wp_path.read_text())
     reqs = wp.get("requests") or []
     ids = man["identities"]
     pdg = bmap["program_digest"]
@@ -466,11 +470,14 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     geo = geo_digest or hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest()
 
     # the executed prefix of record: declared LAG + declared EOS + the served tokens the record carries (never inferred from the trace)
-    lag = (wp.get("lag") or {}).get("value")
+    try:
+        stop, served = DeclaredStop.of(wp, str(wp_path)), _served_tokens_of_record(rd, wp)
+    except RecordError as e:
+        return {"ok": False, "why": f"executed prefix of record not placeable: {e}", "executed_prefix": None}
+    lag = stop.declared_lag
     caps = {str(r.get("request_id", f"r{i}")): int(r.get("cap") or r.get("max_tokens") or 0) for i, r in enumerate(reqs)}
     arrivals = {str(r.get("request_id", f"r{i}")): int(r.get("arrive_step", 0) or 0) for i, r in enumerate(reqs)}
-    eos = (wp.get("stop_rule") or {}).get("eos_token_ids")
-    served = _served_tokens_of_record(rd, wp)
+    eos = stop.stop_rule.eos_token_ids if stop.stop_rule is not None else None
     epr = executed_prefix_of_record(list(caps), served, caps=caps, eos_of_record=eos, lag=lag)
     if not epr["ok"]:
         return {"ok": False, "why": "executed prefix of record not placeable: " + "; ".join(epr["problems"]), "executed_prefix": epr}
@@ -869,15 +876,14 @@ def coverage_over_manifest(identities: list[dict[str, Any]], bmap: dict[str, Any
 def _served_tokens_of_record(rd: Path, wp: dict[str, Any]) -> dict[str, list[int]] | None:
     """The served tokens of record per request: the Match capture's `tokens.json` (`generated_token_ids` per request, the same source
     reqval's sampled replay names as `a_r_source`), mapped to `r<k>` by the workload Program's request-id convention.  The commit's
-    `runs.jsonl` generated_tokens is a length-only witness and is NOT accepted: the stop rule needs the last token id."""
+    `runs.jsonl` generated_tokens is a length-only witness and is NOT accepted: the stop rule needs the last token id.  A `tokens.json`
+    missing a field every writer writes is refused (`RecordError`, naming the file and the field)."""
     p = rd / "match" / "capture" / "tokens.json"
     if not p.exists():
         return None
-    d = json.loads(p.read_text())
     ids = ((wp.get("request_ids") or {}).get("workload_request_ids") or {})       # r<k> -> engine request id
     back = {v: k for k, v in ids.items()}
     out: dict[str, list[int]] = {}
-    for i, r in enumerate(d.get("requests") or []):
-        rid = back.get(r.get("request_id"), f"r{i}")
-        out[rid] = [int(x) for x in (r.get("generated_token_ids") or [])]
+    for i, r in enumerate(ServedTokens.load(p).requests):
+        out[back.get(r.request_id, f"r{i}")] = [int(x) for x in r.generated_token_ids]
     return out or None

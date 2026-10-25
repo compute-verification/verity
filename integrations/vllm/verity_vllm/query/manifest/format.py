@@ -49,6 +49,11 @@ TP_PARTIAL_MEMBER = "part_rank{rank}"
 
 TP_SHARD_MEMBER = "shard_rank{rank}"
 
+#: the rows of an fx node's output at a step that the Program computes narrower than its widest rows (`program.prune.narrowed`: the last
+#: layer's fused qkv on the prompt rows before the last, of which only the keys and values are read), `width` elements a row: their own
+#: member beside the widest rows' `member` (`query.required.Population.narrowed`), so neither stands for the other
+NARROWED_MEMBER = "{member}@{width}"
+
 #: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
 #: sampled ids; and the one family of its identities (every value of every engine step).
 SERVED_IDS, SERVED_POSITIONS = "c00.input/ids", "c00.input/positions"

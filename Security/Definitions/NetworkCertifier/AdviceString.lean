@@ -11,7 +11,7 @@ Program, which fixes every egress row from the certified ingress. The advice str
 
 **What is abstract.** The charge is a parameter, `bits a w`: I1's `bits(advice, w)`, the leak charged to certifier
 window `w`, which Python's `bits` mirrors. What it must satisfy for the count to hold is the named assumption
-`BitsCount` (`Models.NetworkCertifier.Assumptions.AdviceString`). Advice v1's charge (`AdviceV1.bits`,
+`BitsCount` (`Definitions.NetworkCertifier.Assumptions.AdviceString`). Advice v1's charge (`AdviceV1.bits`,
 `ChargeCount_v1{N}`'s count) meets it, proved (`Guarantees.EncardChargedLe`), so its leak bounds take no assumption on
 the charge (`Guarantees/AdviceV1` here and in `Models`).
 
