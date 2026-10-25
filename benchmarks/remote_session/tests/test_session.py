@@ -946,6 +946,41 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
         verifier.lean_record({**old, "windows_seen": old["windows_seen"][:-1]})
 
 
+def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
+    """`verifier.recorded_chip_bytes`: a record its verifier wrote at an S_chip under `timing.CHIP_BYTES` (gate runs 7
+    to 9's 3,045,746,688 B) is deducted at `timing.CHIP_BYTES`, in the line of record's inputs (`recorded_inputs`, which
+    the Lean and line.py both read) and in the verifier's diagnostic (`recorded_paced`): every stretch, in both forms
+    and both readings, charges the difference in whole blocks more as absent than the record's own S_chip would. A
+    record at a larger S_chip keeps its own."""
+    line = verifier.line
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    mem = r["ledger"]["memory"]
+    b, short = mem["block_bytes"], 3_045_746_688
+    assert mem["chip_bytes"] == timing.CHIP_BYTES > short
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+
+    def at(chip: int) -> dict:
+        return {**r, "ledger": {**r["ledger"], "memory": {**mem, "chip_bytes": chip}}}
+
+    inputs = verifier.recorded_inputs(at(short), got["reg"], host_bytes=0, rates=rates)
+    assert inputs["chip_bytes"] == timing.CHIP_BYTES
+    assert inputs == verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    charged, own = line.record_run_json(inputs), line.record_run_json({**inputs, "chip_bytes": short})
+    more = -(-timing.CHIP_BYTES // b) - -(-short // b)
+    assert more > 0
+    for f in line.FORMS:
+        assert charged[f]["stretches"] and len(charged[f]["stretches"]) == len(own[f]["stretches"])
+        for x, y in zip(charged[f]["stretches"], own[f]["stretches"]):
+            for reading in line.READINGS:
+                assert line.number(x[reading]["lost_blocks"]) == line.number(y[reading]["lost_blocks"]) + more
+    assert verifier.recorded_paced(at(short), got["reg"], host_bytes=0)["chip_blocks"] == -(-timing.CHIP_BYTES // b)
+    larger = timing.CHIP_BYTES + b
+    assert verifier.recorded_inputs(at(larger), got["reg"], host_bytes=0, rates=rates)["chip_bytes"] == larger
+    assert verifier.recorded_paced(at(larger), got["reg"], host_bytes=0)["chip_blocks"] == -(-larger // b)
+
+
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     """A prover that repeats a root doesn't make a group's last root early on the challenger's clock: window 2's last
     root is also its boundary σ_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads each
