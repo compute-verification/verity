@@ -488,7 +488,8 @@ class Local:
         if rc or got.get("commitment") is None:
             raise Ch.CoinError(f"the local gate refused the open, or its challenger signed no commitment: {out.decode().strip()}")
         address = host.sessions / self.session / "out" / "address.json"
-        while not address.exists() and alive(self.session):
+        # serve.py writes the file in place, its newline last: read it only once it is whole
+        while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
             time.sleep(0.1)
         return json.loads(address.read_text())["address"], got["secret"], got["commitment"]
 
