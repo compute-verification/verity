@@ -205,7 +205,8 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Their salt (their coin, back steps ago, and its round's root) is taken and staged with them (`_salt_early`), so the
 # flag is the dispatch's one write. Graph steps only, and never a step that holds a capture or a fault, nor a window's
-# last step's units
+# last step's units.  "2": as "1", and with TAIL=2 a coin not back at the prequeue (an RTT near the units' D - 2 steps)
+# polled for while the step's trees run, its salt staged as it lands, so the dispatch still writes the flag alone
 PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
 # serving stream's wait on the units, every level of both in one launch after it, not two h1c_builds after it; the same
@@ -337,8 +338,10 @@ class SoWindow(DO.Window):
         self.lm_hold_us = int(os.environ.get(LM_HOLD_ENV) or 0)
         if self.lm_hold_us and not self.lm_gap:
             raise RuntimeError(f"${LM_HOLD_ENV}: needs ${LM_GAP_ENV}")
+        self.salt_poll = os.environ.get(PREQ_ENV) == "2"
+        self.salt_polls = {"polled": 0, "staged": 0}
         self.lm_first = os.environ.get(LM_FIRST_ENV) == "1"
-        if self.lm_first and (self.lm_gap or self.overlap or os.environ.get(PREQ_ENV) == "1"):
+        if self.lm_first and (self.lm_gap or self.overlap or os.environ.get(PREQ_ENV) in ("1", "2")):
             raise RuntimeError(f"${LM_FIRST_ENV}=1 serves an -so arm without -ov, ${LM_GAP_ENV} or ${PREQ_ENV}")
         # the step whose units wait for compute_logits, and the event after its lm_head their stream waits on
         self.lm_defer: int | None = None
@@ -543,6 +546,18 @@ class SoWindow(DO.Window):
         salt = self.HT.live_salt(self.coins.commitment, o.coin, o.index, self.pipe.roots[i])
         self.salt_early[j] = (o, salt)
         sd.stage_salt(j, salt)
+
+    def _salt_poll(self, sd, j: int, ev: torch.cuda.Event) -> None:
+        """$DITHER_SO_PREQ=2: until `ev` (the trees' wait on the units) is done, step j's coin polled for and its salt
+        staged once it is back (`_salt_early`); each sleep frees the GIL for the pipe's reader."""
+        self.salt_polls["polled"] += 1
+        i = self.ix(j)
+        while not ev.query():
+            if self.pipe.opening(i, wait=False) is not None:
+                self._salt_early(sd, j)
+                self.salt_polls["staged"] += 1
+                return
+            time.sleep(2e-5)
 
     def _forward_wait_deferred(self, main: torch.cuda.Stream) -> None:
         """$DITHER_SO_COIN_ASYNC: while forward s runs, the deferred step's units dispatched once its coin is back."""
@@ -958,7 +973,10 @@ class SoWindow(DO.Window):
             if zc:
                 # the stream past its wait on the units, then a spin on the tail's own word: the wake-up's latency
                 # rides the tail's launch
-                (self.ev_w[1] if waited else self.ev_w[2]).synchronize()
+                ew = self.ev_w[1] if waited else self.ev_w[2]
+                if self.salt_poll and ju in sd.queued and ju not in self.salt_early:
+                    self._salt_poll(sd, ju, ew)
+                ew.synchronize()
                 if self.hmark:
                     h_sync = time.perf_counter()
                 root = self.tail.root(0)
@@ -1181,6 +1199,7 @@ class SoWindow(DO.Window):
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
                      "coin_async": {"on": self.coin_async, **deferrals,
                                     "late_wait_ms": {"n": len(late), "p50": _q(late, 0.5), "max": _q(late, 1.0)}},
+                     "salt_poll": {"on": self.salt_poll, **self.salt_polls},
                      "z_side": self.z_side,
                      "root_lag": {"on": self.root_lag, "steps": lagn,
                                   "wait_ms": {"p50": _q(lagw, 0.5), "p90": _q(lagw, 0.9), "max": _q(lagw, 1.0)}},
@@ -1361,7 +1380,7 @@ class SoSide(DA.Side):
             self.unit_next = torch.zeros(words, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
-        self.preq = os.environ.get(PREQ_ENV) == "1"
+        self.preq = os.environ.get(PREQ_ENV) in ("1", "2")
         self.queued: dict[int, tuple[int, int]] = {}
         # step -> the salt `stage_salt` wrote into its ring slot's pinned words ahead of its dispatch
         self.staged: dict[int, bytes] = {}
