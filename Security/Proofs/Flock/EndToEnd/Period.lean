@@ -72,7 +72,11 @@ theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   unfold prCoin
   refine congrArg avg (funext fun ω => ?_)
   rw [prob_map, prob_const (¬ ∃ u ∈ w.L.draw ω, u ∈ B)]
-  exact if_congr (by simp [Finset.disjoint_left]) rfl rfl
+  beta_reduce
+  have hiff : (¬ ∃ u ∈ w.L.draw ω, u ∈ B) ↔ Disjoint (w.L.draw ω) B := by simp [Finset.disjoint_left]
+  by_cases hd : Disjoint (w.L.draw ω) B
+  · rw [if_pos (hiff.2 hd), if_pos hd]
+  · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
 /-- **A window's draw misses its wrong units** with probability at most `(1 − kd/n)^{|W|}`, under A3. -/
@@ -99,7 +103,7 @@ theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
     (fun t => (W t).miss + (W t).ks + (W t).link)
     (fun t τ hτ => (W t).accepted_wrong_le (hA3 t hτ.1) τ hτ.2) T 0 s
     (periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩) hs)
-  simpa using h
+  simpa [Period.run] using h
 
 /-- **The integrity audit over a horizon.** -/
 theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
@@ -160,7 +164,7 @@ theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, ((W t).ks + (W t).link)) + x ^ M := by
         gcongr
-        · simpa using hA
+        · simpa [Period.run] using hA
         · exact hB
     _ ≤ ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link) := by
         rw [add_comm]
