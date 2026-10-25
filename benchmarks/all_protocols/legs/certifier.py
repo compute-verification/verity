@@ -51,8 +51,9 @@ is then proved on link-window 0 (`scan_prove`: `scan_zk.py prove --warden-run --
 behind the Lean firewall; a round not as expected or witness in what its verifier received refuses the session), and
 its audit record is one-stage's answer for its registration, re-decided at the leg's δ (`scan_window`). A period whose
 every link-window has a scan answer is decided in certifier/v0's rows form (`rows_case_of`, ``network-period check``):
-per link-window the scan's registration in the commitment and, in the evidence, its answer, the three records'
-certificates and the two rows' registrations, under the deployment's key and its one schedule; the scan's layout terms
+per link-window the scan's registration in the commitment (its ``warden/<side>`` roots the rows' registrations' roots
+and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the three records' certificates and the two rows'
+registrations, under the deployment's key and its one schedule; the scan's layout terms
 its free inputs (`scan_free`, every scan row but the network certifier's own cells, an overcount) over a link-window's
 buckets. A period with a link-window the scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved
 yet, and a ``late`` run's is refused before the scan registers it).
