@@ -10,11 +10,10 @@ of one stratum of `n` replay units. So `Design.Pa` is that class's `OneStage.Pa 
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit
-
 /-- **`P_a` at the bridge**: on `partOf P`, `designOf kd` misses a set `B` of slots with probability
 `C(n − |B|, kd)/C(n, kd)`. -/
-theorem pa_eq_choose {C : Circuit} {n : ℕ} (P : Partition C n) (kd : ℕ) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
+theorem pa_eq_choose {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
+    (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf kd).Pa (partOf P) B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
   have hl : ((List.finRange n).map fun u => [unitGates P u]).length = n := by simp
   have hw : Claims.Sampling.window 0 n B = B := by
