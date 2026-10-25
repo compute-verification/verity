@@ -743,7 +743,7 @@ theorem drawsIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpre 
   subst hshu
   obtain ⟨m, hm, h1, h2, hx⟩ := shareOf_spec (Array.getElem_mem hk)
   rw [hx]
-  obtain ⟨-, -, -, -, -, hrange, -⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hdraws
+  obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hdraws
   obtain ⟨-, hp, -⟩ := hrange m hm
   refine ⟨by omega, ?_⟩
   have hu : u / g * g + (u - u / g * g) = u := by omega
@@ -868,8 +868,7 @@ theorem dl1_draw {digest : ByteArray} {coins : Array ByteArray} {W samples : Nat
   split at hd'
   · rename_i hc
     rw [hf] at hd'
-    injection hd' with hd'
-    rw [← hd', ← hc.1]
+    rw [← Option.some.inj hd', ← hc.1]
     exact hd
   · exact h v d' (by rw [dr_eq]; exact hd')
 
@@ -989,7 +988,7 @@ theorem sessionDrawsRecords : SessionDrawsRecords := by
     obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hc
     have hW : c < s.params.windows := by rw [hp]; exact hcW
     have hdraws := hL c d hd
-    obtain ⟨-, -, -, -, -, hrange, -⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hdraws
+    obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hdraws
     have hall : shareOf d 0 s.windows[c]!.plans.size = d :=
       shareOf_all d _ fun k hk => by simpa using (hrange k hk).1
     refine link_out hInv hp hr hco hdig hA c d (by rw [drawLengths_one hW]; exact hdraws) ?_
