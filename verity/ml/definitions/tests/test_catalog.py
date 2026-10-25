@@ -4,7 +4,7 @@ that registers more, changes the count and fails here.  Change `COUNT` in the ch
 
 The count is the registry's own: 1,287 on main before the move less PoUW's circuit (the 47 `Ncp*` and `Pouw*` Definitions
 `verity.core.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
-`verity.ml.circuits.ops.ncp`."""
+`verity.ml.circuits.ops.ncp`, and 1,242 since `AttentionHead_v18` and `Attention_v18` (bcf1e1aade)."""
 from __future__ import annotations
 
 import sys
@@ -14,7 +14,7 @@ from verity_vllm.program.registry import catalog
 
 REPO = Path(__file__).resolve().parents[4]
 
-COUNT = 1240
+COUNT = 1242
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
