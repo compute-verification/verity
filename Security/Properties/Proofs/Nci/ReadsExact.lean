@@ -11124,6 +11124,198 @@ theorem gateW_oneShift (P : Prog) {d k m : Nat} {o : Int}
   rw [e, Int.toNat_natCast]
   exact locW_child P hoff hk hp hm (by omega) hl
 
+/-- Definition `d`'s body laid out: each node's gates its members' activations', end to end. -/
+def Laid (P : Prog) (d : Nat) : Prop :=
+  ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
+    (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
+      (P.defs[((P.defs[d]!).body.nodes[k']!).fn]!).gates
+
+/-- Definition `f`'s summarized return names its gates with their widths (`LocW`). -/
+def RetW (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
+  ∀ w p, (Tgt.gate w, p) ∈ psPos (memo[f]!).ret → LocW P f p.toNat w
+
+/-- What `throughArg` gives of member `m`'s parameter `i`'s leaves `g`, each in range, names the body's gates with
+their widths. -/
+def ThroughW (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ k m i g segs, m < (c.body.nodes[k]!).members → g.tgt = .ref true i →
+    (∀ x ∈ pos g, 0 ≤ x.2 ∧ i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size ∧
+      x.2 < ((((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves : Int))) →
+    Desc.throughArg c fuel k m i g = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
+
+/-- What `fromCallee` gives of member `m` of a composite node names the body's gates with their widths. -/
+def CalleeW (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ k m a b segs, m < (c.body.nodes[k]!).members → (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false →
+    Desc.fromCallee c fuel k m a b = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
+
+/-- **`fromCallee`'s width step**: one step up, `fromCallee`'s segments name the body's gates with their widths
+wherever its callees' summaries hold `RetOk` and name theirs (`RetW`), the bodies are laid out, and `throughArg`'s
+segments one step down name the body's gates with their widths, each of a copy at least (`ThroughReps`). -/
+theorem calleeW_succ (c : Desc.Ctx) (fuel : Nat)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hRW : ∀ k node, c.node k = .ok node → RetW c.P c.memo node.fn) (hL : Laid c.P c.d)
+    (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
+      (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates)
+    (hTW : ThroughW c fuel) (hTR : ThroughReps c) : CalleeW c (fuel + 1) := by
+  intro k m a b segs hm hp h
+  rw [Desc.fromCallee.eq_2] at h
+  obtain ⟨node, hn, h⟩ := Walk.except_bind_ok h
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  have hk : k < c.body.nodes.size := node_lt hn
+  subst hnode
+  dsimp only at h
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  obtain ⟨hps, hpos, hgo, -, hpp⟩ := hR k _ hn
+  have hrw := hRW k _ hn
+  obtain ⟨hLf, hlast⟩ := hLF k _ hn hp
+  have hslice := psSlice_pos _ hps a b
+  have hmemS : ∀ s ∈ ((c.memo[(c.body.nodes[k]!).fn]!).ret.slice a b).toList, ∀ x ∈ segPos s,
+      x ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret := by
+    intro s hs x hx
+    have : x ∈ segsPos ((c.memo[(c.body.nodes[k]!).fn]!).ret.slice a b) := List.mem_flatMap.2 ⟨s, hs, hx⟩
+    rw [hslice] at this
+    exact List.mem_of_mem_drop (List.mem_of_mem_take this)
+  have ho : ((c.body.offsets[k]! : Int) + (m : Int) * ((c.P.defs[(c.body.nodes[k]!).fn]!).gates : Int)) =
+      ((c.body.offsets[k]! + m * (c.P.defs[(c.body.nodes[k]!).fn]!).gates : Nat) : Int) := by push_cast; rfl
+  have hin : ∀ w p, (Tgt.gate w, p) ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret →
+      0 ≤ p ∧ p < ((c.P.defs[(c.body.nodes[k]!).fn]!).gates : Int) := by
+    intro w p hx
+    have h0 := (hpos _ hx).1
+    refine ⟨h0, ?_⟩
+    have := locW_lt (hrw w p hx) hLf hlast
+    omega
+  have hfa := forIn_app (GateW c.P c.d) _ _ ?_ #[] segs h'
+  · obtain ⟨out, rfl, hout⟩ := hfa
+    intro s hs
+    rw [Array.toList_append, List.mem_append] at hs
+    exact hs.elim (fun hs => by simp at hs) (hout s)
+  intro s hs r y hy
+  obtain ⟨hrep1, hgates⟩ := retOk_slice hgo hs
+  have hx := hmemS s hs
+  have hone1 : ∀ g, (∀ x ∈ pos g, x ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret) →
+      GateW c.P c.d (Seg.one { g with base := ((c.body.offsets[k]! : Int) +
+        (m : Int) * ((c.P.defs[(c.body.nodes[k]!).fn]!).gates : Int)) + g.base }) := fun g hg =>
+    gateW_oneShift c.P hL hk hp hm ho (fun w p hxm => hrw w p (hg _ (by rwa [segPos_one] at hxm)))
+      (fun w p hxm => hin w p (hg _ hxm))
+  split at hy
+  · rename_i hr
+    split at hy
+    · rename_i hall
+      have hgs := gates_of_all hall
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      refine ⟨#[_], congrArg _ Array.push_eq_append, fun s' hs' => ?_⟩
+      simp only [List.mem_singleton] at hs'
+      subst hs'
+      exact gateW_shift c.P hL hk hp hm ho (fun w p hxm => hrw w p (hx _ hxm)) (fun w p hxm => hin w p (hx _ hxm))
+    rename_i hnot
+    have hsh : s.shift = 0 := by
+      rcases hgates hr with hg | hg
+      · refine absurd ?_ hnot
+        rw [Array.all_eq_true]
+        intro i hi
+        obtain ⟨w, hw⟩ := hg _ (Array.getElem_mem_toList hi)
+        simp only [hw]
+      · exact hg
+    rw [if_neg (by simp [hsh])] at hy
+    obtain ⟨one, hone, hy⟩ := Walk.except_bind_ok hy
+    rw [← Array.forIn_toList] at hone
+    have hxg : ∀ g ∈ s.ps.toList, ∀ x ∈ pos g, x ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret := fun g hg x hxm =>
+      hx x (by
+        rw [segPos_alike hsh]
+        exact List.mem_flatMap.2 ⟨0, List.mem_range.2 (by omega), List.mem_flatMap.2 ⟨g, hg, hxm⟩⟩)
+    obtain ⟨one'', h1'', h2''⟩ := forIn_app (GateW c.P c.d) _ s.ps.toList (fun g hg r' y' hy' => by
+        split at hy'
+        · simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨#[_], congrArg _ Array.push_eq_append, fun s' hs' => ?_⟩
+          simp only [List.mem_singleton] at hs'
+          subst hs'
+          exact hone1 g (hxg g hg)
+        · exact absurd hy' (by intro h; cases h)
+        · rename_i i hi
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          refine hTW k m i g v' hm hi (fun x hxm => ?_) hv'
+          obtain ⟨h0, -, hp⟩ := hpos x (hxg g hg x hxm)
+          obtain ⟨h1, h2⟩ := hp i ((mem_pos_tgt hxm).trans hi)
+          exact ⟨h0, h1, h2⟩) #[] one hone
+    have hone_w : ∀ s' ∈ one.toList, GateW c.P c.d s' := by
+      rw [h1'', Array.empty_append]; exact h2''
+    split at hy
+    · rename_i hall
+      have hsrc := forIn_src (fun x : Seg => x.reps ≠ 0) _ s.ps.toList (fun g _ r' y' hy' => by
+          split at hy'
+          · simp only [pure, Except.pure, Except.ok.injEq] at hy'
+            subst hy'
+            refine ⟨#[_], congrArg _ Array.push_eq_append, ?_⟩
+            intro x hx'
+            rcases List.mem_singleton.1 hx' with rfl
+            exact Nat.one_ne_zero
+          · exact absurd hy' (by intro h; cases h)
+          · rename_i i hi
+            obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+            simp only [pure, Except.pure, Except.ok.injEq] at hy'
+            subst hy'
+            exact ⟨v', rfl, hTR fuel k m i g v' hv'⟩) #[] one hone
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      refine ⟨#[_], congrArg _ Array.push_eq_append, fun s' hs' => ?_⟩
+      simp only [List.mem_singleton] at hs'
+      subst hs'
+      have h1 : ∀ x ∈ one.toList, x.reps = 1 := by
+        intro x hx'
+        have hle := (Array.all_eq_true_iff_forall_mem.1 hall) x (Array.mem_toList_iff.1 hx')
+        simp only [decide_eq_true_eq] at hle
+        rcases hsrc x hx' with h0 | h0
+        · simp at h0
+        · omega
+      have hpa := posAll_flatMap_ps one h1
+      intro w p hx'
+      rw [segPos_alike rfl] at hx'
+      obtain ⟨_, -, hx'⟩ := List.mem_flatMap.1 hx'
+      rw [hpa] at hx'
+      obtain ⟨s', hs', hx''⟩ := List.mem_flatMap.1 hx'
+      exact hone_w s' hs' w p hx''
+    · have hy := walkAtMost_bind _ _ _ hy
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+      obtain ⟨segs', hsegs', hA2⟩ := forIn_app (GateW c.P c.d) _ _ (fun _ _ r' y' hy' => by
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          exact ⟨one, hy'.symm, hone_w⟩) r v hv
+      exact ⟨segs', by rw [hsegs'], hA2⟩
+  · rename_i hr
+    have h1 : s.reps = 1 := by omega
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    rw [← Array.forIn_toList] at hv
+    have hxg : ∀ g ∈ s.ps.toList, ∀ x ∈ pos g, x ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret := fun g hg x hxm =>
+      hx x (by rw [segPos_one_rep h1]; exact List.mem_flatMap.2 ⟨g, hg, hxm⟩)
+    obtain ⟨segs', rfl, hA'⟩ := forIn_app (GateW c.P c.d) _ s.ps.toList (fun g hg r' y' hy' => by
+        split at hy'
+        · simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨#[_], congrArg _ Array.push_eq_append, fun s' hs' => ?_⟩
+          simp only [List.mem_singleton] at hs'
+          subst hs'
+          exact hone1 g (hxg g hg)
+        · exact absurd hy' (by intro h; cases h)
+        · rename_i i hi
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          refine hTW k m i g v' hm hi (fun x hxm => ?_) hv'
+          obtain ⟨h0, -, hp⟩ := hpos x (hxg g hg x hxm)
+          obtain ⟨h1, h2⟩ := hp i ((mem_pos_tgt hxm).trans hi)
+          exact ⟨h0, h1, h2⟩) r v hv
+    exact ⟨segs', rfl, hA'⟩
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
