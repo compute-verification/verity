@@ -56,7 +56,11 @@ waits on the A words before the commitment, but ``stats_a`` is launched into it 
 those come first in the graph's launch order: the commitment's CTAs, each holding an SM whole, take the SMs the call
 before's tile hashing leaves free, rather than waiting for the scales' CTAs to end (r20261025-115836-c84d: at k = 14336
 beside gate_up's 112 tile CTAs, pd_commit took 143 us against 125 alone).  Nothing past that join is reordered, so the
-same kernels write the same bytes.
+same kernels write the same bytes.  Where the call's steps before that join read A's words only in pd_commit's mode 1
+and the kernel's pd_commit can read the call's BF16 rows in their place (`run.Pipeline.reads_bf16`: the same words, each
+BF16 widened to FP32 exactly as it loads them), the widening of the call's x into A's words (widen_a) moves onto the stats
+stream too, before ``stats_a``, so A's commitment starts at the call's x rather than after its widening; everything else
+that reads A's words (the forming, the screen, the stages) runs after the join, as before.
 
 With a `statement` enabled (and hashing), a whole capture also copies each call's A words to the statement's stage, and
 `whole_replayed` launches its commitment of the forward's rows after the replay; its key says so.
@@ -185,6 +189,8 @@ class GraphCalls:
     #: alone) beside its A commitment, joined where the call's forming reads them; and the stats stream
     whole_fork_stats: bool = False
     _stats_stream: Any = None
+    #: the call in flight's A words left to its `_into` (`_widen_later`): its shape, BF16 rows' address, rows and filled rows
+    _widening: Any = None
     #: with ``whole_defer_a``, whether a call's GEMMs beside its forked A tree leave the tree's CTA its SM (the pipeline's
     #: ``beside``)
     whole_tree_sm: bool = False
@@ -257,6 +263,26 @@ class GraphCalls:
     def _forks_stats(self) -> bool:
         """Whether a whole capture forks each call's ``stats_a`` beside its A commitment (`whole_fork_stats`, deferring)."""
         return self.whole_fork_stats and self._defers()
+
+    def _widen_later(self, sh: Any) -> bool:
+        """Whether a call of `sh` leaves its A words' widening (`LaneCalls._stage_a`) to its `_into`: inside a whole capture
+        forking A's scales, at a shape that replays as a graph, which is where the call goes to `_into`."""
+        return self._forks_stats() and self._whole is not None and self._graphed(sh.m16) and _capturing()
+
+    def _reads_bf16(self, pipe: Any, upto: int) -> bool:
+        """Whether the call's steps before ``stats_a`` (step `upto`), the ones the capturing stream runs before the scales'
+        join, read A's words only in pd_commit's mode 1 (``rows_a``; A's tree, ``tree_seed_a``, reads none of them), and
+        `pipe` lets that read the call's BF16 rows instead (`run.Pipeline.reads_bf16`)."""
+        have = {name for name, _, _ in pipe.steps()}
+        before = [x for x in self._call_names(pipe) if x in have][:upto]
+        return ("rows_a" in before and set(before) <= {"rows_a", "tree_seed_a"}
+                and getattr(pipe, "reads_bf16", lambda: False)())
+
+    def _widen(self, widen: tuple, stream: int, pdl: bool = True) -> None:
+        """A call's A words widened from its BF16 rows (`_widening`'s), on `stream`, as `LaneCalls._stage_a` launches it."""
+        sh, src, m, filled = widen
+        kw = {} if pdl else {"pdl": False}
+        self.kernel.run.widen_a(self.kernel.dev, src, sh.xa.data_ptr(), m, filled, sh.k, stream=stream, **kw)
 
     def _statement_on(self) -> bool:
         """Whether forwards replayed whole commit `statement`'s rows too (it is set and enabled, with hashing)."""
@@ -579,13 +605,24 @@ class GraphCalls:
         scales (`_forks_stats`, ``stats_at``), the call opens the stats stream before its A commitment, launches
         ``stats_a`` there after the commitment's first steps, and joins it in its place, before the forming steps that
         read it.  Joining by shape (``whole_shape_joins``), the call doesn't join the call
-        before's side steps; `join_before` joins its shape's."""
+        before's side steps; `join_before` joins its shape's.  The call's A words left to it (`_widening`) are widened on
+        the stats stream before ``stats_a`` where its steps before that join read them only in pd_commit's mode 1, which
+        then reads the call's BF16 rows (`_reads_bf16`), so the commitment needn't wait for the widening; else first."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
             raise RuntimeError(f"{self.entry}: weight {w}'s call of {sh.m16} rows has no graph yet, and vLLM's capture can't make "
                                f"one: run the forward once outside the capture first")
         pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
+        widen, self._widening = self._widening, None
+        if widen is not None and widen[0] is not sh:
+            raise RuntimeError(f"{self.entry}: weight {w}'s call has another shape's A words left to widen")
+        s = g.stats_at if self._forks_stats() else None
+        bf16 = widen is not None and s is not None and self._reads_bf16(pipe, s)
+        if widen is not None and not bf16:
+            self._widen(widen, raw)
+        if bf16:
+            pipe.rows_bf16 = widen[1:3]
         self.kernel.dev.stream = raw
         try:
             if not self._defers():
@@ -594,13 +631,12 @@ class GraphCalls:
             else:
                 a, b = g.cuts
                 t = g.tree_at if self._defers_a() else None
-                s = g.stats_at if self._forks_stats() else None
                 if s is not None:
                     self._open_stats()
                 for f in g.steps[:a if t is None else t]:
                     f()
                 if s is not None:
-                    self._fork_stats(g.steps[s], raw)
+                    self._fork_stats(g.steps[s], raw, widen if bf16 else None)
                 if t is not None:
                     self._fork_tree(g.steps[t:a], raw)
                 if not self.whole_shape_joins:
@@ -624,6 +660,8 @@ class GraphCalls:
                     self._join_tree()
         finally:
             self.kernel.dev.stream = None
+            if bf16:
+                pipe.rows_bf16 = None
         return g.y, screen
 
     def _fork_tree(self, steps: list, raw: int) -> None:
@@ -646,14 +684,17 @@ class GraphCalls:
         import torch
         self._stats_stream.wait_stream(torch.cuda.current_stream(self.device))
 
-    def _fork_stats(self, step: Any, raw: int) -> None:
+    def _fork_stats(self, step: Any, raw: int, widen: tuple | None = None) -> None:
         """`step` (the call's ``stats_a``) on the stats stream, after `_open_stats`'s wait, whatever the capturing stream
-        launched since; `_join_stats` joins it before the call's forming."""
+        launched since, and before it `widen` (the call's A words, `_widen`) where given, plainly: the stats stream's
+        launch before it isn't the one it follows.  `_join_stats` joins them before the call's forming."""
         import torch
         stats = self._stats_stream
         self.kernel.dev.stream = stats.cuda_stream
         try:
             with torch.cuda.stream(stats):
+                if widen is not None:
+                    self._widen(widen, stats.cuda_stream, pdl=False)
                 step()
         finally:
             self.kernel.dev.stream = raw

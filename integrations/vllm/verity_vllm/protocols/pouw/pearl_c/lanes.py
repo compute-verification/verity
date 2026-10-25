@@ -187,11 +187,16 @@ class LaneCalls:
 
     def _stage_a(self, sh: Any, x2: Any, m: int, filled: int) -> None:
         """A call's A words on the current stream: x2's m rows widened to FP32 into ``sh.xa`` and its rows m to `filled` - 1
-        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill."""
+        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill.
+        Inside a whole capture forking A's scales (`GraphCalls._widen_later`) that launch is left to the call's `_into`
+        (``_widening``), which runs it beside A's commitment where the commitment reads x2 itself, else first."""
         import torch
         dev, k = self.kernel.dev, x2.shape[-1]
         if (self.device.type == "cuda" and x2.dtype == torch.bfloat16 and x2.is_contiguous() and x2.data_ptr() % 16 == 0
                 and k % 8 == 0 and getattr(dev, "has", lambda _: False)("widen_a")):
+            if self._widen_later(sh):
+                self._widening = (sh, x2.data_ptr(), m, max(filled, m))
+                return
             self.kernel.run.widen_a(dev, x2.data_ptr(), sh.xa.data_ptr(), m, max(filled, m), k, stream=_stream(self.device))
             return
         sh.xa[:m].copy_(x2)

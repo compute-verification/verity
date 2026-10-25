@@ -971,7 +971,8 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
 // lines (rows and filler rows); PD_STAMP: p13 the stamps or 0.  Z (pearl_c_sm90.cu's pd_commit_g and pd_commit_gm): p14 the
 // digest state of a row of k zero words or 0, and rows r >= i4 zero, whose CTAs take that state for their row digest rather
-// than hash the row
+// than hash the row.  PD_SM90_FORMS, with PD_PAIR: p15 A's rows as BF16 (k halves each, i5 of them, the rows past zero) or 0,
+// read in p0's place and widened to the same FP32 words, so a call's widening (pearl_c_sm90.cu's widen_a) needn't precede it
 template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
@@ -995,6 +996,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   const bool zero = Z && a.p[14] != 0 && r >= a.i[4];
   if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
   if (PAIR && (cw > 2 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM)) __trap();
+  if (PD_SM90_FORMS && !PAIR && a.p[15] != 0) __trap();   // BF16 rows are the paired segments' alone
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
   const uint32_t* unit = reinterpret_cast<const uint32_t*>(a.p[5]);
   const uint64_t index = (uint64_t)unit[24] | (uint64_t)unit[25] << 32;
@@ -1040,20 +1042,43 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
         uint64_t st[8], w[16];
         rs_seg_head(st, j, s);
         const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j);
+        // PD_SM90_FORMS with p15: the row's words from its BF16 row there (rows r >= i5 zero), each BF16 widened to its FP32
+        // word (the bits << 16, exact) as the block's message words are made, so the words are p0's would-be FP32 row's
+        const bool b16 = PD_SM90_FORMS && a.p[15] != 0, real = r < a.i[5];
+        const uint4* seg16 = reinterpret_cast<const uint4*>(a.p[15] + 2ull * k * r + (uint64_t)(RS_SEG / 2) * j);
         uint4 nb[8];
+        if (b16) {
 #pragma unroll
-        for (int q = 0; q < 8; q++) nb[q] = seg[q];
+          for (int q = 0; q < 4; q++) nb[q] = real ? seg16[q] : make_uint4(0, 0, 0, 0);
+        } else {
+#pragma unroll
+          for (int q = 0; q < 8; q++) nb[q] = seg[q];
+        }
 #pragma unroll 1
         for (int c = 0; c <= RS_SEG / 128; c++) {
           if (c < RS_SEG / 128) {
+            if (b16) {
 #pragma unroll
-            for (int q = 0; q < 8; q++) {
-              w[2 * q] = rs_be64(nb[q].x, nb[q].y);
-              w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
-            }
-            if (c + 1 < RS_SEG / 128) {
+              for (int q = 0; q < 4; q++) {
+                w[4 * q] = rs_be64(nb[q].x << 16, nb[q].x & 0xFFFF0000u);
+                w[4 * q + 1] = rs_be64(nb[q].y << 16, nb[q].y & 0xFFFF0000u);
+                w[4 * q + 2] = rs_be64(nb[q].z << 16, nb[q].z & 0xFFFF0000u);
+                w[4 * q + 3] = rs_be64(nb[q].w << 16, nb[q].w & 0xFFFF0000u);
+              }
+              if (c + 1 < RS_SEG / 128) {
 #pragma unroll
-              for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
+                for (int q = 0; q < 4; q++) nb[q] = real ? seg16[4 * (c + 1) + q] : make_uint4(0, 0, 0, 0);
+              }
+            } else {
+#pragma unroll
+              for (int q = 0; q < 8; q++) {
+                w[2 * q] = rs_be64(nb[q].x, nb[q].y);
+                w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
+              }
+              if (c + 1 < RS_SEG / 128) {
+#pragma unroll
+                for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
+              }
             }
           } else {
             pd_padw(w, 128 + RS_SEG);

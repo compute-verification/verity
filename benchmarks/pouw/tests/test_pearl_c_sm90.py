@@ -180,6 +180,60 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
+    """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
+    gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
+    before; rows set on a pipeline that doesn't read them are refused.  `widen_a` with `pdl` False launches plainly."""
+    launched = []
+
+    class D:
+        def __init__(self, marked):
+            self.marked, self.pd_smem = marked, {851: 0}
+
+        def has(self, name):
+            return self.marked and name == RUN.BF16_ROWS_MARK
+
+        def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None, **kw):
+            launched.append((name, tuple(p), tuple(i), kw))
+
+    pipe = RUN.Pipeline.__new__(RUN.Pipeline)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.pd, pipe.split_a, pipe.stamps, pipe.k, pipe.m, pipe.m_real = 851, True, 0, 4096, 64, 16
+    for marked in (True, False):
+        pipe.dev, pipe.rows_bf16 = D(marked), None
+        assert pipe.reads_bf16() is marked
+        launched.clear()
+        pipe.pd_commit(1)
+        assert launched[0][0] == "pd_commit_851" and len(launched[0][1]) == 14 and launched[0][2] == (16, 4096, 1, 64)
+        pipe.rows_bf16 = (777, 8)
+        if not marked:
+            with pytest.raises(RuntimeError, match="reads_bf16"):
+                pipe.pd_commit(1)
+            continue
+        launched.clear()
+        pipe.pd_commit(1)
+        pipe.pd_commit(0)
+        assert launched[0][1][14:] == (0, 777) and launched[0][2] == (16, 4096, 1, 64, 0, 8)
+        assert len(launched[1][1]) == 14 and launched[1][2] == (16, 4096, 0, 64)
+    pipe.dev = D(True)
+    pipe.split_a = False
+    assert not pipe.reads_bf16()
+    pipe.split_a = True
+    monkeypatch.setattr(RUN, "BF16_ROWS", False)
+    assert not pipe.reads_bf16()
+    assert f"void {RUN.BF16_ROWS_MARK}() {{}}" in SOURCE
+
+    calls = []
+    dev = RUN.Dev.__new__(RUN.Dev)
+    dev.cu = SimpleNamespace(cuLaunchKernelEx=lambda *a: calls.append("programmatic") or 0,
+                             cuLaunchKernel=lambda *a: calls.append("plain") or 0)
+    dev.fns, dev.stream, dev.pdl_names = {"widen_a": RUN.vp()}, None, RUN.PDL_ENTRY_KERNELS
+    RUN.widen_a(dev, 1, 2, 8, 16, 4096)
+    RUN.widen_a(dev, 1, 2, 8, 16, 4096, pdl=False)
+    assert calls == ["programmatic", "plain"]
+
+
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
@@ -364,8 +418,12 @@ def grouped_kernels() -> list[str]:
     return [n for n in re.findall(KERNEL, SOURCE) if n.endswith("_g")] + names + [g + "_smem" for g in names] + pd
 
 
+#: the cubin's empty kernels, which run.py looks for and never launches
+MARKS = (RUN.PDL_MARK, RUN.PDL_ENTRY_MARK, RUN.BF16_ROWS_MARK)
+
+
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK, RUN.PDL_ENTRY_MARK} - set(grouped_kernels())
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", *MARKS} - set(grouped_kernels())
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -375,7 +433,7 @@ def kernel_names() -> list[str]:
     (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
     pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
-    return own_kernels() + [RUN.PDL_MARK, RUN.PDL_ENTRY_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
+    return own_kernels() + list(MARKS) + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:

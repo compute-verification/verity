@@ -751,6 +751,61 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
     assert log[:5] == [*main(7, "rows_a"), *tree(7), *main(7, "stats_a", "eprime_a")]
 
 
+def test_a_stats_forking_capture_widens_a_calls_a_words_beside_its_commitment_where_the_commitment_reads_its_bf16_rows(
+        monkeypatch):
+    """A call's A words left to its `_into` (`_widening`, as `LaneCalls._stage_a` leaves them in such a capture): where its
+    steps before the scales' join read them only in ``rows_a`` and the pipeline reads BF16 rows, ``rows_a`` runs with the
+    call's rows set on the pipeline (`rows_bf16`, cleared after) and the widening goes on the stats stream before
+    ``stats_a``, plainly; else the widening runs first on the capturing stream, as `_stage_a` launches it."""
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
+    current = _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    names = ("rows_a", "tree_seed_a", "stats_a", "eprime_a", "gemm", "hash_leaf", "scatter")
+    pipe = SimpleNamespace(b={}, size={"tree_a": 64}, rows_bf16=None, reads=True, names=names)
+    pipe.steps, pipe.reads_bf16 = (lambda: [(x, None, None) for x in pipe.names]), (lambda: pipe.reads)
+    run._call_names = lambda p: p.names
+    widen = lambda dev, src, out, m, filled, k, stream=None, pdl=True: log.append(  # noqa: E731
+        f"widen {src} {m} {filled} {k} on {current[0].name} ({stream}) pdl {pdl}")
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None), run=SimpleNamespace(widen_a=widen))
+    shapes = {7: SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8)),
+              8: SimpleNamespace(m16=32, k=8, n=32, xa=torch.zeros(48, 8))}
+
+    def step(w, name):
+        return lambda: log.append(f"{w}:{name} on {current[0].name} ({run.kernel.dev.stream})"
+                                  + (f" rows {pipe.rows_bf16}" if name == "rows_a" else ""))
+    for w, sh in shapes.items():
+        run._graphs[run._graph_key(w, sh, 32)[0]] = PG._Graph(torch.zeros(1), torch.zeros(1), "graph",
+                                                               [step(w, x) for x in names], (2, 5), 1, 2)
+
+    def forward():
+        run.whole_capture_begin(run.whole_key(False))
+        for i, (w, sh) in enumerate(shapes.items()):
+            run.join_before(sh)
+            assert run._widen_later(sh)
+            run._widening = (sh, 1000 + w, 3, 32)
+            run._graph_call(w, sh, pipe, 1, 4, 32, i, None)
+            assert run._widening is None and pipe.rows_bf16 is None
+        return run.whole_capture_end()
+
+    forward()
+    assert log[:5] == ["stats waits for main", "7:rows_a on main (1) rows (1007, 3)", "widen 1007 3 32 8 on stats (4) pdl False",
+                       "7:stats_a on stats (4)", "tree waits for main"]
+    assert "widen 1008 3 32 8 on stats (4) pdl False" in log and not any("on main" in x for x in log if x.startswith("widen"))
+    for reads, before in ((False, names), (True, ("rows_a", "lines_ea", *names[1:]))):
+        log.clear()
+        pipe.reads, pipe.names = reads, before
+        forward()
+        assert log[:3] == ["widen 1007 3 32 8 on main (1) pdl True", "stats waits for main", "7:rows_a on main (1) rows None"]
+    run.whole_capture_begin(run.whole_key(False))
+    run._widening = (shapes[8], 1, 3, 32)
+    with pytest.raises(RuntimeError, match="another shape's"):
+        run._graph_call(7, shapes[7], pipe, 1, 4, 32, 0, None)
+    monkeypatch.setattr(PG, "_capturing", lambda: False)
+    assert not run._widen_later(shapes[7])
+
+
 def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_pipelines_beside_set(monkeypatch):
     """Under ``whole_tree_sm`` the steps a call launches between its cuts, beside its forked A tree (its forming and GEMM),
     see the pipeline's ``beside`` at 1, so its persistent GEMMs leave the tree's CTA its SM; its A commitment before them,
@@ -880,21 +935,27 @@ def test_an_end_aside_needs_lagged_ends():
 
 def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_copy_and_fill(monkeypatch):
     """`LaneCalls._stage_a`: on the card, with a cubin that has widen_a and x contiguous BF16, one launch on the current
-    stream over the call's rows and the padding up to `filled`; with an older cubin, torch's copy and fill, the same words."""
+    stream over the call's rows and the padding up to `filled`, or none, left to the call's `_into` (`_widening`), where
+    `GraphCalls._widen_later`; with an older cubin, torch's copy and fill, the same words."""
     torch = pytest.importorskip("torch")
     from verity_vllm.protocols.pouw.pearl_c import lanes as L
     monkeypatch.setattr(L, "_stream", lambda device: 77)
     x, launched = torch.arange(24, dtype=torch.float32).reshape(3, 8).to(torch.bfloat16), []
-    for has in (True, False):
+    for has, later in ((True, False), (True, True), (False, True)):
         xa = torch.full((5, 8), 7.0)
         run = SimpleNamespace(widen_a=lambda *a, **kw: launched.append((a[1:], kw)))
         dev = SimpleNamespace(has=lambda name, has=has: has and name == "widen_a")
-        L.LaneCalls._stage_a(SimpleNamespace(device=SimpleNamespace(type="cuda"), kernel=SimpleNamespace(dev=dev, run=run)),
-                             SimpleNamespace(xa=xa), x, 3, 4)
-        if has:
+        calls = SimpleNamespace(device=SimpleNamespace(type="cuda"), kernel=SimpleNamespace(dev=dev, run=run),
+                                _widen_later=lambda sh, later=later: later, _widening=None)
+        sh = SimpleNamespace(xa=xa)
+        L.LaneCalls._stage_a(calls, sh, x, 3, 4)
+        if has and not later:
             assert launched == [((x.data_ptr(), xa.data_ptr(), 3, 4, 8), {"stream": 77})] and (xa == 7).all()
+        elif has:
+            assert calls._widening == (sh, x.data_ptr(), 3, 4) and len(launched) == 1 and (xa == 7).all()
         else:
             assert torch.equal(xa[:3], x.float()) and (xa[3] == 0).all() and (xa[4] == 7).all() and len(launched) == 1
+            assert calls._widening is None
 
 
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():

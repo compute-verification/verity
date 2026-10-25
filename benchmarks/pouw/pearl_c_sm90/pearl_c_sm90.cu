@@ -122,6 +122,8 @@ DEV void pdl_launch() { asm volatile("griddepcontrol.launch_dependents;" ::: "me
 extern "C" __global__ void pdl_waits() {}
 // and PDL_ENTRY_KERNELS (widen_a, and hash_decode.cuh's pd_commit under PD_PDL) only from one with this (PDL_ENTRY_MARK)
 extern "C" __global__ void pdl_waits_entry() {}
+// run.py gives pd_commit a call's BF16 rows (p15, i5) only from a cubin with this (BF16_ROWS_MARK), whose pd_commit reads them
+extern "C" __global__ void pd_reads_bf16() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
