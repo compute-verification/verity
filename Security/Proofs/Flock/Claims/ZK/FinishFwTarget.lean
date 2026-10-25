@@ -357,7 +357,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
   have hk : k.val < (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs).size := k.isLt
   rw [FlockSoundness.Refine.getElem!_range_map _ hk, FlockComplete.Replay.pushes_get _ _ k.val hk,
     FlockSoundness.Refine.recombine_eq _ _ (by rw [Array.size_map, Array.size_range])]
-  congr 1
+  refine congrArg₂ (· * ·) ?_ ?_
   · show fOf (slotAt c (l₂.size + (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs).size) k.val) = fOf (slotAt c (repSlot x (2 * j.val + r.val) (fun _ => 0) - 1) k.val)
     rw [hslot, hl₃]
     exact congrArg (fun q => fOf (slotAt c q k.val)) (by omega)
@@ -372,7 +372,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
           i.val)
       exact congrArg (fun q => fOf (slotAt c q i.val)) (by omega)
     rw [hrpp]
-    congr 1
+    refine congrArg (FlockSoundness.Model.recombine execArith · _) ?_
     show FlockSoundness.Refine.vecOf 128 (_root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k.val]!) =
       Composed.swAt (zkTab x j).table (stAt x j) (czExe PE x c j) r _ k.val
     rcases Nat.lt_or_ge k.val 2 with hk2 | hk2
