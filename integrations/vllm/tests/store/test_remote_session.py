@@ -181,7 +181,7 @@ def tampering(monkeypatch, tamper) -> None:
 def engine(s: Store, at: int = 0):
     """A serving trace in the binder's order: pages 0 to 2 in turn, each a request's for three steps (slots 0 to 3 at
     its first, 4 to 7 at its second, read at its third), freed before the step that reuses it, which is after the
-    forward of its last step, its last read; page 3 a request's that never finishes, written at steps 0 and 1.  The
+    forward of its last step, its last structural reader; page 3 a request's that never finishes, written at steps 0 and 1.  The
     engine numbers its steps from ``at`` (one whose binder numbered steps before the session)."""
 
     lives, n = {3: 0}, [0]

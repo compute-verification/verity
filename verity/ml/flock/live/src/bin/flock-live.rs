@@ -519,6 +519,7 @@ fn bench(st: Arc<Stmt>) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let n: usize = arg("--n", "4096").parse().unwrap();
     if cmd == "serve-gpu" {

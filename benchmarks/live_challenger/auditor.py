@@ -9,7 +9,7 @@ first coin.
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N]
-                                          [--profile planned|served]
+                                          [--in-flight N] [--tokens N] [--profile planned|served]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -94,9 +94,10 @@ first coin.
   a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
   auditor's device would. The gate validates the request (`--peer` one of /etc/vy/peers, `--port` the endpoint's on the
   peer's loopback, `--minutes` 1 to 120, `--tamper late|extra` for a tampering shim instead of an honest one,
-  `--requests` 4 to 400, `--profile planned|served` N2's profile, planned by default: the planned egress occupancy, or
-  NET-54's served profile, whose egress counts derive from the ingress head's), refuses while another rehearsal runs,
-  writes `certifier/<run>/request.json` and starts its unit
+  `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent together and `--tokens` 16 to 64 tokens out of each, each
+  recorded and passed on only when given (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's
+  profile, planned by default: the planned egress occupancy, or NET-54's served profile, whose egress counts derive from
+  the ingress head's), refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
@@ -158,6 +159,8 @@ SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
 CERTIFIER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
 CERTIFIER_MINUTES = (1, 120)
 CERTIFIER_REQUESTS = (4, 400)
+CERTIFIER_IN_FLIGHT = (1, 4)
+CERTIFIER_TOKENS = (16, 64)
 TAMPERS = ("late", "extra")
 CERTIFIER_PROFILES = ("planned", "served")
 TUNNEL_SSH = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15"]
@@ -735,7 +738,8 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 def parse_certifier(argv: list[str], host: Host) -> dict:
     """A certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run, the
-    tampering shim if any, how many requests the plan sends, and N2's profile."""
+    tampering shim if any, how many requests the plan sends, how many in flight and how many tokens each when given, and
+    N2's profile."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate certifier-rehearse", exit_on_error=False, add_help=False,
                                 allow_abbrev=False)
     p.add_argument("--peer", required=True)
@@ -743,6 +747,8 @@ def parse_certifier(argv: list[str], host: Host) -> dict:
     p.add_argument("--minutes", required=True)
     p.add_argument("--tamper", default=None)
     p.add_argument("--requests", default=str(CERTIFIER_REQUESTS[1]))
+    p.add_argument("--in-flight", default=None)
+    p.add_argument("--tokens", default=None)
     p.add_argument("--profile", default=CERTIFIER_PROFILES[0])
 
     def refuse(why: object) -> None:
@@ -764,12 +770,17 @@ def parse_certifier(argv: list[str], host: Host) -> dict:
     port = bounded("--port", a.port, 1024, 65535)
     minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
     requests = bounded("--requests", a.requests, *CERTIFIER_REQUESTS)
+    given = {}
+    if a.in_flight is not None:
+        given["in_flight"] = bounded("--in-flight", a.in_flight, *CERTIFIER_IN_FLIGHT)
+    if a.tokens is not None:
+        given["tokens"] = bounded("--tokens", a.tokens, *CERTIFIER_TOKENS)
     if a.tamper is not None and a.tamper not in TAMPERS:
         raise Refused(f"--tamper {a.tamper!r}: one of {list(TAMPERS)}, or none for an honest shim")
     if a.profile not in CERTIFIER_PROFILES:
         raise Refused(f"--profile {a.profile!r}: one of {list(CERTIFIER_PROFILES)}")
     return {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests,
-            "profile": a.profile}
+            "profile": a.profile} | given
 
 
 def certifier_runs(host: Host) -> list[str]:
@@ -827,7 +838,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
          "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N] "
-         "[--profile planned|served] (a lane's own gate key, or vy-admin) "
+         "[--in-flight N] [--tokens N] [--profile planned|served] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -1240,9 +1251,12 @@ def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> boo
 
 def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
     """`certifier_serve.py rehearse` of the request, the endpoint at `url` (the tunnel's local end): the honest shim, or
-    the request's tamper, with N2 on the request's profile (planned for a request written before it had one)."""
+    the request's tamper, with N2 on the request's profile (planned for a request written before it had one), and the
+    request's in-flight count and tokens only when it has them."""
+    given = [w for flag, key in (("--in-flight", "in_flight"), ("--tokens", "tokens")) if key in req
+             for w in (flag, str(req[key]))]
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
-            "--upstream", url, "--out", str(out), "--requests", str(req["requests"]),
+            "--upstream", url, "--out", str(out), "--requests", str(req["requests"]), *given,
             "--profile", req.get("profile", CERTIFIER_PROFILES[0]), "--strategies", req["tamper"] or "honest"]
 
 

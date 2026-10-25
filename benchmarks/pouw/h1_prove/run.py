@@ -374,7 +374,8 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     drawn unit (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
     (`credit._registration`): the window's registered ``entries`` (the commitment's and the verifier's ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
-    the open root ``window_root``. Each proof's ``program`` is the descriptor's SHA-512, the Program Lean was given. The
+    the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
+    descriptor's SHA-512, the Program Lean was given. The
     steps before them (the challenger's log, the credit bits, the round roots) need a served window's ledger, which this
     harness has none of."""
     layout, why = CR.layout_of(descriptor)
@@ -384,7 +385,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
         program = hashlib.sha512(descriptor).hexdigest()
         proofs = [{"program": program, "registered": f, "unit": int(u), "verdict": "accept"} for u, f in sorted(findings.items())]
         why = CR._proved(sorted(drawn), proofs) or CR._registration(
-            window_root, program, CR._prefix(descriptor), entries, ss, layout, proofs)
+            window_root, program, CR._prefix(descriptor), entries, ss, layout, len(layout["calls"]), proofs)
     return None if why is None else list(why)
 
 

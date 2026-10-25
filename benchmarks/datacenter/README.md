@@ -24,7 +24,10 @@ The covert budget is only what goes beyond the committed computation. Beside it,
 declared crossings (`Profile.exported`). It counts as novel information read by its receivers once the declaration's
 certifiers cover every link, so that `Datacenter.uncovered_links()`, the links no trusted device ends (a
 switch-to-switch link, an outside host's link to a switch), is empty; until then it is reported as not applicable, with
-those links named. The registration commits the occupancy profiles the developer may choose from
+those links named. With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default; the certifier's
+`PROTOCOL.md`, "Sealed pair links"), a crossing from one block to another is ciphertext between the two blocks'
+certifiers, so the export counts only the crossings to a reader off every block, the facility boundary
+(`Placement._exported`). The registration commits the occupancy profiles the developer may choose from
 (`register(..., profiles=...)`), the plan reads their number from it (`Plan(..., profiles=registration)`), so the
 choice is public advice of log2 of that number, and the audit refuses a declared occupancy that isn't one of them; with
 none registered the one profile is the placement's own. `Ledger.custody(registered_bits)` is the share of the

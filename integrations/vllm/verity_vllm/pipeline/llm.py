@@ -6,6 +6,7 @@ engine on.  ``generate`` returns vLLM's own outputs; the records sit beside them
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -32,6 +33,8 @@ SUPPORTED: dict[str, Supported] = {
                                                             "engine profile's)"),
     "kv_cache_memory_bytes": Supported(int, None, "the KV cache's size in bytes, in place of sizing it from free memory "
                                                   "(default: vLLM's sizing)"),
+    "enable_chunked_prefill": Supported(bool, None, "False holds a prefill that doesn't fit a step instead of cutting it into chunks "
+                                                    "(default: vLLM's, on)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
     "execution": Supported((str, type(None)), None, "the execution label the engine is built for (engine.served.EXECUTIONS), which "
                                                     "sets its batch invariance and enforce_eager (default: bi-eager, or bi-compiled "
@@ -48,7 +51,7 @@ SUPPORTED: dict[str, Supported] = {
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
-ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "dtype",
+ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "enable_chunked_prefill", "dtype",
                "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend", "seed")
 #: Explicit overrides that can select kernels outside a protocol option's Build.
 KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
@@ -85,7 +88,8 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
 
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
-    refusal, before any engine exists."""
+    refusal, before any engine exists.  The settings an adapter takes from the built engine (`protocol_options.engine_fills`)
+    are named in its ``filled`` and read as set until `LLM` fills them."""
     enabled = config.parse_protocols(opts["protocols"])
     if not enabled:
         if opts["protocols_config"]:
@@ -94,6 +98,7 @@ def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = Non
     from verity_vllm import protocol_options as PO
     ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
                      settings=PO.load_settings(opts["protocols_config"]))
+    ctx = dataclasses.replace(ctx, filled=PO.engine_fills(ctx))
     overrides = tuple(k for k in KERNEL_PROFILE_OVERRIDES if explicit and explicit.get(k) is not None)
     bad = []
     for entry in enabled:
@@ -149,6 +154,7 @@ class LLM:
     * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.
     * ``kv_cache_memory_bytes`` (int): the KV cache's size in bytes, in place of sizing it from free memory; default vLLM's
       sizing.
+    * ``enable_chunked_prefill`` (bool): False holds a prefill that doesn't fit a step instead of cutting it; default vLLM's.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
     * ``execution`` (str): the execution label the engine is built for, a key of ``engine.served.EXECUTIONS``, which sets
@@ -164,15 +170,19 @@ class LLM:
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
       (:mod:`verity_vllm.protocol_options`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
       A set the options refuse raises ``ValueError`` before the engine is built.  Sampled proofs runs in the Commit stage
-      of a row, not here.
+      of a row, not here.  Settings an option takes from the engine are filled from this one after the build
+      (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
+      (``protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}}``) gets the engine's
+      model runner and, without a ``challenger``, in-process coins, which credit nothing.
     * ``protocols_config`` (dict): each enabled protocol's settings, ``{name: {...}}``; never hashed.
 
     ``generate(prompts, sampling_params=None, use_tqdm=True)`` returns vLLM's ``list[RequestOutput]`` unchanged and
     appends a :class:`GenerateRecord` to ``records``.  ``pin`` is the resolved :class:`~verity_vllm.config.EnginePin`
     and ``engine_record`` the engine as built: the ``vllm.LLM`` keyword arguments, the environment flags the profile
     set, and the execution vLLM reports back.  ``protocols`` is the installed
-    :class:`~verity_vllm.protocol_options.Composition` (None without protocols); ``close()`` uninstalls it.  The engine
-    is always built here; an engine built elsewhere is not accepted.
+    :class:`~verity_vllm.protocol_options.Composition` (None without protocols); ``close()`` uninstalls it, and
+    ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  The engine is always built
+    here; an engine built elsewhere is not accepted.
     """
 
     def __init__(self, model: str, *, revision: str, **options: Any) -> None:
@@ -192,9 +202,29 @@ class LLM:
         self.records: list[GenerateRecord] = []
         self.spec_digest: str | None = None
         self.protocols = None
+        self._explicit, self._installs = dict(options), 0
         if ctx is not None:
-            from verity_vllm import protocol_options as PO
-            self.protocols = PO.install(self._engine.model, ctx)
+            self._install(ctx)
+
+    def _install(self, ctx: Any) -> None:
+        from verity_vllm import protocol_options as PO
+        filled = PO.from_engine(ctx, self._engine.llm, epoch=self._installs)
+        self._installs += 1
+        self.protocols = PO.install(self._engine.model, filled)
+
+    def reinstall(self, protocols_config: dict[str, Any] | None = None) -> Any:
+        """Close the installed protocol options and install the constructor's ``protocols`` afresh on this engine, with
+        ``protocols_config`` in place of the constructor's when given, and return the new composition.  The settings
+        taken from the engine are filled again, with fresh in-process coins of the next epoch: for H1, one window.
+        ``ValueError`` without ``protocols``, or naming every refusal of the new settings."""
+        opts = {**self.options, **({} if protocols_config is None else {"protocols_config": protocols_config})}
+        if not config.parse_protocols(opts["protocols"]):
+            raise ValueError("verity_vllm.LLM.reinstall: this LLM was built without protocols")
+        ctx = protocol_context(opts, self._explicit)
+        self.close()
+        self.protocols = None
+        self._install(ctx)
+        return self.protocols
 
     @classmethod
     def from_spec(cls, spec: Any) -> LLM:

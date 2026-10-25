@@ -54,6 +54,8 @@ import Proofs.Pouw.Fp8Atom.Proofs
 import Proofs.Pouw.FpG1
 import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
+import Proofs.Pouw.HiddenCredit
+import Proofs.Pouw.H1Zy
 import Proofs.Pouw.M1
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
@@ -153,7 +155,9 @@ import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.RelativeSecurityCall
 import Proofs.Pouw.RelativeSecurityGuarantees
+import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.SteinerRigidity

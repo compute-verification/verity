@@ -10,12 +10,18 @@ max_running = 5
 train_size = 15
 # ready marks written before this don't count: drive's cutoff, 12 Oct
 marked_after = "2026-10-12T06:00:00Z"
-# steps a train lands without, still running; one that then fails reverts the landing (the Lean check's are never deferred)
-defer = ["circuit-check", "pytest"]
+# steps a train lands without, still running; one that then fails reverts the landing (the Lean check's are never deferred; its
+# suites, lean-suites, are: Daniel's 11 Oct tier for parts whose cold run is over ~10 min, top 24 Oct 04:46Z)
+defer = ["circuit-check", "lean-suites", "pytest"]
 # land a train whose Lean check passed by committing the lock records it regenerated on top (CI-64)
 regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix the next train needs)
 first = []
+# how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
+# passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); "check", each train on its check
+land = "review"
+# the after-landing run reuses no pass (`check.py --no-cache`), until a suite's reuse is per test
+after_landing_no_cache = true
 # the per-PR landing in shadow beside the trains (`research.drive`): at most this many of its checks at once, landing and ejecting
 # nothing; 0 is off (`research queue stats --per-pr` reads what it would land)
 per_pr_shadow = 0

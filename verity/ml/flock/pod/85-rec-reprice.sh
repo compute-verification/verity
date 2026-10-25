@@ -39,8 +39,9 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py; the
-#                inner's session is not checked)
+#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                and the inner statement's units were derived from the program (lean_verdicts.py; the inner's session is
+#                not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -54,6 +55,11 @@
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
+#      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
+#      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
+#              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
+#              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
+#              one to; empty: none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -66,7 +72,8 @@ unset CARGO_TARGET_DIR
 # the prover's kernels use clmad, which CUDA 13.0's ptxas (node 1's host toolkit) doesn't know: without CUDA_TK, NVIDIA's
 # redistributable CUDA_REDIST archives (sha256-checked) are unpacked once under $FW, and their runtime is the prover's
 CUDA_REDIST=${CUDA_REDIST:-13.3.1}; export CUDA_TK=${CUDA_TK:-$FW/cuda-$CUDA_REDIST}
-if [ ! -x $CUDA_TK/bin/nvcc ]; then
+GPU=${GPU:-1}; GPUF=; [ $GPU = 1 ] && GPUF=--gpu
+if [ $GPU = 1 ] && [ ! -x $CUDA_TK/bin/nvcc ]; then
   exec 7>$FW/cuda.lock; flock 7
   [ -x $CUDA_TK/bin/nvcc ] || python3 - $CUDA_REDIST $CUDA_TK > $O/cuda-redist.log 2>&1 <<'EOF' || { cat $O/cuda-redist.log; exit 1; }
 import hashlib, json, shutil, sys, tarfile, urllib.request
@@ -108,9 +115,11 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
 
 KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
-BIN=$W/bin-$KEY-g1-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
+BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
+# the Lean frame a firewalled prover (MODES=firewall) releases through, built beside flock-verify
+export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
@@ -118,7 +127,7 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 # the lease command: GPU_LEASE, else the queue's own for this node (infra/cluster's submit.wrappers: node 1's pool where its tool
 # and pool file are, else gpu-lease's default)
-if [ -n "${GPU_LEASE:-}" ]; then read -ra LEASE <<< "$GPU_LEASE"; else mapfile -t LEASE < <(python3 - <<'EOF'
+if [ $GPU = 0 ]; then LEASE=(); elif [ -n "${GPU_LEASE:-}" ]; then read -ra LEASE <<< "$GPU_LEASE"; else mapfile -t LEASE < <(python3 - <<'EOF'
 import os, sys
 sys.path.insert(0, "infra/cluster/src")
 from cluster.submit import GPU_LEASE, GPU_LEASE_N1, N1_LEASE_ENV
@@ -141,6 +150,7 @@ wait_serving() { for i in $(seq 3600); do grep -q SERVING $1 && return 0; kill -
 on_gpu() {
   local d=$1 pre=${GPU_PREEMPTIBLE-1}; shift
   : > $d/prove.err
+  if [ $GPU = 0 ]; then "$@" 2> $d/prove.err; return $?; fi
   gpu_mib $d & local s=$!
   "${LEASE[@]}" 1 --wait --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
   local rc=$?
@@ -181,7 +191,7 @@ print(round(sum(busy) / len(busy), 3))
 EOF
   echo "${PENV:-}" > $d/prove-env.txt
   on_gpu $d env ${PENV:-} FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt \
-    $B prove $zk --gpu --verifier $addr --instances $inst --circuit $circ --warm $WARM --runs $RUNS | stamp > $d/prove.tsv
+    $B prove $zk $GPUF --verifier $addr --instances $inst --circuit $circ --warm $WARM --runs $RUNS | stamp > $d/prove.tsv
   local rc=${PIPESTATUS[0]}
   grep -h panicked $d/prove.err | head -3
   return $rc
@@ -227,6 +237,10 @@ proxied() {
   prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
   [ $rc = 0 ] || kill $PP 2>/dev/null
   wait $PP; echo "proxy exit $?"
+  # one session is written into --out itself, not s0 (rec_live.serve)
+  if [ $NS = 1 ] && [ -e $DD/inner/public.json ]; then
+    mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
+  fi
   return $rc
 }
 
@@ -381,9 +395,10 @@ lean_build() {
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
-    if [ ! -x $LEAN_BIN ]; then
+    if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
       rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
-        && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
+        && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
+        && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
     fi
   )
 }
@@ -435,7 +450,7 @@ build)
     exec 8>$W/build.lock; flock 8
     if [ ! -x $B ]; then
       [ -d $F ] || { [ -d ${WARM_FROM:-/workspace/jobs/proofs-vllm-moe/flock-gpu-link}/flock ] && cp -a ${WARM_FROM:-/workspace/jobs/proofs-vllm-moe/flock-gpu-link} $FW/flock-gpu-link; }
-      RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=1 SM=$SM bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
+      RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=$GPU SM=$SM bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
         || { tail -40 $O/build.log; tail -40 $O/build/out/build-circuit.txt 2>/dev/null; exit 1; }
       mkdir -p $BIN && cp $F/target/release/flock-circuit $B
     fi
@@ -630,6 +645,8 @@ oprove)
   # on the host witness: the send check and the level-0 recheck, PROTOCOL.md §10); the firewall's cost is firewall's minus
   # host's. The last mode's last session is the one oreplay and lean read.
   MODES=${MODES:-dev}; MODES=${MODES//,/ }
+  [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
+    || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $DD/v-sess
   W0=$WARM R0=$RUNS
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
@@ -642,6 +659,8 @@ oprove)
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
     done
     PENV=
+    # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
+    grep -h $'\tLIVE\t' $O/oprove/$n/prove.tsv 2>/dev/null | cut -f3- > $DD/v-sess/$l.live
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
     [ -n "${LAST:-}" ] || { echo "$n: no session"; continue; }
     # REPLAY=0: upstream's replay waits for STEP=oreplay (CPU), outside the GPU lease
@@ -684,7 +703,14 @@ lean)
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
   # RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
-  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
+  rec_inner_at() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session --rec-inner-transcript $1/public.json"; }
+  REC_INNER=$(rec_inner_at $INNER)
+  NEGS=
+  for w in ${NEG_INNER-challenge query}; do
+    FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
+      && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
+    NEGS="$NEGS $w"
+  done
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
@@ -733,6 +759,10 @@ EOF
     want $l || continue
     OWN=$(cat $O/lean/own-$l.txt)
     echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $OWN $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
+    case $l in forged-*) continue ;; esac
+    for w in $NEGS; do n=forged-inner-$w-$l
+      echo "/usr/bin/time -v -o $O/lean/time-$n.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $OWN $(rec_inner_at $DD/inner-neg-$w) --session $S > $O/lean/$n.log 2> $O/lean/$n.err; echo $n lean exit \$?"
+    done
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
@@ -758,10 +788,14 @@ EOF
   # fail closed: every statement vstage staged or oprove kept a session of, ZK_LEAN's, and the inner statement's
   PARTS=$( { [ -d $DD/v ] && (cd $DD/v && find . -name inst.bin -printf '%h\n' | sed 's:^\./::; s:/:-:g')
     for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do basename $S; done; } | sort -uV | while read -r l; do want $l && echo $l; done)
+  for l in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | xargs -rn1 basename | sort -V); do
+    case $l in forged-*) continue ;; esac
+    want $l && for w in $NEGS; do PARTS="$PARTS forged-inner-$w-$l"; done
+  done
   [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
-  else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
+  else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null; python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary

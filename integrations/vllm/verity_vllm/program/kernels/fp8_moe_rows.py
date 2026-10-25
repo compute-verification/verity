@@ -108,6 +108,37 @@ def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: 
     return out, nonfin
 
 
+def moe_expert_fp8_block_accs(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, every: int, G: int = 128,
+                              KB: int = 32, swap: bool = False, dot: str | Callable = "hopper") -> np.ndarray:
+    """`moe_expert_fp8_block_row`'s f32 accumulators (g None) after each ``every`` weights: (K / every, N) words, row c the
+    accumulator after K-chunk c, `MoeExpertFp8CoordinateChunk_v1`'s output at chunk width ``every`` (`f2fp_bf16` of the last
+    row is the coordinate's word)."""
+    step = dot if callable(dot) else TWIN_DOTS[dot]
+    xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
+    K = xq.size
+    check_statics(K, G, KB)
+    if every < 1 or K % every or every % G or every % KB:
+        raise ValueError(f"chunks of {every} weights are not whole scale blocks (G={G}) and tiles (KB={KB}) of K={K}")
+    w = np.asarray(w, dtype=np.uint8).reshape(-1, K)
+    N = w.shape[0]
+    sx = np.asarray(sx, dtype=np.uint32).reshape(K // G)
+    ws = np.asarray(ws, dtype=np.uint32).reshape(weight_blocks(N, G), K // G)
+    rows = np.arange(N) // G
+    acc, out = np.zeros(N, dtype=np.uint32), np.empty((K // every, N), dtype=np.uint32)
+    for k in range(K // KB):
+        d = np.zeros(N, dtype=np.uint32)
+        for st in range(KB // 32):
+            lo = k * KB + 32 * st
+            d, _f = step(d, np.broadcast_to(xq[lo:lo + 32], (N, 32)), w[:, lo:lo + 32])
+        kb = k * KB // G
+        a, b = np.broadcast_to(sx[kb], (N,)), ws[rows, kb]
+        first, second = (b, a) if swap else (a, b)
+        acc = fma_rn(mul_rn(d, first), second, acc)
+        if (k + 1) * KB % every == 0:
+            out[(k + 1) * KB // every - 1] = acc
+    return out
+
+
 @lru_cache(maxsize=1)
 def silu_gate_table() -> np.ndarray:
     """`g * (1.0f / (1.0f + expf(-g)))` as an f32 word for each of the 2^16 bf16 gate words: `SiluMulFp8BlockQuantResult_v1` up to

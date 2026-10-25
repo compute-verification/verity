@@ -780,6 +780,28 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
+    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch skipped as "the evidence store is not
+    reachable" here and passed under a bare pytest (r20261024-030225-1ea6). With the run's custody key staged they get it as
+    check's steps do, and the store is required; with none, neither."""
+    root = tmp_path / "tree"
+    run = tmp_path / "research" / "runs" / "r1"
+    custody = tmp_path / "research" / "requests" / "r1" / "custody"
+    run.mkdir(parents=True)
+    custody.mkdir(parents=True)
+    test = ("import os\n\ndef test_env():\n"
+            "    assert (os.environ.get('CHECK_STORE_CUSTODY'), os.environ.get('VERITY_STORE_REQUIRED')) == (os.environ['WANT_C'] or None, "
+            "os.environ['WANT_R'] or None)\n")
+    _env_workspace(root, {"pkg": test})
+    extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "WANT_C": "", "WANT_R": ""}
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, "no key staged: nothing to pass, nothing required\n" + p.stdout + p.stderr
+    (custody / "store.toml").write_text("[remote]\n")
+    (custody / "cred.json").write_text("{}")
+    p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "WANT_C": str(custody.resolve()), "WANT_R": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
     """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite

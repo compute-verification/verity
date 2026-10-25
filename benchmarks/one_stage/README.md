@@ -7,9 +7,10 @@ negatives.
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
 - `pod.sh`: the entry point on a CPU pod.
-- `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its vllm-v1 run root
-  and replay bundle: the CPU RoPE d64 Commit fixture, its window from `verity-vllm serving-rows`, and M0 and Lean built from the
-  run's tree.
+- `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
+  commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture (`COMMIT_SCHEME`: vllm-v1 by
+  default, or rows-sha512, the Commit's default), its window from `verity-vllm serving-rows`, and M0 and Lean built from the run's
+  tree.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the draw): GLM-5.3's TP8 Commit with
@@ -20,11 +21,16 @@ negatives.
   (172,200 routed-expert and 21,525 shared-expert units) is not a member.
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
-  tables over two engine steps, as rank 0 of a one-rank step on a local challenger's coins.
+  tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
+  verifies each drawn chunk with its table's registered reads (`--registered`, `row_tables.registered_reads`).
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
+- `llama1b_tp1_commit.sh`: the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
+  `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
+  store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -77,7 +83,8 @@ negatives.
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   draws from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
-  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below).
+  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
+  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 

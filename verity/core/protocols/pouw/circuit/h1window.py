@@ -5,7 +5,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the window binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so
-  down_proj's calls, at K the intermediate size, instantiate their own template in the same Program.
+  down_proj's calls, at K the intermediate size, instantiate their own template in the same Program. The tile's
+  architecture (`h1_tile`'s ``arch``, sm_120 unless given) is its `h1device` record, which binds its exact accumulator and
+  bounds its K; sm_90's binds the same step, so its Program is sm_120's.
 * **The unit** reads its rows and its z/y record and proves the record (`h1zy`, RT4-INT-33): the H1 tile (`h1_tile`) on the
   rows' codes gives z and the receipt, and the unit returns the receipt and ``ok``, 1 exactly when the record is z and its
   dequant y = RN_bf16(RN32(RN32(RN32(z) s_a) s_w)) at each cell's row scale s_a and column scale s_w, which ride on the
@@ -28,7 +30,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
   of S steps registers Σn weight rows, not S × Σn. ``zy`` is one record per unit (`h1zy.RECORD`, 48 R C bits: its cells'
   s32 z, row-major, then their bf16 y), row u unit u's, the served ``scaled_mm_zy`` record of its tile (a padded row's
   cells z = 0 and y = dq(0, +0, s_w), which is +0 only for a finite positive s_w). ``salt`` is the units' one coin,
-  ``position`` one row per unit (its number), and ``roots`` the window's seed-group roots.
+  ``position`` one row per unit (its number), and ``roots`` the window's seed-group roots. A call's statement seeds
+  its units under the call's own roots instead, root(``a/<K>@<s>``) and root(``b/<K>``), at its public table
+  (`PUBS`, `public_table`), which the verifier builds.
 * **Units** are the tiles, call by call and row block major. Tile ``(c, ti, tj)`` is the unit on rows
   ``block M + [R ti, R ti + R)`` of ``a/<K>``, on rows ``[C tj, C tj + C)`` of its linear's in ``b/<K>`` and on row u of
   ``zy``, at position u, its number. The Program's result is each call's tiles' outputs in turn (their widths depend on
@@ -39,16 +43,20 @@ derives the window's units from its own copy of the Program under the `Q_templat
   into every tile, and a unit that returns no sink is refused.
 * **Names.** Every parameter is named ``prefix`` and its role (`roles`), so a served path can name each after the
   registered value its tree commits.
-* **Tables.** A served round commits each of its calls' A rows and records before the round's coin, as the call's own
-  tables (`TABLES`, `table`): its A table, the M rows of its A block (each its codes and s_a), and its z table, one record
-  a unit of the call in its tile order. A unit's A rows and record open at its call's tables (`table_reads`), its B rows at
+* **Tables.** A served round commits each of its calls' A rows and records before the round's coin (`TABLES`, `table`):
+  one A table for each K its calls have, the M rows of each of those calls' A blocks (each row its codes and s_a) call
+  after call in call order (`step_of`), and each call's z table, one record a unit of the call in its tile order. A
+  unit's A rows open at its step's A table of its K and its record at its call's z table (`table_reads`), its B rows at
   the weights' ``b/<K>``, so a statement holds one call's units, one root a port (`table_reads_file`). The window-wide
   ``a/<K>`` and ``zy`` are the Program's parameters: trees of them registered at the window's close would be committed
-  after their readers' coins.
+  after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit in its tile order), which
+  hang on nothing past the salt, its rows and the roots, are committed whole under its round's root too, and a
+  statement then reads its units' receipts there as its output row o0 (`RECEIPT_PORT`).
 """
 from __future__ import annotations
 
 import bisect
+import functools
 import weakref
 from typing import Any, Callable, Iterable, Sequence
 
@@ -59,8 +67,10 @@ from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import coll_concat, runs
 from verity.ml.circuits.types import Array, Tuple
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.core.protocols.pouw.circuit import h1device as D
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -85,19 +95,23 @@ def roles(ks: Iterable[int]) -> tuple[str, ...]:
     return tuple(r for k in sorted(set(ks)) for r in (f"a/{k}", f"b/{k}")) + SHARED
 
 
-def h1_tile(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
-    """The H1 tile at contraction ``k``: `h1tile.PouwH1Tile` (or ``definition``, its v3) over
-    ``GemmAccumulatorS8_v2{K, sm120}``, R × C ``tile``, every (i, j) pair."""
+def h1_tile(k: int, tile: tuple[int, int], definition: Any = None, arch: str = "sm_120") -> Any:
+    """The H1 tile at contraction ``k`` on architecture ``arch`` (`h1device.DEVICES`): `h1tile.PouwH1Tile` (or ``definition``,
+    its v3) over ``GemmAccumulatorS8_v2{K}`` at the record's s8 binding, R × C ``tile``, every (i, j) pair. Refused
+    (ValueError): an architecture with no record, or a K outside its record's domain."""
+    dev = D.device(arch)
+    if why := dev.refuse(int(k)):
+        raise ValueError(why)
     r, c = tile
-    exact = bind(BG.GemmAccumulatorS8, K=int(k), **BG.GEMM_SM120_S8)
+    exact = bind(BG.GemmAccumulatorS8, K=int(k), **dev.gemm)
     return bind(definition or H.PouwH1Tile, EXACT=exact, R=int(r), C=int(c),
                 PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
 
 
-def tile_unit(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
+def tile_unit(k: int, tile: tuple[int, int], definition: Any = None, arch: str = "sm_120") -> Any:
     """The tile unit at contraction ``k``: `h1zy.PouwH1TileZy` over `h1_tile` (``definition`` its H1 tile, `h1tile.PouwH1Tile`
-    unless given, or its v3), which reads its unit's z/y record and proves it."""
-    return Z.unit(h1_tile(k, tile, definition))
+    unless given, or its v3; ``arch`` its architecture), which reads its unit's z/y record and proves it."""
+    return Z.unit(h1_tile(k, tile, definition, arch))
 
 
 def template_params(k: int) -> tuple[str, ...]:
@@ -131,6 +145,8 @@ def template(k: int, unit: Any) -> Any:
 PUBLIC = ("salt", "position", "roots")
 #: K's statement's output rows ``(schema, outputs)``: the receipt (o0) and ok (o1), one ``row/v2`` row each
 STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)), (G.SCHEMA_V2, (1,)))
+#: the statement's output row of its units' receipts, which reads its call's receipt table when the window registers one
+RECEIPT_PORT = "o0"
 
 
 def statement_rows(template: Any, ports: dict[str, str] | None = None) -> list[tuple[str, str, int, list[str]]]:
@@ -361,9 +377,19 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     return {**out, **{field: (prefix + field, u) for field in OUTPUTS}}
 
 
-#: the tables a call commits under its round's root before the round's coin (#3053's ``tables``): ``a``, its A table, and
-#: ``zy``, its z table
+#: the tables a call's rows are committed in under its round's root before the round's coin (#3053's ``tables``): ``a``,
+#: its step's A table of its K, and ``zy``, its z table
 TABLES = ("a", "zy")
+#: the table a call's receipts are committed in under its round's root before the round's coin: one receipt a unit of the
+#: call, in its tile order, each 2 (KS + m) u32 (`leaf_lanes.words`), which its statement's output row o0 reads
+RECEIPTS = "receipt"
+#: the table of a call's statements' public rows, one a unit of the call in its tile order: the window's salt, the unit's
+#: position and its call's roots (`public_table`), which the verifier registers itself at their known content
+PUBS = "pub"
+#: the statement's public row's port (`statement_rows`' ``pub``)
+PUB_PORT = "pub"
+#: the statement's output row of its unit's ok (`STATEMENT_OUT_ROWS`), which reads the window's ok rows, the verifier's own
+OK_PORT = "o1"
 
 
 def call_units(program: Program) -> list[tuple[int, int]]:
@@ -384,61 +410,109 @@ def call_of(program: Program, u: int) -> tuple[int, int]:
     return c, u - units[c][0]
 
 
-def table(program: Program, name: str, call: int) -> str:
-    """The registered value of call ``call``'s table ``name`` (`TABLES`): ``<prefix>a/<K>@<call>``, its A table (the M rows
-    of its A block, each its K codes and s_a), or ``<prefix>zy@<call>``, its z table (one record a unit of the call, in its
-    tile order)."""
+def step_of(program: Program, call: int, steps: int) -> tuple[int, int, int]:
+    """Call ``call``'s step of the window's ``steps`` (its calls the steps' equal blocks, in order), its step's calls of its
+    K, and its first row in its step's A table (`table`): ``(s, calls, M j)``, the call the j-th of its step's calls of its
+    K in call order."""
     S = program.fn.S()
-    if name not in TABLES or not 0 <= call < len(S.CALLS):
-        raise ValueError(f"a call's tables are {TABLES} of calls 0 .. {len(S.CALLS) - 1}, not {name!r} of call {call}")
-    return f"{S.PREFIX}a/{_k(S)[S.CALLS[call][0]]}@{call}" if name == "a" else f"{S.PREFIX}zy@{call}"
+    ks, n = _k(S), len(S.CALLS)
+    if not 0 <= call < n or steps < 1 or n % steps:
+        raise ValueError(f"the window's {n} calls are not {steps} steps' equal blocks, or {call} is none of them")
+    per = n // steps
+    s, k = call // per, ks[S.CALLS[call][0]]
+    mine = [c for c in range(s * per, (s + 1) * per) if ks[S.CALLS[c][0]] == k]
+    return s, len(mine), S.M * mine.index(call)
 
 
-def table_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
+def table(program: Program, name: str, call: int, steps: int | None = None) -> str:
+    """The registered value of call ``call``'s table ``name`` (`TABLES`, `RECEIPTS` or `PUBS`): ``<prefix>a/<K>@<s>``, its
+    step s's A table of its K (`step_of`, of the window's ``steps``: the M rows of the A block of each of the step's calls
+    of K, each its K codes and s_a, call after call), ``<prefix>zy@<call>``, its z table (one record a unit of the call,
+    in its tile order), ``<prefix>receipt@<call>``, its receipts, or ``<prefix>pub@<call>``, its public rows (each one a
+    unit of the call, in its tile order)."""
+    S = program.fn.S()
+    if name not in TABLES + (RECEIPTS, PUBS) or not 0 <= call < len(S.CALLS) or (name == "a" and steps is None):
+        raise ValueError(f"a call's tables are {TABLES + (RECEIPTS, PUBS)} of calls 0 .. {len(S.CALLS) - 1}, an A table "
+                         f"of the window's steps, not {name!r} of call {call} (steps {steps})")
+    if name in ("zy", RECEIPTS, PUBS):
+        return f"{S.PREFIX}{name}@{call}"
+    return f"{S.PREFIX}a/{_k(S)[S.CALLS[call][0]]}@{step_of(program, call, steps)[0]}"
+
+
+def table_reads(program: Program, tp: Any, u: int, steps: int) -> dict[str, tuple[str, int]]:
     """`unit_reads` at the tables the unit's rows are committed in before its round's coin: unit ``u``, tile t of call c,
-    reads A row ``a_k<K>[i]`` (row M blk + R ti + i of ``a/<K>``) at row R ti + i of call c's A table and its record
-    ``zy`` at row t of call c's z table (`table`); its B rows, the weights' registration, and the rest where `unit_reads`
-    has them. The window-wide ``a/<K>`` and ``zy`` trees a served path registers at close come after their readers'
-    coins, so a unit's A rows and record open only here."""
+    reads A row ``a_k<K>[i]`` (row M blk + R ti + i of ``a/<K>``) at row M j + R ti + i of its step's A table of K, c the
+    j-th of the step's calls of K (`step_of`), and its record ``zy`` at row t of call c's z table (`table`); its B rows,
+    the weights' registration, and the rest where `unit_reads` has them. The window-wide ``a/<K>`` and ``zy`` trees a
+    served path registers at close come after their readers' coins, so a unit's A rows and record open only here."""
     S = program.fn.S()
     c, t = call_of(program, u)
     a_of, zy, base = f"{S.PREFIX}a/", f"{S.PREFIX}zy", S.CALLS[c][1] * S.M
+    at = step_of(program, c, steps)[2]
     out = {}
     for key, (param, row) in unit_reads(program, tp, u).items():
         if param == zy:
             out[key] = (table(program, "zy", c), t)
         elif param.startswith(a_of) and "/" not in param[len(a_of):]:
-            out[key] = (table(program, "a", c), row - base)
+            out[key] = (table(program, "a", c, steps), at + row - base)
         else:
             out[key] = (param, row)
     return out
 
 
-def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str], ports: dict[str, str] | None = None,
-                     prog: str | None = None, window: str | None = None) -> dict[str, Any]:
-    """The verifier's ``--registered`` file (`registered.reads_file`'s format) of a statement over call ``call``'s units:
-    each A row and record at the call's tables (`table_reads`), each B row at the weights' ``b/<K>``. ``roots`` ``{value:
-    root}`` holds the call's two tables' roots, as its round's record names them before that round's coin, and the
-    weights'; ``ports`` names a key's circuit port when they differ (`window_ports`); ``prog`` the Program's digest when the
-    caller holds it. Every table is a ``row/v2`` value of 16-bit leaves under `registered.domain` of its own name, rows and
-    width: an A table is M rows of the parameter's width, a z table one record a unit of the call. ``window``, a served
-    window's open root, binds the call's two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and
-    never the weights', which are held across windows. A unit of another call reads none of them (None, and no entry
-    past a port's last read: the verifier reads none at a unit past ``reads``, `Flock.Registered.badInstance`), so the
-    file holds a statement to one call's units."""
+def _shapes(program: Program, call: int, steps: int) -> dict[str, tuple[int, int]]:
+    """Call ``call``'s tables and the weights' it reads, each ``(rows, words)``, a row's 16-bit words: its step's A table of
+    its K (M rows for each of the step's calls of K), its z table and receipts (one row a unit of the call, the unit's
+    receipt's bits as `statement_rows` counts a row's; 0 words when they are no whole 16-bit words, `credit.shape_of`'s
+    rule) and ``b/<K>``."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
-    k = _k(S)[S.CALLS[call][0]]
+    k, n = _k(S)[S.CALLS[call][0]], call_units(program)[call][1]
+    b = f"{S.PREFIX}b/{k}"
+    receipt = sum(dict(dict(S.TILES)[k].signature()[1].fields)[OUTPUTS[0]].leaf_widths())
+    return {table(program, "a", call, steps): (S.M * step_of(program, call, steps)[1], sig[f"{S.PREFIX}a/{k}"].elem.leaves // 16),
+            table(program, "zy", call): (n, sig[f"{S.PREFIX}zy"].elem.leaves // 16),
+            table(program, RECEIPTS, call): (n, receipt // 16 if receipt % 16 == 0 else 0),
+            b: (sig[b].n, sig[b].elem.leaves // 16)}
+
+
+def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str], ports: dict[str, str] | None = None,
+                     prog: str | None = None, window: str | None = None, *, steps: int, salt: str | None = None
+                     ) -> dict[str, Any]:
+    """The verifier's ``--registered`` file (`registered.reads_file`'s format) of a statement over call ``call``'s units:
+    each A row at its step's A table and each record at the call's z table (`table_reads`, the window's ``steps``), each
+    B row at the weights' ``b/<K>``. ``roots`` ``{value: root}`` holds those two tables' roots, as its round's record names
+    them before that round's coin, and the weights'; ``ports`` names a key's circuit port when they differ
+    (`window_ports`); ``prog`` the Program's digest when the caller holds it. Every table is a ``row/v2`` value of 16-bit
+    leaves under `registered.domain` of its own name, rows and width: an A table is M rows of the parameter's width for
+    each of its step's calls of K, a z table one record a unit of the call. ``window``, a served window's open root,
+    binds the two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and never the weights', which are
+    held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
+    row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
+    of them (None, and no entry past a port's last read: the verifier reads none at a unit past ``reads``,
+    `Flock.Registered.badInstance`), so the file holds a statement to one call's units. With ``salt``, the window's Program salt (hex),
+    the statement's public row ``pub`` (`PUB_PORT`) is the call's public table (`PUBS`, `public_table`) at its rows, one
+    a unit, at its known content (``known``): the salt, the unit's position and its call's roots, root(a/<K>@<s>) and
+    root(b/<K>) as ``roots`` holds them, so a unit seeded under another salt, position or roots opens no row of it; and
+    the statement's output row ``ok`` (`OK_PORT`, o1) is the window's ok rows ``<prefix>ok`` (`ok_table`, row u unit
+    u's) at its known content, the one word 1 under `core_check.ok_salt` of ``window`` and u, so a unit that computed 0
+    opens no row of it."""
+    S = program.fn.S()
     u0, n = call_units(program)[call]
-    a, zy, b = table(program, "a", call), table(program, "zy", call), f"{S.PREFIX}b/{k}"
-    shape = {a: (S.M, sig[f"{S.PREFIX}a/{k}"].elem.leaves // 16), zy: (n, sig[f"{S.PREFIX}zy"].elem.leaves // 16),
-             b: (sig[b].n, sig[b].elem.leaves // 16)}
+    b, rc = f"{S.PREFIX}b/{_k(S)[S.CALLS[call][0]]}", table(program, RECEIPTS, call)
+    shape = _shapes(program, call, steps)
+    if rc not in roots:
+        del shape[rc]
+    elif not shape[rc][1]:
+        raise ValueError(f"call {call}'s units return no receipt of whole 16-bit words for {rc} to hold")
     if missing := sorted(set(shape) - set(roots)):
         raise ValueError(f"call {call}'s statement reads {missing}, whose roots the verifier does not hold")
     reads: dict[str, dict[str, Any]] = {}
     for u in range(u0, u0 + n):
-        for key, (value, row) in table_reads(program, tp, u).items():
+        for key, (value, row) in table_reads(program, tp, u, steps).items():
             if value in shape:
                 reads.setdefault(key, {"value": value, "rows": [None] * (u0 + n)})["rows"][u] = row
+        if rc in shape:
+            reads.setdefault(OUTPUTS[0], {"value": rc, "rows": [None] * (u0 + n)})["rows"][u] = u - u0
     for r in reads.values():
         while r["rows"][-1] is None:
             r["rows"].pop()
@@ -446,9 +520,46 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     out = {}
     for key, r in reads.items():
         leaves, words = shape[r["value"]]
-        out[(ports or {}).get(key, key)] = {
+        out[{OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)] = {
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
             "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
             **G.schema_entry(G.SCHEMA_V2),
             "reads": r["rows"]}
+    if salt is not None:
+        if window is None:
+            raise ValueError("a call's public rows are committed under salts of the window's open root: give window")
+        pv = table(program, PUBS, call)
+        rows, salts, reg = public_table(prog, pv, salt, window, u0, n, (roots[table(program, "a", call, steps)], roots[b]))
+        out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": G.WORD_BITS,
+                         "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                         "reads": [None] * u0 + list(range(n)), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
+        ov = f"{S.PREFIX}{OUTPUTS[1]}"
+        rows, salts, reg = ok_table(prog, ov, window, tp.population)
+        out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(CC.OK_ROW),
+                        "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                        "reads": [None] * u0 + list(range(u0, u0 + n)),
+                        "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
     return {"format": G.READS, "ports": out}
+
+
+def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str]
+                 ) -> tuple[list[list[int]], list[bytes], G.Registered]:
+    """A call's public rows ``value`` (`PUBS`) over its ``n`` units from unit ``u0``, their salts and their registration:
+    unit u's row the window's Program salt ``salt``, its position u and its call's ``roots`` (`core_check.public_words`,
+    each hex), under the public salt `core_check.public_row_salt` of the window's open root ``window`` and u, registered
+    under the window Program's digest ``prog`` binding ``window``."""
+    s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
+    rows = [CC.public_words(s, u, rs) for u in range(u0, u0 + n)]
+    salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
+    return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
+
+
+@functools.lru_cache(maxsize=8)
+def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
+    """The window's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
+    registration (h1_prove's `register_ok`, #3124): row u the one word 1 (`core_check.OK_ROW`) under
+    `core_check.ok_salt` of the window's open root ``window`` and u, registered under the window Program's digest
+    ``prog`` binding ``window``."""
+    rows = [list(CC.OK_ROW) for _u in range(population)]
+    salts = [CC.ok_salt(window, u) for u in range(population)]
+    return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
