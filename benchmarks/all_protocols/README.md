@@ -19,8 +19,10 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
 - `verity_all_protocols/compose.py`: the composed verdict. A rejecting leg rejects it (onsite's reject dominance). It is
   `pending-ports` while a leg is missing or has no case, or any of onsite's components (read from `CoreOnsite.lean`) is
   still a stub, since a stub answers for itself, not for the protocol. Once all of them are ports, `onsite check` decides
-  on the legs' cases. Bandwidth is not an onsite component yet: a rejection there rejects, but its acceptance completes
-  nothing. `horizon` is the union bound over periods, each audited on its own live coins, `vacuous` once the δs sum to 1.
+  on the legs' cases. `run.sh` builds `onsite` and the runner runs `onsite check` every period regardless: each port on its
+  leg's case, each stub undecided (no statement yet), a port with no case on one it refuses. Its answer is `composed.answer`,
+  where each case came from `composed.inputs`. `horizon` is the union bound over periods, each audited on its own live
+  coins, `vacuous` once the δs sum to 1.
 - `verity_all_protocols/runner.py`: the periods, each report in `$OUT/p<P>/report.json` and `$OUT/reports.jsonl`, and one
   `ALLP` line per period. `--tamper P,...` makes those periods' loop record outputs that aren't its model's.
 

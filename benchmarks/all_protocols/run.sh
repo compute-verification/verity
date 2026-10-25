@@ -25,9 +25,11 @@ BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
-sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
+(cd verity/core/protocols/onsite && lake build onsite) > $O/build-onsite.log 2>&1 || { tail -40 $O/build-onsite.log; exit 7; }
+ONSITE=$REPO/verity/core/protocols/onsite/.lake/build/bin/onsite
+sha256sum $BIN $LEAN $FWL $ONSITE | tee $O/binaries.sha256
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 $PY -c 'import json, sys; print(json.dumps(dict(zip(["flock-circuit", "flock-verify", "flock-firewall", "m0-pythonpath"], sys.argv[1:]))))' \
   $BIN $LEAN $FWL $M0PATH > $O/tools.json
 export RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20))
-PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner --out $O --tools $O/tools.json --scratch $W "$@"
+PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner --out $O --tools $O/tools.json --onsite $ONSITE --scratch $W "$@"
