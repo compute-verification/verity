@@ -17,12 +17,15 @@ Parts, in order; each writes JSON lines to OUT/run.jsonl and a failed gate stops
              must be refused, no write and the next blocks' keys
   linear     int8_fused on each staged matrix at every `--m`, every output bit against the twin, and int8_fused's activation
              quantization against the twin's
-  time       interleaved rep by rep after a warm-up, with each rep's SM clock where NVML gives it: each variant's staging
-             decode of each matrix alone; the plain GEMM on plaintext (int8_fused, and cuBLASLt's s32 product); and a layer
-             three ways: plain (GEMMs only), staged (decode, then GEMM, one stream) and overlapped (the next matrix's decode on
-             a second stream beside the current GEMM, a two-buffer ring's dependencies), at `--time-m`
+  time       at each `--time-m`, interleaved rep by rep after a warm-up, with each rep's SM clock and energy (NVML's
+             counter) where NVML gives them: each variant's staging decode of each matrix alone, and libp2v1's (keys, then
+             decode, then the payload bytes copied into staging); the plain GEMM on plaintext (int8_fused, and cuBLASLt's s32
+             product); and a layer three ways: plain (GEMMs only), staged (decode, then GEMM, one stream) and overlapped (the
+             next matrix's decode on a second stream beside the current GEMM, a two-buffer ring's dependencies); and from the
+             energies, the least time any overlap could take at the card's power limit
 
-  python run.py --ship SHIP --out OUT [--parts encode,codewords,gate,linear,time] [--m 1 64 4096 20480] [--time-m 20480]
+  python run.py --ship SHIP --out OUT [--parts encode,codewords,gate,linear,time] [--m 1 64 4096 20480]
+                [--time-m 20480 4096] [--stage-variant w4]
 """
 from __future__ import annotations
 
@@ -283,13 +286,33 @@ def sm_clock() -> int | None:
         return None
 
 
-def part_time(st: dict[str, Stage], pfx: bytes, tensors: list, staged: dict, tm: int, reps: int, layers: int,
-              dev: torch.device, g: torch.Generator, log: Log) -> None:
+class Energy:
+    """The card's energy counter (NVML's total energy since the driver loaded, in J) and its enforced power limit (W);
+    both None without NVML."""
+
+    def __init__(self) -> None:
+        self.nv = self.limit_w = self.missing = None
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            uuid = str(torch.cuda.get_device_properties(0).uuid)
+            self.h = pynvml.nvmlDeviceGetHandleByUUID(uuid if uuid.startswith("GPU-") else f"GPU-{uuid}")
+            pynvml.nvmlDeviceGetTotalEnergyConsumption(self.h)
+            self.limit_w = pynvml.nvmlDeviceGetEnforcedPowerLimit(self.h) / 1e3
+            self.nv = pynvml
+        except Exception as e:  # noqa: BLE001 (no NVML or no energy counter: the arms carry no joules)
+            self.missing = repr(e)
+
+    def read(self) -> float | None:
+        return self.nv.nvmlDeviceGetTotalEnergyConsumption(self.h) / 1e3 if self.nv else None
+
+
+def part_time(kern: Kernels, st: dict[str, Stage], sv0: Stage, pfx: bytes, tensors: list, staged: dict, tm: int, reps: int,
+              layers: int, dev: torch.device, g: torch.Generator, log: Log) -> None:
     start, total = tensors[0][3], sum(t[4] for t in tensors)
     blocks = F.blocks_of(start, total)
     first = blocks.start
     c = random_rows(len(blocks), g, dev)
-    sv0 = next(iter(st.values()))
     nxt = {t[0]: torch.empty(t[4], dtype=torch.uint8, device=dev) for t in tensors}
     mats = []
     for tname, nn, kk, base, length in tensors:
@@ -298,15 +321,23 @@ def part_time(st: dict[str, Stage], pfx: bytes, tensors: list, staged: dict, tm:
         xq, s_a = T.row_quant(x)
         del x
         mats.append({"name": tname, "N": nn, "K": kk, "base": base, "length": length, "c": c[b.start - first:b.stop - first],
-                     "j0": b.start, "w": staged[tname].view(torch.int8).view(nn, kk), "xq": xq, "s_a": s_a,
+                     "j0": b.start, "off": base - F.PAYLOAD * b.start,
+                     "w": staged[tname].view(torch.int8).view(nn, kk), "xq": xq, "s_a": s_a,
                      "s_w": torch.rand(nn, dtype=torch.float32, device=dev, generator=g) * 1e-2 + 1e-4,
                      "y": torch.empty(tm, nn, dtype=torch.bfloat16, device=dev), "plan": T._plan(tm, nn, kk, dev)})
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     s_gemm, s_dec = torch.cuda.Stream(dev), torch.cuda.Stream(dev)
     s_hi = torch.cuda.Stream(dev, priority=-1)
+    en = Energy()
 
     def decode(mt: dict, sv: Stage = sv0, grid: int = 0, stream=None) -> None:
         sv.decode(mt["c"], mt["j0"], pfx, mt["base"], mt["length"], nxt[mt["name"]], grid=grid, stream=stream)
+
+    def decode_p2v1(mt: dict, grid: int = 0, stream=None) -> None:
+        # memory-accounting's two kernels (keys, then decode) on the tensor's blocks, then their payload bytes into staging
+        with torch.cuda.stream(stream or torch.cuda.current_stream(dev)):
+            m = kern.decode(mt["c"], mt["j0"])
+            nxt[mt["name"]].copy_(m[:, 2:].reshape(-1)[mt["off"]:mt["off"] + mt["length"]])
 
     def gemm(mt: dict) -> None:
         T.scaled_mm(mt["xq"], mt["s_a"], mt["w"], mt["s_w"], mt["y"], *mt["plan"])
@@ -320,9 +351,9 @@ def part_time(st: dict[str, Stage], pfx: bytes, tensors: list, staged: dict, tm:
         for mt in seq:
             gemm(mt)
 
-    def layer_staged() -> None:
+    def layer_staged(dec=decode) -> None:
         for mt in seq:
-            decode(mt)
+            dec(mt)
             gemm(mt)
 
     def mark(s: torch.cuda.Stream) -> torch.cuda.Event:
@@ -330,18 +361,18 @@ def part_time(st: dict[str, Stage], pfx: bytes, tensors: list, staged: dict, tm:
         e.record(s)
         return e
 
-    def layer_overlap(grid: int = 0, gemm_stream: torch.cuda.Stream = s_gemm) -> None:
+    def layer_overlap(grid: int = 0, gemm_stream: torch.cuda.Stream = s_gemm, dec=decode) -> None:
         # a two-buffer ring: decode i + 1 runs beside GEMM i, and may start only once GEMM i - 1 has released its buffer
         cur = torch.cuda.current_stream(dev)
         gemm_stream.wait_stream(cur)
         s_dec.wait_stream(cur)
-        decode(seq[0], grid=grid, stream=s_dec)
+        dec(seq[0], grid=grid, stream=s_dec)
         dec_done, gemm_done = [mark(s_dec)], []
         for i in range(len(seq)):
             if i + 1 < len(seq):
                 if i >= 1:
                     s_dec.wait_event(gemm_done[i - 1])
-                decode(seq[i + 1], grid=grid, stream=s_dec)
+                dec(seq[i + 1], grid=grid, stream=s_dec)
                 dec_done.append(mark(s_dec))
             gemm_stream.wait_event(dec_done[i])
             with torch.cuda.stream(gemm_stream):
@@ -351,17 +382,20 @@ def part_time(st: dict[str, Stage], pfx: bytes, tensors: list, staged: dict, tm:
         cur.wait_stream(s_dec)
 
     arms: dict[str, tuple] = {}
-    for name, sv in st.items():
+    decoders = {**{name: (lambda mt, sv=sv: decode(mt, sv)) for name, sv in st.items()}, "p2v1": decode_p2v1}
+    for name, fn in decoders.items():
         for mt in mats:
-            arms[f"decode:{name}:{mt['name']}"] = (lambda mt=mt, sv=sv: decode(mt, sv), "decode", mt["length"])
+            arms[f"decode:{name}:{mt['name']}"] = (lambda mt=mt, fn=fn: fn(mt), "decode", mt["length"])
     for mt in mats:
         arms[f"gemm:{mt['name']}"] = (lambda mt=mt: gemm(mt), "gemm", 2 * tm * mt["N"] * mt["K"])
         arms[f"lt:{mt['name']}"] = (lambda mt=mt: lt(mt), "gemm", 2 * tm * mt["N"] * mt["K"])
     layer_bytes = sum(mt["length"] for mt in mats)
-    overlaps = {"layer:overlap": {}, "layer:overlap-g1": {"grid": sms}, "layer:overlap-g2": {"grid": 2 * sms},
-                "layer:overlap-hi": {"gemm_stream": s_hi}}
+    staged_arms = {"layer:staged": decode, "layer:staged-p2v1": decode_p2v1}
+    overlaps = {"layer:overlap": {}, "layer:overlap-g2": {"grid": 2 * sms}, "layer:overlap-hi": {"gemm_stream": s_hi},
+                "layer:overlap-p2v1": {"dec": decode_p2v1}}
     arms["layer:plain"] = (layer_plain, "layer", layer_bytes * layers)
-    arms["layer:staged"] = (layer_staged, "layer", layer_bytes * layers)
+    for n, fn in staged_arms.items():
+        arms[n] = (lambda fn=fn: layer_staged(fn), "layer", layer_bytes * layers)
     for n, kw in overlaps.items():
         arms[n] = (lambda kw=kw: layer_overlap(**kw), "layer", layer_bytes * layers)
     for fn, _, _ in arms.values():
@@ -370,34 +404,56 @@ def part_time(st: dict[str, Stage], pfx: bytes, tensors: list, staged: dict, tm:
     names = list(arms)
     got: dict[str, list] = {n: [] for n in names}
     clocks: dict[str, list] = {n: [] for n in names}
+    joules: dict[str, list] = {n: [] for n in names}
     for r in range(reps):
         order = names[r % len(names):] + names[:r % len(names)]
         for n in order:
             a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            e0 = en.read()
             a.record()
             arms[n][0]()
             b.record()
             b.synchronize()
+            e1 = en.read()
             got[n].append(a.elapsed_time(b) / 1e3)
             clocks[n].append(sm_clock())
+            joules[n].append(None if e0 is None else e1 - e0)
     med = {n: statistics.median(v) for n, v in got.items()}
+    jmed = {n: statistics.median(v) if v[0] is not None else None for n, v in joules.items()}
     for n in names:
         kind, size = arms[n][1], arms[n][2]
         rate = {"decode": {"GBps": size / med[n] / 1e9}, "gemm": {"TOPS": size / med[n] / 1e12},
                 "layer": {"W_GBps": size / med[n] / 1e9}}[kind]
-        log({"part": "time", "arm": n, "M": tm, "median_s": med[n], "reps": got[n], "sm_mhz": clocks[n], **rate})
+        power = {} if jmed[n] is None else {"J": jmed[n], "W": jmed[n] / med[n]}
+        log({"part": "time", "arm": n, "M": tm, "median_s": med[n], "reps": got[n], "sm_mhz": clocks[n], "joules": joules[n],
+             **power, **rate})
     per = {n: med[n] / layers for n in names if n.startswith("layer:")}
     plain = per["layer:plain"]
     lt_layer = sum(med[f"lt:{mt['name']}"] for mt in mats)
     best = min(plain, lt_layer)
-    dec = {name: sum(med[f"decode:{name}:{mt['name']}"] for mt in mats) for name in st}
-    hide = min(plain, dec[next(iter(st))])
+    dec = {name: sum(med[f"decode:{name}:{mt['name']}"] for mt in mats) for name in decoders}
+    stage_name = next(n for n, sv in st.items() if sv is sv0)
     summary = {"part": "time", "arm": "summary", "M": tm, "pipelined_layers": layers, "model_layers": 52,
+               "staging_variant": stage_name, "power_limit_W": en.limit_w, "energy_missing": en.missing,
                "layer_plain_s": plain, "layer_lt_s": lt_layer, "plain_divisor": "int8_fused" if plain <= lt_layer else "cuBLASLt s32",
                "decode_layer_s": dec, "decode_layer_GBps": {k: layer_bytes / v / 1e9 for k, v in dec.items()}}
-    for n in ("layer:staged", *overlaps):
+    for n in (*staged_arms, *overlaps):
+        base_arm = "layer:staged-p2v1" if n.endswith("p2v1") else "layer:staged"
+        hide = min(plain, dec["p2v1" if n.endswith("p2v1") else stage_name])
         summary[n] = {"layer_s": per[n], "slowdown_vs_plain": per[n] / best, "step_s": 52 * per[n],
-                      "hidden": (per["layer:staged"] - per[n]) / hide}
+                      "hidden": (per[base_arm] - per[n]) / hide}
+    if en.limit_w and jmed["layer:plain"] is not None:
+        # at the power limit a layer takes at least its GEMMs' and its decode's energy over the limit, however overlapped
+        # (an estimate: each arm's energy is at its own clocks, and both carry the card's static power)
+        j_plain = jmed["layer:plain"] / layers
+        for name in (stage_name, "p2v1"):
+            j_dec = sum(jmed[f"decode:{name}:{mt['name']}"] for mt in mats)
+            floor = max(plain, dec[name], (j_plain + j_dec) / en.limit_w)
+            serial = plain + dec[name]
+            summary[f"power_floor:{name}"] = {
+                "gemm_J": j_plain, "gemm_W": j_plain / plain, "decode_J": j_dec, "decode_W": j_dec / dec[name],
+                "decode_J_per_GB": j_dec / (layer_bytes / 1e9), "floor_layer_s": floor, "serial_layer_s": serial,
+                "most_hidden": (serial - floor) / min(plain, dec[name])}
     log(summary)
 
 
@@ -409,7 +465,9 @@ def main() -> int:
     ap.add_argument("--variants", default="", help="comma-separated lib/ variants (default: every one shipped)")
     ap.add_argument("--shape", default="mqa16k", choices=sorted(SHAPES))
     ap.add_argument("--m", type=int, nargs="+", default=[1, 64, 4096, 20480])
-    ap.add_argument("--time-m", type=int, default=20480)
+    ap.add_argument("--time-m", type=int, nargs="+", default=[20480, 4096])
+    ap.add_argument("--stage-variant", default="w4", help="the staging variant the layer arms decode with (default w4, "
+                    "else the first shipped)")
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--time-layers", type=int, default=3, help="layers a timed layer arm runs back to back (one unhidden "
                     "prologue decode among them)")
@@ -440,7 +498,10 @@ def main() -> int:
     if ok and "linear" in parts:
         ok = part_linear(staged, tensors, a.m, dev, g, log) and ok
     if ok and "time" in parts:
-        part_time(st, pfx, tensors, staged, a.time_m, a.reps, a.time_layers, dev, g, log)
+        sv0 = st.get(a.stage_variant) or next(iter(st.values()))
+        for tm in a.time_m:
+            part_time(kern, st, sv0, pfx, tensors, staged, tm, a.reps, a.time_layers, dev, g, log)
+            torch.cuda.empty_cache()
     log({"part": "end", "passed": ok, "parts": parts})
     return 0 if ok else 1
 
