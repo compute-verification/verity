@@ -357,8 +357,8 @@ def SoundExecJ (I : Inputs) : Prop :=
         (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPJ ht dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ ht dj x₀) (tabPJ ht dj x₀)
-          ((rsPJ ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope).binding
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ (Reg := Reg) ht dj x₀) (tabPJ (Reg := Reg) ht dj x₀)
+          ((rsPJ ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope (Reg := Reg)).binding
             (rsPJ_computes ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope)) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
@@ -422,8 +422,8 @@ def SoundExecJPerTest (I : Inputs) : Prop :=
         (Law.subset n kd hkd).miss K + η +
         StrictCR.ksAvgStrict (planPJ ht dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ ht dj x₀) (tabPJ ht dj x₀)
-          ((rsPJ ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope).binding
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ (Reg := Reg) ht dj x₀) (tabPJ (Reg := Reg) ht dj x₀)
+          ((rsPJ ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope (Reg := Reg)).binding
             (rsPJ_computes ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope)) k Rw M ρ t')
 
 theorem soundExecJ (I : Inputs) : SoundExecJ I := by
