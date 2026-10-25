@@ -11,11 +11,12 @@ every input row wired, registered or ingress.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, n = ``grain.gemm_words`` // K output columns a slice, each reading
   its weight rows from the weights record (`Read`) and its ``x`` whole.
 - `RoPE_v1{NHEADS, D}` and `Attention_v18{T, NH, KVH, D}` are their heads (`RoPEHead_v1{D}`, `AttentionHead_v18{T}`).
-  A head's keys and values are one row of an `AllGather_v1{T, D}` over every key position's row, each position's row
-  gathered first when it spans several writers (the V slices).
-- `TokenSelect_v4{V}` is its chunks `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and
-  `TokenSelectCombine_v2{V, C}` over them: ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and
-  ``x0`` (``logits[0]``) from one `Gemm_v2{K, 1}` unit over the LM head's input and its first weight row.
+  A head's keys and values are one row of an `AllGather_v1{T, D}` over every key position's row (T at most `KEYS`), each
+  position's row gathered first when it spans several writers (the K and V slices).
+- `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
+  `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
+  ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
+  `Gemm_v2{K, 1}` unit over the LM head's input and its first weight row.
 - `RMSNormTriton_v5`, `RMSNormFusedCuda_v2` and `SiluMul_v2` are one unit each.
 
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
@@ -23,9 +24,9 @@ divides every use's row count, holds at most ``grain.rows`` rows, and makes the 
 ``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part). Every wire and read is stated per node as
 a pattern and `interface.coalesce`d, so the circuit's description grows with the Programs' nodes, not their units.
 
-Refused by name (`Unexpressible`): a family this lowering doesn't know (a stochastic token select among them), a request a
-Commit window carries in or out, a prefix-cache hit, byte ingress, a weight record that isn't 16-bit leaves, and a row form
-the cut rule can't state. The circuit is completeness only: that it computes what serving ran is held by the units' proofs
+Refused by name (`Unexpressible`): a request Program reading more than its prompt and the weights (a stochastic request's
+seed, a prefix-cache hit's prefix, a TP rank's peers), a family this lowering doesn't know, a request a Commit window carries
+in or out, byte ingress, a weight whose leaves aren't whole u16 words, and a row form the cut rule can't state. The circuit is completeness only: that it computes what serving ran is held by the units' proofs
 on their committed rows, never by this lowering.
 """
 from __future__ import annotations
@@ -50,12 +51,20 @@ WEIGHTS = "weights"
 PROMPT = "prompt"
 
 
+#: the most keys an attention head reads through one `AllGather_v1{T, D}`, until v19's per-key-block cut is wired
+#: (`AttentionHead_v19`, CIR-96)
+KEYS = 136
+
+
 @dataclass(frozen=True)
 class Grain:
-    """The units' size: a GEMM slice reads ``gemm_words`` weight words (N = gemm_words // K output columns), and no unit reads
-    a port as more than ``rows`` rows (nor gathers more than ``rows``)."""
+    """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
+    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`), no unit reads a port as more than ``rows`` rows nor
+    gathers more than ``rows``, and a token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256, each
+    chunk's row past one SHA-512 block)."""
     gemm_words: int = 32768
     rows: int = 256
+    select: int = 768
 
 
 @dataclass(frozen=True)
@@ -318,6 +327,9 @@ class _Request:
     def _Attention(self, j: int, node: Any) -> None:
         s = node.fn.bindings
         T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
+        if T > KEYS:
+            raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads until v19's "
+                                "per-key-block cut is wired")
         head = self._heads(node, "AttentionHead", NH)
         q, kc, vc = node.args
         tid, u = self.b.unit(head, NH)
@@ -333,16 +345,18 @@ class _Request:
         V = node.fn.bindings["V"]
         nodes = node.fn.body.nodes
         chunk, combine = nodes[0].fn, nodes[-1].fn
-        C = chunk.bindings.get("C")
-        if chunk.name != "TokenSelectChunk" or combine.name != "TokenSelectCombine" or not C or len(nodes) != V // C + 1:
+        if chunk.name != "TokenSelectChunk" or combine.name != "TokenSelectCombine" or V < 2:
             raise Unexpressible(f"{node.fn.id}: its body is not chunks and one combine")
+        C = min(self.b.grain.select, V)
         (logits,) = node.args
-        tid, u = self.b.unit(chunk, V // C)
-        for c in range(V // C):
-            self.b.feed(tid, "x", u + c, 1, (self.b.gather(self.rows(logits.refs.slice(c * C, (c + 1) * C))),))
-        ctid, cu = self.b.unit(combine)
-        self.b.feed(ctid, "best", cu, 1, (self.b.gather([Row(tid, u + c, "o0", 1) for c in range(V // C)]),))
-        self.b.feed(ctid, "idx", cu, 1, [Row(tid, u + c, "o1", 2) for c in range(V // C)])
+        parts = []
+        for lo in range(0, V, C):
+            tid, u = self.b.unit(bind(chunk.defn, **{**chunk.bindings, "C": min(C, V - lo)}))
+            self.b.feed(tid, "x", u, 1, (self.b.gather(self.rows(logits.refs.slice(lo, min(lo + C, V)))),))
+            parts.append((tid, u))
+        ctid, cu = self.b.unit(bind(combine.defn, **{**combine.bindings, "V": V, "C": C}))
+        self.b.feed(ctid, "best", cu, 1, (self.b.gather([Row(t, u, "o0", 1) for t, u in parts]),))
+        self.b.feed(ctid, "idx", cu, 1, [Row(t, u, "o1", 2) for t, u in parts])
         (_, lm, lo, _), = self.segments(logits.refs.slice(0, 1))
         if lm not in self.gemms:
             raise Unexpressible(f"{node.fn.id}: its logits are node {lm}'s, not a GEMM's")
