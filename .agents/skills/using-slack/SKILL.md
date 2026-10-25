@@ -36,7 +36,7 @@ named humans. `research msg handles` prints it; `research msg owners PATH...` na
   old group ids are its `retired_usergroups`, which still route.
 - **Channels.** `#agent-coordination`: everything between handles. `#agent-alerts`: machine alerts, each to `@infra`.
   `#ask-daniel` (`C0C5UCA0S0Z`): one card per question for Daniel. `#ask-the-team` (`C0CA1JZSYNR`) and
-  `#resource-accounting`: people's questions, which the Slack events service (`integrations/slack-events/`) routes to the
+  `#resource-accounting`: people's questions, which the Slack events service (`infra/slack-events/`) routes to the
   lanes they name (else `@top`); answer with `research msg reply --as ME --channel ask-the-team --thread T`.
 - **Workers never use Slack** (AGENTS.md): a coordinator asks for them and relays.
 
