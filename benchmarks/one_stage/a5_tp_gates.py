@@ -22,8 +22,9 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   entries (``of.partials``) and each peer partial's it reads (``of.peers``), by value, before any rank's coin. Synthetic:
   each rank's f32 activations, rounded to bf16.
 * **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the law ``work:2``: Q·K·T units of the transfer-gate
-  template `TpAllReduce2{H}` (AllReduce2_v1's body on two ports, ``part0`` and ``part1``, the ranks' partials in rank order;
-  the stand-in for a registered two-parameter twin of AllReduce2_v1), a chunk ``q<q>c<k>`` a request's collective, unit i
+  template, the registered `AllReduce2_v1{H}` itself (`b1_tp2.AllReduce2`), its input ``parts`` staged as two ports,
+  ``part0`` and ``part1``, its rows ``parts[0]`` and ``parts[1]``: the ranks' partials in rank order (`PORT_PARAMS`), a
+  chunk ``q<q>c<k>`` a request's collective, unit i
   of it token i; and the rest, ``--rest`` units of `WardenRowIdentity{128}` over rows of their own, standing in for the
   compiled model steps. The verifier's work table proves every transfer-gate unit (selection All) beside the rest's drawn
   share. Each chunk's ``part<j>`` is a shared-row table of rank j's partial's rows under rank j's salts, so its ``b || c``
@@ -78,16 +79,15 @@ sys.path.insert(0, str(HERE.parent / "network_traces"))
 from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E402
 from warden_zk import WardenRowIdentity  # noqa: E402
 from verity.ml.circuits import evaluation as E  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
-from verity.ml.circuits.ops.boolean import elementwise as EW  # noqa: E402
-from verity.ml.circuits.types import Array  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, produced  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity_vllm.commit import serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
+from verity_vllm.program.registry.b1_tp2 import AllReduce2  # noqa: E402
 
 #: the stand-in's TP run root, which every rank's window and every partial's domain bind
 ROOT = hashlib.sha512(b"verity/a5/tp2-gates-stand-in/v1").hexdigest()
@@ -111,22 +111,12 @@ TRANSFERS = {"altered": "does not open", **MADE_FOR}
 
 # --- the unit ---------------------------------------------------------------------------------------------------------
 
-def _signature(S):
-    return (("part0", Array(S.N, EW.BF16)), ("part1", Array(S.N, EW.BF16))), Array(S.N, EW.BF16)
-
-
-def _body(B, S, part0, part1):
-    return B.batch(EW.Bf16Add, part0, part1, axes=(0, 0))
-
-
-TpAllReduce2 = CompositeDefinition(
-    "TpAllReduce2", 1, ("N",), _signature, _body, conformance="exact-model-tested", register=False,
-    doc="TpAllReduce2{N}: AllReduce2_v1{N}'s sums, bf16_rn(f32(a) + f32(b)) element by element, on two ports, one a rank's "
-        "partial: the toy transfer-gate unit whose ports open both ranks' registered partials (a5_tp_gates.py)")
+#: each port's row: rank j's partial, the registered AllReduce2_v1's input ``parts`` row j
+PORT_PARAMS = {f"part{j}": f"parts[{j}]" for j in RANKS}
 
 
 def sums(part0: np.ndarray, part1: np.ndarray) -> np.ndarray:
-    """AllReduce2_v1's sums of two partials' bf16 words: `Bf16Add_v1`, the word view of the unit's `Bf16Add_v2`."""
+    """AllReduce2_v1's sums of two partials' bf16 words: `Bf16Add_v1`, the word view of its `Bf16Add_v2`."""
     a, b = np.asarray(part0, np.uint16), np.asarray(part1, np.uint16)
     return np.asarray(E.evaluate_batch(W.Bf16Add, a.reshape(-1), b.reshape(-1)), np.uint16).reshape(a.shape)
 
@@ -138,8 +128,9 @@ def bf16(x: np.ndarray) -> np.ndarray:
 
 
 def templates(hidden: int) -> tuple:
-    """The transfer-gate template over H words a port, and the rest's."""
-    return bind(TpAllReduce2, N=hidden), bind(WardenRowIdentity, B=REST_BYTES)
+    """The transfer-gate template, the registered AllReduce2_v1{H} the TP2 rank Programs end each reduction in, and the
+    rest's."""
+    return bind(AllReduce2, N=hidden), bind(WardenRowIdentity, B=REST_BYTES)
 
 
 # --- the partials --------------------------------------------------------------------------------------------------------
@@ -390,7 +381,8 @@ def gate_rows(mine: CS.Window, regs: dict[int, dict]) -> list[dict]:
 
 def composer(defn, hidden: int, cache: Path | None = None):
     """``a5.audit``'s composer of the transfer-gate template's circuit: C-Flock's `UnitStager` over its ports ``part0`` and
-    ``part1`` (16·H bits each) in and ``o0`` out, bound to the window's partition and program. ``cache``: a directory of the
+    ``part1`` (16·H bits each, the rows ``parts[0]`` and ``parts[1]`` of AllReduce2_v1's input) in and ``o0`` out, bound to
+    the window's partition and program. ``cache``: a directory of the
     circuits composed so far, by template, partition and program, which both ranks' windows and every run share."""
     def compose(circuit: Path, partition: str, program: str) -> dict:
         from verity_flock.class_statement import UnitStager
@@ -399,7 +391,7 @@ def composer(defn, hidden: int, cache: Path | None = None):
         if cache is not None and (cache / f"{key}.json").exists():
             shutil.copyfile(cache / f"{key}.txt", circuit)
             return json.loads((cache / f"{key}.json").read_text())
-        st = UnitStager(defn, "unit/a5-tp-gates", [(f"part{j}", V2, 16 * hidden, [f"part{j}"]) for j in RANKS], [(V2, (0,))],
+        st = UnitStager(defn, "unit/a5-tp-gates", [(p, V2, 16 * hidden, [PORT_PARAMS[p]]) for p in PORT_PARAMS], [(V2, (0,))],
                         circuit=circuit, bind={"partition": partition, "program": program})
         made = {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
         if cache is not None:
