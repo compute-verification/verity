@@ -149,13 +149,12 @@ def record_temperature(c: dict, record) -> float:
 # ------------------------------------------------------------------------------------------------ produce (GPU)
 
 
-def produce(out: str, record_npz: str | None, seed: int) -> None:
-    import torch
+def _mask_probe_kernel():
+    """The instrumented copy of vLLM's split top-p mask kernel that `produce` launches beside the real one.  Built by the call:
+    triton and vLLM exist only on the pod."""
     import triton
     import triton.language as tl
-    from vllm.utils.platform_utils import num_compute_units
     from vllm.v1.sample.ops import topk_topp_triton as TT
-    from vllm.v1.worker.gpu.sample.gumbel import apply_temperature
 
     @triton.jit
     def _mask_probe(LOGITS, LOGITS_STRIDE_0, STATS, PARTS, P, Z_OUT, KEEP_OUT, SC_OUT,
@@ -240,6 +239,17 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
                 keep = keep & (~dmask | keep_dup)
             tl.store(KEEP_OUT + i + offs, keep.to(tl.int32), mask=mask_n)
 
+    return _mask_probe
+
+
+def produce(out: str, record_npz: str | None, seed: int) -> None:
+    import torch
+    import triton
+    from vllm.utils.platform_utils import num_compute_units
+    from vllm.v1.sample.ops import topk_topp_triton as TT
+    from vllm.v1.worker.gpu.sample.gumbel import apply_temperature
+
+    _mask_probe = _mask_probe_kernel()
     dev = torch.device("cuda:0")
     num_sm = num_compute_units(dev.index)
     F, R = TT._SPLIT_FANOUT, TT._SPLIT_ROUNDS
