@@ -48,7 +48,7 @@ def NoOutsideCompute (T : Trace Ω) (O : Outside T) : Prop :=
     O.blocks ω t = ∅ ∧ O.receipts ω t = ∅
 
 /-- **`trusted-host`** (the provider's lockdown): on every accepting outcome, at every tick of `[applied,
-lifted)`, an interval over which the host provider (Nebius) applied a lockdown to the node, no device outside the node
+lifted)`, an interval over which the host provider applied a lockdown to the node, no device outside the node
 computes on a registered block or on a receipt of one. A lockdown is the provider's security group on the node's
 network interfaces admitting packets only from and to its allow list, the auditor's devices (the verifier's and the
 challenger's hosts); its records are infra's, the rules before, during and after, with the times applied and lifted.
@@ -56,11 +56,11 @@ challenger's hosts); its records are infra's, the rules before, during and after
 What the lockdown covers: every packet between the node and another host that crosses the provider's network and that
 a security group evaluates. What it doesn't, and so what this assumes besides the provider enforcing its rules:
 
-* name resolution through the provider's resolver (on Nebius `169.254.169.2`), which security groups don't evaluate:
+* name resolution through the provider's resolver (a link-local address), which security groups don't evaluate:
   a channel out of the node;
 * stateful flows: a connection opened before the lockdown was applied, which a stateful rule may keep admitting;
 * the provider's own paths into the node: its metadata service, its management plane, a GPU cluster's fabric between
-  hosts, and any shared filesystem the node mounts (for vy-nebius-2: infra's answer is pending);
+  hosts, and any shared filesystem the node mounts;
 * the allow list's hosts themselves, which are the auditor's devices (the rest of `trusted-host`).
 
 So it states the part of `NoOutsideCompute` a lockdown grounds: `[applied, lifted)` are on the verifier's clock, and
