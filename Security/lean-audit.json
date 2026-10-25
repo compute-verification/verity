@@ -2452,9 +2452,9 @@
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
   },
   "Definitions.Flock": {
-   "imports": ["Mathlib", "Definitions.Flock"],
+   "imports": ["Mathlib", "Definitions.Core.Boolean", "Definitions.Flock"],
    "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean)"
   }
  },
  "reads_exempt": {
