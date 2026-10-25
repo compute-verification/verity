@@ -62,7 +62,7 @@ fi
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-300}; floor=$((DISK_FLOOR_GB * 1048576))
 under_floor() { [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ]; }
 keep_records() {
-  for f in requests.jsonl serve.json windows.jsonl seals.jsonl advice_trace.jsonl summary.json; do
+  for f in requests.jsonl serve.json windows.jsonl seals.jsonl advice_trace.jsonl pauses.jsonl summary.json; do
     [ -f "$D/$f" ] && cp "$D/$f" "$OUT/.$f.tmp" 2>/dev/null && mv "$OUT/.$f.tmp" "$OUT/$f"
   done
 }

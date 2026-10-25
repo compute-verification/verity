@@ -4,7 +4,7 @@
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
         [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
-        [--admit arrival|release-order [--admit-hold-ms 5000]]
+        [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -63,6 +63,11 @@ not sealed and the server stops: it refuses new requests, finishes those in flig
 run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
 the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
 finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`).
+
+The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
+the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
+``--switch-interval-ms`` (0.1 ms; Python's is 5 ms). ``pauses.jsonl``
+(`serve_seal.Watchdog`) records each stall of the process of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -71,6 +76,7 @@ import json
 import queue
 import shutil
 import signal
+import sys
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -148,6 +154,10 @@ class Options:
     copy_records_to: str | None = option("--copy-records-to", default=None,
                                          help="copy serve.json, requests.jsonl, windows.jsonl and the step traces into this "
                                               "directory (the run's $OUT) after each window and at the stop")
+    switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
+                                       help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
+                                            "thread may wait for the GIL after each torch call while the seal's thread runs Python "
+                                            "(0: leave Python's)")
     required_manifest: str | None = option("--required-manifest", default=None,
                                            help="rows-sha512: the bench row's required manifest (its manifest.json), which the Commit of "
                                                 "record's committer parts and the sealed binding map are built from")
@@ -544,8 +554,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
-    if min(opts.window_gb, opts.seal_hold_gb, opts.disk_floor_gb) < 0:
-        raise UsageError("--window-gb, --seal-hold-gb and --disk-floor-gb are at least 0")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+        raise UsageError("--window-gb, --seal-hold-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
@@ -627,6 +637,10 @@ def main(opts: Options) -> int:
         # the queue's lock is not reentrant: the stop is queued from a thread of its own, never from inside the handler
         signal.signal(sig, lambda *_: threading.Thread(target=loop.stop, daemon=True).start())
     bound = [http.address]
+    if opts.switch_interval_ms:
+        sys.setswitchinterval(opts.switch_interval_ms / 1000)
+    watchdog = SS.Watchdog(out / "pauses.jsonl")
+    watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
@@ -643,7 +657,8 @@ def main(opts: Options) -> int:
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
-              **SS.target_of()}
+              "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of()}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()
@@ -657,7 +672,8 @@ def main(opts: Options) -> int:
         def stopped() -> dict[str, Any]:
             got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
-                   "sealer": sealer.summary() if sealer is not None else None, "mirror_errors": mirror.errors[:10] if mirror else None}
+                   "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
+                   "mirror_errors": mirror.errors[:10] if mirror else None}
             (out / "summary.json").write_text(json.dumps(got, indent=1))
             if mirror is not None:
                 mirror()
@@ -667,6 +683,7 @@ def main(opts: Options) -> int:
             stopped()
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
+        watchdog.stop()
         summary = stopped()
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
