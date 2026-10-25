@@ -9,9 +9,9 @@ import json
 import os
 import re
 
-from verity_vllm.check.match import capture_log as CL
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
+from verity_vllm.observe import capture_log as CL
 from verity_vllm.program import prefix_plan as PP
 
 GP_SCHEMA = "cb-a/global-program/v1"

@@ -55,7 +55,6 @@ from dataclasses import dataclass
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.capture_log import read_steps, request_params
 from verity_vllm.check.match.dag_form import dag_hashes, live_cone
 from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _fast_stats, _install_profile_counters, _n_runs_of, _NoPhase,
                                                     _Phase, _profile_on)
@@ -65,6 +64,7 @@ from verity_vllm.check.match.occurrence import SHARED, attribute, shared_legs
 from verity_vllm.check.match.projection import Projection, engine_steps_of
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 # Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.

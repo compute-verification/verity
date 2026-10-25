@@ -1,4 +1,4 @@
-"""The capture log as Match reads it: the RunHeader, each engine step's StepStart rows, and the request each prompt parameter is."""
+"""The capture log as Match and `observe.contract` read it: the RunHeader, each engine step's StepStart rows, and the request each prompt parameter is."""
 
 from __future__ import annotations
 
