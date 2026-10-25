@@ -109,7 +109,7 @@ Never: decide what is required; never a model-name list.
 runtime metadata in the identity tuple.
 
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,
-`batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`, occurrence resolution `resolve.py` / `resolve_decomp.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
+`batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
 `stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
 `verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
 `fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
