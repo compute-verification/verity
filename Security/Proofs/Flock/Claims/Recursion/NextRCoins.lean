@@ -13,6 +13,8 @@ first value of rep `k`'s round-2 coin in `repCtx`. Here it holds wherever the re
   reads it from, in `cs.tail.dropLast`.
 * **The honest run decides at its own proofs** (`sessionRun_decides_coins`): `sessionRun_decides_fit` at such coins,
   with no `FilesFinalC` premise.
+* **The deployed verifier's coins are enough** (`repLens_sum`, `hlen_of_k`): the reps' rounds are the plain verifier's
+  recorded rounds (`rounds false`), so coins numbering `(V false).k x` meet the count premise.
 -/
 
 namespace FlockDeploy
@@ -159,8 +161,75 @@ theorem sessionRun_decides_coins {H : Claims.Msg → Claims.Msg} (h64 : Claims.O
   exact sessionRun_decides_fit h64 hx hcs hc htab hS
     (filesFinalC h64 hc (setup_tables hx).2.symm htab hS hresp hlen) hrd hps
 
+theorem sum_range_two_mul (g : ℕ → ℕ) : ∀ n,
+    ((List.range (2 * n)).map fun k => g (k / 2)).sum = ((List.range n).map fun i => 2 * g i).sum
+  | 0 => by simp
+  | n + 1 => by
+    rw [show 2 * (n + 1) = 2 * n + 1 + 1 by omega, List.range_succ, List.range_succ, List.range_succ (n := n),
+      List.map_append, List.map_append, List.map_append, List.sum_append, List.sum_append, List.sum_append,
+      sum_range_two_mul g n]
+    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+    rw [show (2 * n + 1) / 2 = n by omega, show 2 * n / 2 = n by omega]
+    omega
+
+theorem foldl_add_eq_sum {α : Type} (f : α → ℕ) : ∀ (l : List α) (a : ℕ),
+    l.foldl (fun acc x => acc + f x) a = a + (l.map f).sum
+  | [], a => by simp
+  | x :: l, a => by
+    simp only [List.foldl_cons, List.map_cons, List.sum_cons]
+    rw [foldl_add_eq_sum f l]
+    omega
+
+theorem array_foldl_eq {α : Type} [Inhabited α] (f : α → ℕ) (xs : Array α) :
+    xs.foldl (fun acc x => acc + f x) 0 = ((List.range xs.size).map fun i => f xs[i]!).sum := by
+  rw [← Array.foldl_toList, foldl_add_eq_sum, Nat.zero_add]
+  congr 1
+  apply List.ext_getElem
+  · simp
+  · intro i h1 h2
+    simp only [List.getElem_map, List.getElem_range]
+    rw [getElem!_pos xs i (by simpa using h2)]
+    simp
+
+/-- **A table's rep schedule has the plain verifier's rounds** (`repRounds false`), at a `fast100` schedule and
+`k_log ≥ 6`. -/
+theorem repSchedAt_length {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).isSome) (h6 : 6 ≤ st.c.kLog) :
+    (RecDeploy.repSchedAt spec st).length = repRounds false spec st := by
+  obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 hf
+  obtain ⟨-, h35, -⟩ := RecDeploy.fast100_sizes hsch
+  have key : ∀ m < 36, (fast100 m).isSome → (RecVStar.repRounds m 6 1).isSome := by decide +kernel
+  obtain ⟨out, hout⟩ := Option.isSome_iff_exists.1 (key _ (by omega) hf)
+  obtain ⟨T, -, hall⟩ := FlockC3.Compose.repRounds_tail hout
+  have h2 := hall st.c.kLog (2 + spec.points * st.regions.size)
+  rw [RecDeploy.flockRepRounds_eq h2 h6]
+  simp only [RecDeploy.repSchedAt, h2, Option.map_some, Option.getD_some, Array.length_toList]
+
+/-- **The reps' rounds are the plain verifier's recorded rounds** (`rounds false`), at `TableOk` tables. -/
+theorem repLens_sum {spec : SessionSpec} {sts : Array Stmt}
+    (hok : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i]) :
+    (repLens spec sts).sum = rounds false spec sts := by
+  unfold repLens rounds
+  rw [sum_range_two_mul (fun i => (RecDeploy.repSchedAt spec sts[i]!).length),
+    array_foldl_eq (fun st => 2 * repRounds false spec st)]
+  congr 1
+  refine List.map_congr_left fun i hi => ?_
+  have hi' := List.mem_range.1 hi
+  show 2 * (RecDeploy.repSchedAt spec sts[i]!).length = 2 * repRounds false spec sts[i]!
+  rw [getElem!_pos sts i hi', repSchedAt_length (FlockComplete.fast100_isSome (hok i hi').m22 (hok i hi').m35)
+    (hok i hi').k]
+
+/-- **`hlen` holds at the deployed verifier's coin count**: at a statement that sets up with `TableOk` tables, coins
+numbering `(V false).k x`, the link's, the reps' rounds (`repLens_sum`) and the last message's, are at least the
+reps' rounds and two. -/
+theorem hlen_of_k {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {cs : List Coin}
+    (hx : setupOf false x = some (s, spec, sts)) (hok : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i])
+    (hk : cs.length = (V false).k x) : (repLens spec sts).sum + 2 ≤ cs.length := by
+  rw [hk, repLens_sum hok]
+  simp only [V, hx]
+  omega
+
 /-- **Non-vacuity of the coin premises**: replies that are a coin list's bytes meet `hresp`, and its head's bytes are
-the first reply. -/
+the first reply; `hlen` holds at the deployed verifier's coin count (`hlen_of_k`). -/
 example (c₁ : Coin) (cs : List Coin) :
     (∀ i < (c₁ :: cs).length, (fun i => ((c₁ :: cs).getD i default).bytes) i = ((c₁ :: cs).getD i default).bytes) ∧
       (c₁ :: cs).head? = some c₁ :=
