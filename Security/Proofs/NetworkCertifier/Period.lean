@@ -61,7 +61,7 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
     (f : TapRecord Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn))
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
     (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit)
@@ -119,7 +119,7 @@ theorem periodLeak : Guarantees.PeriodLeakAccepted := by
     simp only [βmax, hP]
     exact Finset.le_sup (f := faultyBits s.prog P) hF
   exact ⟨(sampledLeak_reg SecurityProofs.SampledAuditAccepted H D hks L K S lay k δ decode hδ hdec reg βmax Dj
-    hβmax).1, encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hcap Zs
+    hβmax).1, encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss Zs
     schedOf srvOf hs dec hdz x wit hcarry⟩
 
 end Deploy

@@ -43,6 +43,9 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
                                (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
                                wardenCode), the fail cell (failCell) and the client's view (clientView)
+../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
+                               server's uplink: its record format (TapRecord: every cell it sends reads back from its
+                               record) and its one code run giving the cells and the record (tapCode)
 ../../Definitions/NetworkCertifier/Guarantees/Warden.lean  trusted: the warden's channel bound (the client's view factors through
                                the fail cells, its count, and the whole run's bound with the advice string and content)
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty units add under a sampled audit: their
@@ -55,9 +58,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                window's (SameRegistration) and a window's good event (WindowGood)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the wardens over a period of sampled
                                audits (PeriodLeakAccepted)
-../../Definitions/NetworkCertifier/Assumptions/Period.lean  trusted: the period's named assumptions: the wardens see what
-                               the certifier observed (WardenCertifierEgress), and the audits' traces carry it
-                               (RowsCarried)
+../../Definitions/NetworkCertifier/Assumptions/Period.lean  trusted: the period's named assumption: the audits' traces
+                               carry the certifier's rows (RowsCarried)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -88,10 +90,13 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
+Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host its cells read
+                                         back from the record its same run writes (tap_cells_read), and each data cell
+                                         its lane sends before the fail cell is in it (tap_data_read)
 Period.lean     the leak through the wardens over a period: each good window's observations are among
                                          AccSeqsSampled at its registration (mem_accSeqsSampled_of_windowGood), and the
-                                         secrets the wardens' views decode to, counted over the windows
-                                         (encard_periodGood_le, periodLeak)
+                                         secrets the tap's cells decode to, read back from those observations and
+                                         counted over the windows (encard_periodGood_le, periodLeak)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
@@ -259,16 +264,19 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
   `Claims.Sampling.KS` are named assumptions in the lock.
 - **The leak through the wardens over a period** (`Period.lean`): `PeriodLeakAccepted` composes
-  `SampledLeakAccepted`, at `SampledAuditAccepted`'s proof, with `EncardWardenViewsLe`, so the warden bound's content
+  `SampledLeakAccepted`, at `SampledAuditAccepted`'s proof, with the tap's read-back, so the warden bound's content
   term comes from the audits: over a period's windows, each registered as a statement, the secrets of a covert sender
   whose every window meets its good event (`WindowGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each window's audit
-  fails `RLeak` with at most `KSLinOn`'s probability. Its named assumptions are `Claims.Sampling.KS`,
-  `Claims.Flock.ListWithin`, `trusted-host`, `warden-certifier-egress` (`NetTiming.WardenCertifierEgress`: the data
-  reaching the wardens is the certifier's observations framed into cells, a tie between two auditor devices) and
-  `rows-carried` (`NetTiming.RowsCarried`: the audits' extracted traces carry the certifier's rows at their transfer
-  gates, which the scan's registered reads of the warden's rows check, with no lemma yet deriving it from them); the
-  union over the period's live coins and the registration's binding are not yet stated.
+  fails `RLeak` with at most `KSLinOn`'s probability. The warden and the certifier are one device, the tap on the
+  server's uplink (`Definitions/NetworkCertifier/Tap.lean`; Daniel, 25 Oct): one run of its code (`tapCode`, under
+  one `trusted-host`) gives the cells the client receives and the observations the audits read, its record of those
+  cells, so the cells read back from the observations (`tap_cells_read`, a lemma, not a premise). The record holds the
+  fail cells and padding too, so the proof counts the cells through the observations and needs no fail-cell charge:
+  `∏_c (cap_c + 1)` is room. Its named assumptions are `Claims.Sampling.KS`, `Claims.Flock.ListWithin`,
+  `trusted-host` and `rows-carried` (`NetTiming.RowsCarried`: the audits' extracted traces carry the certifier's rows
+  at their transfer gates, which the scan's registered reads of the warden's rows check, with no lemma yet deriving it
+  from them); the union over the period's live coins and the registration's binding are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
 

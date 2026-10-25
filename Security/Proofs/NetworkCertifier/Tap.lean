@@ -44,6 +44,6 @@ theorem tap_data_read (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals 
     (f.read s (run tap (s, σ)).2 c)[j]? = some (s.bucket c j, .data (arr σ c).stream[j]) := by
   rw [← tap_cells_read f arr tap run htrust s σ, tap_cells f arr tap run htrust s σ, wardenCode_eq]
   simp only [clientView, List.getElem?_map, List.getElem?_range hj, Option.map_some, cellView_of_lt _ hf,
-    streamCell, dif_pos hd]
+    streamCell, hd, ↓reduceDIte]
 
 end NetTiming
