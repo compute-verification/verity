@@ -228,7 +228,7 @@ class EngineLoop:
             if self.live.pop(eid, None) is not None:
                 self.engine.abort_request([eid])
                 if self.commit is not None:
-                    self.commit.aborted(eid)
+                    self.commit.aborted(eid, "client")
             return True
         if self.draining is not None:
             item.deliver(Delta([], "", error=f"the endpoint is stopping: {self.draining}"))
@@ -287,7 +287,7 @@ class EngineLoop:
             for adm in list(self.live.values()):
                 adm.deliver(Delta([], "", error=self.error or "the server stopped"))
                 if self.commit is not None:
-                    self.commit.aborted(adm.engine_id)
+                    self.commit.aborted(adm.engine_id, "server")
             self.live.clear()
             if self.commit is not None and self.commit.is_open:
                 self.commit.close()

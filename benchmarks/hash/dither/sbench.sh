@@ -45,7 +45,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # that leaves those alone.  Neither covers --bw-passes.
 COINS_PKG=verity/core/protocols/pouw/lean/check
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC DITHER_H1C_KC"
+SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_KC"
 # the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
 COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
   for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
@@ -53,7 +53,7 @@ ship_key() {
   git ls-tree -r HEAD -- benchmarks/hash/dither benchmarks/hash/codec_tensor | grep -E '\.(cu|cuh)$'
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
-  echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}"
+  echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
 }
 if [ -n "${SBENCH_SHIP:-}${SBENCH_SHIP_OUT:-}" ]; then
   case " $* " in *" --bw-passes"*) echo "sbench: SHIP_STALE: a ship doesn't cover --bw-passes"; exit 17 ;; esac

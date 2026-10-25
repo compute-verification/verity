@@ -19,7 +19,7 @@ from verity_vllm.acquire.sources.hidden_source import (
 
 
 class NativeHiddenM1Source(HiddenM1Source):
-    """R11 collector v2: the FA2 M1 tap glue as ONE C++ callable (`Fa2Wrap`, native_collect.cpp) in place of the Python `varlen_fwd`
+    """The FA2 M1 tap glue as ONE C++ callable (`Fa2Wrap`, native_collect.cpp) in place of the Python `varlen_fwd`
     wrapper.  Same tapped kernel, same per-geometry buffer rule, same names/order into the same collector; stats synced at uninstall."""
 
     #: [R18 tap, F-r17-23] default cap on the FA2 tap's device residency (MiB); VERITY_FA2_TAP_CAP_MB=0 restores the unbounded buffers
@@ -221,13 +221,13 @@ class NativeHiddenM1Source(HiddenM1Source):
         if self._tel_fh is not None:
             try:
                 self._tel_fh.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as e:  # noqa: BLE001
+                self.c.errors.append(f"fa2 tap telemetry close: {e!r}"[:200])
             self._tel_fh = None
 
 
 class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
-    """R13 hopper: the FA3 M1 tap glue as ONE C++ callable (`Fa3Wrap`, native_collect.cpp) in place of the Python `fwd` wrapper of
+    """The FA3 M1 tap glue as ONE C++ callable (`Fa3Wrap`, native_collect.cpp) in place of the Python `fwd` wrapper of
     `hidden_source.HiddenM1SourceFA3` -- same tapped kernel (`verity_fa3_matReq.so`), same geometry / tile rule, same names into the same
     collector; stats synced at uninstall."""
 

@@ -39,7 +39,7 @@ from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partitio
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 

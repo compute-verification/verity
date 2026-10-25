@@ -1098,9 +1098,9 @@ requests, whose frames are a function of the prompt's length alone), for every p
     one that releases the frame, so a floor that read a declaration would carry one window's word into another's
     view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
     link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
-    window under only from the certifier's clock certificate of the window, verified under its key and session, and
-    a window without a valid one is refused, and the link with it
-    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
+    window under only from the certifier's salted clock certificate of the window, opened against the digest it signs
+    under its key and session (the sync and the salt are witness, the certificate public), and a window without a
+    valid one is refused, and the link with it ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -1189,9 +1189,19 @@ requests, whose frames are a function of the prompt's length alone), for every p
   `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
   it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
   completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
-  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
-  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
-  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
+  certificate beside its egress record, so it needs no head change
+  ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+- **Named gap: the clock's opening** (owned by network-accounting). What the certifier signs is witness, so a window's
+  clock certificate signs its sync salted (`certificate.clock_commitment`), and the verifier reads the sync only
+  through the opening, the sync and `salt_c`, against that digest (`advised.SignedClocks`). Until N2's advised unit
+  opens it, the verifier of record opens it on the host, as the in-the-clear check opens a record
+  (`CertifiedRecord.verify`): on an accepted window the sync it reads is the declared one, a public output already,
+  and on a refused one it reads the sync the certifier ran. Design: the unit takes each window's clock opening as
+  witness, checks it against the certificate's signed digest (the clock digest and its salted digest, two SHA-512s
+  of a few blocks, as the head check computes a head's signed digest), and computes the floor from the opened syncs
+  inside the unit, so the floor leaves the public row; the verifier then reads no sync. It changes N2's advised unit, its pinned digest and its public
+  row, so it lands with that unit's change.
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
@@ -1284,7 +1294,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The advice string, with a precommitted, deterministic compiler | `Σ_w b_w + min(W, m)·log2 #Σ_sync + n·log2 D` bits, where `b_w` is the public cap on the advice charged to window w (I1's `bits(advice, w)`), fixed before the run. Over all W windows (n = W·T), `b_w + log2 #Σ_sync + T·log2 D` bits per window, cumulative as above | `SecurityProofs.EncardAccSeqsWithinLeConstantRate`; for a decoder of the wire, under W2, J and the compiler's two assumptions, `SecurityProofs.EncardDecodableWithinLeCompiled` and `SecurityProofs.EncardDecodableWithinLeCompiledPerWindow`; with advice v1's charge, no assumption on the charge: `SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`, `SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1` |
-| The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and a faulty set is one `RAcc δ` allows (in `M_δ`, no unit drawn `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c all those inputs, since `RAcc` doesn't pin the advice. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
+| The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and a faulty set is one `RAcc δ` allows (in `M_δ`, no unit drawn `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
 | The warden (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. With the data from an advice string within the caps and `k` bits of content no proved unit fixes, `log2 #schedules + Σ_c log2(cells_c + 1) + Σ_w b_w + k` bits for the run | `SecurityProofs.WardenViewEqClientView`, `SecurityProofs.EncardWardenViewsLe`; for a decoder of the client's view, under `trusted-nebius-host` and `BitsCount`, `SecurityProofs.EncardWardenDecodableLe` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
@@ -1477,7 +1487,7 @@ of the wrong units (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + 
    recorded row is the Program's. Today's audit gets it by recomputing the grid, and a sampled audit does not.
    For the circuit's Program, `SampledAuditAccepted` (PRF-144, proved) is that bridge with φ the faulty units' committed
    gates, and `SecurityProofs.EncardAccSeqsSampledLe` is its count: φ costs those gates' bits plus log2 of the number
-   of possible faulty sets. `SecurityProofs.SampledLeakAccepted` composes the two, with a any value of the free inputs.
+   of possible faulty sets. `SecurityProofs.SampledLeakAccepted` composes the two, with a pinned at the registered inputs.
 5. **The advice set.** `#𝒜_c ≤ 2^(c+1) − 1`. `encode` is injective (A5), so distinct advice values are distinct bit
    strings of at most c bits. A prefix-free code gives `#𝒜_c ≤ 2^c` by Kraft, with the charge the decoder's own length
    of the symbols it decoded, whichever of a message's codewords the prover sent.
@@ -2091,20 +2101,10 @@ them.
     vLLM's stream text).
     - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
       q + 1.
-    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, and the
-      certifier commits whatever ids and finish the server writes: one of three states (none, `length`, `stop`) at
-      each response's end, where an id event marks the end out of band. A stop carries the EOS id the model sampled,
-      so where a response stops can be checked as an id event's can. The rehearsal's certified I/O
-      (`certifier_serve.certified_io`) refuses a mark before a response's last record, a stop on an id that isn't
-      one of the model's EOS ids, an EOS id in any record but the stop, and `COMPACT_LAST` alone short of
-      `max_tokens`. Like an EOS id event, a stop on an EOS id that the model didn't sample there passes it, so the
-      check that refuses a wrong length or finish is the I/O tie's, required of compact framing, against the Commit's
-      sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each carries its
-      sampled id, the response is as long as the Commit's, and it stops only where the Commit sampled EOS
-      (`compact_finish_violations`). IO-TIE's egress tie holds each compact cell's token field to this rule as well
-      as to its id. Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io`
-      accepted it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the
-      model never sampled; that field is now a stop on id 2^30 − 1, which isn't EOS.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, which the
+      certifier commits whatever they say. The certified I/O and the I/O tie hold each response's length and finish
+      to the Commit's sampled ids, a client's abort only where the Commit says so
+      ([protocol/compact-finish.md](protocol/compact-finish.md)).
     - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
