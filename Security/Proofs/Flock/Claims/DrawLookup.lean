@@ -35,9 +35,10 @@ theorem getValue?_forall₂ (k : String) : ∀ {l₁ l₂ : List ((_ : String) �
 theorem ordered_of_keys {t u : Impl String fun _ => Json} (ht : t.Ordered)
     (h : t.toListModel.map (·.1) = u.toListModel.map (·.1)) : u.Ordered := by
   unfold Impl.Ordered at *
-  have := List.pairwise_map.2 ht
-  rw [h] at this
-  exact List.pairwise_map.1 this
+  have hm : (t.toListModel.map (·.1)).Pairwise (fun a b => compare a b = .lt) :=
+    List.pairwise_map.2 ht
+  rw [h] at hm
+  exact List.pairwise_map.1 hm
 
 theorem get?_eq_getValue? {t : Impl String fun _ => Json} (h : t.Ordered) (k : String) :
     (⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json compare).get? k = getValue? k t.toListModel :=
@@ -92,5 +93,56 @@ theorem getObjVal?_jsonEquiv {a b : Json} (hw : Claims.Json.Wf a) (h : JsonEquiv
     · rename_i v w
       cases hr with
       | some hvw => exact .inr ⟨v, w, rfl, rfl, hv k v hmk, hvw⟩
+
+theorem getNat?_jsonEquiv {a b : Json} (h : JsonEquiv a b) : a.getNat? = b.getNat? := by
+  cases a with
+  | null => rw [jsonEquiv_null h]
+  | bool x => rw [jsonEquiv_bool h]
+  | num x => rw [jsonEquiv_num h]
+  | str x => rw [jsonEquiv_str h]
+  | arr x => obtain ⟨b', rfl⟩ := jsonEquiv_arr h; rfl
+  | obj x => obtain ⟨b', rfl⟩ := jsonEquiv_obj h; rfl
+
+theorem getStr?_jsonEquiv {a b : Json} (h : JsonEquiv a b) : a.getStr? = b.getStr? := by
+  cases a with
+  | null => rw [jsonEquiv_null h]
+  | bool x => rw [jsonEquiv_bool h]
+  | num x => rw [jsonEquiv_num h]
+  | str x => rw [jsonEquiv_str h]
+  | arr x => obtain ⟨b', rfl⟩ := jsonEquiv_arr h; rfl
+  | obj x => obtain ⟨b', rfl⟩ := jsonEquiv_obj h; rfl
+
+theorem asNat_jsonEquiv {a b : Json} (h : JsonEquiv a b) (c : String) : Flock.J.asNat a c = Flock.J.asNat b c := by
+  simp only [Flock.J.asNat, getNat?_jsonEquiv h]
+
+theorem asStr_jsonEquiv {a b : Json} (h : JsonEquiv a b) (c : String) : Flock.J.asStr a c = Flock.J.asStr b c := by
+  simp only [Flock.J.asStr, getStr?_jsonEquiv h]
+
+/-- **`J.get` on equivalent values**, the first well-formed: the same refusal, or equivalent values. -/
+theorem J_get_jsonEquiv {a b : Json} (hw : Claims.Json.Wf a) (h : JsonEquiv a b) (k c : String) :
+    (∃ e, Flock.J.get a k c = .error e ∧ Flock.J.get b k c = .error e) ∨
+      ∃ v w, Flock.J.get a k c = .ok v ∧ Flock.J.get b k c = .ok w ∧ Claims.Json.Wf v ∧ JsonEquiv v w := by
+  rcases getObjVal?_jsonEquiv hw h k with ⟨e, ha, hb⟩ | ⟨v, w, ha, hb, hv, hvw⟩
+  · exact .inl ⟨s!"{c}: {k} missing", by simp only [Flock.J.get, ha], by simp only [Flock.J.get, hb]⟩
+  · exact .inr ⟨v, w, by simp only [Flock.J.get, ha], by simp only [Flock.J.get, hb], hv, hvw⟩
+
+/-- A step after `J.get` that agrees on equivalent values, the first well-formed, agrees after it. -/
+theorem J_get_bind {γ : Type} {a b : Json} (hw : Claims.Json.Wf a) (h : JsonEquiv a b) (k c : String)
+    (f : Json → Flock.V γ) (hf : ∀ v w, Claims.Json.Wf v → JsonEquiv v w → f v = f w) :
+    (Flock.J.get a k c >>= f) = (Flock.J.get b k c >>= f) := by
+  rcases J_get_jsonEquiv hw h k c with ⟨e, ha, hb⟩ | ⟨v, w, ha, hb, hv, hvw⟩
+  · rw [ha, hb]
+  · rw [ha, hb]
+    exact hf v w hv hvw
+
+theorem J_nat_jsonEquiv {a b : Json} (hw : Claims.Json.Wf a) (h : JsonEquiv a b) (k c : String) :
+    Flock.J.nat a k c = Flock.J.nat b k c := by
+  unfold Flock.J.nat
+  exact J_get_bind hw h k c (fun x => Flock.J.asNat x s!"{c}.{k}") fun _ _ _ hvw => asNat_jsonEquiv hvw _
+
+theorem J_str_jsonEquiv {a b : Json} (hw : Claims.Json.Wf a) (h : JsonEquiv a b) (k c : String) :
+    Flock.J.str a k c = Flock.J.str b k c := by
+  unfold Flock.J.str
+  exact J_get_bind hw h k c (fun x => Flock.J.asStr x s!"{c}.{k}") fun _ _ _ hvw => asStr_jsonEquiv hvw _
 
 end FlockDeploy
