@@ -34,9 +34,7 @@
 // templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
 // pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; in mode 1, which builds no
 // templates, warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead (`pd_fold_sched`; with
-// PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule, and the warps idle
-// beside the segments run the fold's rounds and (at cw = 1, on pair 1) the row's seed chain once on stand-in words, each
-// one called copy (`pd_fold_rounds_call`, `pd_row_seed_call`), so neither is fetched cold on the critical path.
+// PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
@@ -420,9 +418,8 @@ template <int V> DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int 
 // pd_fold's rounds-only form split over two warps (pd_commit's fold in mode 1, s / 2 + 1 <= 32 blocks): pd_fold_sched, on
 // a whole warp, lane b block b, stores K_t + W_t at kw[32 t + b] a chunk of 16 t at a time for every block, arriving on
 // barrier 1 + q after chunk q, while pd_fold_rounds, on another whole warp (every lane the same rounds), runs the blocks'
-// rounds in order, block 0 waiting there for each chunk.  Barriers 1-5, 64 threads; st out on every lane.  warm: no
-// barriers (pd_fold_rounds_call's warming run)
-DEV void pd_fold_rounds(const uint64_t* qst, int nb, uint64_t* st, const uint64_t* kw, bool warm = false) {
+// rounds in order, block 0 waiting there for each chunk.  Barriers 1-5, 64 threads; st out on every lane
+DEV void pd_fold_rounds(const uint64_t* qst, int nb, uint64_t* st, const uint64_t* kw) {
 #pragma unroll
   for (int t = 0; t < 8; t++) st[t] = qst[t];
 #pragma unroll 1
@@ -430,7 +427,7 @@ DEV void pd_fold_rounds(const uint64_t* qst, int nb, uint64_t* st, const uint64_
     uint64_t a = st[0], bb = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll 1
     for (int q = 0; q < 5; q++) {
-      if (b == 0 && !warm) pd_bar_sync(1 + q, 64);
+      if (b == 0) pd_bar_sync(1 + q, 64);
       uint64_t k16[16];
 #pragma unroll
       for (int i = 0; i < 16; i++) k16[i] = kw[32 * (16 * q + i) + b];
@@ -438,16 +435,6 @@ DEV void pd_fold_rounds(const uint64_t* qst, int nb, uint64_t* st, const uint64_
       for (int i = 0; i < 16; i++) rs_round(a, bb, c, d, e, f, g, h, k16[i]);
     }
     st[0] += a; st[1] += bb; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
-  }
-}
-// pd_fold_rounds as one called copy, its state into out (shared) from lane 0.  warm: one block with no barriers and no
-// output, run by an idle warp so the copy's code is in the SM's instruction cache when the fold starts
-__device__ __noinline__ void pd_fold_rounds_call(const uint64_t* qst, int nb, const uint64_t* kw, uint64_t* out, bool warm) {
-  uint64_t st[8];
-  pd_fold_rounds(qst, warm ? 1 : nb, st, kw, warm);
-  if (!warm && (threadIdx.x & 31) == 0) {
-#pragma unroll
-    for (int t = 0; t < 8; t++) out[t] = st[t];
   }
 }
 DEV void pd_fold_sched(const uint64_t* dig, int s, int lane, uint64_t* kw) {
@@ -849,37 +836,29 @@ DEV void pd_row_leaf(uint64_t hm, const uint64_t* xr, const uint64_t* mk, const 
     pd_cmp<V, P>(lt, w);
   }
 }
-// row r's seed and line key (into seeds and keys, pd_commit's p3 and p4), and its E_A line (into ea, p12, when nonzero),
-// from the row digest xr, the unit block and the label states lab; stored, and stamped into sb (p13), if on.  With PD_LOOP
-// the line's hash is pd_seed's fourth block
+// row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr, the unit block and the
+// label states lab (all shared); stored if on.  With PD_LOOP the line's hash is pd_seed's fourth block
 template <int V, int P = 0>
-DEV void pd_row_seed(uint64_t seeds, uint64_t keys, uint64_t ea, uint64_t sb, const uint32_t* unit, const uint64_t* lab,
-                     uint64_t index, int r, const uint64_t* xr, bool on) {
+DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, uint64_t index, int r, const uint64_t* xr,
+                     bool on) {
   uint64_t x[8];
   uint32_t seed[8], key[8], h[8];
-  const bool line = ea != 0;
+  const bool line = a.p[12] != 0;
 #pragma unroll
   for (int q = 0; q < 8; q++) x[q] = xr[q];
-  if (on) pd_stamp<V>(sb, r, PS_SEED0);
+  if (on) pd_stamp<V>(a.p[13], r, PS_SEED0);
   if constexpr ((V & PD_LOOP) != 0) {
     pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab, h, line);
   } else {
     pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab);
     if (line) pd_line_hash<V, P>(key, 0, h, lab);
   }
-  if (on) pd_stamp<V>(sb, r, PS_LINE);
+  if (on) pd_stamp<V>(a.p[13], r, PS_LINE);
   if (on) {
-    store_cv(seeds + 32ull * r, seed);
-    store_cv(keys + 32ull * r, key);
+    store_cv(a.p[3] + 32ull * r, seed);
+    store_cv(a.p[4] + 32ull * r, key);
   }
-  if (line) pd_line_codes(h, ea + 32ull * r, on);
-}
-// pd_row_seed on pair 1's consumer as one called copy: a warming run (on false, its inputs any readable words) fetches its
-// code into the SM's instruction cache before the row digest is ready
-template <int V>
-__device__ __noinline__ void pd_row_seed_call(uint64_t seeds, uint64_t keys, uint64_t ea, uint64_t sb, const uint32_t* unit,
-                                              const uint64_t* lab, uint64_t index, int r, const uint64_t* xr, bool on) {
-  pd_row_seed<V, 1>(seeds, keys, ea, sb, unit, lab, index, r, xr, on);
+  if (line) pd_line_codes(h, a.p[12] + 32ull * r, on);
 }
 // the tree's levels above level 0 (tm the templates, nodes PD_NODES words, root 8, lk 8: shared), seed_A and line_a, E_A's
 // filler lines (p12 nonzero), and the counter at scratch reset (scratch nonzero).  PD_PAIR: by pair 0 (warps 0 and pw0) and
@@ -1002,9 +981,6 @@ template <int V> DEV void pd_commit_t(const Args a) {
     for (int p = count + r; p < width; p += count) pd_pad<V>(dom, (uint64_t)p, tree, hbuf);
     pd_stamp<V>(sb, r, PS_FRAME);
   };
-  // in mode 1 no templates are built, so with PD_LATE warp 2 computes the fold's round inputs while warp 0 runs its rounds,
-  // and the warps idle beside the segments warm the fold's and the seed chain's code
-  const bool split = LATE && (V & PD_ROUNDS) && a.i[2] == 1 && s / 2 + 1 <= 32;
   if (tid == 0) pd_stamp<V>(sb, r, PS_START);
   if (warp == (int)blockDim.x / 32 - 1) {           // the last warp, which no segment's chain is on
     if (lane < 24) lab[lane] = (&PD_LABELS[0][0])[lane];
@@ -1047,14 +1023,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     } else {
       pd_serve<V>(warp - cw);
     }
-  } else if (LATE) {                                // warming runs (split): the seed chain's copy and the fold's rounds
-    if (split && cw == 1 && warp == c1) {           // pair 1's buffer is idle at cw = 1, so its pair runs the seed chain
-      pd_row_seed_call<V>(a.p[3], a.p[4], a.p[12], sb, unit, &PD_LABELS[0][0], index, r, xr, false);
-      pd_pstop();
-    } else if (split && cw == 1 && warp == p1) {
-      pd_serve<V>(1);
-    }
-    if (split && warp == (cw == 1 ? c1 : sw)) pd_fold_rounds_call(RS_Q_HEADS + 8 * s, 1, kw, xr, true);
+  } else if (LATE) {
   } else if (warp < sw) {                           // the row's segments
     if (tid < s) {
       uint64_t st[8], w[16];
@@ -1083,15 +1052,15 @@ template <int V> DEV void pd_commit_t(const Args a) {
   }
   __syncthreads();
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
-  if (warp == 0) {                                  // the row digest (kw its schedules), into xr
+  // in mode 1 no templates are built, so with PD_LATE warp 2 computes the fold's round inputs while warp 0 runs its rounds
+  const bool split = LATE && (V & PD_ROUNDS) && a.i[2] == 1 && s / 2 + 1 <= 32;
+  if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
-    if (split) pd_fold_rounds_call(RS_Q_HEADS + 8 * s, s / 2 + 1, kw, xr, false); else pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    if (split) pd_fold_rounds(RS_Q_HEADS + 8 * s, s / 2 + 1, st, kw); else pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
     if (lane == 0) {
-      if (!split) {
+      s512_store(a.p[1] + 64ull * r, st, 8);
 #pragma unroll
-        for (int q = 0; q < 8; q++) xr[q] = st[q];
-      }
-      s512_store(a.p[1] + 64ull * r, xr, 8);
+      for (int q = 0; q < 8; q++) xr[q] = st[q];
       pd_stamp<V>(sb, r, PS_FOLD);
     }
   } else if (LATE && warp == 1) {
@@ -1127,8 +1096,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
       }
     } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
       if (warp == c1) {
-        if constexpr (LATE) pd_row_seed_call<V>(a.p[3], a.p[4], a.p[12], sb, un, lab, index, r, xr, lane == 0);
-        else pd_row_seed<V, 1>(a.p[3], a.p[4], a.p[12], sb, un, lab, index, r, xr, lane == 0);
+        pd_row_seed<V, 1>(a, un, lab, index, r, xr, lane == 0);
         if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
       } else {
@@ -1151,7 +1119,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     s512_store(tree + 64ull * r, lt, 8);
     pd_stamp<V>(sb, r, PS_LEAF);
   } else if (tid == 32 * cw) {
-    pd_row_seed<V>(a.p[3], a.p[4], a.p[12], sb, un, lab, index, r, xr, true);
+    pd_row_seed<V>(a, un, lab, index, r, xr, true);
     pd_stamp<V>(sb, r, PS_SEED);
   }
   if (a.i[2] == 1) return;
