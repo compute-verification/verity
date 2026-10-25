@@ -1,4 +1,4 @@
-import Models.Flock.Guarantees.Claims
+import Definitions.Flock.Guarantees.Claims
 import Proofs.Flock.Claims.RecursionStated
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Finder
@@ -118,6 +118,7 @@ import Proofs.Flock.Claims.Recursion.TopsStaged
 import Proofs.Flock.Claims.Recursion.FinOpen
 import Proofs.Flock.Claims.Recursion.RecRecord
 import Proofs.Flock.Claims.Recursion.RecOpen
+import Proofs.Flock.Claims.Recursion.OpenedPlain
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
@@ -130,9 +131,20 @@ import Proofs.Flock.Claims.Recursion.PartAccepts
 import Proofs.Flock.Claims.Recursion.VStarPartsB
 import Proofs.Flock.Claims.Recursion.PartsCompose
 import Proofs.Flock.Claims.Recursion.NextCs
+import Proofs.Flock.Claims.Recursion.NextShaRep
 import Proofs.Flock.Claims.Recursion.NextJ
 import Proofs.Flock.Claims.Recursion.NextP
 import Proofs.Flock.Claims.Recursion.NextSha
+import Proofs.Flock.Claims.Recursion.NextShaS17
+import Proofs.Flock.Claims.Recursion.NextShaDec
+import Proofs.Flock.Claims.Recursion.NextS
+import Proofs.Flock.Claims.Recursion.NextR
+import Proofs.Flock.Claims.Recursion.VerdictParts
+import Proofs.Flock.Claims.Recursion.ResAccepts
+import Proofs.Flock.Claims.Recursion.RowSlots
+import Proofs.Flock.Claims.Recursion.FinalPiece
+import Proofs.Flock.Claims.Recursion.VerdictPieces
+import Proofs.Flock.Claims.Recursion.VerdictRun
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
