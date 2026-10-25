@@ -359,9 +359,9 @@
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
   "Properties.Pouw.Period": {
-   "imports": ["Definitions.Accounting", "Models.Accounting.Assumptions", "PouwCheck"],
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
    "except": [],
-   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Models.Accounting.Assumptions`), never a proof"
+   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
   "Properties.RemoteAudit.Pooled": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],

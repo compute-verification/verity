@@ -1,12 +1,12 @@
 import Batteries.Tactic.OpenPrivate
-import Properties.Proofs.RemoteAudit.Sort
+import Proofs.Properties.RemoteAudit.Sort
 
 /-!
 # `Array.qsort` sorts strings
 
 PoUW's check compares a registration's item names, sorted with `Array.qsort (· < ·)` (`PouwCheck.keys`,
 `PouwWindow.sortedKeys`), with `registeredSorted` and `lengthKeys`. `qsort_sorted` is that the sort's output is sorted,
-the proof of `Properties.Proofs.Nci.ReadsExact.qsort_sorted` (a sort by a `Nat` key) at strings' own order; with
+the proof of `Proofs.Properties.Nci.ReadsExact.qsort_sorted` (a sort by a `Nat` key) at strings' own order; with
 `qsort_perm` it gives `qsort_eq_of_perm`, that the sort of a list depends only on its elements, and
 `qsort_of_sorted`, that it leaves a sorted list as it is.
 -/

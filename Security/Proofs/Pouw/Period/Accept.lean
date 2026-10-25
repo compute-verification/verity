@@ -1,6 +1,6 @@
 import Proofs.Pouw.Period.Sort
-import Properties.Proofs.Pouw.Check
-import Properties.Proofs.Pouw.Draw
+import Proofs.Properties.Pouw.Check
+import Proofs.Properties.Pouw.Draw
 
 /-!
 # PoUW's deployed check accepts H1's honest window at the leg's parameters
