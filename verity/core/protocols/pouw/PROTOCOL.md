@@ -3,11 +3,11 @@
 Certifies that a declared workload of integer or FP8 matmuls was computed with at least a stated fraction of the honest
 work, by sampled recomputation of committed checked values. The setting and the cost model (W1 on an RTX 4090) are the
 PoUW problem statement's; the guarantee is Lean's `Pouw.SecurityProofs.EndToEnd` instantiated with a scheme's
-conjecture. PoUW's Lean is under `Security/` (`Definitions/Pouw`, `Models/Pouw`, `Proofs/Pouw`), and every theorem this document
+conjecture. PoUW's Lean is under `Security/` (`Definitions/Pouw`, `Definitions/Pouw`, `Proofs/Pouw`), and every theorem this document
 cites is pinned in `Security/lean-audit.json`.
 
 This document describes the scheme while it is experimental; what is proved is the Lean. Each guarantee G is stated in
-`Models/Pouw` and proved in `Proofs/Pouw`, as `Pouw.SecurityProofs.G : Pouw.Guarantees.G`, and this document points at
+`Definitions/Pouw` and proved in `Proofs/Pouw`, as `Pouw.SecurityProofs.G : Pouw.Guarantees.G`, and this document points at
 those names rather than restating them.
 
 ## The interface
@@ -245,7 +245,7 @@ opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sig
 Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
 coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
-`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+`trusted-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
 (`received_at`) and then coin i's release after it (`released_at`).
 
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
@@ -571,7 +571,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   `tests/test_pouw_word_p.py` certifies all of them exactly at the k the MVP uses (1,088, 2,048, 11,008).
   `ncp-v1-shift24` uses the shift by 24 instead, admissible with independent checkpoints for every k ≥ 1,024 with
   16 ∣ k (Lean `Pouw.SecurityProofs.NCP.ShiftBy24Admissible`, `Pouw.SecurityProofs.NCP.IndependentWitness`).
-- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `Security/Models/Pouw/Guarantees/NCP.lean`
+- **Lean.** The certificate's guarantees are its `theorems`: NCP's in `Security/Definitions/Pouw/Guarantees/NCP.lean`
   (the reduction `Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1`, from the named assumption `Pouw.NCP.Assumptions.TTNCP_U`),
   the barrier `Pouw.Guarantees.Barrier.Generic`, and the game's `Pouw.Guarantees.Theorem1`, `WorkWeightedSampling` and
   `EndToEnd`.
@@ -1620,7 +1620,7 @@ site that fills none (decode's few tokens); the vLLM integration serving the com
 
 ## Not here yet
 
-- The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
+- The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocols/pouw/__init__.py`)
   are gated by these vectors when they land. Pearl-C's sm_120 kernel is `benchmarks/pouw/pearl_c_sm120/`; its H100
   kernel (-h1, BLAKE3) is kept unmaintained in `archive/pouw-blake3/pearl_c/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.

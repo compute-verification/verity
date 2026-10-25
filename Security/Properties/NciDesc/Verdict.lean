@@ -18,8 +18,8 @@ the verdict has the property (`OnExpansions`).
   (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `BaselineRegistered`), which the check does not see.
 
 None is a guarantee yet: each is proved from `DescAgrees`, whose proof rests on one open statement, `Novel.ReadsExact`
-(`descAgrees_of_readsExact`, `Properties.Proofs.Nci.Agrees`): `descReports_of` and `descWitnesses_of` in
-`Properties.Proofs.Nci.DescVerdict`, and the four
+(`descAgrees_of_readsExact`, `Proofs.Properties.Nci.Agrees`): `descReports_of` and `descWitnesses_of` in
+`Proofs.Properties.Nci.DescVerdict`, and the four
 bounds in `Proofs.Nci.DescVerdict` (package `security_proofs`), whose proofs need the thread bounds'.
 -/
 
