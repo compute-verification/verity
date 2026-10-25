@@ -43,7 +43,7 @@ theorem setupOf_tablePJ {I : Inputs} {record : String} {d : Lean.Json} {spec : S
       have e2 : drawJ I d 0 = d := by simp [drawJ, hc]
       rw [e1, e2, ← hd]
       exact hst
-    · exact absurd hc' (by change ¬ 1 < I.count; omega)
+    · exact absurd hc' (by omega)
   · have hc1 : 1 < I.count := by omega
     obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := Tables.setupTables_parts hh hc1 hs
     obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
@@ -67,6 +67,7 @@ private theorem stmtOf_congr {a b : Flock.Stmt} (h : a = b) (ha : StmtWF a) (hb 
 variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
 
+set_option maxHeartbeats 4000000 in
 /-- **The decoder is right at a plain session of `J` tables** (R11b at `--plain-tables --session-tables J`): given the
 tags, `wr` the challenger's record and the challenger's draws setting each table up at `mPts` link points, `DecodesOnJ`
 holds at `planPJ` with the decoder `decJ` on each table's two streams, single coins as field elements, no final

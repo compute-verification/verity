@@ -514,15 +514,15 @@ theorem count : I.count ≤ Tags.MAX_TABLES := by
 
 theorem typed : I.tags.typed = false := Checks.typed h.checks
 
-theorem parse : HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse h.checks h.hidden
+theorem parse : HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse (I := { I with count := 1 }) h.checks h.hidden
 
-theorem load : HmRow.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.load h.checks h.hidden
+theorem load : HmRow.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.load (I := { I with count := 1 }) h.checks h.hidden
 
-theorem built : Built (circS I).unit := Checks.built h.checks
+theorem built : Built (circS I).unit := Checks.built (I := { I with count := 1 }) h.checks
 
-theorem tables : (pubS I).tables = none := Checks.tables_none h.checks rfl
+theorem tables : (pubS I).tables = none := Checks.tables_none (I := { I with count := 1 }) h.checks rfl
 
-theorem scope : Layout.scopeOk (circS I) = true := Checks.scope h.checks h.hidden
+theorem scope : Layout.scopeOk (circS I) = true := Checks.scope (I := { I with count := 1 }) h.checks h.hidden
 
 /-- **The verifier's own program is the circuit's** (`ProgramOfCircuit`). -/
 theorem program : ProgramOfCircuit I := by
