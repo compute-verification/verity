@@ -241,6 +241,28 @@ class Step:
                 best = (r * t, r)
         return best
 
+    def forward_loss(self, k: float = K) -> dict:
+        """The corrected count of one forward over the layers, per token and with tokens unbounded (contiguous layer
+        segments, each entering at its own boundary's measured F, or at the embedding), against the fan-out count
+        L N beta_x^rep / (e k) per token: the step-level loss factor of the fan-out allowance at each reading."""
+        best = [0.0] + [math.inf] * self.L
+        cut = [0] * (self.L + 1)
+        for b in range(1, self.L + 1):
+            for a in range(b):
+                l_w = sum(self.w[a:b])
+                opts = [(l_w, H_TOK + self.F[a - 1])] if a > 0 else \
+                    [(l_w + self.emb, H_TOK), (l_w, H_TOK + self.cfg.d * self.beta_e)]
+                v = best[a] + min((t / (k - s - A_DEC) if s + A_DEC < k else math.inf) for s, t in opts)
+                if v < best[b]:
+                    best[b], cut[b] = v, a
+        segs, b = [], self.L
+        while b > 0:
+            segs.append((cut[b], b))
+            b = cut[b]
+        fan = {r: self.L * self.prods * self.beta_rep(r) / (self.e * k) for r in READINGS}
+        return {"blocks_per_token": best[-1], "segments": segs[::-1], "fanout_blocks_per_token": fan,
+                "loss": {r: fan[r] / best[-1] for r in READINGS}}
+
     def step_blocks(self, train: bool, acc_mode: str = "chain", k: float = K, c: float = C) -> tuple[float, list]:
         """The fewest blocks for one pass over the step's layers, segments contiguous."""
         U = self.L
@@ -547,6 +569,22 @@ def report(doc: dict, measured_doc: dict, existing: dict) -> tuple[str, dict]:
                         "any": max(1.0, anyb), "embedding_share_of_products": s, "aggregate": agg}
                     out.append(f"| {cname} | {p} | {b} ({which}) | {r} | {_show(bb, r)} | {_show(be, r)} | "
                                f"{_show(br, r)} | {sig(max(1.0, whole))} | {sig(max(1.0, anyb))} | {sig(agg)} ({s:.1%}) |")
+    out += ["", "The step-level column gives every product outside the embedding block the best other block's R, so it "
+            "bounds the step-level loss from above. With B1's per-boundary F (the matched step, Qwen2.5-1.5B), one "
+            "forward over the layers in contiguous segments, each entering at its own boundary or the embedding, "
+            "tokens unbounded:", "",
+            "| entry | prec | segments | corrected blocks per token | fan-out blocks per token (Ff_min, mean) | "
+            "step-level loss factor (Ff_min, mean) |", "|---|---|---|---|---|---|"]
+    for name, en in doc["entries"].items():
+        if en["prompt_mean"] is None:
+            continue
+        for p in PRECISIONS:
+            fl = Step(en, p, qwen).forward_loss()
+            res["forward_loss"] = res.get("forward_loss", {}) | {f"{name}/{p}": fl}
+            segs = " ".join(f"{a}-{b - 1}" for a, b in fl["segments"])
+            fb = fl["fanout_blocks_per_token"]
+            out.append(f"| {name} | {p} | {segs} | {sig(fl['blocks_per_token'])} | {sig(fb['Ff_min'])}, "
+                       f"{sig(fb['mean'])} | {sig(fl['loss']['Ff_min'])}, {sig(fl['loss']['mean'])} |")
     return "\n".join(out) + "\n", res
 
 
