@@ -1656,6 +1656,9 @@
    "assumptions": [],
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e"
   },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "owner": "@memory-accounting"
+  },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.credited : Properties.Requirement.Credited"],
@@ -1865,7 +1868,8 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Models.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises"
+   "Properties.RemoteAudit.Line.Premises",
+   "Properties.RemoteAudit.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -2832,6 +2836,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.scheduleFixesLayout": {
+    "function": "RemoteAudit.Schedule.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.steered_of_checked": {
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
