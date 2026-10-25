@@ -109,7 +109,7 @@ PROOF = [
 ]
 
 #: (name, rep, edit, expect): a nonce of the file made 1, its rounds left as they are: the decoder refuses it before any replay
-#: (verifier PROTOCOL.md R4, D20), and upstream's replay rejects it at the rounds' digests.
+#: (verifier PROTOCOL.md R4, D21), and upstream's replay rejects it at the rounds' digests.
 NONCES = [
     ("zk-lig-query-nonce", 0, flip("lig.qn"), reject("grinding_nonce ≠ 0 (R4)")),
     ("zk-lig-claim-nonce", 0, flip("lig.cbn", 1), reject("claim_batch_grinding_nonce ≠ 0 (R4)")),

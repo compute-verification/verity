@@ -2395,7 +2395,7 @@ impl Challenger for ReplayChallenger {
     }
 
     /// R4: the nonce is a message like any other (bound by the round digest), and must be `0`: the coin does not depend on
-    /// it, so the verifier refuses every other nonce, as the Lean verifier's decoder does (D20).
+    /// it, so the verifier refuses every other nonce, as the Lean verifier's decoder does (D21).
     fn verify_pow(&mut self, nonce: u64, _bits: u32) -> bool {
         self.observe_bytes(&nonce.to_le_bytes());
         nonce == 0

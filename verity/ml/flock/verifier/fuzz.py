@@ -7,7 +7,7 @@ Each case edits one thing, chosen with `random.Random(seed)`:
   transcript (R2) or the decoder must reject (past the pair in its statement's pinned form, §8.1 refuses every byte: D17).
 - `proof-value`: one field element or hash of one rep's proof, with that rep's round digests rebuilt (`redigest.py`). It must
   be rejected; a proof-of-work nonce by the Lean verifier's decoder only, which refuses every nonce but `0` (R4), divergence
-  D20.
+  D21.
 - `coin`: one bit of one recorded coin. No expectation: an unused coin (§19 A1) or the high bits of a query coin (§13.5)
   leave the verdict unchanged; the verifiers must only agree.
 - `digest`: one bit of one round's `msg_sha256`. Must be rejected (R2).
