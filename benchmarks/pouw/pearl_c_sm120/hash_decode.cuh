@@ -32,7 +32,9 @@
 // the producer one called copy (`pd_serve`), since each inlined paired site is about 7 KB (the producer's 23 KB) fetched
 // cold on the CTA's SM, and the last CTA's tail runs each of its sites once; PD_LATE (with PD_PAIR), pd_commit's salt,
 // templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
-// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers.
+// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; in mode 1, which builds no
+// templates, warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead (`pd_fold_sched`; with
+// PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
@@ -411,6 +413,46 @@ template <int V> DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int 
       pd_fold_block(dig, s, b, w);
       pd_cmp<V>(st, w);
     }
+  }
+}
+// pd_fold's rounds-only form split over two warps (pd_commit's fold in mode 1, s / 2 + 1 <= 32 blocks): pd_fold_sched, on
+// a whole warp, lane b block b, stores K_t + W_t at kw[32 t + b] a chunk of 16 t at a time for every block, arriving on
+// barrier 1 + q after chunk q, while pd_fold_rounds, on another whole warp (every lane the same rounds), runs the blocks'
+// rounds in order, block 0 waiting there for each chunk.  Barriers 1-5, 64 threads; st out on every lane
+DEV void pd_fold_rounds(const uint64_t* qst, int nb, uint64_t* st, const uint64_t* kw) {
+#pragma unroll
+  for (int t = 0; t < 8; t++) st[t] = qst[t];
+#pragma unroll 1
+  for (int b = 0; b < nb; b++) {
+    uint64_t a = st[0], bb = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll 1
+    for (int q = 0; q < 5; q++) {
+      if (b == 0) pd_bar_sync(1 + q, 64);
+      uint64_t k16[16];
+#pragma unroll
+      for (int i = 0; i < 16; i++) k16[i] = kw[32 * (16 * q + i) + b];
+#pragma unroll
+      for (int i = 0; i < 16; i++) rs_round(a, bb, c, d, e, f, g, h, k16[i]);
+    }
+    st[0] += a; st[1] += bb; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+  }
+}
+DEV void pd_fold_sched(const uint64_t* dig, int s, int lane, uint64_t* kw) {
+  const int nb = s / 2 + 1, b = lane < nb ? lane : 0;
+  const bool on = lane < nb;
+  uint64_t w[16];
+  pd_fold_block(dig, s, b, w);
+#pragma unroll
+  for (int t = 0; t < 16; t++)
+    if (on) kw[32 * t + b] = RS_K[t] + w[t];
+  pd_bar_arrive(1, 64);
+#pragma unroll 1
+  for (int q = 1; q < 5; q++) {
+    rs_next16(w);
+#pragma unroll
+    for (int i = 0; i < 16; i++)
+      if (on) kw[32 * (16 * q + i) + b] = RS_K[16 * q + i] + w[i];
+    pd_bar_arrive(1 + q, 64);
   }
 }
 // the hm96 salt pieces of leaf i (hm_leaves' work before x), by one whole warp: lanes 0-2 the three ChaCha20 blocks of y
@@ -971,9 +1013,11 @@ template <int V> DEV void pd_commit_t(const Args a) {
   }
   __syncthreads();
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
+  // in mode 1 no templates are built, so with PD_LATE warp 2 computes the fold's round inputs while warp 0 runs its rounds
+  const bool split = LATE && (V & PD_ROUNDS) && a.i[2] == 1 && s / 2 + 1 <= 32;
   if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
-    pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    if (split) pd_fold_rounds(RS_Q_HEADS + 8 * s, s / 2 + 1, st, kw); else pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
     if (lane == 0) {
       s512_store(a.p[1] + 64ull * r, st, 8);
 #pragma unroll
@@ -983,7 +1027,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
   } else if (LATE && warp == 1) {
     salt();
   } else if (LATE && warp == 2) {                   // a lane a level; the pairs' buffers are idle until the leaf
-    templates(lane, pd_dyn());
+    if (split) pd_fold_sched(dig, s, lane, kw); else templates(lane, pd_dyn());
   } else if (LATE && warp == 3 && lane == 0) {
     frame();
   }
