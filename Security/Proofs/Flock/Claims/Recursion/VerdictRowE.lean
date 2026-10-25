@@ -39,7 +39,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
 /-- The `α` of the verifier rows' consistency context for level `ℓ` at rep `r`'s coins, as `consOf` reads it. -/
-def alphaAt (ℓ : ℕ) : Array F128 :=
+noncomputable def alphaAt (ℓ : ℕ) : Array F128 :=
   match verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb with
   | .ok (_, info, _) =>
     match info.lg.conss.find? (·.start == ℓ) with
@@ -48,7 +48,7 @@ def alphaAt (ℓ : ℕ) : Array F128 :=
   | .error _ => #[]
 
 /-- The verifier's `coef` for opening `j` of level `ℓ` at rep `r`: `κ[ℓ] · eq(α)[j]` at the verifier rows' `κ`. -/
-def coefAt (ℓ j : ℕ) : Array F128 :=
+noncomputable def coefAt (ℓ j : ℕ) : Array F128 :=
   match verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb with
   | .ok (_, _, kappa) =>
     FlockVBridge.coefAt (kappa[ℓ]!) (levelLanes (D.sh cls i) ℓ) (eqTable (D.alphaAt cls acc i r ℓ))[j]!
@@ -56,7 +56,7 @@ def coefAt (ℓ j : ℕ) : Array F128 :=
 
 /-- **Rep `r`'s openings at the decision**, from chain position `p0`: level `ℓ`'s queries of the schedule, the rows its
 Ligerito proof opens at `ℓ`, the verifier's `α` and `coef`. -/
-def opens (p0 : ℕ) : Openings where
+noncomputable def opens (p0 : ℕ) : Openings where
   p0 := p0
   q ℓ := ((D.files cls i).sch.levels.getD ℓ default).q
   rows ℓ := (openAt ((D.files cls i).proof r).ligerito ((D.files cls i).sch.levels.size - 1) ℓ).1
