@@ -37,7 +37,8 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
