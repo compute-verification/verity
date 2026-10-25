@@ -8,6 +8,7 @@ import Definitions.Flock.Piop
 import Definitions.Flock.Ligerito
 import Definitions.Flock.Sparse
 import Definitions.Flock.Merkle
+import Definitions.Flock.Circuit
 
 /-!
 # C-Flock's definitions
