@@ -15,7 +15,8 @@ injective (`decode_injective`).
 
 The verifier's own parsers then run on those bytes, as `Main.verifyCmd` runs them (`Raw.ins`): `Tags.find?` on the
 statement id, the refusals of a plain-leaf statement under `--zk` and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
-else `--coins`), `Json.parse` then `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
+else `--coins`), `Json.parse` then, for the draw, `norm` (as `Main.recordDraw` rebuilds the record's), and
+`Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
 The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
 `Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
 scope check C's `scopeCheckOf`, the verifier's own scope refusal (`scopeCheck`: `ProvedScope.check`, then
@@ -186,7 +187,7 @@ def Raw.ins (w : Raw) : Except String Ins := do
   if w.zk && tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"
   if w.zk && w.osCoins then throw "verify --zk: a --zk session's coins are its keyed coin tree, so --coins does not apply"
   let coins : Coins := if w.zk then .tree (Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed
-  let draw ← w.draw.mapM (jsonOf "draw")
+  let draw := (← w.draw.mapM (jsonOf "draw")).map Flock.norm
   let partition ← w.partition.mapM (jsonOf "partition")
   let table ← w.workTable.mapM fun b => do Draw.workTableOfJson (← jsonOf "work table" b)
   let closure ← w.closure.mapM fun b => do Draw.closureMapOfJson (← jsonOf "closure map" b)
@@ -266,6 +267,14 @@ theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk :=
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
+
+/-- **The statement's draw is rebuilt** (`norm`) from the JSON its bytes parse to. -/
+theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
+    ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
+  unfold Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl⟩)
 
 /-- A statement of the verifier that is masked exactly when `zk` is read as masked exactly when `zk`. -/
 theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf zk x = some r) : r.zk = zk := by
