@@ -40,7 +40,7 @@ class _LLM:
 
 def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], Path]:
     pytest.importorskip("torch")
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC

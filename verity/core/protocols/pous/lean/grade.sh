@@ -9,8 +9,8 @@
 #      grader's LEAN_PATH (the security packages, Mathlib and their other dependencies, the toolchain's core) are recorded.
 #      The trusted layer is built in `Security/Proofs`, and the grader here; TRUSTED.sha256's paths are relative
 #      to this directory.
-#   2. The submission may import only the trusted layer (`Definitions.Pous`, `Models.Pous.Assumptions`,
-#      `Models.Pous.Guarantees`, in `Security`, and the lemmas' statements `Proofs.Pous.Statements`, which proves
+#   2. The submission may import only the trusted layer (`Definitions.Pous`, `Definitions.Pous.Assumptions`,
+#      `Definitions.Pous.Guarantees`, in `Security`, and the lemmas' statements `Proofs.Pous.Statements`, which proves
 #      nothing), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers` (in `Security/Proofs`), and
 #      `Mathlib.*`; the grader's trusted environment is exactly those imports.
 #   3. It compiles in a throwaway directory, inside a user, mount, PID and network namespace where every other mount is
@@ -38,7 +38,7 @@ unshare --user --map-root-user --pid --fork --mount --net true 2> /dev/null \
 
 # 1. the trusted tree, before any submission code runs
 sha256sum --quiet -c TRUSTED.sha256 >&2 || fatal "trusted files differ from TRUSTED.sha256"
-(cd "$proofs" && lake build Definitions.Pous Models.Pous.Assumptions Models.Pous.Guarantees Proofs.Pous.Statements \
+(cd "$proofs" && lake build Definitions.Pous Definitions.Pous.Assumptions Definitions.Pous.Guarantees Proofs.Pous.Statements \
   Proofs.Pous.Sanity Proofs.Pous.Accounting.Numbers) >&2 || fatal "the trusted layer does not build"
 lake build pous-grader >&2 || fatal "the grader does not build"
 grader=$root/.lake/build/bin/pous-grader
@@ -60,7 +60,7 @@ imports=$(sed -n 's/^[[:space:]]*import[[:space:]]\{1,\}//p' "$work/PousSubmissi
 [ -n "$imports" ] || fail "no import"
 for m in $imports; do
   case "$m" in
-    Definitions.Pous|Models.Pous.Assumptions|Models.Pous.Guarantees|Proofs.Pous.Statements|Mathlib|Mathlib.*) ;;
+    Definitions.Pous|Definitions.Pous.Assumptions|Definitions.Pous.Guarantees|Proofs.Pous.Statements|Mathlib|Mathlib.*) ;;
     Proofs.Pous.Sanity|Proofs.Pous.Accounting.Numbers) ;;
     *) fail "import $m: a submission may import only the trusted layer, Sanity, Numbers and Mathlib modules" ;;
   esac

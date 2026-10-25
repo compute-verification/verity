@@ -12,7 +12,7 @@ which each device begins each engine step), PoUW's regions, ingress and credits 
 (`RequirementCredits`, `RequirementHelpBound`, and `RequirementHelp` when the wiring is `topological`), a run input an
 input gate wherever it is placed. A step is always an engine step. It is code, so it requires nothing of `Security/`: the Lean check's
 `security_properties` package states that each function is the definition it computes (`Properties.Accounting.Requirement`)
-and proves it (`Properties.Proofs.Accounting.Requirement`).
+and proves it (`Proofs.Properties.Accounting.Requirement`).
 
 - `CircuitRequirement.lean`: `Instance`, `Store`, `Placement` and the functions, on lists with membership through hash sets, so a
   registry row of tens of thousands of gates runs in seconds.
