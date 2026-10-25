@@ -26,14 +26,19 @@ failure message carries its fix.
  only shrinks, and every failure prints the exact entry lines.
 
 **The rule on every change: no growth** (Daniel's delegation to the vLLM coordinator, 25 Oct 09:40Z). No PR adds a ratchet
-exception or raises a recorded count: against its merge base with `main`, no ratchet holds more entries and no entry's
-`count` is higher. An entry may move with the violation it allows. A change to a lint's own code or thresholds is judged
+exception or raises a recorded count: against its merge base with `main` (the merge of its merge bases, when a branch that
+merged both `main` and a since-landed branch has several), no ratchet holds more entries and no entry's `count` is higher. An entry may move with the violation it allows. A change to a lint's own code or thresholds is judged
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
+
+**A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more
+`noqa` comments than it removes. The gate counts them with no allowlist, and refuses a change that adds more, naming each
+new line. Lines are matched by their stripped text, so a `noqa` that moves with its code counts as kept. Fix the finding
+instead, or delete a stale `noqa` elsewhere in the same change: deleting one is a retirement.
 
 To retire an entry, fix what it allows and delete it: its rule's stale-entry check then keeps it gone. Each lint's
 `test_no_new*` tests are the ones the gate runs, under drive's Python, so `test_ratchet.py` holds every lint to having one

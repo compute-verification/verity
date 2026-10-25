@@ -5,11 +5,12 @@ delegation to the vLLM coordinator, 25 Oct 09:40Z).  Dedicated cleanup lanes pay
 
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
-them (a branch's own commits against its merge base).  A ratchet is a shrink-only allowlist under ``integrations/vllm/tests``
-(``**/allowlists/*.json`` or ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a
-rule number (``p10_size.json`` and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the
-change adds starts at its own count and is not compared.  A change is judged when it touches a ratchet or a ``*.py`` file
-under ``integrations/vllm/tests/lint/`` (the lints' code), and passes when:
+them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
+ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
+holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json`` and ``size.json`` are
+both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own count and is not
+compared.  A change is judged when it touches a ratchet or a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
+code), and passes when:
 
 * no ratchet its base has holds more entries after it than before;
 * no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
@@ -19,6 +20,11 @@ under ``integrations/vllm/tests/lint/`` (the lints' code), and passes when:
   changed (every lint's, if the shared code did) run without pytest.  So loosening a lint to drop its entries (raising P10's
   cap, skipping a kind, deleting the lint) fails, naming each violation the base's lint still finds, while tightening one
   passes once the change fixes what it finds.
+
+A ``# noqa`` is an exception too (the vLLM coordinator, 25 Oct 11:20Z, under that delegation), held by count with no
+allowlist, and every change is judged by it: in the ``*.py`` files it touches under ``integrations/vllm``, a change may add
+no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa``) than it removes.  A line is matched by its stripped text, codes included, so one
+that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
@@ -33,12 +39,15 @@ run.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's to
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import tokenize
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -49,6 +58,10 @@ LINT = f"{TESTS}lint"
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
+#: a comment ruff reads as a ``noqa``: the hash, then ``noqa`` or ``noqa: CODE, ...``, or a file's ``ruff: noqa`` (or ``flake8:``)
+NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
+#: a unified diff's hunk header: the new side's first line and its count (1 when left out)
+HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
 
@@ -182,6 +195,8 @@ class Change:
     after: int | None = None
     lints: list[str] = field(default_factory=list)
     fix: list[str] = field(default_factory=list)
+    noqa_added: int = 0
+    noqa_removed: int = 0
 
     @property
     def name(self) -> str:
@@ -189,12 +204,28 @@ class Change:
 
     def doc(self) -> dict:
         return {"name": self.name, "commit": self.hi, "base": self.lo, "pr": self.pr, "verdict": self.verdict, "why": self.why,
-                "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix}
+                "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix,
+                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed}
+
+
+def merge_base(base: str, top: str) -> str:
+    """``base``'s and ``top``'s merge base.  When they have several (a branch that took ``base``'s commits by two routes: it
+    merged ``main``, and a branch ``main`` has landed since), no one of them holds all they share, and against it what ``base``
+    brought by the other route would count as the branch's; so the base is their merge, as git's own merge takes it."""
+    first, *rest = git("merge-base", "--all", base, top).split()
+    for other in rest:
+        r = subprocess.run(["git", "merge-tree", "--write-tree", "--no-messages", first, other], capture_output=True, text=True)
+        if r.returncode:
+            raise GitError(f"{top[:12]}'s merge bases with {base[:12]} don't merge cleanly, so it has no one base to be judged "
+                           f"against: merge {base[:12]} into the branch, which leaves it one")
+        first = git("-c", "user.name=ratchet gate", "-c", "user.email=ratchet-gate@invalid", "commit-tree", r.stdout.split()[0],
+                    "-p", first, "-p", other, "-m", "ratchet gate: the merge of the merge bases").strip()
+    return first
 
 
 def changes(base: str, top: str) -> list[Change]:
     """The changes on ``top``'s first-parent chain above its merge base with ``base``, oldest first."""
-    mb = git("merge-base", base, top).strip()
+    mb = merge_base(base, top)
     out: list[Change] = []
     lo, group = mb, []
     for line in reversed(git("log", "--first-parent", "--format=%H %P%x00%s", f"{mb}..{top}").splitlines()):
@@ -246,6 +277,50 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
     return grown, fix
 
 
+def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
+    """(line number, stripped line) of each line of ``path`` at ``rev`` whose comment is a ``noqa`` (none when it isn't
+    there).  Only comments count, so a docstring that mentions one doesn't; a file ``tokenize`` refuses is read by line."""
+    try:
+        src = git("show", f"{rev}:{path}")
+    except GitError:
+        return []
+    lines = src.split("\n")
+    try:
+        rows = {t.start[0] for t in tokenize.generate_tokens(io.StringIO(src).readline)
+                if t.type == tokenize.COMMENT and NOQA.search(t.string)}
+    except (tokenize.TokenError, SyntaxError):
+        rows = {n for n, line in enumerate(lines, 1) if NOQA.search(line)}
+    return [(n, lines[n - 1].strip()) for n in sorted(rows)]
+
+
+def added_rows(lo: str, hi: str, path: str) -> set[int]:
+    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds."""
+    rows: set[int] = set()
+    for m in HUNK.finditer(git("diff", "--no-renames", "-U0", lo, hi, "--", path)):
+        rows.update(range(int(m[1]), int(m[1]) + int(m[2] or 1)))
+    return rows
+
+
+def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]:
+    """(each ``noqa`` line the change adds, as ``file:line: text``; how many it adds; how many it removes) over the
+    ``*.py`` files it changes under ``integrations/vllm``.  Lines are matched by their stripped text across those files, so
+    one that moves, within a file or to another, is neither.  Of lines with the same text, those the diff adds are named
+    first, so a new copy of a common line (a bare ``noqa: BLE001``) is named where it was added."""
+    files = [f for f in diff if f.startswith(f"{INTEGRATION}/") and f.endswith((".py", ".pyi"))]
+    was = Counter(text for f in files for _, text in noqa_lines(lo, f))
+    now = [(f, n, text) for f in files for n, text in noqa_lines(hi, f)]
+    added, removed = Counter(t for *_, t in now) - was, was - Counter(t for *_, t in now)
+    fresh = {f: added_rows(lo, hi, f) for f in {f for f, _, text in now if added[text]}}
+    left, picked = Counter(added), set()
+    for new_first in (True, False):
+        for f, n, text in now:
+            if left[text] and (f, n) not in picked and (n in fresh[f]) == new_first:
+                left[text] -= 1
+                picked.add((f, n))
+    named = [f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}" for f, n, text in now if (f, n) in picked]
+    return named, sum(added.values()), sum(removed.values())
+
+
 def lint_selection(touched: list[str]) -> list[str] | None:
     """The slugs of the lints to run, or None for all of them (the shared lint code changed)."""
     code = [f for f in touched if is_lint_code(f)]
@@ -294,24 +369,29 @@ def violations(failures: list[dict]) -> list[str]:
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
     c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f)))
-    if not c.touched:
-        c.verdict, c.why = "untouched", f"changes no ratchet and no lint code under {LINT}/"
+    new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
+    noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
+    if not c.touched and not noqa:
+        c.verdict, c.why = "untouched", f"changes no ratchet, no lint code under {LINT}/ and no `# noqa`"
         return
-    before, was_at, _ = ratchets(c.lo)
-    after, now_at, bad = ratchets(c.hi)
-    c.before = sum(len(v) for v in before.values())
-    c.after = sum(len(after.get(s, [])) for s in before)
-    grown, added = growth(before, after, {**was_at, **now_at})
-    found: list[str] = []
-    if not grown and not bad:
+    grown, added, bad, found = [], [], [], []
+    if c.touched:
+        before, was_at, _ = ratchets(c.lo)
+        after, now_at, bad = ratchets(c.hi)
+        c.before = sum(len(v) for v in before.values())
+        c.after = sum(len(after.get(s, [])) for s in before)
+        grown, added = growth(before, after, {**was_at, **now_at})
+    noqa_grows = c.noqa_added > c.noqa_removed
+    if c.touched and not (grown or bad or noqa_grows):
         slugs = lint_selection(c.touched)
         if slugs is None or slugs:
             c.lints, failures = base_lints(c, slugs, after)
             found = violations(failures)
-        if not found:
-            c.verdict, c.why = "passed", f"{c.before} -> {c.after} ratchet exceptions" + (
-                f"; the base's lint code finds nothing uncovered ({', '.join(c.lints)})" if c.lints else "")
-            return
+    if not (grown or bad or noqa_grows or found):
+        c.verdict, c.why = "passed", "; ".join(
+            ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + noqa
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
+        return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
         return
@@ -325,6 +405,11 @@ def judge(c: Change, base: str) -> None:
         c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count (fix the new code; "
                  f"an entry may move with the violation it allows, within its ratchet)")
         c.fix = added[:CHEAPEST] + ([f"... and {len(added) - CHEAPEST} more"] if len(added) > CHEAPEST else [])
+    elif noqa_grows:
+        c.why = (f"adds {c.noqa_added} `# noqa` line(s) under {INTEGRATION}/ and removes {c.noqa_removed}: a noqa is an "
+                 f"exception, so fix the finding each new one suppresses, or delete a stale noqa elsewhere in the same change "
+                 f"(a noqa line that moves with its code counts as kept)")
+        c.fix = new_noqa[:CHEAPEST] + ([f"... and {len(new_noqa) - CHEAPEST} more"] if len(new_noqa) > CHEAPEST else [])
     else:
         moves = git("diff", "--name-only", "-M", "--diff-filter=R", c.lo, c.hi).strip()
         c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "

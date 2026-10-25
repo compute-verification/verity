@@ -1,8 +1,9 @@
-"""`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base, each queue merge
-on its own, no ratchet growing (by entries, per ratchet, or by an entry's count), a new, moved or renamed ratchet, the changes
-it doesn't judge, the base's lint code run on the change's tree (a loosened, deleted or bypassed lint fails, naming what it
-still finds; a tightened one passes once its findings are fixed), the exemptions (a revert, a pure move the base's
-move_check certifies), and its command line."""
+"""`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
+merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's
+count), a new, moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
+loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
+`noqa` count (no change adds more than it removes; a moved one is kept; only comments count; a new copy of a line is named
+where it was added), the exemptions (a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
 
 import importlib.util
@@ -167,6 +168,48 @@ def test_main_moving_on_keeps_the_branch_judged_against_its_merge_base(repo):
     assert (c["verdict"], c["before"], c["after"], c["touched"]) == ("passed", 2, 1, [P01])
 
 
+def test_a_branch_with_two_merge_bases_is_judged_against_their_merge(repo):
+    """``pr`` merged ``main`` and a side branch that ``main`` landed since, so the two have two merge bases; against either,
+    what ``main`` brought by the other route (a noqa each, and an allowlist entry) would count as ``pr``'s."""
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit("side: a noqa", {"integrations/vllm/verity_vllm/c.py": "import os  # noqa: F401\n"})
+    repo.git("checkout", "-q", "main")
+    repo.commit("main: a noqa and its entry", {"integrations/vllm/verity_vllm/d.py": "import re  # noqa: F401\n",
+                                               P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
+                                                               _entry("verity_vllm/d.py", "D"))})
+    repo.git("checkout", "-q", "-b", "pr", "main~1")
+    repo.commit("pr", {A_PY: "A = 2\n"})
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main", "main")
+    repo.git("merge", "-q", "--no-ff", "-m", "merge side", "side")
+    repo.git("checkout", "-q", "main")
+    repo.queue(7, "side", "side")
+    assert len(repo.git("merge-base", "--all", "main", "pr").split()) == 2
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["touched"]) == ("untouched", 0, [])
+    repo.git("checkout", "-q", "pr")
+    repo.commit("pr's own noqa", {"integrations/vllm/verity_vllm/e.py": "import sys  # noqa: F401\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["verity_vllm/e.py:1: import sys  # noqa: F401"])
+
+
+def test_merge_bases_that_conflict_are_refused_with_how_to_leave_one(repo):
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit("side", {A_PY: "A = 'side'\n"})
+    repo.git("checkout", "-q", "main")
+    repo.commit("main", {A_PY: "A = 'main'\n"})
+    repo.git("checkout", "-q", "-b", "pr", "main~1")
+    repo.commit("pr", {"integrations/vllm/verity_vllm/c.py": "C = 1\n"})
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main", "main")
+    repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "merge side", "side")
+    repo.git("checkout", "-q", "main")
+    repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "Queue: #7 side", "side")
+    with pytest.raises(G.GitError, match="don't merge cleanly, so it has no one base to be judged against: merge .* into the"):
+        G.gate("main", "pr")
+    repo.git("checkout", "-q", "pr")
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main again", "main")
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "untouched"
+
+
 def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
     base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     repo.git("checkout", "-q", "-b", "one")
@@ -303,6 +346,61 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
     assert G.violations([{"lint": "p10_size", "test": "test_no_new_x", "error": True,
                           "message": "Traceback:\n  File x\nFileNotFoundError: gone.py\n"}]) == [
         "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
+
+
+A_PY = "integrations/vllm/verity_vllm/a.py"
+
+
+def test_a_change_adds_no_more_noqa_lines_than_it_removes(repo):
+    repo.commit("noqas", {A_PY: "import os  # noqa: F401\nA = 1\n", "integrations/vllm/verity_vllm/b.py": "B = 1  # noqa: E1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("a new noqa, and one that only names it", {"integrations/vllm/verity_vllm/c.py": (
+        '"""Say why in a `# noqa: CODE`."""\nimport sys  # noqa: F401\nX = "# noqa"\n')})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"], c["touched"]) == ("failed", 1, 0, [])
+    assert c["why"].startswith("adds 1 `# noqa` line(s) under integrations/vllm/ and removes 0: a noqa is an exception, so "
+                               "fix the finding each new one suppresses, or delete a stale noqa elsewhere in the same change")
+    assert c["fix"] == ["verity_vllm/c.py:2: import sys  # noqa: F401"] and doc["failures"][0]["fix"] == c["fix"]
+    repo.commit("deletes a stale one", {"integrations/vllm/verity_vllm/b.py": "B = 1\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("passed", 1, 1)
+    assert c["why"] == "1 `# noqa` line(s) added, 1 removed"
+
+
+def test_a_new_copy_of_a_noqa_line_is_named_where_the_diff_adds_it(repo):
+    bare = "    except Exception:  # noqa: BLE001"
+    repo.commit("one", {A_PY: f"try:\n    A = 1\n{bare}\n    A = 0\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("another", {A_PY: f"try:\n    A = 1\n{bare}\n    A = 0\ntry:\n    B = 1\n{bare}\n    B = 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["fix"]) == ("failed", 1, [f"verity_vllm/a.py:7: {bare.strip()}"])
+
+
+def test_a_noqa_that_moves_with_its_code_is_kept_and_a_file_wide_one_counts(repo):
+    repo.commit("a noqa", {A_PY: "import os  # noqa: F401\nA = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("moves the import to c.py, edits a line beside it", {
+        A_PY: "A = 2\n", "integrations/vllm/verity_vllm/c.py": "C = 0\n\nimport os  # noqa: F401\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("untouched", 0, 0)
+    repo.commit("edits the line it's on", {"integrations/vllm/verity_vllm/c.py": "C = 0\n\nimport re  # noqa: F401\n"})
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "passed"
+    for name, text in [("ruff", "# ruff: noqa\nA = 1\n"), ("flake8", "# flake8: noqa: E1\nA = 1\n"),
+                       ("unparsed", "A = (  # NOQA:E1\n")]:
+        repo.git("checkout", "-q", "-B", name, "main")
+        repo.commit(f"a {name} noqa", {"integrations/vllm/verity_vllm/d.py": text})
+        [c] = G.gate("main", name)["changes"]
+        assert (c["verdict"], c["fix"]) == ("failed", [f"verity_vllm/d.py:1: {text.splitlines()[0]}"]), name
+
+
+def test_a_noqa_outside_the_integration_or_in_a_revert_is_not_held(repo):
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("elsewhere", {"tools/x.py": "import os  # noqa: F401\n", "integrations/vllm/notes.md": "# noqa\n"})
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "untouched"
+    repo.git("checkout", "-q", "-b", "revert", "main")
+    repo.commit('Revert "Queue: #9 drops a noqa"', {A_PY: "A = 1  # noqa: E1\n"})
+    assert _verdicts(G.gate("main", "revert"))[0][1] == "exempt"
 
 
 def test_the_command_line(repo):
