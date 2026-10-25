@@ -2428,11 +2428,6 @@
    "except": [],
    "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
   },
-  "Definitions.Flock": {
-   "imports": ["Mathlib", "Definitions.Flock"],
-   "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
-  },
   "Definitions.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Definitions.Hash.Guarantees"],
    "except": [],
@@ -2455,6 +2450,11 @@
    ],
    "except": [],
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
+  },
+  "Definitions.Flock": {
+   "imports": ["Mathlib", "Definitions.Flock"],
+   "except": [],
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
   }
  },
  "reads_exempt": {
