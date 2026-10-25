@@ -5,7 +5,8 @@ import Properties.NciDesc
 # `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`
 
 `descAgrees_of` proves `Properties.DescAgrees` from two statements about the decoder and the description-sized analysis,
-each a named `Prop` here, open:
+each a named `Prop` here, the first proved (`Walk.gatesLocated_of`, from `Resolve.bodiesOk`) and the second open
+(`Novel.novelExact_of`, from `Novel.ReadsExact`):
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of

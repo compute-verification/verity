@@ -24,12 +24,12 @@
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DescDifftestMain": {
-   "why": "3,993 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which PRF-151's first liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "4,009 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which PRF-151's first liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
     "{desc_difftest/python.jsonl}",
-    "3993"
+    "4009"
    ],
    "data": {
     "desc_difftest/expanded.jsonl": "3b949025ab243bd48efa032500550dc1f7e92bc524ac528e9e7f9fd09f070e46",
