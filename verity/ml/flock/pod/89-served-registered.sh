@@ -8,9 +8,10 @@
 # prove.err, live.json (the LIVE record), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
 # ZK=0 is the plain session instead (no --zk anywhere): a stratified draw of K units, Lean's own (`flock-verify draw
 # --stratified K` on the stage's program and partition, the OS's coins), served from its file and verified with
-# `--stratified K`; Lean also verifies it without --registered (lean-none.log, refused). Its fixture adds vectors/: honest,
-# root and none, each the session with its case.json (the live server's verdict, from serve's index.jsonl) and a
-# registered.json for the two negatives (agree.py's per-session reads; vectors.json's live set).
+# `--stratified K --coins os` (FC_COINS=os: every round's coins the OS's); Lean also verifies it without --registered
+# (lean-none.log, refused). Its fixture adds vectors/: honest, root and none, each the session with its case.json (the live
+# server's verdict, from serve's index.jsonl) and a registered.json for the two negatives (agree.py's per-session reads;
+# vectors.json's live set).
 # env: CPUS=16  K=16 (the draw's units, of the stage's 32)  ZK=1  SCHEMA=v1 (the tree's row format: v1, v2 or seg,
 #      served_registered.py's --schema)  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget
 #      where /workspace isn't writable (node 1) (the prover build and its venv, shared as 76-read-gadget.sh's)
