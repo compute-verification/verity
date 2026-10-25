@@ -10,7 +10,7 @@ ebcdbc782c8b4287be1a0682b6bc58e5ebf2b52380a7509f31e9e3d5ca1495aa  Grader/Registr
 d13d1f4dbf6c2525376ced2cda0ef7bfaf3f03aeb2a11f599f2215d16b980bf0  ../../../../../Security/Proofs/lakefile.toml
 dff5d799d07c5962dde6e0967f8925956561be6b011b7e0187188495fcbe8088  ../../../../../Security/Proofs/lake-manifest.json
 13ebe8f2454e2d12130d6f13a8459b436cbfaad3da5c843ae172a0ec9fecc5e9  ../../../../../Security/Definitions/Pous.lean
-b84b4f861c18b87d77a66dff6e4ee63275b54ec557a7958b6b67669ccf7056c8  ../../../../../Security/Proofs/Pous/Statements.lean
+d6f476b75201ef7b2adfd5492406e7505dfb330e2aeef355115a0d606e2c93fa  ../../../../../Security/Proofs/Pous/Statements.lean
 73013c0534eabdec28bc10865e7ec0b6ade32eb63f65d7b5d8612ac054e92bdc  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
 525fb6166c7097d9230cb2f3515df9ee9d5a9874ddff7dcd69fa838759b8ec2e  ../../../../../Security/Definitions/Pous/Accounting/EraseMeets.lean
