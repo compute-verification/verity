@@ -23,7 +23,7 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units are compute accounting's
   decision 106: every s8 dot checks its seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
   runs the Qwen3-8B row the same way. A linear's coordinate may be cut into K-chunks that commit their running sums, and
-  r × c tiles are offered so the width rule's price shows as a hint. It writes the fitted model (`cost-model.json`, a
+  r × c tiles are offered, each a unit when its outputs fit a size class. It writes the fitted model (`cost-model.json`, a
   cost-model/v1 record), the serve-time commitments, the frontier, the plan at each budget, the tensors committed at
   more than one scale and what committing each once saves (`overlaps`), the block kinds' weights at each ε
   (`--weights`), the break-even table (the linears forced to each grain, per window, ε and commitment regime), the

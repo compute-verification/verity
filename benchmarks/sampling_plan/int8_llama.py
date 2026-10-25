@@ -5,8 +5,8 @@ than one scale, and the block kinds' weights at each target.
 
 Units are decision 106's: every s8 dot unit checks its seed and derives its own noise (2 + 2 ceil(L b / 512) SHA-512
 compressions), opens its operand rows and its output in circuit, and carries its own work (MACs, W_ref's proxy).  A dot
-may be cut into K-chunks (`S8Dot{T0 = input}`), each committing its running sum; tiles of r x c dots are offered so the
-width rule's price is reported.  B is GPU-seconds of overhead per plain GPU-second over a window (BUDGET's unit), the
+may be cut into K-chunks (`S8Dot{T0 = input}`), each committing its running sum, and tiles of r x c dots are offered,
+each a unit when its outputs fit a size class.  B is GPU-seconds of overhead per plain GPU-second over a window (BUDGET's unit), the
 total: everything is committed at serve time (ASK-25), so B holds every scale's serve-time commitments under the PoUW
 scheme (`inputs.serve_rows`: the Commit's taps, PoUW's work blocks, the bits they pin, the remote audit's receipts) beside
 the proving, the units' commitments, the witnesses' replay and the zero-work templates.  The `floor` scheme is #2457's
@@ -71,7 +71,7 @@ def s8_unit(name: str, length: int, out_bits: int, *, extra_rows: tuple[int, ...
 
 def linear(k: int, bits: int, chunks=CHUNKS, tiles=((2, 1), (16, 16))) -> Shape:
     """One output coordinate of `ScaledMmS8Coordinate{K}` with its noise, its scales' rows and its bf16 output, cut into
-    K-chunks that carry the running sum; the root is a 16 x 16 tile (refused by the width rule) over 2 x 1 tiles."""
+    K-chunks that carry the running sum; the root is a 16 x 16 tile over 2 x 1 tiles."""
     ways = tuple((f"K={c}", ((s8_unit(f"S8Chunk{{K={k},L={c}}}", c, 32, extra_rows=(4, 4),
                                       commit_bits=round(32 * (1 - c / k)), bits=bits), k // c),))
                  for c in chunks if c < k and k % c == 0)

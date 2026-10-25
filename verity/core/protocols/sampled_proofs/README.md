@@ -185,8 +185,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights block kinds, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
-- `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP within the width rule;
-  `pressure` gives the developer hints.
+- `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each unit's outputs
+  in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## Not yet in Lean
@@ -306,10 +306,12 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The units are core's evaluation of the query, which refuses a malformed query and a program that is not topological.
   The verifier applies the query to its own copy of the program, and never takes a population or a unit index on the
   prover's word.
-- The one-stage audit applies only `Q_template_instance` v0 and `Q_template_instances` v0: each instance of a listed
-  template in the program's root body is one unit, in canonical order (node, then member), with no width rule. They are
-  demo queries for template runs, not the serving partition. Only they define strata; any other query refuses the
-  stratified and work sampling designs.
+- The one-stage audit applies `Q_template_instance` v0 and `Q_template_instances` v0, and `Q_word` v1 at X = 16 and
+  `Q_call` v1 at X <= 16. Under a template query each instance of a listed template in the program's root body is one
+  unit, in canonical order (node, then member). Every unit's committed bits fit a public size class, a power of two
+  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`; ASK-61, provisional), and a program with a wider unit is refused. The
+  template queries are demo queries for template runs, not the serving partition. Only they define strata; any other
+  query refuses the stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same
   rule (`partition.digest`).
 
