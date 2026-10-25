@@ -125,7 +125,8 @@ and the embedding shard layout (`embedding_shard.py`).
 
 **`records/`** holds the typed stage records, one frozen dataclass per record kind one stage writes and another reads, whose `load`
 refuses a missing required field by file and field name (`fields.py`): `required_manifest.py` (the required-value manifest, as the
-replay's coverage reads it).  Never: an import of anything else in `verity_vllm`.
+replay's coverage reads it) and `query_checks.py` (the sampled replay's reconciliation against Q(P), as the C2 rules read it).
+Never: an import of anything else in `verity_vllm`.
 
 **`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
 `*_negative*.sh` runs, `cov_pod.sh`, the gates (`pod_gate.sh`, `verify_lane.sh`), `known_roots.json`.  Never: Python that a layer

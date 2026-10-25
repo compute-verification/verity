@@ -5,4 +5,5 @@ A record's `load` reads the JSON as its writer writes it and refuses a missing r
 package imports nothing else from `verity_vllm`, so every stage may import it.
 
 * `required_manifest` -- the required-value manifest (`verity-sweep/required-manifest/v1`), as the replay's coverage reads it.
+* `query_checks` -- the sampled replay's reconciliation against Q(P) (`population.query_checks`), as the C2 rules read it.
 """
