@@ -50,8 +50,10 @@ gates included, so a record that passes the check, whose frame is its checked ro
 proofs': on a trace whose egress units are exact (a class drawn `all`) and whose verdicts open to `ACCEPT`, unit ℓ·T + t's
 frame inputs are the cells `egress.bucket_map` renders from its state input. The state is a registered read too, not a
 wire, so the chain from ingress to egress is the scan's ok bits on the registered state rows (`ingress_scan`), which
-no record-grain dependence sees. `Fits` stays structural (top's ruling, 25 Oct: semantic Fits is dropped): a served window
-fits in the step-indexed scan's form (`ingress_scan`, note:network-accounting/20261025T0830Z-report-net68-scan-router),
+no record-grain dependence sees.
+
+`Fits` stays structural (top's ruling, 25 Oct: semantic Fits is dropped): a served window fits in the step-indexed scan's
+form (`ingress_scan`, note:network-accounting/20261025T0830Z-report-net68-scan-router),
 whose bucket t unit reads bucket t's ingress row and the state bucket t − 1 carries, and whose Programs start at fixed
 boundaries and read their slots there, so an egress bucket reaches ingress only through earlier buckets' state, whatever
 the arrival steps and prompt lengths. A window in any other form, such as an egress bucket that reads every request's
