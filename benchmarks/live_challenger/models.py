@@ -12,7 +12,9 @@ its own salts, so a period's weights' root is never the prover's choice.
     ``{role: {"checkpoint_sha512": hex}}``), which credit holds each open's ``model`` to;
   - the descriptor's linears are exactly the model's decoder linears, ``qkv_proj``, ``o_proj``, ``gate_up_proj`` and
     ``down_proj`` of each of config.json's ``num_hidden_layers`` in turn (`DECODER`, `check_linears`), so the root it
-    signs is the function the model computes.
+    signs is the function the model computes; or, for a role whose manifest entry declares ``linears`` (the torch loop's
+    MLP, ``model.layers.0.mlp.up_proj`` then ``model.layers.1.mlp.down_proj``), exactly those in that order
+    (`declared_linears`). Only the pinned tree declares them, never the prover.
   It then draws a fresh 32-byte salt key; commits each K's ``<prefix>b/<K>`` from the int8 codes and s_w of the pinned
   shards alone, a tensor in two shards refused (`Checkpoint`), vLLM's fused ``qkv_proj`` and ``gate_up_proj`` their
   parts' rows in turn (`FUSED`, `weights.weights_roots`); keeps the key (`key_path`, auditor's, 0600); and appends one
@@ -158,7 +160,8 @@ class Checkpoint:
 
 
 def parts(name: str) -> list[str]:
-    """The checkpoint modules a window linear `name` (vLLM's module name) reads, in row order."""
+    """The checkpoint modules a window linear `name` (vLLM's module name) reads, in row order: a fused one's parts
+    (`FUSED`), any other module itself alone."""
     head, _, last = name.rpartition(".")
     return [f"{head}.{p}" for p in FUSED[last]] if last in FUSED else [name]
 
@@ -184,18 +187,37 @@ def layout(descriptor: bytes, circuit: str) -> tuple[str, list[tuple[str, int, i
     return CR.shape_of(descriptor)["prefix"], [(str(a), int(k), int(n)) for a, k, n in lay["linears"]]
 
 
-def check_linears(linears: list[tuple[str, int, int]], config: dict) -> None:
-    """Refused unless the window's linears are `DECODER` of each of the model's ``num_hidden_layers`` in turn, no other."""
-    layers = config.get("num_hidden_layers")
-    if type(layers) is not int or layers < 1:
-        raise Refused("the checkpoint's config.json names no num_hidden_layers")
-    want = [f"model.layers.{i}.{m}" for i in range(layers) for m in DECODER]
+def declared_linears(entry: dict) -> list[str] | None:
+    """The role's own ordered linears, its pinned `MANIFEST` entry's ``linears`` (module names, each read by `parts`), or
+    None when the entry has none and the role's linears are `DECODER`'s; Refused when the field is not a nonempty list of
+    distinct names. Only the pinned tree's entry declares them, never the prover, the request or the checkpoint
+    directory: the gate is auditor-trusted, and what it signs is the pinned role's function, not one the prover picks."""
+    if "linears" not in entry:
+        return None
+    names = entry["linears"]
+    if (not isinstance(names, list) or not names or not all(isinstance(n, str) and n for n in names)
+            or len(set(names)) != len(names)):
+        raise Refused(f"{MANIFEST}'s {entry.get('role')} declares linears that are not a nonempty list of distinct module "
+                      "names: fix the role's entry in the pinned tree")
+    return names
+
+
+def check_linears(linears: list[tuple[str, int, int]], config: dict | None, declared: list[str] | None = None) -> None:
+    """Refused unless the window's linears are the role's `declared` ones (`declared_linears`) in that order, or, when it
+    declares none, `DECODER` of each of `config`'s ``num_hidden_layers`` in turn; no other."""
     got = [name for name, _k, _n in linears]
+    if declared is not None:
+        want, what = declared, "the role's declared linears"
+    else:
+        layers = (config or {}).get("num_hidden_layers")
+        if type(layers) is not int or layers < 1:
+            raise Refused("the checkpoint's config.json names no num_hidden_layers")
+        want = [f"model.layers.{i}.{m}" for i in range(layers) for m in DECODER]
+        what = f"the model's {layers} decoder layers' {', '.join(DECODER)}"
     if got != want:
         at = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
-        raise Refused(f"the descriptor's linears are not the model's {layers} decoder layers' {', '.join(DECODER)} in "
-                      f"turn: linear {at} is {got[at] if at < len(got) else 'missing'}, not "
-                      f"{want[at] if at < len(want) else 'past the last'}")
+        raise Refused(f"the descriptor's linears are not {what} in turn: linear {at} is "
+                      f"{got[at] if at < len(got) else 'missing'}, not {want[at] if at < len(want) else 'past the last'}")
 
 
 def register(tree: Path, role: str, circuit: str, descriptor: bytes, checkpoint: Path, key: bytes, *, pinned: str,
@@ -211,11 +233,14 @@ def register(tree: Path, role: str, circuit: str, descriptor: bytes, checkpoint:
     digest = checkpoint_sha512(files)
     if digest != pin:
         raise Refused(f"the checkpoint's SHA-512 {digest[:16]}... is not {PINS}'s pin {pin[:16]}... of {role}")
-    try:
-        config = json.loads((checkpoint / "config.json").read_text())
-    except (OSError, ValueError):
-        raise Refused("the checkpoint has no readable config.json") from None
-    check_linears(linears, config)
+    declared = declared_linears(entry)
+    config = None
+    if declared is None:
+        try:
+            config = json.loads((checkpoint / "config.json").read_text())
+        except (OSError, ValueError):
+            raise Refused("the checkpoint has no readable config.json") from None
+    check_linears(linears, config, declared)
     ckpt = Checkpoint(checkpoint, names)
     shapes = [(n, k) for _name, k, n in linears]
     try:
