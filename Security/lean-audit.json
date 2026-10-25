@@ -8489,6 +8489,12 @@
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
+  "NetTiming.SecurityProofs.HorizonWrongUnitsLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe"],
+   "assumptions": [],
+   "type_hash": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f"
+  },
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted"],
@@ -11483,7 +11489,8 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes SampledLeakAccepted's statement (NetTiming.sampledLeak_reg at SampledAuditAccepted, with Claims.Sampling.KS at each deployment) with EncardWardenViewsLe's, over the warden's code (wardenCode) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a period of windows, with the wardens seeing what the certifier observed (WardenCertifierEgress): it bounds AccSeqsSampled at each window's registration and the views of the wardens' code, not runs of the network check's code or of a compiled warden program, and it counts the secrets whose every window meets its good event (WindowGood, which holds that the audit's trace carries the certifier's observations, Carries, as RAcc's conclusion does), with each window's failure bounded on its own and no union over the period's live coins yet.",
    "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
-   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts."
+   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
+   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16467,6 +16474,7 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
+    "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -20801,6 +20809,13 @@
     "NetTiming.SecurityProofs.EncardChargedLe",
     "NetTiming.SecurityProofs.EncardChargedLeCounted"
    ]
+  },
+  "Definitions.NetworkCertifier.Guarantees.Horizon": {
+   "digest": "723d0a0a236028b921596dfdf2107229b3949843f4b0f74ea68fa8b9676a0546",
+   "definitions": {
+    "NetTiming.Guarantees.HorizonWrongUnitsLe": "714a21e19dcc8f20d883e5801e93168f3e81afc079674707adc46fc795b29482"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
    "digest": "b84efcd4873ffd09b4997383b6cb2c69c7698bcc1b117c2cf3e8acf420c8ca92",
