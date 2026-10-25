@@ -12,6 +12,8 @@ Given the two `Xor` gates' values, `xorSum a v` and `xorSum b v`, the `And` gate
 * `Prog.runIn_and_row'`: the same in a set of gates `u` (`Prog.runIn`, what `Prog.Correct` reads), with each of the two
   wires either a gate of `u` before the `And` gate, at its computed value, or outside `u`, at its read value.
 * `Prog.runIn_and_row`: the lowering's layout, the two `Xor` gates at `o` and `o + 1` in `u` and the `And` at `o + 2`.
+* `Prog.runIn_and_row_seen`: the two sums as what `u` sees at any earlier wires `p` and `q` (computed in `u`, or read
+  from outside it), the form an XOR chain's last wire gives (`XorChain.seen_out`).
 * `foldl_xor_map`: the claims `Xor` gate's fold, `(l.map v).foldl Bool.xor false`, is `xorSum l v`; the `_foldl`
   variants take the two sums in that form.
 -/
@@ -64,6 +66,22 @@ theorem Prog.runIn_and_row {N : ℕ} (Cp : Prog) (ref : ℕ → Option Bool) (u 
     (hp : Cp.runIn ref u o = some (xorSum a v)) (hq : Cp.runIn ref u (o + 1) = some (xorSum b v)) :
     Cp.runIn ref u (o + 2) = some ((Op.row a b).apply v) :=
   Prog.runIn_and_row' Cp ref u a b v hg (.inl ⟨h0, by omega, hp⟩) (.inl ⟨h1, by omega, hq⟩)
+
+/-- **A lowered row's `And`, reading what `u` sees**: gate `g` is `And [p, q]` with `p, q < g`, and on each of `p` and
+`q` the set `u` sees its sum (its value computed in `u` for a gate of `u`, its read value otherwise; the XOR chain's
+`XorChain.seen`); then `g`'s value in `u` is the row's. -/
+theorem Prog.runIn_and_row_seen {N : ℕ} (Cp : Prog) (ref : ℕ → Option Bool) (u : List ℕ) (a b : List (Fin N))
+    (v : Fin N → Bool) {p q g : ℕ} (hg : Cp.gates[g]? = some (.and [p, q])) (hpg : p < g) (hqg : q < g)
+    (hp : (if p ∈ u then Cp.runIn ref u p else Cp.read ref p) = some (xorSum a v))
+    (hq : (if q ∈ u then Cp.runIn ref u q else Cp.read ref q) = some (xorSum b v)) :
+    Cp.runIn ref u g = some ((Op.row a b).apply v) := by
+  refine Prog.runIn_and_row' Cp ref u a b v hg ?_ ?_
+  · by_cases h : p ∈ u
+    · exact .inl ⟨h, hpg, by simpa only [h, ↓reduceIte] using hp⟩
+    · exact .inr ⟨h, by simpa only [h, ↓reduceIte] using hp⟩
+  · by_cases h : q ∈ u
+    · exact .inl ⟨h, hqg, by simpa only [h, ↓reduceIte] using hq⟩
+    · exact .inr ⟨h, by simpa only [h, ↓reduceIte] using hq⟩
 
 /-- `BGate.val_and_row`, the two sums as the claims `Xor` gate's fold. -/
 theorem BGate.val_and_row_foldl {N : ℕ} (a b : List (Fin N)) (v : Fin N → Bool) {rd : ℕ → Option Bool}
