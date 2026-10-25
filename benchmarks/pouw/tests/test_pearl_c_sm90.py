@@ -107,7 +107,7 @@ def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
     grids = []
     dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, **k: grids.append(grid))
     pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1}, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d")}, dev=dev, k=4096,
-                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0), m_real=16, a_rows={})
+                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0), m_real=16)
     for beside, n, grid in ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None)):
         pipe.beside = beside
         RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
@@ -121,7 +121,7 @@ def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
     dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, i, **k: lives.append(i[4]))
     pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1, "gemm_words_d": 1}, dev=dev, k=4096, beside=0, m_real=16,
                            boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d"), ("at", "fbT32"): RUN.gemm_tile("gemm_words_d")},
-                           b=dict.fromkeys(("at", "bt", "fbT32", "c", "af", "tma"), 0), a_rows={})
+                           b=dict.fromkeys(("at", "bt", "fbT32", "c", "af", "tma"), 0))
     RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
     RUN.Pipeline.gemm(pipe, "gemm_words_d", "at", "fbT32", 64, 32, out=("af",))
     RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096, live=40)
@@ -131,32 +131,6 @@ def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
     monkeypatch.setattr(RUN, "LIVE", False)
     RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
     assert lives == [16, 0, 40, 0, 0]
-
-
-def test_the_chains_a_maps_end_at_the_rows_its_gemms_store(monkeypatch):
-    """At 64 x 64 under LIVE the chain's A and P_A maps (MAPS slot 0) cover m_real rows, the rows its GEMMs store, so TMA
-    fills the rest of a box with zeros rather than reading filler rows; the other maps, other tiles, no filler rows,
-    PEARLC_A_ROWS=0 and PEARLC_LIVE=0 cover m; and a GEMM that would store a row past its A map's is refused."""
-    maps = []
-    dev = SimpleNamespace(tmap=lambda ptr, depth, rows, box: maps.append((ptr, rows)) or bytes(RUN.TMAP_BYTES),
-                          ck=lambda *a: None, sms=132, launch=lambda *a, **k: None)
-    b = {x: j + 1 for j, x in enumerate(("at", "bt", "fbT32", "pa_t", "pb_t", "c", "tma"))}
-    pipe = SimpleNamespace(dev=dev, b=b, m=64, n=4096, k=4096, bm=RUN.BM_D, bn=RUN.BM_D, m_real=16, boxes={}, a_rows={},
-                           GEMM_SMEM={"gemm_pearlc_d": 1}, beside=0)
-    pipe.words_rows = lambda rows, small=False: RUN.Pipeline.words_rows(pipe, rows, small)
-    pipe.chain_rows = lambda: RUN.Pipeline.chain_rows(pipe)
-    RUN.Pipeline.encode_maps(pipe)
-    assert maps == [(b["at"], 16), (b["bt"], 4096), (b["pa_t"], 16), (b["pb_t"], 4096), (b["at"], 64), (b["fbT32"], RUN.WORDS_N)]
-    assert pipe.a_rows == {("at", "bt"): 16, ("at", "fbT32"): 64}
-    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
-    with pytest.raises(ValueError, match="stores 40 rows, and \\(at, bt\\)'s A map covers 16"):
-        RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096, live=40)
-    for change in ({"m_real": 64}, {"bm": RUN.BM, "bn": RUN.BN_N64}):
-        assert RUN.Pipeline.chain_rows(SimpleNamespace(**{**vars(pipe), **change})) == 64
-    for flag in ("A_ROWS", "LIVE"):
-        with monkeypatch.context() as mp:
-            mp.setattr(RUN, flag, False)
-            assert RUN.Pipeline.chain_rows(pipe) == 64
 
 
 def test_operands_are_in_natural_order():
@@ -652,7 +626,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert allocs.get(ev[end], 0) >= ev["bytes"], ev
     elif ev["op"] == "tmap":
         assert room(allocs, ev["ptr"]) >= ev["depth"] * ev["rows"] and ev["box"][0] == 128 and ev["box"][1] in (32, 64, 128), ev
-        assert ev["rows"] > 0, ev
+        assert ev["rows"] % ev["box"][1] == 0, ev
         if maps is not None:
             maps.add((ev["ptr"], ev["depth"], ev["rows"], ev["box"][1]))
     elif ev["op"] == "launch":
@@ -675,11 +649,9 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             wins = i[2] // RUN.WINDOW if name.startswith("gemm_words_win") else 1
             assert g[0] <= min(132, (i[0] // tm) * (i[1] // bn) * wins) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
             if maps is not None:
-                # A's and P_A's maps cover the rows the launch stores (i4, 0 all M), at most M; TMA zero-fills a box past them
                 M, N, K = i[:3]
-                a_map = lambda ptr, depth: any((i[4] or M) <= r <= M for q, d, r, bx in maps if (q, d, bx) == (ptr, depth, tm))
-                assert a_map(p[0], K) and (p[1], K, N, bn) in maps, name
-                assert not p[5] or a_map(p[5], 128) and (p[6], 128, N, bn) in maps, name
+                assert {(p[0], K, M, tm), (p[1], K, N, bn)} <= maps, name
+                assert not p[5] or {(p[5], 128, M, tm), (p[6], 128, N, bn)} <= maps, name
         if name == "s512_rows":
             assert g[0] == i[0] and i[1] % 256 == 0 and i[1] <= 256 * RUN.RS_MAX_SEGS
         if name == "s512_tile_leaves":

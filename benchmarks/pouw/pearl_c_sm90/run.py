@@ -29,7 +29,6 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
-                                 PEARLC_A_ROWS=0 for their A and P_A maps over all m rows,
                                  PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
                                  PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_PDL=0 for PDL_KERNELS
                                  launched plainly)
@@ -58,8 +57,6 @@ VARIANT_G = {"h100": 4}
 #: the 64 x 64 GEMMs store the real rows alone (i4 = m_real: a filler row's C~, U and y are left as the buffer holds them);
 #: PEARLC_LIVE=0 stores all m rows, the same real rows
 LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
-#: under LIVE, the chain's A and P_A maps end at those rows (Pipeline.chain_rows); PEARLC_A_ROWS=0 maps all m, the same bytes
-A_ROWS = os.environ.get("PEARLC_A_ROWS", "1") != "0"
 #: a promotion window's depth (pearl_c_sm90.cu's BK)
 WINDOW = 128
 #: with 64-row tiles and an af_win buffer, A'F_B is a CTA a window (gemm_words_win_d), which pa_w adds up in gemm_words_d's
@@ -280,8 +277,7 @@ class Dev:
 
     def tmap(self, ptr: int, depth: int, rows: int, box_rows: int = BM) -> bytes:
         """A CUtensorMap over a row-major (rows x depth) byte matrix as pearl_c_sm90.cu's GEMMs load it: UINT8, rank 2,
-        boxes of box_rows x 128 bytes, SWIZZLE_128B, L2 promotion 128B, a box's rows past `rows` zeros (no NaN fill), read
-        from nowhere."""
+        boxes of box_rows x 128 bytes, SWIZZLE_128B, L2 promotion 128B, no fill."""
         f = self.cu.cuTensorMapEncodeTiled
         f.argtypes, f.restype = [vp, i32, u, vp, P(u64), P(u64), P(u), P(u), i32, i32, i32, i32], i32
         raw = C.create_string_buffer(TMAP_BYTES + 64)
@@ -544,7 +540,6 @@ class Pipeline:
             dev.sync()
             dev.rs_heads = True
         self.boxes: dict[tuple[str, str], tuple[int, int]] = {}
-        self.a_rows: dict[tuple[str, str], int] = {}
         self.encode_maps()
 
     def words_rows(self, rows: int, small: bool = False) -> int:
@@ -564,17 +559,11 @@ class Pipeline:
         for (x, y), slot in MAPS.items():
             if x in b and y in b:
                 bx, by = box[(x, y)]
-                ra = self.chain_rows() if slot == 0 else rows[x]
-                ab = d.tmap(b[x], k, ra, bx) + d.tmap(b[y], k, rows[y], by)
+                ab = d.tmap(b[x], k, rows[x], bx) + d.tmap(b[y], k, rows[y], by)
                 peel = slot == 0 and "pa_t" in b and "pb_t" in b
-                tail = d.tmap(b["pa_t"], PEEL_ROW, ra, bx) + d.tmap(b["pb_t"], PEEL_ROW, n, by) if peel else ab
+                tail = d.tmap(b["pa_t"], PEEL_ROW, m, bx) + d.tmap(b["pb_t"], PEEL_ROW, n, by) if peel else ab
                 d.ck("cuMemcpyHtoD_v2", u64(b["tma"] + MAP_SET * slot), C.c_char_p(ab + tail), MAP_SET)
-                self.boxes[(x, y)], self.a_rows[(x, y)] = (bx, by), ra
-
-    def chain_rows(self) -> int:
-        """The rows of A and P_A that the chain's maps (MAPS slot 0) cover: m_real where its 64 x 64 GEMMs store those alone
-        (LIVE), so TMA fills the rest of a box with zeros rather than reading the filler rows; else m."""
-        return self.m_real if LIVE and A_ROWS and (self.bm, self.bn) == (BM_D, BM_D) and self.m_real < self.m else self.m
+                self.boxes[(x, y)] = (bx, by)
 
     @staticmethod
     def sizes(m: int, n: int, k: int, m_real: int | None = None) -> dict[str, int]:
@@ -751,8 +740,6 @@ class Pipeline:
         tiles = (M // tm) * (N // bn) * (self.k // WINDOW if name.startswith("gemm_words_win") else 1)
         if live is None:
             live = self.m_real if LIVE and (tm, bn) == (BM_D, BM_D) and self.m_real < M else 0
-        if (live or M) > self.a_rows.get((a, b), M):
-            raise ValueError(f"{name} stores {live or M} rows, and ({a}, {b})'s A map covers {self.a_rows[(a, b)]}")
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, self.b["tma"] + MAP_SET * MAPS[(a, b)], key]
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
@@ -1045,11 +1032,11 @@ LIVE_ROWS, LIVE_FILL = 40, 0xAB
 
 def check_live(dev: Dev, pipe: Pipeline, want) -> dict:
     """The A side's GEMMs of GEMM_RERUNS (all but bf, over B's rows, and af under `words_win`, whose windows and pa_w store
-    every row) at 64 x 64 on LIVE_ROWS real rows (i4, and m_real, so the chain's A and P_A maps end there and TMA fills the
-    rest of their boxes): each output's real rows against the fixture's, and its filler rows as LIVE_FILL's memset left them."""
+    every row) at 64 x 64 on LIVE_ROWS real rows (i4): each output's real rows against the fixture's, and its filler rows as
+    LIVE_FILL's memset left them."""
     res = {}
     p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, bm=BM_D,
-                  bn=BM_D, weight=pipe.weight, m_real=LIVE_ROWS)
+                  bn=BM_D, weight=pipe.weight)
     steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
     real = p_.gemm
     p_.gemm = lambda *a, **kw: real(*a, **{**kw, "live": LIVE_ROWS})
