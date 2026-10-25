@@ -40,7 +40,7 @@ def verifier_json(r: M.Run) -> dict:
         "k": 0, "accepted": s.outcome == "accepted",
         "failure": None if v is None else {"t": v.window, "failure": v.failure, "at": None if v.at is None else list(v.at)},
         "allowance_ns": r.params.deadline_ns, "samples": r.params.samples, "window_ns": r.params.window_ns,
-        "windows": r.params.windows, "registration": reg.digest.hex(),
+        "windows": r.params.windows, "lifetime": r.params.lifetime, "registration": reg.digest.hex(),
         "pace": None if pace is None else {"k": pace.k, "t_ms": pace.window_ns / 1e6},
         "draws": {str(t): [list(d) for d in w.draws] for t, w in enumerate(s.windows) if w.draws},
         "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
@@ -238,7 +238,7 @@ def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     assert case["params"] == {
         "deadline_ns": s["allowance_ns"], "deferred": False, "lifetime": s["record"]["public"]["lifetime"],
         "min_passes": 1, "pace": None, "samples": s["samples"], "window_ns": s["window_ns"], "windows": s["windows"]}
-    assert s["record"]["public"]["lifetime"] == audit.LIFETIME
+    assert s["record"]["public"]["lifetime"] == s["lifetime"] == audit.lifetime_windows(s["window_ns"])
     receives = [e for e in case["events"] if e["kind"] == "receive"]
     assert [e["now"] for e in receives] == [x for w in s["windows_seen"] for x in w["arrivals_ns"]]
     assert [e["step"] for e in receives] == [x for w in s["record"]["profile"]["windows"] for x in w["steps"]]

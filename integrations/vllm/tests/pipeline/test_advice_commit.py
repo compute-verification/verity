@@ -18,7 +18,7 @@ from verity_vllm.pipeline import advice_windows as AW
 
 RUN_A = Path(__file__).parent / "fixtures" / "advice_run_a"
 RUN_A_BITS = 71801
-C = ADV.Compiler("test-compiler", "ab" * 64)
+C = ADV.registered_compiler("test-compiler", "ab" * 64)
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +51,9 @@ def test_the_root_is_the_advice_commitments_reference_on_run_a(run_a):
 def test_the_registration_carries_the_root_and_bit_count_and_not_the_advice(run_a):
     reg, data = run_a["registration"], run_a["data"]
     assert reg["binding"] == AW.binding(C, reg["binding"]["advice"]["root"], RUN_A_BITS)
-    assert set(reg) == {"schema", "scheme", "binding", "rows", "row_bits", "T", "bits_by_window"}
+    assert set(reg) == {"schema", "scheme", "binding", "rows", "row_bits", "T", "bits_by_window", "compiler"}
+    assert reg["compiler"] == {"name": AW.CAPPED, "digest": C.digest, "cap_bits": ADV.CAP_BITS,
+                               "inner": {"name": "test-compiler", "digest": "ab" * 64}}
     assert sum(reg["bits_by_window"].values()) == RUN_A_BITS
     assert reg["bits_by_window"] == {str(w): n for w, n in I1.bits_by_window(I1.decode(data), reg["T"]).items()}
     text = run_a["registration_text"]
@@ -76,6 +78,14 @@ def test_fresh_salts_or_another_compiler_give_another_root(run_a):
     assert AW.commit_advice(ADV.Compiler("test-compiler", "cd" * 64), data, salts).root.hex() != root
 
 
+def test_advice_over_the_registered_cap_is_refused(run_a):
+    a = I1.decode(run_a["data"])
+    with pytest.raises(ValueError, match="over the registered cap"):
+        ADV.commit(ADV.registered_compiler("test-compiler", "ab" * 64, cap_bits=RUN_A_BITS - 1), a)
+    reg, _opening = ADV.commit(ADV.registered_compiler("test-compiler", "ab" * 64, cap_bits=8 * len(run_a["data"])), a)
+    assert reg["compiler"]["cap_bits"] == 8 * len(run_a["data"])
+
+
 def test_the_default_compiler_digest_is_64_bytes():
     c = ADV.registered_compiler()
-    assert c.name == ADV.COMPILER and len(bytes.fromhex(c.digest)) == 64
+    assert c.inner.name == ADV.COMPILER and len(bytes.fromhex(c.digest)) == 64 and len(bytes.fromhex(c.inner.digest)) == 64
