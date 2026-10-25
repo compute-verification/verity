@@ -48,8 +48,9 @@ names it.  The rows commit u16 words: a template's every port is 16-bit elements
 Boolean element's bit j is bit j of its word, `boolean.elements`), or, for a row or coordinate template, elements of ``PACKED`` widths with each
 port whole u16 words (``Template.packed``): a port's words are then its elements' little-endian bytes, two to a word, which are
 the port's bits in M0's row order (an 8-bit element is half a word, a 32-bit one two words, low half first); refused otherwise.
-A committed member of a wider signed integer dtype than its output port (``BY_VALUE``: the sampler's i64 token under
-`TokenSelect`'s i32) is read by value, as the replay links tokens, each element below 2^bits or refused.
+A committed member of a wider signed integer dtype than its port (``BY_VALUE``: the sampler's i64 token under `TokenSelect`'s
+i32 output, and under the vocabulary shard's i32 ``tok`` input) is read by value, as the replay links tokens, each element below
+2^bits or refused.
 Each member's ports, by the family of the template's word (``LAYOUTS``):
 
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
@@ -470,7 +471,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
         if tp.packed:
-            ops = [_packed(_slices(pi, store, weights, rid, arrive, g), b, f"row {r['i']} argument {k}")
+            ops = [_packed(_slices(pi, store, weights, rid, arrive, g, bits=b), b, f"row {r['i']} argument {k}")
                    for k, (g, b) in enumerate(zip(r["args"], tp.packed))]
         else:
             ops = [_operand(pi, store, weights, rid, arrive, g) for g in r["args"]]
@@ -682,9 +683,12 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
     return np.concatenate(_slices(pi, store, weights, rid, arrive, group))
 
 
-def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> list[np.ndarray]:
+def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, *,
+            bits: int | None = None) -> list[np.ndarray]:
     """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
-    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression."""
+    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
+    element width ``bits``, a committed member of a wider signed integer dtype (``BY_VALUE``: the sampler's i64 token under the
+    vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`)."""
     words = []
     for sl in runs_from_file_items(group):
         kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
@@ -692,12 +696,15 @@ def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group
             m = pi.member_at(a, lo, hi)
             if m is None:
                 raise LookupError(f"arg slice {list(sl)} is not inside one committed member")
-            pd, member, mlo, mhi, _dt = m
+            pd, member, mlo, mhi, dt = m
             width = next(int(mm[1]) for mm in pd["members"] if mm[0] == member)
             w, why = store.words(rid, arrive + pd["step"], pd["op_path"], member, pd["row"] * width + mlo, pd["row"] * width + mhi)
             if w is None:
                 raise LookupError(why)
-            words.append(np.asarray(w).reshape(-1))
+            w = np.asarray(w).reshape(-1)
+            if bits is not None and dt in BY_VALUE and w.dtype.itemsize * 8 > bits:
+                w = _by_value(w, bits, f"member {member} of {pd['op_path']}")
+            words.append(w)
         elif kind == "p" and (pi.pnames[a] if a < len(pi.pnames) else None) == "weights":
             ws = pi.weight_slice(lo, hi)
             if ws is None:
