@@ -620,25 +620,6 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #if H1U_JXS && !H1U_JX
 #error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
 #endif
-// H1U_JSM = 1 (with JX, not JN2): h1umj's and h1umj_sm's warps hold WarpSmemJ, WarpSmem without the row blocks and
-// coins JX's unit never reads (7808 bytes a warp against 10240), so shared memory admits 12 warps an SM
-#ifndef H1U_JSM
-#define H1U_JSM 0
-#endif
-#if H1U_JSM && (!H1U_JX || H1U_JN2)
-#error "H1U_JSM drops rowbits, which only JX without JN2 leaves unread"
-#endif
-struct alignas(16) WarpSmemJ {
-  NoiseMid nm;
-  u32 colbits[32][17];
-  u32 utab[32][9];
-  u32 ring[32][33];
-};
-#if H1U_JSM
-using JSmem = WarpSmemJ;
-#else
-using JSmem = WarpSmem;
-#endif
 // H1U_JCS = G (2 or 4; with JX and H1U_JCTA, not JN2 or H1U_JPROBE & 1): a column block's blocks are its seed_c
 // stream's, the same in every row block's unit, so h1umj_sm's CTA takes its WARPS units as a tile of r live row blocks
 // by WARPS / r column blocks (r = G, else 2, else 1: the most that divides the live row blocks), the live tiles first,
@@ -662,20 +643,22 @@ struct alignas(16) WarpSmemJC {
   u32 utab[32][9];
   u32 ring[32][33];
 };
-// immediate barrier ids and counts: a register id has ptxas reserve all 16 of the CTA's barriers
+// immediate barrier ids and counts: a register id has ptxas reserve all 16 of the CTA's barriers. barrier.sync, not
+// bar.sync (barrier.sync.aligned, undefined for a warp that reaches it diverged): a warp can come to it straight from
+// cs_hash's per-lane store
 static_assert(WARPS <= 8, "js_sync names barriers 1 .. WARPS / 2");
 __device__ __forceinline__ void js_sync(const JShare& js) {
   if (js.lr == 0) {
     __syncwarp();
   } else if (js.lr == 2) {
-    if (js.bar == 1) asm volatile("bar.sync 1, 128;" ::: "memory");
-    else asm volatile("bar.sync 2, 128;" ::: "memory");
+    if (js.bar == 1) asm volatile("barrier.sync 1, 128;" ::: "memory");
+    else asm volatile("barrier.sync 2, 128;" ::: "memory");
   } else {
     switch (js.bar) {
-      case 1: asm volatile("bar.sync 1, 64;" ::: "memory"); break;
-      case 2: asm volatile("bar.sync 2, 64;" ::: "memory"); break;
-      case 3: asm volatile("bar.sync 3, 64;" ::: "memory"); break;
-      default: asm volatile("bar.sync 4, 64;" ::: "memory"); break;
+      case 1: asm volatile("barrier.sync 1, 64;" ::: "memory"); break;
+      case 2: asm volatile("barrier.sync 2, 64;" ::: "memory"); break;
+      case 3: asm volatile("barrier.sync 3, 64;" ::: "memory"); break;
+      default: asm volatile("barrier.sync 4, 64;" ::: "memory"); break;
     }
   }
 }
@@ -1405,14 +1388,21 @@ constexpr u32 SMC_SLOTS = 1024;
 constexpr u32 SMQ_DEN_MAX = 256;
 
 // whether this CTA takes units: on a kept SM (smid % den < q), and under CAP only the first cap CTAs to reach it
-// (next[1 + smid]); off them only the grid's last CTA while no unit has been taken
-template <bool CAP>
+// (next[1 + smid]); off them only the grid's last CTA while no unit has been taken. ONE: thread 0 decides for the CTA,
+// for one whose warps take units together: the last CTA's warps reading next apart could see a unit taken between their
+// reads, and those that stayed would claim units for those that had left
+template <bool CAP, bool ONE = false>
 __device__ __forceinline__ bool sm_keep(u32 smid, u32 q, u32 den, u32 cap, u32* next) {
   if constexpr (CAP) {
     __shared__ u32 keep;
     if (threadIdx.x == 0)
       keep = (blockIdx.x + 1 == gridDim.x && !*(volatile u32*)next) ||
              (smid % den < q && atomicAdd(next + 1 + smid % SMC_SLOTS, 1u) < cap);
+    __syncthreads();
+    return keep;
+  } else if constexpr (ONE) {
+    __shared__ u32 keep;
+    if (threadIdx.x == 0) keep = !(smid % den >= q && (blockIdx.x + 1 < gridDim.x || *(volatile u32*)next));
     __syncthreads();
     return keep;
   } else {
@@ -2786,7 +2776,7 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
 
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                     const uint8_t* __restrict__ live) {
-  __shared__ JSmem smem[WARPS];
+  __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5;
   const u32 gu = blockIdx.x * WARPS + wp;
   if (gu >= calls[ncalls].u0) return;
@@ -2807,7 +2797,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
 
 // h1umj's unit gu, for h1umj_sm (h1umj keeps its own copy, as h1um does of h1um_one)
 __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
-                                          const uint8_t* __restrict__ live, u32 gu, JSmem& S) {
+                                          const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
   u32 lo = 0, hi = ncalls;
   while (hi - lo > 1) {
     const u32 mid = (lo + hi) >> 1;
@@ -2887,10 +2877,10 @@ template <bool CAP>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                        const uint8_t* __restrict__ live, u32 q, u32 den,
                                                        u32* __restrict__ next, u32 cap) {
+#if H1U_JCS
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
-#if H1U_JCS
+  if (!sm_keep<CAP, true>(smid, q, den, cap, next)) return;
   __shared__ WarpSmemJC smem[WARPS];
   __shared__ u32 jcb[2 * WARPS][32][17];
   __shared__ u32 claim;
@@ -2918,7 +2908,10 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
     __syncwarp();
   }
 #else
-  __shared__ JSmem smem[WARPS];
+  u32 smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
+  __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   if constexpr (H1U_JCTA) {
     __shared__ u32 claim;
