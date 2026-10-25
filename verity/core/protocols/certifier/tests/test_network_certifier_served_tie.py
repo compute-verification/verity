@@ -22,7 +22,10 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, bit_row, row_leaf, sha512_row_v2_digest
 
-FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
+FIXTURES = Path(__file__).parent / "fixtures"
+FIXTURE = FIXTURES / "compile_slice_smallkv.json"
+BOOK = next(s for s in json.loads((FIXTURES / "arith_encode_vectors.json").read_text())["streams"]
+            if s["source"].startswith("async-light"))["decisions"]["book"]
 COUNT, POS = 1 << ST.FLAGS.index("count"), 1 << ST.FLAGS.index("pos")
 
 
@@ -39,7 +42,7 @@ def _tokens(step):
 def x():
     fx = json.loads(FIXTURE.read_text())
     S = SimpleNamespace(**CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"],
-                                     K=fx["K"], SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
+                                     K=fx["K"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
     st = ST.statics(S)
     sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
     rows = [tuple(map(tuple, r)) for r in fx["rows"]]
@@ -59,12 +62,13 @@ def test_the_honest_window_is_accepted(x):
 
 def test_six_passes_are_refused_against_the_batch_the_server_ran(x):
     """REDTEAM phase 10 finding 2 through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
-    consistently: their row is the registered one, so the slice accepts them at 0x1F with a 5-bit code. The batch the
-    server ran admitted user-1 at step 6, 29 prefill tokens beside user-0's decode, and those positions are committed;
-    the cheap rows end step 6 at 1 token of its 30 and leave 29 uncovered, so the tie refuses on both bits."""
+    consistently: their row is the registered one, so the slice accepts them, under the registered book (the compile
+    slice test's), at a charge below the honest run's. The batch the server ran admitted user-1 at step 6, 29 prefill
+    tokens beside user-0's decode, and those positions are committed; the cheap rows end step 6 at 1 token of its 30 and
+    leave 29 uncovered, so the tie refuses on both bits."""
     S, sl = x.S, x.sl
-    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps, sl.tokens))
-    assert cheap.verdict == CS.ACCEPT and cheap.length == 5 and list(cheap.steps) != x.rows
+    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps, sl.tokens), BOOK)
+    assert cheap.verdict == CS.ACCEPT and cheap.length < CS.case(S, sl, BOOK).length and list(cheap.steps) != x.rows
     served = SR.register(S, [list(cheap.steps)], bytes(64))
     assert served.registration.rows[0] == SR._row(cheap.rows["srv"])[0]
     assert [u for u, (a, b) in enumerate(zip(cheap.steps, x.rows)) if a != b] == [6]
