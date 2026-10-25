@@ -20,7 +20,7 @@ verity_vllm/
   engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
-  correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
+  correspondence/     runtime corresp.   runtime.py reader_for_*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
   protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
@@ -76,7 +76,7 @@ required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebu
 and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
-`reader_for_query.py` / `reader_for_acquire.py`; and *occurrence resolution*: `resolve.py`, `resolve_decomp.py`.  Never:
+`reader_for_query.py` / `reader_for_acquire.py`.  Never:
 verification policy, commitment positions, requiredness, verdicts.
 
 **`observe/`** implements *value observation* (the Match-side capture): `observer.py` (the TorchDispatchMode), `events.py` /
@@ -109,7 +109,7 @@ Never: decide what is required; never a model-name list.
 runtime metadata in the identity tuple.
 
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,
-`batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
+`batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`, occurrence resolution `resolve.py` / `resolve_decomp.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
 `stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
 `verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
 `fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;

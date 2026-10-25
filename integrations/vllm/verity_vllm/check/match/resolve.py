@@ -1,4 +1,4 @@
-"""verity_vllm.correspondence.resolve -- occurrence resolution: a runtime occurrence -> the Program value it is an observation of (v2 Phase 4b).
+"""verity_vllm.check.match.resolve -- occurrence resolution: a runtime occurrence -> the Program value it is an observation of (v2 Phase 4b).
 
     resolve(program, correspondence, occurrence, live, observation=None) -> ValueRef
 
@@ -18,7 +18,7 @@ An occurrence no channel attributes is resolved to no request with the refusal N
 The request-relative STEP is X-09's segmentation (a request's sampling events; a chunked prefill's engine steps are all step 0 and each
 chunk's discarded sample is not a step), the ORDINAL is the value's index among the request's values at (step, site, slot) in emission
 order, and the CALL is the Program call the correspondence puts at that (step, site, slot, ordinal) -- `<consumer>/in` (a promoted interior
-value observed at its consumer's input, F-r19-int-20) resolves through `arg_slot`.
+value observed at its consumer's input) resolves through `arg_slot`.
 
 `validate(observation, resolved, ...)` compares the resolution with the observation's HINT and the collector's own statements and yields
 named faults: `unattributable`, `ambiguous-request`, `reads-several-requests`, `request-mismatch` (meta vs rows channel), `layer-mismatch`,
@@ -185,7 +185,7 @@ class DescriptorCorrespondence:
 
     def arg_slot(self, call: Any, i: int) -> str | None:
         """The slot at which the call's i-th argument is observed: the consumer-side acquisition `<consumer>/in` (a promoted interior
-        value, F-r19-int-20: the collector observes it at the consumer's input)."""
+        value: the collector observes it at the consumer's input)."""
         mod = self.owning_module(call)
         return f"{mod}/in" if mod else None
 

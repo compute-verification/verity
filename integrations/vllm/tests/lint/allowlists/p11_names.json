@@ -247,8 +247,6 @@
     {"file": "verity_vllm/observe/chunks.py", "kind": "doc-board-id", "symbol": "attribute", "detail": "F-rN"},
     {"file": "verity_vllm/observe/chunks.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/observe/chunks.py", "kind": "doc-round", "symbol": "attribute", "detail": "R1N"},
-    {"file": "verity_vllm/correspondence/resolve.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
-    {"file": "verity_vllm/correspondence/resolve.py", "kind": "doc-board-id", "symbol": "DescriptorCorrespondence.arg_slot", "detail": "F-rN"},
     {"file": "verity_vllm/observe/runtime_tree.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "def-name", "symbol": "<module>", "detail": "_m1_words"},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
