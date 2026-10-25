@@ -10,27 +10,42 @@ none, each on the connection's ordinal q. A connection's ingress is one warden-f
 (`active.id_request(..., lead=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
-**The state** (`layout`) is `now` (u32, the buckets the scan has taken) and `last` (u32, the last ordinal admitted),
-then NR = lanes request slots, each `live`, `done` (its request's `END` is in), `q`, `left` (its request's bytes still
-to come, u32), `cells` (received, CB = bit length of C bits), `fields` (prompt ids received, u32), `max_tokens` and
-`seed` (u32), `temperature` and `top_p` (their seven digits' value, 24 bits), `admitted` (`now` at its admission, u32)
-and `ids`, C·K prompt ids of IDB bits: cell c's field k at c·K + k, so prompt position p is at `position(p)`. Each field
-is least significant bit first, the fields in `layout`'s order. The empty state (`empty`) is all zeros.
+**The start cadence.** Programs start at the boundaries, the buckets t ≡ 0 mod EVERY of the scan (EVERY a parameter:
+once a window or once a group of buckets). A request admitted at bucket s is anchored at A(s), the first boundary at
+or after s + WITHIN (`Class.anchor`), WITHIN the class's ingress bound δ in buckets, and its Program reads its slot in
+S_{A−1}. So the count of requests anchored at each boundary is what the cadence publishes; arrival buckets, prompt
+lengths and slot assignments stay private.
+
+**The state** (`layout`) is `now` (u32, the buckets the scan has taken), `phase` (`now` mod EVERY, u32) and `last`
+(u32, the last ordinal admitted), then NR = lanes request slots, each `live`, `done` (its request's `END` is in), `q`,
+`left` (its request's bytes still to come, u32), `cells` (received, CB = bit length of C bits), `fields` (prompt ids
+received, u32), `max_tokens` and `seed` (u32), `temperature` and `top_p` (their seven digits' value, 24 bits),
+`admitted` (`now` at its admission, u32), `anchor` (A(admitted), u32) and `ids`, C·K prompt ids of IDB bits: cell c's
+field k at c·K + k, so prompt position p is at `position(p)`. Each field is least significant bit first, the fields in
+`layout`'s order, then `pad`, zeros to a whole 16-bit word (`sout`'s held to zero, `sin`'s not read). The empty state
+(`empty`) is all zeros. The egress side reads a slot's fields at their `layout` offsets.
 
 **A unit** (`step`, its reference):
 1. each block's q is its first cell's ordinal; a block is empty (q = 0, every byte zero) or every cell is on q and is
    `DATA`, `END` or `PAD`; the nonempty blocks come first, q increasing;
-2. a block on a live slot's q continues that slot; a block on another q is new, its q above `last`, and the i-th new
-   block takes the i-th slot no block continues (the lowest free slot); a live slot no block continues is freed,
-   since the warden holds a connection's lane through its last bucket;
+2. a block on a live slot's q continues that slot; a block on another q is new, its q above `last`; a slot is held
+   while it is live and `now` is below its anchor, so its ids stay in place until its Program has read them; a slot
+   is free when no block continues it and it isn't held, and the i-th new block takes the i-th free slot (the lowest
+   free slot), its `admitted` `now` and its anchor A(`now`);
 3. a block's cells in order: its data cells (`DATA` or `END`), none once its slot is `done`, then its `PAD`s (kind,
    length and payload zero); each data cell is the next frame of its slot's request (`io_request._reading` at lead 0,
    a first frame from `left` = 0, whose head's fields go into the slot), `END` exactly when it holds the request's last
    byte, its length the request's bytes in it, its slot's `cells` below C, and its ids, each below 2^IDB, written at
    the slot's cell `cells` (a new slot's ids from the slot's last request are overwritten as its request comes in,
    and no Program reads past a slot's `fields`);
-4. `now` + 1, and `last` the last new block's q.
+4. `now` + 1, `phase` + 1 wrapping to 0 at EVERY (a `phase` of EVERY or more is refused), `last` the last new block's
+   q, and a slot live iff a block continued or took it or it is held.
 ok is 1 iff every check holds and the computed S_t is `sout`.
+
+**The warden it serves** (`Class.serves`): a class takes every run of a warden whose B, r and lanes are its own, whose
+`ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in S_{A−1}, or its ingress
+failed) and whose D is at least WITHIN + EVERY − 1 (a slot is free by the time the warden can admit a connection on
+the lane its request held, so NR = lanes slots always suffice).
 
 **Structural Fits.** A unit reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path from
 one bucket's ingress to a later bucket's gates: each step reads the state the step before wrote, whatever the arrivals
@@ -40,8 +55,9 @@ and the prompt lengths, which stay private.
 `row` the warden's signed row t (`warden_rows.bucket_port`), `sin` and `sout` the scan's state rows t − 1 and t, `sin`
 of the first bucket the empty state's. The unit's one output is ok.
 
-    IngressScanBucket{B, r, lanes, C, IDB}(row: Array<lanes·r·B, Byte>, sin: Array<NS>, sout: Array<NS>) -> Value<1>
-        NS = `state_bits`: 64 + lanes·(330 + CB + C·K·IDB), K = (B − 9) // 11
+    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
+                                                         sout: Array<NS>) -> Value<1>
+        NS = `state_bits`: 96 + lanes·(274 + CB + C·K·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
 """
 from __future__ import annotations
 
@@ -56,10 +72,10 @@ from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_ids as II
 from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES, PAD
-from verity.core.protocols.certifier.warden import END
+from verity.core.protocols.certifier.warden import END, WardenParams
 
 BIT, BYTE = HC.BIT, HC.BYTE
-#: the state's head: `now`, `last`
+#: the state's head: `now`, `phase`, `last`
 HEAD = (("now", 32), ("phase", 32), ("last", 32))
 #: a ratio field's seven digits' value: below 10^7
 RATIO_BITS = (10 ** 7 - 1).bit_length()
@@ -123,6 +139,20 @@ class Class:
         x -= self.EVERY if x >= self.EVERY else 0
         return (now + self.WITHIN + (self.EVERY - x if x else 0)) % (1 << 32)
 
+    def serves(self, params: WardenParams) -> None:
+        """ValueError, naming the fix, unless the scan takes every run of the warden at `params` (the module
+        docstring's "The warden it serves")."""
+        need = {"cell_bytes": (params.cell_bytes == self.B, f"= B = {self.B}"),
+                "slots": (params.slots == self.r, f"= r = {self.r}"),
+                "lanes": (params.lanes == self.lanes, f"= lanes = {self.lanes}"),
+                "ingress_cells": (params.ingress_cells <= self.C, f"<= C = {self.C}"),
+                "ingress_buckets": (params.ingress_buckets <= self.WITHIN, f"<= WITHIN = {self.WITHIN}"),
+                "delay": (params.delay >= self.WITHIN + self.EVERY - 1,
+                          f">= WITHIN + EVERY - 1 = {self.WITHIN + self.EVERY - 1}")}
+        bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
+        if bad:
+            raise ValueError(f"{self} doesn't serve the warden at these parameters: set " + "; ".join(bad))
+
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
     return (("live", 1), ("done", 1), ("q", 32), ("left", 32), ("cells", cls.CB), ("fields", 32), ("max_tokens", 32),
@@ -130,19 +160,25 @@ def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
             ("ids", cls.C * cls.K * cls.IDB))
 
 
+def _fields_bits(cls: Class) -> int:
+    return sum(w for _, w in HEAD) + cls.NR * sum(w for _, w in slot_layout(cls))
+
+
 def layout(cls: Class) -> dict[str, tuple[int, int]]:
-    """Each field's (offset, width) in the state row: `now`, `phase`, `last`, then slot j's as ``"j.name"``."""
+    """Each field's (offset, width) in the state row: `now`, `phase`, `last`, slot j's as ``"j.name"``, then `pad`."""
     out, at = {}, 0
     for name, w in HEAD:
         out[name], at = (at, w), at + w
     for j in range(cls.NR):
         for name, w in slot_layout(cls):
             out[f"{j}.{name}"], at = (at, w), at + w
+    out["pad"] = (at, state_bits(cls) - at)
     return out
 
 
 def state_bits(cls: Class) -> int:
-    return sum(w for _, w in HEAD) + cls.NR * sum(w for _, w in slot_layout(cls))
+    """The state row's bits: its fields', zero-padded to whole 16-bit words (a row a statement registers)."""
+    return -(-_fields_bits(cls) // 16) * 16
 
 
 def position(cls: Class, p: int) -> int:
@@ -197,7 +233,7 @@ def encode(cls: Class, st: State) -> list[int]:
             raise ValueError(f"a slot holds {cls.C * cls.K} ids, not {len(s.ids)}")
         for v in s.ids:
             put(v, cls.IDB)
-    return bits
+    return bits + [0] * (state_bits(cls) - len(bits))
 
 
 def decode(cls: Class, bits: Sequence[int]) -> State:
@@ -506,6 +542,7 @@ def _build(C, S, *e):
     wrap = _eqk(C, up, cls.EVERY)
     computed = add(C, now, [ONE], width=32) + [C.AND(wrap.inv(), b) for b in up] + last + \
         [b for o in out_slots for n, _ in sf for b in o[n]]
+    computed += [ZERO] * (len(sout) - len(computed))
     return [and_reduce(C, oks + [_eq(C, computed, sout)])]
 
 
@@ -539,6 +576,7 @@ IngressScanBucket = _part(
     "takes the lowest free slot as a new connection above `last`, its data cells are the next frames of the slot's "
     "warden-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C; every switch "
     "is computed from sin and the row")
+IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 
 
 def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]]]) -> list[list]:
