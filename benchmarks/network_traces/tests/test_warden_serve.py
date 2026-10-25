@@ -143,6 +143,41 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nd") == (b"abcd", False)
 
 
+def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
+    """`rehearse --ids`: an `id_traffic` request, sent warden-form (`active.id_request`), is answered with its
+    `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
+    `parse_id_response` reads its count, and a cut or altered response isn't complete."""
+    sys.path.insert(0, str(HERE))
+    import scan_zk as sz
+    traffic = ws.id_traffic(20, model="m", seed=2, max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    assert traffic == ws.id_traffic(20, model="m", seed=2, max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    assert all(1 <= x["ids"]["max_tokens"] <= 64 and all(i < 1 << 17 for i in x["ids"]["prompt"]) for x in traffic)
+    fields, P, B = traffic[0]["ids"], sz.PARAMS.payload, sz.PARAMS.cell_bytes
+    request = ws.id_request(**fields, frame_bytes=B, offset=0)
+
+    async def main() -> bytes:
+        server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep, id_payload=P),
+                                            "127.0.0.1", 0)
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.sockets[0].getsockname()[1])
+        writer.write(request)
+        data = await reader.read()
+        writer.close()
+        server.close()
+        return data
+
+    data = asyncio.run(main())
+    ids = ws.fake_ids(json.loads(request.partition(b"\r\n\r\n")[2]))
+    assert data == ws.id_response(ids, P) and 1 <= len(ids) <= fields["max_tokens"]
+    assert data[len(ids) * P:] == sz.IT.TRAILER
+    assert [sz.IT.data_cell(x, 1, B)[sz.IT.HEADER.size:sz.IT.HEADER.size + P] for x in ids] == [
+        data[i:i + P] for i in range(0, len(ids) * P, P)]
+    got = ws.parse_id_response(data, P)
+    assert (got["ids"], got["complete"], got["completion_tokens"]) == (len(ids), True, len(ids))
+    assert not ws.parse_id_response(data[:-1], P)["complete"] and not ws.parse_id_response(data[:-len(sz.IT.TRAILER)],
+                                                                                            P)["complete"]
+    assert not ws.parse_id_response(data.replace(b"data:", b"datum", 1), P)["complete"]
+
+
 class _Writer:
     def __init__(self, warden: Warden | None = None) -> None:
         self.warden, self.writes, self.closed, self.transport = warden, [], False, self
