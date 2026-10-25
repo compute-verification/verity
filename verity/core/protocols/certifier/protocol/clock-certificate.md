@@ -37,9 +37,11 @@ makes that source the certifier's signed record.
   released in one of those windows no floor is under a signed sync, and every window of the link is refused. The
   link's verdict is the AND over its windows, so the link is refused either way. The certificates are public, so
   whoever delivers them, the prover included, can't change what they say.
-  `LinkWindows(clocks=…)` takes a stand-in source in their place, never beside them: the tests' (`StandInClocks` in
-  `tests/advised_traffic.py`), or a run's proxy log for a run from before the certifier signed its syncs, each
-  labelled as one.
+  `LinkWindows(clocks=…)` takes a stand-in source in their place, never beside them, each labelled as one: the tests'
+  (`StandInClocks` in `tests/advised_traffic.py`), or, only when asked for, a run's proxy log for a run from before
+  the certifier signed its syncs (`n2_advised_zk.py --clock-stand-in`). Without that flag the driver refuses a run
+  without `clocks.jsonl`, and any `clocks.jsonl` entry, a regular file or not, is read as the run's certificates, so a
+  dangling link or a directory there is refused, not taken for a run without them.
 - **What it rests on** is what the record certificate rests on: LMS's unforgeability (`euf-cma/lms-sha512-n64`), and a
   certifier that is the auditor's device, on a host the prover doesn't control. A certifier run on the prover's own
   machine (a rehearsal's against an endpoint on its own loopback) signs whatever that machine runs, so there its signed
@@ -52,3 +54,5 @@ makes that source the certifier's signed record.
   - The Lean CertifierDevice's issuer signs records only; the clock certificate is the Python issuer's until the
     device mirrors `Issuer.clock`.
   - A run made before `clocks.jsonl` has no clock certificates, so the source of record refuses its advised links.
+  - A deleted `clocks.jsonl` looks exactly like a run from before it: only `--clock-stand-in` proves such a run, on
+    an unsigned source its summary labels a stand-in.
