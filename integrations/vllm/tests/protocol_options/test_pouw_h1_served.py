@@ -721,6 +721,70 @@ def test_a_producer_with_prepare_is_handed_each_steps_calls_of_one_k_before_it_i
     assert any(r.startswith("calls [") and r.endswith("]: no launch") for r in refused), refused
 
 
+class _OnDevice(torch.Tensor):
+    """A host tensor that says it is on a CUDA device, as the engine's ``a`` is."""
+
+    @property
+    def is_cuda(self):
+        return True
+
+
+class _Staged(_Prepared):
+    """The stand-in with a ``stage`` too: each call it was handed, with the asks made before it and the rows."""
+
+    def __init__(self, fail=None):
+        super().__init__()
+        self.staged, self.stage_fail = [], fail
+
+    def stage(self, call, a):
+        if self.stage_fail:
+            raise ValueError(self.stage_fail)
+        self.staged.append((len(self.order), call.index, a))
+
+
+def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_its_asked_them(monkeypatch):
+    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA device
+    (kernels' device codes, note:kernels-rcpt/20261024T0430Z-draft-served-device-codes): the engine's tensor itself, in call
+    order, before any of its step's calls of K are asked; each receipt table is still the producer's ask's words. Rows on
+    the host stage nothing, and a ``stage`` that refuses refuses the window, naming the call."""
+    commit, seen = SV.Served.commit, {}
+
+    def on_device(self, run, call, a, *rest):
+        a = seen[call.index] = a.as_subclass(_OnDevice)
+        return commit(self, run, call, a, *rest)
+
+    monkeypatch.setattr(SV.Served, "commit", on_device)
+    made = _Staged()
+    run, _ws, _got = _window(W1, receipts=made)
+    served = run.served
+    assert not served.refused
+    assert [c for _asked, c, _a in made.staged] == [c.index for c in run.calls if c.m]
+    for asked, c, a in made.staged:
+        assert a is seen[c] and c not in made.order[:asked] and asked == made.order.index(served.step_calls(c)[0])
+    for c in run.calls:
+        rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+                                      SV.RECEIPT_NONCE + c.index)
+    refused = _window(W1, receipts=_Staged(fail="no copy"))[0].served.refused
+    first = min(c for _asked, c, _a in made.staged)
+    assert f"call {first}: no copy" in refused, refused
+    monkeypatch.undo()
+    host = _Staged()
+    assert not _window(W1, receipts=host)[0].served.refused and host.batches and not host.staged
+
+
+def test_zy_words_are_record_words_of_the_records_split():
+    """`zy_words` is `record_words` of `pouw_h1_records.split`: the records' own words where the Program's tile is their
+    unit and they cover every slot, taken apart otherwise (fewer rows than slots, another tile)."""
+    from verity_vllm.protocol_options import pouw_h1_records as ZR
+
+    rng = np.random.default_rng(3)
+    for rows, n, slots, tile in ((64, 96, 64, (32, 32)), (32, 64, 64, (32, 32)), (64, 64, 64, (16, 32))):
+        records = rng.integers(0, 256, ((rows // 32) * (n // 32), ZR.ZY_BYTES), dtype=np.uint8)
+        got = SV.zy_words(records, rows, n, slots, tile)
+        assert got.dtype == np.uint16 and np.array_equal(got, SV.record_words(*ZR.split(records, rows, n), slots, tile))
+
+
 def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
     """VLLM-81: GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
     share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
