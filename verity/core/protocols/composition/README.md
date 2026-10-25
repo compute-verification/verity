@@ -1,11 +1,13 @@
 # core_composition: onsite and remote Verity as core protocols
 
-Three Lake packages, each on C-Flock's verifier and the core interface (`../interface`) by path, with no Mathlib:
+Three Lake packages, each on C-Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on
+their ported components' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
   stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
-- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space and communication.
+- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth and
+  communication.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
 
 The rule and the formats are written once, over any list of components, and the two products are values
@@ -36,20 +38,32 @@ keyed by the component's id. On rejection or undecided nothing is public.
 
 ## Components
 
-Until their ports land, each component is a stub, `Core.Example.protocol` under an id that says so:
-`verity/stub/sampled-proofs/v0` (integrity, sampled proofs' one-stage audit), `verity/stub/pouw/v0` (work),
-`verity/stub/pous/v0` (space) and `verity/stub/certifier/v0` (communication, the network certifier). A port replaces its
-stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, keeping each list in the
-order of its ids (`ordered`, which each product's `#guard` checks). NCI and the trial's reconciling are not components yet.
+| component | onsite | remote | `Core.Protocol` | id |
+| --- | --- | --- | --- | --- |
+| work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| integrity (sampled proofs' one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| bandwidth | yes | | stub | `verity/stub/bandwidth/v0` |
+| communication (the network certifier) | yes | | stub | `verity/stub/certifier/v0` |
+| space (PoUS) | yes | | stub | `verity/stub/pous/v0` |
+
+Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
+replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
+a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
+checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
+own Python (`Ported`), and its cases come from the port's own difftest. NCI and the trial's reconciling are not
+components yet.
 
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
-with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`) and a
-mirror of the stub. Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or
-fails to decode, and the composition's inputs or the case itself are often broken. The port follows top's rule where the
+with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), a
+mirror of the stub, and each ported component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage
+difftest's `answer`, `one_stage` behind the protocol's decoders), which that component's own difftest holds its Lean to.
+Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode (a
+ported component's from its own difftest's generator, every one aimed at acceptance a third of the time), and the
+composition's inputs or the case itself are often broken. The port follows top's rule where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
 - **Reject dominates.** In the trial a missing statement leaves the product with no verdict even when another component's
