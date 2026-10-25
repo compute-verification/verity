@@ -88,6 +88,15 @@ noncomputable def value (p : α → Prop) : Game α → ℝ≥0∞
   | .send _ k => ⨆ m, value p (k m)
   | @Game.coin _ C iF _ k => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * value p (k c)
 
+/-- The uniform average over a finite type. -/
+noncomputable def avg {C : Type} [Fintype C] (f : C → ℝ≥0∞) : ℝ≥0∞ :=
+  ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * f c
+
+open Classical in
+/-- The probability that a uniform coin satisfies `p`, as an average of indicators. -/
+noncomputable def prCoin {C : Type} [Fintype C] (p : C → Prop) : ℝ≥0∞ :=
+  avg fun c => if p c then 1 else 0
+
 /-- The concurrent run once the first interaction's next step is fixed: `adv₁ g₂` advances the first interaction by one
 node while the second is at `g₂`, and `fin₁ b` finishes the first interaction alone once the second has ended with `b`.
 Recursion is on the second interaction. -/
