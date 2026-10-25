@@ -167,8 +167,13 @@ A spec-level reference for network accounting's timing channel:
   link ℓ (its frame parameter row, the warden's registered row), the same gates whatever the load, so arrival steps and
   prompt lengths stay private (`NetTiming.Layout`). `refusal` is the verifier's check before it draws that the layout
   fits the circuit (`NetTiming.Layout.Fits`) at the record's grain, which contains the gate grain's, held to
-  `prog_fits`, `Layout.Fits` itself on a flattened program. No served window fits structurally, so it refuses every one
-  until proofs' semantic causality lands;
+  `prog_fits`, `Layout.Fits` itself on a flattened program. `Fits` stays structural: a served window fits in the
+  step-indexed scan's form, and a window in any other form is refused;
+- the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
+  warden ingress row and the slot state the bucket before carries (registered reads), computes the next state (each
+  block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a slot
+  held until its Program's anchor) and outputs one ok bit; `Class.serves` names the warden parameters it takes every
+  run of, and `benchmarks/network_traces/ingress_scan_zk.py` proves its units at w63's class;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a

@@ -116,8 +116,8 @@ def test_a_window_whose_egress_reads_only_earlier_ingress_fits():
 
 
 def test_an_egress_bucket_that_reads_a_later_buckets_ingress_is_refused_by_the_causal_conjunct():
-    """The served shape (N2's encoder at bucket t reads every request's ids, so a later bucket's ingress): refused until
-    proofs' semantic Fits covers it, at the egress bucket and the ingress bucket it reads."""
+    """An egress bucket that reads every request's ids, so a later bucket's ingress (a window not in the scan's form):
+    refused, at the egress bucket and the ingress bucket it reads."""
     T = 3
     toys = [(ING, T), (Toy("Mid_v1", (("x", 1),), (("o0", 1, "dense"),)), 2), (EGR, T)]
     wires = {("Mid_v1", "x"): [2, 1], (EGR.tid, "y"): [3, 4, 3]}

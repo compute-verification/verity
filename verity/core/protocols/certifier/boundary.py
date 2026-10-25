@@ -37,9 +37,13 @@ depends on an ingress gate of a later step. Dependence is taken at the record's 
 on each of its input rows, a wired input row is its writer's output row (`Member.wired`), and a row table's rows are
 inputs, which no unit of the record writes. That dependence contains `Depends`, so a record the check accepts fits
 (`prog_fits` is `Layout.Fits` itself on a flattened program, and the tests hold `refusal` to it); a record that fits only
-at the gate grain is refused. With private arrival steps no served window fits structurally, since an egress bucket reads
-every request's ids, so the check refuses every one until proofs' semantic Fits (EVALCOMP) lands: the verifier gains no
-form ahead of its proof. The record must also name the boundary's rows, and no others, as its ``external`` ports.
+at the gate grain is refused. `Fits` stays structural (top's ruling, 25 Oct: semantic Fits is dropped): a served window
+fits in the step-indexed scan's form (`ingress_scan`, note:network-accounting/20261025T0830Z-report-net68-scan-router),
+whose bucket t unit reads bucket t's ingress row and the state bucket t − 1 carries, and whose Programs start at fixed
+boundaries and read their slots there, so an egress bucket reaches ingress only through earlier buckets' state, whatever
+the arrival steps and prompt lengths. A window in any other form, such as an egress bucket that reads every request's
+ids, is refused: the verifier gains no form ahead of its proof. The record must also name the boundary's rows, and no
+others, as its ``external`` ports.
 """
 from __future__ import annotations
 
@@ -249,7 +253,8 @@ def refusal(doc: Mapping[str, Any]) -> str | None:
                 ell_i = (src[u] - lo_i) // T
                 return (f"Layout.Fits, causal: egress bucket {t} of link {ell} (unit {u}) depends on ingress bucket "
                         f"{latest[u]} of link {ell_i} (unit {src[u]}), a later step, through the record's wires; "
-                        "it is refused until proofs' semantic causality covers it")
+                        "a window fits in the scan's form, its egress reading ingress through earlier buckets' "
+                        "state (ingress_scan)")
     return None
 
 
