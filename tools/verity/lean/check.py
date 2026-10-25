@@ -995,9 +995,11 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
+    premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
+                                  "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -1528,7 +1530,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
-    definitions unfolded and a `Premises` abbrev seen through:
+    definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
+    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -2130,7 +2133,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}

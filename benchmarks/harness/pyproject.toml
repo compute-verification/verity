@@ -31,7 +31,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # graphs for arms whose served kernels are bound to a row Build. Dispatch names
 # a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
 # harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable
-# memory accounting's arms read and build from sources that exist. served_commit's arm gates on the run phases
+# memory accounting's arms read and build from sources that exist, and the breakdown's arms are its `BandwidthArm`s, which
+# a test builds (it imports the spans module). served_commit's arm gates on the run phases
 # the runner names, which a test checks with a fake committer; it and its stock profiling arm read only the public
 # names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
 # write each run's records after the run's timed window, which a test checks with the same fakes; and its TP decode
@@ -89,6 +90,7 @@ inputs = [
     "integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py",
     "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py",
     "benchmarks/vllm_encoded/bench_arm.py",
+    "benchmarks/vllm_encoded/step_spans.py",
     "benchmarks/vllm_encoded/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
     "benchmarks/codec_tensor/reader.cu",

@@ -49,6 +49,7 @@ from typing import Any
 
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 
+from .pouw_pass import call_index
 from .pouw_pearl_c_host import _Driver, _event, _put, _zeros
 from .pouw_pearl_c_kernel import _load
 from .pouw_pearl_c_screen import scatter_into, screen_into
@@ -124,13 +125,13 @@ class _Call:
             if run.fused_screen:
                 scatter_into(xa, alpha, aux, screened, flags_to, gathered, roots_to, none, roots_to, offs, idx)
                 return
-            index, flag_rows = self.at
+            pos, flag_rows = self.at
             if screened:
                 torch.index_select(alpha, 0, idx, out=alpha_s)
                 torch.index_select(aux, 0, idx, out=aux_s)
                 screen_into(run.flag_buf[flag_rows:flag_rows + screened], xf, alpha_s, aux_s, False)
             if gathered.numel():
-                roots_to[nb * index:nb * index + gathered.numel()].copy_(gathered)
+                roots_to[nb * pos:nb * pos + gathered.numel()].copy_(gathered)
 
         def screen():
             if not split:
@@ -249,10 +250,10 @@ class _Group:
             c = self.calls[key] = _Call(run, self, us, split, side, b)
         return c
 
-    def table(self, run: Any, c: _Call, keys: bytes | None, leaves: int, index: int, flag_rows: int) -> tuple[int, int]:
+    def table(self, run: Any, c: _Call, keys: bytes | None, leaves: int, pos: int, flag_rows: int) -> tuple[int, int]:
         """The call's table in the next pinned host slot, once its last upload is done: `c`'s template with each unit's keys
-        (none without hashing), its tile leaves from address `leaves` and the call's offsets (matmul `index`, its first
-        flag row).  Returns the slot and the table's bytes."""
+        (none without hashing), its tile leaves from address `leaves` and the call's offsets (its first unit's position
+        `pos` in the pass, its first flag row).  Returns the slot and the table's bytes."""
         import numpy as np
         G, i = self.G, self.host_turn % HOST_SLOTS
         self.host_turn += 1
@@ -263,7 +264,7 @@ class _Group:
         if keys:
             h[:recs].reshape(c.count, G.REC)[:, G.KEYS_AT:G.KEYS_AT + G.KEY_BYTES] = np.frombuffer(keys, np.uint8).reshape(c.count, -1)
         h[:recs].view("<u8")[c.leaf_at] = c.leaf_offs + np.uint64(leaves)
-        h[t:t + OFFS_BYTES].view("<i8")[:] = (run.nb * index, 2 * flag_rows, 0)
+        h[t:t + OFFS_BYTES].view("<i8")[:] = (run.nb * pos, 2 * flag_rows, 0)
         return i, t + OFFS_BYTES
 
     def upload(self, b: dict[str, Any], i: int, n: int, stream: int) -> None:
@@ -441,8 +442,9 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
     us = g.units(counts)
     if not us:
         return x.new_zeros((0, n)) if bias is None else x.new_zeros((0, n)) + bias
-    rows, tiles, index, real = sum(u.seg for u in us), sum(u.tiles for u in us), len(cur.matmuls), len(x)
-    if run.hashing and (cur.tiles + tiles > run.capacity or index + len(us) > CALL_CAPACITY
+    rows, tiles, pos, real = sum(u.seg for u in us), sum(u.tiles for u in us), len(cur.matmuls), len(x)
+    index = call_index(run, len(us))
+    if run.hashing and (cur.tiles + tiles > run.capacity or pos + len(us) > CALL_CAPACITY
                         or cur.flag_rows + real > len(run.flag_buf)):
         raise RuntimeError(f"{run.entry}: the pass is over its capacity ({run.capacity} tiles, {CALL_CAPACITY} calls, "
                            f"{len(run.flag_buf)} screened rows); end it and begin another")
@@ -460,8 +462,8 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
     j, b = g.take()
     c = g.call(run, counts, us, split, side, j, b)
     keys = b"".join(run.keys(run.roots[ws[u.pos]], index + i, u.m16) for i, u in enumerate(us)) if run.hashing else None
-    slot, nbytes = g.table(run, c, keys, run.leaves.data_ptr() + run.nb * cur.tiles, index, cur.flag_rows)
-    c.at = (index, cur.flag_rows)
+    slot, nbytes = g.table(run, c, keys, run.leaves.data_ptr() + run.nb * cur.tiles, pos, cur.flag_rows)
+    c.at = (pos, cur.flag_rows)
     to = None
     if side:
         to = run.sides[run._side_turn % len(run.sides)]

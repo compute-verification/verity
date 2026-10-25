@@ -1,5 +1,7 @@
-"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; measured only, never served or credited until the verifier takes
-the form): the gate's references for it, swapped into dither_a's check as j10served.py swaps banded noise's.
+"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; RT-ALGO-16's verifier form, #3574: each unit's call is its call's
+first position and its blocks `core_check.j10r_blocks` at the call's slot M, as credit derives them from the window's
+layout, when M is "slot" on a slot T with every row block computed, `forms.j10r_part`): the gate's references for it,
+swapped into dither_a's check as j10served.py swaps banded noise's.
 
     every capture, the window's end   each receipt against h1r.cu's version 1 under J10-R (`RefH1R`: h1r_launch_j10r, its
                                       own seeds kernel and SHA-512, the call's stream at Layout(M, N, K))
@@ -27,7 +29,7 @@ from h1r import H1R
 J10R_SHA = "559bc0aa69"
 TREE_ENV = "DITHER_J10R_TREE"
 LABEL = ("J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's receipt, #3403 on cursor/h1-j10r-1de3 at "
-         f"{J10R_SHA}; measured only)")
+         f"{J10R_SHA}; RT-ALGO-16's verifier form, #3574)")
 M_MODES = {"slot": "each call's A slot, T rows (j10r_blocks' docstring: the call's slot)",
            "live": "the step's live rows rounded up to 32"}
 # dither_so's $DITHER_UNITS_SKIP_DEAD: a row block wholly past the live rows computed in full (unset), or skipped ("1")
