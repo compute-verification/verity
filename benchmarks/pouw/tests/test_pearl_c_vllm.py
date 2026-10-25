@@ -833,16 +833,24 @@ def bf16_file(rows: list[bytes]) -> bytes:
 
 
 #: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
-@pytest.fixture(params=sorted(s for s in PPD.SCHEMES if "unpromoted" not in s))
+PROMOTED = sorted(s for s in PPD.SCHEMES if "unpromoted" not in s)
+
+
+@pytest.fixture(params=PROMOTED)
 def honest_pass(tmp_path, request):
+    return proved_pass(tmp_path, request.param)
+
+
+def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1)):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
     audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
     (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
-    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap)."""
-    scheme = request.param
+    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
+    The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
+    salt coin), as passes of one install are."""
     key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
@@ -850,9 +858,10 @@ def honest_pass(tmp_path, request):
     a0 = bf16_words(rng, 32, k)
     a0[20:] = 0
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
-    acts = {0: a0, 1: bf16_words(rng, 16, k)}
+    i0, i1 = indices
+    acts = {i0: a0, i1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
-    work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
+    work = Workload((Matmul(i0, Shape(32, k, 16), 0), Matmul(i1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
     coins = salt_coin(prover.weight_roots)
@@ -860,9 +869,9 @@ def honest_pass(tmp_path, request):
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
-                         real_rows={0: 20})
+                         real_rows={i0: 20})
     assert records[0].excluded_a == (5,)
-    (tmp_path / "calls").mkdir()
+    (tmp_path / "calls").mkdir(parents=True)
     (tmp_path / "weights").mkdir()
     weights = {}
     for w, x in wrows.items():
@@ -960,6 +969,53 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 1
     doc = json.loads(out.read_text())
     assert (doc["accepted"], doc["ok"]) == (0, False) and doc["verdicts"][0]["line"].startswith("REJECT")
+
+
+def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
+    """A serve's directory naming `passes` (manifests) in order, as ``served_passes.py serve`` writes it."""
+    d = tmp_path / "served"
+    d.mkdir(exist_ok=True)
+    (d / "served.json").write_text(json.dumps({"run": RUN, "passes": [{"pass": i, "units": 2, "tiles": 4, "manifest": str(p)}
+                                                                      for i, p in enumerate(passes)]}))
+    (d / "coins.json").write_text((passes[0].parent / "coins.json").read_text())
+    return d
+
+
+def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
+    """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
+    both, so the run is refused (``repeated-call``) before any pass is replayed (CMP-84)."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
+    assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
+    d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
+    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
+    doc = json.loads(out.read_text())
+    assert (doc["ok"], doc["verified"], doc["verdicts"]) == (False, 0, []) and doc["refused"][0] == "repeated-call"
+    assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
+
+
+@pytest.mark.slow
+def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
+    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
+    accepted."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
+    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert (doc["ok"], doc["verified"], doc["accepted"]) == (True, 2, 2) and "refused" not in doc
+
+
+def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
+    """A pass whose call index is 2^32 (`pearl_c.CALL_RANGE`, past the row seed's range) is refused ``call-range``, and one
+    holding an index twice ``repeated-call``, before anything is opened."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    for index, code in ((C.CALL_RANGE, "call-range"), (0, "repeated-call")):
+        man["matmuls"][1]["index"] = index
+        path.write_text(json.dumps(man))
+        r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
+        assert not r["accepted"] and r["refused"][0] == code and r["line"].startswith("REJECT") and code in r["line"], r
 
 
 @pytest.mark.slow
