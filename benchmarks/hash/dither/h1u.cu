@@ -622,11 +622,12 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #endif
 // H1U_JCS = G (2 or 4; with JX and H1U_JCTA, not JN2 or H1U_JPROBE & 1): a column block's blocks are its seed_c
 // stream's, the same in every row block's unit, so h1umj_sm's CTA takes its WARPS units as a tile of r live row blocks
-// by WARPS / r column blocks (r = G, else 2, else 1: the most that divides the live row blocks, or all of them but the
-// last where they are an odd number past 1), the live tiles first, then the last live row block's units if the tiles
-// left it, one warp a unit, then the dead units; a column block's r warps share its blocks: each hashes 32 / r of its
-// columns for r blocks a pass (sets of r blocks, one set ahead, double-buffered in the CTA's shared memory) and they
-// meet once a set. r = 1 is the units in their own order, each warp hashing its own blocks; the same blocks and receipts
+// by WARPS / r column blocks: under G = 4 the live row blocks 4 a tile as far as they go, then (either G) 2 a tile, the
+// tiles first, then the units of a live row block left over (an odd count), one warp a unit, then the dead units. A
+// column block's r warps share its blocks: each hashes 32 / r of its columns for r blocks a pass (sets of r blocks, one
+// set ahead, double-buffered in the CTA's shared memory) and they meet once a set. Where nothing tiles (one live row
+// block, or calls that don't fit), r = 1 is the units in their own order, each warp hashing its own blocks; the same
+// blocks and receipts
 #ifndef H1U_JCS
 #define H1U_JCS 0
 #endif
@@ -2840,11 +2841,11 @@ __device__ __forceinline__ u32 nth_rb(const uint8_t* __restrict__ live, u32 nrb,
   return 0;
 }
 
-// h1umj_one under H1U_JCS: slot gu of its call's tiles (the first nt of its nl live row blocks, r = 1 << lr of them a
-// tile), then the units of the live row blocks past them and the dead units, one warp a unit (r = 1 is the unit gu
-// itself), its group's buffers in jcb
+// h1umj_one under H1U_JCS: slot gu of its call's tiles (of its nl live row blocks, the first n4 4 a tile and the next
+// n2 2 a tile), then the units of the live row block past them and the dead units, one warp a unit (n4 = n2 = 0: the
+// unit gu itself), its group's buffers in jcb
 __device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
-                                         const uint8_t* __restrict__ live, u32 gu, u32 nl, u32 nt, u32 lr,
+                                         const uint8_t* __restrict__ live, u32 gu, u32 nl, u32 n4, u32 n2,
                                          WarpSmemJC& S, u32 (*jcb)[32][17]) {
   u32 lo = 0, hi = ncalls;
   while (hi - lo > 1) {
@@ -2853,16 +2854,16 @@ __device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 n
     else hi = mid;
   }
   const UCallR c = calls[lo];
-  const u32 wp = threadIdx.x >> 5, s = gu - c.u0, ncb = c.N / 32, nrb = M / 32;
-  const u32 rl = s < nt * ncb ? lr : 0, C = WARPS >> rl, k = wp % C;
+  const u32 wp = threadIdx.x >> 5, s = gu - c.u0, ncb = c.N / 32, nrb = M / 32, e4 = n4 * ncb, e2 = e4 + n2 * ncb;
+  const u32 rl = s < e4 ? 2 : s < e2 ? 1 : 0, C = WARPS >> rl, k = wp % C;
   u32 u = s;
-  if (lr) {
-    if (rl) {
-      const u32 t = s / WARPS, nct = ncb / C;
-      u = nth_rb(live, nrb, ((t / nct) << rl) + wp / C, true) * ncb + C * (t % nct) + k;
-    } else if (s < nl * ncb) {
-      const u32 e = s - nt * ncb;
-      u = nth_rb(live, nrb, nt + e / ncb, true) * ncb + e % ncb;
+  if (rl) {
+    const u32 t = (rl == 2 ? s : s - e4) / WARPS, nct = ncb / C;
+    u = nth_rb(live, nrb, (rl == 2 ? 0 : n4) + ((t / nct) << rl) + wp / C, true) * ncb + C * (t % nct) + k;
+  } else if (n4 | n2) {
+    if (s < nl * ncb) {
+      const u32 e = s - e2;
+      u = nth_rb(live, nrb, n4 + n2 + e / ncb, true) * ncb + e % ncb;
     } else {
       const u32 d = s - nl * ncb;
       u = nth_rb(live, nrb, d / ncb, false) * ncb + d % ncb;
@@ -2891,21 +2892,20 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   __shared__ u32 jcb[2 * WARPS][32][17];
   __shared__ u32 claim;
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0, nrb = M / 32;
-  // r: H1U_JCS live row blocks a tile, else 2, else 1, the most that divides the nt the tiles take (nl, or nl - 1 for
-  // an odd nl past 1); more than 1 only where every call's units are its nrb ncb, from a multiple of WARPS, and its
-  // column blocks a multiple of WARPS / r. The tiles' units then end at a multiple of WARPS, so no claim mixes them with
-  // the one-warp units past them
+  // the tiles: n4 of the nl live row blocks 4 a tile (H1U_JCS = 4), as many as fit, then n2 of the rest 2 a tile; any
+  // only where every call's units are its nrb ncb, from a multiple of WARPS, and its column blocks a multiple of
+  // WARPS / r for each r it tiles at. Each r's units then end at a multiple of WARPS, so a claim's warps share one r
   u32 nl = 0;
   for (u32 b = lane; b < nrb; b += 32) nl += !live || live[b] ? 1u : 0u;
   nl = __reduce_add_sync(0xFFFFFFFFu, nl);
-  const u32 nt = nl > 1 ? nl & ~1u : nl;
-  u32 lr = (H1U_JCS >= 4 && WARPS % 4 == 0 && nt % 4 == 0) ? 2 : (WARPS % 2 == 0 && nt % 2 == 0) ? 1 : 0;
+  u32 n4 = H1U_JCS >= 4 && WARPS % 4 == 0 ? nl & ~3u : 0, n2 = WARPS % 2 == 0 ? (nl - n4) & ~1u : 0;
   bool ok = true;
   for (u32 i = lane; i < ncalls; i += 32) {
     const u32 ncb = calls[i].N / 32;
-    ok = ok && calls[i].u0 % WARPS == 0 && calls[i + 1].u0 - calls[i].u0 == nrb * ncb && ncb % (WARPS >> lr) == 0;
+    ok = ok && calls[i].u0 % WARPS == 0 && calls[i + 1].u0 - calls[i].u0 == nrb * ncb &&
+         ncb % (WARPS >> (n2 ? 1 : 2)) == 0;
   }
-  if (!__all_sync(0xFFFFFFFFu, ok)) lr = 0;
+  if (!__all_sync(0xFFFFFFFFu, ok)) n4 = n2 = 0;
   for (;;) {
     __syncthreads();
     if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
@@ -2913,7 +2913,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
     const u32 g0 = claim, gu = g0 + wp;
     if (g0 >= total) break;
     if (gu >= total) continue;
-    h1umj_cs(calls, ncalls, M, live, gu, nl, nt, lr, smem[wp], jcb);
+    h1umj_cs(calls, ncalls, M, live, gu, nl, n4, n2, smem[wp], jcb);
     __syncwarp();
   }
 #else
