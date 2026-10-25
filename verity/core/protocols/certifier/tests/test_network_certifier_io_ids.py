@@ -5,6 +5,7 @@ negative is REDTEAM phase 9 #1 (`cursor/redteam-phase9-iotiereq-061a`): IoTieReq
 bound to nothing, so the model could compute on another prompt of the same length."""
 from __future__ import annotations
 
+import hashlib
 import random
 
 import numpy as np
@@ -12,11 +13,13 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.ml.commitments import advice as ADV
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_ids as I
 from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import id_request
 
 PL = (5, 60, 12, 100, 1)
@@ -137,6 +140,62 @@ def test_a_commit_that_differs_at_a_source_is_refused_in_both_buckets():
     insts = _link(ACROSS, tokens=tokens)
     bad = {_holding(insts, 1, 3), _holding(insts, 3, 3)}
     assert len(bad) == 2 and _verdicts(insts) == [int(k not in bad) for k in range(BUCKETS)]
+
+
+def test_the_read_rows_are_the_commits_at_the_maps_steps():
+    """Each bucket's read rows are the Commit's registered rows (`verity.ml.commitments.advice`'s registration) at its
+    map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have unit u read bucket u's steps, and the Lean
+    verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a step
+    other than the Commit's, as `reads_open` does in the clear."""
+    insts, count = _link(ACROSS), len(_steps(ACROSS))
+    seed = hashlib.sha512(b"commit").digest()
+    rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
+    salts = [IT.fake_salt(b"commit", s) for s in range(count)]
+    root = ADV.register(rows, 32 * P, seed, salts).root
+    assert root == insts[0].port_root
+    dom = IT.domain(seed, count)
+    ports = I.port_reads([i.map for i in insts], root, dom.domain_id, count, P)
+    assert [p["reads"] for p in ports.values()] == [[i.map.steps[s] for i in insts] for s in range(SHAPE.S)]
+
+    def refusals(insts_):
+        return [WR.refusal(ports[f"{IT.PORT}[{s}]"], dom, {
+            "value": I.INPUT_IDS, "positions": [i.map.steps[s] for i in insts_],
+            "paths": [b"".join(i.paths[s]).hex() for i in insts_]}, [WR.bc(i.port[s], i.port_salts[s]) for i in insts_])
+            for s in range(SHAPE.S)]
+
+    assert refusals(insts) == [None] * SHAPE.S and all(I.reads_open(SHAPE, i) for i in insts)
+    u, b = 4, insts[4]
+    row = bytearray(b.port[1])
+    row[3] ^= 1
+    steps = list(b.map.steps)
+    steps[0] = (steps[0] + 1) % count
+    for name, bad in {"a row": b._replace(port=(b.port[0], bytes(row), *b.port[2:])),
+                      "a salt": b._replace(port_salts=(IT.fake_salt(b"x", 0), *b.port_salts[1:])),
+                      "a step": b._replace(map=b.map._replace(steps=tuple(steps)))}.items():
+        assert not I.reads_open(SHAPE, bad) and not I.reference(SHAPE, bad), name
+        assert any(refusals([*insts[:u], bad, *insts[u + 1:]])), name
+
+
+def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registration():
+    """REDTEAM phase 19 #1: the forward computes request 2's position 5 on another id, and the Commit registers that
+    tree. The prover hands the verifier instances opened from a second tree of the user's ids under the same public
+    domain, so every unit is 1. The verifier's own ports name the registration's root and its own maps' steps, never
+    an instance's, so the second tree's rows open none of them."""
+    tokens = _tokens(_prompts(ACROSS))
+    tokens[2][5] ^= 1
+    rows = I.commit_rows(_steps(ACROSS), tokens, P)
+    salts, levels, dom_id = I.commit(rows)
+    registered = ADV.register(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
+    forged = _link(ACROSS)
+    assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
+    assert [I.unit_reference(SHAPE, i) for i in forged] == [1] * BUCKETS
+    ports = I.port_reads([i.map for i in forged], registered.root, dom_id, len(rows), P)
+    assert {p["root"] for p in ports.values()} == {registered.root.hex()}
+    dom = IT.domain(hashlib.sha512(b"commit").digest(), len(rows))
+    assert all(WR.refusal(ports[f"{IT.PORT}[{s}]"], dom, {
+        "value": I.INPUT_IDS, "positions": [i.map.steps[s] for i in forged],
+        "paths": [b"".join(i.paths[s]).hex() for i in forged]}, [WR.bc(i.port[s], i.port_salts[s]) for i in forged])
+        for s in range(SHAPE.S))
 
 
 def test_the_map_refuses_an_advice_it_cant_tie():
@@ -275,15 +334,15 @@ def test_the_chain_circuit_is_its_reference():
 
 @pytest.mark.slow
 def test_the_unit_is_its_reference():
-    """`IoTieRequestIds{512, 2, 2, 16, 8, 4}` against `reference` on the link's buckets, honest, under the phase-9
+    """`IoTieRequestIds{512, 2, 2, 16, 8}` against `unit_reference` on the link's buckets, honest, under the phase-9
     substitution, the Commit differing at a cache source, and a cache hit on another prefix in the same bucket; a
     field's class the sink, an entry's class another class, two fields' classes swapped, and a lane's carry-out one
     field short; and random switches for each routing. What the parts' tests can't reach is the wiring: each lane's
     cells into its frames on its ordinal, the slots of each cell from its frame and the bucket's running count of
-    fields, the classes' routing to the fields, the members (slots, the opened rows' entries, the sink) into the sort,
-    and IoTieRequest's and the port's checks beside them.
+    fields, the classes' routing to the fields, the members (slots, the read rows' entries, the sink) into the sort,
+    and IoTieRequest's checks beside them. No gate of it hashes: the read rows are the registered reads'.
 
-    Slow (the unit's ANDs traced and evaluated, most of them the port's SHA-512 bodies)."""
+    Slow (the unit's ANDs traced and evaluated on 19 cases, about 18 s)."""
     sh = SHAPE
     ps = _prompts(ACROSS)
     sub, src = _tokens(ps), _tokens(ps)
@@ -302,13 +361,13 @@ def test_the_unit_is_its_reference():
     short = (lanes_[0]._replace(fields_out=lanes_[0].fields_out - 1),) + lanes_[1:]
     insts += [h4._replace(map=mp._replace(keys=(sh.sink,) + mp.keys[1:])), h4._replace(map=mp._replace(ekeys=tuple(ek))),
               h4._replace(map=mp._replace(keys=tuple(ks))), h4._replace(request=h4.request._replace(lanes=short))]
-    want = [I.reference(sh, i) for i in insts]
-    assert want == [1] * BUCKETS + [0, 1, 0, 0] + [0, 0, 0, 0]
+    want = [I.unit_reference(sh, i) for i in insts]
+    assert want == [I.reference(sh, i) for i in insts] == [1] * BUCKETS + [0, 1, 0, 0] + [0, 0, 0, 0]
     rng = random.Random(3)
     cases = [(i, I.route_switches(sh, i), I.sort_switches(sh, i)) for i in insts]
     cases += [(h4, [rng.randrange(2) for _ in range(sh.route)], I.sort_switches(sh, h4)),
               (h4, I.route_switches(sh, h4), [rng.randrange(2) for _ in range(sh.sort)])]
-    fn = bind(I.IoTieRequestIds, B=sh.B, L=sh.L, R=sh.R, P=sh.P, S=sh.S, DS=sh.DS)
+    fn = bind(I.IoTieRequestIds, B=sh.B, L=sh.L, R=sh.R, P=sh.P, S=sh.S)
     args = [I.arguments(sh, i, r, s) for i, r, s in cases]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(len(args[0]))])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want + [0, 0]
@@ -316,7 +375,7 @@ def test_the_unit_is_its_reference():
     a = lambda f: HC.ands(f, memo)  # noqa: E731
     rq = sh.request
     parts = (rq.N * (a(bind(Q.IoTieRequestFrame, B=sh.B)) + a(bind(Q.IoTieRequestStep)) + a(bind(I.IoTieIdsSlots, B=B)))
-             + rq.L * a(bind(Q.IoTieRequestEnd)) + a(bind(IT.IoTiePort, P=sh.P, S=sh.S, DS=sh.DS))
+             + rq.L * a(bind(Q.IoTieRequestEnd))
              + a(bind(IT.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1)) + a(bind(I.IoTieIdsKeys, NK=sh.NK, CB=sh.CB, D1=sh.D1))
-             + a(bind(IT.IoTieRoute, W=sh.CB + 33, D=sh.D2)) + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + rq.L + 2)
+             + a(bind(IT.IoTieRoute, W=sh.CB + 33, D=sh.D2)) + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + rq.L + 1)
     assert a(fn) == parts

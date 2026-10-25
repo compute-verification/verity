@@ -28,16 +28,17 @@ reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
-registers. Bucket t's unit opens S rows (`Shape.S`), at the steps its bucket's outputs were sampled in
-(`window_map`'s steps, public with the map), and its entry e = σ·P + r is opened row σ's r-th id. The real port is
-vllm's Commit (its binding map's `sampled_token_ids` under the run root), which this fake upstream stands in for.
+registers (`verity.ml.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
+unit reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public with the
+map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vllm's Commit (its binding map's
+`sampled_token_ids` under the run root), which this fake upstream stands in for.
 
-**What 1 means** (`reference`): every bucket row is row t of the warden's registered root (the verifier's
-registered read, outside the unit; here `rows_root`), and each bucket's unit is 1 (`bucket_reference`): its port
-rows open at their steps under the port's root, and every cell is its map's (`cells_match`): the record's kind on the
-record's stream, a `DATA` cell's id port entry e. So a duplicated, dropped, reordered, moved or altered cell, a covert
-byte, a cell on another stream or in another connection's slots, a fabricated output, an early, late or missing
-`END`, a `FAIL`, a wrong id and a forged port row each make it 0.
+**What 1 means** (`reference`): every bucket row is row t of the warden's registered root, and every port row bucket t
+reads is its step's row of the Commit's registered root (the verifier's registered reads, outside the unit; here
+`rows_root` and the port's openings), and each bucket's unit is 1 (`bucket_reference`): every cell is its map's
+(`cells_match`): the record's kind on the record's stream, a `DATA` cell's id port entry e. So a duplicated, dropped,
+reordered, moved or altered cell, a covert byte, a cell on another stream or in another connection's slots, a
+fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a forged port row each make it 0.
 
     IoTieCell{B}(cell: Array<B, Byte>) -> Array<67>        ok, data, end, stream (u32), id (u32), LSB first
     IoTieRoute{W, D}(xs: Array<M, Array<W>>, switches: Array<S_W>) -> Array<M, Array<W>>
@@ -46,42 +47,40 @@ byte, a cell on another stream or in another connection's slots, a fabricated ou
         -> Value<1>
     IoTieContent{B, R, P, S}(cells: Array<R, Array<B, Byte>>, map: Array<R, Array<8, Byte>>,
         port: Array<S, Array<4P, Byte>>, switches: Array<S_W>) -> Value<1>
-    IoTiePort{P, S, DS}(root, domain, port: Array<S, Array<4P, Byte>>, salts: Array<S, Salt>,
-        steps: Array<S, Array<DS>>, paths: Array<S, Array<DS, Digest>>) -> Value<1>
-    IoTieBucket{B, R, P, S, DS}(row: Array<8·R·B>, map, port_root, port_domain, port, port_salts, steps, paths,
-        switches) -> Value<1>
+    IoTieBucket{B, R, P, S}(row: Array<8·R·B>, map, port: Array<S, Array<4P, Byte>>, switches) -> Value<1>
         E = S·P port entries a bucket, M = 2^D ≥ max(R, E)
 
-`IoTieBucket` is the unit, one a bucket row. Its `row` is the warden's registered row t, which the proof system reads
-(the Lean verifier's registered reads, `flock-verify --registered`, unit t row t by `warden_rows.bucket_port`), so no
-gate of it hashes the row. It opens each port row at its step (`FrameV3Read`) and holds every cell to the map
-(`IoTieContent`): the port's E entries, each its id and its index e, routed to the slots by the prover's switches; any
-setting is a permutation, and `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. A
-link-window's tie is its T units. Public: the warden's root and domain id (its registration), the port's root and domain
-id, and, until the named gap closes, the steps and the map. Witness: the rows, the opened port rows, their salts and
-paths, and the switches.
+`IoTieBucket` is the unit, one a bucket row. Its `row` is the warden's registered row t and its `port` S rows of the
+Commit's registered port, which the proof system reads (the Lean verifier's registered reads, `flock-verify
+--registered`: unit t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th step by
+`port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries, each its
+id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and `IoTieMatch` holds
+each `DATA` cell's id to the entry the map names, by its index. A link-window's tie is its T units. Public: the
+warden's root and domain id (its registration), the port's root and domain id (the Commit's), and, until the named gap
+closes, the steps (the port's read positions) and the map. Witness: the rows and the read port rows (each with its salt
+and path, the registered reads'), and the switches.
 """
 from __future__ import annotations
 
 import hashlib
 import struct
 from dataclasses import dataclass
-from typing import NamedTuple, Sequence
+from typing import Any, NamedTuple, Sequence
 
-from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens, read
-from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
+from verity.ml.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import _PAD, CommitmentDomain, _hash, _uint
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
+from verity.core.protocols.sampled_proofs.one_stage import produced
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
-BIT, BYTE, DIGEST, SALT = HC.BIT, HC.BYTE, HC.DIGEST, HC.SALT
+BIT, BYTE = HC.BIT, HC.BYTE
 ID_DIGITS = 10
 ID_EVENT_HEAD = EVENT_HEAD[:EVENT_HEAD.index(b'"delta"')] + b'"token_id":'
 ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
@@ -101,6 +100,10 @@ CELL_OUT = 3 + 32 + 32
 MAP = struct.Struct(">II")
 EMPTY = 0xFFFF_FFFF
 END_ENTRY = EMPTY - 1
+#: the unit's port parameter: S whole rows of the Commit's port, row s a registered read at its own key `port[s]`
+PORT = "port"
+#: the registered value the egress port reads, the Commit's sampled ids
+SAMPLED = "sampled_token_ids"
 
 
 # --- the cells -------------------------------------------------------------------------------------------------------
@@ -197,7 +200,7 @@ def route_depth(cells: int, entries: int) -> int:
 @dataclass(frozen=True)
 class Shape:
     """A link-window's egress, T ≥ 2 buckets of R slots of B-byte cells (N = T·R cells, the warden's T rows of R =
-    lanes·r slots), and each bucket's port: S opened rows of P ids each (E = S·P entries) from a port tree of depth
+    lanes·r slots), and each bucket's port: S read rows of P ids each (E = S·P entries) from a port tree of depth
     DS. A bucket's routing is over M = 2^D ≥ max(R, E) positions."""
 
     B: int
@@ -461,20 +464,21 @@ def _check_sizes(inst: Instance) -> None:
 
 
 def _port_opens(inst: Instance, t: int) -> bool:
+    """Bucket t's port rows open at its steps under the Commit's root: its `port_reads`, in the clear."""
     return all(opens(SCHEMA, inst.port_root, inst.port_domain, HC.hiding_value(r, s), x, list(p)) == 1
                for r, s, x, p in zip(inst.port[t], inst.port_salts[t], inst.steps[t], inst.paths[t]))
 
 
 def bucket_reference(inst: Instance, t: int) -> bool:
-    """`IoTieBucket`'s output for bucket t: its port rows open at its steps, and its cells are its records'."""
+    """`IoTieBucket`'s output for bucket t: its cells are its records', with its port rows' ids."""
     _check_sizes(inst)
     b = inst.bucket(t)
-    return _port_opens(inst, t) and cells_match(inst.shape, inst.cells[b], inst.map[b], inst.port[t])
+    return cells_match(inst.shape, inst.cells[b], inst.map[b], inst.port[t])
 
 
 def reference_parts(inst: Instance) -> dict[str, bool]:
-    """Each part's verdict in the clear: the cells' root (the registered reads of the rows), every bucket's port
-    openings and every bucket's content."""
+    """Each part's verdict in the clear: the cells' root and every bucket's port openings (the registered reads of the
+    rows and of the port), and every bucket's content (its unit)."""
     _check_sizes(inst)
     sh = inst.shape
     cells = rows_root(inst.cells_domain, bucket_rows(sh, inst.cells), inst.cell_salts) == inst.cells_root
@@ -484,8 +488,30 @@ def reference_parts(inst: Instance) -> dict[str, bool]:
 
 
 def reference(inst: Instance) -> bool:
-    """The link-window's tie: its rows are the registered root's, and every bucket's unit is 1."""
+    """The link-window's tie: its rows are the registered roots', and every bucket's unit is 1."""
     return all(reference_parts(inst).values())
+
+
+# --- the verifier's registered reads of the port ---------------------------------------------------------------------
+
+def port_reads(steps: Sequence[Sequence[int]], root: bytes, domain_id: bytes, count: int, P: int,
+               value: str = SAMPLED, reads_from: int = 0) -> dict[str, dict[str, Any]]:
+    """The verifier's own `--registered` ports (`warden_rows.reads_file`'s `ports`) of a population of units that each
+    read S rows of the Commit's port, its `count` rows of P ids under `root` in the domain `domain_id`: `port[s]` (`port`
+    when S = 1, as `registered.reads` keys a parameter of one row), the unit's s-th port row, has unit `reads_from + u`
+    read row steps[u][s]. The steps are the verifier's map's, so every read is at a public position, and the Lean
+    verifier holds each read row to its leaf of the Commit's root by its b ‖ c (`registered.verify_read`), as it holds
+    a bucket row to the warden's (`warden_rows.bucket_port`)."""
+    widths = {len(st) for st in steps}
+    if len(widths) != 1 or 0 in widths:
+        raise ValueError("every unit reads the same S >= 1 port rows")
+    if any(type(x) is not int or not 0 <= x < count for st in steps for x in st):
+        raise ValueError(f"a read is a step of the Commit's {count} rows")
+    S = widths.pop()
+    e = {"leaves": count, "words": 2 * P, "word_bits": G.WORD_BITS, "domain": bytes(domain_id).hex()}
+    extra = {G.READS_FROM: int(reads_from)} if reads_from else {}
+    return {(PORT if S == 1 else f"{PORT}[{s}]"): produced.port(value, e, bytes(root).hex(), [st[s] for st in steps],
+                                                                SCHEMA) | extra for s in range(S)}
 
 
 # --- the prover's openings and routing -------------------------------------------------------------------------------
@@ -760,56 +786,23 @@ IoTieContent = CompositeDefinition(
         "the slots and matched there (`IoTieMatch`)")
 
 
-def _sig_port(S):
-    for name, least, most in (("P", 1, 1 << 28), ("S", 1, 1 << 32), ("DS", 1, 32)):
-        if type(getattr(S, name)) is not int or not least <= getattr(S, name) <= most:
-            raise ValueError(f"a port read has {least} <= {name} <= {most}, not {getattr(S, name)!r}")
-    return ((("root", DIGEST), ("domain", DIGEST), ("port", Array(S.S, Array(4 * S.P, BYTE))), ("salts", Array(S.S, SALT)),
-             ("steps", Array(S.S, Array(S.DS, BIT))), ("paths", Array(S.S, Array(S.DS, DIGEST)))), BIT)
-
-
-def _body_port(B, S, root, dom, port, salts, steps, paths):
-    rr, sr, st, pa = HC._refs(port), HC._refs(salts), HC._refs(steps), HC._refs(paths)
-    nb, sb, db = 32 * S.P, SALT.leaves, DIGEST.leaves * S.DS
-    oks = []
-    for s in range(S.S):
-        x = B.call(bind(HC.NetworkRowDigest, N_BITS=nb), HC._coll(Array(nb, BIT), rr[nb * s:nb * (s + 1)]))
-        v = B.call(Hm96Sha512Leaf, x, HC._coll(SALT, sr[sb * s:sb * (s + 1)]))[2]
-        oks += HC._refs(B.call(read(S.DS, SCHEMA), root, dom, v, HC._coll(Array(S.DS, BIT), st[S.DS * s:S.DS * (s + 1)]),
-                               HC._coll(Array(S.DS, DIGEST), pa[db * s:db * (s + 1)])))
-    if S.S == 1:
-        return HC._coll(BIT, oks)
-    return B.call(BL.and_gate(S.S), HC._coll(Array(S.S, BIT), oks))
-
-
-IoTiePort = CompositeDefinition(
-    "IoTiePort", 1, ("P", "S", "DS"), _sig_port, _body_port, conformance="exact-model-tested",
-    doc="1 iff each of the S port rows of P u32 ids, its hm96-sha512/row/v2 leaf under its salt, opens at its step under "
-        "root in the depth-DS dense frame-v3-sha512 tree of domain id domain (`FrameV3Read`)")
-
-
 def _sig_bucket(S):
     sh = _bucket_shape(S)
-    return ((("row", Array(8 * S.R * S.B, BIT)), ("map", Array(S.R, Array(MAP.size, BYTE))), ("port_root", DIGEST),
-             ("port_domain", DIGEST), ("port", Array(S.S, Array(4 * S.P, BYTE))), ("port_salts", Array(S.S, SALT)),
-             ("steps", Array(S.S, Array(S.DS, BIT))), ("paths", Array(S.S, Array(S.DS, DIGEST))),
-             ("switches", Array(sh.switches, BIT))), BIT)
+    return ((("row", Array(8 * S.R * S.B, BIT)), ("map", Array(S.R, Array(MAP.size, BYTE))),
+             (PORT, Array(S.S, Array(4 * S.P, BYTE))), ("switches", Array(sh.switches, BIT))), BIT)
 
 
-def _body_bucket(B, S, row, mp, port_root, port_domain, port, port_salts, steps, paths, switches_):
-    oks = [B.call(bind(IoTiePort, P=S.P, S=S.S, DS=S.DS), port_root, port_domain, port, port_salts, steps, paths),
-           B.call(bind(IoTieContent, B=S.B, R=S.R, P=S.P, S=S.S), row.reshape(Array(S.R, Array(S.B, BYTE))), mp, port,
-                  switches_)]
-    bits = [r for o in oks for r in HC._refs(o)]
-    return B.call(BL.and_gate(2), HC._coll(Array(2, BIT), bits))
+def _body_bucket(B, S, row, mp, port, switches_):
+    return B.call(bind(IoTieContent, B=S.B, R=S.R, P=S.P, S=S.S), row.reshape(Array(S.R, Array(S.B, BYTE))), mp, port,
+                  switches_)
 
 
 IoTieBucket = CompositeDefinition(
-    "IoTieBucket", 1, ("B", "R", "P", "S", "DS"), _sig_bucket, _body_bucket, conformance="exact-model-tested",
-    doc="1 iff each port row opens at its step under the port root (`IoTiePort`), and every cell of the bucket row "
-        "(the warden's registered row, read by the proof system: bit 8k + i is bit i of byte k) is its map record's, "
-        "with a DATA cell's id the port entry the record names (`IoTieContent`): the I/O tie of one egress bucket row, "
-        "every cell opened; a link-window's tie is its T rows'")
+    "IoTieBucket", 1, ("B", "R", "P", "S"), _sig_bucket, _body_bucket, conformance="exact-model-tested",
+    doc="1 iff every cell of the bucket row (the warden's registered row, read by the proof system: bit 8k + i is bit i "
+        "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
+        "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
+        "one egress bucket row, every cell opened; a link-window's tie is its T rows'")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -821,26 +814,16 @@ def content_arguments(inst: Instance, t: int, bits: Sequence[int]) -> list[list[
             [x for r in inst.port[t] for x in HC._bytes_bits(r)], list(bits)]
 
 
-def port_arguments(inst: Instance, t: int) -> list[list[int]]:
-    """Bucket t's `IoTiePort` arguments in its signature's order, each its leaves' bits."""
-    d, ds = HC._digest_bits, inst.shape.DS
-    return [d(inst.port_root), d(inst.port_domain), [b for r in inst.port[t] for b in HC._bytes_bits(r)],
-            [b for s in inst.port_salts[t] for b in d(s)], [b for s in inst.steps[t] for b in HC._int_bits(s, ds)],
-            [b for p in inst.paths[t] for x in p for b in d(x)]]
-
-
 def bucket_arguments(inst: Instance, t: int, bits: Sequence[int]) -> list[list[int]]:
-    """Bucket t's `IoTieBucket` arguments in its signature's order, each its leaves' bits: the row first, as the
-    registered read gives it."""
-    row, mp, _, sw = content_arguments(inst, t, bits)
-    root, dom, port, salts, steps, paths = port_arguments(inst, t)
-    return [row, mp, root, dom, port, salts, steps, paths, sw]
+    """Bucket t's `IoTieBucket` arguments in its signature's order, each its leaves' bits: the row and the port rows as
+    the registered reads give them, then the map and the switches as `IoTieContent` takes them."""
+    return content_arguments(inst, t, bits)
 
 
 __all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "END", "END_ENTRY", "ID_AT", "ID_EVENT_BYTES", "Instance",
-           "IoTieBucket", "IoTieCell", "IoTieContent", "IoTieMatch", "IoTiePort", "IoTieRoute", "MAP", "MapEntry",
-           "Output", "Parsed", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply", "bucket_arguments",
+           "IoTieBucket", "IoTieCell", "IoTieContent", "IoTieMatch", "IoTieRoute", "MAP", "MapEntry", "Output", "PORT",
+           "Parsed", "SAMPLED", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply", "bucket_arguments",
            "bucket_reference", "bucket_rows", "cells_match", "content_arguments", "data_cell", "domain", "end_cell",
            "entry_perm", "expected_cell", "fake_salt", "id_event", "map_bytes", "open_port", "pad_cell", "parse_cell",
-           "port_arguments", "port_id", "port_row", "reference", "reference_parts", "route_depth", "rows_levels",
+           "port_id", "port_reads", "port_row", "reference", "reference_parts", "route_depth", "rows_levels",
            "rows_path", "rows_root", "switches", "window_map"]

@@ -396,8 +396,9 @@ witness that opens those: the cells' and rows' salts, the rows' paths and the ro
 (`test_network_certifier_io_tie_phase4.py`), and so is a two-sided tamper of the routing: two ids swapped together
 with the switches that route each cell the entry carrying its new id. This also closes NETREV's finding on v3: the
 table's binding to the token port was outside the tie and load-bearing, and had to be an `All` unit's egress transfer
-gates. v4 has no table. `IoTiePort` opens each id from the Commit's own rows under the Commit's registered root,
-inside this unit, and `IoTieMatch` holds each routed entry's index to the one the map names.
+gates. v4 has no table. Each id is an entry of the Commit's own rows, which the unit reads at the map's steps as
+registered rows under the Commit's root (`io_tie.port_reads`), and `IoTieMatch` holds each routed entry's index to the
+one the map names.
 
 **(a) Decision: the token's id in the frame, not its text.** Each egress event carries one sampled id, and the user
 decodes it with the public tokenizer.
@@ -545,7 +546,7 @@ two ties between the advice's requests and the warden's certified ingress record
 - **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
   prompt_len must be the number of prompt fields in the request the warden certified on ingress. This unit reads
   egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
-  is the ingress-ids tie's (`io_ids`, below), reading the Commit's input rows as `IoTiePort` reads its sampled rows.
+  is the ingress-ids tie's (`io_ids`, below), reading the Commit's input rows as this unit reads its sampled rows.
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, L, R}`: the reference, the warden's own ingress as its fake
 upstream (`serve`, which drives `warden.Warden._ingress`) and the Boolean Definitions, with its sidecar). It is one
@@ -616,11 +617,13 @@ unit outputs 1 exactly when, in each lane of ordinal q:
 - **Not in it: the prompt ids' values** (REDTEAM phase 9 #1: the tie counts each request's prompt fields and checks
   each is a u32, but the ids the user sent are tied to nothing). The ingress-ids tie below closes it. Also not in it:
   the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s).
-- **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, L, R, P, S, DS}`: the reference on a fake upstream Commit
+- **The ingress-ids tie** (`io_ids`, `IoTieRequestIds{B, L, R, P, S}`: the reference on a fake upstream Commit
   and the warden's own ingress, and the Boolean Definition, with its sidecar), one unit a bucket row like
-  IoTieRequest. It is the ingress analog of `IoTiePort`: IoTieRequest's scan plus the Commit's `c00.input/ids` rows
-  opened, and every computation of a prompt position, and every prefix-cache read in place of one, held to the id
-  the user sent there. It is meant to replace IoTieRequest as the ingress unit once the Commit side exists.
+  IoTieRequest. It is the ingress analog of the egress port's reads: IoTieRequest's scan plus the Commit's
+  `c00.input/ids` rows at the map's steps, read as registered rows under the root and domain of the Commit's
+  registration, which the verifier holds and no instance names (`io_ids.port_reads`), and every computation of a
+  prompt position, and every prefix-cache read in place of one, held to the id the user sent there. It is meant to
+  replace IoTieRequest as the ingress unit once the Commit side exists.
   - **What PROVE-PATH must expose** (the Commit side; the fake upstream's layout, `io_ids.commit_rows`):
     `c00.input/ids` of every executed step as one `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the
     step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
@@ -651,17 +654,26 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     non-decreasing, one value a class but the sink, and each class starting with a slot. A Beneš network is a
     permutation under any switches, so every member is in the order and the switches can only sort. On a link whose
     every bucket row is accepted, every computation of request i's prompt position p, and every KV read in place of
-    one, is the id the user sent. Public: IoTieRequest's lanes, the Commit's root and domain id, the steps, `keys` and
-    `ekeys`. Witness: the row, the opened rows, their salts and paths, and both routings.
+    one, is the id the user sent. Public: IoTieRequest's lanes, the Commit's root and domain id, the steps (the
+    port's read positions), `keys` and `ekeys`. Witness: the row and the read rows (each with its salt and path, the
+    registered reads'), and both routings.
   - **Tests** (`test_network_certifier_io_ids.py`): a link served through the warden, of chunked prefill across
     buckets, a recompute after a preemption and a cache hit from another bucket's request or the same bucket's, is
     accepted in every bucket. Refused: REDTEAM phase 9 #1 (one prompt id substituted in the Commit, which
     IoTieRequest accepts), a cache hit on another prefix (either kind), and a Commit that differs at a cache source
     (both buckets). The unit is its reference on those and on map, lane and switch tampers
     (`test_the_unit_is_its_reference`, slow).
-  - **Cost.** `IoTieRequestIds{512, 2, 2, 16, 8, 4}` is 8,832,144 ANDs, most of it the 8 port rows' SHA-512 bodies;
-    the sidecar's `{512, 1, 1, 2, 2, 1}` is 1,170,444. A bucket opens the steps that compute its own fields, so a
-    step whose tokens' fields are in k buckets is opened k times, and each bucket's sort is over its NK + E members.
+  - **Cost.** `IoTieRequestIds{512, 2, 2, 16, 8}` is 431,496 ANDs and the sidecar's `{512, 1, 1, 2, 2}` 69,132.
+    No gate of it hashes: the read rows are registered reads, whose rows the statement's registered-read slots hash,
+    as the bucket row's. Opened in the unit (each row's digest, its hm96 leaf and `FrameV3Read{DS}`), they were 95%
+    of it: 8,832,144 and 1,170,444. At the ingress shape B = 4,096, R = 1, P = 512, S = 6
+    (r20261025-002531-cb26), `IoTieRequestIds{4096, 1, 1, 512, 6}` is 2,701,439 ANDs and `{4096, 16, 1, 512, 6}`
+    20,300,946. Of them, IoTieRequest's scan is 166,816 and 2,669,055, and the sort's `IoTieRoute{CB + 33, D2}`
+    1,978,368 (D2 = 12) and 10,174,464 (D2 = 14). With the port opened in the unit they were 20,569,541 and
+    38,169,048: `IoTiePort{512, 6, 10}` adds 17,868,101 ANDs and a join, as it does to `IoTieBucket{256, 16, 512, 6,
+    10}` (20,009,029, against 2,140,927). Building them takes 15.1 GB and 84.7 GB (204 s and 1,241 s), nearly all of
+    it `IoTieRoute`'s flat trace. A bucket reads the steps that compute its own fields, so a step whose tokens'
+    fields are in k buckets is read k times, and each bucket's sort is over its NK + E members.
     A cheaper split has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival
     order, and hold every computation and cache hit to it in the Commit's units; the tie would then read the
     bucket's stream entries in order with no map or sort.
@@ -672,7 +684,7 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   1.14 × 10^10 when the unit recomputed the window's rows root (the rows 92% of it), plus each row's hashing in
   the registered read, which the proof system does outside the unit.
 
-**The unit,** `IoTieBucket{B, R, P, S, DS}`, one a bucket row (R = lanes·r slots):
+**The unit,** `IoTieBucket{B, R, P, S}`, one a bucket row (R = lanes·r slots):
 - **The cells** are the warden's per-window value, as WARDEN's registration v2 commits them: each bucket's R cells are
   one `hm96-sha512/row/v2` row of R·B bytes under a fresh salt, in a `frame-v3-sha512` tree of T rows (a dense
   domain, its pads to a power of two). The unit's `row` input is the registered port (`warden_rows.bucket_port`: unit t
@@ -680,15 +692,17 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   warden's root, and no gate of the unit hashes the row or climbs the tree.
 - **The port** is the Commit's value: one `hm96-sha512/row/v2` row a step of the session, its P sampled ids (u32be in
   batch-row order, zero past its batch), in a dense `frame-v3-sha512` tree of 2^DS steps whose root and domain the
-  Commit registers. The unit opens its bucket's S rows at the map's steps (`IoTiePort`: each row's digest, its hm96
-  leaf and `FrameV3Read{DS}`). This is the fake upstream's layout. The real port is vllm's Commit
+  Commit registers (`verity.ml.commitments.advice`'s registration of the rows). The unit's `port` input is its
+  bucket's S rows at the map's steps, each a registered port (`io_tie.port_reads`: `port[s]` reads the bucket's s-th
+  step), so the proof system's registered reads check them under the Commit's root, and no gate of the unit hashes a
+  row or climbs the tree. This is the fake upstream's layout. The real port is vllm's Commit
   (`runner.sampler/sampled_token_ids`, int32 [num_reqs, 1], under the run root's binding map): vllm owns its layout,
-  and `IoTiePort` follows it.
+  and the reads follow it.
 - **The content** (`IoTieContent{B, R, P, S}`) parses each cell, routes the bucket's port entries and matches them.
 - **Public:** the warden's registration (root and domain id), the port's root and domain id, the statics, and in v4
   the bucket's records and steps (the named gap). At the target the map registration's root and domain id replace
   them.
-- **Witness:** the row and its salt (the registered read's), the S opened port rows with their salts and paths, and
+- **Witness:** the row and its salt, and the S port rows with their salts and paths (the registered reads'), and
   the switches.
 - **Output:** one bit, ok. A link-window's tie is its T units'.
 
@@ -723,9 +737,8 @@ both the cells and the Commit's step rows read as registered rows, by the warden
 
 So the layout to register is a row a bucket. Row t − w·T holds bucket t's S slots in slot order, slot j at bytes
 j·B to (j + 1)·B: WARDEN's row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At WARDEN's schedule that
-row is 4 KiB. Built that way: `IoTieBucket` reads its one bucket row as a registered port and recomputes no cells
-root. It still opens the Commit's step rows in the unit (`FrameV3Read{DS}`), until the Commit registers them; read
-as registered rows too, each bucket's unit would read S + 1.
+row is 4 KiB. Built that way: `IoTieBucket` reads its one bucket row and its S Commit step rows as registered ports,
+S + 1 reads a unit, and recomputes no root and hashes no row.
 
 **What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the window
 (`release[k] // T = w`):
@@ -750,7 +763,7 @@ steps of P = 64 from a session of 2^10 (E = M = 8,192). Served is `SERVED`'s sha
 ingress frames 4,096. The table is v4's window unit, one a link-window with both roots in it and one routing over
 the window's N cells, the comparison the bucket unit (below the table) is priced against. Each part's formula is
 exact, checked against `HC.ands` at two sizes or more and the whole window at T = 3, R = 4, P = 4, S = 4, DS = 3
-(6,721,770 ANDs: `IoTiePort` 3,534,423, the cells' rows root 3,139,634, the content 47,711 and 2 joining them), and
+(6,721,770 ANDs: the port's reads 3,534,423, the cells' rows root 3,139,634, the content 47,711 and 2 joining them), and
 extrapolated from there; nothing at these sizes is built.
 
 | Part | Rehearsal | Served | From |
@@ -758,7 +771,7 @@ extrapolated from there; nothing at these sizes is built.
 | Cells' rows: digests | 684,933,540 | 117,273,138,600 | T × ⌈(R·B + 17) / 128⌉ compressions of 57,947 (`NetworkRowDigest`) |
 | Cells' rows: hm96 leaves | 12,935,820 | 129,358,200 | T × `Hm96Sha512Leaf`, 215,597 |
 | Cells' tree | 17,487,788 | 282,689,596 | T `FrameV3Leaf`s, the frame-v3 pads to a power of two, the nodes, `LmsEqual` |
-| The port's rows and reads | 277,345,151 | 19,256,418,303 | `IoTiePort`: S × (`NetworkRowDigest{32P}`, `Hm96Sha512Leaf`, `FrameV3Read{DS}`) + S − 1; 2,166,758 and 4,701,273 a step |
+| The port's rows and reads | 277,345,151 | 19,256,418,303 | v4's port read in the unit: S × (`NetworkRowDigest{32P}`, `Hm96Sha512Leaf`, `FrameV3Read{DS}`) + S − 1; 2,166,758 and 4,701,273 a step |
 | Cells' parse | 21,626,640 | 3,720,664,800 | N × `IoTieCell`, 3,678 |
 | Routing | 4,608,000 | 1,063,256,064 | `IoTieRoute`, W = 32 + D ANDs a switch |
 | Match | 764,399 | 131,507,999 | `IoTieMatch`, N·(130 + D − tz(E)) − 1 |
@@ -777,25 +790,26 @@ extrapolated from there; nothing at these sizes is built.
   window's 35,386 tokens (REDTEAM's figure) fill 3.5% of N, and the pads are hashed, routed and matched as data cells
   are.
 
-**The bucket unit's cost.** `IoTieBucket{B, R, P, S_t, DS}` is `IoTiePort{P, S_t, DS}`, R × `IoTieCell{B}`,
-`IoTieRoute{32 + D_t, D_t}` and `IoTieMatch{R, D_t, S_t·P}` (N·(131 + D − tz(E)) − 1), and one join, with
-D_t = ⌈log2 max(R, S_t·P)⌉ and S_t the bucket's steps. At the tests' shape `IoTieBucket{256, 8, 4, 4, 3}` is
-3,570,599 ANDs: `IoTiePort` 3,534,423, `IoTieContent` 36,175 (8 × 4,139, routing 2,016, match 1,047) and the join.
-Against the table:
-- the cells' tree goes (the registered read climbs it), and the rows' digests and hm96 leaves move into the
-  statement's registered-read slots at about the same ANDs;
+**The bucket unit's cost.** `IoTieBucket{B, R, P, S_t}` is `IoTieContent{B, R, P, S_t}`: R × `IoTieCell{B}`,
+`IoTieRoute{32 + D_t, D_t}` and `IoTieMatch{R, D_t, S_t·P}` (N·(131 + D − tz(E)) − 1), with
+D_t = ⌈log2 max(R, S_t·P)⌉ and S_t the bucket's steps. At the tests' shape `IoTieBucket{256, 8, 4, 4}` is 36,175 ANDs
+(8 × 4,139, routing 2,016, match 1,047), against 3,570,599 when the unit opened its four port rows itself (3,534,423
+of it). Against the table:
+- the cells' tree and the port's paths go (the registered reads climb them), and the rows' digests and hm96 leaves,
+  the cells' and the port's, move into the statement's registered-read slots at about the same ANDs: 389,438 a port
+  row at the rehearsal and 737,120 served, of a read's 2,166,758 and 4,701,273;
 - the parse is 4,139 a cell (the template spans the P-byte event), 12.5% more;
 - the routing and the match are a bucket's, over its own entries;
-- the port is Σ_t S_t step reads, not S: each bucket opens the steps its outputs were sampled in, so a step whose
-  outputs a window releases over several buckets is opened by each.
+- the port is Σ_t S_t step reads, not S: each bucket reads the steps its outputs were sampled in, so a step whose
+  outputs a window releases over several buckets is read by each.
 
 With each step's outputs released in one bucket (S_t = 3 at the rehearsal, 7 served, rounded up), the window is
-1.118 × 10^9 at the rehearsal (+9.6%, the port's 180 reads against 128) and 1.420 × 10^11 served, as the table's. If
-every output of a served window's 35,386 is its bucket's own step (59 a bucket), the port is 1.66 × 10^11 and the
-window 2.94 × 10^11, twice the table's. The engine's steps against the warden's release set where between those a
-link falls. The levers are the port's: the Commit's step rows read as registered rows (3.96 × 10^6 of each read's
-4.70 × 10^6 is its path), or a port laid out by release bucket. The other shape keeps the table's S reads: a window
-unit with T registered row ports, one routing over the window's cells and one port opening. It needs a statement of
+7.98 × 10^8 at the rehearsal (−21.7%: 180 port rows read against the table's 128 opened, none with its path) and
+1.254 × 10^11 served (−11.6%). If every output of a served window's 35,386 is its bucket's own step (59 a bucket), the
+port's rows are 2.61 × 10^10 and the window 1.54 × 10^11, 8% over the table's (2.94 × 10^11 when each bucket opened
+its rows in the unit). The engine's steps against the warden's release set where between those a link falls. The
+port's remaining lever is a port laid out by release bucket. The other shape keeps the table's S reads: a window
+unit with T registered row ports, one routing over the window's cells and one port read. It needs a statement of
 T registered ports (600 served, of 431,616 bytes each), which hasn't been measured, where the bucket unit reads one
 row a unit (`warden_rows.bucket_port`).
 
@@ -929,7 +943,9 @@ unit reads its row there by a registered read. The reference is `io_tie.data_cel
 - **Registered:** the root and the domain id, with the window w; bucket t is session bucket w·T + t. The T salts go
   to the prover, privately: they are its witness, and it rebuilds the cells from the map and the port.
 - **The port's rows** (the fake upstream's; the real ones are vllm's) are the same leaves and tree over the session's
-  2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`).
+  2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`:
+  `verity.ml.commitments.advice`'s registration of the rows), which each unit reads as registered rows
+  (`port_reads`).
 - **Not needed by the All tie:** a per-stream sequence number in the header.
 
 **What the prover keeps,** from the window's registration until the tie's outcome of record, by `proof_deadline`: the
@@ -950,10 +966,10 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root are
   compute's and vllm's.
 
-**Reuse.** `Sha512Compress`, `NetworkRowDigest`, `Hm96Sha512Leaf`, `FrameV3Leaf`, `FrameV3Node`, `FrameV3Read` and
-`LmsEqual`. The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTiePort`,
-`IoTieBucket`) are composites of those, with no new hash. No unit recomputes a rows root: both ties read the warden's
-registered rows.
+**Reuse.** The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTieBucket`) are Boolean
+composites with no hash. No unit hashes a row or climbs a tree: both ties read the warden's registered rows, and the
+egress and ingress-ids ties the Commit's, whose rows the statement's registered-read slots hash (`NetworkRowDigest`'s
+and `Hm96Sha512Leaf`'s work) and whose paths the verifier climbs.
 
 **The prototype** (`io_tie`, on the warden's own egress and a fake upstream's port) has the reference
 (`io_tie.reference`, in the clear), the Boolean Definitions above, and their tests:

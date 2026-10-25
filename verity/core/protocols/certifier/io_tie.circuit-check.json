@@ -1,5 +1,9 @@
 {
  "definitions": {
+  "IoTieBucket_v1{B=256,R=8,P=4,S=4}": {
+   "and": 35663,
+   "type": "1008f482dfa53d2af1285b7a543cb85a4999989222676cf0f7be177b62c61b0e6728a70c1d965649936a2b4169e33e748080e72015614fd62519de3904e512d2"
+  },
   "IoTieCell_v1{B=256}": {
    "and": 4139
   },
