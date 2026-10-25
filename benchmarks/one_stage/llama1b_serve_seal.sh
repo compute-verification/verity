@@ -42,7 +42,7 @@ export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/ca
 # collector's 4096 MiB default, and isn't committed; lease --mem-gb 256 with it.
 [ "$MAX_MODEL_LEN" -gt 512 ] && export VERITY_LEARN_HOST_BUDGET_MB=${VERITY_LEARN_HOST_BUDGET_MB:-65536}
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
-{ id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "serve dir $D port $PORT until $UNTIL"; nvidia-smi -L; } | tee "$OUT/machine.txt"
+{ id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "serve dir $D port $PORT until $UNTIL"; nvidia-smi -L; df -h "$ROOT"; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
   --why "G-A (network accounting): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
 cd "$TREE/integrations/vllm"
@@ -235,7 +235,7 @@ done
 cp "$D/windows.jsonl" "$D/requests.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
 WS=$("$PY" -c "import json,sys; print(' '.join(sorted(json.load(open('$D/advice/windows.json'))['windows'], key=int)))" 2>/dev/null)
 FIRST=${WINDOW:-5}
-for k in $FIRST $WS; do
+for k in ${COMPILE_WINDOWS-$FIRST $WS}; do                 # COMPILE_WINDOWS="" compiles none
   sealed | grep -qx "$k" || continue
   [ -f "$D/windows/w$k/manifest.json" ] && continue
   "$PY" tools/advice_compile.py "$D" --window "$k" > "$OUT/compile_w$k.log" 2>&1
