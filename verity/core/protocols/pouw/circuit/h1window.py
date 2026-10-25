@@ -36,8 +36,8 @@ derives the window's units from its own copy of the Program under the `Q_templat
 * **Chunk rows.** At a K whose `weights.chunks` n is above 1 (K > 4096) each A and B row is n leaves: row r's leaf
   n r + c is its codes [c K/n, (c + 1) K/n) and its scale (`h1zy.ROW` (K/n)). Every row count of K's values and tables
   is then n times its rows, every row index n times the row's plus its chunk, and K's template is over
-  `h1zy.PouwH1TileZyChunks` at n, which rebuilds the unit's rows from its n R and n C chunk rows (`program` wraps the
-  bare zy unit). At n = 1 all of this is the whole-row layout.
+  `h1zy.PouwH1TileZyChunks` at n (v2 over a J10-R tile), which rebuilds the unit's rows from its n R and n C chunk rows
+  (`program` wraps the bare zy unit, `h1zy.unit_chunks`). At n = 1 all of this is the whole-row layout.
 * **J10-R.** A unit under J10-R's noise (`h1tile.PouwH1Tile5` or its v6 under `h1zy`, through ``unit``) takes `J10R`
   after them: ``call``, its call's first unit, and ``blocks``, its first row and column block of the call's stream,
   one row of each a unit (`j10r_inputs`). Its statement's public row holds them too (`PUBLIC_J10R`), at the values the
@@ -302,7 +302,7 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
     call reads, a call of no linear, a linear whose n is not whole blocks of C, a slot that is no power of two of at least
     R, an A block of a K that no call reads, a K `weights.chunks` refuses, or a unit whose rows aren't n R × n C chunk
     rows of K/n codes and their row's scale (`h1zy.ROW`, n = `weights.chunks` (K); a bare `h1zy.PouwH1TileZy` at n > 1
-    is wrapped in `h1zy.PouwH1TileZyChunks`), whose record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns
+    is wrapped in `h1zy.unit_chunks`' `h1zy.PouwH1TileZyChunks`, v2 over a J10-R tile), whose record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns
     other than its receipt and ``ok``, or whose shared parameters differ by K."""
     linears = tuple((str(name), int(k), int(n)) for name, k, n in linears)
     calls = tuple((str(lin), int(blk)) for lin, blk in calls)
@@ -350,8 +350,8 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
 
 
 def _chunked(k: int, unit: Any) -> Any:
-    """``unit`` at K: wrapped in `h1zy.PouwH1TileZyChunks` at `weights.chunks` (K) when that is above 1 and ``unit`` is
-    the bare zy unit, else ``unit``; ValueError on a K with no chunks."""
+    """``unit`` at K: wrapped in `h1zy.unit_chunks`' `h1zy.PouwH1TileZyChunks` (v2 over a J10-R tile) at `weights.chunks`
+    (K) when that is above 1 and ``unit`` is the bare zy unit, else ``unit``; ValueError on a K with no chunks."""
     n = W.chunks(k)
     return Z.unit_chunks(unit.bindings["TILE"], n) if n > 1 and getattr(unit, "defn", None) is Z.PouwH1TileZy else unit
 
@@ -667,7 +667,7 @@ def _tile_of(program: Program, k: int) -> Any:
     if int(k) not in tiles:
         raise ValueError(f"the window has no template at K = {k}: its K are {sorted(tiles)}")
     unit = tiles[int(k)].bindings["UNIT"]
-    if getattr(unit, "defn", None) is Z.PouwH1TileZyChunks:
+    if getattr(unit, "defn", None) in Z.CHUNKED:
         unit = unit.bindings["UNIT"]
     if getattr(unit, "defn", None) is not Z.PouwH1TileZy:
         raise ValueError(f"the window's unit at K = {k} is {getattr(unit, 'id', unit)}, not h1zy's PouwH1TileZy over an H1 "

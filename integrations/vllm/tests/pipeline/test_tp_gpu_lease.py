@@ -248,8 +248,8 @@ def lease(tmp_path, monkeypatch):
     ranks = [_Rank(r, ev, locks) for r in (0, 1)]
     yield SimpleNamespace(ev=ev, watched=watched, smi=smi, locks=locks, started=started, holder=holder, ranks=ranks, llm=_LLM(ranks, ev),
                           cuda=GL.DRIVER, note=lambda: json.loads((tmp_path / "gpu_lease.released").read_text()))
-    for p in hooks.live():
-        if p.owner is _WorkerProc:
+    for p in reversed(hooks.live()):                  # ranks share this process, so their patches stack; release them newest first,
+        if p.owner is _WorkerProc:                    # which separate processes never need
             p.uninstall()
     for fd in fds if held else []:                    # a release closed them, and their numbers may be another file's by now
         os.close(fd)
@@ -296,7 +296,7 @@ def test_what_a_ranks_weights_view_holds_on_the_host_is_emptied_not_moved(lease)
     """`acquire.as_loaded`: a TP rank's MXFP4 Marlin experts are on the host as loaded, and every reader after the release reads them
     through the rank's weights view, so the release empties their served copies instead of moving a second one to the host
     (DeepSeek-V4-Pro: 103 of a rank's 110 GB, eight ranks on one node's host memory)."""
-    from verity_vllm.protocol_options import WeightsView
+    from verity_vllm.protocols import WeightsView
 
     lease.cuda.looks = [[], [], [0]]
     for r in lease.ranks:

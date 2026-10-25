@@ -5,7 +5,10 @@
 plus weight-read bytes as an extra. They are the credited lines (``CREDITED``). ``BandwidthArm`` builds the ablations
 under ids of their own (README.md): ``topup=False`` (or ``VERITY_VLLM_BENCH_TOPUP=off``) never starts the top-up, and
 ``spans=True`` (or ``VERITY_VLLM_BENCH_SPANS=on``) times each step's parts (`step_spans.py`). Either refuses credit:
-under a credited id its gate fails, so the run has no line.
+under a credited id its gate fails, so the run has no line. ``topup_sms=F`` (or ``VERITY_VLLM_BENCH_TOPUP_SMS``) places
+the top-up on F SMs of its own and the engine on the rest (`kv_filler/green.py`, green contexts), split before vLLM
+starts; 0 interleaves it with the engine on every SM. A partition whose confinement check fails, or a run off the
+step's stream, fails the gate.
 
 The GPU libraries are built outside the lease's Python process and named by:
 
@@ -39,6 +42,8 @@ _LIB_VARS = {
 }
 #: the lines a table may cite as the audit's cost: only with the top-up running and no spans
 CREDITED = ("bandwidth-plain", "bandwidth-audit")
+#: the top-up's SMs when an arm and VERITY_VLLM_BENCH_TOPUP_SMS leave them open (0: interleaved on every SM)
+TOPUP_SMS = "0"
 
 
 def _libraries() -> dict[str, str]:
@@ -78,6 +83,14 @@ def _switch(value: bool | None, variable: str, default: str) -> bool:
     if got not in ("on", "off"):
         raise RuntimeError(f"{variable} must be 'on' or 'off'")
     return got == "on"
+
+
+def _sms(value: int | None) -> int:
+    """An arm's top-up SMs, else VERITY_VLLM_BENCH_TOPUP_SMS's, else TOPUP_SMS."""
+    got = str(value) if value is not None else os.environ.get("VERITY_VLLM_BENCH_TOPUP_SMS", TOPUP_SMS)
+    if not got.isdigit():
+        raise RuntimeError("VERITY_VLLM_BENCH_TOPUP_SMS must be a nonnegative integer (0: interleaved)")
+    return int(got)
 
 
 def credit(arm_id: str, *, topup: bool, spans: bool, empty_runs: int) -> dict[str, Any]:
@@ -126,7 +139,7 @@ class _TopupLog:
 
 class _Installed:
     def __init__(self, target: Any, *, encoded: bool, topup: bool, spans: bool, kv_receipts: bool,
-                 codec_rounds: int) -> None:
+                 codec_rounds: int, topup_sms: int) -> None:
         from benchmarks.vllm_encoded import serve
 
         libs = _libraries()
@@ -135,6 +148,9 @@ class _Installed:
         self.ctas = int(os.environ.get("VERITY_VLLM_BENCH_FILLER_CTAS", "32"))
         if self.ctas < 1:
             raise RuntimeError("VERITY_VLLM_BENCH_FILLER_CTAS must be positive")
+        self.topup_sms, self.green, self.step_stream, self.off_step_runs = topup_sms, None, None, 0
+        if topup_sms:
+            self._partition(topup_sms)
         args = SimpleNamespace(
             arm="stack" if encoded else "pstack",
             k=codec_rounds,
@@ -156,6 +172,22 @@ class _Installed:
         self.run_start: int | None = None
         self.measured = self.empty_runs = 0
 
+    def _partition(self, fill_sms: int) -> None:
+        """The SMs split before vLLM starts: the step's stream torch's current one, its SM count the device's, and the
+        stack's side streams on its context. The top-up library is opened bare here (kv_filler's bench, which wraps it,
+        puts word_codec first on sys.path, ahead of the stack's install); `Topup` opens the same one at `ready`."""
+        import torch
+
+        from benchmarks.kv_filler import green
+
+        self.green_lib = SimpleNamespace(so=ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve())))
+        self.green, self.step_stream, self.new_stream = green.partition(self.green_lib, torch, fill_sms)
+        import stack as S   # benchmarks.vllm_encoded.serve put HERE first; the install imports this module
+
+        if Path(S.__file__).resolve().parent != HERE:
+            raise RuntimeError(f"the stack module is {S.__file__}, not {HERE / 'stack.py'}")
+        S.new_stream = self.new_stream
+
     def ready(self, target: Any) -> None:
         import torch
 
@@ -164,6 +196,11 @@ class _Installed:
 
         if self.install.stack is None:
             raise RuntimeError("bandwidth benchmark arm did not install during model loading")
+        if self.green is not None:
+            from benchmarks.kv_filler import green
+
+            self.green["spread"] = green.spread_checks(self.green_lib, torch, self.step_stream, self.new_stream,
+                                                       self.green)
         if self.use_topup:
             runner = get_model_runner(target.engine.vllm)
             tensors = []
@@ -199,6 +236,7 @@ class _Installed:
             HERE / "stack.py",
             HERE / "step_spans.py",
             HERE / "paged.cu",
+            HERE.parent / "kv_filler" / "green.py",
             *(Path(self.libs[name]) for name in ("wt_lib", "reader_lib", "paged_lib", "topup_lib")),
         ])
 
@@ -239,6 +277,9 @@ class _Installed:
             "receipt_passes": after["passes"] - before["passes"],
             "filler_ctas": float(self.ctas),
         }
+        if self.green is not None:
+            out["topup_sms"] = float(self.green["fill_sms"])
+            out["step_sms"] = float(self.green["step_sms"])
         if "span" in after and "span" in before:
             steps = step_spans.per_step(before["span"], after["span"])
             out.update({f"span_per_step.{key}": value for key, value in steps.items()})
@@ -251,6 +292,11 @@ class _Installed:
         return out
 
     def begin_run(self, phase: str) -> None:
+        if self.step_stream is not None:
+            import torch
+
+            if torch.cuda.current_stream().cuda_stream != self.step_stream.cuda_stream:
+                self.off_step_runs += 1
         self.run_start = self.log.progress() if phase == "measure" else None
 
     def end_run(self) -> None:
@@ -264,16 +310,21 @@ class _Installed:
     def gate(self, arm_id: str) -> dict[str, Any]:
         gates = self.install.record.get("gates", {})
         judged = credit(arm_id, topup=self.use_topup, spans=self.use_spans, empty_runs=self.empty_runs)
-        return {
-            "passed": _install_gate_passed(self.install.record, encoded=self.encoded) and judged["passes"],
+        placed = self.green is None or (bool(self.green.get("spread", {}).get("confined")) and not self.off_step_runs)
+        out = {
+            "passed": _install_gate_passed(self.install.record, encoded=self.encoded) and judged["passes"] and placed,
             "layers": int(gates.get("layers", 0)),
             "kv_receipts": bool(self.stack.kv_receipts),
             "filler_ctas": self.ctas,
             "topup": self.use_topup,
             "spans": self.use_spans,
+            "topup_sms": self.topup_sms,
             "measured_runs": self.measured,
             "credit": judged,
         }
+        if self.green is not None:
+            out["partition"] = {**self.green, "off_step_runs": self.off_step_runs}
+        return out
 
     def close(self) -> None:
         if self.closed:
@@ -287,18 +338,21 @@ class BandwidthArm:
     """A bandwidth arm: the encoded stack (``encoded``) or its plain forms, token-gated against ``control``. Each
     setting left None is its environment variable's: ``topup`` VERITY_VLLM_BENCH_TOPUP (default on), ``spans``
     VERITY_VLLM_BENCH_SPANS (default off), ``kv_receipts`` VERITY_VLLM_BENCH_KV_RECEIPTS (default on, encoded only),
-    ``codec_rounds`` VERITY_VLLM_BENCH_CODEC_ROUNDS (default 3)."""
+    ``codec_rounds`` VERITY_VLLM_BENCH_CODEC_ROUNDS (default 3), ``topup_sms`` VERITY_VLLM_BENCH_TOPUP_SMS (default
+    ``TOPUP_SMS``)."""
 
     precision = "fp8"
     protocols: tuple[str, ...] = ()
     resident = False
 
     def __init__(self, arm_id: str, *, encoded: bool, control: str | None, topup: bool | None = None,
-                 spans: bool | None = None, kv_receipts: bool | None = None, codec_rounds: int | None = None) -> None:
+                 spans: bool | None = None, kv_receipts: bool | None = None, codec_rounds: int | None = None,
+                 topup_sms: int | None = None) -> None:
         self.id = arm_id
         self.encoded = encoded
         self.control = control
         self.topup, self.spans_on, self.kv_receipts, self.codec_rounds = topup, spans, kv_receipts, codec_rounds
+        self.topup_sms = topup_sms
         self.state: _Installed | None = None
 
     def settings(self) -> dict[str, Any]:
@@ -311,6 +365,7 @@ class BandwidthArm:
             "spans": _switch(self.spans_on, "VERITY_VLLM_BENCH_SPANS", "off"),
             "kv_receipts": _switch(self.kv_receipts, "VERITY_VLLM_BENCH_KV_RECEIPTS", "on"),
             "codec_rounds": rounds,
+            "topup_sms": _sms(self.topup_sms),
         }
 
     def install(self, target: Any) -> _Installed:

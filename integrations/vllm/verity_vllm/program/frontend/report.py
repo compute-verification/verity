@@ -59,6 +59,7 @@ class DeriveSession:
     check_registry: bool
     rank: tuple[int, int] | None   # the derivation's (world, rank)
     family: dict | None            # the family the derivation claimed (`DeriveReport.family`)
+    dead_free: bool = False        # the tail's `dead_free`: a rank written from this derivation is in the same form
 
 
 __all__ = ["DeriveReport", "DeriveSession"]

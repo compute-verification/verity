@@ -9,7 +9,7 @@ import CertifierDevice.Issuer
 state it leaves and the proxy's actions out. The code has no fold of it over a trace, so this module defines one
 (`outputs`, `after`, from `init c`); every statement is about it, for every configuration and every trace, whatever its
 events' clock readings, order or bytes. `Issuer.certify` (`Issuer.lean`) signs a closed window's record. Each statement
-is a named `Prop`, proved as the lower-case theorem of the same name in `Properties.Proofs.CertifierDevice`, and a
+is a named `Prop`, proved as the lower-case theorem of the same name in `Proofs.Properties.CertifierDevice`, and a
 guarantee of this package (`lean-audit.json`). Each has one shape: for every input, if the code accepts it, the
 conclusion holds. `step` always returns, so the trace statements take no hypothesis; the issuer's takes the acceptances
 of the calls that made the key and of the one they are about. No statement takes an assumption about the world.

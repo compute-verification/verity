@@ -9,8 +9,9 @@
 #   on node 2's share: research run --on auto --cpus 16 --mem-gb 64 --timeout 180m --cwd clone ... -- bash ...
 # env: CS_MEM_GB (what job.sh's stages may take, within the slot's)  CS_SLICE (compile_slice_zk.py's --slice, demo by
 #      default; several, comma-separated, are proved one after another)  CS_POINTS (its --points, 1 by default)
-#      CS_KINDS (its --kinds, every kind by default)  CS_CACHE (the build cache, kept across runs where writable; default
-#      pouw-hidden-zk's)  CS_DRY=1 (the slice and its references only)
+#      CS_KINDS (its --kinds, every kind by default)  CS_G (its --g, the steps a served row holds, P by default)
+#      CS_CACHE (the build cache, kept across runs where writable; default pouw-hidden-zk's)  CS_DRY=1 (the slice and
+#      its references only)
 # Kept in $OUT/cszk/<slice>: the driver's records and logs, the public files and everything the verifier received;
 # never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
@@ -30,9 +31,9 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 
 rc=0
 for slice in $(echo "${CS_SLICE:-demo}" | tr , ' '); do
-  log "cszk: proving, slice $slice, points ${CS_POINTS:-1}${CS_KINDS:+, kinds $CS_KINDS}${CS_DRY:+, dry}"
+  log "cszk: proving, slice $slice, points ${CS_POINTS:-1}${CS_KINDS:+, kinds $CS_KINDS}${CS_G:+, G $CS_G}${CS_DRY:+, dry}"
   "$PY" benchmarks/network_traces/compile_slice_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/cszk/$slice" \
-    --slice "$slice" --points "${CS_POINTS:-1}" ${CS_KINDS:+--kinds "$CS_KINDS"} ${CS_DRY:+--dry} 2>&1 \
+    --slice "$slice" --points "${CS_POINTS:-1}" ${CS_KINDS:+--kinds "$CS_KINDS"} ${CS_G:+--g "$CS_G"} ${CS_DRY:+--dry} 2>&1 \
     | tee -a "$OUT/cszk-$slice.log" | cut -c1-4000
   r=${PIPESTATUS[0]}
   mkdir -p "$OUT/cszk/$slice"
