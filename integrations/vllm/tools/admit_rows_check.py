@@ -98,7 +98,7 @@ def check(serve_dir: str | Path) -> dict[str, Any]:
     for q in sorted((q for q in reqs if q.get("release")), key=lambda q: q["admitted"]):
         runs.setdefault(str(q["release"][0]), []).append(int(q["release"][1]))
     return {"serve_dir": str(d), "admit": serve.get("admit"), "step_rows": serve.get("step_rows"),
-            "attention_backend": ((serve.get("engine") or {}).get("attention_backend")), "requests": len(reqs),
+            "flash_attn_version": ((serve.get("engine") or {}).get("effective") or {}).get("flash_attn_version"), "requests": len(reqs),
             "released": sum(map(len, runs.values())), "admitted_in_release_order": all(ns == sorted(ns) for ns in runs.values()),
             "layout": layout, "trace": trace, "committed": committed,
             "passed": trace["inversions"] == 0 and committed["inversions"] == 0 and trace["numbering_is_admission"]
@@ -125,7 +125,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if x["inversions"]:
                 print(f"  w{w}: {x['inversions']} inversions ({x['same_step']} in one step), e.g. {json.dumps(x['examples'][0])}")
     print(f"layout: {json.dumps(rep['layout'])}")
-    keys = ("admit", "step_rows", "attention_backend", "requests", "released", "admitted_in_release_order")
+    keys = ("admit", "step_rows", "flash_attn_version", "requests", "released", "admitted_in_release_order")
     print(f"ADMIT-ROWS {'PASS' if rep['passed'] else 'FAIL'} {json.dumps({k: rep[k] for k in keys})}")
     return 0 if rep["passed"] else 1
 
