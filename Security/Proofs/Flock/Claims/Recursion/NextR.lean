@@ -30,12 +30,6 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   `RecursiveKS` at `nextR` needs to be non-vacuous.
 * **The round messages custody and the verdict read** (`framesOf`): each round's framed bytes, the chunks of the
   decided proof's `repFrames`, with the round's coin.
-* **The record custody and the verdict read** (`recJ`, `recStreams`): the reader's, not the prover's: the honest
-  record's form at SHA-512, whose rep streams retain the round messages, each round counting its schedule's coins
-  (`RecDeploy.repSchedAt`) and holding its coin's first that many. This is what the shipped recursion enforces of the
-  inner record: check 5 holds its coins to the coin server's round for round (`RecVStar.innerCommits`, `CoinTie`), and
-  the coin server's rounds to the schedule (`RecVStar.checkSchedule`). At any hash but SHA-512 the record's digests
-  disagree with the verdict's, which then refuses.
 * **(a)** (`decR_fits`): at a decision, every rep's proof fits its opened rounds. **(b)** (`decR_publics`, `decR_s8`,
   `decR_rootB`): round 0 carries no public words; the link's are empty, and S8 passes on each.
 * **The step, the split and the composition** (`actR`, `nextR`, `lastSplitR`, `RecDeploy.decompB_nextR`): as `nextS`,
@@ -371,27 +365,9 @@ structure DecR where
   mids : List (Claims.Msg × Coin)
   f : FinalP
 
-/-- **The rep streams' rounds as the reader fixes them**: rep `k`, in `spec.repStreams`' order, takes the `k`-th block
-of the round messages `ms`; its round `j` counts its schedule's coins `n`, holds the first `n` values of its coin among
-`cs`, and retains its message. -/
-def recStreams (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) (cs : List Coin) :
-    Array (Array Flock.Round) :=
-  ((List.range (2 * sts.size)).map fun k =>
-    (((cutLens (repLens spec sts) ms).getD k []).mapIdx fun j m =>
-      let n := ((RecDeploy.repSchedAt spec sts[k / 2]!).getD j default).1
-      (⟨n, ByteArray.empty, (cs.getD (((repLens spec sts).take k).sum + j) default).vals n,
-        some ⟨m.toArray⟩⟩ : Flock.Round)).toArray).toArray
-
-/-- **The record the reader hands over**: the honest record's form at SHA-512, at the link's `root_B`, the first
-coin's link points, the reader's streams (`recStreams`) and the proofs' files. -/
-def recJ (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (ms : List Claims.Msg) (cs : List Coin) (ps : Array Flock.Proof) : Json :=
-  FlockComplete.JsonRT.recordObj spec (Claims.hOf sha512) link.1.toArray (pointsOf spec c₁)
-    (recStreams spec sts ms cs) (filesAt (tabsOf sts) (pointsOf spec c₁) ps)
-
 /-- **The reading at a decision**: at a statement that sets up, the last message's proof (`rd`, for what no frame
-reads), round 0's rows as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), the round
-messages their framed bytes, each with its round's coin, and the record the reader's (`recJ`). -/
+reads), round 0's rows as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), and the round
+messages their framed bytes, each with its round's coin. -/
 def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Option DecR := do
   let v ← setupOf false x
   let a ← as.getLast?
@@ -402,8 +378,7 @@ def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.
   let rss ← as.tail.dropLast.mapM rowsOf
   let link ← linkR v.2.2 r₀
   let pf ← readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl
-  pure ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
-    ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩
+  pure ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast, ⟨fl.stmt, fl.j, pf.1⟩⟩
 
 theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
@@ -412,8 +387,7 @@ theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
       setupOf false x = some v ∧ cs.head? = some c₁ ∧ rowsOf (as.headD []) = some r₀ ∧
       as.tail.dropLast.mapM rowsOf = some rss ∧ linkR v.2.2 r₀ = some link ∧
       readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
-      d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
-        ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩ := by
+      d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast, ⟨fl.stmt, fl.j, pf.1⟩⟩ := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
   obtain ⟨v, h1, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨a, -, h⟩ := Option.bind_eq_some_iff.1 h
