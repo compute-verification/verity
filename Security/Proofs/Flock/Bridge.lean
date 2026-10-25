@@ -1,4 +1,5 @@
 import Proofs.Flock.Bridge.Targets
+import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Bridge.Canon
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.Bridge.FaultyRightC
