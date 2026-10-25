@@ -49,7 +49,10 @@ if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed 
   exit 0
 fi
 
-vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
+# the server's own pid (not a function's subshell), so a stop's SIGTERM reaches its handler: it writes summary.json and
+# finishes the pending seals
+"$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin \
+  --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "${DISK_FLOOR_GB:-300}" \
   --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &

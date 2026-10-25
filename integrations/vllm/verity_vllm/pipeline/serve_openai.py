@@ -624,15 +624,20 @@ def main(opts: Options) -> int:
         http.shutdown()
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
-        if sealer is not None:
-            print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
-            sealer.close()
-        summary = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+        def stopped() -> dict[str, Any]:
+            got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "mirror_errors": mirror.errors[:10] if mirror else None}
-        (out / "summary.json").write_text(json.dumps(summary, indent=1))
-        if mirror is not None:
-            mirror()
+            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            if mirror is not None:
+                mirror()
+            return got
+
+        if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
+            stopped()
+            print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
+            sealer.close()
+        summary = stopped()
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
         if com is not None:
