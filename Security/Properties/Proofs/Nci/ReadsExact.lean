@@ -3100,6 +3100,8 @@ def batchStride (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : P
       if one.all (·.reps ≤ 1) then return #[{ ps := one.flatMap (·.ps), len := 1, reps := q.len, shift := 0 }]
   batchPts c fuel q
 
+/-- A batch of a composite's piece of one row past its one-run case, of a stride of whole members, as `batchStride`
+reads it. -/
 theorem down_batch_stride (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
@@ -3212,6 +3214,7 @@ def batchOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piec
       return ← batchEnds c fuel k L a b #[{ ps := one.flatMap (·.ps), len := L, reps := m1 - m0, shift := 0 }]
   batchThrough c fuel k node a b
 
+/-- A batch of a composite's piece of one row and stride 1 past its one-run case, as `batchOne` reads it. -/
 theorem down_batch_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
