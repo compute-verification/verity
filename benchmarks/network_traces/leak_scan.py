@@ -8,7 +8,8 @@
 It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
 
 The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
-cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes.
+cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
+zero-padded (the row's last element, packed from an element boundary).
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
@@ -60,15 +61,16 @@ RS_NONCE = re.compile(r"rs\.\d+\.nonce")
 def cut(blobs: dict[str, bytes], size: int) -> dict[str, bytes]:
     """`blobs` cut into `size`-byte pieces that cover each whole, each distinct piece once under its first name
     (``"<blob> @<offset>"``): its aligned pieces and, when its length isn't a multiple of `size`, its last `size` bytes,
-    which overlap the piece before them."""
+    which overlap the piece before them, and its last aligned chunk zero-padded, the last element of the row packed into
+    the format's 16-byte elements from an element boundary, where the overlapping piece straddles two elements."""
     pieces: dict[str, bytes] = {}
     seen: set[bytes] = set()
     for name, b in blobs.items():
         if len(b) < size:
             raise ValueError(f"{name!r} is {len(b)} bytes, shorter than the scan's {size}-byte piece, which `a8.needles` "
                              "won't cut: scan it whole with its own finder (as compile_slice_zk's `found` does its carry rows)")
-        for o in [*range(0, len(b) - size + 1, size)] + [len(b) - size] * (len(b) % size > 0):
-            x = b[o:o + size]
+        for o in [*range(0, len(b) - size + 1, size)] + [len(b) - size, len(b) - len(b) % size] * (len(b) % size > 0):
+            x = b[o:o + size].ljust(size, b"\0")
             if x not in seen:
                 seen.add(x)
                 pieces[f"{name} @{o}"] = x

@@ -285,11 +285,13 @@ def test_a_rows_tail_is_cut_and_a_leak_written_only_there_is_found(tmp_path):
         row = bytes(range(n))
         pieces = LS.cut({"r": row}, 16)
         at = sorted(int(x.rsplit("@", 1)[1]) for x in pieces)
-        assert at == [*range(0, n - 15, 16)] + [n - 16] * (n % 16 > 0), n
-        assert all(row[o:o + 16] == pieces[f"r @{o}"] for o in at) and {i for o in at for i in range(o, o + 16)} == set(range(n))
+        assert at == [*range(0, n - 15, 16)] + [n - 16, n - n % 16] * (n % 16 > 0), n
+        assert all(row[o:o + 16].ljust(16, b"\0") == pieces[f"r @{o}"] for o in at)
+        assert {i for o in at for i in range(o, min(o + 16, n))} == set(range(n))
     wit = bytes(16) + b"\x07\x00\x09\x00"
     kept, held, public = LS.public_pieces(A8, {"wit 0": wit}, {"wit 0"}, b"g 1 2\n" + bytes(16).hex().encode())
-    assert (kept, held, public) == ({"wit 0 @4": wit[4:]}, {"wit 0 @4"}, [bytes(16).hex()])
+    assert (kept, held, public) == ({"wit 0 @4": wit[4:], "wit 0 @16": wit[16:] + bytes(12)}, {"wit 0 @4", "wit 0 @16"},
+                                    [bytes(16).hex()])
     vdir = _streams(tmp_path, {112: (wit[4:], b"")})
     assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads) == (["wit 0 @4"], {})
     (tmp_path / "file").mkdir()
@@ -298,3 +300,18 @@ def test_a_rows_tail_is_cut_and_a_leak_written_only_there_is_found(tmp_path):
     assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads) == (["wit 0 @4"], {})
     with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece"):
         LS.cut({"cin 0": bytes(12)}, 16)
+
+
+@pytest.mark.parametrize("t", range(1, 16))
+def test_a_row_packed_whole_from_an_element_boundary_is_leaked_by_its_last_element(tmp_path, t):
+    """REDTEAM phase 19 #3984: a row of 16 zeros the circuit holds and then t witness bytes, packed into 16-byte
+    elements from an element boundary (a stream's elements, each its own read; a round message's, each its own record),
+    holds its tail in its last element, zero-padded. The overlapping tail piece straddles that element and the one
+    before it (``across``), so only the zero-padded last chunk is one field's bytes."""
+    row = bytes(16) + bytes(range(1, t + 1))
+    kept = LS.public_pieces(A8, {"wit 0": row}, {"wit 0"}, b"g 1 2\n" + bytes(16).hex().encode())[0]
+    vdir = _streams(tmp_path, {112: (row + bytes(16 - t), b"")})
+    assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads)[0] == ["wit 0 @16"]
+    (tmp_path / "msg").mkdir()
+    vdir = _transcript(tmp_path / "msg", (_framed((3, 2, 2, row + bytes(16 - t))), _framed((3, 1, 1, bytes(range(100, 116))))))
+    assert LS.classify(_found(vdir, kept), kept, vdir)[0] == ["wit 0 @16"]
