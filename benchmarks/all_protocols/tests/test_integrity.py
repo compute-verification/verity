@@ -2,10 +2,11 @@
 
 * an accepted audit record is sampled proofs' accept: the registration's digest, the drawn and proved units with the bound
   on wrong units at δ, and the profile as `Core.Integrity` with δ an exact ratio, all read back by the core answer's
-  decoder; its quantity is the bound over the window's units;
+  decoder; the report's ε is that bound over the window's units;
 * a refusal of the records, a check before the draw that failed, an audit record that doesn't accept and advice fixed
   after the draw each reject by name, with no public outputs or profile;
 * an audit that left nothing behind is the leg's error, not a verdict;
+* the records kept in ``$OUT`` hold no prover's file;
 * opt-in (``VERITY_ALL_PROTOCOLS_TOOLS=tools.json``, the built executables `run.sh` writes; minutes): two periods of the
   loop through the runner, the honest one accepted by the Lean verifier of record and the tampered one rejected, which
   rejects the composition.
@@ -20,8 +21,10 @@ import pytest
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity_all_protocols import integrity as I, runner as RN
-from verity_all_protocols.legs import check_answer
+from verity_all_protocols import runner as RN, table as T
+from verity_all_protocols.table import check_answer
+
+I = T.load("sampled-proofs")
 
 REG = {"format": R.FORMAT, "protocol": R.PROTOCOL, "program": "aa" * 64, "partition": "bb" * 64, "population": 1024,
        "law": {"law": "subset", "k": 2}}
@@ -46,7 +49,7 @@ def record(accepted: bool, **checks) -> dict:
 def test_an_accepted_audit_is_an_accept(tmp_path):
     out = write(tmp_path / "a", {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}},
                 record(True))
-    a, q = I.answer(out, REG)
+    a = I.answer(out, REG)
     assert check_answer(a) == a
     assert a["verdict"] == "accept" and a["protocol"] == "verity/sampled-proofs/one-stage/v1"
     assert a["commitment"] == R.digest(REG)
@@ -54,7 +57,7 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
     p = CC.integrity(a["profile"])
     assert str(p["delta"]) == "1/2" and p["drawn"] == [("unit", 2)]
     assert p["levels"] == [{"name": "unit", "query": "bb" * 64, "size": 1024, "draw": {"subset": 2}}]
-    assert q == {"wrong_units_bound": 3, "units": 1024, "delta": "1/2", "epsilon": "3/1024"}
+    assert RN.epsilon(a) == "3/1024"
 
 
 @pytest.mark.parametrize("summary,rec,why", [
@@ -66,9 +69,9 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
     ({"fixed_before_draw": {"ok": False, "codes": ["after-the-draw"]}}, record(True), "not fixed before the draw: after"),
 ])
 def test_refusals_reject_by_name(tmp_path, summary, rec, why):
-    a, q = I.answer(write(tmp_path / "a", summary, rec), REG)
+    a = I.answer(write(tmp_path / "a", summary, rec), REG)
     assert check_answer(a) == a
-    assert a["verdict"] == "reject" and a["reason"].startswith(why) and q is None
+    assert a["verdict"] == "reject" and a["reason"].startswith(why)
     assert a["commitment"] == R.digest(REG)
 
 
@@ -77,6 +80,17 @@ def test_an_audit_that_left_nothing_is_an_error(tmp_path):
         I.answer(tmp_path, REG)
     with pytest.raises(RuntimeError, match="no audit record and no refusal"):
         I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}), REG)
+
+
+def test_kept_records_hold_no_prover_file(tmp_path):
+    src = tmp_path / "work"
+    for f in ("summary.json", "window/audit.json", "window/m0/circuit.txt", "window/m0/prover/inst-4.bin",
+              "window/m0/m0-inst-1.bin", "window/m3-private.bin", "window/m0/archive/x.json", "window/m0/pub-4.bin"):
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
+        (src / f).write_text("x")
+    I.keep(src, tmp_path / "kept")
+    assert sorted(str(f.relative_to(tmp_path / "kept")) for f in (tmp_path / "kept").rglob("*") if f.is_file()) == [
+        "summary.json", "window/audit.json", "window/m0/pub-4.bin"]
 
 
 TOOLS = os.environ.get("VERITY_ALL_PROTOCOLS_TOOLS")
@@ -91,6 +105,7 @@ def test_two_periods_through_the_verifier_of_record(tmp_path):
     reports = [json.loads(x) for x in (tmp_path / "out" / "reports.jsonl").read_text().splitlines()]
     assert rc == 0
     honest, tampered = (r["protocols"]["integrity"] for r in reports)
-    assert honest["verdict"] == "accept" and honest["quantity"]["units"] == reports[0]["loop"]["population"]
+    assert honest["verdict"] == "accept"
+    assert honest["answer"]["profile"]["levels"][0]["size"] == reports[0]["loop"]["population"]
     assert tampered["verdict"] == "reject"
     assert [r["composed"]["verdict"] for r in reports] == ["pending-ports", "reject"]

@@ -124,11 +124,11 @@ def horizon(reports: Sequence[Mapping[str, Any]], period_s: float, month_s: floa
     that probability reaches 1. A period that didn't accept certifies nothing, and counts in ``refused``."""
     rows = [r["protocols"]["integrity"] for r in reports]
     accepted = [r for r in rows if r.get("verdict") == "accept"]
-    delta = sum((Fraction(r["quantity"]["delta"]) for r in accepted), Fraction(0))
+    delta = sum((Fraction(r["delta"]) for r in accepted), Fraction(0))
     so_far = {"periods": len(rows), "accepted": len(accepted), "refused": len(rows) - len(accepted),
-              "wrong_units_bound": sum(r["quantity"]["wrong_units_bound"] for r in accepted),
-              "units": sum(r["quantity"]["units"] for r in accepted), "delta": str(min(delta, Fraction(1))),
-              "vacuous": delta >= 1}
+              "wrong_units_bound": sum(r["quantity"]["bound"] for r in accepted),
+              "units": sum(r["answer"]["profile"]["levels"][-1]["size"] for r in accepted),
+              "delta": str(min(delta, Fraction(1))), "vacuous": delta >= 1}
     n = max(1, math.floor(month_s / period_s)) if period_s > 0 else None
     month: dict[str, Any] = {"periods": n, "period_s": period_s}
     if n is not None and accepted:

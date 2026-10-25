@@ -5,25 +5,26 @@
 
 Per period P (0-based): the verifier registers the loop's circuit from its shape and run id (``serve --circuit-only``),
 the loop serves once (`integrations/torch_loop`, run id ``RUN/pP``, so each period has a root of its own) and writes its
-window into scratch; each leg of `legs.LEGS` audits that window (`decide`); and ``DIR/pP/report.json`` holds the period's
-report, also appended to ``DIR/reports.jsonl``:
+window into scratch with ``period.json`` beside it; each protocol of `table.TABLE` audits it through its leg (`decide`);
+and ``DIR/pP/report.json`` holds the period's report, also appended to ``DIR/reports.jsonl``:
 
     {"format": "verity/all-protocols-period/v1", "period": P, "node": NAME, "run": RUN, "loop": {...},
-     "protocols": {LEG: ROW, ...}, "composed": {...}, "horizon": {...}, "seconds": {...}}
+     "protocols": {NAME: ROW, ...}, "composed": {...}, "horizon": {...}, "seconds": {...}}
 
 A row is ``{"verdict": "missing", "owner": LANE}`` for a protocol with no leg, ``{"verdict": "error", "owner", "reason"}``
 for a leg that couldn't decide, and otherwise its answer's verdict with ``protocol``, ``owner``, ``commitment``,
-``reason``, ``quantity`` (what its acceptance certifies; null unless it accepts), ``delta`` (its profile's), ``runs`` and
-the whole ``answer``. ``composed`` is `compose.composed`'s, ``horizon`` `compose.horizon`'s over the periods so far.
+``reason``, ``quantity`` (its answer's public outputs, what acceptance certifies; null unless it accepts), ``delta`` (its
+profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of its units), ``runs`` and the whole
+``answer``. ``composed`` is `compose.composed`'s, ``horizon`` `compose.horizon`'s over the periods so far.
 
-``--tools FILE``: JSON naming the built executables (`legs.Period.tools`). ``--tamper P,...``: those periods' loop records
-outputs that are not its model's (`serve --tamper`) and its prover skips its self-check, so a drawn unit's proof is of a
-false witness. Only the window's public files are kept in ``DIR`` (never a prover's file: its rows and salts).
+``--tools FILE``: JSON naming the built executables (``flock-circuit``, ``flock-verify``, ``flock-firewall``,
+``m0-pythonpath``). ``--tamper P,...``: those periods' loop records outputs that are not its model's (`serve --tamper`)
+and its prover skips its self-check, so a drawn unit's proof is of a false witness. Only the window's public files are
+kept in ``DIR`` (never a prover's file: its rows and salts).
 """
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import json
 import os
 import shutil
@@ -32,58 +33,84 @@ import sys
 import tempfile
 import time
 import traceback
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 from . import compose as C
-from .legs import LEGS, Entry, Leg, Missing, Period, check_answer
+from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-period/v1"
 ROOT = Path(__file__).resolve().parents[3]
 LOOP = ROOT / "integrations" / "torch_loop"
-PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json")
+PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json", PERIOD)
 
 
-def row_of(entry: Entry, leg: Leg) -> dict[str, Any]:
+def epsilon(a: Mapping[str, Any]) -> str | None:
+    """A sampled protocol's bound on wrong units (``public.bound``) over its checked level's size (`Core.Integrity`), or
+    None for an answer that has no such bound."""
+    try:
+        bound, size = a["public"]["bound"], a["profile"]["levels"][-1]["size"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return str(Fraction(bound, size)) if isinstance(bound, int) and isinstance(size, int) and size > 0 else None
+
+
+def row_of(entry: Entry, a: Any, out: Path) -> dict[str, Any]:
     """A leg's report row from its answer (checked to be a core answer first)."""
-    a = check_answer(leg.answer)
+    a = check_answer(a)
+    runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
+    run = os.environ.get("RESEARCH_RUN_ID")
+    accepted = a["verdict"] == "accept"
     return {"protocol": a["protocol"], "owner": entry.owner, "verdict": a["verdict"], "reason": a["reason"],
-            "commitment": a["commitment"], "quantity": leg.quantity if a["verdict"] == "accept" else None,
-            "delta": (a["profile"] or {}).get("delta"), "runs": list(leg.runs), "answer": a}
+            "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
+            "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
+            "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
 
 
-def decide(period: Period, legs: Sequence[Entry] = LEGS, earlier: Sequence[dict] = (), period_s: float = 0,
+def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABLE,
+           legs: Callable[[str], LegFn | None] = leg_of, earlier: Sequence[dict] = (), period_s: float = 0,
            onsite: Sequence[str] | None = None, exe: str | None = None,
            clock: Callable[[], float] = time.monotonic) -> dict[str, Any]:
-    """Every leg's row on ``period``, the composed verdict and the horizon over ``earlier`` reports and this one."""
+    """Every protocol's row on the period in ``period_dir``, in ``table``'s order, each leg's answer written to
+    ``period_dir/answers/<component>.json`` for the legs after it; the composed verdict; the horizon over ``earlier``
+    reports and this one."""
     rows: dict[str, dict] = {}
     cases: dict[str, dict | None] = {}
     seconds: dict[str, float] = {}
-    for e in legs:
-        if isinstance(e.leg, Missing):
-            rows[e.name] = {"verdict": "missing", "owner": e.leg.owner}
+    (period_dir / ANSWERS).mkdir(exist_ok=True)
+    for e in table:
+        fn = legs(e.component)
+        if fn is None:
+            rows[e.name] = {"verdict": "missing", "owner": e.owner}
             continue
         t = clock()
-        out = period.out / e.name
-        out.mkdir(parents=True, exist_ok=True)
+        lout = out / e.name
+        lout.mkdir(parents=True, exist_ok=True)
         try:
-            got = e.leg(dataclasses.replace(period, out=out))
-            rows[e.name], cases[e.name] = row_of(e, got), got.case
+            rows[e.name] = row_of(e, fn(period_dir, node, lout), lout)
         except Exception as x:  # noqa: BLE001: a leg's failure is its row's error, and the other legs still run
-            (out / "error.txt").write_text(traceback.format_exc())
+            (lout / "error.txt").write_text(traceback.format_exc())
             rows[e.name] = {"verdict": "error", "owner": e.owner, "reason": f"{type(x).__name__}: {x}"[:2000]}
+        else:
+            (period_dir / ANSWERS / f"{e.component}.json").write_text(json.dumps(rows[e.name]["answer"], sort_keys=True))
+            case = lout / f"{e.component}.case.json"
+            cases[e.name] = json.loads(case.read_text()) if case.exists() else None
         seconds[e.name] = round(clock() - t, 1)
-    report = {"format": FORMAT, "period": period.index, "node": period.node, "run": os.environ.get("RESEARCH_RUN_ID"),
-              "loop": {"circuit": period.circuit, "run_root": period.run_root, "law": period.law, "cap": period.cap,
-                       "tampered": bool(period.prover_env)},
+    p = json.loads((period_dir / PERIOD).read_text())
+    report = {"format": FORMAT, "period": p["period"], "node": node, "run": os.environ.get("RESEARCH_RUN_ID"),
+              "loop": {"circuit": p["circuit"], "run_root": p["run_root"], "law": p["law"], "cap": p["cap"],
+                       "tampered": bool(p.get("prover_env"))},
               "protocols": rows, "seconds": seconds,
-              "composed": C.composed(rows, {e.name: e.component for e in legs}, cases, onsite, exe)}
+              "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe)}
     report["horizon"] = C.horizon([*earlier, report], period_s)
+    out.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(period_dir / ANSWERS, out / ANSWERS, dirs_exist_ok=True)
     return report
 
 
-def serve(argv: Sequence[str], scratch: Path) -> dict[str, Any]:
+def serve(argv: Sequence[str]) -> dict[str, Any]:
     """The torch loop's ``serve`` with ``argv``: its JSON line."""
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(LOOP), os.environ.get("PYTHONPATH")]))}
     p = subprocess.run([sys.executable, "-m", "verity_torch_loop.serve", *argv], cwd=ROOT, env=env, capture_output=True,
@@ -93,29 +120,31 @@ def serve(argv: Sequence[str], scratch: Path) -> dict[str, Any]:
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
-def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path) -> tuple[Period, dict]:
-    """The period's loop: the circuit registered before it runs, then its window in scratch; its public files in ``out``."""
+def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path) -> tuple[Path, dict]:
+    """The period's loop: the circuit registered before it runs, then its window in scratch with ``period.json``; its
+    public files in ``out/window``. -> the period's directory and what the loop printed."""
     shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
              f"{run}/p{index}"]
-    circuit = serve([*shape, "--circuit-only"], scratch)["circuit"]
-    window = scratch / f"p{index}" / "window"
+    circuit = serve([*shape, "--circuit-only"])["circuit"]
+    window = scratch / f"p{index}"
     tampered = index in a.tamper
-    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else [])], scratch)
+    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
+    (window / PERIOD).write_text(json.dumps({
+        "period": index, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law, "cap": a.cap,
+        "tools": a.tools, "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
     for f in [*PUBLIC, *(p.name for p in window.glob("m*-public.bin"))]:
         if (window / f).exists():
             shutil.copy(window / f, kept / f)
-    period = Period(index=index, node=a.node, records=window, out=out, circuit=circuit, run_root=got["run"], law=a.law,
-                    cap=a.cap, tools=a.tools, prover_env={"FC_ZK_SELF_CHECK": "skip"} if tampered else {})
-    return period, {"circuit_before": circuit, **got}
+    return window, {"circuit_before": circuit, **got}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--tools", required=True, help="JSON: the built executables by name (legs.Period.tools)")
+    ap.add_argument("--tools", required=True, help="JSON: the built executables by name")
     ap.add_argument("--periods", type=int, default=1)
     ap.add_argument("--period-s", type=float, default=3600, help="the period's length: each period starts this long after "
                     "the one before (at once when the one before took longer), and the month's horizon counts them")
@@ -144,14 +173,14 @@ def main(argv: list[str] | None = None) -> int:
             pdir = out / f"p{p}"
             t = time.monotonic()
             try:
-                period, loop = loop_period(p, run, a, Path(scratch), pdir)
+                period_dir, loop = loop_period(p, run, a, Path(scratch), pdir)
             except Exception as x:  # noqa: BLE001: a failed loop is the period's error, and the next period still runs
                 report = {"format": FORMAT, "period": p, "node": a.node, "run": run,
                           "error": f"the loop: {type(x).__name__}: {x}"[:3000]}
                 rc = 1
             else:
                 loop_s = round(time.monotonic() - t, 1)
-                report = decide(period, LEGS, reports, a.period_s, exe=a.onsite)
+                report = decide(period_dir, a.node, pdir, earlier=reports, period_s=a.period_s, exe=a.onsite)
                 report["loop"].update({k: loop.get(k) for k in ("population", "members", "registration", "mismatched")})
                 report["seconds"]["loop"] = loop_s
                 reports.append(report)
@@ -161,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
             with open(out / "reports.jsonl", "a") as f:
                 f.write(json.dumps(report, sort_keys=True) + "\n")
             print("ALLP " + json.dumps(summary_line(report), sort_keys=True), flush=True)
-    return rc
+    return int(rc)
 
 
 def summary_line(report: dict[str, Any]) -> dict[str, Any]:
@@ -170,6 +199,7 @@ def summary_line(report: dict[str, Any]) -> dict[str, Any]:
         return {"period": report["period"], "error": report["error"]}
     return {"period": report["period"], "tampered": report["loop"]["tampered"],
             "protocols": {n: {"verdict": r["verdict"], **({"quantity": r["quantity"]} if r.get("quantity") else {}),
+                              **({"epsilon": r["epsilon"], "delta": r["delta"]} if r.get("epsilon") else {}),
                               **({"reason": r["reason"][:300]} if r.get("reason") else {})}
                           for n, r in report["protocols"].items()},
             "composed": {k: report["composed"].get(k) for k in ("verdict", "reason")},

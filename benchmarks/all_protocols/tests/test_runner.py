@@ -5,7 +5,9 @@
 * a leg that raises, or answers outside the core answer's shapes, is that row's error and never a verdict, and the other
   legs still run;
 * once every component is a port, onsite's own executable decides on the legs' cases;
-* `LEGS` names every onsite component once, and onsite's components are read from `CoreOnsite.lean` as written;
+* each leg reads the answers of the legs before it, and its port's case reaches onsite;
+* `TABLE` names every onsite component once, a leg is its file in `legs/`, and onsite's components are read from
+  `CoreOnsite.lean` as written;
 * the horizon's union bound over periods, vacuous at the sum of δ reaching 1;
 * the loop's period keeps only the window's public files, and its circuit is the one registered before it ran.
 """
@@ -19,8 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_all_protocols import compose as C, runner as RN
-from verity_all_protocols.legs import LEGS, Entry, Leg, Missing, Period
+from verity_all_protocols import compose as C, runner as RN, table as T
 
 PROFILE = {"covered": [], "delta": "1/2", "drawn": {"unit": 1},
            "levels": [{"draw": {"subset": 1}, "name": "unit", "query": "p", "size": 4}], "linked": False,
@@ -29,33 +30,42 @@ PROFILE = {"covered": [], "delta": "1/2", "drawn": {"unit": 1},
 
 def answer(verdict: str, protocol: str = "verity/fake/v0") -> dict:
     if verdict == "accept":
-        return {"commitment": "ab" * 64, "profile": PROFILE, "protocol": protocol, "public": {"n": 1}, "reason": None,
+        return {"commitment": "ab" * 64, "profile": PROFILE, "protocol": protocol, "public": {"bound": 1}, "reason": None,
                 "verdict": "accept"}
     return {"commitment": "ab" * 64, "profile": None, "protocol": protocol, "public": None, "reason": f"{verdict} by fake",
             "verdict": verdict}
 
 
-def fake(verdict: str, quantity: dict | None = None, case: dict | None = None):
-    def leg(period: Period) -> Leg:
-        (period.out / "ran").write_text(str(period.index))
-        return Leg(answer(verdict, f"verity/fake-{period.out.name}/v0"), quantity, case)
+def fake(verdict: str, case: dict | None = None):
+    def leg(period_dir: Path, node: str, out: Path) -> dict:
+        (out / "ran").write_text(json.dumps({"node": node, "answers": sorted(f.name for f in (period_dir / "answers").iterdir())}))
+        if case is not None:
+            (out / f"{COMPONENT[out.name]}.case.json").write_text(json.dumps(case))
+        return answer(verdict, f"verity/fake-{out.name}/v0")
     return leg
 
 
-def period(tmp_path: Path) -> Period:
-    return Period(index=0, node="test-node", records=tmp_path / "records", out=tmp_path / "out", circuit="cd" * 64,
-                  run_root="ef" * 64, law="subset:2", cap=8)
+COMPONENT = {e.name: e.component for e in T.TABLE}
 
 
-def table(**legs) -> tuple[Entry, ...]:
-    return tuple(Entry(e.name, e.component, e.owner, legs.get(e.name, e.leg)) for e in LEGS)
+def period(tmp_path: Path, tampered: bool = False) -> Path:
+    d = tmp_path / "p0"
+    d.mkdir()
+    (d / "period.json").write_text(json.dumps({"period": 0, "node": "test-node", "circuit": "cd" * 64,
+                                               "run_root": "ef" * 64, "law": "subset:2", "cap": 8, "tools": {},
+                                               "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}))
+    return d
 
 
-QUANTITY = {"wrong_units_bound": 3, "units": 4, "delta": "1/2", "epsilon": "3/4"}
+def decide(tmp_path: Path, **legs) -> dict:
+    """`decide` on one period with the legs given by name and every other protocol missing."""
+    kw = {k: legs.pop(k) for k in ("onsite", "exe") if k in legs}
+    by_component = {COMPONENT[n]: f for n, f in legs.items()}
+    return RN.decide(period(tmp_path), "test-node", tmp_path / "out", legs=by_component.get, **kw)
 
 
 def test_a_rejecting_leg_rejects_the_composition(tmp_path):
-    r = RN.decide(period(tmp_path), table(integrity=fake("accept", QUANTITY), space=fake("reject")))
+    r = decide(tmp_path, integrity=fake("accept"), space=fake("reject"))
     assert r["protocols"]["space"]["verdict"] == "reject"
     assert r["protocols"]["space"]["quantity"] is None
     assert r["protocols"]["work"] == {"verdict": "missing", "owner": "compute-accounting"}
@@ -65,46 +75,49 @@ def test_a_rejecting_leg_rejects_the_composition(tmp_path):
 
 
 def test_a_rejecting_bandwidth_audit_rejects_though_it_is_no_onsite_component(tmp_path):
-    r = RN.decide(period(tmp_path), table(integrity=fake("accept", QUANTITY), bandwidth=fake("reject")))
+    r = decide(tmp_path, integrity=fake("accept"), bandwidth=fake("reject"))
     assert r["composed"]["verdict"] == "reject"
     assert r["composed"]["outside_onsite"] == ["bandwidth"]
 
 
 def test_nothing_composes_to_accept_while_onsite_has_stubs(tmp_path):
-    every = {e.name: fake("accept", QUANTITY, {"commitment": "00", "evidence": "00", "params": {}}) for e in LEGS}
-    r = RN.decide(period(tmp_path), table(**every), exe="/nonexistent/onsite")
+    every = {e.name: fake("accept", {"commitment": "00", "evidence": "00", "params": {}}) for e in T.TABLE}
+    r = decide(tmp_path, **every, exe="/nonexistent/onsite")
     assert all(x["verdict"] == "accept" for x in r["protocols"].values())
     assert r["composed"]["verdict"] == "pending-ports"
     assert "onsite's stubs" in r["composed"]["reason"]
 
 
 def test_missing_legs_are_never_verdicts(tmp_path):
-    r = RN.decide(period(tmp_path), table(integrity=fake("accept", QUANTITY)))
+    r = decide(tmp_path, integrity=fake("accept"))
     missing = {n: x for n, x in r["protocols"].items() if n != "integrity"}
     assert {x["verdict"] for x in missing.values()} == {"missing"}
     assert {n: x["owner"] for n, x in missing.items()} == {
         "work": "compute-accounting", "space": "memory-accounting", "bandwidth": "memory-accounting",
         "communication": "network-accounting"}
     assert r["composed"]["verdict"] == "pending-ports"
-    assert r["protocols"]["integrity"]["quantity"] == QUANTITY
+    assert r["protocols"]["integrity"]["quantity"] == {"bound": 1}
     assert r["protocols"]["integrity"]["delta"] == "1/2"
+    assert r["protocols"]["integrity"]["epsilon"] == "1/4"
+    assert r["horizon"]["integrity"]["wrong_units_bound"] == 1 and r["horizon"]["integrity"]["units"] == 4
+    assert json.loads((tmp_path / "out" / "answers" / "sampled-proofs.json").read_text())["verdict"] == "accept"
 
 
 def test_a_failing_leg_is_an_error_and_the_others_still_run(tmp_path):
-    def boom(p: Period) -> Leg:
+    def boom(period_dir: Path, node: str, out: Path) -> dict:
         raise RuntimeError("the prover's build is missing")
 
-    def malformed(p: Period) -> Leg:
-        return Leg({**answer("accept"), "reason": "accepts with a reason"})
+    def malformed(period_dir: Path, node: str, out: Path) -> dict:
+        return {**answer("accept"), "reason": "accepts with a reason"}
 
-    r = RN.decide(period(tmp_path), table(integrity=boom, work=malformed, space=fake("accept", QUANTITY)))
+    r = decide(tmp_path, integrity=boom, work=malformed, space=fake("accept"))
     assert r["protocols"]["integrity"]["verdict"] == "error"
     assert "the prover's build is missing" in r["protocols"]["integrity"]["reason"]
     assert (tmp_path / "out" / "integrity" / "error.txt").exists()
     assert r["protocols"]["work"]["verdict"] == "error"
     assert "not a core answer" in r["protocols"]["work"]["reason"]
     assert r["protocols"]["space"]["verdict"] == "accept"
-    assert (tmp_path / "out" / "space" / "ran").read_text() == "0"
+    assert json.loads((tmp_path / "out" / "space" / "ran").read_text()) == {"node": "test-node", "answers": []}
     assert r["composed"]["verdict"] == "pending-ports"
 
 
@@ -120,9 +133,9 @@ print(json.dumps({{"commitment": c.hex(), "profile": {{}}, "protocol": "verity/o
 ''')
     exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
-    every = {e.name: fake("accept", QUANTITY, case) for e in LEGS}
+    every = {e.name: fake("accept", case) for e in T.TABLE}
     ports = ["Ports.certifier", "Ports.pous", "Ports.pouw", "Ports.sampledProofs"]
-    r = RN.decide(period(tmp_path), table(**every), onsite=ports, exe=str(exe))
+    r = decide(tmp_path, **every, onsite=ports, exe=str(exe))
     assert r["composed"]["verdict"] == "accept"
     got = json.loads(seen.read_text())
     assert got["argv1"] == "check"
@@ -138,9 +151,9 @@ def test_onsite_accepting_while_bandwidth_is_undecided_is_undecided(tmp_path):
                    '"protocol": "verity/onsite/v0", "public": {}, "reason": None, "verdict": "accept"}))\n')
     exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
     case = {"commitment": "01", "evidence": "02", "params": {}}
-    every = {e.name: fake("accept", QUANTITY, case) for e in LEGS}
+    every = {e.name: fake("accept", case) for e in T.TABLE}
     every["bandwidth"] = fake("undecided")
-    r = RN.decide(period(tmp_path), table(**every), onsite=["Ports.a"], exe=str(exe))
+    r = decide(tmp_path, **every, onsite=["Ports.a"], exe=str(exe))
     assert r["composed"]["verdict"] == "undecided"
 
 
@@ -148,10 +161,23 @@ def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
     assert onsite == ["Stub.certifier", "Stub.pous", "Stub.pouw", "Stub.sampledProofs"], \
         "onsite's components changed: a port replaced a stub, so the runner may now decide through `onsite check`"
-    named = sorted(e.component for e in LEGS if e.component is not None)
+    named = sorted(e.component for e in T.TABLE if e.onsite)
     assert named == sorted(C.stub_component(x) for x in onsite)
-    assert len({e.name for e in LEGS}) == len(LEGS) == 5
-    assert all(isinstance(e.leg, Missing) or callable(e.leg) for e in LEGS)
+    assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 5
+    assert T.TABLE[0].name == "integrity", "integrity runs first: PoUW's evidence is its answer"
+
+
+def test_a_leg_is_its_file(tmp_path):
+    assert T.leg_of("pous", tmp_path) is None
+    (tmp_path / "sampled_proofs.py").write_text("def leg(period_dir, node, out):\n    return {'node': node}\n")
+    assert T.leg_of("sampled-proofs", tmp_path)(None, "n", None) == {"node": "n"}
+    assert T.leg_of("sampled-proofs").__module__ == "all_protocols_leg_sampled_proofs"
+
+
+def test_each_leg_reads_the_answers_before_it(tmp_path):
+    decide(tmp_path, integrity=fake("reject"), work=fake("accept"))
+    assert json.loads((tmp_path / "out" / "work" / "ran").read_text())["answers"] == ["sampled-proofs.json"]
+    assert json.loads((tmp_path / "out" / "integrity" / "ran").read_text())["answers"] == []
 
 
 def test_onsite_components_are_read_as_written():
@@ -163,9 +189,10 @@ def test_onsite_components_are_read_as_written():
 
 
 def _report(verdict: str, composed: str = "pending-ports") -> dict:
-    q = {"wrong_units_bound": 3, "units": 1024, "delta": "1/2", "epsilon": "3/1024"}
-    return {"protocols": {"integrity": {"verdict": verdict, "quantity": q if verdict == "accept" else None}},
-            "composed": {"verdict": composed}}
+    a = {"profile": {"levels": [{"size": 1024}]}}
+    row = {"verdict": verdict, "quantity": {"bound": 3}, "delta": "1/2", "answer": a} if verdict == "accept" else \
+        {"verdict": verdict, "quantity": None}
+    return {"protocols": {"integrity": row}, "composed": {"verdict": composed}}
 
 
 def test_the_horizon_is_a_union_bound_over_periods():
@@ -182,14 +209,15 @@ def test_the_horizon_is_a_union_bound_over_periods():
 
 
 def test_the_loop_period_keeps_only_public_files(tmp_path):
-    a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={})
-    p, loop = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+    a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"})
+    d, loop = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
-    assert "registration.json" in kept and "circuit.json" in kept
+    assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept
     assert not [f for f in kept if "private" in f]
-    assert any((p.records / f).name.endswith("-private.bin") for f in (x.name for x in p.records.iterdir()))
-    reg = json.loads((p.records / "registration.json").read_text())
-    assert reg["window"]["circuit"] == p.circuit == loop["circuit_before"]
-    assert p.run_root == loop["run"]
-    assert p.prover_env == {"FC_ZK_SELF_CHECK": "skip"}
+    assert [f for f in (x.name for x in d.iterdir()) if f.endswith("-private.bin")]
+    p = T.period_of(d)
+    reg = json.loads((d / "registration.json").read_text())
+    assert reg["window"]["circuit"] == p["circuit"] == loop["circuit_before"]
+    assert p["run_root"] == loop["run"] and p["tools"] == {"x": "y"} and p["node"] == "test-node"
+    assert p["prover_env"] == {"FC_ZK_SELF_CHECK": "skip"}
     assert loop["mismatched"]
