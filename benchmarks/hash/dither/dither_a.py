@@ -357,8 +357,12 @@ class Side:
         """The arm's parts no ruling has taken in (`forms.UNADOPTED_PARTS`)."""
         return ()
 
+    def adopted(self) -> tuple[str, ...]:
+        """The arm's parts a ruling has taken in (`forms.ADOPTED_PARTS`)."""
+        return ()
+
     def label(self) -> dict:
-        return F.form_of("dither-a", self.z, self.in_order, self.unadopted())
+        return F.form_of("dither-a", self.z, self.in_order, self.unadopted(), self.adopted())
 
     def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
