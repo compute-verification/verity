@@ -38,8 +38,8 @@
 #     circuit registered before it ran, under PP_LAW (default subset:64, per window) in members of PP_TORCH_LOOP_CAP units
 #     (default 16384), committed by PP_TORCH_FROZEN_WORKERS processes (default 16); then the tampered step (every output's
 #     bit 0 flipped), whose drawn units Lean must refuse, on PP_TORCH_FROZEN_TAMPERED tags (default all; "none" skips it);
-#     W per block and pooled (frozen_w) into $O/w.json. PP_TORCH_LOOP_SHAPE: more serve_frozen.py flags (--layers,
-#     --position, --tags, --keep).
+#     W per block and pooled (frozen_w) into $O/w.json. PP_ONLY=honest|forged runs one arm. PP_TORCH_LOOP_SHAPE: more
+#     serve_frozen.py flags (--layers, --position, --tags, --keep).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -295,8 +295,10 @@ elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
     done
     return $rc
   }
-  frozen torch-frozen || rc=1
-  $PY -m verity_torch_loop.frozen_w --serve $O/torch-frozen/serve.json --law $TLAW > $O/w.json && cat $O/w.json || rc=1
+  if [ "${PP_ONLY:-}" != forged ]; then
+    frozen torch-frozen || rc=1
+    $PY -m verity_torch_loop.frozen_w --serve $O/torch-frozen/serve.json --law $TLAW > $O/w.json && cat $O/w.json || rc=1
+  fi
   TT=${PP_TORCH_FROZEN_TAMPERED:-}
   if [ "${PP_ONLY:-}" != honest ] && [ "$TT" != none ]; then
     frozen torch-frozen-tampered --tamper ${TT:+--tags $TT} || rc=1
