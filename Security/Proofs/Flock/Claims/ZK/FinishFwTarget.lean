@@ -372,7 +372,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
           i.val)
       exact congrArg (fun q => fOf (slotAt c q i.val)) (by omega)
     rw [hrpp]
-    refine congrArg (FlockSoundness.Model.recombine execArith · _) ?_
+    refine congrArg (FlockSoundness.Model.recombine FlockSoundness.execArith · _) ?_
     show FlockSoundness.Refine.vecOf 128 (_root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k.val]!) =
       Composed.swAt (zkTab x j).table (stAt x j) (czExe PE x c j) r _ k.val
     rcases Nat.lt_or_ge k.val 2 with hk2 | hk2
