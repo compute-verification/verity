@@ -18,7 +18,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from verity.ml.circuits.codec import canonical_json
 from verity_vllm.engine import env
 
 DECLARED_ENV = env.ENGINE
@@ -457,4 +456,5 @@ def build_manifest(
 
 
 def profile_id_of(manifest: dict[str, Any]) -> str:
+    from verity.ml.circuits.codec import canonical_json
     return hashlib.sha256(canonical_json(manifest)).hexdigest()[:12]
