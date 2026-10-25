@@ -9,8 +9,8 @@ import Proofs.Flock.Claims.Complete.Discharge
 (`Case.table`). Its proof reads only that table's facts (`TableOk`: `22 ≤ m ≤ 35`, an untyped row circuit the scope
 parsed, `m = k_log + nbl`, `6 ≤ k_log`, a registered scheme) and a bound on the extra claims, so it holds at any table
 that has them (`repShapedOk`). At rep `k` of a set-up statement, table `k / 2`'s returned proof is then an honest rep of
-`repCtx` wherever its nonces are zero (`honestRep_of_repP`), which is the per-rep hypothesis `ReadsBack` takes, less the
-schedule (`schedOf_repCtx`) and the cap.
+`repCtx` (`honestRep_of_repP`): its nonces are zero, as the shape has them, which is the per-rep hypothesis `ReadsBack`
+takes, less the schedule (`schedOf_repCtx`) and the cap.
 
 The plain case's one table is `TableOk` (`Case.tableOk`); a statement of several plain tables has no deployed relation
 yet, so there `TableOk` stays a hypothesis per table.
@@ -85,7 +85,7 @@ open Flock FlockComplete FlockSoundness.Refine
 
 /-- **Table `k / 2`'s returned proof is an honest rep of `repCtx`** at rep `k` of a set-up statement: at a `TableOk`
 table with its `fast100` schedule and at most 2,048 extra claims at the first coin's link points, the proof `repP`
-returns on any trace, under any salts, is `ProofShaped` (`repShapedOk`), so with zero nonces it is an honest rep
+returns on any trace, under any salts, is `ProofShaped` (`repShapedOk`), zero nonces included, so it is an honest rep
 (`honestRep_of_shaped`). -/
 theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {k : ℕ} (hk : k / 2 < sts.size)
@@ -97,9 +97,7 @@ theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (d : ByteArray) {l l' : Array Claims.Msg}
     {pt : Flock.Proof × Transcript}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit sts[k / 2]) sch tr
-      (packed tr (Setup.ofCircuit sts[k / 2]).m) cm e salt nonce).run (Transcript.init #[] d)).go l = (.ok pt, l'))
-    (hz : (∀ n ∈ pt.1.ligerito.queryNonces, n = 0) ∧ (∀ n ∈ pt.1.ligerito.claimNonces, n = 0) ∧
-      ∀ n ∈ pt.1.ligerito.consistencyNonces, n = 0) :
+      (packed tr (Setup.ofCircuit sts[k / 2]).m) cm e salt nonce).run (Transcript.init #[] d)).go l = (.ok pt, l')) :
     HonestRep (repCtx spec sts c₁ r₀ k) pt.1 := by
   have hp := JsonRT.repShapedOk h64 hok hsch resp tr hcm he2 salt nonce d l pt l' hrun
   have hk' : k / 2 < (tabsOf sts).size := by
@@ -124,7 +122,7 @@ theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
       | .ok e => e.size
       | .error _ => 0) = _
     rw [he]
-  refine honestRep_of_shaped hn ?_ hz
+  refine honestRep_of_shaped hn ?_
   rw [hst, hsch']
   exact hp
 
