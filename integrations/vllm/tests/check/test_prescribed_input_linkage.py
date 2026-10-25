@@ -345,11 +345,11 @@ def test_padrev_m0517_lag_1_negatives_name_the_eos_step_and_the_placeholder():
 
 
 def test_padrev_m0517_the_lag_is_read_through_gp01s_one_reader_of_the_attested_field():
-    # commit_delta feeds boundary_linkage the resolved async_scheduling through global_program.eos_lag_rows_declared: one field, one reader
-    from verity_vllm.pipeline import global_program as GP
-    assert GP.eos_lag_rows_declared({"async_scheduling": True}) == 1 and GP.eos_lag_rows_declared({"async_scheduling": False}) == 0
-    assert GP.eos_lag_rows_declared({"async_scheduling": "true"}) == 1
-    assert GP.eos_lag_rows_declared({"async_scheduling": None}) is None and GP.eos_lag_rows_declared({}) is None and GP.eos_lag_rows_declared(None) is None
+    # commit_delta feeds boundary_linkage the resolved async_scheduling through program.workload.eos_lag_rows_declared: one field, one reader
+    from verity_vllm.program.workload import eos_lag_rows_declared
+    assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
+    assert eos_lag_rows_declared({"async_scheduling": "true"}) == 1
+    assert eos_lag_rows_declared({"async_scheduling": None}) is None and eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None
     from pathlib import Path
     src = "".join((Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / f"{m}.py").read_text() for m in ("commit", "c2_replay"))      # torch-free: the wiring read as text
     assert 'eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})' in src
