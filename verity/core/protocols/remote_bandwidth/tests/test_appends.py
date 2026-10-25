@@ -694,6 +694,21 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
     assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
 
 
+@pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
+def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
+    """No session draws nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
+    doesn't decode, read as no openings, is refused on every window."""
+    r = Run(store(), windows=1)
+    assert r.run() is None
+    r.boundary()
+    r.clock.now = r.s.deadline(0) + 1
+    draws = r.s.close(0)
+    openings = [r.prover.open(r.passes[0, i], q) for i, q in draws][:opened]
+    r.s.windows[0].draws = ()
+    assert r.s.verify(0, openings) == audit.Verdict(0, False, "malformed") == r.s.failed
+
+
 def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     """A prover that commits its append's tree one index past the one the verifier assigns, and opens its pages with
     that tree's paths (the same shape), fails the payload path."""
