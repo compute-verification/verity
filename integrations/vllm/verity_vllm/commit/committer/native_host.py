@@ -1176,8 +1176,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_exec(scheduler_output, *a, **kw)
             me._end_step()                       # a step whose sample() we never saw
-            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(   # X-02 as native_collect; an explicit ring is one size
-                int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
+            me._plan_shape = (int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
+            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(*me._plan_shape)   # X-02 as native_collect; an explicit ring is one size
             me._begin_step()
             return orig_exec(scheduler_output, *a, **kw)
 
