@@ -26,7 +26,7 @@ import os
 import re
 from typing import Any, Callable, Iterable
 
-from verity_vllm.records.required_manifest import SCHEMA
+SCHEMA = "verity-sweep/required-manifest/v1"
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
