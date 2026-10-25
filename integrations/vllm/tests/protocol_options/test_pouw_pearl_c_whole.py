@@ -703,8 +703,9 @@ def test_a_shape_joining_capture_joins_a_calls_side_steps_only_before_the_next_c
 def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitment_and_joins_them_in_their_place(
         monkeypatch):
     """Under ``whole_fork_stats`` a call's ``stats_a``, which reads A's words alone, goes on the stats stream after the
-    call's A words, beside its A commitment (``rows_a``) and tree, and the capturing stream joins it in its place, before
-    ``eprime_a`` reads A's scales; every other step keeps its stream and order."""
+    call's A words, beside its A commitment (``rows_a``) and tree, launched after the commitment (so the graph launches
+    the commitment first), and the capturing stream joins it in its place, before ``eprime_a`` reads A's scales; every
+    other step keeps its stream and order."""
     torch = pytest.importorskip("torch")
     run, log = Calls(torch), []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
@@ -731,15 +732,15 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
 
     assert [c.w for c in forward()] == [7, 8, 9]
     main = lambda w, *xs: [f"{w}:{x} on main (1)" for x in xs]  # noqa: E731
-    stats = lambda w: ["stats waits for main", f"{w}:stats_a on stats (4)"]  # noqa: E731
     tree = lambda w: ["tree waits for main", f"{w}:tree_seed_a on tree (3)"]  # noqa: E731
+    commit = lambda w: ["stats waits for main", *main(w, "rows_a"), f"{w}:stats_a on stats (4)", *tree(w)]  # noqa: E731
     side = lambda w: ["side waits for main", f"{w}:hash_leaf on side (2)", "side waits for tree",  # noqa: E731
                       f"{w}:scatter on side (2)"]
-    assert log == [*stats(7), *main(7, "rows_a"), *tree(7), "main waits for stats", *main(7, "eprime_a", "gemm"), *side(7),
-                   *stats(8), *main(8, "rows_a"), *tree(8), "main waits for side", "main waits for stats",
+    assert log == [*commit(7), "main waits for stats", *main(7, "eprime_a", "gemm"), *side(7),
+                   *commit(8), "main waits for side", "main waits for stats",
                    *main(8, "eprime_a", "gemm"), *side(8),
                    "main waits for side",                     # 9's call is of 8's shape: joined before it writes A's words
-                   *stats(9), *main(9, "rows_a"), *tree(9), "main waits for stats", *main(9, "eprime_a", "gemm"), *side(9),
+                   *commit(9), "main waits for stats", *main(9, "eprime_a", "gemm"), *side(9),
                    "main waits for side", "main waits for tree"]
     assert run.kernel.dev.stream is None
     log.clear()
