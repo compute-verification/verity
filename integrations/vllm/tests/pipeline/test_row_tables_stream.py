@@ -4,7 +4,7 @@ window's `row-table` port a tree over the step roots (`service.ROOTS`) over its 
 (`over=row_table.SCHEMA`), and one `Stream` over the window's template registers the window's record at the
 challenger's counts, draws from the auditor's challenger's coins, and runs each outcome by the Lean verifier of record,
 while the window's tables hold against the members' strings and the step roots serving recorded
-(`row_tables.check_row_tables`)."""
+(`tables.check_row_tables`)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
-from verity_vllm.commit import row_tables as RTB, serving_rows as CS
+from verity_vllm.commit import serving_rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 
@@ -69,7 +69,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     def register(coins, i, window_root):
         rec = CS.registration(c, {"row": 101 + i}, registrar=R)
         roots = {r["port"]: r["root"] for r in rec["roots"]}
-        held.append(RTB.check_row_tables(mine, publics, roots, live))
+        held.append(TB.check_row_tables(mine, publics, roots, live))
         s = stream(spec, coins)
         return s, s.register(rec, ports, leaf_layer=layer, window_root=window_root, counts={TEMPLATE: UNITS})
 

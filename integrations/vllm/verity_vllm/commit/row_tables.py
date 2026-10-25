@@ -12,8 +12,8 @@ step, the domain id and leaf count an opening verifies under, and each token row
 tables come from its own window (``pipeline.serving_rows.population`` over the Build's Programs and the arrivals, the partition
 file's ``row_tables: true``, the live coin commitment's root as its context), the step roots serving recorded, and the
 registration ``registration.check`` accepted, whose ``row-table`` root must be the tree over them (``of_registration``;
-``check_row_tables`` ties the linked chunks' public ``x`` strings to the same roots, and ``registered_reads`` gives each linked
-chunk's Lean verify its ``--registered`` file: its ``x`` port's reads of its one table, under that table's root); the
+`tables.check_row_tables` ties the linked chunks' public ``x`` strings to the same roots, and `tables.registered_reads` gives
+each linked chunk's Lean verify its ``--registered`` file: its ``x`` port's reads of its one table, under that table's root); the
 prover's from the window directory serving wrote (``of_dir``), with ``opening`` (the table's root opened in its step's tree, and a
 set of ranks' strings with their multiproof against it: a ``row_table.StepOpening``, from ``window.json`` and ``t<k>-public.bin``)
 and ``witness`` (their rows and salts, from ``t<k>-private.bin``: what a tile's proof takes privately).  ``verify`` checks an
@@ -35,8 +35,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 
 from . import serving_rows as CS
 
-__all__ = ["COLUMNS", "StepRoots", "Table", "check_order", "check_row_tables", "find", "layer", "of_dir", "of_registration",
-           "opening", "registered_reads", "reported_reads", "row_table", "step_roots", "table_key", "verify", "witness"]
+__all__ = ["COLUMNS", "StepRoots", "Table", "check_order", "find", "layer", "of_dir", "of_registration", "opening", "row_table",
+           "step_roots", "table_key", "verify", "witness"]
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 #: a row table row's key: its request, its token row and its program row
@@ -168,104 +168,6 @@ def of_registration(window: CS.Window, rec: Mapping[str, Any], step_roots: Mappi
     ctx, count = bytes.fromhex(window.context), {s: len(ks) for s, ks in window.segments}
     return [Table(t, window.table_domain(k), k, window.places[k], count[t.segment], ctx, step_roots[t.segment])
             for k, t in enumerate(window.row_tables)]
-
-
-def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Mapping[str, str | bytes],
-                     step_roots: Mapping[int, bytes] | None = None) -> dict[str, str]:
-    """The verifier's tie between the row tables, their linked members and serving's step roots: each step's root recomputed
-    from the linked members' public ``x`` strings (``publics[member]``, their public bodies, which the leaf layer binds), two
-    members' strings for one row the same, and the ``row-table`` port's registered root (``roots``) the tree over them; with
-    ``step_roots`` (what serving recorded before each step's coin, by engine step), each step's recomputed root is the recorded
-    one and the registered root the tree over the recorded ones.  ``{key: why}`` keyed by a member, a table's port, a step
-    (``row-table/<engine step>``) or the port; empty when everything holds."""
-    strings, bad = _linked_strings(window, publics)
-    table_roots: dict[int, bytes] = {}
-    for k, (t, ss) in enumerate(zip(window.row_tables, strings, strict=True)):
-        if t.port in bad:
-            continue
-        if any(s is None for s in ss):
-            bad[t.port] = "a row no member's"
-        else:
-            table_roots[k] = RT.RowTable(window.table_domain(k), ss).root
-    if not window.row_tables:
-        return bad
-    want = roots.get(CS.TABLE_PORT)
-    want = bytes.fromhex(want) if isinstance(want, str) else want
-    steps = {s: window.segment_root(s, [table_roots[k] for k in ks]) for s, ks in window.segments
-             if all(k in table_roots for k in ks)}
-    if step_roots is not None:
-        for s, root in steps.items():
-            if root != step_roots.get(s):
-                bad[f"{CS.TABLE_PORT}/{s}"] = "the members' strings are not the step root serving recorded"
-        recorded = [step_roots.get(s) for s, _ in window.segments]
-        if any(r is None for r in recorded) or RT.RootTree(window.tables_domain, recorded).root != want:
-            bad[CS.TABLE_PORT] = "its root is not the tree over the step roots serving recorded"
-    elif len(steps) < len(window.segments):
-        bad[CS.TABLE_PORT] = "a step whose tables do not hold"
-    elif RT.RootTree(window.tables_domain, list(steps.values())).root != want:
-        bad[CS.TABLE_PORT] = "the members' strings are not its root's rows"
-    return bad
-
-
-def registered_reads(window: CS.Window, publics: Mapping[str, bytes], *, registered: Any) -> dict[str, dict[str, Any]]:
-    """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, in the format of ``registered``,
-    core's ``one_stage.registered``, by member key): its ``x``
-    port reads its one row table, under the table's root recomputed from the members' public strings (the root
-    ``check_row_tables`` ties to the registration and serving's step roots, so call it after that passes) and its serve-time
-    domain, and unit ``m.base + i`` reads the table row its ``i``-th unit links; a member linking rows of two tables is refused,
-    whatever built it.  The header's ``registered`` entry
-    (``serving_rows.registered_entry``) must give each of the chunk's ``x`` rows a path to that root at that position."""
-    strings, bad = _linked_strings(window, publics)
-    out: dict[str, dict[str, Any]] = {}
-    for m in window.members:
-        if not m.links:
-            continue
-        if len({t for t, _ in m.links}) != 1:
-            raise ValueError(f"{m.key}: its {CS.LINKED} rows are rows of several row tables, which no one registered root opens")
-        k = m.links[0][0]
-        t, ss = window.row_tables[k], strings[k]
-        if m.key in bad or t.port in bad or any(s is None for s in ss):
-            raise ValueError(f"{m.key}: {t.port}'s rows do not hold among the members' strings: {bad}")
-        port = {"value": t.port, "root": RT.RowTable(window.table_domain(k), ss).root.hex(), "leaves": t.n, "words": t.words,
-                "word_bits": registered.WORD_BITS, "domain": window.table_domain(k).domain_id.hex(),
-                registered.SCHEMA_KEY: registered.SCHEMA_SEG, "reads": [m.links[j][1] for j in m.link_refs],
-                registered.READS_FROM: m.base}
-        out[m.key] = {"format": registered.READS_V1, "ports": {CS.LINKED: port}}
-    return out
-
-
-def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """The audit record's ``registered_reads``: for each drawn chunk with registered reads (``verdicts[key]``, its Lean verifier
-    of record's verdict), the value each registered port reads (a linked chunk's ``x``, its row table) and the root the
-    verifier's own ``--registered`` file named (``reads[key]``: `registered_reads`, or an outside value's), beside the
-    ``registered`` finding the verdict reports opening the chunk's rows against.  ``ok`` when every chunk's verdict accepted it
-    and reports exactly its file's ports, values and roots."""
-    chunks = {}
-    for key, v in verdicts.items():
-        want = {p: {"value": e["value"], "root": e["root"]} for p, e in (reads.get(key) or {}).get("ports", {}).items()}
-        got = v.get("registered")
-        chunks[key] = {"reads": want, "reported": got, "ok": bool(want) and v.get("accepted") is True and got == want}
-    return {"ok": all(c["ok"] for c in chunks.values()), "chunks": chunks}
-
-
-def _linked_strings(window: CS.Window, publics: Mapping[str, bytes]) -> tuple[list[list[bytes | None]], dict[str, str]]:
-    """Each row table's strings as the linked members' public ``x`` strings give them (None where no member links a row), and
-    ``{key: why}`` for a member whose body is short or a table two members' strings disagree on."""
-    strings: list[list[bytes | None]] = [[None] * t.n for t in window.row_tables]
-    bad: dict[str, str] = {}
-    for m in window.members:
-        if not m.links:
-            continue
-        body = publics.get(m.key, b"")
-        if len(body) < CS.BC_BYTES * len(m.links):
-            bad[m.key] = f"its public body is {len(body)} bytes, short of its {len(m.links)} {CS.LINKED} strings"
-            continue
-        for j, (t, r) in enumerate(m.links):
-            s = body[j * CS.BC_BYTES:(j + 1) * CS.BC_BYTES]
-            if strings[t][r] is not None and strings[t][r] != s:
-                bad.setdefault(window.row_tables[t].port, f"row {r}: two members' strings differ ({m.key})")
-            strings[t][r] = s
-    return strings, bad
 
 
 def _window(window_dir: str | Path) -> dict[str, Any]:

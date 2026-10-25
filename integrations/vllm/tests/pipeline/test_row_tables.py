@@ -21,7 +21,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
-from verity_vllm.commit import index as IX, row_tables as RTB, serving_rows as CS
+from verity_vllm.commit import index as IX, row_tables as RTB, serving_rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
@@ -229,7 +229,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
     v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, ports, leaf_layer=CS.leaf_layer(publics))
     assert v.ok, v.detail
     roots, live = {r["port"]: r["root"] for r in rec["roots"]}, dict(c.segment_roots)
-    assert RTB.check_row_tables(mine, publics, roots) == {} and RTB.check_row_tables(mine, publics, roots, live) == {}
+    assert TB.check_row_tables(mine, publics, roots) == {} and TB.check_row_tables(mine, publics, roots, live) == {}
     assert [e["port"] for e in win["row_tables"]] == [t.port for t in mine.row_tables]
     assert [e["step_index"] for e in win["row_tables"]] == [0, 1, 0, 1]
     assert win["row_table_steps"]["steps"] == [{"engine_step": 0, "tables": [0, 1], "root": c.segment_roots[0].hex()},
@@ -238,7 +238,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
     assert win["members"][2]["registered"][CS.LINKED]["value"] == mine.row_tables[0].port
     assert win["members"][2]["registered"][CS.LINKED]["positions"] == [0, 1]
     # each linked chunk's --registered file: its x rows open its one table's root at the positions its units read
-    reads = RTB.registered_reads(mine, publics, registered=REG)
+    reads = TB.registered_reads(mine, publics, registered=REG)
     assert set(reads) == {m.key for m in mine.members if m.links}
     for k, m in enumerate(mine.members):
         t, port, head = m.links[0][0], reads[m.key]["ports"][CS.LINKED], win["members"][k]["registered"][CS.LINKED]
@@ -258,22 +258,22 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
             assert not REG.verify_read(dom, root, pos ^ 1, bc, path, REG.SCHEMA_SEG)
             assert not REG.verify_read(dom, root, pos, bc, path, REG.SCHEMA)
     with pytest.raises(ValueError, match="do not hold"):
-        RTB.registered_reads(mine, {k: v for k, v in publics.items() if k != mine.members[0].key}, registered=REG)
+        TB.registered_reads(mine, {k: v for k, v in publics.items() if k != mine.members[0].key}, registered=REG)
     # a chunk whose x string is the only copy of a table row and is not that row: step 0's root, against the recorded one
     k0, t0, t1 = mine.members[0].key, mine.row_tables[0].port, mine.row_tables[1].port
     flip = lambda body, at: body[:at] + bytes([body[at] ^ 1]) + body[at + 1:]  # noqa: E731
     once = dict(publics, **{k0: flip(publics[k0], 5)})                 # m0's x row 0, table 1's row 0, read by m0 alone
-    assert RTB.check_row_tables(mine, once, roots) == {CS.TABLE_PORT: "the members' strings are not its root's rows"}
-    assert RTB.check_row_tables(mine, once, roots, live) == {f"{CS.TABLE_PORT}/0": "the members' strings are not the step root serving recorded"}
+    assert TB.check_row_tables(mine, once, roots) == {CS.TABLE_PORT: "the members' strings are not its root's rows"}
+    assert TB.check_row_tables(mine, once, roots, live) == {f"{CS.TABLE_PORT}/0": "the members' strings are not the segment root recorded"}
     twice = dict(publics, **{k0: flip(publics[k0], 200)})              # m0's x row 1, table 1's row 1, which m1 reads too
-    assert set(RTB.check_row_tables(mine, twice, roots)) == {t1, CS.TABLE_PORT} and set(RTB.check_row_tables(mine, twice, roots, live)) == {t1}
+    assert set(TB.check_row_tables(mine, twice, roots)) == {t1, CS.TABLE_PORT} and set(TB.check_row_tables(mine, twice, roots, live)) == {t1}
     # a registered root that is not the tree over the step roots, a recorded step root the window's are not, a chunk missing
     other = dict(roots, **{CS.TABLE_PORT: "00" * 64})
-    assert RTB.check_row_tables(mine, publics, other, live) == {CS.TABLE_PORT: "its root is not the tree over the step roots serving recorded"}
-    assert set(RTB.check_row_tables(mine, publics, roots, {**live, 1: bytes(64)})) == {f"{CS.TABLE_PORT}/1", CS.TABLE_PORT}
-    assert RTB.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots) == {
-        k0: "its public body is 0 bytes, short of its 2 x strings", t1: "a row no member's", CS.TABLE_PORT: "a step whose tables do not hold"}
-    assert t0 not in RTB.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots)
+    assert TB.check_row_tables(mine, publics, other, live) == {CS.TABLE_PORT: "its root is not the tree over the recorded segment roots"}
+    assert set(TB.check_row_tables(mine, publics, roots, {**live, 1: bytes(64)})) == {f"{CS.TABLE_PORT}/1", CS.TABLE_PORT}
+    assert TB.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots) == {
+        k0: "its public body is 0 bytes, short of its 2 x strings", t1: "a row no member's", CS.TABLE_PORT: "a segment whose tables do not hold"}
+    assert t0 not in TB.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots)
     copies, _, _ = window(row_tables=False)
     assert "R3-ports" in R.check(rec, copies.program, copies.query, copies.law, CS.SCHEME, CS.expected_ports(copies),
                                  leaf_layer=CS.leaf_layer(publics)).codes
@@ -285,12 +285,12 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
     c, _s, got = committed(monkeypatch)
     CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
     mine, _, _ = window()
-    reads = RTB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
+    reads = TB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
                                  registered=REG)
     k0, k4 = mine.members[0].key, mine.members[4].key
     lean = lambda key: {"accepted": True, "of_record": True,  # noqa: E731
                         "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
-    rec = RTB.reported_reads(reads, {k0: lean(k0), k4: lean(k4)})
+    rec = TB.reported_reads(reads, {k0: lean(k0), k4: lean(k4)})
     t1 = mine.row_tables[1]
     assert rec["ok"] and rec["chunks"][k0] == {"reads": {CS.LINKED: {"value": t1.port, "root": c.table_roots[t1.port].hex()}},
                                                "reported": lean(k0)["registered"], "ok": True}
@@ -298,8 +298,8 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
     another_root = {CS.LINKED: {**lean(k0)["registered"][CS.LINKED], "root": "00" * 64}}
     for bad in ({**lean(k0), "registered": another_root}, {**lean(k0), "registered": lean(k4)["registered"]},
                 {k: v for k, v in lean(k0).items() if k != "registered"}, {**lean(k0), "accepted": False}):
-        assert not RTB.reported_reads(reads, {k0: bad, k4: lean(k4)})["ok"]
-    assert not RTB.reported_reads({k4: reads[k4]}, {k0: lean(k0), k4: lean(k4)})["ok"]
+        assert not TB.reported_reads(reads, {k0: bad, k4: lean(k4)})["ok"]
+    assert not TB.reported_reads({k4: reads[k4]}, {k0: lean(k0), k4: lean(k4)})["ok"]
 
 
 def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeypatch, tmp_path):
@@ -327,7 +327,7 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
     spanned = copy.copy(mine)
     object.__setattr__(spanned, "members", (mine.members[0], old, *mine.members[2:]))
     with pytest.raises(ValueError, match="several row tables"):
-        RTB.registered_reads(spanned, publics, registered=REG)
+        TB.registered_reads(spanned, publics, registered=REG)
 
 
 def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):

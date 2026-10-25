@@ -45,7 +45,7 @@ segment's tables in the order the integration gives them, under the ``table_doma
 them, ``row-table``: the tree over its segments' roots (window-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed
 twice.  Its linked members (``Member.links``) are shared-row chunks whose ``x`` table holds the distinct rows they read, each
 under its row table row's salt (so the same ``b || c``), read by offset; the integration's verifier side ties them to the
-recorded segment roots (vLLM's ``row_tables.check_row_tables``).  ``write`` adds ``t<k>-public.bin``
+recorded segment roots (``tables.check_row_tables``).  ``write`` adds ``t<k>-public.bin``
 (every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits
 each wired input port as other units' output rows under their salts, which `wiring.check` holds across statements.
 """
@@ -727,7 +727,7 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
 def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | None = None) -> dict[str, Any]:
     """Linked member ``m``'s public header ``registered`` entry: its ``x`` table's rows are rows of its row table (the value,
     named by the table's port), each at its rank with its path to the table's root (``RT.RowTable.path``), which the Lean
-    verifier opens against the root its own ``--registered`` file names (``row_tables.registered_reads``).  ``trees``
+    verifier opens against the root its own ``--registered`` file names (``tables.registered_reads``).  ``trees``
     caches each table's tree by its index."""
     t, trees = m.links[0][0], {} if trees is None else trees
     tab = c.window.row_tables[t]
