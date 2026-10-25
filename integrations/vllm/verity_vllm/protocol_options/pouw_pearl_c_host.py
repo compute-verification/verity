@@ -1,7 +1,7 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
-handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the
-streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on their handles (`_Driver`), and a retained
-pass's files (`_write`, `write_manifest`).
+handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
+kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
+their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
 """
 from __future__ import annotations
 

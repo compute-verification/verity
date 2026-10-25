@@ -40,8 +40,8 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
-from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
+from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
@@ -678,7 +678,7 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
         assert p["base"] == 2 * i
         assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [(2 * i + j, w, m) for j, (w, m) in enumerate(step)]
         assert man["commitment"] == {"root": p["transcript_root"], "count": p["tiles"]} and sorted(man["weights"]) == ["0", "1"]
-    assert CR.passes_distinct(mans) is None
+    assert passes_distinct(mans) is None
     for f in ("weights/0.rows.bf16", "weights/0.tree", "weights/1.rows.bf16", "weights/1.tree"):
         stats = [(root / f"pass-{i:05d}" / f).stat() for i in range(3)]
         assert len({s.st_ino for s in stats}) == 1 and stats[0].st_nlink == 3, f
