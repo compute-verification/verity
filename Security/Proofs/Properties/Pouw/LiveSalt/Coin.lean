@@ -424,10 +424,14 @@ end Properties.Pouw.LiveSalt.Coin
 namespace Properties.Pouw.LiveSalt
 
 open Properties.NetworkCertifier.Bytes (hash_size)
+open SampledProofs.Challenger (LiveCommitment LiveOpening liveReason)
 open Coin (reason_ok hashedBy_eq same_commitment climb_eq coin_eq collides_mono top_mem leafMsg)
 
-theorem liveCoinBinding : LiveCoinBinding := by
-  intro c c' o o' label index after after' hr h h'
+/-- `LiveCoinBinding` of two commitments with one root. -/
+theorem liveCoinBinding_root (c c' : LiveCommitment) (o o' : LiveOpening) (label : String) (index : Int)
+    (after after' : ByteArray) (hr : c.root = c'.root) (h : liveReason c o label index after = .ok none)
+    (h' : liveReason c' o' label index after' = .ok none) :
+    (c = c' ∧ o.coin = o'.coin) ∨ Collides (hashedBy c o label index) (hashedBy c' o' label index) := by
   obtain ⟨pos, dom, hp, hd, hlen, hsib, hcl⟩ := reason_ok h
   obtain ⟨pos', dom', hp', hd', hlen', hsib', hcl'⟩ := reason_ok h'
   rw [hashedBy_eq hd hp, hashedBy_eq hd' hp']
@@ -443,6 +447,10 @@ theorem liveCoinBinding : LiveCoinBinding := by
       (fun e2 => Or.inr (collides_mono (fun _ ha => List.mem_append_right _ ha)
         (fun _ ha => List.mem_append_right _ ha) e2)))
     (fun e => Or.inr (collides_mono (fun _ ha => top_mem (Or.inr ha)) (fun _ ha => top_mem (Or.inr ha)) e))
+
+theorem liveCoinBinding : LiveCoinBinding := by
+  intro s s' e e' fs fs' r o o' label index after after'
+  exact liveCoinBinding_root ⟨s, e, fs, r⟩ ⟨s', e', fs', r⟩ o o' label index after after' rfl
 
 theorem onePair : OnePair PouwCheck.liveSaltCheck := onePair_of_binding liveCoinBinding
 
