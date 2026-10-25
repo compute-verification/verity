@@ -92,7 +92,7 @@ def test_the_record_is_public_only(x):
     text = json.dumps(x.record)
     private = [*x.served.registration.salts, *x.served.registration.rows]
     assert not any(p.hex() in text for p in private)
-    assert set(x.record) == {"schema", "binding", "root", "count", "n_bits"}
+    assert set(x.record) == {"schema", "binding", "root", "count", "n_bits", "G"}
 
 
 @pytest.mark.parametrize("bad, why", [
