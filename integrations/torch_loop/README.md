@@ -21,6 +21,13 @@ committed row longer than one SHA-512 block.
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
   vLLM.
+- `verity_torch_loop/transformer.py`: the demo's standard workload (CMP-92), a 2-layer decoder-only transformer (width 128,
+  2 heads of 64, MLP 512, byte vocabulary, context 32, greedy). Its static matmuls are `ScaledMmS8Coordinate_v1{K=128|512}`
+  units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64|32, DOT=AmpereBF16TcDot16_v2}` units over the KV cache,
+  computed through the Definition's kernel. RMSNorm, softmax, ReLU, the quantizer, the adds and argmax run in torch, and
+  are not units until their Definitions land (CIR-100). `serve_transformer.py` writes its window as `serve.py` writes the
+  MLP's, and `tests/test_transformer.py` covers both. The plan, counts and wiring:
+  `note:compute-accounting/20261025T2154Z-report-allp-xfmr`.
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
