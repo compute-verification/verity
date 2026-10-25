@@ -11,11 +11,16 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    h8 (a block per query row, 8 heads and sequence).  A control arm fills the buffers and launches nothing, and must be
    rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
    them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests.
+2. The torch functions (attn.py's qk and pv, the skeleton's interface), on every decode case (one query a sequence): once
+   over the whole batch with its lens, and once per KV length T over the sequences of that length with k and v sliced to
+   their first T keys and no lens, as the skeleton calls them.  Every word must equal the fixture's (S past a length
+   is not compared); for FULL, each sequence's digests.
    Exit 4 if any check fails, before anything is timed.
-2. Diagnostic timing (information only, not a panel row), at the H200 model's decode step (TIME_B sequences, TIME_H query
-   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L): QK^T and PV here in both tilings, each the median of
-   REPS after a warm-up, interleaved rep by rep with torch's SDPA (its default choice of backend, and FlashAttention's
-   alone; both include the softmax these two leave out) and with torch's two bf16 batched matmuls (cuBLAS), on the card.
+3. Diagnostic timing (information only, not a panel row), at the H200 model's decode step (TIME_B sequences, TIME_H query
+   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here in both tilings, each
+   the median of REPS after a warm-up, interleaved rep by rep with torch's SDPA (its default choice of backend, and
+   FlashAttention's alone; both include the softmax these two leave out) and with torch's two bf16 batched matmuls
+   (cuBLAS), on the card.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -37,7 +42,9 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import attn  # noqa: E402
 import gen  # noqa: E402
+from attn import Args, grid  # noqa: E402
 
 #: compute capability: (accepted name prefixes, the cubin's arch)
 CARDS = {"9.0": (("NVIDIA H100", "NVIDIA H200"), "sm_90a"), "12.0": (("NVIDIA RTX PRO 6000 Blackwell",), "sm_120a")}
@@ -56,13 +63,6 @@ CUDA = {
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuGetErrorString": [i32, P(C.c_char_p)],
 }
-
-
-class Args(C.Structure):
-    """attn_bf16.cu's AttnArgs."""
-    _fields_ = [("x", u64), ("kv", u64), ("out", u64), ("lens", u64), ("nq", u64), ("xs", C.c_int64 * 3),
-                ("kvs", C.c_int64 * 3), ("os", C.c_int64 * 3), ("B", C.c_int32), ("H", C.c_int32), ("Mq", C.c_int32),
-                ("Lcap", C.c_int32), ("gshift", C.c_int32)]
 
 
 def emit(obj: dict) -> None:
@@ -129,10 +129,12 @@ def strides(shape: tuple) -> tuple:
 
 
 class Attn:
-    """The cubin's kernels over one set of device buffers: Q, P [B, H, *, *], K, V [B, Hkv, *, *] bf16, lens and nq [B] int32."""
+    """The cubin's kernels over one set of device buffers: Q, P [B, H, *, *], K, V [B, Hkv, *, *] bf16, lens and nq [B] int32,
+    and PV's least K (z["kpv"])."""
 
     def __init__(self, cu: Cuda, funcs: dict, z: dict):
         self.cu, self.funcs = cu, funcs
+        self.kpv = int(z["kpv"])
         self.D = z["Q"].shape[-1]
         self.B, self.H, self.Mq, self.Lcap = z["P"].shape
         self.Hkv = z["K"].shape[1]
@@ -150,17 +152,17 @@ class Attn:
     def _args(self, x: str, kv: str, out: int, xs: tuple, kvs: tuple, os_: tuple) -> Args:
         return Args(self.dev[x], self.dev[kv], out, self.dev["lens"], self.dev["nq"], (C.c_int64 * 3)(*strides(xs)),
                     (C.c_int64 * 3)(*strides(kvs)), (C.c_int64 * 3)(*strides(os_)), self.B, self.H, self.Mq, self.Lcap,
-                    self.gshift)
+                    self.gshift, self.kpv)
 
     def kernel(self, op: str, tiling: str):
         return self.funcs[f"attn_{op}_d{self.D}" + ("_h8" if tiling == "h8" else "")]
 
     def launch(self, op: str, tiling: str, warps: int) -> None:
-        """q8: a block per (8 query rows, head, sequence); h8: per (query row, 8 heads, sequence); of ``warps`` warps."""
+        """attn.grid's blocks for ``tiling``, of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
-        grid = (-(-self.Mq // 8), self.H, self.B) if tiling == "q8" else (self.Mq, self.H // 8, self.B)
         params = (vp * 1)(C.cast(C.pointer(args), vp))
-        self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid, 32 * warps, 1, 1, 0, None, params, None)
+        self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid(tiling, self.B, self.H, self.Mq), 32 * warps, 1, 1, 0, None,
+                params, None)
 
     def poison(self) -> None:
         self.cu("cuMemsetD8_v2", self.S, POISON, int(np.prod(self.s_shape)) * 2)
@@ -185,7 +187,7 @@ def sha(a: np.ndarray) -> str:
 
 
 def _head(name: str, z: dict, a: Attn) -> dict:
-    return {"part": "check", "case": name, "B": a.B, "H": a.H, "Hkv": a.Hkv, "D": a.D, "Mq": a.Mq, "Lcap": a.Lcap,
+    return {"part": "check", "case": name, "B": a.B, "H": a.H, "Hkv": a.Hkv, "D": a.D, "Mq": a.Mq, "Lcap": a.Lcap, "kpv": a.kpv,
             "lens": [int(z["lens"].min()), int(z["lens"].max())], "nq": [int(z["nq"].min()), int(z["nq"].max())],
             "tilings": list(a.tilings), "arms": {}}
 
@@ -221,13 +223,21 @@ def check_case(cu: Cuda, funcs: dict, path: str) -> dict:
     return row
 
 
+def full_inputs(f: dict) -> dict:
+    """A FULL case's inputs, made by gen.py from the seed its file names."""
+    B, H, Hkv, D, Lcap, seed, _, kpv = (int(v) for v in f["shape"])
+    z = {k: gen.array(seed, k, s) for k, s in gen.shapes(B, H, Hkv, D, Lcap).items()}
+    z["lens"], z["nq"] = gen.lens_nq(B, Lcap)
+    z["kpv"] = np.int32(kpv)
+    return z
+
+
 def full_case(cu: Cuda, funcs: dict, path: str) -> dict:
     """A FULL case: gen.py's inputs, held to the fixture's digests, and each sequence's S and O digests."""
     name = os.path.basename(path)[: -len(".full.npz")]
     f = dict(np.load(path))
-    B, H, Hkv, D, Lcap, seed, chunk = (int(v) for v in f["shape"])
-    z = {k: gen.array(seed, k, s) for k, s in gen.shapes(B, H, Hkv, D, Lcap).items()}
-    z["lens"], z["nq"] = gen.lens_nq(B, Lcap)
+    z = full_inputs(f)
+    B, H, Hkv, D, Lcap, seed, chunk, _ = (int(v) for v in f["shape"])
     bad_in = {k: int(sum(not np.array_equal(gen.digests(z[k][b0:b0 + chunk][None])[0], f[f"in_{k}"][i])
                          for i, b0 in enumerate(range(0, B, chunk)))) for k in ("Q", "K", "V", "P")}
     a = Attn(cu, funcs, z)
@@ -265,6 +275,54 @@ def full_case(cu: Cuda, funcs: dict, path: str) -> dict:
     return row
 
 
+def api_case(path: str) -> dict | None:
+    """attn.qk and attn.pv through torch on a decode case: the whole batch with its lens, then each KV length T's sequences
+    with k and v sliced to their first T keys and no lens (the skeleton's call).  None for a case with prefill rows."""
+    import torch
+
+    full = path.endswith(".full.npz")
+    name = os.path.basename(path)[: -len(".full.npz" if full else ".npz")]
+    f = dict(np.load(path))
+    z = full_inputs(f) if full else f
+    if z["Q"].shape[2] != 1:
+        return None
+    B, H, _, D = z["Q"].shape
+    Hkv, Lcap = z["K"].shape[1], z["K"].shape[2]
+    kpv, lens = int(z["kpv"]), z["lens"]
+
+    def dev(a: np.ndarray):
+        return torch.from_numpy(np.ascontiguousarray(a).view(np.int16)).cuda().view(torch.bfloat16)
+
+    def host(x) -> np.ndarray:
+        torch.cuda.synchronize()
+        return x.view(torch.int16).cpu().numpy().view(np.uint16)
+
+    q, p, k, v = dev(z["Q"][:, :, 0]), dev(z["P"][:, :, 0]), dev(z["K"]), dev(z["V"])
+    if Hkv == 1:
+        k, v = k[:, 0], v[:, 0]
+    live = np.broadcast_to(np.arange(Lcap)[None, None, :] < lens[:, None, None], (B, H, Lcap))
+    S = host(attn.qk(q, k, lens=torch.from_numpy(lens.astype(np.int32)).cuda()))
+    O = host(attn.pv(p, v, lens=torch.from_numpy(lens.astype(np.int32)).cuda(), kpv=kpv))
+    zeros_past = bool((S[~live] == 0).all())
+    S[~live] = 0xA5A5
+    S2, O2 = np.full((B, H, Lcap), 0xA5A5, np.uint16), np.empty((B, H, D), np.uint16)
+    for T in np.unique(lens).tolist():
+        sel = np.flatnonzero(lens == T)
+        st = torch.from_numpy(sel).cuda()
+        S2[sel, :, :T] = host(attn.qk(q[st], k[st][..., :T, :]))
+        O2[sel] = host(attn.pv(p[st][..., :T], v[st][..., :T, :], kpv=kpv))
+    row = {"part": "api", "case": name, "B": B, "H": H, "Hkv": Hkv, "D": D, "Lcap": Lcap, "kpv": kpv,
+           "k_form": "(B, T, D)" if Hkv == 1 else "(B, Hkv, T, D)", "S_zero_past_lens": zeros_past, "arms": {}}
+    for arm, (s, o) in (("lens", (S, O)), ("per_length", (S2, O2))):
+        if full:
+            row["arms"][arm] = {"S_sequences_differing": int((gen.digests(s[:, :, None]) != f["S"]).any(axis=1).sum()),
+                                "O_sequences_differing": int((gen.digests(o[:, :, None]) != f["O"]).any(axis=1).sum())}
+        else:
+            row["arms"][arm] = {"S_mismatches": int((s != f["S"][:, :, 0]).sum()), "O_mismatches": int((o != f["O"][:, :, 0]).sum())}
+    row["ok"] = zeros_past and not any(n for a in row["arms"].values() for n in a.values())
+    return row
+
+
 def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
     """The H200 model's decode step at every KV length TIME_L: these kernels, SDPA and torch's matmuls, interleaved."""
     B, H, Hkv, L = (int(os.environ.get(k, d)) for k, d in (("TIME_B", 20480), ("TIME_H", 256), ("TIME_HKV", 1), ("TIME_L", 32)))
@@ -275,7 +333,7 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
         return (rng.standard_normal(shape, np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
     z = {"Q": words((B, H, 1, D)), "K": words((B, Hkv, L, D)), "V": words((B, Hkv, L, D)), "P": words((B, H, 1, L)),
-         "lens": np.full(B, L, np.int32), "nq": np.ones(B, np.int32)}
+         "lens": np.full(B, L, np.int32), "nq": np.ones(B, np.int32), "kpv": attn.PAD_K}
     a = Attn(cu, funcs, z)
     e0, e1 = cu.event(), cu.event()
     ms = C.c_float()
@@ -339,6 +397,10 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
         qg, pg, kt = q.view(B, Hkv, G, D), p.view(B, Hkv, G, L), k.transpose(-1, -2)
         arms["torch_qk"] = lambda: tt(lambda: torch.matmul(qg, kt))
         arms["torch_pv"] = lambda: tt(lambda: torch.matmul(pg, v))
+        # attn.py's functions as the skeleton calls them: each launch with its output's allocation
+        q3, p3, k3, v3 = q[:, :, 0], p[:, :, 0], k[:, 0] if Hkv == 1 else k, v[:, 0] if Hkv == 1 else v
+        arms["api_qk"] = lambda: tt(lambda: attn.qk(q3, k3))
+        arms["api_pv"] = lambda: tt(lambda: attn.pv(p3, v3))
         out["torch"] = torch.__version__
     except ImportError as e:
         out["torch"] = f"unavailable: {e}"
@@ -399,6 +461,18 @@ def main(argv: list[str]) -> int:
         if r.get("generator_disagrees"):
             print(f"REFUSED: {r['case']}: gen.py's inputs differ from the fixture's ({r['input_chunks_differing']})", file=sys.stderr)
             return 5
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            raise ImportError("torch without CUDA")
+        api = [r for r in (api_case(p) for p in paths) if r is not None]
+    except ImportError as e:
+        api = [{"part": "api", "ok": False, "unavailable": str(e)}]
+    for r in api:
+        rows.append(r)
+        emit(r)
+        print(f"api {r.get('case')}: {'ok' if r['ok'] else 'FAILED'} {json.dumps(r.get('arms', r.get('unavailable')))}", file=sys.stderr)
     if not all(r["ok"] for r in rows):
         print("REFUSED: a case failed; nothing timed", file=sys.stderr)
         return 4

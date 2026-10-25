@@ -4,9 +4,11 @@
 // the PRO 6000's capture of sm120.mma.m16n8k16.bf16 agrees with it).  Softmax is its own unit: QK^T's words come out, PV's
 // P goes in.
 //
-//   attn_qk_d{64,128}[_h8]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])                       for j < len(b,q)
-//   attn_pv_d{64,128}[_h8]   O[b,h,q,d] = GemmCoordinate{K=pad16(len)}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)   len = len(b,q)
+//   attn_qk_d{64,128}[_h8]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])                   for j < len(b,q)
+//   attn_pv_d{64,128}[_h8]   O[b,h,q,d] = GemmCoordinate{K=kp}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)    len = len(b,q)
 //
+// with kp = max(kpv, pad16(len)): kpv = 0 pads each query's keys to a multiple of 16, and kpv = 32 is the H200 model's PV
+// (every KV length 1..32 padded with +0 to K = 32).
 // kv(h) = h >> gshift: 2^gshift query heads share a KV head (MHA: 0; MQA: log2 H).  Sequence b holds lens[b] keys and its
 // last nq[b] positions are the queries (decode: nq = 1; prefill: nq = lens; a chunk: anything between), so query q < nq[b]
 // sees len(b,q) = lens[b] - nq[b] + q + 1 keys (causal).  Nothing else is written: S past len(b,q), and every row
@@ -22,8 +24,8 @@
 // codes in both operands, as the Definition pads them: P is loaded as zero there, and V too.  V is shared by the tile's
 // columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key block each distinct stopping
 // point gets its own mma with V zeroed past it, and each column takes its word from the mma of its own; a column whose keys
-// ended before the block keeps its accumulator, so its chain is its own pad16(len)/16 steps.  The _h8 kernels' columns
-// share one length, so each block is one mma.
+// ended before the block keeps its accumulator unless the block is below kpv, so its chain is its own kp/16 steps.  The _h8
+// kernels' columns share one length, so each block is one mma.
 //
 // The kernels do no floating-point arithmetic: operands and accumulators move as bits, and the only floating-point
 // instructions are the mma and the cvt (sass_gate.py refuses any other).
@@ -39,6 +41,7 @@ struct AttnArgs {
     int64_t xs[3], kvs[3], os[3];  // element strides of batch, head and row; the last dimension is contiguous
     int32_t B, H, Mq, Lcap;        // Mq: the query rows each (b, h) has room for; Lcap: S's and the cache's key rows
     int32_t gshift;                // log2 of the query heads a KV head serves
+    int32_t kpv;                   // PV's least K, a multiple of 16 (0: pad16(len) alone)
 };
 
 namespace {
@@ -117,7 +120,7 @@ __device__ __forceinline__ void pv(const AttnArgs& a) {
     const Tile<HPT> w = tile_of<HPT>(a);
     if (!w.ok(0)) return;
     const int b = w.b, L = w.L;
-    const int steps = (w.seen(w.last()) + 15) >> 4;
+    const int steps = max(a.kpv >> 4, (w.seen(w.last()) + 15) >> 4);
     const uint16_t* P = a.x + b * a.xs[0] + w.h(g) * a.xs[1] + (w.ok(g) ? w.q(g) : 0) * a.xs[2];
     const int64_t vr = a.kvs[2];
     const int Lg = w.seen(g), La = w.seen(2 * t), Lb = w.seen(2 * t + 1);
@@ -147,7 +150,7 @@ __device__ __forceinline__ void pv(const AttnArgs& a) {
             float next[4] = {acc[0], acc[1], acc[2], acc[3]};
             for (int j = 0; j < 8; ++j) {  // warp-uniform: one mma per distinct count of the block's keys a column sees
                 const int m = min(max(w.seen(j) - k0, 0), 16);
-                bool again = m == 0;
+                bool again = m == 0 && k0 >= a.kpv;
                 for (int i = 0; i < j; ++i) again |= min(max(w.seen(i) - k0, 0), 16) == m;
                 if (again) continue;
                 uint32_t w0[4], w8[4];

@@ -4,10 +4,11 @@ Every word the kernels write is `GemmCoordinate_v2{K, GEMM_HOPPER}` (verity.ml.c
 twin (`evaluate_batch`, kernel "auto"), and the twin is held to the Definition's reference evaluator on a sample of each
 case's words (every special-valued one first); any disagreement exits 1 before anything is written:
 
-  S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])                              for q < nq[b], j < len(b,q)
-  O[b,h,q,d] = GemmCoordinate{K=pad16(len)}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)     for q < nq[b], len = len(b,q)
+  S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])                         for q < nq[b], j < len(b,q)
+  O[b,h,q,d] = GemmCoordinate{K=kp}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)        for q < nq[b], len = len(b,q)
 
-with len(b,q) = lens[b] - nq[b] + q + 1 (causal: a sequence's queries are its last nq positions) and kv(h) = h // (H / Hkv).
+with len(b,q) = lens[b] - nq[b] + q + 1 (causal: a sequence's queries are its last nq positions), kv(h) = h // (H / Hkv)
+and kp = max(kpv, pad16(len)), kpv the case's (KPV; the H200 model's PV pads every KV length 1..32 to K = 32).
 Every other word of S and O is 0xA5A5, the poison run.py fills them with: the kernels must leave it.  Inputs the kernels must
 not read hold junk (NaN, infinities and huge values): the cache past lens[b], P past len(b,q), and the rows past nq[b].
 
@@ -77,9 +78,15 @@ CASES = {
     "long_d64": (4, 8, 1, 64, 4096, lambda B: np.array([4096, 4095, 2049, 1]), _decode, 0.0, 0),
     "long_d128": (2, 2, 2, 128, 4100, lambda B: np.array([4100, 3000]), lambda lens: np.array([1, 40]), 0.001, 1),
 }
+# PV's least K by case (default 0: pad16(len) alone)
+KPV = {"h200_decode": 32, "mha_decode_d64": 32, "specials_d64": 48, "h200_decode_full": 32}
 # name: B, H, Hkv, D, Lcap, seed (gen.py's inputs: lens 1 + b mod Lcap, one query each)
 FULL = {"h200_decode_full": (20480, 256, 1, 64, 32, 20261026)}
 SEQ_CHUNK = 256
+
+
+def pv_k(li: np.ndarray, kpv: int) -> np.ndarray:
+    return np.maximum(kpv, -(-np.asarray(li) // 16) * 16)
 
 
 def bf16(v: np.ndarray) -> np.ndarray:
@@ -134,7 +141,7 @@ def build(name: str):
         P[b, :, M:] = rng.choice(JUNK, P[b, :, M:].shape)
         for q in range(M):
             P[b, :, q, seen(lens, nq, b, q):] = rng.choice(JUNK, P[b, :, q, seen(lens, nq, b, q):].shape)
-    return dict(Q=Q, K=K, V=V, P=P, lens=lens, nq=nq), D
+    return dict(Q=Q, K=K, V=V, P=P, lens=lens, nq=nq, kpv=np.int32(KPV.get(name, 0))), D
 
 
 def coordinate(x: np.ndarray, w: np.ndarray, kernel: str = "auto") -> np.ndarray:
@@ -169,6 +176,7 @@ def _pick(kind: str, x: np.ndarray, w: np.ndarray, words: np.ndarray, live: np.n
 def expected(inp: dict, D: int, sample: list, rng: np.random.Generator):
     """S and O as the kernels must leave them, with a sample of their words' operand rows appended to ``sample``."""
     Q, K, V, P, lens, nq = (inp[k] for k in ("Q", "K", "V", "P", "lens", "nq"))
+    kpv = int(inp["kpv"])
     B, H, Mq, Lcap = P.shape
     kvh = np.arange(H) // (H // K.shape[1])
     S = np.full((B, H, Mq, Lcap), POISON, np.uint16)
@@ -186,8 +194,8 @@ def expected(inp: dict, D: int, sample: list, rng: np.random.Generator):
         words = words.reshape(len(bi), hh, Lcap)
         S[bi[:, None], hs[None, :], qi[:, None]] = words
         sample.append(_pick("qk", x, w, words.reshape(-1), live, rng))
-    for kp in sorted({int(-(-n // 16) * 16) for n in li}):
-        sel = np.flatnonzero(-(-li // 16) * 16 == kp)
+    for kp in sorted(set(pv_k(li, kpv).tolist())):
+        sel = np.flatnonzero(pv_k(li, kpv) == kp)
         b, q, n_ = bi[sel], qi[sel], li[sel]
         keys = np.arange(kp)
         mask = keys[None, :] < n_[:, None]
@@ -223,6 +231,7 @@ def full_inputs(name: str, b0: int, b1: int) -> dict:
     B, H, Hkv, D, Lcap, seed = FULL[name]
     inp = {k: gen.array(seed, k, s, b0, b1) for k, s in gen.shapes(B, H, Hkv, D, Lcap).items()}
     inp["lens"], inp["nq"] = gen.lens_nq(B, Lcap, b0, b1)
+    inp["kpv"] = np.int32(KPV.get(name, 0))
     return inp
 
 
@@ -246,12 +255,13 @@ def full(check: str, name: str) -> dict:
         got = sorted(pool.map(_full_chunk, jobs), key=lambda r: r[0])
     Sd, Od = np.concatenate([r[1] for r in got]), np.concatenate([r[2] for r in got])
     ins = {k: np.stack([r[3][k] for r in got]) for k in ("Q", "K", "V", "P")}
+    kpv = KPV.get(name, 0)
     np.savez(os.path.join(check, f"{name}.full.npz"), S=Sd, O=Od, **{f"in_{k}": v for k, v in ins.items()},
-             shape=np.array([B, H, Hkv, D, Lcap, seed, SEQ_CHUNK], np.int64))
+             shape=np.array([B, H, Hkv, D, Lcap, seed, SEQ_CHUNK, kpv], np.int64))
     lens, _ = gen.lens_nq(B, Lcap)
-    return {"B": B, "H": H, "Hkv": Hkv, "D": D, "Mq": 1, "Lcap": Lcap, "seed": seed, "seq_chunk": SEQ_CHUNK,
+    return {"B": B, "H": H, "Hkv": Hkv, "D": D, "Mq": 1, "Lcap": Lcap, "seed": seed, "seq_chunk": SEQ_CHUNK, "kpv": kpv,
             "lens": [int(lens.min()), int(lens.max())], "queries": B, "qk_words": H * int(lens.sum()), "pv_words": H * B * D,
-            "pv_k": sorted({int(-(-n // 16) * 16) for n in lens}), "reference": got[0][4]}
+            "pv_k": sorted(set(pv_k(lens, kpv).tolist())), "reference": got[0][4]}
 
 
 def main(argv: list[str]) -> int:
@@ -276,9 +286,9 @@ def main(argv: list[str]) -> int:
         B, H, Mq, Lcap = inp["P"].shape
         _, _, li = pairs(inp["lens"], inp["nq"])
         summary["cases"][name] = {"B": B, "H": H, "Hkv": int(inp["K"].shape[1]), "D": D, "Mq": Mq, "Lcap": Lcap,
-                                  "lens": [int(inp["lens"].min()), int(inp["lens"].max())], "queries": len(li),
-                                  "qk_words": H * int(li.sum()), "pv_words": H * len(li) * D,
-                                  "pv_k": sorted({int(-(-n // 16) * 16) for n in li}), "reference": ref}
+                                  "kpv": int(inp["kpv"]), "lens": [int(inp["lens"].min()), int(inp["lens"].max())],
+                                  "queries": len(li), "qk_words": H * int(li.sum()), "pv_words": H * len(li) * D,
+                                  "pv_k": sorted(set(pv_k(li, inp["kpv"]).tolist())), "reference": ref}
         print(name, json.dumps(summary["cases"][name]), flush=True)
     with open(os.path.join(check, "fixture.json"), "w") as f:
         json.dump(summary, f, indent=1)
