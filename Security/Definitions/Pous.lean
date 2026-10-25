@@ -21,6 +21,7 @@ import Definitions.Pous.Model.Invertible
 import Definitions.Pous.Model.Labelling
 import Definitions.Pous.Model.M1
 import Definitions.Pous.Model.M1p
+import Definitions.Pous.Model.Mutable
 import Definitions.Pous.Model.P3Chain
 import Definitions.Pous.Model.Pebbling
 import Definitions.Pous.Model.PubEncoder

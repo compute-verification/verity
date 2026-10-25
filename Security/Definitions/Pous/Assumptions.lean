@@ -1,6 +1,7 @@
 import Definitions.Pous.Accounting.LemmaA
 import Definitions.Pous.Model.Inc
 import Definitions.Pous.Assumptions.P2
+import Definitions.Pous.Assumptions.Obligation
 
 /-!
 # Named assumptions
