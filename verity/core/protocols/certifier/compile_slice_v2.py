@@ -268,7 +268,11 @@ def positions(S, t: SimpleNamespace) -> dict[int, tuple[str, int]]:
 
 
 class Refused(Exception):
-    """A call or a bound of the class refuses the step."""
+    """A call or a bound of the class refuses the step; in `pool_step`'s derive mode ``partial`` holds the hits,
+    evictable counts and returns derived before the refusal (the given ones past it) and the order they were derived
+    in."""
+
+    partial: tuple | None = None
 
 
 def _need(ok: bool, why: str) -> None:
@@ -323,8 +327,9 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
     t = tap(S, st, inp)
     R, W, A, B, N = S.R, S.W, S.A, S.B, S.CN
     cur, fl = pool.pool, list(pool.fl) if S.AS else [0] * R
+    seen: list[tuple[str, int]] = []
     if derive:
-        hit, ev, ret, tau = [0] * (W + A), [0] * (W + A), [0] * R, [0] * R
+        hit, ev, ret, tau = list(inp.hit), list(inp.evict), list(inp.ret), [0] * R
     else:
         hit, ev, ret, tau = list(inp.hit), list(inp.evict), list(inp.ret), list(tau) + [0] * (R - len(tau))
         _need(not any(hit[c] or ev[c] for c in range(W + A) if not t.cands[c]["reach"]),
@@ -353,6 +358,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         us = units(x["id"])
         if derive:
             hit[c], ev[c] = _longest(Y, cur, us, x["ntok"], KL)
+            seen.append(("c", c))
         _need(hit[c] < KL and ev[c] < lim, f"candidate {c}'s hit {hit[c]} past KL = {KL} units, or its count past HW")
         K = min(x["ntok"], (1 << Z.LW) - 1)
         looked.append(c)
@@ -381,39 +387,51 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
             bit = 1 << slot
             has = [c for x in cur.table if x for c in x.copies if c.mask & bit]
             ret[p] = sum(c.mask == bit for c in has) + held - len(has)
+            seen.append(("p", p))
         _need(held < lim and ret[p] < lim, f"slot {slot}'s free: {held} held, {ret[p]} returned past HW")
         call(kind, C2.Op(slot=slot, free=True, held=held, ret=ret[p]))
 
-    events = positions(S, t)
-    for p in range(R):
-        s = t.post[p]
-        if s is not None and s["cand"] is not None:
-            lookup(s["cand"]["c"], p, True)
-        if p in events:
-            kind, i = events[p]
-            r = t.run[i]
-            if kind == "free":
-                free(i, i, r["id"], RS.cdiv(r["comp"], B), "preempt")
-            else:
-                target = min(r["comp"] + t.run_n[i], r["P"] + r["out"] - fl[i]) // B if t.run_n[i] else 0
-                compute(i, r["id"], t.needs[i], target, KC)
-        elif s is not None and s["cand"] is not None:
-            compute(p, s["id"], s["cand"]["new"], min(s["comp"] + s["n"], s["P"] + s["out"]) // B, KC)
-    left = [x["c"] for x in t.cands if x["reach"] and not x["admit"]]
-    if left:
-        lookup(left[0], 0, False)
-    for p in range(R):
-        s, u = t.post[p], t.update[p]
-        if s is None:
-            continue
-        if S.AS and s["cand"] is None and fl[p]:
-            compute(p, s["id"], 0, (u["comp"] - u["sampled"]) // B, LATE, "late")
-        if u["leave"]:
-            free(p, p, s["id"], u["held"])
+    def run() -> None:
+        events = positions(S, t)
+        for p in range(R):
+            s = t.post[p]
+            if s is not None and s["cand"] is not None:
+                lookup(s["cand"]["c"], p, True)
+            if p in events:
+                kind, i = events[p]
+                r = t.run[i]
+                if kind == "free":
+                    free(i, i, r["id"], RS.cdiv(r["comp"], B), "preempt")
+                else:
+                    target = min(r["comp"] + t.run_n[i], r["P"] + r["out"] - fl[i]) // B if t.run_n[i] else 0
+                    compute(i, r["id"], t.needs[i], target, KC)
+            elif s is not None and s["cand"] is not None:
+                compute(p, s["id"], s["cand"]["new"], min(s["comp"] + s["n"], s["P"] + s["out"]) // B, KC)
+        left = [x["c"] for x in t.cands if x["reach"] and not x["admit"]]
+        if left:
+            lookup(left[0], 0, False)
+        for p in range(R):
+            s, u = t.post[p], t.update[p]
+            if s is None:
+                continue
+            if S.AS and s["cand"] is None and fl[p]:
+                compute(p, s["id"], 0, (u["comp"] - u["sampled"]) // B, LATE, "late")
+            if u["leave"]:
+                free(p, p, s["id"], u["held"])
+        _need(not any(c.mask >> p & 1 for x in cur.table if x for c in x.copies for p in gone)
+              and all(cur.spfx[p] == N for p in gone), "a slot that leaves the running list still holds blocks")
+
     keep = [p for p in range(R) if t.update[p] is not None and t.update[p]["keep"]]
     gone = [p for p in range(R) if p not in keep]
-    _need(not any(c.mask >> p & 1 for x in cur.table if x for c in x.copies for p in gone)
-          and all(cur.spfx[p] == N for p in gone), "a slot that leaves the running list still holds blocks")
+    try:
+        run()
+    except Refused as x:
+        if derive:
+            x.partial = (tuple(hit), tuple(ev), tuple(ret), tuple(seen))
+        raise
+    if derive:
+        hit, ev = ([v if ("c", c) in seen else 0 for c, v in enumerate(xs)] for xs in (hit, ev))
+        ret = [v if ("p", p) in seen else 0 for p, v in enumerate(ret)]
 
     def moved(m: int) -> int:
         return sum((m >> p & 1) << q for q, p in enumerate(keep))
@@ -423,7 +441,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
     spfx = tuple(cur.spfx[p] for p in keep) + (N,) * (R - len(keep))
     nfl = tuple(int(t.update[p]["sampled"]) for p in keep) + (0,) * (R - len(keep)) if S.AS else ()
     return SimpleNamespace(pool=Pool(replace(cur, table=table, spfx=spfx), nfl), calls=calls, looked=tuple(looked),
-                           hit=tuple(hit), ev=tuple(ev), ret=tuple(ret), tau=tuple(tau))
+                           hit=tuple(hit), ev=tuple(ev), ret=tuple(ret), tau=tuple(tau), order=tuple(seen))
 
 
 # --- the rows ----------------------------------------------------------------------------------------------------------------
@@ -712,6 +730,34 @@ def unit(**st):
     return bind(CompileSlice, **st)
 
 
+#: `compile_slice.DEMO_ENGINE` at two sequences of 16 tokens and six blocks (five past the null block), so the pool evicts
+DEMO_ENGINE = {**CS.DEMO_ENGINE, "max_num_seqs": 2, "max_model_len": 16, "num_gpu_blocks": 6}
+
+
+def demo() -> tuple[dict, CS.Slice]:
+    """The demonstration class's statics and slice: five steps at (R 2, W 1, A 2) on `DEMO_ENGINE`, three arrivals,
+    five decisions, a 5-entry pool of 4-bit tokens with two copies an entry and 6-bit stamps, 4 units a request.
+    Request 1 shares request 0's first block: it is looked up at step 0, takes that hit at step 1 and leaves at once,
+    freeing three blocks one of which slot 0 still holds (REDTEAM phase 18's free). Both computes of step 2 evict
+    queued copies; request 2 is preempted at step 3 and readmitted at step 4 with a hit on its own first block."""
+    st = statics(2, 1, 2, DEMO_ENGINE, 3, Q=3, D=5, P=5, K=3, CN=5, CTW=4, CU=4, CD=2, SW=6)
+    tokens = ((8, 14, 9, 14, 10, 4, 3, 13, 9, 8, 11, 10, 13, 3, 2), (8, 14, 9, 14, 7, 8, 11, 12, 10, 11, 3, 10, 1),
+              (10, 1, 13, 8, 6, 8))
+    return st, CS.Slice(((0, 11, 4), (1, 12, 1), (2, 4, 2)), (0, 1, 1, 0, 0), 5, tokens)
+
+
+def demo_async() -> tuple[dict, CS.Slice]:
+    """The asynchronous demonstration class's: `demo`'s at AS = 1 (so ``wit`` has a ``map`` and the pool rows ``fl``).
+    Request 2 shares request 0's first block: it is looked up at step 3 and admitted at step 4 with that hit, its
+    compute evicting the oldest queued copy, and request 0 then leaves holding the shared block; slot 0's late
+    `cache_blocks` caches a block at step 4."""
+    st = statics(2, 1, 2, {**DEMO_ENGINE, "async_scheduling": True}, 3, Q=3, D=5, P=5, K=3, CN=5, CTW=4, CU=4, CD=2,
+                 SW=6)
+    tokens = ((6, 10, 14, 1, 8, 5, 12, 14, 11, 9, 2, 13, 8), (13, 5, 6, 1, 11),
+              (6, 10, 14, 1, 10, 9, 14, 4, 5, 10, 9, 3, 4, 9))
+    return st, CS.Slice(((0, 9, 4, 1), (1, 4, 1, 0), (2, 12, 2, 0)), (0, 1, 0, 1, 1), 5, tokens)
+
+
 # --- the specification -------------------------------------------------------------------------------------------------------
 
 
@@ -821,22 +867,38 @@ def scan(S, sl: CS.Slice, *, overstate: dict[int, int] | None = None, made_up: d
             continue
         st = CS._state(Sc, cur)
         reqs = tuple(RS.Req(**dict(zip(names, x))) for x in arr)
-        h, e, r = (0,) * CA, (0,) * CA, returns(S, pool, st)
-        for _round in range(CA + R + 3):
-            inp = RS.Inputs(reqs, tuple(bits), h, e, r)
+        h, e, r = [0] * CA, [0] * CA, list(returns(S, pool, st))
+        for _round in range(4 * (CA + R) + 8):
+            inp = RS.Inputs(reqs, tuple(bits), tuple(h), tuple(e), tuple(r))
             out = RS.reference(St, st, inp)
             if not out.ok:
                 raise ValueError(f"step {u} refuses: the slice's class can't take it")
+            refused = None
             try:
                 got = pool_step(S, pool, st, inp, out, toks, derive=True, overstate=overstate,
                                 made_up=(made_up or {}).get(u))
+                dh, de, dr, order = got.hit, got.ev, got.ret, got.order
             except Refused as x:
-                raise ValueError(f"step {u}: {x}") from None
-            if (got.hit, got.ev, got.ret) == (h, e, r):
+                if x.partial is None:
+                    raise ValueError(f"step {u}: {x}") from None
+                refused, (dh, de, dr, order) = x, x.partial
+            # the first value in call order that the calls derive otherwise: the calls before it ran on settled values
+            k = next(((kind, i) for kind, i in order
+                      if ((dh[i], de[i]) != (h[i], e[i]) if kind == "c" else dr[i] != r[i])), None)
+            if k is not None:
+                if k[0] == "c":
+                    h[k[1]], e[k[1]] = dh[k[1]], de[k[1]]
+                else:
+                    r[k[1]] = dr[k[1]]
+                continue
+            if refused is not None:
+                raise ValueError(f"step {u}: {refused}") from None
+            if (got.hit, got.ev, got.ret) == tuple(map(tuple, (h, e, r))):
                 break
-            h, e, r = got.hit, got.ev, got.ret
+            h, e, r = list(got.hit), list(got.ev), list(got.ret)
         else:
             raise ValueError(f"step {u}'s hits and returns don't settle")
+        h, e, r = tuple(h), tuple(e), tuple(r)
         t = list(got.tau)
         for slot, v in (taus or {}).get(u, {}).items():
             t[slot] = v
