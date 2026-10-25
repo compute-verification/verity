@@ -9,3 +9,11 @@ on it right away:
 (or a slot on cpu-1/2), and put the head, move_check's verdict and that run id in your final message (I post them to ci
 in thread 1792820329.429599). Allow 30-60 min (Lean reuses passes; suites rerun on moved paths). Also: on cpu-1 a
 source tree may have a uv-managed CPython 3.14 venv (GC test failures); prefer cpu-4/5 for the move's checks.
+
+## 01:05Z: your moved tree's suites (r20261025-002311-a54a) fail only on main's breakages
+
+57/61 passed. The 4 failures are all on main without the move: test_glue (#3971 fixes), verity-bench's
+PearlCWholeArm `execution` test (main's, kernels'), and KeyError 'SEG' in the served-tie tests of benchmarks/prove_path
+and verity/core/protocols/certifier (network-accounting's #3884 fixes). So the move is clean. Next: when #3834 lands,
+regenerate on that main, `verity check move main HEAD`, and start the recorded full check (check.py --record on cpu-4);
+give me head + verdict + run id.
