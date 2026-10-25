@@ -111,7 +111,7 @@ def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units drawn subset:3 at δ = 1/10 with at most 4 wrong, 7 cells on one
     connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps; and eps over audits at
     δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
-    p = Params(((0, 3),), (7, 0), 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
+    p = Params(((0, 3),), (7, 0), 0, 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
     assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
             out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
