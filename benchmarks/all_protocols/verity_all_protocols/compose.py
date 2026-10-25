@@ -1,4 +1,4 @@
-"""The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``), and the bound over a horizon of periods.
+"""The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``).
 
 Onsite's check (verity/core/protocols/composition/README.md) runs each component's own ``answer`` on that component's
 case and decides, reject first: any component's rejection rejects onsite whatever the others answer; otherwise onsite
