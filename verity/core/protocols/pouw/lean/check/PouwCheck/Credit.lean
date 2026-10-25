@@ -2176,9 +2176,9 @@ def mainIndex? (main : Json) (commit : String) : Option Nat :=
 commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
 but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
 records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
-(CMP74-FOLLOW). -/
+(CMP74-FOLLOW). `unit` names what `i` counts (`pass` in a Pearl-C period, `pearlCPeriodCredit`). -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
-    (floor : Option Nat) : Option (String × String) :=
+    (floor : Option Nat) (unit : String := "window") : Option (String × String) :=
   match periodPin with
   | none => none
   | some pp =>
@@ -2192,7 +2192,7 @@ def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (period
       | some base =>
         let f := floor.getD 0
         if pos > base + f then
-          some ("pin", s!"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
+          some ("pin", s!"{unit} {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
             s!"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned.take 16}... is " ++
             s!"that far behind {pp.take 16}... on main's first-parent line, so the period earns nothing; " ++
             "open every window within the floor of its period's open pin")

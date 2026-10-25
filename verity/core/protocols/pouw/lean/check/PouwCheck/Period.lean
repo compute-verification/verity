@@ -15,7 +15,10 @@ takes in its `earlier`, and the credited passes' manifests, in the order present
    order, so a complete salt-only session no pass presents refuses the period.
 2. Salt-only sessions (`salt-only`): no pass's session is one `liveSaltCheck` refuses with `salt`.
 3. Credited sessions (`circuit`): each pass's session passes `creditedSession` with its `descriptor`.
-4. Accepted passes (`pass`): each pass passes `passEpoch` under the verifier's live inputs.
+3a. Fresh pins (`pin`): each pass's session is pinned within the period's freshness floor of the commit its open
+   recorded, H1's period-level pin hygiene (`Credit.committedPin`, `Credit.committedFloor`, `Credit.pinHygiene`).
+4. Accepted passes (`pass`): each pass's `context` is a string, and the pass passes `passEpoch` under the verifier's
+   live inputs.
 5. Consecutive epochs (`index`): for each W, the period's epochs on W, in the close's order, are numbered on from the
    lane's `earlier` credited epochs on W with no gap or repeat.
 6. Distinct calls (`passesDistinct`: `call-range`, `repeated-call`): no two passes of one salt hold one call index,
@@ -118,14 +121,23 @@ def periodChecks (key ledger pins main name passes earlier : Json) : R (List (St
         throw (SALT_ONLY, s!"pass {i} of period {nm} is not of a Pearl-C salt session, so the period earns nothing: {why}")
       if c == "error" then throw (c, why)
     | .ok _ => pure ()
+  let mut audited : List SampledProofs.Challenger.Audited := []
   for ((p, (_, _, r)), i) in (ps.zip epochs).zipIdx do
     let some d := hexBytes? (get p "descriptor")
       | throw (CIRCUIT, s!"pass {i} of period {nm}: the descriptor is not the bytes in lowercase hex of the circuit it proves")
-    discard <| (creditedSession ledger (Json.mkObj [("root", .str r)]) ck pins main d).mapError fun e =>
+    let a ← (creditedSession ledger (Json.mkObj [("root", .str r)]) ck pins main d).mapError fun e =>
       (CIRCUIT, s!"pass {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+    audited := audited ++ [a]
+  let periodPin := Credit.committedPin ledger ((str? name).getD "")
+  let floor := Credit.committedFloor ledger ((str? name).getD "")
+  for (a, i) in audited.zipIdx do
+    if let some why := Credit.pinHygiene nm i main a.pinned periodPin floor "pass" then throw why
   for ((p, raw), i) in (ps.zip raws).zipIdx do
+    let .str context := get p "context"
+      | throw (PASS_REFUSED, s!"pass {i} of period {nm} is refused, so the period earns nothing: its context is not " ++
+          "a string, the window context naming its manifest by SHA-512")
     let live := Json.mkObj [("key", key), ("ledger", ledger), ("main", main), ("pins", pins), ("session", get p "session")]
-    discard <| (passEpoch .null (some raw) ((str? (get p "context")).getD "") false none none none none live).mapError
+    discard <| (passEpoch .null (some raw) context false none none none none live).mapError
       fun e => if e.1 == "error" then e
         else (PASS_REFUSED, s!"pass {i} of period {nm} is refused, so the period earns nothing: {e.1}: {e.2}")
   let mut nxt : List (String × Nat) := []
