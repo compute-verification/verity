@@ -57,7 +57,19 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 
 #: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", "windows.jsonl", "seals.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "summary.json")
+MIRRORED = ("serve.json", "requests.jsonl", "windows.jsonl", "seals.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "pauses.jsonl",
+            "summary.json")
+
+
+def gc_of(rc: Any) -> dict[str, Any] | None:
+    """A window's Python collections (the committer's `GcPauses` record, while it was installed): how many, their total and
+    longest, and each of 50 ms or more as (generation, start on `time.perf_counter`, seconds, thread)."""
+    g = (getattr(rc, "extra", None) or {}).get("gc")
+    if not g:
+        return None
+    p = list(g.get("pauses") or [])
+    return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
+            "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
 
 
 class Mirror:
@@ -225,7 +237,8 @@ class CommitWindows:
                    "steps": commit["steps"], "step_roots": [bytes(s.root).hex() for s in rc.steps],
                    "committed_bytes": sum(int(s.n_bytes) for s in rc.steps), "ids_name": readback["ids_name"],
                    "requests": readback["requests"], "commit": commit, "readback_errors": readback["readback_errors"],
-                   "readback_errors_n": readback["readback_errors_n"], "passed": commit["passed"] and readback["passed"]}
+                   "readback_errors_n": readback["readback_errors_n"], "passed": commit["passed"] and readback["passed"],
+                   "gc": gc_of(rc)}
             if self.seal is not None:
                 job = self._seal_job(rec, rc)
                 rec["seal"] = {"row_dir": str(self.out / "windows" / f"w{self.window}"), "off_loop": self.sealer is not None} \

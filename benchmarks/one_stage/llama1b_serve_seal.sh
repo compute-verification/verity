@@ -134,6 +134,6 @@ end=$(date -u -d "today $UNTIL" +%s)
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
 trap - TERM INT
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
-cp "$D/summary.json" "$D/windows.jsonl" "$D/seals.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
+cp "$D/summary.json" "$D/windows.jsonl" "$D/seals.jsonl" "$D/requests.jsonl" "$D/pauses.jsonl" "$OUT/" 2>/dev/null
 tail -3 "$OUT/serve.log"
 exit $rc

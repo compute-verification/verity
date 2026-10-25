@@ -24,21 +24,28 @@ state, and the pinned blocks its values sit in lent out of the committer's pool 
 tensors' bytes are read (`extras_of`), and `seal_window` runs over the frozen view on the sealer's thread while the engine
 serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps the serve dir's
 filesystem above a floor: a window whose seal would take it under is not sealed.
+
+The seal shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of entries at a time
+(`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time (`drop`). `Watchdog`
+records what still stalls the process (``pauses.jsonl``), and each seal's line its phases.
 """
 from __future__ import annotations
 
+import contextlib
 import copy
 import functools
+import gc
 import json
 import shutil
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm.commit import json_chunks as JC
 from verity_vllm.config import UsageError
 
 SCHEMES = ("vllm-v1", "rows-sha512")
@@ -211,17 +218,22 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     out.mkdir(parents=True, exist_ok=True)
     pd = bytes(com.program_digest).hex()
     manifest = getattr(com, "required_manifest", None)
-    binder = served_binder(manifest, sorted(com._layouts), getattr(com, "sources", None) or ()) if manifest is not None else None
-    bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_rows=request_rows, chunk=com.chunk,
-                               weight_registration=rc.weight_registration, binder=binder)
+    with gc_paused():
+        binder = served_binder(manifest, sorted(com._layouts), getattr(com, "sources", None) or ()) if manifest is not None else None
+        bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_rows=request_rows, chunk=com.chunk,
+                                   weight_registration=rc.weight_registration, binder=binder)
+        with open(out / "binding_map_p0.json", "w") as fh:
+            fh.writelines(JC.dict_pieces(bmap, "entries", separators=(",", ":"), default=str))
+        drop(bmap["entries"])
+        del binder
+    t_map = time.perf_counter()
     of_record = {} if manifest is None else {
         "required_manifest": {"path": getattr(com, "required_manifest_path", None), "program_digest": manifest.get("program_digest"),
                               "digest": manifest.get("digest")},
         "op_path_aliases": dict(manifest.get("op_path_aliases") or {})}
-    (out / "binding_map_p0.json").write_text(json.dumps({k: v for k, v in bmap.items() if k != "entries"} | {"entries": bmap["entries"]},
-                                                        separators=(",", ":"), default=str))
     hashed: dict[str, str] = {}
     RB.write_store(out, 0, com, rc, digests=hashed, extras=extras)
+    t_store = time.perf_counter()
     scheme = getattr(com, "commit_scheme", "vllm-v1")
     sr, bl = RB.deferred_records(RB.path(out, 0))
     row = {"pair": 0, "arm": "instrumented", "label": label, "served_window": {"schema": SERVED_WINDOW, **{k: rec.get(k) for k in ("window", "run_id")}},
@@ -246,8 +258,29 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str) + "\n")
     b = (verdict.get("replay_deferred") or {}).get("bundles") or [{}]
     return {"row_dir": str(d), "bundle": b[0].get("path"), "manifest_sha256": b[0].get("manifest_sha256"), "bytes": b[0].get("bytes"),
-            "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "requests": [q["request_id"] for q in reqs],
-            "seal_s": round(time.perf_counter() - t0, 3)}
+            "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "binding_map_entries": bmap["entries_n"],
+            "requests": [q["request_id"] for q in reqs], "seal_s": round(time.perf_counter() - t0, 3),
+            "phases_s": {"binding_map": round(t_map - t0, 3), "store": round(t_store - t_map, 3),
+                         "bundle": round(time.perf_counter() - t_store, 3)}}
+
+
+@contextlib.contextmanager
+def gc_paused() -> Iterator[None]:
+    """No cyclic collection while the block runs: a served window's binding map is up to a few million young objects, and a
+    collection that scans them stops every thread, the engine's too. Refcounting still frees what the block drops."""
+    was = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if was:
+            gc.enable()
+
+
+def drop(items: list[Any], chunk: int = 4096) -> None:
+    """``items`` emptied ``chunk`` at a time: freeing a million map entries at once is one C call that holds the GIL."""
+    while items:
+        del items[-chunk:]
 
 
 class _Null:
@@ -400,3 +433,37 @@ class DiskFloor:
             return None
         return (f"{self.path} has {free / GB:.0f} GB free, under the disk floor ({self.floor / GB:.0f} GB, --disk-floor-gb) plus one "
                 f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
+
+
+class Watchdog:
+    """A thread that sleeps ``period_s`` at a time beside the engine: each wake ``min_s`` or more late is a pause, a line of
+    ``path`` (pauses.jsonl: when it ended, unix seconds as the step trace's ``t_end``, and how late). The engine's thread waits
+    as long for the GIL (or a core), so a pause is a stall of the step then running; the window's ``gc`` and the seals'
+    ``phases_s`` say what ran."""
+
+    def __init__(self, path: str | Path, *, period_s: float = 0.05, min_s: float = 0.2, clock: Callable[[], float] = time.perf_counter,
+                 sleep: Callable[[float], Any] = time.sleep, wall: Callable[[], float] = time.time) -> None:
+        self.path, self.period_s, self.min_s = Path(path), float(period_s), float(min_s)
+        self.clock, self.sleep, self.wall = clock, sleep, wall
+        self.late: list[float] = []
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self.run, name="serve-watchdog", daemon=True)
+
+    def run(self) -> None:
+        while not self.stopped.is_set():
+            t0 = self.clock()
+            self.sleep(self.period_s)
+            late = self.clock() - t0 - self.period_s
+            if late >= self.min_s:
+                self.late.append(late)
+                with open(self.path, "a") as fh:
+                    fh.write(json.dumps({"t_end": round(self.wall(), 3), "late_s": round(late, 3)}) + "\n")
+
+    def stop(self) -> None:
+        self.stopped.set()
+        if self.thread.is_alive():
+            self.thread.join()
+
+    def summary(self) -> dict[str, Any]:
+        return {"period_s": self.period_s, "min_s": self.min_s, "pauses": len(self.late),
+                "late_s": {"max": round(max(self.late, default=0.0), 3), "total": round(sum(self.late), 3)}}

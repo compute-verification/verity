@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import gc
+import hashlib
 import json
 import shutil
 import threading
@@ -308,3 +310,70 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
     assert so.records_mirror(src, str(src)) is None and so.records_mirror(src, None) is None
     assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
+
+
+def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):
+    from verity_vllm.commit import binding as B, json_chunks as JC
+
+    built: list[dict[str, Any]] = []
+    real = B.build_binding_map
+
+    def build(*a: Any, **k: Any) -> dict[str, Any]:
+        m = real(*a, **k)
+        built.append(copy.deepcopy(m))
+        return m
+
+    monkeypatch.setattr(B, "build_binding_map", build)
+    monkeypatch.setattr(JC, "CHUNK", 1)
+    com, rc, kw = _window_a()
+    got = ss.seal_window(com, rc, tmp_path / "w5", **kw)
+    (bmap,) = built
+    assert bmap["entries_n"] > 1, "more than one piece"
+    one = json.dumps({k: v for k, v in bmap.items() if k != "entries"} | {"entries": bmap["entries"]}, separators=(",", ":"), default=str)
+    assert (tmp_path / "w5" / "commit" / "binding_map_p0.json").read_text() == one
+    canon = json.dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()
+    assert got["binding_map_digest"] == bmap["digest"] == hashlib.sha256(canon).hexdigest()
+    assert got["binding_map_entries"] == bmap["entries_n"] and set(got["phases_s"]) == {"binding_map", "store", "bundle"}
+
+
+def test_no_collection_runs_while_the_map_is_built_and_the_collector_comes_back_as_it_was():
+    was = gc.isenabled()
+    try:
+        gc.enable()
+        with ss.gc_paused():
+            assert not gc.isenabled()
+        assert gc.isenabled()
+        gc.disable()
+        with ss.gc_paused():
+            pass
+        assert not gc.isenabled()
+    finally:
+        (gc.enable if was else gc.disable)()
+    items = list(range(10_001))
+    ss.drop(items, chunk=4096)
+    assert items == []
+
+
+def test_the_watchdog_records_each_wake_late_by_its_floor_or_more(tmp_path):
+    t = [0.0]
+    late = iter([0.0, 0.5, 0.1, 2.0])
+    wd = ss.Watchdog(tmp_path / "pauses.jsonl", period_s=0.05, min_s=0.2, clock=lambda: t[0], wall=lambda: 1000.0 + t[0])
+
+    def sleep(s: float) -> None:
+        d = next(late, None)
+        if d is None:
+            wd.stopped.set()
+        t[0] += s + (d or 0.0)
+
+    wd.sleep = sleep
+    wd.run()
+    lines = [json.loads(x) for x in (tmp_path / "pauses.jsonl").read_text().splitlines()]
+    assert [x["late_s"] for x in lines] == [0.5, 2.0] and lines[1]["t_end"] == round(1000.0 + 4 * 0.05 + 0.5 + 0.1 + 2.0, 3)
+    assert wd.summary() == {"period_s": 0.05, "min_s": 0.2, "pauses": 2, "late_s": {"max": 2.0, "total": 2.5}}
+    wd.stop()
+
+
+def test_a_windows_record_carries_its_collections_and_names_the_long_ones():
+    rc = SimpleNamespace(extra={"gc": {"pauses": [(0, 1.0, 0.002, "MainThread"), (2, 5.0, 1.25, "serve-seal")], "freeze_s": [0.3]}})
+    assert sc.gc_of(rc) == {"n": 2, "total_s": 1.252, "max_s": 1.25, "long": [[2, 5.0, 1.25, "serve-seal"]], "freeze_s": [0.3]}
+    assert sc.gc_of(SimpleNamespace(extra={})) is None and sc.gc_of(None) is None
