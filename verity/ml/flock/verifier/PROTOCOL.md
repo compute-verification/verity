@@ -1765,7 +1765,8 @@ statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; unde
 drawn unit's registered reads checked; both on rows that read no `pub.tables = none` and so cover rule 6's shared-row
 exception), and elsewhere `--registered F` accepts no more than the verifier does without it. Its third conjunct is `--plain-tables`': over `VerifiesP` (accepted and
 `ScopeP`, `checkP` passing), a plain session at 1 to 64 tables under the live subset draw is bounded by the subset law's
-miss, the key-switch average and the link bound, with no named assumption beyond the one-table plain claims'. At public
+miss, the key-switch average and the link bound, with no named assumption beyond the one-table plain claims' (its
+custody, `Assumptions.RecordCustodyExecHJ` at hidden outputs, is `RecordCustodyExecH`'s at `J` tables). At public
 outputs it is `FailClosed.SoundExecJ` (`PlainJ.plain_session_soundJ`, at `Prog.flock_headline_live_tables_subset_miss`),
 at the circuit's unit's key program (`keyProg`). At hidden outputs it is `FailClosed.SoundExecHJ`
 (`PlainHJ.plain_session_soundHJ`, at `Prog.flock_headline_live_tables_subset_missX`), each table set up with
@@ -1774,7 +1775,10 @@ program where the wires feed neither the unit nor the outputs (`SoundExecHJU`), 
 (`instProg`) where they feed either (`SoundExecHJG`). Each one's first part says what the bound is about: every session
 `--plain-tables` accepts is over a circuit whose META `program_sha512` is the verifier's own program's digest
 (`FailClosed.ProgramOfCircuit`). That the circuit's gates compute the program is META's binding, which
-the verifier does not recompile. The claims layer (`FlockDeploy`, `InScope`) reads `check` without the flag, so its plain
+the verifier does not recompile. With `--registered F` it is over `VerifiesPR` (`ScopePR`, `checkP` with the verifier's
+registered reads): at hidden outputs `FailClosed.SoundExecHJR`, `SoundExecHJ`'s bound with every table's registered reads
+checked (`PlainReg.checked_of_acceptsRHJ`), on rows that read no `pub.tables = none` and so cover rule 6's shared-row
+exception; at public outputs it accepts no more than `VerifiesP` (`verifiesP_of_R`). The claims layer (`FlockDeploy`, `InScope`) reads `check` without the flag, so its plain
 key-switch results stay at one table. The live server refuses the same statements with the same reason
 (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise. Its rule 6 reads the registered reads off the public header

@@ -153,7 +153,7 @@ link term per audit.
   `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
   `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, drawn units' reads are
-  checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
+  checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`), `SoundExecHJR` (`--plain-tables`).
 
 ### 1.4 Status
 

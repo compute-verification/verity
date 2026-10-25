@@ -24,7 +24,8 @@ public outputs, or hidden outputs and `hm96-sha512/v1` leaves, at up to 64 table
 own `--program` the one META's `program_sha512` names, `ProvedScope.checkP` and `ProvedScope.lawWhy` at `plainTables`,
 which `flock_verify_sound`'s `SoundExecJ` and `SoundExecHJ` cover) and more than 2^16 with it (`ProvedScope.zkTableCap`),
 shared-row public files (except at hidden outputs and `hm96-sha512/v1` leaves with the verifier's own `--registered F`,
-which `FailClosed.SoundZHJR` covers under `--zk` and `FailClosed.SoundExecHR` without it), and circuits
+which `FailClosed.SoundZHJR` covers under `--zk`, `FailClosed.SoundExecHR` without it, and `FailClosed.SoundExecHJR`
+under `--plain-tables`), and circuits
 outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
 a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
 general instance form: a unit reading any number of input groups and tail stages returning the outputs (a repeated last
