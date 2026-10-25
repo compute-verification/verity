@@ -236,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID") or "local"
     reports: list[dict] = []
     lock = threading.Lock()
+    os.environ.setdefault("CERTIFIER_PERIODS", str(a.windows))
     if a.jobs > 1 and "RAYON_NUM_THREADS" in os.environ:
         os.environ["RAYON_NUM_THREADS"] = str(max(1, int(os.environ["RAYON_NUM_THREADS"]) // a.jobs))
 
