@@ -31,18 +31,22 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   tables.
 
 - `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server-time block of
-  serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`: 100
-  layers at width 8,192, 80.6 GB of INT8 linears and 13.4 GB of KV on one 96 GiB card; each dimension a flag). Every op
-  is a proof unit of its Definition: the linears `ScaledMmS8Coordinate_v1`, attention `GemmCoordinate_v2`, the residual
-  `Bf16Add_v1`, and CIR-100's ops (RMSNorm, the s8 quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id
-  `stub:`, until they land. The harm is faulty units, IntegrityPeriod's W. It writes the frontier of expected C-Flock
-  cost (every serve-time commitment in it) against certified faulty units at δ, the chosen plan for `--target`, its
-  certificate recomputed through `Stratified.harm_bound` and `count_bound` at δ = 1% and 1e-6, the pooled bound over a
-  week, a month and a year on one server and on an assumed 10,000 (an assumed 10-minute block: neither is in the
-  census), and the plan as the circuit record's templates with the `work:1` law and work table that draw its k
-  (`handoff`). Its tests are this directory's suite.
+  serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`:
+  compute-accounting's 70 layers at width 8,192, 128 heads of 64 and an MLP of 32,768, 52.5 GiB of INT8 linears and
+  35.0 GiB of KV for 1,023 sequences on one 96 GiB card, its requests a block from an estimated 195 ms step; each
+  dimension a flag). Every op is a proof unit of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
+  them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and CIR-100's ops (RMSNorm, the s8
+  quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
+  chunked or recomputed. The harm is faulty ANDs, the same whatever the cut, with the faulty units (IntegrityPeriod's W)
+  beside it. It writes the frontier of expected C-Flock cost (every serve-time commitment and the replay in it) against
+  certified faulty ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
+  the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
+  δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
+  20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
+  `IntegrityPeriod` window a template (`subset:k`, its cap and K0), or the block as one window under the `work:1` law.
+  Its tests are this directory's suite.
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
-uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--target W] [--delta D]
+uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
 ```
