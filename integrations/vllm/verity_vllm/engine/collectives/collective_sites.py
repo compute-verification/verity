@@ -1,4 +1,4 @@
-"""[R19 moe F-r19-moe-1, row #70] MID-module TP collective sites of a vLLM model -- the ONE finder the GPU-side observers share (the
+"""MID-module TP collective sites of a vLLM model -- the ONE finder the GPU-side observers share (the
 committer's `TPPartialSource`, the Match recorder `tp2_worker.tp2_coll_install`).
 
 vLLM issues most TP collectives from its layer modules (`RowParallelLinear`, `VocabParallelEmbedding`, `LogitsProcessor`, the fused-MoE
@@ -6,7 +6,7 @@ runner): the observers wrap the module-level names `tensor_model_parallel_all_re
 a call to the innermost hooked module (`SITES` / `MOE_COLLECTIVE_MODULES`).  A MODEL class may import the same names into its own module
 and call them from inside its forward -- `vllm/model_executor/models/olmoe.py`'s `OlmoeAttention._apply_qk_norm` all-gathers q and k
 (`tensor_model_parallel_all_gather(q.contiguous())`, twice per layer under TP) -- and such a call is invisible to the wrappers above: the
-name is bound in the model's module.  R17 row #70 (OLMoE TP2 B8): the recorder saw 34 collectives per step against the Build's 66 links
+name is bound in the model's module.  On OLMoE at TP2 (B8) the recorder saw 34 collectives per step against the Build's 66 links
 (structure FAIL), and nothing committed the q/k shards or the gathered rows (6,944 identities per rank unbound).
 
 A mid-module site is (module path, class) of a model module whose CLASS source contains a call of one of the collective names (static:
@@ -175,10 +175,7 @@ def patch_targets(sites: list[dict[str, Any]]) -> list[tuple[Any, str, str]]:
     seen: set[tuple[str, str]] = set()
     out: list[tuple[Any, str, str]] = []
     for s in sites:
-        try:
-            mod = importlib.import_module(s["py_module"])
-        except Exception:  # noqa: BLE001 -- the class's module always imports (it is loaded); defensive
-            continue
+        mod = importlib.import_module(s["py_module"])
         for attr, kind in COLLECTIVE_NAMES:
             if (s["py_module"], attr) in seen or not hasattr(mod, attr):
                 continue
