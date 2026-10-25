@@ -1,6 +1,6 @@
-"""R15 lane `compiled`: graph-replay-safe acquisition for `Execution=compiled` rows (vLLM torch.compile + CUDA graphs, enforce_eager=False).
+"""Graph-replay-safe acquisition for `Execution=compiled` rows (vLLM torch.compile + CUDA graphs, enforce_eager=False).
 
-Why the eager collector cannot see anything here (M-0055, F-dse-12 at rc3): vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
+Why the eager collector cannot see anything here: vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
 (`support_torch_compile`) and replays the Inductor-compiled pieces as CUDA graphs.  The committer's module-forward wrappers are installed AFTER
 the model was compiled, so Dynamo's guards were already skipped (`TorchCompileWrapperWithCustomDispatcher`) and the wrappers are never traced;
 during graph replay no Python runs at all.  Result at rc3: 1 of 189 required tensors per step (the sampled ids), Commit FAIL.
