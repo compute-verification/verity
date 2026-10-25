@@ -146,6 +146,8 @@ def run_set(i, s, a, ups, store):
         cmd += ["--tables", tables]
     if "stratified" in st:
         cmd += ["--stratified", str(st["stratified"])]
+    if "coins" in st:
+        cmd += ["--coins", st["coins"]]
     if "lean_refuses" in s:
         cmd += ["--lean-refuses", s["lean_refuses"]]
     if "lean_refuses_drawn" in s:

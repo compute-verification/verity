@@ -78,7 +78,7 @@ if [ "${ZK:-1}" = 0 ]; then
   wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
   $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
   grep -h '^DRAW ' $O/draw.log | head -1 | cut -d' ' -f2- > $D/draw.json
-  DRAW=(--draw-file $D/draw.json); VFLAGS=(--stratified $K)
+  DRAW=(--draw-file $D/draw.json); VFLAGS=(--stratified $K --coins os)
 else
   DRAW=(--draw subset:$K); VFLAGS=(--zk)
 fi
