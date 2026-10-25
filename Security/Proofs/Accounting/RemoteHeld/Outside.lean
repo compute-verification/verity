@@ -1,5 +1,5 @@
-import Definitions.Accounting.Assumptions.RemoteOutside
-import Definitions.Accounting.Assumptions.RemoteSketch
+import Models.Accounting.Assumptions.RemoteOutside
+import Models.Accounting.Assumptions.RemoteSketch
 import Proofs.Accounting.RemoteHeld
 
 /-!

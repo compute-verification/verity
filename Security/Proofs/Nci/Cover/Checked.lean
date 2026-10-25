@@ -1,5 +1,5 @@
 import NciCheck.Baseline
-import Proofs.Properties.Nci.DescAgree
+import Properties.Proofs.Nci.DescAgree
 import Proofs.Nci.Cover.Training
 
 /-!
@@ -13,7 +13,7 @@ The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the
 Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
 expansion of the instance, gate by gate. `CheckedCoverTraining` states the cover theorem's factor of every verdict of the
 check of record, on every expansion, of which there is one. It is not yet a guarantee: `DescAgrees` is proved from two
-open statements (`GatesLocated`, `NovelExact`, `Proofs.Properties.Nci.DescAgree`), and `checkedCoverTraining_of` proves
+open statements (`GatesLocated`, `NovelExact`, `Properties.Proofs.Nci.DescAgree`), and `checkedCoverTraining_of` proves
 `CheckedCoverTraining` from them.
 -/
 

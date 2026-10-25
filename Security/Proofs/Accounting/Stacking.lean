@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.Stacking
+import Models.Accounting.Guarantees.Stacking
 import Proofs.Accounting.RateAudit.DeployedSketchSum
 import Proofs.Accounting.RateAudit.DeployedRelay
 import Proofs.Accounting.Requirement

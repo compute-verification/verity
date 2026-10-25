@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.TS
+import Models.Accounting.Guarantees.TS
 import Proofs.Pouw.RelativeSecurity
 
 /-!

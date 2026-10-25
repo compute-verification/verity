@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.Bandwidth
+import Models.Accounting.Guarantees.Bandwidth
 import Proofs.Accounting.Bandwidth.Chip
 
 /-!

@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees.CoverChained
+import Models.Nci.Guarantees.CoverChained
 import Proofs.Nci.CoveringTwoCostsWitness
 
 /-!

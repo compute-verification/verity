@@ -1,4 +1,4 @@
-import Definitions.Flock.Guarantees.Claims
+import Models.Flock.Guarantees.Claims
 import Proofs.Flock.Claims.RecursionStated
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Finder

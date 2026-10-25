@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.BandwidthAudit
+import Models.Accounting.Guarantees.BandwidthAudit
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Bandwidth.AuditRO
 

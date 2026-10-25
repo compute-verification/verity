@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120Gamma
 

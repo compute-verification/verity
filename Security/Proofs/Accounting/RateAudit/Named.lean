@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditNamed
+import Models.Accounting.Guarantees.RateAuditNamed
 import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.Horizon
 

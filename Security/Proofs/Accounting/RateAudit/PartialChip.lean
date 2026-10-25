@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Assumptions.RateAudit
+import Models.Accounting.Assumptions.RateAudit
 import Proofs.Accounting.RateAudit.Chip
 
 /-!

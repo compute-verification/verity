@@ -1,4 +1,4 @@
-import Definitions.Hash.Guarantees
+import Models.Hash.Guarantees
 
 /-!
 # What the hash area's binding proofs share

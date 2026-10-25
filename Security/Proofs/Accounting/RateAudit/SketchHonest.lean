@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditSketch
+import Models.Accounting.Guarantees.RateAuditSketch
 
 /-!
 # The honest device: the sketch rate audit is not vacuous

@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Pinned
+import Models.Pouw.Assumptions.Pinned
 import Proofs.Pouw.Prob
 
 /-!

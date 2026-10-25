@@ -1,6 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
-import Definitions.Pouw.Guarantees.PearlC
+import Models.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!

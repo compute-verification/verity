@@ -1,4 +1,4 @@
-import Definitions.Accounting.Assumptions.Remote
+import Models.Accounting.Assumptions.Remote
 import Proofs.Pouw.Prob
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Tactic.FieldSimp

@@ -1,6 +1,6 @@
 import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.Assumptions
-import Definitions.NetworkCertifier.Guarantees
+import Models.NetworkCertifier.Assumptions
+import Models.NetworkCertifier.Guarantees
 import Proofs.NetworkCertifier
 open NetTiming
 

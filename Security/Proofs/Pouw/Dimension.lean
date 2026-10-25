@@ -1,4 +1,4 @@
-import Definitions.Pouw.Guarantees.Dimension
+import Models.Pouw.Guarantees.Dimension
 import Proofs.Pouw.Dimension.OpenPipeProofs
 
 /-!

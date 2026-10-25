@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees.PackedTraining
+import Models.Nci.Guarantees.PackedTraining
 import Proofs.Nci.Packed
 import Proofs.Nci.Training
 

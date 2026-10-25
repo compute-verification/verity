@@ -1359,12 +1359,6 @@
         "verity/experimental/tests/network/": "verity/core/protocols/network/tests/",
         "verity/experimental/tests/sampled_proofs/": "verity/core/protocols/sampled_proofs/tests/"
       }
-    },
-    {
-      "paths": {
-        "Security/Models/": "Security/Definitions/",
-        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
-      }
     }
   ]
 }

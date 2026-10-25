@@ -1,6 +1,6 @@
 import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.Assumptions
+import Models.Pouw.Assumptions.Game
+import Models.Pouw.Assumptions.NCP.Assumptions
 import Proofs.Flock.Soundness.Audit.Extraction
 import Proofs.Flock.Soundness.Audit.RegDraw
 import Proofs.Flock.Soundness.Audit.Window

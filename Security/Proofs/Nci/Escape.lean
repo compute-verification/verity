@@ -1,4 +1,4 @@
-import Definitions.Nci.Assumptions.Remote
+import Models.Nci.Assumptions.Remote
 
 /-!
 # The escaped blocks under sampled proofs

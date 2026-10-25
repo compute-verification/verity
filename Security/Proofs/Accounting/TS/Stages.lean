@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.TS.Stages
+import Models.Accounting.Guarantees.TS.Stages
 import Proofs.Accounting.TS
 
 /-!

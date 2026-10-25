@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.RemoteDraw
+import Models.Accounting.Guarantees.RemoteDraw
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.Prob
