@@ -23,8 +23,10 @@ nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.mem,power.draw,temperature.gp
   > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${S8_MAX_MIN:-30}
-echo "s8_linear: $SCRIPT asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
+# a timed script pauses the fill queue and isn't preempted (kernel-engineering skill); the gate times nothing
+LEASE=(--preemptible); [ "$SCRIPT" != run.py ] && LEASE=(--timed)
+echo "s8_linear: $SCRIPT asking for one GPU (${LEASE[*]}) at $(date -u +%H:%M:%SZ)"
+gpu-lease 1 --wait "${LEASE[@]}" --max-min "$MAX_MIN" -- bash -c '
   [ -n "${GPU_LEASE_UUID:-}" ] && nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$0/clocks.txt" 2>&1
   exec timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"' "$OUT" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$SCRIPT" "$@"
 rc=$?
