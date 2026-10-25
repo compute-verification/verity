@@ -258,8 +258,12 @@ class CommitWindows:
 
     def close(self) -> dict[str, Any]:
         t0 = self.clock()
+        laps = [("", t0)]
+        lap = lambda name: laps.append((name, self.clock()))  # noqa: E731
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
+        lap("finalize")
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
+        lap("readback")
         self.com.uninstall()
         self.is_open = False
         job: Any = None
@@ -274,17 +278,23 @@ class CommitWindows:
                    "requests": readback["requests"], "commit": commit, "readback_errors": readback["readback_errors"],
                    "readback_errors_n": readback["readback_errors_n"], "passed": commit["passed"] and readback["passed"],
                    "gc": gc_of(rc)}
+            lap("record")
             if self.served is not None:
                 rec["served_rows"] = self._served_rows(rec)
                 rec["passed"] = rec["passed"] and "error" not in rec["served_rows"]
+                lap("served_rows")
             if self.seal is not None:
                 job = self._seal_job(rec, rc)
                 rec["seal"] = {"row_dir": str(self.out / "windows" / f"w{self.window}"), "off_loop": self.sealer is not None} \
                     if isinstance(job, tuple) else job
                 rec["passed"] = rec["passed"] and "error" not in rec["seal"]
+                lap("seal_job")
         self._write_step_trace(rec, rc)
+        lap("step_trace")
         self._check_finished()
-        rec["seconds"] = {"open": round(self.open_s, 4), "close": round(self.clock() - t0, 4)}
+        lap("requests")
+        rec["seconds"] = {"open": round(self.open_s, 4), "close": round(laps[-1][1] - t0, 4)}
+        rec["close_phases_s"] = {name: round(t - s, 4) for (_, s), (name, t) in zip(laps, laps[1:])}
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
