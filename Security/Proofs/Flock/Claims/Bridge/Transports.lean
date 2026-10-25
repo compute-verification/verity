@@ -78,6 +78,7 @@ theorem deploy_opens_of_root (c : Code) (H : Msg → Msg) (roots : List Msg) (o 
 theorem deploy_opens_of_short (c : Code) (H : Msg → Msg) (hH : ∀ m, (H m).length ≠ 64) (roots : List Msg)
     (o : Opening Bool) : (commit c).Opens H roots o = false := by
   unfold Commitment.Opens commit pathCommit
+  dsimp only
   split
   · rw [ocBind_eval, hm96Leaf_fst, if_neg fun h => hH _ h.1]
     rfl
