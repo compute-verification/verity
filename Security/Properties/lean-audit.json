@@ -134,6 +134,10 @@
    "owner": "@lean",
    "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
+  "NetTiming.DeviceIntact": {
+   "owner": "@network-accounting",
+   "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
+  },
   "Pous.P2.Assumptions.CoinCommitHides": {
    "owner": "@memory-accounting",
    "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
@@ -141,6 +145,14 @@
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+  },
+  "Properties.RemoteAudit.Line.Registered": {
+   "owner": "@memory-accounting",
+   "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
+  },
+  "Properties.RemoteAudit.ScheduleLayoutGap": {
+   "owner": "@memory-accounting",
+   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -1700,6 +1712,27 @@
    "assumptions": [],
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e"
   },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
+    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
+    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
+    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
+    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  (checked :",
+    "    ∀ (c : Pfx) (y : Y),",
+    "      Exists fun sc =>",
+    "        Exists fun passes =>",
+    "          Exists fun b =>",
+    "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
+    "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
+    "                (Option.some (sent c y)))) :",
+    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+   ],
+   "assumptions": [],
+   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
+  },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.credited : Properties.Requirement.Credited"],
@@ -1909,7 +1942,8 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Models.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises"
+   "Properties.RemoteAudit.Line.Premises",
+   "Properties.RemoteAudit.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -2905,6 +2939,10 @@
    },
    "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
     "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.steered_of_checked": {
+    "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    }
   },
@@ -4376,7 +4414,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
-    "Properties.RemoteAudit.pooledCoversSession"
+    "Properties.RemoteAudit.pooledCoversSession",
+    "Properties.RemoteAudit.steered_of_checked"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -6120,6 +6159,13 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
+  },
+  "Models.Accounting.Assumptions.Stacking": {
+   "digest": "71fa7fa9649ff2d2a9f6bfd4bee2a65fbd7e17992301591760ca451abbde9525",
+   "definitions": {
+    "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
+   },
+   "guarantees": ["Properties.RemoteAudit.steered_of_checked"]
   },
   "Models.Nci.Assumptions.Baseline": {
    "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
@@ -8575,12 +8621,17 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "c36ff3974b283161f0292f0fb552b43ae93c6f2e053fabcd4db7b970441fbb1b",
+   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
    "definitions": {
-    "Properties.RemoteAudit.ScheduleChecked": "e6ca67e811aaaa94f42cd880be7e620ea0be19ff38996dc4bfce884988ccea24",
-    "Properties.RemoteAudit.ScheduleFixesLayout": "0e02152b247e6ca4f53271b0659a4ab4d1e8d0ecb744b452041044129a541cd5"
+    "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
+    "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
+    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
    },
-   "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+   "guarantees": [
+    "Properties.RemoteAudit.scheduleChecked",
+    "Properties.RemoteAudit.scheduleFixesLayout",
+    "Properties.RemoteAudit.steered_of_checked"
+   ]
   },
   "Properties.RemoteAudit.Shared": {
    "digest": "691bc299c37faf179a0ed805709419debab20a3dc2fcd1049651b8867abab76d",
@@ -9044,7 +9095,7 @@
    ]
   },
   "RemoteAudit.Schedule": {
-   "digest": "f9134c0e0c8b48c213be0ac1893cf7d36c18f0c661aa5274189a05abdc2fc27f",
+   "digest": "2459e8378b3b7614fecb10fa735209004adccb9786038d95957fd56e7ab98939",
    "definitions": {
     "RemoteAudit.Schedule.Block": "1578971260af18cb33cc15d9fcdb29364f80d5df5df3d0174c27266afb640bfe",
     "RemoteAudit.Schedule.STEP_LIMIT": "43c3940b0e86acea846c9da637f9a815b206b375925f44f64c5562efc92d2792",
@@ -9056,7 +9107,7 @@
     "RemoteAudit.Schedule.appendsDiffer": "484021fcaf5024c5afebe02c0d2909db7ade180c7ae5f63977d98c05bdf2ffc7",
     "RemoteAudit.Schedule.bits": "428283decfa3bc5adfc0c287a5ecb392ad292ce9fbe75b23a6424333a12314a9",
     "RemoteAudit.Schedule.blockCode": "5fa8140671d868703fd8624d23601d1b8ea5c2c2d2f46c1e497edec220e90e1c",
-    "RemoteAudit.Schedule.check": "10bb0ef9f5b011fd7852b178ed7c181180ea0999a6e6434a8afe513faa57cc3c",
+    "RemoteAudit.Schedule.check": "581834feee03ae81ebe33239763a778b256f5b38b9cfa103fa202e96d7eddd19",
     "RemoteAudit.Schedule.check._sparseCasesOn_1": "b389bb19ce9deedd1c30e68173d86a9a53bad7ab0b33627711cb3bd2483341d2",
     "RemoteAudit.Schedule.encode": "cae3039d29b21907e855b90e65eadca457a6a8d3b3d6b535381b994a94a18531",
     "RemoteAudit.Schedule.malformed": "291aee05e822de11a2294a53d50c892e9eb9b9bd92389eb5e3c3f5c94b577269",
@@ -9069,7 +9120,11 @@
     "RemoteAudit.Schedule.spans": "3e888bfd47428be7c9ef0fb32baf300c6990f04a2b5c367b5a0f17b175cac271",
     "RemoteAudit.Schedule.varint": "0d20f517bea3fac822dd927ccc639844dad1637da8e4b124268c5317d94faf43"
    },
-   "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+   "guarantees": [
+    "Properties.RemoteAudit.scheduleChecked",
+    "Properties.RemoteAudit.scheduleFixesLayout",
+    "Properties.RemoteAudit.steered_of_checked"
+   ]
   },
   "RemoteAudit.Session": {
    "digest": "533385e84d8860d8961fd4483864439e2aca1418de34aec4a40794c414e17538",

@@ -286,5 +286,14 @@
   "policy": {"guarantees": {"Control.match_own": {"owner": "@lean"}}},
   "fails": "assumptions: Control.Wrap is a premise of Control.match_own, an assumption the lock doesn't list",
   "not": ["assumptions: Control.match_own.match_"]
+ },
+ "premise_module_in_statement": {
+  "write": {"Control/Prem.lean": "/-! A premises module (`shape.premises`) outside an assumptions module. -/\n\nnamespace Control\n\ndef Fits (n : Nat) : Prop := n < 2 ^ 448\n\nabbrev Within (n : Nat) : Prop := Fits n\n\nend Control\n",
+            "Control/PremThms.lean": "import Control.Defs\nimport Control.Prem\n\nnamespace Control\n\ndef Accepted (n : Nat) : Prop := double n = n + n\n\ndef Held : Prop := ∀ n, Fits n → Accepted n → double n = n + n\n\ntheorem statement_premise : Held := fun _ _ h => h\n\ntheorem conclusion_premise : ∀ k : Nat, True ∧ (Within k → True) := fun _ => ⟨trivial, fun _ => trivial⟩\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.PremThms"]},
+  "policy": {"guarantees": {"Control.conclusion_premise": {"owner": "@lean"}, "Control.statement_premise": {"owner": "@lean"}},
+             "shape": {"premises": ["Control.Assumptions", "Control.Prem"], "statements": ["Control.Defs"]}},
+  "fails": "assumptions: Control.Fits is a premise of Control.conclusion_premise, Control.statement_premise, an assumption the lock doesn't list",
+  "not": ["assumptions: Control.Accepted", "assumptions: Control.Within"]
  }
 }
