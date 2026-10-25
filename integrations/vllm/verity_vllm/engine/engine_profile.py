@@ -455,9 +455,6 @@ def build_manifest(
     return doc
 
 
-def canonical_json_bytes(doc: Any) -> bytes:
-    return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-
-
 def profile_id_of(manifest: dict[str, Any]) -> str:
-    return hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()[:12]
+    from verity.ml.circuits.codec import canonical_json
+    return hashlib.sha256(canonical_json(manifest)).hexdigest()[:12]
