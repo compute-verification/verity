@@ -1,17 +1,19 @@
 import Definitions.NetworkCertifier.Guarantees.Period
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.NetworkCertifier.Warden
+import Proofs.NetworkCertifier.Tap
 
 /-!
 # The leak through the wardens over a period of sampled audits
 
 A window that meets `WindowGood`, with its trace carrying its observations (`RowsCarried`), has them among the
 sequences `AccSeqsSampled` counts at its registration, with the registration's values at `reg`
-(`mem_accSeqsSampled_of_windowGood`). The data through the wardens is then the cells framed from one of the products of
-those sets (`WardenCertifierEgress`), and the views of the trusted wardens number at most
-`#Ss · ∏_c (cap_c + 1)` times that product's size (`encard_wardenViews_le`), which bounds the secrets the views decode
-to (`encard_periodGood_le`). `periodLeak` adds the per-window bound of `sampledLeak_reg` at `SampledAuditAccepted`.
+(`mem_accSeqsSampled_of_windowGood`). The observations are the trusted tap's record of the cells it sends, so the
+client's view reads back from them under its schedule (`tap_cells_read`): the views, and the secrets they decode to,
+number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record holds the fail
+cells and the padding too, so the count needs no separate charge for them: the bound's `∏_c (cap_c + 1)`, the warden's
+fail choices in `EncardWardenViewsLe`, is room here. `periodLeak` adds the per-window bound of `sampledLeak_reg` at
+`SampledAuditAccepted`.
 -/
 
 namespace NetTiming
@@ -55,60 +57,59 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
     (hPw : ∀ i, D.partition (sw i) = some (Pw i)) (ρ : Fin n → ℕ → Bool)
     (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
-    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell) (w : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → Conn → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
+    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
+    (f : TapRecord Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
+    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run w (schedOf z, srvOf z)) = z)
-    (obsOf : Srv → Fin n → List (Obs L K S)) (cells : (Fin n → List (Obs L K S)) → Conn → List Cell)
-    (hegress : WardenCertifierEgress arr obsOf cells) (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit)
-    (hcarry : ∀ z ∈ Zs, ∀ i, RowsCarried H D lay k (op i) (x z i) (wit z i) (obsOf (srvOf z) i)) :
+    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
+    (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit)
+    (hcarry : ∀ z ∈ Zs, ∀ i, RowsCarried H D lay k (op i) (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)) :
     {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) (x z i) (wit z i)
-        (obsOf (srvOf z) i)}.encard ≤
+        ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
       Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
         (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
   set G := {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) (x z i) (wit z i)
-    (obsOf (srvOf z) i)} with hG
+    ((run tap (schedOf z, srvOf z)).2 i)} with hG
   rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
   · rw [he, Set.encard_empty]
     exact zero_le
   let A : ∀ i : Fin n, Set (List (Obs L K S)) := fun i =>
     AccSeqsSampled (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i))
       (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) δ (op i) Dj
-  have hgood : ∀ z ∈ G, ∀ i, obsOf (srvOf z) i ∈ A i := fun z hz i =>
+  have hgood : ∀ z ∈ G, ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈ A i := fun z hz i =>
     (mem_accSeqsSampled_of_windowGood (hPw i) (hz.2 i) (hcarry z hz.1 i)).2
   have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i =>
     (mem_accSeqsSampled_of_windowGood (hPw i) (hz₀.2 i) (hcarry z₀ hz₀.1 i)).1
-  let Ds : Set (Conn → List Cell) := cells '' Set.pi Set.univ A
-  have hD : ∀ σ ∈ srvOf '' G, (fun c => (arr σ c).stream) ∈ Ds := by
-    rintro _ ⟨z, hz, rfl⟩
-    exact ⟨obsOf (srvOf z), fun i _ => hgood z hz i, (hegress (srvOf z)).symm⟩
-  have hsub : G ⊆ dec '' {v | ∃ s ∈ Ss, ∃ σ ∈ srvOf '' G, run w (s, σ) = v} := fun z hz =>
-    ⟨run w (schedOf z, srvOf z), ⟨schedOf z, hs z hz.1, srvOf z, ⟨z, hz, rfl⟩, rfl⟩, hdz z hz.1⟩
-  have hDs : Ds.encard ≤ ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
-      (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
-    calc Ds.encard ≤ (Set.pi Set.univ A).encard := Set.encard_image_le _ _
-      _ = ∏ i, (A i).encard := Set.encard_pi_eq_prod_encard
+  let V : Set (Conn → List (ℕ × CellView Cell)) :=
+    (fun p : WardenSchedule Conn × (Fin n → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Set.pi Set.univ A)
+  have hsub : G ⊆ dec '' V := fun z hz =>
+    ⟨(run tap (schedOf z, srvOf z)).1, ⟨(schedOf z, (run tap (schedOf z, srvOf z)).2),
+      ⟨hs z hz.1, fun i _ => hgood z hz i⟩, (tap_cells_read f arr tap run htrust _ _).symm⟩, hdz z hz.1⟩
+  have hA : (Set.pi Set.univ A).encard ≤ ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
+      reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
+    calc (Set.pi Set.univ A).encard = ∏ i, (A i).encard := Set.encard_pi_eq_prod_encard
       _ ≤ ∏ i, ((2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
           (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i) : ℕ) : ℕ∞) :=
         Finset.prod_le_prod fun i _ => encard_accSeqsSampled_le _ _ _ _ _ (hfits i) δ _ _
           (encard_asReg_le _ _ _ _ _) (β i) (hβ i) (op i) Dj
       _ = _ := (Nat.cast_prod _ _).symm
-  calc G.encard ≤ (dec '' {v | ∃ s ∈ Ss, ∃ σ ∈ srvOf '' G, run w (s, σ) = v}).encard := Set.encard_le_encard hsub
-    _ ≤ {v | ∃ s ∈ Ss, ∃ σ ∈ srvOf '' G, run w (s, σ) = v}.encard := Set.encard_image_le _ _
-    _ ≤ Ss.encard * ((∏ c, (cap c + 1) : ℕ) : ℕ∞) * Ds.encard :=
-        encard_wardenViews_le arr w run htrust cap Ss hcap _ Ds hD
-    _ ≤ Ss.encard * ((∏ c, (cap c + 1) : ℕ) : ℕ∞) * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-          reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) :=
-        by gcongr
-    _ = _ := by rw [mul_assoc, ← Nat.cast_mul]
+  have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
+  calc G.encard ≤ (dec '' V).encard := Set.encard_le_encard hsub
+    _ ≤ V.encard := Set.encard_image_le _ _
+    _ ≤ (Ss ×ˢ Set.pi Set.univ A).encard := Set.encard_image_le _ _
+    _ = Ss.encard * (Set.pi Set.univ A).encard := Set.encard_prod
+    _ ≤ _ := by
+        gcongr
+        refine hA.trans ?_
+        exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
 /-- **The leak through the wardens over a period**: `Guarantees.PeriodLeakAccepted`, from `sampledLeak_reg` at
 `SampledAuditAccepted` with each statement's largest faulty-bit count, and `encard_periodGood_le`. -/
 theorem periodLeak : Guarantees.PeriodLeakAccepted := by
   intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
-    arr w run htrust cap Ss hcap Zs schedOf srvOf hs dec hdz obsOf cells hegress x wit hcarry
+    arr f tap run htrust cap Ss hcap Zs schedOf srvOf hs dec hdz x wit hcarry
   classical
   let βmax : Stmt → ℕ := fun s => match D.partition s with
     | some P => (faultySets s.design P δ).sup (faultyBits s.prog P)
@@ -118,8 +119,8 @@ theorem periodLeak : Guarantees.PeriodLeakAccepted := by
     simp only [βmax, hP]
     exact Finset.le_sup (f := faultyBits s.prog P) hF
   exact ⟨(sampledLeak_reg SecurityProofs.SampledAuditAccepted H D hks L K S lay k δ decode hδ hdec reg βmax Dj
-    hβmax).1, encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr w run htrust cap Ss hcap Zs schedOf
-    srvOf hs dec hdz obsOf cells hegress x wit hcarry⟩
+    hβmax).1, encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hcap Zs
+    schedOf srvOf hs dec hdz x wit hcarry⟩
 
 end Deploy
 

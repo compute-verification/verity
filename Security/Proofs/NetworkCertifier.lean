@@ -23,6 +23,7 @@ import Proofs.NetworkCertifier.AdviceString
 import Proofs.NetworkCertifier.AdviceV1
 import Proofs.NetworkCertifier.WindowCharge
 import Proofs.NetworkCertifier.Warden
+import Proofs.NetworkCertifier.Tap
 
 /-!
 # Proofs of the network certifier's guarantees
