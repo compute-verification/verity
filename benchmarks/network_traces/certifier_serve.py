@@ -131,10 +131,11 @@ certified, the I/O, the audit and the salt accept.
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
 - `serve` starts the shim, then the certifier's key in a process of its own (`CertifierProcess`, which keeps and
   certifies every record and signs every reveal off the proxy's GIL), the proxy, the link's listener and the reveal
-  endpoint (`active.serve_reveals`), and writes `deployment.json`, the auditor's record of the run: the certifier's
-  public key, the proxy's run id, the certifier session (`--session`, which the challenger draws), the links, the
-  addresses, the origin and the reveal deadline. It takes one link connection, which must come before the origin. Once
-  the link has ended it stops the shim, writes the logs and prints `{"served": ...}`, then serves reveals until every
+  endpoint (`active.serve_reveals`, which also serves each window's certificates' public part once both its records
+  are certified: `CertifyingPublisher.public`), and writes `deployment.json`, the auditor's record of the run: the
+  certifier's public key, the proxy's run id, the certifier session (`--session`, which the challenger draws), the
+  links, the addresses, the origin and the reveal deadline. It takes one link connection, which must come before the
+  origin. Once the link has ended it stops the shim, writes the logs and prints `{"served": ...}`, then serves reveals until every
   window's salt is revealed or the last window's reveal deadline has passed. `--tamper` makes the shim an adversary of
   `active_replay.adversary_plan`: `late` holds one session of window 0 past every sync (on a varied plan, past every
   frame written before it is due), which the certifier's own audit faults; `extra` writes one event more at the end of
@@ -142,7 +143,9 @@ certified, the I/O, the audit and the salt accept.
   only N2's counts against the profile refuse it (on a varied plan, an id event of token 0, which the certified I/O's
   finish rule refuses). The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
-  the wire to its end (`peer.json`).
+  the wire to its end (`peer.json`). Then it asks the reveal endpoint for each window's certificates and keeps those
+  that verify under the deployment's certifier key and session (`keep_certificates`: `certificates.jsonl`, and the
+  clock certificates in `clocks.jsonl`); it refuses each other one by name (`check_certificates`) and exits 1.
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
   and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
   `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
@@ -163,10 +166,13 @@ certified, the I/O, the audit and the salt accept.
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
 certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's clock
 certificate of each egress window's sync, public, which an advised link's verifier reads: `read_clocks`),
-`proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and
-`check.json`. Records, certificates,
-the certifier's salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal
-publishes them so that its check can be replayed. No PoUW salt is written, only its SHA-512
+`proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the client's `peer.json`, `certificates.jsonl` and
+`clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and `check.json`. Records, their heads, the certifier's
+salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal publishes them so that
+its check can be replayed. A certificate's public part is public, which the client keeps: its key id, link, direction
+and window, the digest it signs and its LMS signature, in the deployment's session. The digest is the head's salted by
+`salt_c` (`certificate_digest`), a hiding commitment, so the signature over it shows nothing of the head; a clock
+certificate's sync is public too. No PoUW salt is written, only its SHA-512
 (`active_replay.fingerprint`). With `CERTIFIER_SERVE_TIMING` set, `serve` also writes `publisher_timing.json`: when
 each record was handed over, kept and certified, on the proxy's clock, and each step's CPU seconds (`tick_load.py`
 reads it).
@@ -183,6 +189,7 @@ import os
 import random
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -199,7 +206,7 @@ from pathlib import Path
 import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit as host_audit, calibration
-from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
+from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, ClockCertificate, Direction, \
@@ -215,6 +222,8 @@ from verity.core.protocols.sampled_proofs.service import Registration
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 EGRESS, INGRESS, N2_LINK = "responses", "requests", "served"
+#: the rehearsal's client writes here in its run, as on a host of its own (`check` reads its `peer.json` there)
+CLIENT = "client"
 HEIGHT = 10
 #: the processes `load_key` makes a key above `HEIGHT` in (at H = 20, about two minutes on eight cores); at or below
 #: it a key takes about a second in one, and a caller on a thread forks nothing
@@ -335,27 +344,31 @@ def _dec(field: str, value):
     return tuple(value) if field == "counts" else value
 
 
+def certificate_json(c: Certificate) -> dict:
+    return {f: _enc(getattr(c, f)) for f in Certificate.__slots__}
+
+
+def certificate_from_json(doc: dict) -> Certificate:
+    return Certificate(**{f: _dec(f, doc[f]) for f in Certificate.__slots__})
+
+
 def certified_json(record: CertifiedRecord) -> dict:
-    return {"salt_c": record.salt.hex(),
-            **{part: {f: _enc(getattr(obj, f)) for f in type(obj).__slots__}
-               for part, obj in (("head", record.head), ("certificate", record.certificate))}}
+    return {"salt_c": record.salt.hex(), "head": {f: _enc(getattr(record.head, f)) for f in RecordHead.__slots__},
+            "certificate": certificate_json(record.certificate)}
 
 
 def certified_from_json(doc: dict) -> CertifiedRecord:
     return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}), bytes.fromhex(doc["salt_c"]),
-                           Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
+                           certificate_from_json(doc["certificate"]))
 
 
 def clock_json(clock: ClockCertificate) -> dict:
-    c = clock.certificate
-    return {"sync": [clock.sync.delta, str(clock.sync.rho)],
-            "certificate": {f: _enc(getattr(c, f)) for f in type(c).__slots__}}
+    return {"sync": [clock.sync.delta, str(clock.sync.rho)], "certificate": certificate_json(clock.certificate)}
 
 
 def clock_from_json(doc: dict) -> ClockCertificate:
     delta, rho = doc["sync"]
-    return ClockCertificate(ClockSync(delta, Fraction(rho)),
-                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
+    return ClockCertificate(ClockSync(delta, Fraction(rho)), certificate_from_json(doc["certificate"]))
 
 
 def read_clocks(path: Path) -> list[ClockCertificate]:
@@ -382,7 +395,8 @@ class CertifyingPublisher(ar.Publisher):
     hands it over, under the N2 link's name `link`, the one name both ends of a link-window share
     (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the link-window under `refused` when the
     signer refuses. An egress record handed with the sync the shaper ran its window under (`ServedProxy`) gets that
-    sync's clock certificate too (`Issuer.clock`), one line of `clocks.jsonl`, none when the signer refuses."""
+    sync's clock certificate too (`Issuer.clock`), one line of `clocks.jsonl`, none when the signer refuses. `public`
+    gives a window's certificates without the heads and salts, for the reveal endpoint to serve."""
 
     def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True) -> None:
         super().__init__(out, setup, threaded)
@@ -390,6 +404,20 @@ class CertifyingPublisher(ar.Publisher):
         self.ends = {setup.egress_link: (Direction.EGRESS, parameters_digest(setup.egress_params, setup.sync_set)),
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
+        self.issued: dict[int, list[tuple[Direction, CertifiedRecord | None, ClockCertificate | None]]] = {}
+
+    def public(self, window: int) -> dict | None:
+        """Window `window`'s certificates' public part once both its records are kept, else None: the session they are
+        signed in, each certificate (`certificate_json`), each clock certificate (`clock_json`), and the link-windows
+        the signer refused (`unsigned`). A certificate signs its head's digest salted by `salt_c`, a hiding
+        commitment, so it shows nothing of the head; the head and the salt stay in `certified.jsonl`."""
+        kept = list(self.issued.get(window, ()))
+        if len(kept) < len(self.ends):
+            return None
+        return {"session": self.issuer.session.hex(),
+                "certificates": [certificate_json(c.certificate) for _, c, _ in kept if c is not None],
+                "clocks": [clock_json(k) for _, _, k in kept if k is not None],
+                "unsigned": [[self.link, d.value, window] for d, c, _ in kept if c is None]}
 
     def __call__(self, record, params, sync: ClockSync | None = None) -> None:
         if self.executor is None:
@@ -407,10 +435,12 @@ class CertifyingPublisher(ar.Publisher):
                 else certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
-        if sync is not None and direction is Direction.EGRESS and \
-                (clock := self.issuer.clock(self.link, record.window, sync)) is not None:
+        clock = self.issuer.clock(self.link, record.window, sync) \
+            if sync is not None and direction is Direction.EGRESS else None
+        if clock is not None:
             with open(self.out / "clocks.jsonl", "a") as fh:
                 fh.write(json.dumps(clock_json(clock)) + "\n")
+        self.issued.setdefault(record.window, []).append((direction, certified, clock))
         if self.timing is not None:
             end = time.monotonic(), time.thread_time()
             self.timing.append({"link": record.link, "window": record.window, "start": start[0], "kept": kept[0],
@@ -432,6 +462,8 @@ def _certifier_call(name: str, *args):
         return publish.keep(*args)
     if name == "refused":
         return publish.issuer.refused, publish.timing
+    if name == "certificates":
+        return publish.public(*args)
     if name == "close":
         return own.close()
     return getattr(own, name)(*args)
@@ -442,7 +474,8 @@ class CertifierProcess:
     key and its leaf state: each record kept and certified as `CertifyingPublisher(threaded=False)` keeps it, and each
     reveal signed, one call at a time in the order they are made. Certifying a window's records hashes for
     milliseconds, so a thread would hold the proxy's GIL at its window's end. `close` waits for every record (the
-    signer stays up for the reveals), `refused` gives the issuer's refusals and `shutdown` closes the signer."""
+    signer stays up for the reveals), `refused` gives the issuer's refusals, `certificates` a window's public part
+    (`CertifyingPublisher.public`, after every record handed before it) and `shutdown` closes the signer."""
 
     def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str) -> None:
         self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"),
@@ -463,6 +496,9 @@ class CertifierProcess:
 
     def sign(self, message: bytes) -> bytes:
         return self.pool.submit(_certifier_call, "sign", message).result()
+
+    def certificates(self, window: int) -> dict | None:
+        return self.pool.submit(_certifier_call, "certificates", window).result()
 
     def __call__(self, record, params, sync: ClockSync | None = None) -> None:
         if self.submits is not None:
@@ -933,7 +969,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
             served.set_result(None)
 
     listening = await asyncio.start_server(on_link, *link)
-    reveals = await serve_reveals(proxy, *reveal)
+    reveals = await serve_reveals(proxy, *reveal, certificates=certifier.certificates)
     conn.send(origin)
     record = deployment(proxy, setup, windows, session=session, n2_link=n2_link,
                         link=(link[0], listening.sockets[0].getsockname()[1]),
@@ -971,9 +1007,12 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     return log
 
 
-async def client(plan: dict, report: dict, deployment: dict, out: Path, link: tuple[str, int] | None = None) -> None:
+async def client(plan: dict, report: dict, deployment: dict, out: Path,
+                 link: tuple[str, int] | None = None) -> list[str]:
     """The client on the link (`active_replay.Peer`), at the deployment's origin on this host's clock, connecting to
-    `link`, by default the deployment's."""
+    `link`, by default the deployment's; once the wire has ended, it keeps every window's certificates
+    (`keep_certificates`) and returns what it refused."""
+    out.mkdir(parents=True, exist_ok=True)
     peer = ar.Peer(plan, ar.wire_params(ar.Setup(report)))
     reader, writer = await asyncio.open_connection(*(link or deployment["link"]), limit=1 << 22)
     origin = time.monotonic() + deployment["origin_unix"] - time.time()
@@ -982,6 +1021,73 @@ async def client(plan: dict, report: dict, deployment: dict, out: Path, link: tu
     sending.cancel()
     writer.close()
     ar.write_logs(out, peer=peer)
+    return await asyncio.to_thread(keep_certificates, deployment, out)
+
+
+def ask_certificates(address: Sequence, window: int, timeout: float | None = 60.0) -> dict:
+    """The reveal endpoint's answer for window `window`'s certificates (`active.serve_reveals`): one connection, one
+    request line, one answer line."""
+    with socket.create_connection(tuple(address), timeout=timeout) as sock, sock.makefile("rwb") as stream:
+        stream.write(json.dumps({"window": window, "kind": "certificates"}).encode() + b"\n")
+        stream.flush()
+        sock.shutdown(socket.SHUT_WR)
+        return json.loads(stream.readline(REVEAL_LINE_BYTES))
+
+
+def check_certificates(deployment: dict, window: int, answer: dict) -> tuple[list, list, list, list[str]]:
+    """Window `window`'s certificates as the reveal endpoint served them (`CertifyingPublisher.public`), each held to
+    the deployment's certifier key and session: (certificates, clock certificates, the link-windows the signer refused,
+    refusals). A refusal names the certificate and what fails: another key's, another link-window's, a second of its
+    direction, or a signature that doesn't verify over its fields in the session (forged, or a field altered). An
+    answer that is a refusal, another window's or another session's, or not certificates, is refused whole."""
+    key, session, link = read_public(deployment["certifier_key"]), deployment["session"], deployment["links"]["n2"]
+    try:
+        if set(answer) == {"refused"}:
+            raise ValueError(f"the certifier refused them: {answer['refused']}")
+        if (answer["window"], answer["session"]) != (window, session):
+            raise ValueError(f"the answer is window {answer['window']}'s in session {answer['session'][:16]}…, not "
+                             f"the deployment's session {session[:16]}…")
+        certificates = [certificate_from_json(d) for d in answer["certificates"]]
+        clocks = [clock_from_json(d) for d in answer["clocks"]]
+        unsigned = [[u[0], Direction(u[1]).value, u[2]] for u in answer["unsigned"]]
+    except (KeyError, TypeError, ValueError, IndexError) as e:
+        return [], [], [], [f"window {window}'s certificates: {e}"]
+    s, kept, refused = bytes.fromhex(session), {"certificate": [], "clock certificate": []}, []
+    for what, item, c in [("certificate", c, c) for c in certificates] + \
+            [("clock certificate", k, k.certificate) for k in clocks]:
+        name = f"window {window}'s {c.direction.value} {what} of {c.link} (key {c.key_id.hex()[:16]}…)"
+        if c.key_id != key.key_id:
+            refused.append(f"{name}: another key's, not the deployment's {key.key_id.hex()[:16]}…")
+        elif (c.link, c.window) != (link, window):
+            refused.append(f"{name}: it names {c.link} window {c.window}, not {link} window {window}")
+        elif not item.verify(key, s):
+            refused.append(f"{name}: its signature doesn't verify under the deployment's key in its session")
+        elif any(getattr(x, "certificate", x).direction is c.direction for x in kept[what]):
+            refused.append(f"{name}: a second one of its direction")
+        else:
+            kept[what].append(item)
+    return kept["certificate"], kept["clock certificate"], unsigned, refused
+
+
+def keep_certificates(deployment: dict, out: Path, ask=ask_certificates) -> list[str]:
+    """The client's copy of each window's certificates' public part, asked of the reveal endpoint (`ask`) and held
+    to the deployment's key and session (`check_certificates`): those that verify go in `certificates.jsonl`, each
+    with its session (a link-window the signer refused as `unsigned`), and `clocks.jsonl` (`clock_json`), beside
+    `peer.json`. Returns the refusals, each naming what it refused."""
+    refused: list[str] = []
+    with open(out / "certificates.jsonl", "w") as certs, open(out / "clocks.jsonl", "w") as clocks:
+        for w in range(deployment["windows"]):
+            try:
+                answer = ask(deployment["reveal"], w)
+            except (OSError, ValueError) as e:
+                refused.append(f"window {w}'s certificates: the reveal endpoint gave no answer: {e}")
+                continue
+            got, synced, unsigned, no = check_certificates(deployment, w, answer)
+            refused += no
+            certs.writelines(json.dumps({"session": deployment["session"]} | certificate_json(c)) + "\n" for c in got)
+            certs.writelines(json.dumps({"unsigned": u}) + "\n" for u in unsigned)
+            clocks.writelines(json.dumps(clock_json(k)) + "\n" for k in synced)
+    return refused
 
 
 # The offline check.
@@ -1196,7 +1302,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
             network = lw.network_verdict(stream, windows)
         except ValueError as err:
             network = {"accepted": False, "error": str(err)}
-    audited = ar.audit_configuration(plan, report, run, audit=audit)
+    client = run / CLIENT if (run / CLIENT / "peer.json").exists() else run
+    audited = ar.audit_configuration(plan, report, run, audit=audit, client=client)
     e, i = setup.egress_params, setup.ingress_params
     in_records = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
     out_records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
@@ -1258,8 +1365,8 @@ def table(result: dict) -> str:
 
 def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, challenger_dir: Path,
                  api_key_env: str | None, start_in: float) -> dict:
-    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest), then `client`, then
-    `check` while `serve` serves reveals."""
+    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest), then `client` (into
+    the run's `client/`), then `check` while `serve` serves reveals."""
     run = out / strategy
     run.mkdir(parents=True, exist_ok=True)
     me = [sys.executable, str(HERE / "certifier_serve.py")]
@@ -1278,7 +1385,7 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
             with open(run / "client.log", "w") as clog:
                 client_exit = subprocess.run(me + ["client", "--plan", str(out / "plan.json"), "--calibration",
                                                    str(out / "calibration.json"), "--deployment",
-                                                   str(run / "deployment.json"), "--out", str(run)],
+                                                   str(run / "deployment.json"), "--out", str(run / CLIENT)],
                                              stdout=clog, stderr=subprocess.STDOUT).returncode
             done = json.loads(proc.stdout.readline() or "{}")
             if not done.get("served"):
@@ -1486,9 +1593,10 @@ def main(argv=None) -> int:
         return 1 if "error" in log else 0
     if args.command == "client":
         ar._quiet_runtime()
-        asyncio.run(client(json.loads(args.plan.read_text()), json.loads(args.calibration.read_text()),
-                           json.loads(args.deployment.read_text()), args.out, args.link))
-        return 0
+        refused = asyncio.run(client(json.loads(args.plan.read_text()), json.loads(args.calibration.read_text()),
+                                     json.loads(args.deployment.read_text()), args.out, args.link))
+        print(json.dumps({"certificates_refused": refused}), flush=True)
+        return 1 if refused else 0
     if args.command == "check":
         challenger = signer(args.challenger)
         try:
