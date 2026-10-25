@@ -13,6 +13,9 @@ whose verifier of record is `LinkWindows.verify` (C-Flock's Lean verifier on the
 the sync); and when every compute audit's answer accepted a subset draw. On acceptance its public output is `K` with its
 terms, each `⌈log2⌉` of a factor of `NetTiming.Guarantees.PeriodLeakAccepted`: the schedules (`#Σ_sync^m`), the cells
 (`Σ_c (cap_c + 1)`), and per audit its free inputs, its faulty sets (`Σ_{j ≤ b} C(N, j)`, with `b` one-stage's bound on
-wrong units at its δ), `16 · b` and `Dj^k`. The parameters name the layout terms (free inputs, horizon `k`, cell caps,
+wrong units at its δ), `16 · b` and `Dj^k`. Beside `K` it publishes `eps`, the probability that `K` fails to bound the
+period's leak: the union of the audits' δ, an exact `"num/den"` string as PoUS's and remote bandwidth's publics carry
+theirs. The parameters name the layout terms (free inputs, horizon `k`, cell caps,
 `Dj`); the composition's theorem is to tie the audits' answers to the sampled-proofs component's.
-`verity/core/protocols/network/tests/test_network_period_protocol.py` holds it to a Python mirror on signed periods.
+`verity/core/protocols/network/tests/test_network_period_protocol.py` holds it to its Python mirror
+(`verity/core/protocols/network/tests/period_case.py`) on signed periods.
