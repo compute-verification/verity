@@ -1,8 +1,8 @@
 """The s8 quantizer's units (`verity.ml.circuits.ops.quant`) are the loop's own ``quantize`` of each linear's input, bit for bit in
 torch on x86-64: on every row the loop quantizes after a linear while it serves (up_proj's output relu'd, RELU true; down_proj's
 as it is, RELU false), and on random and edge rows (all zero, all -0, all negative, ties, NaN with saturating neighbours, ±inf,
-subnormal). The row's amax, then pair j's unit on x[2j], x[2j + 1] and that amax and both scale halves on it: the word
-Definitions at three pairs, the Boolean ones at every pair."""
+subnormal). The row unit, and the row in four chunks (its amax, then a chunk unit a chunk); on the served rows the Boolean row
+unit too."""
 from __future__ import annotations
 
 import numpy as np
@@ -18,24 +18,31 @@ from verity.ml.circuits.ops.boolean import quant as BQ
 from verity_torch_loop import loop as L
 
 
-def check(y: torch.Tensor, relu: bool, codes: torch.Tensor, scale: torch.Tensor) -> None:
-    """The units on the bf16 rows ``y`` against ``quantize``'s ``codes`` and ``scale`` of them."""
+def _same(out: np.ndarray, codes: np.ndarray, scale: np.ndarray) -> bool:
+    n = codes.shape[1]
+    return bool((out[:, :n].astype(np.uint8) == codes.view(np.uint8)).all() and (out[:, n].astype(np.uint32) == scale).all())
+
+
+def check(y: torch.Tensor, relu: bool, codes: torch.Tensor, scale: torch.Tensor, boolean: bool = False) -> None:
+    """The units on the bf16 rows ``y`` against ``quantize``'s ``codes`` and ``scale`` of them: the row unit, the row in four
+    chunks, and with ``boolean`` the Boolean row unit."""
     xb, h = L.bits(y), y.shape[1]
     want_codes, want_scale = L.bits(codes), L.bits(scale)
-    for boolean, js in ((False, (0, 1, h // 2 - 1)), (True, range(h // 2))):
-        M, ev = (BQ, BS.evaluate_words) if boolean else (Q, E.evaluate_batch)
-        amax = ev(bind(M.RowAbsMax, N=h, RELU=relu), xb).astype(np.uint16)
-        for j in js:
-            got = ev(bind(M.QuantS8Pair, RELU=relu), xb[:, 2 * j:2 * j + 2], amax).astype(np.uint8)
-            assert (got == want_codes[:, 2 * j:2 * j + 2]).all(), (boolean, j, np.argwhere(got != want_codes[:, 2 * j:2 * j + 2])[:4])
-        lo, hi = (ev(bind(M.QuantS8Scale, HALF=k), amax).astype(np.uint32) for k in (0, 1))
-        assert ((hi << np.uint32(16)) | lo == want_scale).all(), boolean
+    assert _same(E.evaluate_batch(bind(Q.QuantRowS8, N=h, RELU=relu), xb), want_codes, want_scale)
+    amax = E.evaluate_batch(bind(Q.RowAbsMax, N=h, RELU=relu), xb).astype(np.uint16)
+    c = h // 4
+    for k in range(4):
+        got = E.evaluate_batch(bind(Q.QuantChunkS8, N=c, RELU=relu), xb[:, k * c:(k + 1) * c], amax)
+        assert _same(got, want_codes[:, k * c:(k + 1) * c], want_scale), k
+    if boolean:
+        assert _same(BS.evaluate_words(bind(BQ.QuantRowS8, N=h, RELU=relu), xb), want_codes, want_scale)
 
 
 @pytest.mark.slow
 def test_the_units_are_the_quantize_of_every_row_the_loop_serves(monkeypatch):
-    """Each linear's output against the loop's next ``quantize`` call, which reads it (a request's last linear has none). ~10 s
-    on a check node."""
+    """Each linear's output against the loop's next ``quantize`` call, which reads it (a request's last linear has none), with
+    the Boolean row unit at the loop's width, which ops' tests check only at small widths: ~90 s on a check node, most of it
+    tracing `QuantRowS8_v2{128}` for each RELU."""
     calls: list = []
     quantize, linear = L.quantize, L.linear
 
@@ -58,7 +65,7 @@ def test_the_units_are_the_quantize_of_every_row_the_loop_serves(monkeypatch):
             edges[i // 2 % 2 == 0].append((c[i], *c[i + 1]))
     for relu, rows in edges.items():
         y, codes, scale = (torch.cat(t) for t in zip(*rows))
-        check(y, relu, codes, scale)
+        check(y, relu, codes, scale, boolean=True)
 
 
 def edge_rows(h: int) -> torch.Tensor:

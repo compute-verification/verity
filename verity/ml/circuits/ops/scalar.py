@@ -22,7 +22,7 @@ F32_NAN_PTX = 0x7FFFFFFF
 
 __all__ = ["BIT", "BF16", "F32", "I32", "S8", "U16", "Bf16GtStrict", "BitAnd", "BitNot", "BitOr", "F32BitsShl23", "F32Eq",
            "F32Fabs", "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Neg", "F32Sat", "F32ToS8RniSat", "I32Add", "I32Eq", "I32Le",
-           "SelectBf16", "SelectF32", "SelectI32", "U32Hi16", "U32Lo16"]
+           "SelectBf16", "SelectF32", "SelectI32", "U32Hi16"]
 
 
 def _order(u: int, width: int) -> int:
@@ -110,12 +110,6 @@ def F32ToS8RniSat(x: int) -> int:
         v = q + (r > half or (r == half and q & 1))
     v = min(v, 128 if neg else 127)
     return (-v if neg else v) & 0xFF
-
-
-@primitive("U32Lo16", 1, [("a", I32)], U16, conformance="protocol-defined")
-def U32Lo16(a: int) -> int:
-    """A 32-bit word's low 16 bits."""
-    return a & 0xFFFF
 
 
 @primitive("U32Hi16", 1, [("a", I32)], U16, conformance="protocol-defined")

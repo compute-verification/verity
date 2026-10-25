@@ -26,7 +26,7 @@ def _words(rng: random.Random, n: int) -> list[int]:
 def test_registered_ids() -> None:
     names = ["F32Fabs", "F32Neg", "F32Fmaxf", "F32Fminf", "F32Sat", "F32BitsShl23", "F32IsFinite", "F32Eq", "Bf16GtStrict",
              "I32Le", "I32Eq", "I32Add", "BitAnd", "BitNot", "BitOr", "SelectF32", "SelectBf16", "SelectI32", "F32ToS8RniSat",
-             "U32Lo16", "U32Hi16"]
+             "U32Hi16"]
     for n in names:
         d = getattr(S, n)
         assert d.id == f"{n}_v1" and REGISTRY[d.id] is d
@@ -95,7 +95,7 @@ def test_integer_bit_and_select() -> None:
         assert S.I32Eq.evaluate(a, b) == int(a == b)
         assert S.I32Add.evaluate(a, b) == (a + b) % (1 << 32)
     for a in ints:
-        assert (S.U32Hi16.evaluate(a) << 16) | S.U32Lo16.evaluate(a) == a
+        assert S.U32Hi16.evaluate(a) == a >> 16
     for a, b in itertools.product((0, 1), (0, 1)):
         assert (S.BitAnd.evaluate(a, b), S.BitOr.evaluate(a, b), S.BitNot.evaluate(a)) == (a & b, a | b, 1 - a)
     for c in (0, 1):

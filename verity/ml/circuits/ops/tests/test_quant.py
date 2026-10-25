@@ -1,8 +1,9 @@
 """`verity.ml.circuits.ops.quant` and `ops.boolean.quant`: the s8 quantizer's units are the torch loop's ``quantize`` of the row,
 relu'd first under RELU (here in numpy float32, the same IEEE operations; torch itself in `integrations/torch_loop`'s tests), on
 random rows and on the edge rows (all zero, all -0, all negative, ties at .5, NaN with saturating neighbours, ±inf, subnormal);
-a row's amax is the max of its parts' amaxes; the scale reads any amax word as ``torch.where(amax > 0, amax / 127, 1)``; each
-Boolean unit computes its word Definition, at H = 128 and at a small odd H; and `bind` refuses statics outside the family."""
+a row wider than one unit, as RowAbsMax over the row then a chunk unit a chunk, is the row unit; the scale reads any amax word as
+``torch.where(amax > 0, amax / 127, 1)``; each Boolean unit computes its word Definition, at small widths; and `bind` refuses
+statics outside the family."""
 from __future__ import annotations
 
 import numpy as np
@@ -64,18 +65,19 @@ def _same_amax(got: np.ndarray, want: np.ndarray) -> bool:
     return bool(((g.view(np.uint32) == want.view(np.uint32)) | (np.isnan(g) & np.isnan(want))).all() and not (got >> 15).any())
 
 
+def _split(out: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """A unit's output leaves as (its codes as u8, its scale's word)."""
+    return out[:, :n].astype(np.uint8), out[:, n].astype(np.uint32)
+
+
 @pytest.mark.parametrize("relu", [True, False])
-def test_the_word_units_are_the_loops_quantize(relu) -> None:
+def test_the_row_unit_is_the_loops_quantize(relu) -> None:
     xb = rows(H, np.random.default_rng(3))
     codes, scale, amax = reference(xb, relu)
-    got = E.evaluate_batch(bind(Q.RowAbsMax, N=H, RELU=relu), xb).astype(np.uint16)
-    assert _same_amax(got, amax)
-    for j in (0, 1, 31, 63):
-        pair = E.evaluate_batch(bind(Q.QuantS8Pair, RELU=relu), xb[:, 2 * j:2 * j + 2], got).astype(np.uint8)
-        assert (pair == codes[:, 2 * j:2 * j + 2]).all(), (j, np.argwhere(pair != codes[:, 2 * j:2 * j + 2])[:5])
-    for half in (0, 1):
-        s = E.evaluate_batch(bind(Q.QuantS8Scale, HALF=half), got).astype(np.uint32)
-        assert (s == (scale >> np.uint32(16 * half)) & np.uint32(0xFFFF)).all(), half
+    got, s = _split(E.evaluate_batch(bind(Q.QuantRowS8, N=H, RELU=relu), xb), H)
+    assert (got == codes).all(), np.argwhere(got != codes)[:5]
+    assert (s == scale).all()
+    assert _same_amax(E.evaluate_batch(bind(Q.RowAbsMax, N=H, RELU=relu), xb).astype(np.uint16), amax)
 
 
 def test_the_edge_rows_reach_their_edges() -> None:
@@ -90,13 +92,21 @@ def test_the_edge_rows_reach_their_edges() -> None:
 
 
 @pytest.mark.parametrize("relu", [True, False])
-def test_a_rows_amax_is_the_max_of_its_parts_amaxes(relu) -> None:
-    """The tree a row wider than one unit's reads takes: four parts' amaxes, then the amax of those without the ReLU."""
+def test_a_row_in_chunks_is_the_row_unit(relu) -> None:
+    """A row wider than one unit: its amax (once whole, once as the amax of four parts' amaxes without the ReLU), then four
+    chunk units under it, whose codes are the row's and whose scales are each the row's."""
     xb = rows(H, np.random.default_rng(4))
-    part = bind(Q.RowAbsMax, N=H // 4, RELU=relu)
-    parts = np.stack([E.evaluate_batch(part, xb[:, k * H // 4:(k + 1) * H // 4]) for k in range(4)], axis=1).astype(np.uint16)
+    codes, scale, amax = reference(xb, relu)
+    c = H // 4
+    part = bind(Q.RowAbsMax, N=c, RELU=relu)
+    parts = np.stack([E.evaluate_batch(part, xb[:, k * c:(k + 1) * c]) for k in range(4)], axis=1).astype(np.uint16)
+    tree = E.evaluate_batch(bind(Q.RowAbsMax, N=4, RELU=False), parts).astype(np.uint16)
     whole = E.evaluate_batch(bind(Q.RowAbsMax, N=H, RELU=relu), xb).astype(np.uint16)
-    assert _same_amax(E.evaluate_batch(bind(Q.RowAbsMax, N=4, RELU=False), parts).astype(np.uint16), _f32(whole))
+    assert _same_amax(tree, amax) and _same_amax(whole, amax)
+    chunk = bind(Q.QuantChunkS8, N=c, RELU=relu)
+    for k in range(4):
+        got, s = _split(E.evaluate_batch(chunk, xb[:, k * c:(k + 1) * c], whole), c)
+        assert (got == codes[:, k * c:(k + 1) * c]).all() and (s == scale).all(), k
 
 
 def test_the_scale_is_torchs_where_on_every_kind_of_amax_word() -> None:
@@ -109,37 +119,34 @@ def test_the_scale_is_torchs_where_on_every_kind_of_amax_word() -> None:
     with np.errstate(all="ignore"):
         f = _f32(a)
         want = np.where(f > 0, f / np.float32(127), np.float32(1)).astype(np.float32).view(np.uint32)
-    lo, hi = (E.evaluate_batch(bind(Q.QuantS8Scale, HALF=k), a).astype(np.uint32) for k in (0, 1))
-    assert ((hi << np.uint32(16)) | lo == want).all()
+    _, s = _split(E.evaluate_batch(bind(Q.QuantChunkS8, N=1, RELU=False), np.zeros((len(a), 1), np.uint16), a), 1)
+    assert (s == want).all()
 
 
-def _targets(h: int, relu: bool) -> list:
-    return [bind(BQ.RowAbsMax, N=h, RELU=relu), bind(BQ.QuantS8Pair, RELU=relu)] + [bind(BQ.QuantS8Scale, HALF=k) for k in (0, 1)]
-
-
-@pytest.mark.parametrize("h", [H, 3])
+@pytest.mark.parametrize("h", [8, 3])
 @pytest.mark.parametrize("relu", [True, False])
 def test_the_boolean_units_compute_their_word_definitions(h, relu) -> None:
+    """At small widths, since a unit's circuit is the same circuit at every element (H = 128 traces for ~40 s a unit: the torch
+    loop's served-rows test)."""
     rng = np.random.default_rng(7 + h)
     xb = np.concatenate([rows(h, rng), rng.integers(0, 1 << 16, (64, h)).astype(np.uint16)])
     amax = E.evaluate_batch(bind(Q.RowAbsMax, N=h, RELU=relu), xb).astype(np.uint16)
     amax[-64:] = rng.integers(0, 1 << 16, 64)
-    args = {"RowAbsMax": (xb,), "QuantS8Pair": (xb[:, :2], amax), "QuantS8Scale": (amax,)}
-    for target in _targets(h, relu):
+    for d, a in ((BQ.QuantRowS8, (xb,)), (BQ.RowAbsMax, (xb,)), (BQ.QuantChunkS8, (xb, amax))):
+        target = bind(d, N=h, RELU=relu)
         word = TR.word_of(target)
         assert word.id == target.id.replace("_v2", "_v1")
-        a = args[target.id.split("_")[0]]
         got = BS.evaluate_words(target, *a).astype(np.uint64)
         ref = E.evaluate_batch(word, *a).astype(np.uint64)
         assert (got == ref).all(), (target.id, np.argwhere(got != ref)[:5])
 
 
-_BAD = {"N": (0, "4"), "RELU": (2, "no"), "HALF": (2, -1)}
+_BAD = {"N": (0, "4"), "RELU": (2, "no")}
 
 
-@pytest.mark.parametrize("d,k,v", [(d, k, v) for d in (Q.RowAbsMax, Q.QuantS8Pair, Q.QuantS8Scale, BQ.RowAbsMax, BQ.QuantS8Pair,
-                                                        BQ.QuantS8Scale) for k in d.statics for v in _BAD[k]],
+@pytest.mark.parametrize("d,k,v", [(d, k, v) for d in (Q.QuantRowS8, Q.RowAbsMax, Q.QuantChunkS8, BQ.QuantRowS8, BQ.RowAbsMax,
+                                                        BQ.QuantChunkS8) for k in d.statics for v in _BAD[k]],
                          ids=lambda a: getattr(a, "id", repr(a)))
 def test_bind_refuses_statics_outside_the_family(d, k, v) -> None:
     with pytest.raises(ValueError, match="refuses this binding"):
-        bind(d, **{**{s: {"N": 4, "RELU": False, "HALF": 0}[s] for s in d.statics}, k: v})
+        bind(d, **{**{"N": 4, "RELU": False}, k: v})

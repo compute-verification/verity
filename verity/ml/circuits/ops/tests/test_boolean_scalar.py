@@ -28,8 +28,7 @@ from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.silicon.cast import E2M1_UP
 
 DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.SelectF32, BSC.F32Eq, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
-        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd, BSC.F32ToS8RniSat, BSC.U32Lo16,
-        BSC.U32Hi16]
+        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd, BSC.F32ToS8RniSat, BSC.U32Hi16]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -51,7 +50,6 @@ PINS = {
     "F32ToE2m1Sat_v2": (60, 86, 2, "262b97bd6873c99e7ae520c63d16238c32e397f6717d21dab5ebe665223172c7337563f8d904c21dd927e8870fac35dc7882acf3a799b612e911373b46d14334"),
     "BitAnd_v2": (1, 0, 0, "aa243ece6f21049abb7a8c4ecb98adbc92d9c237b824273463b4ae7e06e691f8d02cf3fb592d4465e11914e6a39f609f8d18a3d41cdb6752e8880ef302c30ae7"),
     "F32ToS8RniSat_v2": (313, 482, 45, "0be737231eeb81aa82ec05193d49ecb0b78d9c48a2fe474f95c69bbd91f0d9c51611f28107a9ac934481363e77c3beb64683ec88e1c297290d2e7ab9061ee28e"),
-    "U32Lo16_v2": (0, 0, 0, "f2abf95a12ecabcc4b06774d3e11fcf056c22b29518334c2d28535b7d87f8a9193cc49163846e39677892fadef190caa15313509ae214c78e66f34724b8343f0"),
     "U32Hi16_v2": (0, 0, 0, "e50e70260bcac2a1d87e3bb87ce5cb60e05ca213b6607ffde918418667d09e11c98e1c4f8a24f20c599b3ed3651793007d50c606895807e41f44ddcdfef29d0c"),
 }
 

@@ -10,5 +10,5 @@ def _boolean_roots() -> list[Any]:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import quant as BQ
 
-    return ([bind(BQ.RowAbsMax, N=128, RELU=relu) for relu in (True, False)] + [bind(BQ.RowAbsMax, N=4, RELU=False)]
-            + [bind(BQ.QuantS8Pair, RELU=relu) for relu in (True, False)] + [bind(BQ.QuantS8Scale, HALF=half) for half in (0, 1)])
+    return ([bind(BQ.QuantRowS8, N=128, RELU=relu) for relu in (True, False)] + [bind(BQ.QuantRowS8, N=512, RELU=True)]
+            + [bind(BQ.RowAbsMax, N=128, RELU=True), bind(BQ.RowAbsMax, N=4, RELU=False), bind(BQ.QuantChunkS8, N=128, RELU=True)])

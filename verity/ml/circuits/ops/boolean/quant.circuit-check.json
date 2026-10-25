@@ -1,25 +1,5 @@
 {
  "definitions": {
-  "QuantS8Pair_v2{RELU=False}": {
-   "and": 5981,
-   "type": "34d1520eddb5833025b384dc41857bf4671ff0de7ec5999be1b4c53c8192b67d3558f8236f17f31fda6eb8a0579694745555bf74dbc7eb69f01b08b640c6bb90"
-  },
-  "QuantS8Pair_v2{RELU=True}": {
-   "and": 6053,
-   "type": "88f4361d7267f76a36eaa03ef24849fa188184fd23bdd3770cb1067788bab5b0f7152ee6c834f86ac983aa2708aec78db51f5bd8759843383cb00184de76b823"
-  },
-  "QuantS8Scale_v2{HALF=0}": {
-   "and": 703,
-   "type": "7df23919b4030e876317031e6aced58e23e3626fc2bcb789d4eaf364979294e056e24e8007ce1f125bcb5af77e4661b66ad8b365b0f2d4405c0664e0b77ba57b"
-  },
-  "QuantS8Scale_v2{HALF=1}": {
-   "and": 736,
-   "type": "413ed256c956c68ac18cf6dbcc8ed276c2826de5b20c88f8c52953c9de9426f0355d6f510bee5e69b00d9c6be1db655d12186bffb91d5e739526199aaf00fac5"
-  },
-  "RowAbsMax_v2{N=128,RELU=False}": {
-   "and": 3810,
-   "type": "1876f50801ed659be60d369871c92e1940660e75564bbdd3aeb102f30b0a89416a8c144fb5206be5b8946b337c87f027717fb088ffdda78ab6a3e13c6ef88442"
-  },
   "RowAbsMax_v2{N=128,RELU=True}": {
    "and": 8290,
    "type": "a1c1ac1d90f6911a14da27715e518d271dda6a93523690033370aa1345952e91149c4606ec358f0dcf8daf6d509f78ac99302b729939e558b5c3603a1f89314b"
