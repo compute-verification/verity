@@ -8510,6 +8510,89 @@ theorem batchShape_of (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel)
     subst hs
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
+/-- A piece of positive count, its positions at or past 0, moved onto gates `A + e * F` with `A, F ≥ 0`, as a
+segment. -/
+theorem shapeOk_affine (P : Prog) (d : Nat) (q : Piece) (w : Nat) {A F : Int} (hA : 0 ≤ A) (hF : 0 ≤ F)
+    (h0 : q.count ≠ 0) (hq : ∀ x ∈ pos q, 0 ≤ x.2) : ShapeOk P d (Seg.one (q.affine w A F)) := by
+  refine shapeOk_one P d _ (Nat.pos_of_ne_zero h0) (fun x hx => ?_) (fun k hk => by cases hk) (fun x hx i hi => ?_)
+  · rw [pos_eq_map, List.mem_map] at hx
+    obtain ⟨t, ht, rfl⟩ := hx
+    rw [List.mem_range] at ht
+    have ht' : t < q.count := ht
+    have hx0 : 0 ≤ ppt q t := hq _ (by rw [pos_eq_map]; exact List.mem_map.2 ⟨t, List.mem_range.2 ht', rfl⟩)
+    show 0 ≤ ppt (q.affine w A F) t
+    rw [ppt_affine]
+    have := mul_nonneg hx0 hF
+    linarith
+  · have := (mem_pos_tgt hx).symm.trans hi
+    cases this
+
+/-- **A batch of a composite's piece in its one-run case** is `ShapeOk`: the run's first gate and its step are at or
+past 0. `batchShape_of`'s `hAff`. -/
+theorem batchAffine_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) :
+    ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → affineOf c k node q = some p →
+      ShapeOk c.P c.d (Seg.one p) := by
+  intro q k node p ht hn hform hp hL h0 hq hf ha
+  obtain ⟨hok, hpos, -, -, hpp⟩ := hR k node hn
+  unfold affineOf at ha
+  dsimp only at ha
+  split at ha
+  swap
+  · cases ha
+  rename_i hc
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hc
+  obtain ⟨⟨hsz, hreps⟩, hps⟩ := hc
+  obtain ⟨s0, hs0⟩ := Array.size_eq_one_iff.1 hsz
+  obtain ⟨g0, hg0⟩ := Array.size_eq_one_iff.1 (by rw [hs0] at hps; exact hps)
+  rw [hs0] at ha hreps
+  simp only [hg0] at ha
+  have e1 : (#[s0] : Array Seg)[0]! = s0 := rfl
+  have e2 : (#[g0] : Array Piece)[0]! = g0 := rfl
+  rw [e1] at hreps
+  simp only [e2] at ha
+  rcases hgt : g0.tgt with _ | w
+  · rw [hgt] at ha; cases ha
+  rw [hgt] at ha
+  dsimp only at ha
+  split at ha
+  swap
+  · cases ha
+  rename_i hc
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
+  obtain ⟨⟨hrows, hlen⟩, hFG⟩ := hc
+  simp only [Option.some.injEq] at ha
+  subst ha
+  rw [e1] at hg0
+  have hflat : psPos (c.memo[node.fn]!).ret = pos g0 := by
+    rw [psPos_flat _ hok (fun x hx => by
+      rw [hs0] at hx
+      simp at hx
+      subst hx; exact hreps), hs0]
+    simp [hg0, posAll_singleton]
+  have hg0c : 0 < g0.count := hpp s0 (by rw [hs0]; simp) g0 (by rw [hg0]; simp)
+  have hr1 : g0.rows = 1 := by
+    unfold Desc.Piece.count at hg0c
+    rcases Nat.lt_or_ge g0.rows 1 with h | h
+    · rw [show g0.rows = 0 by omega, Nat.zero_mul] at hg0c; omega
+    · omega
+  have hl0 : 0 < g0.len := by rw [count_one hr1] at hg0c; exact hg0c
+  have hb0 : 0 ≤ g0.base := by
+    have hm := at_mem_pos hr1 hl0
+    have := (hpos _ (by rw [hflat]; exact hm)).1
+    simpa [Desc.Piece.at] using this
+  refine shapeOk_affine c.P c.d q w (add_nonneg (Int.natCast_nonneg _) hb0) ?_ h0 hq
+  split
+  · exact Int.natCast_nonneg _
+  · rename_i hL1
+    have hL1' : (c.P.defs[node.fn]!).outLeaves ≠ 1 := by simpa using hL1
+    have hG := hFG.resolve_left hL1'
+    by_contra hneg
+    push_neg at hneg
+    have hL0 : (0 : Int) < ((c.P.defs[node.fn]!).outLeaves : Int) := by exact_mod_cast Nat.pos_of_ne_zero hL
+    nlinarith [Int.natCast_nonneg ((c.P.defs[node.fn]!).gates)]
+
 /-- A scan's ys `[lo, hi)`, `yl` leaves to an iteration, through `fromCallee` iteration by iteration: `ShapeOk`
 segments. -/
 theorem ys_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
