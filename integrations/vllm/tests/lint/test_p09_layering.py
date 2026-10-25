@@ -62,9 +62,24 @@ def layer_violations() -> list[R.Violation]:
 LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {"verity_vllm.engine.env"}
 
 
+#: The unit a package cycle counts these modules and subpackages in (longest prefix wins), whatever package they sit in:
+#: the allowlist's cycles are between these units.
+PACKAGE_OF = {
+    "verity_vllm.protocol_options": "protocol_options",
+    "verity_vllm.linear": "linear",
+    "verity_vllm.store": "store",
+    "verity_vllm.predict": "predict",
+    "verity_vllm.collectives": "collectives",
+    "verity_vllm.pipeline.engine_spec": "pipeline",
+    "verity_vllm.pipeline.llm": "pipeline",
+}
+
+
 def _package(m: str) -> str:
     if m in LEAF_MODULES:
         return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
+    if hit := max((p for p in PACKAGE_OF if m == p or m.startswith(p + ".")), key=len, default=None):
+        return PACKAGE_OF[hit]
     parts = m.split(".")
     return parts[1] if len(parts) > 1 else parts[0]
 

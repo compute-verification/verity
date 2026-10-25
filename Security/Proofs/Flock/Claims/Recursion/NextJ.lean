@@ -14,8 +14,9 @@ verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the
 * **The step** (`actJ`, `nextJ`): a coin is answered as the deployed plain verifier answers it (`nextJ_coin`, so
   `deploySplit` applies); at a decision it is `decisionJF` (`nextJ_decide`).
 * **The parsed value's decision is `nextCs`'s** (`decisionAtJ_eq`, `decisionJF_eq`): at the same session, link, first
-  coin and round messages, `nextJ`'s decision on a parsed value `j` is `nextCs`'s on every record that parses to `j`,
-  so a route through the plain step at every parsed value (`verifyJWithM`) covers both.
+  coin and round messages, `nextJ`'s decision on a parsed value `j` is `nextCs`'s on the record that parses to `j` in
+  its canonical text (`printT j`, which S0 passes: `RecordText.check_of`), so a route through the plain step at every
+  parsed value (`verifyJWithM`) covers both.
 * **The reader parts' checks** (`ReadOk`, `LastSplitJ`, `LastSplitJ.toLast`, `ownJ`): a split of `nextJ`'s last step
   whose soundness may assume the reading, the last message read by `rd` and the record value's fields custody reads
   present with their shapes (`liveOfJ` at the substituted value `.ok`). The reading is one check, `read`, given to the
@@ -59,7 +60,7 @@ def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteA
   Record.check (drawEq (drawOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j') link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw false none
+  if s.read.draw.isNone then ProvedScope.drawLaw false s.read.tags false none
 
 /-- **The decision at a session at the parsed value**: the plain verdict and custody's reading at the coin-substituted
 value. -/
@@ -119,24 +120,26 @@ theorem nextJ_decide {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : 
     nextJ rd x as cs = outOf (decisionJF s x link c₁ mids f) := by
   simp only [nextJ, h]
 
-/-- **The parsed value's decision at a session is `nextCs`'s** on a record that parses to it. -/
+/-- **The parsed value's decision at a session is `nextCs`'s** on a record in its canonical text that parses to it. -/
 theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (hj : Json.parse f.record = .ok j) :
+    (hj : Json.parse f.record = .ok j) (hc : RecordText.printT j = f.record) :
     decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCsAt s spec sts x link c₁ mids f := by
+  have hs : RecordText.check f.record = pure () := RecordText.check_of hj hc
   rw [decisionCsAt_parse s spec sts x link c₁ mids hj]
-  simp only [decisionAtJ, decisionJ, verdictJM, checksAtJ, checksJ, recordDraw_of_parse hj, Bool.false_eq_true,
-    ↓reduceIte]
+  simp only [decisionAtJ, decisionJ, verdictJM, checksAtJ, checksJ, recordDraw_of_parse hj, hs, bind_pure_unit,
+    Bool.false_eq_true, ↓reduceIte]
 
-/-- **The parsed value's decision is `nextCs`'s** on a record that parses to it. -/
+/-- **The parsed value's decision is `nextCs`'s** on a record in its canonical text that parses to it. -/
 theorem decisionJF_eq (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Json.parse f.record = .ok j) :
+    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Json.parse f.record = .ok j)
+    (hc : RecordText.printT j = f.record) :
     decisionJF s x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCs s x link c₁ mids f := by
   unfold decisionJF decisionCs
   congr 1
   funext p
   obtain ⟨spec, sts⟩ := p
-  exact decisionAtJ_eq s spec sts x link c₁ mids hj
+  exact decisionAtJ_eq s spec sts x link c₁ mids hj hc
 
 /-! ## The reader parts' checks -/
 

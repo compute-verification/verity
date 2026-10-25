@@ -3,7 +3,9 @@
 build's mirror (`proved_scope.rs`, `statement_why`) gives; one of `zkTableCap` tables passes the statement's rules, and
 without `--zk` the rule is still at most one table. Under `--plain-tables` (`ProvedScope.checkP`) a plain session of
 public outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, a statement with hidden outputs
-is refused at any count, and the verifier's own program must be the one META binds (`ProvedScope.programWhyP`).
+is refused at any count, and the verifier's own program must be the one META binds (`ProvedScope.programWhyP`). Its
+draw is by the subset law alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public
+outputs draws by the stratified law alone.
 -/
 import Flock.ProvedScope
 
@@ -51,5 +53,13 @@ def progSha : String :=
   some "refused: the verifier's program (--program) is not a JSON descriptor"
 #guard ProvedScope.programWhyP (bound none) (some prog) ==
   some "refused: a circuit whose META binds no program_sha512 under --plain-tables: the verifier cannot hold its program to the circuit"
+
+def subsetD : Draw.UnitDraw := { law := .subset 2, population := 8, units := #[1, 6] }
+def stratD : Draw.UnitDraw := { law := .stratified 2 #[], population := 8, units := #[1, 6] }
+
+#guard ProvedScope.lawWhy false Tags.circuit967b8d06 true subsetD == none
+#guard ProvedScope.lawWhy false Tags.circuit967b8d06 true stratD == some "a stratified draw under --plain-tables"
+#guard ProvedScope.lawWhy false Tags.circuit967b8d06 false stratD == none
+#guard ProvedScope.lawWhy false Tags.circuit967b8d06 false subsetD == some "a subset draw without --zk"
 
 end Flock.Test.TableCap

@@ -14,7 +14,7 @@ It is `Integrate.flock_headline_exec` with the session's tables in place of its 
 as `Composed.zk_session_soundJ` makes them under `--zk`:
 
 * the law is the live subset draw `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other law,
-  `ProvedScope.drawLawP`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
+  `ProvedScope.lawWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
   (`Law.subset_miss`), under A3 at its one byte source;
 * the tags, the record and the draws are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),
   `DecodeZLJ.RecordsLiveJ` and `DrawOkPJ`, the coin server's draw setting each table up at its part.

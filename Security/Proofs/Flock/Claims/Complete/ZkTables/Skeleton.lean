@@ -171,6 +171,9 @@ def DrawMatchesZk : Prop :=
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReadsZk : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
 
+/-- **The record is in its canonical text** (S0, `Flock.RecordText.check`). -/
+def RecordCanonicalZk : Prop := ∀ o : Run H rel, Flock.RecordText.check o.record = .ok ()
+
 /-- **Custody: the record's `root_B` is the link message's.** -/
 def CustodyRootBZk : Prop := ∀ o : Run H rel, (o.live.rootB.toList == o.link.1) = true
 
@@ -307,6 +310,7 @@ structure Goals : Prop where
   inner : Inner H rel
   consumed : ConsumedZk H rel
   capCommitted : CapCommittedZk H rel
+  canonical : RecordCanonicalZk H rel
 
 end Goals
 
@@ -350,7 +354,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk none`. -/
+/-- **A drawn session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem Case.drawn (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw
@@ -422,6 +426,7 @@ theorem Run.checks_ok' (g : Goals H rel) (o : Run H rel) :
     checks true o.s o.spec o.x o.link (Claims.coinSeq o.r 0) o.mids o.final = .ok () :=
   checks_ok o.stmt_ok (g.draw o) (g.liveReads o)
     (custody_ok (g.rootB o) (g.publicsLink o) (g.points o) (g.count o) (g.rounds o)) o.scope_ok o.drawn
+    (g.canonical o)
 
 /-- **The honest masked prover is accepted** at every honest masked run at a good case. -/
 theorem Run.acc (g : Goals H rel) (o : Run H rel) :

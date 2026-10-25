@@ -10,8 +10,8 @@ The plain verifier's custody (`FlockDeploy.custody`) compares the coins the reco
 and its verdict (`verdictM`) reads the coins off the record. `nextCs` is the plain verifier's step with the record's
 coins substituted after parsing: at a decision whose record parses to `j`, it runs the verdict (`verifyJWithM`) and
 custody's reading (`liveOfJ`) at `coinSubJ spec c₁ mids j`, `j` with its coins replaced by the live coins, while the
-statement and draw checks read the record's text as the plain verifier does. A record that is not JSON is decided as
-the plain verifier decides it.
+statement and draw checks and S0 (`RecordText.check`) read the record's text as the plain verifier does. A record that
+is not JSON is decided as the plain verifier decides it.
 
 * **Reading at a parsed value** (`liveOfJ`, `verdictJM`, `checksJ`, `decisionJ`): the plain verifier's readers after
   the parse; at a record that parses to `j` each is the plain one (`liveOf_of_parse`, `verdictM_of_parse`,
@@ -28,8 +28,9 @@ Three facts, and custody:
 * **Soundness transfers at the parsed value** (`nextCs_decide`, `decisionCsAt_parse`): `nextCs` at a decision is the
   plain verdict and checks at the substituted value, so a route that proves the plain step at every parsed value
   (`verifyJWithM`) covers it.
-* **The coin text is not read** (`decisionCsAt_coinBlind`, `nextCs_coinBlind`): two decisions whose records parse to
-  values equal once their coins are erased, with the same statement, proofs and draw, step alike.
+* **The coin text is not read** (`decisionCsAt_coinBlind`, `nextCs_coinBlind`): two decisions whose records are in
+  their canonical text (S0 passes, `RecordText.check_of`) and parse to values equal once their coins are erased, with
+  the same statement, proofs and draw, step alike.
 * **Custody holds by construction** (`liveOfJ_points`, `liveOfJ_coins`, `custody_coinSubJ`): at the substituted value
   custody's points are the first coin's and, at rep streams of distinct names, every recorded round it pairs with a
   round message carries the first `n` of that message's coin (`f128s_map`, the hex round trip), so custody is its
@@ -91,7 +92,7 @@ theorem verdictM_of_parse {M : Type → Type} [Monad M] [LawfulMonad M] [MonadEx
   unfold verdictM verdictJM
   rw [verifyWithM_of_parse hs spec tabs proofs h, Zk.verifyWithM_of_parse hs spec tabs proofs h]
 
-/-- `checks` with custody reading the parsed value `j`; the statement and draw checks read the record's text. -/
+/-- `checks` with custody reading the parsed value `j`; the statement and draw checks and S0 read the record's text. -/
 def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) (j : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
@@ -99,7 +100,8 @@ def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : 
     "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j) link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw zk none
+  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags false none else pure ())
+  RecordText.check f.record
 
 theorem checks_of_parse (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
@@ -292,26 +294,29 @@ theorem nextCs_canonical {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin
     (hk : ∀ spec', coinSubJ spec' c₁ mids j = j) : nextCs x as cs = next false x as cs := by
   simp only [nextCs, next, h, decisionCs_canonical s x link c₁ mids hj hk]
 
-/-- **The coin text is not read** at a session: two records that parse to values equal once their coins are erased,
-with the same statement, proofs and draw, are decided alike. -/
+/-- **The coin text is not read** at a session: two records in their canonical text that parse to values equal once
+their coins are erased, with the same statement, proofs and draw, are decided alike. -/
 theorem decisionCsAt_coinBlind (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f₁ f₂ : Final}
     {j₁ j₂ : Json} (hj₁ : Json.parse f₁.record = .ok j₁) (hj₂ : Json.parse f₂.record = .ok j₂)
     (he : eraseCoins j₁ = eraseCoins j₂) (hst : f₁.stmt = f₂.stmt) (hp : f₁.proofs = f₂.proofs)
-    (hd : FlockSoundness.Discharge.Exec.recordDraw f₁.record = FlockSoundness.Discharge.Exec.recordDraw f₂.record) :
+    (hd : FlockSoundness.Discharge.Exec.recordDraw f₁.record = FlockSoundness.Discharge.Exec.recordDraw f₂.record)
+    (hc₁ : RecordText.printT j₁ = f₁.record) (hc₂ : RecordText.printT j₂ = f₂.record) :
     decisionCsAt s spec sts x link c₁ mids f₁ = decisionCsAt s spec sts x link c₁ mids f₂ := by
   rw [decisionCsAt_parse s spec sts x link c₁ mids hj₁, decisionCsAt_parse s spec sts x link c₁ mids hj₂]
-  simp only [decisionJ, checksJ, coinSubJ, he, hst, hp, hd]
+  simp only [decisionJ, checksJ, coinSubJ, he, hst, hp, hd, RecordText.check_of hj₁ hc₁, RecordText.check_of hj₂ hc₂]
 
 /-- **The coin text is not read**: two decisions on the same session, link, first coin and round messages whose
-records parse to values equal once their coins are erased, with the same statement, proofs and draw, step alike. -/
+records are in their canonical text and parse to values equal once their coins are erased, with the same statement,
+proofs and draw, step alike. -/
 theorem nextCs_coinBlind {x : Claims.Msg} {as₁ as₂ : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec₁ spec₂ : SessionSpec} {sts₁ sts₂ : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f₁ f₂ : Final} (h₁ : act false x as₁ cs = .decide s spec₁ sts₁ link c₁ mids f₁)
     (h₂ : act false x as₂ cs = .decide s spec₂ sts₂ link c₁ mids f₂) {j₁ j₂ : Json}
     (hj₁ : Json.parse f₁.record = .ok j₁) (hj₂ : Json.parse f₂.record = .ok j₂) (he : eraseCoins j₁ = eraseCoins j₂)
     (hst : f₁.stmt = f₂.stmt) (hp : f₁.proofs = f₂.proofs)
-    (hd : FlockSoundness.Discharge.Exec.recordDraw f₁.record = FlockSoundness.Discharge.Exec.recordDraw f₂.record) :
+    (hd : FlockSoundness.Discharge.Exec.recordDraw f₁.record = FlockSoundness.Discharge.Exec.recordDraw f₂.record)
+    (hc₁ : RecordText.printT j₁ = f₁.record) (hc₂ : RecordText.printT j₂ = f₂.record) :
     nextCs x as₁ cs = nextCs x as₂ cs := by
   simp only [nextCs, h₁, h₂]
   congr 1
@@ -319,7 +324,7 @@ theorem nextCs_coinBlind {x : Claims.Msg} {as₁ as₂ : List Claims.Msg} {cs : 
   congr 1
   funext p
   obtain ⟨spec, sts⟩ := p
-  exact decisionCsAt_coinBlind s spec sts x link c₁ mids hj₁ hj₂ he hst hp hd
+  exact decisionCsAt_coinBlind s spec sts x link c₁ mids hj₁ hj₂ he hst hp hd hc₁ hc₂
 
 /-! ## Custody at the substituted value -/
 

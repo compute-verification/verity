@@ -726,8 +726,8 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk` or `--plain-tables`; under `--plain-tables` every
-draw but a subset draw, `ProvedScope.drawLawP`), and under `--rec-inner` so is a session of more
+work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
+draw under `--plain-tables`), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
@@ -735,7 +735,8 @@ so is a session without a draw, under `--rec-inner` a session whose draw is not 
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies), all after every check has passed (so the reason is the refusal only when nothing else
+cannot know what it verifies), and last a record not in its canonical text (`RecordText.check`, S0), all after every
+check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`.
@@ -845,7 +846,6 @@ def verifyCmd (args : List String) : IO UInt32 := do
     else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome
       registered.isSome
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  let drawLaw := if plainTables then ProvedScope.drawLawP else ProvedScope.drawLaw zk
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         Registered.checkProgram program registered.isSome
@@ -867,7 +867,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then drawLaw draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
@@ -912,13 +912,15 @@ def verifyCmd (args : List String) : IO UInt32 := do
       else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a draw, then a session's without the program
+      -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
+      -- then a record not in its canonical text (S0)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
-      if draw.isNone then drawLaw draw
+      if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
+      RecordText.check record
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
