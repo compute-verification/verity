@@ -12122,6 +12122,184 @@ theorem batchW_of (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel)
     subst hs
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
+/-- **Copies of a callee's gates, a copy a member** (`shiftGates` to member `m0`'s first gate, each next copy `dm`
+members on): of the callee's gates at or past 0 with their widths, each copy a member of node `k`, they name the
+caller's gates with theirs, in laid-out bodies. -/
+theorem gateW_copies (P : Prog) {d k : Nat}
+    (hoff : Laid P d) (hk : k < (P.defs[d]!).body.nodes.size)
+    (hp : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false)
+    (hLc : Laid P ((P.defs[d]!).body.nodes[k]!).fn)
+    (hlast : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.offsets[
+        (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.nodes.size]! =
+      (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates)
+    {ps : Array Piece} {m0 : Nat} {δ dm S : Int} {len reps : Nat}
+    (hδ : δ = ((P.defs[d]!).body.offsets[k]! : Int) +
+      (m0 : Int) * ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Int))
+    (hS : S = dm * ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Int))
+    (hW : ∀ w v, (Tgt.gate w, v) ∈ posAll ps → 0 ≤ v ∧ LocW P ((P.defs[d]!).body.nodes[k]!).fn v.toNat w)
+    (hin : ∀ u < reps, 0 ≤ (m0 : Int) + (u : Int) * dm ∧
+      (m0 : Int) + (u : Int) * dm < (((P.defs[d]!).body.nodes[k]!).members : Int)) :
+    GateW P d { ps := Desc.shiftGates δ ps, len := len, reps := reps, shift := S } := by
+  intro w p hx
+  unfold segPos at hx
+  obtain ⟨u, hu, hx⟩ := List.mem_flatMap.1 hx
+  rw [List.mem_range] at hu
+  simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
+  obtain ⟨⟨t, v⟩, hy, he⟩ := hx
+  cases t with
+  | ref b i => simp [shiftPos] at he
+  | gate w0 =>
+    simp only [shiftPos, Prod.mk.injEq, Tgt.gate.injEq] at he
+    obtain ⟨rfl, rfl⟩ := he
+    obtain ⟨hv0, hl⟩ := hW w0 v hy
+    obtain ⟨n, rfl⟩ := Int.eq_ofNat_of_zero_le hv0
+    rw [Int.toNat_natCast] at hl
+    have hnl := locW_lt hl hLc hlast
+    obtain ⟨h0, h1⟩ := hin u hu
+    obtain ⟨mm, hmm⟩ := Int.eq_ofNat_of_zero_le h0
+    have hmlt : mm < ((P.defs[d]!).body.nodes[k]!).members := by omega
+    have key := locW_child P hoff hk hp hmlt hnl hl
+    have e : (n : Int) + (δ + (u : Int) * S) = (((P.defs[d]!).body.offsets[k]! +
+        mm * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + n : Nat) : Int) := by
+      rw [hδ, hS]
+      push_cast
+      rw [← hmm]
+      ring
+    rw [e, Int.toNat_natCast]
+    exact key
+
+/-- Copies of one member's segments, each of a copy, that name the body's gates with their widths, alike: a segment
+naming them with theirs. -/
+theorem gateW_alike (P : Prog) (d : Nat) {one : Array Seg} (h1 : ∀ x ∈ one.toList, x.reps = 1)
+    (hW : ∀ s ∈ one.toList, GateW P d s) (len reps : Nat) :
+    GateW P d { ps := one.flatMap (·.ps), len := len, reps := reps, shift := 0 } := by
+  intro w p hx
+  rw [segPos_alike rfl] at hx
+  obtain ⟨_, -, hx⟩ := List.mem_flatMap.1 hx
+  rw [posAll_flatMap_ps one h1] at hx
+  unfold segsPos at hx
+  obtain ⟨s, hs, hxs⟩ := List.mem_flatMap.1 hx
+  exact hW s hs w p hxs
+
+/-- **A batch of a composite's piece of one row and a stride of whole members**, as `batchStride` reads it, names the
+body's gates with their widths: copies of a member's leaf of gates, a copy a member (`gateW_copies`); copies of what
+`fromCallee` gives of a leaf of arguments the members share (`gateW_alike`); or position by position (`batchPts_w`).
+`batchW_of`'s `hStride`. -/
+theorem batchStride_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c.d) (fuel : Nat)
+    (hD : DownWAt c fuel) (hCW : CalleeW c fuel)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hRW : ∀ k node, c.node k = .ok node → RetW c.P c.memo node.fn)
+    (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
+      (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates) :
+    ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 →
+      (q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0) →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchStride c fuel k node q = .ok segs →
+      ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  intro q k node segs ht hn hform hp hL0 h1 hcp hq hf h
+  obtain ⟨hok, hnn, hgo, -, hpp⟩ := hR k node hn
+  have hRWk := hRW k node hn
+  obtain ⟨hLc, hlast⟩ := hLF k node hn hp
+  have hdo := downOk_of hB hn
+  have hk := node_lt hn
+  have hnode := node_get hn
+  have hl0 : 0 < q.len := by omega
+  have hfu : q.at 0 < ((c.body.nodes[k]!).out.leaves : Int) := hf _ (at_mem_pos h1 hl0) k ht
+  rw [hnode] at hfu
+  have hbl : q.base.toNat < node.out.leaves := by
+    have : q.at 0 = q.base := by simp [Desc.Piece.at]
+    rw [this] at hfu
+    omega
+  have hdo0 := hdo q.base.toNat hbl
+  simp only [hform] at hdo0
+  have hmn := hdo0.1
+  unfold batchStride at h
+  dsimp only at h
+  split at h
+  · rename_i hrep
+    split at h
+    · simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      intro s hs
+      simp only [List.mem_singleton] at hs
+      subst hs
+      have hleaf1 : ∀ x ∈ ((c.memo[node.fn]!).ret.slice (q.base.toNat % (c.P.defs[node.fn]!).outLeaves)
+          (q.base.toNat % (c.P.defs[node.fn]!).outLeaves + 1)).toList, x.reps = 1 := fun x hx => by
+        have h1' := (retOk_slice hgo hx).1
+        have h2' := (Array.all_eq_true_iff_forall_mem.1 hrep) x (Array.mem_toList_iff.1 hx)
+        simp only [decide_eq_true_eq] at h2'
+        omega
+      have hpsPos := posAll_flatMap_ps _ hleaf1
+      rw [psSlice_pos _ hok] at hpsPos
+      have hLp : 0 < (c.P.defs[node.fn]!).outLeaves := Nat.pos_of_ne_zero hL0
+      have hLI : ((c.P.defs[node.fn]!).outLeaves : Int) ≠ 0 := by exact_mod_cast hL0
+      obtain ⟨dd, hdd⟩ : ∃ dd, q.stride = ((c.P.defs[node.fn]!).outLeaves : Int) * dd :=
+        ⟨q.stride / (c.P.defs[node.fn]!).outLeaves, (Int.mul_ediv_cancel' (Int.dvd_of_emod_eq_zero hcp.2.1)).symm⟩
+      have hdiv : q.stride / ((c.P.defs[node.fn]!).outLeaves : Int) = dd := by
+        rw [hdd]; exact Int.mul_ediv_cancel_left _ hLI
+      have hB' : (q.base.toNat : Int) = q.base := Int.toNat_of_nonneg hcp.2.2
+      have h2 : (q.base : Int) = ((q.base.toNat / (c.P.defs[node.fn]!).outLeaves : Nat) : Int) *
+          ((c.P.defs[node.fn]!).outLeaves : Int) + ((q.base.toNat % (c.P.defs[node.fn]!).outLeaves : Nat) : Int) := by
+        rw [← hB']
+        exact_mod_cast (Nat.div_add_mod' q.base.toNat (c.P.defs[node.fn]!).outLeaves).symm
+      have hjL : ((q.base.toNat % (c.P.defs[node.fn]!).outLeaves : Nat) : Int) <
+          ((c.P.defs[node.fn]!).outLeaves : Int) := by exact_mod_cast Nat.mod_lt _ hLp
+      subst hnode
+      refine gateW_copies c.P hL hk hp hLc hlast (m0 := q.base.toNat / (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves)
+        (dm := q.stride / ((c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Int)) rfl rfl ?_ ?_
+      · intro w v hx
+        rw [hpsPos] at hx
+        have hx' := List.mem_of_mem_drop (List.mem_of_mem_take hx)
+        exact ⟨(hnn _ hx').1, hRWk w v hx'⟩
+      · intro u hu
+        rw [hdiv]
+        have hat : q.at u = (((q.base.toNat / (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Nat) : Int) +
+            (u : Int) * dd) * ((c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Int) +
+            ((q.base.toNat % (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Nat) : Int) := by
+          unfold Desc.Piece.at
+          rw [hdd]
+          linear_combination h2
+        have hEq : q.at u / ((c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Int) =
+            ((q.base.toNat / (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Nat) : Int) + (u : Int) * dd := by
+          rw [hat, Int.add_comm, Int.add_mul_ediv_right _ _ hLI,
+            Int.ediv_eq_zero_of_lt (Int.natCast_nonneg _) hjL, Int.zero_add]
+        have hm := at_mem_pos h1 hu
+        have hE0 : 0 ≤ q.at u := hq _ hm
+        have hEl : q.at u < ((c.body.nodes[k]!).out.leaves : Int) := hf _ hm k ht
+        obtain ⟨E, hE⟩ := Int.eq_ofNat_of_zero_le hE0
+        rw [hE] at hEq hEl
+        have hEl' : E < (c.body.nodes[k]!).out.leaves := by exact_mod_cast hEl
+        have hdE := (hdo E hEl')
+        simp only [hform] at hdE
+        have hcast : ((E / (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Nat) : Int) =
+            (E : Int) / ((c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Int) := by norm_cast
+        rw [← hEq, ← hcast]
+        refine ⟨Int.natCast_nonneg _, ?_⟩
+        have hmb : ((c.P.defs[c.d]!).body.nodes[k]!).members = (c.body.nodes[k]!).n := members_batch hform
+        rw [hmb]
+        exact_mod_cast hdE.1
+    · split at h
+      · obtain ⟨one, hone, h⟩ := Walk.except_bind_ok h
+        split at h
+        · rename_i hone1
+          simp only [pure, Except.pure, Except.ok.injEq] at h
+          subst h
+          intro s hs
+          simp only [List.mem_singleton] at hs
+          subst hs
+          have hrep1 : ∀ x ∈ one.toList, x.reps = 1 := by
+            intro x hx
+            have h0 := ((reps_fuel c fuel).2.1 k _ _ _ one hone x hx).1
+            have hle := (Array.all_eq_true_iff_forall_mem.1 hone1) x (Array.mem_toList_iff.1 hx)
+            simp only [decide_eq_true_eq] at hle
+            omega
+          have hmem : q.base.toNat / (c.P.defs[node.fn]!).outLeaves < (c.body.nodes[k]!).members := by
+            rw [hnode, members_batch hform]; exact hmn
+          exact gateW_alike c.P c.d hrep1 (hCW k _ _ _ one hmem (by rw [hnode]; exact hp) hone) 1 q.len
+        · exact batchPts_w c fuel hD q ht h1 hq hf h
+      · exact batchPts_w c fuel hD q ht h1 hq hf h
+  · exact batchPts_w c fuel hD q ht h1 hq hf h
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
