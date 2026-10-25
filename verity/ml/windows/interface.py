@@ -200,8 +200,8 @@ def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]]
                          "tables": [list(t) for t in m.tables], "link_units": list(m.link_units),
                          "links": [list(x) for x in m.links], "wired": [[p, o, list(ws)] for p, o, ws in m.wired]}
                         for m in w.members],
-            "row_tables": [{"engine_step": t.engine_step, "op_path": t.op_path, "template": t.template, "words": t.words,
-                            "rows": [list(r) for r in t.rows]} for t in w.row_tables],
+            "row_tables": [{"segment": t.segment, "name": t.name, "template": t.template, "words": t.words,
+                            "keys": [list(k) for k in t.keys], "label": [[k, v] for k, v in t.label]} for t in w.row_tables],
             "statements": {t: {"in_rows": [[p, s, b, list(ps)] for p, s, b, ps in st["in_rows"]],
                                "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]], "reads": st.get("reads", "inline")}
                            for t, st in sorted((statements or {}).items())}}
@@ -209,6 +209,11 @@ def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]]
 
 def circuit_bytes(doc: Mapping[str, Any]) -> bytes:
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+
+
+def _frozen(x: Any) -> Any:
+    """A JSON value with every list a tuple, as a row table's keys and labels are held."""
+    return tuple(_frozen(v) for v in x) if isinstance(x, list) else x
 
 
 def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Callable[[str], Any]) -> CS.Window:
@@ -226,8 +231,8 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
                          tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
                          tuple(map(tuple, m["links"])), tuple((p, o, tuple(ws)) for p, o, ws in m["wired"]))
                for m in doc["members"])
-    tables = tuple(CS.RowTable(t["engine_step"], t["op_path"], t["template"], t["words"], tuple(map(tuple, t["rows"])))
-                   for t in doc["row_tables"])
+    tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),
+                               tuple((k, _frozen(v)) for k, v in t["label"])) for t in doc["row_tables"])
     w = CS.Window(program, query, dict(law), doc["run"], ms, tables, doc["context"], doc["work_table"])
     got = {"query": dict(query), "program": w.partition["program"], "partition": w.partition_digest}
     if bad := sorted(k for k, v in got.items() if v != doc[k]):
