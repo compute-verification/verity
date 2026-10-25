@@ -15,11 +15,14 @@ and exits 0 iff every compiled Program equals its trace.  `compile_steps` refusi
 compiled.json and exits 2; `--partial` refuses request by request instead, and compiles the rest.
 
 `--window K` reads a `verity-vllm serve-openai --seal` run instead: window K's advice (`advice/w<K>/private/advice.bin`, its
-registration's ℓ), each request's certified body from `requests.jsonl` (by `user`: the sampling fields its ingress record says
-it brought, and its prompt ids), and the model, target,
-execution and default seed from `serve.json`.  The Build dirs go into `--out` itself (default the window's row dir,
-`windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's Program digest and
-Build dir, and the registration the advice is bound to.
+registration's ℓ), the certified body of each of window K's requests from `requests.jsonl` (the records whose ``windows`` hold
+K, by `user`: the sampling fields its ingress record says it brought, and its prompt ids), and the model, target,
+execution and default seed from `serve.json`.  A window's advice is `window_advice`'s: a request window K carries in from the
+one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
+window before K that ran steps (`windows.jsonl`), whose close K must open on (`window_advice.follows`); K is refused (exit 2) when
+it doesn't, or when it carries a request in and that advice isn't there.  The Build dirs go into `--out` itself (default the
+window's row dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
+Program digest and Build dir, the registration the advice is bound to, and the carry.
 
     cd integrations/vllm; PYTHONPATH=.:../.. /workspace/jobs/venv312/bin/python tools/advice_compile.py RUN --out DIR [--partial]
     ... tools/advice_compile.py RUN --window K [--out DIR] [--partial]
@@ -36,8 +39,9 @@ MANIFEST = "verity-vllm/served-window-programs/v1"
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
-    """A serve-openai window's (advice file, run meta, each request's certified body by user, registration): the body is the
-    sampling fields the request brought (its ingress record) with its prompt ids."""
+    """A serve-openai window's (advice file, run meta, the certified body of each of its requests by user, registration): the
+    body is the sampling fields the request brought (its ingress record) with its prompt ids. Only the window's own records
+    count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
     reg = json.loads((adv / "registration.json").read_text())
     serve = json.loads((run / "serve.json").read_text())
@@ -45,10 +49,41 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     for line in (run / "requests.jsonl").read_text().splitlines():
         if line.strip():
             d = json.loads(line)
-            bodies[d.get("user") or d["http_id"]] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
+            if int(window) not in (d.get("windows") or ()):
+                continue
+            user = d.get("user") or d["http_id"]
+            if user in bodies:
+                raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
+            bodies[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"], "execution": serve.get("execution"),
             "default_seed": serve.get("default_seed")}
     return adv / "private" / "advice.bin", meta, bodies, reg
+
+
+def carry_of(run: Path, window: int, data: bytes) -> dict:
+    """Window K's carry (``data`` its advice), held to the advice of the last window before K that ran steps (``windows.jsonl``'s
+    last non-empty one): K must open where that window closed (`window_advice.follows`). The requests K carries in and the ones it
+    leaves with outputs to keep, by id, and the window it follows; a ValueError when K doesn't follow it, or carries a request in
+    with no advice before it to carry it from."""
+    from verity_vllm.pipeline import window_advice as WA
+
+    a = WA.decode(data)
+    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
+    before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]
+    last = max(before, default=None)
+    path = None if last is None else run / "advice" / f"w{last}" / "private" / "advice.bin"
+    carry = {"in": [q.id for q in a.requests[:len(a.carried)]], "out": [a.requests[c.request].id for c in WA.close(a) if c.must],
+             "follows": None}
+    if path is not None and path.exists():
+        try:
+            WA.follows(WA.decode(path.read_bytes()), a)
+        except WA.MalformedAdvice as e:
+            raise ValueError(f"window {window} doesn't open where window {last} closed: {e}") from None
+        carry["follows"] = last
+    elif a.carried:
+        raise ValueError(f"window {window} carries {len(a.carried)} requests in, {carry['in'][0]!r} first, and "
+                         + (f"window {last}, the one before it, has no advice at {path}" if path else "no window ran before it"))
+    return carry
 
 
 def main() -> int:
@@ -69,9 +104,10 @@ def main() -> int:
 
     from verity_vllm.config import checkpoint_entries
     from verity_vllm.engine import step_trace as ST
-    from verity_vllm.predict.build import Unexpressible
-    from verity_vllm.predict.phi import Phi
-    from verity_vllm.predict.steps import (
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import (
         CAP_BITS,
         Registered,
         compare,
@@ -79,12 +115,16 @@ def main() -> int:
         trace_commands,
     )
 
-    from verity.core.protocols.certifier import advice as I1
-
-    reg_doc = None
+    reg_doc, carry = None, None
     if a.window is not None:
         path, meta, bodies, reg_doc = served_inputs(run, a.window)
         data = Path(a.advice or path).read_bytes()
+        try:
+            carry = carry_of(run, a.window, data)
+        except ValueError as e:
+            (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+            print(f"[advice-compile] the advice's carry is refused: {e}", flush=True)
+            return 2
     else:
         data = Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes()
         meta = json.loads((run / "run.json").read_text())
@@ -95,7 +135,8 @@ def main() -> int:
         # records stand in for its sampling
         bodies = {user[r["request"]]: {**r["sampling"], "prompt": prompt[user[r["request"]]]}
                   for r in ST.load(run / "step_trace.jsonl") if r["kind"] == "arrive"}
-    ids = {q.id for q in I1.decode(data).requests}
+    advice = WA.decode(data)
+    ids = {q.id for q in advice.requests}
     ingress = {k: v for k, v in bodies.items() if k in ids}
     entry = next(c for c in checkpoint_entries() if c["repo"] == meta["model"] and c["revision"] == meta["revision"])
     hf_config = json.loads((Path(entry["local_path"]) / "config.json").read_text())
@@ -124,12 +165,13 @@ def main() -> int:
     (out / "comparison.json").write_text(json.dumps(cmp, indent=1) + "\n")
     print(f"[advice-compile] equal {cmp['equal']}, different {cmp['different']}, no trace {cmp['no_trace']}", flush=True)
     if a.window is not None:
-        from verity_vllm.predict.steps import trace_dir
+        from verity_vllm.program.predict.steps import trace_dir
         man = {"schema": MANIFEST, "run": str(run), "window": a.window, "registration": reg_doc, "cap_bits": cap,
                "compiler": summary["compiler"], "workload_digest": summary["workload_digest"],
                "requests": {u["id"]: {"digest": u["digest"], "build_dir": trace_dir(u), "LP": u["LP"], "T": u["T"], "first_step": u["first_step"]}
                             for u in summary["requests"] if u is not None},
                "component_digests": sorted(summary["programs"]), "refused": summary.get("refused") or {},
+               "carry": {**carry, "idle": [advice.requests[i].id for i in summary["carry"]["idle"]]},
                "comparison": {k: cmp[k] for k in ("equal", "different", "no_trace", "mismatches") if k in cmp}}
         (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
         print(f"[advice-compile] {out / 'manifest.json'}: {len(man['requests'])} request Programs", flush=True)

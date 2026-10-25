@@ -976,8 +976,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
 
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
-    from verity_vllm.protocol_options import pouw
-    from verity_vllm.protocol_options.interface import Context
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.interface import Context
 
     from verity_bench.vllm.arms import protocols_config
 
@@ -1029,7 +1029,7 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
     """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
     device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
 
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     from verity_bench.vllm import runner
 
@@ -1073,8 +1073,11 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
 
-        def begin(self, stepped=False):
-            self.stepped = stepped
+        def begin(self, stepped=False, at=None):
+            self.stepped, self.ats = stepped, [*getattr(self, "ats", []), at]
+
+        def epoch_calls(self):
+            return 7
 
         def poison(self):
             pass
@@ -1088,7 +1091,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
     exact = runner._pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
-    assert run.stepped
+    assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
@@ -1134,9 +1137,9 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     from the run's step bound, and the LLM fills the model runner and in-process coins after the build; a spec can't
     supply them, nor S."""
 
-    from verity_vllm import protocol_options as PO
-    from verity_vllm.pipeline.llm import protocol_context, resolve_options
-    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm import protocols as PO
+    from verity_vllm.llm import protocol_context, resolve_options
+    from verity_vllm.protocols.pouw import h1 as PH
 
     from verity_bench.vllm.arms import H1, h1_config, protocols_config, window_steps
     from verity_bench.vllm.runner import H1_OPENING_STEPS, engine_args
@@ -1175,7 +1178,7 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
     (`pouw.h1_run`) and closes it with `LLM.close` after serving, even when serving fails; each window's summary is the
     arm's gate, and a timed rep's is its `extras.h1_window`."""
 
-    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocols import pouw
 
     from verity_bench.vllm import runner
     from verity_bench.vllm.arms import H1
@@ -1248,7 +1251,7 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
 
     from verity_bench.vllm import runner
     from verity_bench.vllm.arms import plugin
-    from verity_vllm.pipeline.llm import resolve_options
+    from verity_vllm.llm import resolve_options
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
@@ -1267,7 +1270,8 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
                                            "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
-    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
@@ -1275,8 +1279,7 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     compiled stock, its setup building pearl_c_sm90's cubin; with PEARLC_KERNEL that directory, the arm takes its record
     (`pearl-c-h100-v1-h3`, a scheme the device path runs) and its build.sh cubin, and builds the same engine."""
     from verity_bench.vllm import runner
-    from verity_bench.vllm.arms import plugin
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root))
@@ -1297,10 +1300,11 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     assert whole.scheme == "pearl-c-h100-v1-h3" and whole.kernel_dir.name == "pearl_c_sm90"
     assert whole.kernel_digest(None) is None or (whole.kernel_dir / "pearl_c_sm90.cubin").is_file()
     preset, eager = served(spec.preset, spec.eager)
-    preset, eager = runner.arm_execution(plugin(arms[-1]), preset, eager)
+    preset, eager = runner.arm_execution(arms[-1], preset, eager)
     built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
     assert built["compilation_config"]["cudagraph_mode"] == "FULL_DECODE_ONLY"
-    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
