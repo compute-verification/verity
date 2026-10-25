@@ -480,8 +480,9 @@ def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_a
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
     session and a prover that skips half its reads, each paced in twelve windows drawn on three openings coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
-    and whose record names g, is credited, its pooled bound read over its three draws (`line.draws_of`), and the Lean
-    verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
+    and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
+    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
+    (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest,skip:0.5", True, groups_per_coin=4)
@@ -496,8 +497,10 @@ def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_a
     h, s = doc["sessions"]
     assert h["credit"]["ok"] and h["of_record"] and s["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
     assert {k: [why.split(":")[0] for why in v] for k, v in doc["credit"]["zero"].items()} == {1: ["not accepted"]}
-    t = h["T"]
-    assert doc["line"][t]["credited_sessions"] == [0] and h["shares_auditor_clock"][al.line.TIME_HELD]["time"] > 0
+    t, mine = h["T"], h["shares_auditor_clock"][al.line.TIME_HELD]
+    assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t][al.line.TIME_HELD] == {
+        "k": 0, **{x: mine[x] for x in (*al.SHARES, "exact")}}
+    assert h["groups"] == 12 and sum(h["named"]["last_root_first_named_by"].values()) == 12
     assert len(verifier.recorded_windows(honest)[0]) == 3
     by = al.lv.Lean(al.lv.build(), lambda _: None)
     try:
