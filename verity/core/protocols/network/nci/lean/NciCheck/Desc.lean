@@ -214,7 +214,9 @@ def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with rep
 
 /-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
 pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
-read is kept, and its IU found, by its first piece. -/
+read is kept, and its IU found, by its first piece. Copies that shift stay one read, since they lie in one node: they
+name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
+offsets a callee's into one member), and copies naming leaves never shift. -/
 def Seg.split (s : Seg) : Array Seg :=
   let s := s.alike
   if s.reps == 1 then s.ps.map .one else #[s]
