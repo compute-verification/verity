@@ -243,6 +243,75 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
 
 
+def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    rows, at, reads = IF.layout(COORD).rows, 0, []
+    for p, words in rows:
+        if p != free:
+            reads.append(IF.Read(TID, p, "a", at=0, radix=(n,), base=at, step=(words,)))
+        at += n * words
+    return IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
+
+
+def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_charge(tmp_path, capsys):
+    """A stated record whose inputs are declared is counted from its description alone: with every input row registered
+    nothing is free, so its other inputs are the advice's bits, the charge; a port left free adds its rows and the bound is
+    vacuous. ``records_audit.py count`` prints the same from the record's file."""
+    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
+    assert RA.declared_count(doc, 1687) == {"units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0,
+                                            "free": 0, "other_inputs": 1687, "advice_bits": 1687, "bound": "within the charge"}
+    x = 16 * dict(IF.layout(COORD).rows)["x"]
+    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687)
+    assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
+    (tmp_path / "c.json").write_bytes(IF.circuit_bytes(doc))
+    capsys.readouterr()
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687"]) == 0
+    assert json.loads(capsys.readouterr().out) == RA.declared_count(doc, 1687)
+    with pytest.raises(ValueError, match="counted from its members"):
+        RA.declared_count({"templates": doc["templates"]}, 0)
+
+
+def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's compile stubbed, its
+    window's circuit one whose every input is registered): it writes the circuit's record from its description (members
+    stated at its cap, no run) or, ``--description``, the description, prints the length the registration charges with the
+    count, and exits `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the
+    record finds the charge."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict.build import Unexpressible
+
+    s, circuit = _served(tmp_path, monkeypatch), _registered_circuit()
+    stub, refuse = ST.compile_steps, []
+
+    def lower():
+        if refuse:
+            raise Unexpressible("a family the window's lowering doesn't take")
+        return circuit
+
+    monkeypatch.setattr(ST, "compile_steps", lambda *a: SimpleNamespace(requests=stub(*a).requests, circuit=lower))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    bits = s.bound["advice"]["bits"]
+    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+            str(tmp_path / "advice.bin"), "--cap", "4"]
+    capsys.readouterr()
+    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
+    got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description()))
+    rec = json.loads((tmp_path / "c.json").read_text())
+    assert rec == IF.descriptor_record(circuit, 4) and (rec["cap"], rec["registered"]) == (4, circuit.registered.doc())
+    assert PP.main([*base, "--out", str(tmp_path / "d.json"), "--description"]) == 0
+    assert json.loads((tmp_path / "d.json").read_text()) == circuit.description()
+    capsys.readouterr()
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits)]) == 0
+    count = json.loads(capsys.readouterr().out)
+    assert (count["free"], count["other_inputs"], count["bound"]) == (0, bits, "within the charge")
+    refuse.append(True)
+    assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
+    assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables

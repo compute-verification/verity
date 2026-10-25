@@ -28,6 +28,10 @@ it (`leak_count`). An integration's labels are never read.
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]]
+    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...]
+
+``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
+from its description alone (`declared_count`), before the committer writes its members' rows.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -58,6 +62,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib
 import json
 import os
 import random
@@ -237,6 +242,16 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     other = inputs - wired
     return {"inputs": inputs, "wired": wired, "ingress": 0, "registered": 0, "external": ext_bits, "other_inputs": other,
             "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+
+
+def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], Any] = IF.resolve) -> dict[str, Any]:
+    """The leak bound's count of a stated record that declares its inputs (`interface.input_count`, from its description
+    alone): its input rows less those its wires, registered reads and ingress fill leave ``free``, and ``other_inputs`` is
+    those plus the advice's ``bits``, the compile unit's one input, a statement of its own. So ``other_inputs`` equals the
+    charge exactly when the circuit leaves no input free."""
+    n = IF.input_count(doc, resolve)
+    other = n["free"] + bits
+    return {**n, "other_inputs": other, "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
 
 
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
@@ -470,7 +485,17 @@ def main(argv: list[str] | None = None) -> int:
                    "(infra's challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
+    p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
+    p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
+    p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
+    p.add_argument("--catalog", action="append", default=[], help="a module whose Definitions the record's templates name, "
+                   "imported before they resolve (repeatable; `interface.resolve` loads the ops and the embedding read)")
     a = ap.parse_args(argv)
+    if a.cmd == "count":
+        for m in a.catalog:
+            importlib.import_module(m)
+        print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits), sort_keys=True))
+        return 0
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if a.challenger:
