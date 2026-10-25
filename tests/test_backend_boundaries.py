@@ -1,10 +1,11 @@
-"""Backends never need an integration (DESIGN.md "Development": backends must be testable without installing a frontend or
-runtime integration).  Today one does: C-Flock takes the vLLM integration's registered Definitions and kernels where core has no
-equivalent yet (the numerical bench, which did too, is a benchmark now, and a benchmark may compose an integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
-fails, and so does a listed site that is gone, so the list stays exact.
+"""Nothing under ``verity/`` needs an integration (DESIGN.md "Development": backends must be testable without installing a
+frontend or runtime integration), the trees `tests/test_boundaries.py` leaves out (``SEPARATE``: C-Flock, the GPU hash, the
+difftest harness, PoUS's check) included.  C-Flock took the vLLM integration's registered Definitions and kernels until they moved
+to ``verity.ml.definitions``; what still reaches an integration is in ``KNOWN``, which lists every ``(file, module)`` site and may
+only shrink: a new site fails, and so does a listed site that is gone, so the list stays exact.
 
-An import is an import statement, a string handed to ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, or
-a ``"module:attr"`` string naming what to load at run time.
+An import is an import statement, a string handed to ``importlib.import_module``, ``__import__``, ``pytest.importorskip`` or
+``importlib.resources.files``, or a ``"module:attr"`` string naming what to load at run time.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-#: The backends' tree: C-Flock, the backend in development.
-BACKENDS = ROOT / "verity" / "ml" / "flock"
+#: The tree that needs no integration: ``verity``, C-Flock and their tests.
+SCANNED = ROOT / "verity"
 #: The integrations' import packages, from each distribution's wheel configuration (a virtual member, such as the Slack
 #: events service, has none to import).
 INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
@@ -26,43 +27,20 @@ INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrati
                          .get("targets", {}).get("wheel", {}).get("packages", []))
 SKIP_DIRS = {"target", "node_modules", "__pycache__"}
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
-IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
+IMPORT_CALLS = {"import_module", "__import__", "importorskip", "files"}
 
-#: Every backend file that imports an integration, with each integration module it imports.  Repoint a backend at core (or
-#: drop the use) and delete its line; a new line needs a reason the dependency cannot go through core.
+#: Every file under ``verity/`` that imports an integration, with each integration module it imports.  Repoint it at
+#: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity.ml.definitions.encoding"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity.ml.definitions.word"),
-    ("verity/ml/flock/python/verity_flock/class_statement.py", "verity.ml.definitions.encoding"),
-    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity.ml.definitions.numerics"),
-    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/python/verity_flock/ir_sampling.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/python/verity_flock/partition_units.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/python/verity_flock/tail.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/python/verity_flock/tail_pieces.py", "verity.ml.definitions.registry"),
-    # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
-    ("verity/ml/flock/python/verity_flock/templates/silu_mul_v2.py", "verity.ml.definitions.registry.boolean_silu"),
-    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity.ml.definitions.registry.topp_keep_builder"),
-    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity.ml.definitions.registry.topp_word_gates"),
-    ("verity/ml/flock/tests/test_boolean_export.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_boolean_export.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_circuit.py", "verity.ml.definitions.numerics"),
-    ("verity/ml/flock/tests/test_circuit.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_class_statement.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_derive.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_flock_rows.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry.sampling"),
-    ("verity/ml/flock/tests/test_ir_sampling.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_ir_sampling.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_lean_rope.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_lean_typed_statement.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_partition_units.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_stage_typed.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_topp_word.py", "verity.ml.definitions.registry"),
-    ("verity/ml/flock/tests/test_typed_statement.py", "verity.ml.definitions.registry.prims"),
+    # the memory-map test holds the Commit's builder to the request Programs the integration's predictor builds
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.predict.build"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.predict.phi"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.store.interface"),
+    ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.store.registry"),
+    # the cuBLAS route check reads the device pins the integration measures (`verity_vllm/pins/`) until it hands them in
+    ("verity/ml/definitions/registry/bf16_gemm_check.py", "verity_vllm"),
 }
 
 
@@ -84,7 +62,7 @@ def _modules(path: Path, text: str) -> set[str]:
 @functools.cache
 def _sites() -> frozenset[tuple[str, str]]:
     sites = set()
-    for path in sorted(BACKENDS.rglob("*.py")):
+    for path in sorted(SCANNED.rglob("*.py")):
         rel = path.relative_to(ROOT)
         if any(part.startswith(".") or part in SKIP_DIRS for part in rel.parts):
             continue
@@ -99,18 +77,18 @@ def test_the_integrations_are_found():
 
 
 def test_the_scan_sees_the_backends():
-    """The scan walks C-Flock's tree: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
-    as sites of files that don't exist yet."""
-    for name in ("verity_flock",):
+    """The scan walks C-Flock's tree and the Definitions': one that moved out of ``verity/`` would leave its imports unchecked,
+    and `KNOWN` would pass as sites of files that don't exist yet."""
+    for name in ("verity_flock", "verity.ml.definitions"):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
-        assert origin.is_relative_to(BACKENDS), f"{name} is at {origin}, outside the scanned {BACKENDS.relative_to(ROOT)}/"
+        assert origin.is_relative_to(SCANNED), f"{name} is at {origin}, outside the scanned {SCANNED.relative_to(ROOT)}/"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
 
 
 def test_no_backend_imports_an_integration_outside_known():
     new = sorted(_sites() - KNOWN)
-    assert not new, ("a backend imports an integration (DESIGN.md: backends are testable without one); import from core instead, "
-                     "or, if the dependency cannot go through core yet, add to KNOWN in tests/test_backend_boundaries.py:\n"
+    assert not new, ("a file under verity/ imports an integration (DESIGN.md: backends are testable without one); import from verity "
+                     "instead, or, if the dependency cannot go through verity yet, add to KNOWN in tests/test_backend_boundaries.py:\n"
                      + "\n".join(f'    ("{f}", "{m}"),' for f, m in new))
 
 

@@ -88,7 +88,8 @@ DEPENDENCIES = {"numpy"}
 #: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), the differential test of the Lean against
 #: its Python (``verity_difftest``, which their tests import, on Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is
 #: run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
-#: which holds it to the wire's Python reference through ``verity_difftest``.
+#: which holds it to the wire's Python reference through ``verity_difftest``.  ``tests/test_backend_boundaries.py`` holds them,
+#: as every file under ``verity/``, to importing no integration.
 SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
