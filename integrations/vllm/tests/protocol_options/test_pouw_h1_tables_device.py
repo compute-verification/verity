@@ -17,6 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw.audit import HM96, rows_domain  # noqa: E402
+from verity.core.protocols.pouw.protocol import tagged  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
 from verity.ml.commitments.merkle import Commitment, verify_opening  # noqa: E402
 from verity_vllm.engine import int8_ops  # noqa: E402
@@ -42,7 +43,7 @@ def _rows(n, k, seed):
 def _reference(n, k, owner, name):
     """The table's rows, `hiding_rows`' tree of them under H1's binding and nonce for call `owner`, and the twin's input."""
     codes, words = _rows(n, k, n * 7 + k)
-    binding = PH.tagged(RQ.TABLE_TAGS[name], hashlib.sha512(b"salt").digest(), owner)
+    binding = tagged(RQ.TABLE_TAGS[name], hashlib.sha512(b"salt").digest(), owner)
     nonce = RQ.TABLES_NONCE + 3 * owner + RQ.TABLE_NONCES[name]
     leaves = [codes[i].tobytes() + words[i].astype("<u4").tobytes() for i in range(n)]
     tree = RQ.hiding_rows(binding, owner, leaves, KEY, nonce)

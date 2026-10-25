@@ -68,7 +68,6 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
-import math
 import os
 from collections import Counter, deque
 from dataclasses import dataclass
@@ -78,12 +77,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96, commit_rows, rows_domain, weight_binding
+from verity.core.protocols.pouw.audit import commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
-from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -291,14 +289,6 @@ def numpy_of(t: Any) -> np.ndarray:
     return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
-def _words(t: Any, m: int, dtype: str) -> np.ndarray:
-    """`t`'s m rows as little-endian `dtype` words, a bf16 tensor by its bits."""
-    if hasattr(t, "detach") and str(t.dtype) == "torch.bfloat16":
-        import torch
-        t = t.detach().contiguous().view(torch.int16)
-    return np.ascontiguousarray(numpy_of(t).reshape(m, -1), dtype=dtype)
-
-
 class H1Run:
     """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
     public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
@@ -396,15 +386,8 @@ class H1Run:
     @property
     def tables(self) -> dict[int, dict[str, str | None]]:
         """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
-        self._settle(wait=True)
+        TD.settle(self, wait=True)
         return self._roots
-
-    def _settle(self, wait: bool) -> None:
-        """Record the roots of the calls whose tables the GPU has hashed, in call order: all of them with ``wait``, else
-        the leading ones already done."""
-        while self._hashing and (wait or self._hashing[0][1].ready()):
-            index, pending = self._hashing.popleft()
-            self._roots[index].update(zip(("a", "z"), (r.hex() for r in pending.roots())))
 
     @property
     def salt(self) -> bytes:
@@ -443,66 +426,9 @@ class H1Run:
         self.commits["requests_root"], self.commits["request_table"] = requests.hex(), table.hex()
         return requests
 
-    def _binding(self, call: Call, name: str) -> tuple[bytes, int]:
-        """The call's `name` table's domain binding and salt nonce."""
-        return tagged(TABLE_TAGS[name], self.salt, call.index), RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]
-
-    def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
-        binding, nonce = self._binding(call, name)
-        return RQ.hiding_rows(binding, call.index, leaves, self._key, nonce).commitment.root.hex()
-
-    def _kernel_tables(self, call: Call, a: Any, s_a: Any, zy: Any, where: str) -> None:
-        """`_commit_tables`' roots by the row-table kernels (`pouw_h1_tables_device`), on ``a``'s device's side streams
-        (``"gpu"``, recorded once hashed: `tables` waits for them) or the CPU (``"host"``): the A table's T rows of K codes and
-        f32 scale, the z table's records split as the kernels take them."""
-        import torch
-
-        m, t, k = call.m, self.rows, call.k
-        dev = a.device if where == "gpu" else torch.device("cpu")
-        codes, scales = torch.zeros((t, k), dtype=torch.int8, device=dev), torch.zeros(t, dtype=torch.float32, device=dev)
-        if m:
-            codes[:m], scales[:m] = torch.as_tensor(a).reshape(m, k), torch.as_tensor(s_a).reshape(m)
-        tables = [("a", codes, scales)]
-        if not m:
-            tables.append(("z", torch.zeros((call.units, ZR.ZY_BYTES - 4), dtype=torch.uint8, device=dev),
-                           torch.zeros(call.units, dtype=torch.int32, device=dev)))
-        elif zy is not None:
-            tables.append(("z", *TD.record_rows(torch.as_tensor(zy).to(dev))))
-        laid = []
-        for name, c, w in tables:
-            binding, nonce = self._binding(call, name)
-            laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, nonce, c, w))
-        self._roots[call.index] = {"a": None, "z": None}
-        if where == "gpu":
-            self._hashing.append((call.index, TD.device_hash(laid, self._key)))
-            self._settle(wait=False)
-        else:
-            self._roots[call.index].update(zip(("a", "z"), (r.hex() for r in TD.host_roots(laid, self._key))))
-
     def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
-        """The call's A table (`table_leaves`) and its z table, leaf u unit u's z/y record (`pouw_h1_records`; an empty call's
-        all zero), none for a served call whose arm handed over no records. Hashed where `pouw_h1_tables_device.path` says
-        (by default on the GPU when the call's tensors, ``zy`` its records, are CUDA tensors), each root `hiding_rows`'."""
-        m, t = call.m, self.rows
-        given = [x for x in (a, s_a, zy) if x is not None]
-        kernels = (a is not None and call.k % 2 == 0 and call.units > 0 and (records is None or zy is not None)
-                   and (not m or math.prod(s_a.shape) == m))
-        where = TD.path(*given) if kernels else "python"
-        if where != "python":
-            self._kernel_tables(call, a, s_a, zy if m and records is not None else None, where)
-            if self.prover is not None and m:
-                PV.keep_call(self.prover, call.index, _words(a, m, "i1"), _words(s_a, m, "<f4"), records)
-            return
-        if a is not None and m:
-            av, sv = _words(a, m, "i1"), _words(s_a, m, "<f4")
-        else:
-            av = sv = np.zeros((0, 1), "i1")
-        out: dict[str, str | None] = {"a": self._table(call, "a", table_leaves(t, call.k + 4, m, av, sv))}
-        leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
-        out["z"] = None if leaves is None else self._table(call, "z", leaves)
-        self._roots[call.index] = out
-        if self.prover is not None and m:
-            PV.keep_call(self.prover, call.index, av, sv, records)
+        """The call's A and z tables (`pouw_h1_tables_device.commit_tables`)."""
+        TD.commit_tables(self, call, a, s_a, records, zy)
 
     def call(self, index: int) -> Call:
         """Call `index`; KeyError when the window has none."""
@@ -692,7 +618,7 @@ class H1Run:
             return None
         call, z, held = made
         v = CG.verdict(trace, y, z)
-        if v["credit"] and (why := ZR.refusal(held, call, _words(y, call.m, "<i2"))):
+        if v["credit"] and (why := ZR.refusal(held, call, TD.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v

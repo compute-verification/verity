@@ -14,21 +14,31 @@ stream has enqueued, nothing waiting on the host, and hands back a `Pending` who
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
 machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
+
+`commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
+says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
 """
 from __future__ import annotations
 
 import ctypes
+import math
 import warnings
 from collections.abc import Sequence
 from functools import cache
 from typing import Any
 
 import numpy as np
+from verity.core.protocols.pouw.audit import HM96, rows_domain
+from verity.core.protocols.pouw.protocol import tagged
 
 from verity_vllm.commit import row_tables_device as RTD
+from verity_vllm.protocol_options import pouw_h1_prover as PV
+from verity_vllm.protocol_options import pouw_h1_records as ZR
+from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options.pouw_h1_requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 
-__all__ = ["MODE", "Pending", "STREAMS", "available", "device_hash", "device_lib", "device_roots", "host_roots", "layout", "path",
-           "record_rows"]
+__all__ = ["MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
+           "host_roots", "layout", "path", "record_rows", "row_words", "settle"]
 
 #: where `pouw_h1.H1Run` hashes a call's tables: ``"auto"`` (the GPU when the call's tensors are CUDA tensors and the kernels
 #: build for their device, else ``hiding_rows``), ``"gpu"``, ``"host"`` (the kernels' functions on the CPU, the twin) or
@@ -252,3 +262,86 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> Pe
 def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
     """`device_hash`'s roots, waited for."""
     return device_hash(tables, key).roots()
+
+
+def row_words(t: Any, m: int, dtype: str) -> np.ndarray:
+    """`t`'s m rows as little-endian `dtype` words, a bf16 tensor by its bits."""
+    if hasattr(t, "detach") and str(t.dtype) == "torch.bfloat16":
+        import torch
+        t = t.detach().contiguous().view(torch.int16)
+    t = t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
+    return np.ascontiguousarray(t.reshape(m, -1), dtype=dtype)
+
+
+def settle(run: Any, wait: bool) -> None:
+    """Record the roots of ``run``'s calls whose tables the GPU has hashed, in call order: all of them with ``wait``, else
+    the leading ones already done."""
+    while run._hashing and (wait or run._hashing[0][1].ready()):
+        index, pending = run._hashing.popleft()
+        run._roots[index].update(zip(("a", "z"), (r.hex() for r in pending.roots())))
+
+
+def _binding(run: Any, call: Any, name: str) -> tuple[bytes, int]:
+    """The call's `name` table's domain binding and salt nonce."""
+    return tagged(TABLE_TAGS[name], run.salt, call.index), RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]
+
+
+def _table(run: Any, call: Any, name: str, leaves: list[bytes]) -> str:
+    binding, nonce = _binding(run, call, name)
+    return RQ.hiding_rows(binding, call.index, leaves, run._key, nonce).commitment.root.hex()
+
+
+def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -> None:
+    """`commit_tables`' roots by the row-table kernels, on ``a``'s device's side streams (``"gpu"``, recorded once hashed:
+    ``run.tables`` waits for them) or the CPU (``"host"``): the A table's T rows of K codes and f32 scale, the z table's
+    records split as the kernels take them."""
+    import torch
+
+    m, t, k = call.m, run.rows, call.k
+    dev = a.device if where == "gpu" else torch.device("cpu")
+    codes, scales = torch.zeros((t, k), dtype=torch.int8, device=dev), torch.zeros(t, dtype=torch.float32, device=dev)
+    if m:
+        codes[:m], scales[:m] = torch.as_tensor(a).reshape(m, k), torch.as_tensor(s_a).reshape(m)
+    tables = [("a", codes, scales)]
+    if not m:
+        tables.append(("z", torch.zeros((call.units, ZR.ZY_BYTES - 4), dtype=torch.uint8, device=dev),
+                       torch.zeros(call.units, dtype=torch.int32, device=dev)))
+    elif zy is not None:
+        tables.append(("z", *record_rows(torch.as_tensor(zy).to(dev))))
+    laid = []
+    for name, c, w in tables:
+        binding, nonce = _binding(run, call, name)
+        laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, nonce, c, w))
+    run._roots[call.index] = {"a": None, "z": None}
+    if where == "gpu":
+        run._hashing.append((call.index, device_hash(laid, run._key)))
+        settle(run, wait=False)
+    else:
+        run._roots[call.index].update(zip(("a", "z"), (r.hex() for r in host_roots(laid, run._key))))
+
+
+def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
+    """``run``'s (a `pouw_h1.H1Run`'s) commit of the call's A table (`table_leaves`) and its z table, leaf u unit u's z/y
+    record (`pouw_h1_records`; an empty call's all zero), none for a served call whose arm handed over no records. Hashed
+    where `path` says (by default on the GPU when the call's tensors, ``zy`` its records, are CUDA tensors), each root
+    `hiding_rows`'."""
+    m, t = call.m, run.rows
+    given = [x for x in (a, s_a, zy) if x is not None]
+    kernels = (a is not None and call.k % 2 == 0 and call.units > 0 and (records is None or zy is not None)
+               and (not m or math.prod(s_a.shape) == m))
+    where = path(*given) if kernels else "python"
+    if where != "python":
+        _kernel_tables(run, call, a, s_a, zy if m and records is not None else None, where)
+        if run.prover is not None and m:
+            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), records)
+        return
+    if a is not None and m:
+        av, sv = row_words(a, m, "i1"), row_words(s_a, m, "<f4")
+    else:
+        av = sv = np.zeros((0, 1), "i1")
+    out: dict[str, str | None] = {"a": _table(run, call, "a", table_leaves(t, call.k + 4, m, av, sv))}
+    leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
+    out["z"] = None if leaves is None else _table(run, call, "z", leaves)
+    run._roots[call.index] = out
+    if run.prover is not None and m:
+        PV.keep_call(run.prover, call.index, av, sv, records)
