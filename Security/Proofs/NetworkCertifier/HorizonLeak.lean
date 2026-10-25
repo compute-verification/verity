@@ -38,9 +38,9 @@ theorem prod_min_add_le : ∀ {m : ℕ} (a e : Fin m → ℝ), (∀ i, 0 ≤ a i
     have ih : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ ∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ :=
       prod_min_add_le _ _ (fun i => ha0 _) (fun i => ha1 _) (fun i => he _)
     have hm0 : ∀ i : Fin m, 0 ≤ min 1 (a i.succ + e i.succ) := fun i => le_min zero_le_one (add_nonneg (ha0 _) (he _))
-    have hX0 := Finset.prod_nonneg fun i (_ : i ∈ Finset.univ) => hm0 i
+    have hX0 : 0 ≤ ∏ i : Fin m, min 1 (a i.succ + e i.succ) := Finset.prod_nonneg fun i _ => hm0 i
     have hX1 : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ 1 :=
-      Finset.prod_le_one (fun i _ => hm0 i) fun i _ => min_le_left _ _
+      Finset.prod_le_one₀ (fun i _ => hm0 i) fun i _ => min_le_left _ _
     have hE0 : 0 ≤ ∑ i : Fin m, e i.succ := Finset.sum_nonneg fun i _ => he _
     rw [Fin.prod_univ_succ, Fin.prod_univ_succ, Fin.sum_univ_succ]
     calc min 1 (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ)
@@ -74,17 +74,25 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
     exact ENNReal.ofReal_le_ofReal (le_min (Pr_le_one _) (hesc t ω))
   have key := FlockSoundness.Audit.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin m => Ω)
     (fun t ω => A t ω (ω t)) (fun t ω => ENNReal.ofReal (min 1 (r ^ f t ω + e t)))
-    (fun t ω ω' h => by rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
+    (fun t ω ω' h => by
+      show A t ω (ω t) = A t ω' (ω' t)
+      rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
     (fun t ω ω' h => by simp only [hf t ω ω' h]) hstep (ENNReal.ofReal (r ^ F + ∑ i, e i))
   have he0 : 0 ≤ r ^ F + ∑ i, e i := add_nonneg (pow_nonneg hr0 F) (Finset.sum_nonneg fun i _ => he i)
+  have hprod : ∀ ω : Fin m → Ω, F ≤ ∑ i, f i ω →
+      ∏ t, ENNReal.ofReal (min 1 (r ^ f t ω + e t)) ≤ ENNReal.ofReal (r ^ F + ∑ i, e i) := fun ω hF => by
+    rw [← ENNReal.ofReal_prod_of_nonneg fun i _ => le_min zero_le_one (add_nonneg (pow_nonneg hr0 _) (he i))]
+    refine ENNReal.ofReal_le_ofReal ((prod_min_add_le (fun i => r ^ f i ω) e (fun i => pow_nonneg hr0 _)
+      (fun i => pow_le_one₀ hr0 hr1) he).trans ?_)
+    rw [Finset.prod_pow_eq_pow_sum]
+    exact add_le_add_right (pow_le_pow_of_le_one hr0 hr1 hF) _
+  have hmono : prCoin (fun ω : Fin m → Ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤
+      ENNReal.ofReal (r ^ F + ∑ i, e i) :=
+    (prCoin_mono (q := fun ω : Fin m → Ω => (∀ t, A t ω (ω t)) ∧
+      ∏ t, ENNReal.ofReal (min 1 (r ^ f t ω + e t)) ≤ ENNReal.ofReal (r ^ F + ∑ i, e i))
+      fun ω hω => ⟨hω.1, hprod ω hω.2⟩).trans key
   rw [Claims.Sampling.Pr_eq_toReal_prCoin]
-  refine (ENNReal.toReal_mono ENNReal.ofReal_ne_top ((prCoin_mono fun ω hω => ⟨hω.1, ?_⟩).trans key)).trans_eq
-    (ENNReal.toReal_ofReal he0)
-  rw [← ENNReal.ofReal_prod_of_nonneg fun i _ => le_min zero_le_one (add_nonneg (pow_nonneg hr0 _) (he i))]
-  refine ENNReal.ofReal_le_ofReal ((prod_min_add_le (fun i => r ^ f i ω) e (fun i => pow_nonneg hr0 _)
-    (fun i => pow_le_one₀ hr0 hr1) he).trans ?_)
-  rw [Finset.prod_pow_eq_pow_sum]
-  exact add_le_add_right (pow_le_pow_of_le_one hr0 hr1 hω.2) _
+  exact (ENNReal.toReal_mono ENNReal.ofReal_ne_top hmono).trans_eq (ENNReal.toReal_ofReal he0)
 
 /-! ### The families of faulty sets -/
 
