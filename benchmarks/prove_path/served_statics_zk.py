@@ -30,7 +30,8 @@ the cost.
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
   proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
-  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's.
+  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
+  at G = 1 in the slice's class, 8 bytes) is found whole (`leak_scan.find_whole`).
 """
 from __future__ import annotations
 
@@ -319,6 +320,19 @@ def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, set(blobs)
 
 
+def received(a8, vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], circuit: bytes) -> dict:
+    """What the verifier received (`vdir`) scanned for `blobs`, by `leak_scan`'s rule: each row of at least a piece cut
+    whole, less the pieces the staged `circuit` holds (`leak_scan.public_pieces`, found by `a8.received`), and each
+    shorter row found whole (`leak_scan.find_whole`, as ``whole_rows``); the `control` (the instance file) is to hold
+    every one in `held`."""
+    short = {k: x for k, x in blobs.items() if len(x) < a8.PIECE}
+    pieces, kept, public = LS.public_pieces(a8, {k: x for k, x in blobs.items() if k not in short}, held, circuit)
+    rec = {**a8.received(vdir, control, pieces, kept), "public_pieces": len(public)}
+    rec.update(LS.scan(rec, pieces, vdir))
+    rec["whole_rows"] = LS.find_whole(rec, short, vdir, control, held & set(short))
+    return rec
+
+
 def expected(name: str, registered: bool, res: dict, units: list) -> bool:
     """A registered statement is accepted, each unit's verdict its kind's; an unregistered one is refused by Lean's
     registered reads."""
@@ -378,21 +392,22 @@ def prove(a) -> int:
         log(f"{name}: staged {m['n']} units, {m['ands']} ANDs a unit, k_log {meta['k_log']}, m {meta['k_log'] + m['nbl']}, "
             f"{'registered' if registered else 'fresh'} srb salts, {m['stage_s']} s")
         res = audit(M, N2, av, sg, m, units, d, out / name, a.port + 20 * k)
-        blobs, held, public = LS.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
-        res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
-                           "public_pieces": len(public)}
-        res["received"].update(LS.scan(res["received"], blobs, out / name / "verifier"))
+        blobs, held = blobs_of(units, m["salts"])
+        res["received"] = rec = received(M.a8, out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held,
+                                         (m["dir"] / "circuit.txt").read_bytes())
+        wr = rec["whole_rows"]
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": meta["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"], "registered": registered}
-        res["as_expected"] = (expected(name, registered, res, units) and not res["received"]["leaked"]
-                              and res["received"]["control"]["holds_all"])
+        res["as_expected"] = (expected(name, registered, res, units) and not rec["leaked"] and rec["control"]["holds_all"]
+                              and not wr["leaked"] and wr["control"]["holds_all"])
         ok &= res["as_expected"]
         summary[name] = res
         log(f"{name}: proofs {res.get('verdicts')}, why {res.get('why')}, audit {res.get('audit')}, verdicts "
             f"{[(r['kind'], r['block'], r['verdict_word'], r['srb_read'], r['verdict']) for r in res.get('units', [])][:12]}..., "
             f"prove {res.get('timing', {}).get('timing', {}).get('prove_total_s')} s, Lean {res.get('lean_verify_s')} s, "
-            f"proof {sum(res.get('proof_bytes') or [0])} B, witness pieces found {res['received']['leaked'] or 'none'} "
-            f"(of {len(blobs)}), structured {res['received']['structured'] or 'none'}; "
+            f"proof {sum(res.get('proof_bytes') or [0])} B, witness pieces found {rec['leaked'] or 'none'} "
+            f"(of {len(blobs)} rows), structured {rec['structured'] or 'none'}; rows shorter than a piece found whole "
+            f"{wr['leaked'] or 'none'} (of {wr['rows']}), structured {wr['structured'] or 'none'}; "
             f"{'as expected' if res['as_expected'] else 'UNEXPECTED'}")
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     summary["ok"] = ok
