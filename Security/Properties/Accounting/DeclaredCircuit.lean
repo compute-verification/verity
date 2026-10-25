@@ -6,12 +6,13 @@ import Properties.RemoteAudit.Schedule
 
 `Accounting.Guarantees.DeclaredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` with that premise
-replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`) accepts at the steering cap the
-session committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`), under the named gap
-between the check and the model's layout, `Properties.RemoteAudit.ScheduleLayoutGap`. It is stated here because it reads
-the verifier's code, which the spec doesn't; its theorem, `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`
-in `Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s theorem with `SteeredLayout` from
-`Properties.RemoteAudit.steered_of_checked`.
+replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`) at the steering cap the session
+committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`) accepts each pass of the
+session, under the named gap between the check and the model's layout, `Properties.RemoteAudit.ScheduleLayoutGap`. It is
+stated here because it reads the verifier's code, which the spec doesn't; its theorem,
+`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
+`Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
+layout steered there by `Properties.RemoteAudit.steered_of_checked`.
 -/
 
 namespace Properties.DeclaredCircuit
@@ -23,26 +24,27 @@ open scoped ENNReal
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
 
 `G` (`Accounting.Guarantees.DeclaredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
-the bound as it states them) with its premise `SteeredLayout layout steer` replaced by the schedule check's acceptance
-at the cap `cap` and the named gap `ScheduleLayoutGap`. At each prefix `c` of the session's coins before a pass and each
-codec and append coins `y`, the check at `cap` over `blocks` registered blocks accepts some schedule for a session whose
-appends are `appended c y` and whose pass `idx c` sent the runs `sent c y`, and the pass's layout is the verifier's
-positions `pos c` of those appends and runs (`ScheduleLayoutGap`). `cap` is the one cap the session committed before its
-first coin, over which the check refuses a schedule (#4021), so the layout reads `y` only through the accepted
-schedule's `cap + 1` padded bits (`Properties.RemoteAudit.steered_of_checked`).
+the bound as it states them) with its premise `SteeredLayout layout steer` replaced by the named gap `ScheduleLayoutGap`
+and the schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix
+`c` of the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
+blocks accepts some schedule for a session whose appends are `appended c y` and whose pass `idx c` sent the runs
+`sent c y`. The gap: the pass's layout is the verifier's positions `pos c` of those appends and runs. `cap` is the one
+cap the session committed before its first coin, over which the check refuses a schedule (#4021), so on the coins the
+check accepts the layout reads `y` only through the accepted schedule's `cap + 1` padded bits
+(`Properties.RemoteAudit.steered_of_checked`).
+
+On a session the check refuses at some pass the ledger credits nothing after the seed, so no shortfall against its
+credit is counted there: the event, an accepted audit whose reads fall short of its credit, asks that the check accept
+every pass of the session. The bound is `G`'s over the accepted sessions; a prover may run any layout on the coins the
+check refuses.
 
 The pass devices are told `steer c y`, any `a` bits, as in `G`. The layout's summary is the schedule's, which they are
 told only through `steer`, so the union in `G`'s query term runs over both summaries: `2^(a + (cap + 1))` in place of
 `G`'s `2^a`. At `a = 0`, devices told nothing past the session's coins before their pass, it is `G`'s bound at
 `a = cap + 1`; devices told the schedule are told its bits in `steer`, at `a = cap + 1`, and pay them twice.
 
-The acceptance is taken at every prefix and coins, as `steered_of_checked` takes it: a prover whose schedule the check
-refuses at some coin is outside this statement. The ledger credits nothing after the seed of a session the check
-refuses, but `G`'s proof prices each pass on its layout at every coin, so restricting it to the accepted coins is a
-change to that proof (its pass bound, `RateSketch.pr_badK_pass_le`), not to this corollary.
-
-Frozen (no-function, hash): `G`'s game, its premises but `SteeredLayout`, and `RemoteAudit.Schedule.check`'s acceptance
-at the committed cap at every coin, under `ScheduleLayoutGap`. -/
+Frozen (no-function, hash): `G`'s game, its premises but `SteeredLayout`, `ScheduleLayoutGap` and
+`RemoteAudit.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
 def ScheduledRequirement : Prop :=
   ∀ (n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
@@ -71,8 +73,6 @@ def ScheduledRequirement : Prop :=
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →
     Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout →
-    (∀ c y, ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
-      (passes[idx c]?).map Prod.snd = some (sent c y)) →
     RateSketch.LifetimeCapped layout joined L →
     Gates.Restricted B Wc → Gates.Property caps Aud Wc → (∀ v < Aud.windows, Aud.reads v ≤ P * N * 4096) →
     (∀ x, (p x).Deadlines (bind x) τ ∧ (∀ w j w' j', w < w' ∨ w = w' ∧ j < j' → bind x w j < bind x w' j') ∧
@@ -102,7 +102,11 @@ def ScheduledRequirement : Prop :=
     let store := RateSketch.programmed (RateSketch.steeredStore enc choose layout)
     let win := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) =>
       A.win w x.2 fun j => steer (RateSketch.SketchPrefix.of x.2 w j) x.1
+    let accepted := fun (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) =>
+      ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
+        (passes[idx c]?).map Prod.snd = some (sent c y)
     pr (fun x : RateSketch.StackedCoins Ω Ca T n P N ρ G =>
+      (∀ w j, accepted (RateSketch.SketchPrefix.of x.2 w j) x.1) ∧
       (∀ w t, (x.2 w).2.2 t ∈ (win x w).correctOn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
         ((((∑ w, (win x w).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w) : ℕ)) : ℝ) <
             ((∑ w, ∑ j, credit x (bind x w j) : ℕ) : ℝ) - (0.0015 + γ) * (n * P * N * 32768) ∨
