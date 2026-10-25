@@ -45,8 +45,18 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
   `IntegrityPeriod` window a template (`subset:k`, its cap and K0), or the block as one window under the `work:1` law.
   Its tests are this directory's suite.
+- `h200.py`: the demo's plan on one H200 (PRF-170): compute-accounting's frozen MQA shape (52 layers, width 16,384, 256
+  query heads of 64 and one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on circuits' partition,
+  one lockstep block of 31 decode steps. Each template is one `IntegrityPeriod` window, one `--zk` session drawing
+  `subset:k` over the tables `_cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
+  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
+  units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
+  tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
+  window length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
+  guarantee).
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
+uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
 ```
