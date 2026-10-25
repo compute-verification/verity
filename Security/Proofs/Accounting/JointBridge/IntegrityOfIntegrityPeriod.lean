@@ -1,4 +1,4 @@
-import Proofs.Accounting.JointBridge.Statement.IntegrityOfIntegrityPeriod
+import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Pouw.Prob
 
