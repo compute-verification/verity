@@ -27,6 +27,7 @@
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
   "Properties.Pous.Period",
+  "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins",

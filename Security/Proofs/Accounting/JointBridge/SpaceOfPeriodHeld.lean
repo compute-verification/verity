@@ -1,4 +1,4 @@
-import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
+import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
 import Proofs.Pous.Period
 import Proofs.Pouw.Prob
 
@@ -18,22 +18,9 @@ open scoped ENNReal
 
 set_option exponentiation.threshold 20000
 
-/-- **PoUS's per-period guarantee at a period that realizes it.** Under `PeriodHeld`'s premises (`AcceptsDecodes`,
-`PublishesRoot`, `CoinCommitHides`, `P2RingAuditSecure`) and its `RingDevice` on the joint run the period realizes,
-with the certificate within the ring game's state bound, PoUS's audit of the period has `PeriodRun.Sound` at error
-`δ + ε_max` (`1% + 2^-128`). -/
-theorem SpaceOfPeriodHeld (hd : AcceptsDecodes) (hp : PublishesRoot)
-    (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131))
-    (D Q L : ℕ) (hP : Pous.P2.Assumptions.P2RingAuditSecure D Q L)
-    {ι α : Type} [Fintype ι] [Fintype α] {d : Device ι} {C : Verity.Circuit} {I : Type} [DecidableEq I]
-    {Ω : I → Type} [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) {ΩW ΩQ : Type}
-    (run : Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : Audits ΩW ΩQ) (round : ℕ) (c : Certificates) (p : Price)
-    (hR : RealizesSpaceOfPeriodHeld r run (fun ω => P.Accepts ω ∧ ¬ P.Break ω))
-    (hdev : RingDevice run P D Q L round)
-    (hS : c.S * (run.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S) :
-    r.Sound c p .pous ((Params.δ : ℝ) + Params.εMax.toReal) := by
-  intro ξ
+/-- **PoUS's per-period guarantee at a period that realizes it** (`Accounting.Bridge.SpaceOfPeriodHeld`). -/
+theorem SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld := by
+  intro hd hp hH D Q L hP ι α _ _ d C I _ Ω _ r ΩW ΩQ run P round c p hR hdev hS ξ
   have h := Pous.Period.SecurityProofs.periodHeld hd hp hH D Q L hP ι α ΩW ΩQ d run P round c.S hdev hS
     (hR.other ξ)
   refine le_trans ?_ ((Pouw.pr_equiv hR.coins _).trans_le h)
