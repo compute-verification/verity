@@ -21,6 +21,7 @@ from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_period as W
+from verity.core.protocols.pous import wipe_store as WS
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
@@ -134,8 +135,11 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
                     "vy-nebius-cpu-4", tmp_path)
     wired = WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"wipe": {
-        "command": ["vy-verifier-gate", "wipe"], "address": "127.0.0.1:7962"}}}, "vy-nebius-cpu-4", tmp_path)
+        "command": ["vy-verifier-gate", "wipe"], "address": "127.0.0.1:7962"}}}, "vy-nebius-cpu-4", tmp_path,
+        ("--streamer", "build"))
     assert wired == WP.Party("vy-auditor-1", ("vy-verifier-gate", "wipe"), ("127.0.0.1", 7962))
+    native = WP.Party.of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
+    assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
     assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ")
 
 
@@ -149,7 +153,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     device = tmp_path / "device"
     device.mkdir()
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d: side))
+    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -159,6 +163,29 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert sorted(case) == ["commitment", "evidence", "params"]
     record = json.loads((out / "wipe.json").read_text())
     assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
+    assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
+    assert record["wipe"] == W.CONFIG | {"segments": W.SEGMENTS, "tier": W.TIER}
+
+
+def test_the_config_and_the_device_fit() -> None:
+    assert W.config({}) == W.CONFIG and W.config({"wipe": {"store": "cuda"}})["store"] == "cuda"
+    with pytest.raises(ValueError, match="unknown keys"):
+        W.config({"wipe": {"segment": 4}})
+    with pytest.raises(ValueError, match="store is python, host or cuda"):
+        W.config({"wipe": {"store": "tpu"}})
+
+    class Free(WS.Cuda):
+        def __init__(self, free: int) -> None:
+            self.free_bytes = free
+
+        def mem_info(self) -> tuple[int, int]:
+            return self.free_bytes, 0
+
+    c = W.config({"wipe": {"store": "cuda", "reserve_bytes": 1 << 20}})
+    assert W.segments_of(c, Free(5 * W.LEAST_FILL_BYTES + 100)) == 4
+    assert W.segments_of(c | {"segments": 9}, Free(0)) == 9 and W.segments_of(W.CONFIG, WS.HostMemory()) == W.SEGMENTS
+    with pytest.raises(RuntimeError, match="less than one segment"):
+        W.segments_of(c, Free(W.LEAST_FILL_BYTES))
 
 
 @pytest.mark.parametrize("labels", [16, 1000, 1 << 19, 3 << 20, 1 << 30, 1_610_612_736, 1 << 50])

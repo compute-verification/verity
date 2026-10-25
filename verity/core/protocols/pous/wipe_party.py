@@ -11,11 +11,13 @@ certifier's count over the session; `UNCOUNTED`, which bounds nothing, when it h
 sends. A prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
 "host", "public_key", "reads", "signed"}`, `signed` null when unsigned.
 
-`python -m verity.core.protocols.pous.wipe_party --device DIR [--listen HOST:PORT] [--egress-bits N]` is the
-challenger's side (`main`): it reads the request `{"k", "labels", "limit_ns", "node", "tiers"}` as one JSON line on
-stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report. `session(party, request,
-prover)` is the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by
-default the port it printed, on this machine) and answers from `prover` (`answer`).
+`python -m verity.core.protocols.pous.wipe_party --device DIR [--listen HOST:PORT] [--egress-bits N] [--streamer
+build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"k", "labels", "limit_ns", "node",
+"tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
+With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
+report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `session(party, request, prover)` is
+the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by default the port
+it printed, on this machine) and answers from `prover` (`answer`).
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from typing import Any, BinaryIO
 
 from . import memory_challenger as mc
 from . import streamed_wipe as sw
+from . import wipe_stream
 
 MODULE = "verity.core.protocols.pous.wipe_party"
 PREMISE = "trusted-nebius-host"
@@ -58,15 +61,21 @@ def params_of(request: Mapping[str, Any]) -> sw.WipeParams:
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
-          clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK) -> sw.Challenger:
+          clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
+          fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id drawn here, the
-    fill streamed, each batch revealed and its answers read on `clock`, the session signed by `signer` with
+    fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
+    `wipe_stream`), each batch revealed and its answers read on `clock`, the session signed by `signer` with
     `egress_bits` once it ends. A prover that closes first leaves it unsigned."""
     c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32), params_of(request),
                       signer, log=log, clock=clock)
     try:
-        for first, data in c.fill(chunk):
-            f.write(FILL + first.to_bytes(8, "big") + (len(data) // sw.LABEL_BYTES).to_bytes(4, "big") + data)
+        if fill is not None:
+            f.flush()
+            c.fill_by(fill)
+        else:
+            for first, data in c.fill(chunk):
+                f.write(FILL + first.to_bytes(8, "big") + (len(data) // sw.LABEL_BYTES).to_bytes(4, "big") + data)
         f.write(DONE)
         f.flush()
         if _read(f, 1) != ACK:
@@ -85,14 +94,18 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
 
 
 def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int:
-    """The prover's side over the connection `f`: each fill frame kept by `prover`, each batch answered from it until
-    the challenger ends the session (or, with `stop_after`, the prover leaves after that many batches); the batches
-    answered."""
+    """The prover's side over the connection `f`: each fill frame kept by `prover` (read straight into its store when
+    it has `receive_into`, as `wipe_store.StoreProver`), each batch answered from it until the challenger ends the
+    session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
     n = 0
+    into = getattr(prover, "receive_into", None)
     while (tag := _read(f, 1)) != END:
         if tag == FILL:
             first, count = int.from_bytes(_read(f, 8), "big"), int.from_bytes(_read(f, 4), "big")
-            prover.receive(first, _read(f, sw.LABEL_BYTES * count))
+            if into is not None:
+                into(first, count, f)
+            else:
+                prover.receive(first, _read(f, sw.LABEL_BYTES * count))
         elif tag == DONE:
             f.write(ACK)
             f.flush()
@@ -139,18 +152,19 @@ class Party:
     address: tuple[str, int] | None = None
 
     @classmethod
-    def local(cls, host: str, device: str | Path) -> Party:
-        """The challenger's side as a process on this machine (`host`), its key and session log in `device`."""
-        return cls(host, (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0"))
+    def local(cls, host: str, device: str | Path, extra: Sequence[str] = ()) -> Party:
+        """The challenger's side as a process on this machine (`host`), its key and session log in `device`, `extra`
+        more of `main`'s arguments (`--streamer build`)."""
+        return cls(host, (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0", *extra))
 
     @classmethod
-    def of(cls, period: Mapping[str, Any], node: str, device: str | Path) -> Party:
+    def of(cls, period: Mapping[str, Any], node: str, device: str | Path, extra: Sequence[str] = ()) -> Party:
         """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-        node, else `challenger.wipe`'s `command` and `address` (`"HOST:PORT"`), which infra writes once the host serves
-        the challenger's side."""
+        node (with `extra`), else `challenger.wipe`'s `command` and `address` (`"HOST:PORT"`), which infra writes once
+        the host serves the challenger's side."""
         host = period.get("challenger_host") or node
         if host == node:
-            return cls.local(node, device)
+            return cls.local(node, device, extra)
         entry = (period.get("challenger") or {}).get("wipe") or {}
         if not entry.get("command") or not entry.get("address"):
             raise RuntimeError(f"the challenger host {host} isn't wired for the wipe: period.json's challenger.wipe.command "
@@ -159,13 +173,16 @@ class Party:
         return cls(host, tuple(entry["command"]), (h, int(p)))
 
 
-def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
+def placement(node: str, host: str, *, verifier: str | None = None,
+              store: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-nebius-host`'s premise holds: that the memory challenger ran on a
-    machine the prover doesn't control, which is never the prover's node."""
+    machine the prover doesn't control, which is never the prover's node. `store` is the memory the prover kept the
+    fill in (`wipe_store`'s `info`), when it says."""
     held = host != node
-    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-            PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
-                      f"unmet: the memory challenger ran on the prover's node {node}")}
+    out = {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
+           PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
+                     f"unmet: the memory challenger ran on the prover's node {node}")}
+    return out if store is None else out | {"prover_store": dict(store)}
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
@@ -183,7 +200,10 @@ def session(party: Party, request: Mapping[str, Any], prover: sw.Prover, *,
     try:
         p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
         p.stdin.close()
-        port = json.loads(p.stdout.readline())["listening"]
+        line = p.stdout.readline()
+        if not line:
+            raise RuntimeError(f"the challenger's side on {party.host} exited {p.wait()} before it listened")
+        port = json.loads(line)["listening"]
         with socket.create_connection(party.address or ("127.0.0.1", port)) as s:
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             with s.makefile("rwb") as f:
@@ -204,9 +224,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     ap.add_argument("--egress-bits", type=int, default=UNCOUNTED,
                     help="the network certifier's egress count over the session, in bits (default: uncounted)")
+    ap.add_argument("--streamer", help="stream the fill natively (`wipe_stream`): a built wipe_stream, or `build` to "
+                    "compile it into --device; gated before the side listens")
+    ap.add_argument("--threads", type=int, help="the streamer's threads (default: every CPU of this host)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
     device = Path(a.device)
+    streamer, extra = None, {}
+    if a.streamer:
+        streamer = (wipe_stream.Streamer.build(device, threads=a.threads) if a.streamer == "build" else
+                    wipe_stream.Streamer(Path(a.streamer), a.threads))
+        extra["streamer"] = streamer.gate()
     signer = period.challenger(device, workers=len(os.sched_getaffinity(0)))
     if not (device / "sessions").exists():
         mc.SessionLog.create(device / "sessions")
@@ -215,10 +243,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
         conn, _ = srv.accept()
         with conn:
+            conn.setblocking(True)
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+            def native(key: bytes, n: int) -> None:
+                extra["fill"] = streamer.stream(key, n, conn.fileno())
+
             with conn.makefile("rwb") as f:
-                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=a.egress_bits)
-    print(json.dumps(report(c, signer.public_key), sort_keys=True), flush=True)
+                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=a.egress_bits,
+                          fill=None if streamer is None else native)
+    print(json.dumps(report(c, signer.public_key) | extra, sort_keys=True), flush=True)
     return 0
 
 

@@ -115,6 +115,9 @@ wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProto
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` and the foreign content it may leave,
 `⌈M/19⌉ + E` at `2^-128` with 2,152 reads, a fill of at least 32 MiB and the egress counted, and `M` (vacuous) otherwise;
 an unsigned session is undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`.
+On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
+before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
+and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

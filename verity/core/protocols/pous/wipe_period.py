@@ -19,17 +19,22 @@ least `LEAST_FILL_BYTES`, an egress count that isn't saturated) `foreign_bits` i
 `f = 1/19` and `E` the egress the network certifier counted over the session. Off it, `foreign_bits` is `M` and `eps`
 0, the vacuous statement, and the profile names each gap. `EXPERIMENTAL` says what the bound rests on.
 
-`leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe of `SEGMENTS` 32 MiB segments on
-CPU, the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by default, a process
-whose key and session log are beside the periods). No network certifier counts the session's egress yet, so the
-challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't.
+`leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
+(`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`), the memory
+challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by default, a process whose key and
+session log are beside the periods). No network certifier counts the session's egress yet, so the challenger signs
+`UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. `main` runs the leg on
+this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import secrets
+import socket
+import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -41,7 +46,7 @@ from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import memory_challenger as mc
 from . import streamed_wipe as sw
-from . import wipe_party
+from . import wipe_party, wipe_store
 from .period import serve
 from .wipe_party import UNCOUNTED
 
@@ -174,16 +179,27 @@ def keeping(foreign: int) -> Callable[[sw.WipeParams], sw.Prover]:
 
 @dataclass(frozen=True)
 class Wipe:
-    """A period's wipe: the protocol's answer and case, and how the session ran (`ended`, `reads`, the challenger's
-    `host`)."""
+    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the challenger's `host`,
+    and with the native streamer its gate and figures, `streamer` and `fill`) and the signed session, if signed."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
     report: dict[str, Any]
+    signed: sw.SignedWipe | None = None
 
     @property
     def verdict(self) -> str:
         return self.answer["verdict"]
+
+
+def timing(signed: sw.SignedWipe | None) -> dict[str, Any] | None:
+    """The signed session's timings on the memory challenger's clock: the fill, its first label sent to its last, and
+    each read's round trip, a batch's send to its answer's receipt."""
+    if signed is None:
+        return None
+    size, ns = signed.commitment.params.labels * sw.LABEL_BYTES, signed.fill_end_ns - signed.fill_start_ns
+    return {"fill": {"bytes": size, "ns": ns, "GBps": wipe_store.gbps(size, ns)},
+            "reads": wipe_store.percentiles([r.elapsed_ns for r in signed.batches])}
 
 
 def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | None = None,
@@ -219,26 +235,81 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         commitment, key = wipe_party.commitment_of(got["commitment"]), bytes.fromhex(got["public_key"])
         signed = None if got["signed"] is None else wipe_party.signed_of(got["signed"])
         report = {"ended": got["ended"], "host": got["host"], "reads": got["reads"]}
+        report |= {k: got[k] for k in ("fill", "streamer") if k in got}
     trusted = (key,) if trusted is None else tuple(trusted)
     return Wipe(answer(server, commitment.session, trusted, commitment, signed, schemes, protocol),
-                case(server, commitment.session, trusted, commitment, signed), report)
+                case(server, commitment.session, trusted, commitment, signed), report, signed)
+
+
+CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
+          "limit_ns": LIMIT_NS, "streamer": "python", "threads": None}
+"""`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
+through `wipe_store`; `cuda`, GPU `device`'s memory), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills
+the device's free memory less `reserve_bytes`), the declared `tier` (the store's own by default), the deadline a read,
+and the fill's streamer (`native`, `wipe_stream` on `threads` CPUs, or `python`) when the challenger runs on this node.
+A challenger on its own host streams as its `challenger.wipe.command` says."""
+
+
+def config(doc: Mapping[str, Any]) -> dict[str, Any]:
+    """`period.json`'s `wipe` over `CONFIG`'s defaults; an unknown key or value raises."""
+    got = doc.get("wipe") or {}
+    if unknown := set(got) - set(CONFIG):
+        raise ValueError(f"period.json's wipe has unknown keys {sorted(unknown)}: it takes {sorted(CONFIG)}")
+    c = CONFIG | got
+    if c["store"] not in ("python", "host", "cuda") or c["streamer"] not in ("python", "native"):
+        raise ValueError(f"period.json's wipe: store is python, host or cuda and streamer python or native, not {got}")
+    return c
+
+
+def store_of(c: Mapping[str, Any]) -> wipe_store.Memory | None:
+    return {"python": lambda: None, "host": wipe_store.HostMemory, "cuda": lambda: wipe_store.Cuda(c["device"])}[c["store"]]()
+
+
+def segments_of(c: Mapping[str, Any], memory: wipe_store.Memory | None) -> int:
+    """The fill's 32 MiB segments: `c`'s, else the device's free memory less the reserve, else `SEGMENTS`."""
+    if c["segments"] is not None:
+        return c["segments"]
+    if not isinstance(memory, wipe_store.Cuda):
+        return SEGMENTS
+    free, _ = memory.mem_info()
+    if (n := (free - c["reserve_bytes"]) // LEAST_FILL_BYTES) < 1:
+        raise RuntimeError(f"the device has {free} bytes free, less than one segment past the reserve")
+    return n
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe of `SEGMENTS`
-    32 MiB segments, the memory challenger a party of its own on `period.json`'s `challenger_host`
-    (`wipe_party.Party.of`; on this node by default, a process whose key and session log are in `wipe-challenger`
-    beside the periods) and the prover here. With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier of record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and
-    `out/wipe.json`. Which host ran each party, and whether `trusted-nebius-host`'s premise holds
-    (`wipe_party.placement`), go in `wipe.json` and in an accepted answer's profile (`placement`)."""
+    """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
+    `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
+    party of its own on `period.json`'s `challenger_host` (`wipe_party.Party.of`; on this node by default, a process
+    whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
+    gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
+    record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
+    Which host ran each party, whether `trusted-nebius-host`'s premise holds, and the memory the prover kept the fill in
+    (`wipe_party.placement`) go in `wipe.json` and in an accepted answer's profile (`placement`); `wipe.json` adds the
+    prover's own timings (`prover`: its store, gate, fill and device read latency), the signed session's on the
+    challenger's clock (`session`: the fill's GB/s, each read's round trip) and the streamer's (`report.fill`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
-    tools = doc.get("tools") or {}
-    party = wipe_party.Party.of(doc, node, Path(period_dir).parent / "wipe-challenger")
-    where = wipe_party.placement(node, party.host)
-    t = time.monotonic()
-    wipe = run(node, params_for(), party=party)
-    seconds = round(time.monotonic() - t, 2)
+    tools, c = doc.get("tools") or {}, config(doc)
+    extra = ("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ())) \
+        if c["streamer"] == "native" else ()
+    party = wipe_party.Party.of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
+    memory = store_of(c)
+    tier = c["tier"] or (TIER if memory is None else memory.tier)
+    params = params_for(segments_of(c, memory), limit_ns=c["limit_ns"], tier=tier)
+    store = None if memory is None else wipe_store.StoreProver(params, memory)
+    try:
+        if store is not None:
+            store.gate()
+        where = wipe_party.placement(node, party.host,
+                                     store=None if memory is None else memory.info() | {"bytes": store.size})
+        t = time.monotonic()
+        wipe = run(node, params, party=party, prover=sw.Prover if store is None else lambda _: store)
+        seconds = round(time.monotonic() - t, 2)
+        prover = None if store is None else store.record()
+    finally:
+        if store is not None:
+            store.close()
+            memory.close()
     answer, lean = wipe.answer, None
     if "wipe-protocol" in tools:
         lean = serve(tools["wipe-protocol"], [wipe.case])[0]
@@ -249,11 +320,44 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
     (out / "wipe.case.json").write_text(json.dumps(wipe.case, sort_keys=True))
-    (out / "wipe.json").write_text(json.dumps({"answer": answer, "lean": lean, "placement": where,
-                                               "report": wipe.report, "seconds": seconds}, sort_keys=True, indent=1))
+    (out / "wipe.json").write_text(json.dumps({"answer": answer, "lean": lean, "placement": where, "prover": prover,
+                                               "report": wipe.report, "seconds": seconds, "session": timing(wipe.signed),
+                                               "wipe": c | {"segments": params.labels // SEGMENT_LABELS, "tier": tier}},
+                                              sort_keys=True, indent=1))
     return answer
 
 
-__all__ = ["EPS", "EXPERIMENTAL", "F", "LEAST_FILL_BYTES", "LIMIT_NS", "PROTOCOL", "READS", "SEGMENTS", "UNCOUNTED",
-           "Keeping", "Wipe", "answer", "case", "certify", "digest", "gaps", "keeping", "leg", "memory_bits",
-           "outcome", "params_for", "profile", "run", "serve"]
+def summary(record: Mapping[str, Any]) -> dict[str, Any]:
+    """`wipe.json`'s headline: the verdict and who gave it, where each party ran, and the fill's and the reads' figures
+    on each side."""
+    a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
+    return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "judge": "lean" if record["lean"] else
+            "python", "segments": record["wipe"]["segments"], "tier": record["wipe"]["tier"],
+            "placement": record["placement"], "seconds": record["seconds"],
+            "challenger": {"fill_GBps": (session.get("fill") or {}).get("GBps"), "reads": session.get("reads"),
+                           "streamer": fill},
+            "prover": {"fill_GBps": (prover.get("fill") or {}).get("GBps"),
+                       "copy_GBps": (prover.get("fill") or {}).get("copy_GBps"), "device_reads": prover.get("reads"),
+                       "gate": prover.get("gate")}}
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """`python -m verity.core.protocols.pous.wipe_period --period DIR --out DIR [--node NAME]`: the leg on this node,
+    its summary printed; exit 0 on an accepted wipe, 1 otherwise."""
+    ap = argparse.ArgumentParser(prog="python -m verity.core.protocols.pous.wipe_period", description=main.__doc__)
+    ap.add_argument("--period", type=Path, required=True, help="the period's directory, holding period.json")
+    ap.add_argument("--out", type=Path, required=True, help="where wipe.json and wipe.case.json go")
+    ap.add_argument("--node", default=socket.gethostname(), help="the prover's node: the wiped server's id")
+    a = ap.parse_args(argv)
+    answer = leg(a.period, a.node, a.out)
+    print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
+    return 0 if answer["verdict"] == "accept" else 1
+
+
+__all__ = ["CONFIG", "EPS", "EXPERIMENTAL", "F", "LEAST_FILL_BYTES", "LIMIT_NS", "PROTOCOL", "READS", "SEGMENTS",
+           "UNCOUNTED", "Keeping", "Wipe", "answer", "case", "certify", "config", "digest", "gaps", "keeping", "leg",
+           "main", "memory_bits", "outcome", "params_for", "profile", "run", "segments_of", "serve", "store_of",
+           "summary", "timing"]
+
+if __name__ == "__main__":
+    sys.exit(main())

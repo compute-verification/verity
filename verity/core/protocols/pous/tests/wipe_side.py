@@ -1,7 +1,8 @@
 """A stand-in for the wipe challenger's side on its own host (`wipe_party.main`), for `test_pous_wipe_period`'s leg: the
 same stdin, stdout and socket, signed by a key at S1's deployed parameters whose tree holds leaf 0 alone (as
 `test_pous_memory_challenger._SparseTree`), so no deployed key is made, and timed on a counting clock, so no reading is
-the machine's. `python wipe_side.py DIR` keeps its session log in `DIR`."""
+the machine's. `python wipe_side.py DIR [STREAMER]` keeps its session log in `DIR`, and with `STREAMER` (a built
+`wipe_stream`) streams the fill natively and reports the streamer's gate and figures as `main` does."""
 
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import wipe_party as WP
+from verity.core.protocols.pous import wipe_stream as WS
 from verity.ml.crypto import lms
 
 
@@ -45,14 +47,20 @@ def main() -> int:
     device = Path(sys.argv[1])
     request = json.loads(sys.stdin.readline())
     signer = LeafZero()
+    streamer = WS.Streamer(Path(sys.argv[2]), 2) if len(sys.argv) > 2 else None
+    extra = {} if streamer is None else {"streamer": streamer.gate()}
     mc.SessionLog.create(device / "sessions")
     with socket.create_server(("127.0.0.1", 0)) as srv:
         print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
         conn, _ = srv.accept()
+
+        def native(key: bytes, n: int) -> None:
+            extra["fill"] = streamer.stream(key, n, conn.fileno())
+
         with conn, conn.makefile("rwb") as f:
             c = WP.serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=WP.UNCOUNTED,
-                         clock=itertools.count(10 ** 9, 1_000).__next__)
-    print(json.dumps(WP.report(c, signer.public_key), sort_keys=True), flush=True)
+                         clock=itertools.count(10 ** 9, 1_000).__next__, fill=None if streamer is None else native)
+    print(json.dumps(WP.report(c, signer.public_key) | extra, sort_keys=True), flush=True)
     return 0
 
 
