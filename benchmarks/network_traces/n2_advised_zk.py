@@ -5,7 +5,8 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
 (`LinkWindows.outcome(advice=…)`), through `n2_zk`'s statement and rounds (`n2_zk.stager`, `stage`, `member`).
 
     python benchmarks/network_traces/n2_advised_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in] [--advice-from-io]] [--draw K [--coins local]]
+      [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in] [--advice-from-io]]
+      [--draw K [--challenger local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD [--gate-key KEY]]]]
       [--delta D] [--members honest,moved,...] [--jobs 2] [--debug-clear] [--dry]
 
 * **The link** (`simulated`). The advised tests' simulated vLLM serving (`advised_traffic.serve`: varied prompt and
@@ -40,9 +41,13 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   signed clocks how many certificates there are and how many verify under the link's certifier key and session.
 * **The period** (``--draw K``): each member's windows are sampled rather than all proved. The prover commits every
   window's salted root and the advice's digest, the challenger then draws K of the windows on its coins
-  (`LinkWindows.period_draw`; ``--coins local``, the verifier's own), and only the drawn windows are registered,
-  proved and decided; the network verdict is the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows
-  of the period's, ε = bound / n, at the stream's δ, ``--delta``). The summary's ``draw`` and ``sampled`` report them.
+  (`LinkWindows.period_draw`), and only the drawn windows are registered, proved and decided; the network verdict is
+  the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows of the period's, ε = bound / n, at the
+  stream's δ, ``--delta``). The coins are the verifier's own by default; ``--challenger local|gate:USER@HOST`` takes
+  the auditor's challenger's instead (`Challenger`: one session, as `records_audit` takes it, whose evidence each
+  member's draw is held to, `coins.coins_reason`). The summary's ``draw`` and ``sampled`` report them, ``sampled`` per
+  member in scan_zk's shape: ``draw`` {law, coins, units, of}, ``audit`` {accepted, wrong_units} and ``charge``
+  {delta, wrong_units, epsilon}, None unless accepted.
 * **Members.** One stream each, over the link's windows (``--members``: some of them): ``honest``, the session's
   advice and records; ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); ``short``, one
   request's output length one short (`advised_traffic.with_output_len`); on the simulated link ``extra``, one frame
@@ -70,6 +75,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -98,7 +104,7 @@ from verity.core.protocols.certifier.certificate import Direction, Issuer, param
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
-from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
+from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 
@@ -477,15 +483,110 @@ def expected(name: str, fails: list[list[str]]) -> bool:
 
 # --- the proofs -------------------------------------------------------------------------------------------------------
 
-def coins(a):
-    """The period draw's coins (``--coins``): ``local``, the verifier's own, the operating system's bytes as the Lean
-    verifier of record reads them (`sampled_proofs.service`'s default, `verifier.coins`), never the auditor's
-    challenger's; None when the period isn't sampled (``--draw 0``, every window)."""
+COINS_ROOT = "verity/n2/period-coins/v0"
+
+
+def coins_root(periods: dict, k: int) -> str:
+    """The challenger session's root: K and every member's period as it is committed, `periods` member -> (each window's
+    salted root, hex; the advice's digest), what each member's ``period.json`` holds. The roots are salted afresh each
+    run, so each run opens its own session (the gate opens a root once), and the verifier recomputes it from what it
+    received."""
+    doc = {"format": COINS_ROOT, "k": k, "members": {n: {"roots": list(r), "advice": adv}
+                                                      for n, (r, adv) in sorted(periods.items())}}
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def coin_need(k: int, n: int, coin_bytes: int) -> int:
+    """The most coins a period draw of K of n windows reads (`a5_coins.need`'s rule for the period's `subset:K`): the
+    stream's sampler on bytes that reject no word, what it reads plus its longest stream once more."""
+    reads: list[int] = []
+
+    def zeros(m: int) -> bytes:
+        reads.append(m)
+        return bytes(m)
+    rule = S.Law(f"subset:{k}")
+    S.select_draw(rule, S.selection_law(rule, n), n, zeros)
+    return -(-(sum(reads) + max(reads, default=0)) // coin_bytes)
+
+
+class Challenger:
+    """The period draws' coins from the auditor's challenger (``--challenger local|gate:USER@HOST``), as
+    `records_audit` takes them (`a5_coins`): one session on `coins_root`, one rank per member, and each member's draw
+    in its own turn on the session's one client (`a5_coins.RankCoins`), its coins committed to its period's commitment
+    before any is read (`LinkWindows.period_draw`). Every rank plans its need together, before any member runs (the
+    members can outnumber ``--jobs``), so the session opens or is refused before anything is proved. Once every member
+    has drawn or won't, the session's evidence is published, and `check` holds each member's draw to it
+    (`coins.coins_reason`, with `a5_coins.negatives` refused the same way)."""
+
+    def __init__(self, a, rounds: dict, dest: Path) -> None:
+        if str(HERE.parent / "one_stage") not in sys.path:
+            sys.path.append(str(HERE.parent / "one_stage"))
+        import a5_coins as AC
+
+        self.AC, self.names, self.source = AC, list(rounds), a.challenger
+        self.root = coins_root({n: ([x.root.hex() for x in rd.windows],
+                                    None if rd.advice is None else AD.digest(rd.advice)) for n, rd in rounds.items()},
+                               a.draw)
+        self.manager, self.draws, self.finisher = AC.start(
+            a.challenger, self.root, list(range(len(self.names))), dest, a.main, ssh_key=a.gate_key, peer=a.peer,
+            key_record=a.challenger_key)
+        self.ranks = {n: AC.RankCoins(self.draws, r) for r, n in enumerate(self.names)}
+        self.published = self.pre = None
+        try:
+            with ThreadPoolExecutor(max_workers=len(self.names)) as pool:
+                list(pool.map(lambda n: self.ranks[n].plan(coin_need(a.draw, len(rounds[n].windows),
+                                                                     AC.Ch.COIN_BYTES)), self.names))
+        except Exception as e:
+            self.close()
+            raise SystemExit(f"the challenger's session for the period draws: {e}; "
+                             f"{(self.published or {}).get('error')}") from e
+        log(f"challenger {a.challenger}: session on root {self.root[:16]}, needs "
+            f"{ {n: c.need for n, c in self.ranks.items()} } coins")
+
+    def close(self) -> dict:
+        """Every member has drawn or won't: the session's evidence once it has ended (`a5_coins.Draws.evidence`)."""
+        if self.published is None:
+            for r in range(len(self.names)):
+                self.draws.skip(r)
+            self.finisher.join()
+            self.published, self.pre = self.draws.evidence(), self.draws.pre()
+            self.manager.shutdown()
+        return self.published
+
+    def check(self, done: dict, out: Path) -> dict:
+        """Each member's draw held to the session's evidence: the root the verifier recomputes from every member's
+        ``period.json`` (`coins_root`), the coins its draw read released after its period's commitment in that one
+        session (`coins.coins_reason`), and each of `a5_coins.negatives` refused. Writes each member's evidence beside
+        what its verifier received (``coins.json``)."""
+        published = self.close()
+        root = coins_root({n: (r["period"]["roots"], r["period"]["advice"]) for n, r in done.items()},
+                          next(iter(done.values()))["period"]["k"])
+        out_ = {}
+        for name, res in done.items():
+            segment, read = res.get("segment"), bytes(self.ranks[name].read)
+            ev = None if segment is None else self.AC.evidence(published, segment)
+            after = bytes.fromhex(res["period"]["commitment"])
+
+            def reason(e):
+                return CC.coins_reason(e, root, after, read, self.AC.lms_verify)
+            why = (published.get("error") or "the draw released no segment") if ev is None else reason(ev)
+            negatives = ({} if ev is None or self.pre is None else
+                         {k: reason(v) is not None for k, v in self.AC.negatives(ev, self.pre).items()})
+            (out / name / "verifier" / "coins.json").write_text(json.dumps(ev, sort_keys=True))
+            out_[name] = {"source": f"challenger:{self.source}", "root": root, "root_ok": root == self.root,
+                          "session": published.get("trusted"), "plan": published.get("plan"), "coins_reason": why,
+                          "read_bytes": len(read), "negatives_refused": negatives,
+                          "ok": root == self.root and why is None and bool(negatives) and all(negatives.values())}
+        return out_
+
+
+def coins(a, challenger: Challenger | None, name: str):
+    """Member `name`'s period draw's coins: the challenger's session's (``--challenger``), else the verifier's own, the
+    operating system's bytes as the Lean verifier of record reads them (`sampled_proofs.service`'s default,
+    `verifier.coins`); None when the period isn't sampled (``--draw 0``, every window)."""
     if not a.draw:
         return None
-    if a.coins != "local":
-        raise SystemExit(f"--coins {a.coins}: only local coins (the verifier's own) are wired here")
-    return S.V.coins
+    return challenger.ranks[name] if challenger is not None else S.V.coins
 
 
 def draw_label(a, windows: int) -> dict:
@@ -495,10 +596,12 @@ def draw_label(a, windows: int) -> dict:
                 "delta": a.delta or cs.DELTA}
     if not 1 <= a.draw <= windows:
         raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {windows} of the link's {windows} windows")
+    by = (f"the auditor's challenger's ({a.challenger}: a5_coins, one session for every member's draw, each after its "
+          "period's commitment, held to the session's evidence by coins_reason)" if a.challenger else
+          "the verifier's own: the operating system's bytes through the Lean verifier of record (sampled_proofs "
+          "verifier.coins), read only after the period's commitment; not the auditor's challenger's")
     return {"selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": windows,
-            "coins": {"source": a.coins, "by": "the verifier's own: the operating system's bytes through the Lean "
-                                               "verifier of record (sampled_proofs verifier.coins), read only after "
-                                               "the period's commitment; not the auditor's challenger's gate coins"},
+            "coins": {"source": f"challenger:{a.challenger}" if a.challenger else "verifier", "by": by},
             "delta": a.delta or cs.DELTA}
 
 
@@ -560,9 +663,12 @@ def prove(a) -> int:
     log(f"staged: {summary['staging']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
+    challenger = Challenger(a, rounds, out / "challenger") if a.draw and a.challenger else None
+
     def go(k: int, name: str) -> tuple[str, dict]:
         rd = rounds[name]
-        res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0, coins=coins(a))
+        res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0,
+                       coins=coins(a, challenger, name))
         (out / name / "verifier" / "advice.json").write_text(json.dumps(
             {"advice": ADV.to_json(rd.advice.advice), "received": list(rd.advice.received),
              "digest": AD.digest(rd.advice)}, sort_keys=True))
@@ -570,24 +676,43 @@ def prove(a) -> int:
                                          set(res["period"]["units"]) if "period" in res else None)
         return name, res
 
-    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
-        done = dict(pool.map(lambda kv: go(*kv), enumerate(rounds)))
+    try:
+        with ThreadPoolExecutor(max_workers=a.jobs) as pool:
+            done = dict(pool.map(lambda kv: go(*kv), enumerate(rounds)))
+    finally:
+        if challenger is not None:
+            challenger.close()
+    checked = challenger.check(done, out) if challenger is not None else {}
+    if challenger is not None:
+        summary["challenger"] = {"root": challenger.root, "session": challenger.published.get("trusted"),
+                                 "plan": challenger.published.get("plan"), "error": challenger.published.get("error")}
     ok = True
     for name, res in done.items():
         rec = res["received"]
-        good = (all(r["as_expected"] for r in res["windows"]) and res["network"]["accepted"] == (name == "honest")
-                and (res["network"]["accepted"] is False or res["network"]["advice"] == AD.digest(rounds[name].advice))
+        net = res["network"]
+        held = checked.get(name, {"ok": True})
+        accepted = net["accepted"] and held["ok"]
+        good = (all(r["as_expected"] for r in res["windows"]) and accepted == (name == "honest") and held["ok"]
+                and (net["accepted"] is False or net["advice"] == AD.digest(rounds[name].advice))
                 and not rec["verifier_found"] and rec["control"]["holds_all"])
         ok &= good
-        summary["members"][name].update(res, ok=good)
-        net = res["network"]
+        summary["members"][name].update(res, ok=good, **({"coins": held} if name in checked else {}))
         if "wrong_units" in net:
-            summary.setdefault("sampled", {})[name] = {"accepted": net["accepted"], "selection": net["selection"],
-                                                       "wrong_units": net["wrong_units"]}
+            sel, wu = net["selection"], net["wrong_units"]
+            summary.setdefault("sampled", {})[name] = {
+                "accepted": accepted,
+                "draw": {"law": f"subset:{sel['k']}", "coins": summary["draw"]["coins"]["source"], "units": sel["units"],
+                         "of": sel["population"], "commitment": sel["commitment"]},
+                "audit": {"accepted": accepted, "wrong_units": wu},
+                "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if accepted else None,
+                **({"coins": held} if name in checked else {})}
         log(f"member {name}: network {'accept' if net['accepted'] else 'refuse'} (refused windows {net['refused']}"
             + (f"; drew {net['selection']['units']}, {net['selection']['k']} of {net['selection']['population']}: at "
                f"most {net['wrong_units']['bound']} wrong, epsilon {net['wrong_units']['epsilon']:.4f} at delta "
                f"{net['wrong_units']['delta']:.3g}" if "wrong_units" in net else "")
+            + (f"; challenger's coins {'hold' if held['ok'] else 'REFUSED: ' + str(held['coins_reason'])}, "
+               f"{sum(held['negatives_refused'].values())}/{len(held['negatives_refused'])} coin negatives refused"
+               if name in checked else "")
             + f"), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
             f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
             f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the "
@@ -628,8 +753,15 @@ def main(argv=None) -> int:
                    help="K: each member's period sampled, K of its windows drawn after every window's root and the "
                         "advice are committed, and only those proved (LinkWindows.period_draw); 0 (the default): every "
                         "window, Selection All")
-    p.add_argument("--coins", default="local", choices=("local",),
-                   help="the period draw's coins: local, the verifier's own (the Lean verifier's OS bytes)")
+    p.add_argument("--challenger", help="with --draw: the period draws on the auditor's challenger's coins (a5_coins, "
+                   "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (vy-challenger-1 "
+                   "through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
+                   "127.0.0.1 the session's challenger listens on")
+    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
+                   "(infra's challenger-key/v1), never the session's key.json")
+    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
+    p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--delta", type=float, default=None,
                    help="the stream's delta, at which a sampled verdict states its wrong units (default "
                         "certifier_serve.DELTA, 2^-40)")
@@ -647,6 +779,15 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
+    if a.challenger:
+        if not a.draw:
+            ap.error("--challenger draws a sampled period's coins: it needs --draw K")
+        if a.challenger != "local" and not a.challenger.startswith("gate:"):
+            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
+            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main")
     return prove(a)
 
 

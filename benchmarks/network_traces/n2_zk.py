@@ -428,7 +428,9 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
     advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
     decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
-    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`)."""
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`). Coins with a ``drawn``
+    (the challenger's, `a5_coins.RankCoins`) end their turn on the session once the draw has read them, and the
+    result's ``segment`` is what they released."""
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
@@ -436,10 +438,14 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     env, av = firewall(M, sg), SimpleNamespace(bin=a.bin, lease=[], gpu=False)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    drawn, windows = None, rd.windows
+    drawn, windows, segment = None, rd.windows, None
     if k is not None:
-        drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
-                               advice=None if rd.advice is None else AD.digest(rd.advice))
+        try:
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
+                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+        finally:
+            if callable(getattr(coins, "drawn", None)):
+                segment = coins.drawn()
         (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
         windows = [rd.windows[u] for u in drawn["units"]]
         log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) after the period's "
@@ -508,7 +514,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
     network = lw.network_verdict(stream, rd.plan["windows"], drawn)
-    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn})}
+    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
+            **({} if segment is None else {"segment": segment})}
 
 
 def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
