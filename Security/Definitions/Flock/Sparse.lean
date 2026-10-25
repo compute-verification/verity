@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Piop
+import Definitions.Flock.Piop
 
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4

@@ -158,11 +158,11 @@ link term per audit.
 
 | Piece | a16z stage | Lean | Status |
 |---|---|---|---|
-| Interaction model: live coins, prover strategies, acceptance probability, optimal prover | (framework) | `Game/Basic.lean` | proved |
+| Interaction model: live coins, prover strategies, acceptance probability, optimal prover | (framework) | `Game/Basic.lean` (the definitions: `Definitions/Flock/Game.lean`) | proved |
 | A live coin hits a fixed nonzero polynomial's zero with probability at most degree/|F| (Schwartz–Zippel) | (framework) | `Game/Poly.lean` | proved |
 | Two reps on independent coins, any interleaving: the error squares | 1a | `Game/Interleave.lean`, `value_interleave_le` | proved |
 | The bound as a function of the parameters, and its value for every `m` | 1a | `Accounting/*` | proved |
-| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*` | written (definitions) |
+| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*`; the statement, zerocheck, lincheck, opening and Ligerito in `Definitions/Flock/Statement.lean`, `Definitions/Flock/Piop.lean`, `Definitions/Flock/Ligerito.lean` and `Definitions/Flock/Sparse.lean` | written (definitions) |
 | Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
 | One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
