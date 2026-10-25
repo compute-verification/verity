@@ -221,7 +221,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.registered (RecCoins.Source.atC3 none none none) (RecSetup.c3 none none))
   sts.forM (RecVStar.checkPubRows · s.registered none none)
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.draw
+  if r.draw.isSome then ProvedScope.drawLaw (r.zk || r.tags.hiddenOutputs) r.draw
   pure (spec, sts)
 
 /-- The statement's inputs, for the verifier that is masked exactly when `zk`: a statement of the other verifier does not

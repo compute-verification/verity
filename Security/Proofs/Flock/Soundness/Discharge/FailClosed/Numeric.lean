@@ -706,7 +706,7 @@ theorem flock_verify_sound_205 (I : Inputs) :
   by_cases hh : I.tags.hiddenOutputs = true
   · rw [dite_eq_left hh] at h ⊢
     rw [ite_eq_right Bool.false_ne_true] at h
-    exact @SoundExecH.to205 I hh h
+    exact @SoundExecH.to205 I hh h.1
   · rw [dite_eq_right hh] at h ⊢
     rw [ite_eq_right Bool.false_ne_true] at h
     exact @SoundExec.to205 I (Bool.eq_false_of_ne_true hh) h

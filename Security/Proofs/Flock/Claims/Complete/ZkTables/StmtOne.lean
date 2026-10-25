@@ -88,7 +88,8 @@ private theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = tru
 
 /-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
 private theorem setup_drawLaw {s : Ins} {p : SessionSpec × Array Flock.Stmt} (h : s.setup = .ok p)
-    (hd : s.read.draw.isSome = true) : ProvedScope.drawLaw s.read.zk s.read.draw = .ok () := by
+    (hd : s.read.draw.isSome = true) :
+    ProvedScope.drawLaw (s.read.zk || s.read.tags.hiddenOutputs) s.read.draw = .ok () := by
   unfold Ins.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -344,7 +345,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
   dsimp only
   obtain ⟨D, hD, hn⟩ := hinst d hu
   have hdl := setup_drawLaw (setupOf_some hs).2 hdr
-  rw [hdd, hzk] at hdl
+  rw [hdd, hzk, Bool.true_or] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
   have hlw : ProvedScope.lawWhy true D = none := by
     cases e : ProvedScope.lawWhy true D with

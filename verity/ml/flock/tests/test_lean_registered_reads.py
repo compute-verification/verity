@@ -448,7 +448,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the subset law's refusal without `--zk`); a
+    the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a
     transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
     inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about
@@ -486,7 +486,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     def off(xs: list[bytes], i: int) -> list[bytes]:
         return [bytes([b[0] ^ 1]) + b[1:] if j == i else b for j, b in enumerate(xs)]
 
-    assert why(root, tops) == "refused: a subset draw without --zk: no soundness claim draws by this law"
+    assert why(root, tops).startswith("session files: "), why(root, tops)
     # row r of the table reads position OUT_POSITIONS[r]: 2, 7, 0, 9, 4, 4, 1, 6
     if level == 0:
         assert why(off(root, 9), tops) == (f"setup: rec-tops: {unit}: port out's table row 3 is not node 9 of circuit's root_B, "

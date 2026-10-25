@@ -38,7 +38,7 @@ session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLa
 `verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK` without `--registered` and `VerifiesZKR` with it;
 without `--zk` the check is the same either way). `verifyCmd` refuses more, which only shrinks the
 event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
-without `--zk`), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
+without `--zk` at public outputs), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only under `--zk` at hidden outputs, where `VerifiesZKR` models the registered check), a coin-tree
 key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
