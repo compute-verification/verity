@@ -25,3 +25,7 @@ after_landing_no_cache = true
 # the per-PR landing in shadow beside the trains (`research.drive`): at most this many of its checks at once, landing and ejecting
 # nothing; 0 is off (`research queue stats --per-pr` reads what it would land)
 per_pr_shadow = 0
+# scripts, as `main` has them, that a PR's head must pass for its ready mark to count and for the sync to merge it onto `next`
+# (`gate_refusal`): the vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source (Daniel's
+# delegation to the vLLM coordinator, 25 Oct 09:40Z)
+landing_gates = ["integrations/vllm/tools/ratchet_gate.py"]

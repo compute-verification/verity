@@ -30,8 +30,8 @@ exception or raises a recorded count: against its merge base with `main`, no rat
 `count` is higher. An entry may move with the violation it allows. A change to a lint's own code or thresholds is judged
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
-PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. Once drive.toml's `landing_gates` names it, the merge
-queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
+PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
+it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
