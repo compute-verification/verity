@@ -179,6 +179,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Claims.ZK
+import Proofs.Flock.Claims.KS.ZkAcceptsAt
 import Proofs.Flock.Claims.CompleteFails
 import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.Witnesses
