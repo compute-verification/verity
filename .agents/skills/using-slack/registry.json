@@ -622,7 +622,8 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/s8_dec_linear/"
       ],
       "branch_suffixes": [
         "15ad"
