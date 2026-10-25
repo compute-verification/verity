@@ -221,6 +221,8 @@ from verity.core.protocols.sampled_proofs.service import Registration
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 EGRESS, INGRESS, N2_LINK = "responses", "requests", "served"
+#: the rehearsal's client writes here in its run, as on a host of its own (`check` reads its `peer.json` there)
+CLIENT = "client"
 HEIGHT = 10
 PROMPT = "Count from one to one hundred in words, separated by commas:"
 FILLER = " one, two, three, four, five, six, seven, eight, nine, ten,"
@@ -1295,7 +1297,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
             network = lw.network_verdict(stream, windows)
         except ValueError as err:
             network = {"accepted": False, "error": str(err)}
-    audited = ar.audit_configuration(plan, report, run, audit=audit)
+    client = run / CLIENT if (run / CLIENT / "peer.json").exists() else run
+    audited = ar.audit_configuration(plan, report, run, audit=audit, client=client)
     e, i = setup.egress_params, setup.ingress_params
     in_records = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
     out_records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
@@ -1377,7 +1380,7 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
             with open(run / "client.log", "w") as clog:
                 client_exit = subprocess.run(me + ["client", "--plan", str(out / "plan.json"), "--calibration",
                                                    str(out / "calibration.json"), "--deployment",
-                                                   str(run / "deployment.json"), "--out", str(run / "client")],
+                                                   str(run / "deployment.json"), "--out", str(run / CLIENT)],
                                              stdout=clog, stderr=subprocess.STDOUT).returncode
             done = json.loads(proc.stdout.readline() or "{}")
             if not done.get("served"):
