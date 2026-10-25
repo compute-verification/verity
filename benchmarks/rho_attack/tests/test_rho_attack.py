@@ -236,3 +236,74 @@ def test_fanout_e_is_the_largest_layer_fanout_and_the_estimate_is_phi_beta_over_
     kappa = 3 * k2.f / fanout.products(k2)
     assert fanout.estimate(k2, 0.5, "sft") == pytest.approx(k2.phi() * 0.5 / (kappa * 37_248))
     assert fanout.frozen_estimate(k2, 0.5, 1, "sft") < fanout.estimate(k2, 0.5, "sft")
+
+
+def _entry(L: int = 28, F: float = 1000.0, G: float = 8000.0, layer_bits: float = 4e6, emb: float = 5e6) -> dict:
+    per = {"F": [F] * L, "G": [G] * L, "beta_w": 0.1, "embed_bits": emb,
+           "layer_bits": {str(j): {"attn": layer_bits / 4, "mlp": 3 * layer_bits / 4} for j in (0, 9, 18, 27)}}
+    return {"task": "gsm8k", "seed": 1, "step": 1, "eval_tokens": 2048, "embed_params": 233_373_696, "rollouts": 256,
+            "prompts": 32, "n_seq": 56, "n_tok": 15_282, "clen": 237.6, "prompt_mean": 103.6, "fp8": per, "nvfp4": per}
+
+
+def test_matched_block_counts_and_the_coordinators_instantiation():
+    import matched_block as mb
+
+    qwen = configs.get("qwen2.5-1.5b")
+    st = mb.Step(_entry(), "fp8", qwen)
+    assert (st.e, st.acts, st.prods) == (17_920, 13_568, 46_792_704)
+    brep = {"Ff_min": (17 + 1008) / 1536, "mean": (17 + 4206) / 1536}
+    two = mb.median_block(qwen, 0.103, 1008, 2, brep)
+    assert two["beta_x_bound"] == pytest.approx(0.073, abs=5e-4) and two["Q"] == pytest.approx(10_100, rel=0.01)
+    assert two["products_per_entering_coordinate"] == 2 * 30_464
+
+
+def test_an_embedding_entry_block_holds_the_table_and_reads_token_ids_only():
+    import matched_block as mb
+
+    st = mb.Step(_entry(), "fp8", configs.get("qwen2.5-1.5b"))
+    emb, bnd = st.block(0, 1), st.block(1, 1)
+    assert emb["l_w"] == pytest.approx(5e6 + 4e6 + st.SMALL) and emb["l_in"] == pytest.approx(emb["Q"] * 17)
+    assert bnd["l_in"] == pytest.approx(bnd["Q"] * (17 + 1000)) and bnd["products_per_entering_coordinate"] == 30_464
+    assert emb["rollouts"] == 56 and emb["beta_x_bound"] < bnd["beta_x_bound"]
+    assert emb["violation"]["Ff_min"] == pytest.approx(st.beta_rep("Ff_min") / emb["beta_x_bound"])
+
+
+def test_a_step_whose_state_fits_is_two_blocks_and_a_long_rollout_is_cut_into_chunks():
+    import matched_block as mb
+
+    qwen = configs.get("qwen2.5-1.5b")
+    small = mb.Step(_entry(layer_bits=3e5, emb=5e5), "fp8", qwen).step("chain")
+    assert small["blocks"] == 2 and small["rho"] == pytest.approx(2 * mb.C / small["T0"])
+    st = mb.Step(_entry(), "fp8", qwen)
+    # one rollout's forward fits beside the state, its forward and backward together don't: two chunks per rollout
+    assert st._tiles(12e6, 0.0, 3e6, 6e6, True, "chain", 0, mb.K) == 56 * 2
+    assert st._tiles(12e6, 0.0, 3e6, 0.0, False, "chain", 0, mb.K) == 256 / 2
+    assert st._tiles(12e6, 0.0, 9e6, 0.0, False, "chain", 0, mb.K) == math.inf
+
+
+def test_the_corrected_allowance_reproduces_the_dense_optimum_and_k2s_closure():
+    import matched_block as mb
+
+    qwen, k2 = configs.get("qwen2.5-1.5b"), configs.get("kimi-k2")
+    brep = {"Ff_min": 0.667, "mean": 2.75}
+    rows = mb.dense_loss(qwen, 0.103, brep)
+    bnd = next(r for r in rows if r["entry"] == "cheapest boundary")
+    assert bnd["R_continuous"]["Ff_min"] == pytest.approx(mb.K / (4 * 0.103 * 17_920 * 1536), rel=0.01)
+    assert bnd["m"] == 2 and bnd["R"]["Ff_min"] == pytest.approx(1.76, abs=0.05)
+    assert bnd["R"]["mean"] == pytest.approx(bnd["R"]["Ff_min"] * 2.75 / 0.667)
+    rows = {r["held"]: r for r in mb.closure(k2, 0.103, brep)}
+    assert rows["1 routed expert, its tokens only"]["p"] == 3 * 2048 + 384
+    assert rows["attention, 1 layer"]["p"] == pytest.approx(101_122_048 / 7168)
+    assert all(r["R"]["Ff_min"] < 1 for r in rows.values() if r["entry"] == "cheapest boundary")
+
+
+def test_matched_block_report_runs_on_the_extracted_inputs(tmp_path):
+    import matched_block as mb
+
+    here = Path(__file__).resolve().parents[1]
+    assert mb.main(["--inputs", str(here / "inputs" / "a2_full_blocks.json"),
+                    "--measured", str(here / "inputs" / "measured_b1.json"), "--out", str(tmp_path)]) == 0
+    text = (tmp_path / "matched_block.md").read_text()
+    assert "coordinator's instantiation, fp8" in text and "## 4. Loss factor" in text
+    res = json.loads((tmp_path / "matched_block.json").read_text())
+    assert res["coordinator_instantiation"]["fp8/Ff_min"]["beta_x_bound"] == pytest.approx(0.0729, abs=5e-4)

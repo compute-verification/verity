@@ -61,6 +61,26 @@ and 2.5 MB: full training against both bounds, and the cliff just above k (the s
 its trained layers' products.
 Capability sits at S as each experiment counts its state; "full" at the larger target's full fine-tune.
 
+## The matched block
+
+`matched_block.py --out OUT` tests the fan-out premise (every block's counted activations cost at least
+`beta_x |V_I| - lambda_x` bits) on one matched computation: a GRPO step of A2's full-parameter arm on Qwen2.5-1.5B, from
+`inputs/a2_full_blocks.json` (B1's per-boundary F and G and per-map weight-update code lengths on its sampled layers, per
+A2 full-arm entry, with A2's logged step; written by `matched_block.py --extract B1_BUNDLE A2_RUNS --out
+inputs/a2_full_blocks.json` from B1's per-entry `counted_A2_*-full-*.json` and A2's step logs). It writes
+`matched_block.md` and `.json`:
+
+1. the best block entering at a boundary or at the embedding, holding whole rollouts, and its bound
+   `beta_x <= (l_w + l_in + a_dec) / n_I`, beside the coordinator's instantiation at B1's medians;
+2. the step built from such blocks (forward, backward with the accumulator chained or reduced, the tied head in
+   vocabulary-row groups, rollout generation) against `T_0`, and the fan-out prediction `c beta_x / (kappa e k)`;
+3. the closure check for Kimi K2 and DeepSeek-V4-Pro: held sets (attention, experts, both, embedding entry) and the
+   corrected allowance `(k - l_w - a_dec) p / beta_in` over the fan-out allowance `e k / beta_x^rep`;
+4. the loss factor per config, precision, `beta_w` reading and residual reading.
+
+Every code length is one B1's compressors achieved, so it bounds the description length from above, which is what a
+violation needs.
+
 ## Strategies
 
 The fixed recipe (exact layouts, `attack_exact`):
