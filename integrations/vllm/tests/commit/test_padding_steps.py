@@ -226,8 +226,9 @@ def test_the_rule_refuses_what_it_cannot_place_and_never_infers_the_lag(tmp_path
 
 
 #: sha256 of the conversion's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=_plain)`, the run directory replaced),
-#: computed with the conversion on the parsed JSON before it read the records
-OUTCOMES_SHA256 = "1ab24936431ac13b315c6ed2e3a4a6a03a9be12527259f562b84f705526ed40f"
+#: computed with the conversion on the parsed JSON before it read the records, then once more when it took the LAG as G6 does
+#: (`DeclaredStop.declared_lag`): that changed `lag_in_the_stop_rule_only` alone, to `b1_lag1`'s outcome
+OUTCOMES_SHA256 = "95bee0b277c2406645adf4af42d79e01a09e0069bbc35f1b4afaa741c392b3d6"
 RECORDS = Path(__file__).parents[1] / "records" / "data"
 B1 = {"served": {"r0": [5, 6, EOS]}, "lag": 1, "executed_steps": {"r0": [0, 1, 2, 3]}}
 CAP_STOP = {"served": {"r0": [1, 2, 3, 4, 5, 6]}, "lag": 2, "executed_steps": {"r0": list(range(CAP))}}
@@ -293,6 +294,14 @@ def _corpus(tmp: Path) -> dict[str, Any]:
 def test_the_conversion_reads_the_records_to_the_same_outcomes(tmp_path):
     blob = json.dumps(_corpus(tmp_path), sort_keys=True, default=_plain).replace(str(tmp_path), "<run>")
     assert hashlib.sha256(blob.encode()).hexdigest() == OUTCOMES_SHA256
+
+
+def test_a_lag_declared_only_in_the_stop_rule_converts_as_one_in_the_lag_block(tmp_path):
+    """G6 takes the LAG from the stop rule when the Program has no `lag` block (`DeclaredStop.declared_lag`), and so does the conversion."""
+    got = _corpus(tmp_path)
+    assert got["lag_in_the_stop_rule_only"]["ok"] and got["lag_in_the_stop_rule_only"]["report"]["lag"] == 1
+    b1, stop_rule_only = (json.dumps(got[k], sort_keys=True, default=_plain) for k in ("b1_lag1", "lag_in_the_stop_rule_only"))
+    assert stop_rule_only == b1
 
 
 @pytest.mark.parametrize("record,field,change", [

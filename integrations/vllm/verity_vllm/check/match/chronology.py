@@ -42,6 +42,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
                f"passes --tokens-optional (labelled, never a row of record) (F-r17-01)")
     driver = _driver_record(c, tokens, os.path.relpath(tokens_path, oracle_dir))
     tok_req = driver.by_request if driver is not None else {}
+    _driver_requests(c, gp, driver)
     rule = _lag_rule(c, gp, facts, driver)
     decl_lag, lag_declared, rec_lag, rec_lag_src = rule.decl_lag, rule.lag_declared, rule.rec_lag, rule.rec_lag_src
     _lag_obs: dict[str, int] = {}                                    # EOS-stopped request -> rows served after its EOS (for the variable-lag finding)
@@ -50,6 +51,9 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
         rid = g["request_id"]
         ent = next(e for e in res["requests"] if e["request_id"] == rid)
         _n_problems_before = len(c.problems)
+        if driver is not None and rid not in tok_req:
+            c.fail(f"{rid}: the Program declares it but the driver's {driver.where} has no entry for it: its output association (the "
+                   f"driver's served tokens vs the recorder's TokenSelects) and the driver's length claims cannot run, so it is refused by name")
         ps = present.get(rid)
         if not ps:
             continue
@@ -126,6 +130,20 @@ def _driver_record(c: NamedCheck, tokens: dict | None, where: str) -> ServedToke
         return None
 
 
+def _driver_requests(c: NamedCheck, gp: dict, driver: ServedTokens | None) -> None:
+    """The driver's served tokens name each request at most once, and only requests the Program declares (a declared request with
+    no entry is refused in the request's own loop)."""
+    if driver is None:
+        return
+    ids = collections.Counter(r.request_id for r in driver.requests)
+    declared = {g["request_id"] for g in gp["requests"]}
+    if undeclared := sorted(set(ids) - declared):
+        c.fail(f"the driver's {driver.where} carries request(s) {undeclared[:8]} the Program does not declare: served tokens of no declared "
+               f"request are not an execution of the Program")
+    if twice := sorted(r for r, n in ids.items() if n > 1):
+        c.fail(f"the driver's {driver.where} has more than one entry for request(s) {twice[:8]}: which one the driver served is not stated")
+
+
 def _declared_stop(c: NamedCheck, gp: dict) -> DeclaredStop | None:
     """The Program's declared stop rule and LAG (`records.declared_stop`); a declaration it refuses FAILS G6 by name, and G6 then
     holds the record to no EOS set and no LAG, so every early stop fails closed."""
@@ -195,8 +213,9 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
 
 def _arrival(c: NamedCheck, gp: dict, present: dict[str, list[int]], tok_req: dict[str, ServedRequest], g: dict, ent: dict,
              ps: list[int]) -> tuple[ServedRequest | None, int]:
-    """One request's declared, realized and observed arrival and contiguous rows.  Returns its tokens.json entry (None: the driver
-    wrote none, so there is no driver claim to hold) and 1 when it was admitted early under the declared idle rule, else 0."""
+    """One request's declared, realized and observed arrival and contiguous rows.  Returns its tokens.json entry (None: no driver
+    record, or none for this request, which G6 has refused by name; either way no driver claim to hold) and 1 when it was admitted
+    early under the declared idle rule, else 0."""
     rid = g["request_id"]
     idle_rule = 0
     first, last = ps[0], ps[-1]

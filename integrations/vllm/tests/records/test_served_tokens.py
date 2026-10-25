@@ -25,8 +25,9 @@ from verity_vllm.records.served_tokens import ServedRequest, ServedTokens
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "served_tokens.json"
 #: sha256 of GM-01's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
-#: with G6 on the parsed JSON before it read the record
-OUTCOMES_SHA256 = "bd707ef86cdd2e4612803eef8e6923d31d4c37b30650724b5200c6e71f368482"
+#: with G6 on the parsed JSON before it read the record, then once more when G6 began refusing a declared request the record has no
+#: entry for: that turned `a request unserved` and `no requests` from PASS to FAIL, and changed no other case
+OUTCOMES_SHA256 = "62242ae637e0288d12463f771cb135ae9131d6f271a66958a82cb2d2a879928c"
 REQUIRED = ("requests", "requests[0].request_id", "requests[0].generated_token_ids", "lag.value")
 OPTIONAL = ("arrive_step_realized", "first_step", "finish_step", "finish_reason", "served_output_len", "executed_prefix_len")
 #: the TP capture's request fields (`pipeline.tp.capture`), and the TP Match arms' (`pipeline.tp.match`)
@@ -244,3 +245,49 @@ def test_g6_fails_a_refused_record_by_name(memory, tmp_path, path, why, tokens_o
     assert want in g6["problems"], g6["problems"]
     assert g6["tokens_json"] is False
     assert os.path.exists(os.path.join(oracle, "capture", "tokens.json"))
+
+
+def _omitted(rid: str) -> str:
+    return (f"{rid}: the Program declares it but the driver's capture/tokens.json has no entry for it: its output association (the "
+            f"driver's served tokens vs the recorder's TokenSelects) and the driver's length claims cannot run, so it is refused by name")
+
+
+@pytest.mark.parametrize("requests,shortfall", [((T.R0, T.R1), None),
+                                               ((T.R0, T.R1_EOS), "engine steps [2, 3]: live requests observed [1, 0] != programmed [2, 1] -- "
+                                                                  "the shortfall is not after a verified EOS (['r1'] stopped early without one): "
+                                                                  "declared schedule not exercised (M-0571 (1))")],
+                         ids=["served to the cap", "eos stop"])
+@pytest.mark.parametrize("tokens_optional", [False, True])
+def test_g6_refuses_a_declared_request_the_driver_omits(memory, tmp_path, requests, shortfall, tokens_optional):
+    """A passing record with one request dropped from its tokens.json FAILS G6 naming that request, never a PASS with the request's
+    output association skipped.  An EOS stop is then not verified, so the steps it left empty are named as a shortfall too."""
+    gp, oracle = T.assemble(list(requests), tmp_path)
+    assert _outcome(gp, oracle)["verdict"] == "PASS"
+    doc = _tokens(oracle)
+    _write(oracle, {**doc, "requests": [_req(doc, "r0")]})
+    got = _outcome(gp, oracle, tokens_optional)
+    assert got["verdict"] == "FAIL" and got["failed"] == ["G6"]
+    assert got["G6"]["problems"] == [_omitted("r1")] + ([shortfall] if shortfall else []), got["G6"]["problems"]
+    by = {e["request_id"]: e for e in got["requests"]}
+    assert by["r1"]["g6_problems"] == 1 and by["r0"]["g6_problems"] == 0
+    assert by["r1"].get("eos_verified") is (False if shortfall else None)
+
+
+def test_g6_refuses_a_request_the_program_does_not_declare(memory, tmp_path):
+    gp, oracle = T.assemble([T.R0, T.R1], tmp_path)
+    doc = _tokens(oracle)
+    _write(oracle, {**doc, "requests": doc["requests"] + [dict(_req(doc, "r1"), request_id="r9")]})
+    got = _outcome(gp, oracle)
+    assert got["verdict"] == "FAIL" and got["failed"] == ["G6"]
+    assert got["G6"]["problems"] == ["the driver's capture/tokens.json carries request(s) ['r9'] the Program does not declare: served "
+                                     "tokens of no declared request are not an execution of the Program"]
+
+
+def test_g6_refuses_a_request_the_driver_names_twice(memory, tmp_path):
+    gp, oracle = T.assemble([T.R0, T.R1], tmp_path)
+    doc = _tokens(oracle)
+    _write(oracle, {**doc, "requests": doc["requests"] + [copy.deepcopy(_req(doc, "r1"))]})
+    got = _outcome(gp, oracle)
+    assert got["verdict"] == "FAIL" and got["failed"] == ["G6"]
+    assert got["G6"]["problems"] == ["the driver's capture/tokens.json has more than one entry for request(s) ['r1']: which one the driver "
+                                     "served is not stated"]
