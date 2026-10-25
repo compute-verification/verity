@@ -35,7 +35,8 @@ Two kinds of committed run:
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
-        [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local --main FILE]
+        [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local|gate:USER@HOST --main FILE]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
 
@@ -67,9 +68,12 @@ covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then
 run names a stand-in template, at TP1 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's
 `transfer_gate_negatives` and the registration under the compiler listing none (`more_negatives`).
 
-**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local --main FILE`` on the
-auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is read;
-``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent history).
+**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local|gate:USER@HOST --main
+FILE`` on the auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is
+read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
+history; ``gate:USER@HOST`` is vy-challenger-1 through infra's gate with the lane's gate key ``--gate-key``, its challenger on
+``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
+a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
 `advice_before_draw` holds the advice to the receipt of the stream that drew.
 """
 from __future__ import annotations
@@ -887,7 +891,8 @@ def audit(a: argparse.Namespace) -> int:
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {}}
     if a.challenger:
-        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main)
+        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main, ssh_key=a.gate_key,
+                                              peer=a.peer, key_record=a.challenger_key)
     try:
         for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
             summary["ranks"][str(r)] = row
@@ -1007,8 +1012,14 @@ def main(argv: list[str] | None = None) -> int:
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--challenger", choices=["local"], help="draw each window on the auditor's challenger's coins, the run root's one "
-                   "session (a5_coins; local: a development session on this machine), not the verifier's own")
+    p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
+                   "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
+                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
+                   "127.0.0.1 the session's challenger listens on")
+    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
+                   "(infra's challenger-key/v1), never the session's key.json")
+    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
@@ -1047,9 +1058,14 @@ def main(argv: list[str] | None = None) -> int:
                  "--window K --row-dir DIR")
     elif not a.opening or (a.cmd == "commit" and not a.advice):
         ap.error("--opening FILE (and commit's --advice FILE)")
-    if a.cmd == "audit" and a.challenger and not a.main:
-        ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the commit "
-                 "the session's host pins")
+    if a.cmd == "audit" and a.challenger:
+        if a.challenger != "local" and not a.challenger.startswith("gate:"):
+            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
+            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the "
+                     "commit the session's host pins")
     return commit(a) if a.cmd == "commit" else audit(a)
 
 
