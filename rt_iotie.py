@@ -174,10 +174,13 @@ h, l = judge(run2)
 print(f"(4) another run's Commit of the same rows at the same steps, under this run's registration: host "
       f"{[x is not None for x in h]}, lean {[x is not None for x in l]} (refused)")
 assert all(h) and all(l)
-h, l = judge(run2, verifier_ports(root=run2.port_root, dom=run2.port_domain))
-print(f"    the same, with the verifier's port naming run 2's root and domain: host {h} (the emulation climbs "
-      f"under the dom it's handed), lean {l}")
-assert all(h) and l == [None] * SH.S
+try:
+    h, l = judge(run2, verifier_ports(root=run2.port_root, dom=run2.port_domain))
+    print(f"    the same, with the verifier's port naming run 2's root and domain: host {h} (the emulation climbs "
+          f"under the dom it's handed), lean {l}")
+    assert all(h) and l == [None] * SH.S
+except ValueError as e:
+    print(f"    the same, with the verifier's port naming run 2's root and domain: host ValueError({e}) (the fix)")
 
 # (5) b || c: one bit of a row, the salt, a sibling, another value's row (the warden's cells) at the position
 tries = acc = 0
@@ -240,15 +243,26 @@ def ingress_verdicts(ports, insts) -> list:
     return out
 
 
-via_helper = I.port_reads(forged, COUNT_I, TI.P)
-print(f"(6) io_ids.port_reads(instances, count, P), the verifier's own ports, names root "
-      f"{bytes.fromhex(via_helper[key(TI.SHAPE.S, 0)]['root']).hex()[:16]}… (the forged tree's: "
-      f"{via_helper[key(TI.SHAPE.S, 0)]['root'] == F_ROOT.hex()})")
-v = ingress_verdicts(via_helper, forged)
-print(f"    the forged instances' reads under it: host {[a for a, _ in v]}, lean {[b for _, b in v]}")
-whole = all(a is None and b is None for a, b in v) and all(I.unit_reference(TI.SHAPE, i) == 1 for i in forged)
-print(f"    the tie of every bucket accepted (reads and units) while the forward computed another prompt: {whole}")
-assert whole
+try:
+    via_helper = I.port_reads(forged, COUNT_I, TI.P)
+except TypeError:
+    via_helper = None
+if via_helper is not None:
+    print(f"(6) io_ids.port_reads(instances, count, P), the verifier's own ports, names root "
+          f"{bytes.fromhex(via_helper[key(TI.SHAPE.S, 0)]['root']).hex()[:16]}… (the forged tree's: "
+          f"{via_helper[key(TI.SHAPE.S, 0)]['root'] == F_ROOT.hex()})")
+    v = ingress_verdicts(via_helper, forged)
+    print(f"    the forged instances' reads under it: host {[a for a, _ in v]}, lean {[b for _, b in v]}")
+    whole = all(a is None and b is None for a, b in v) and all(I.unit_reference(TI.SHAPE, i) == 1 for i in forged)
+    print(f"    the tie of every bucket accepted (reads and units) while the forward computed another prompt: {whole}")
+    assert whole
+else:
+    fixed = I.port_reads([i.map for i in forged], REAL_ROOT, r_dom, COUNT_I, TI.P)
+    v = ingress_verdicts(fixed, forged)
+    print(f"(6) io_ids.port_reads(maps, root, domain_id, count, P) (the fix) names the registration's root: "
+          f"{fixed[key(TI.SHAPE.S, 0)]['root'] == REAL_ROOT.hex()}; the forged instances refused: "
+          f"{sum(a is not None for a, _ in v)} of {TI.SHAPE.S} (host), {sum(b is not None for _, b in v)} (lean)")
+    assert all(a is not None and b is not None for a, b in v)
 held = IT.port_reads([i.map.steps for i in forged], REAL_ROOT, r_dom, COUNT_I, TI.P, I.INPUT_IDS)
 v = ingress_verdicts(held, forged)
 print(f"    the same instances under the registration's root (io_tie.port_reads' form): "
@@ -257,12 +271,18 @@ print(f"    the same instances under the registration's root (io_tie.port_reads'
 assert all(a is not None and b is not None for a, b in v)
 
 # (7) the host emulation reads neither the port's domain nor its leaves; Lean reads both
+def host(port, entry, bcs):
+    try:
+        return repr(WR.refusal(port, REG_DOM, entry, bcs))
+    except ValueError as e:
+        return f"ValueError({e})"
+
+
 p0 = dict(verifier_ports()[key(SH.S, 0)])
 entry, bcs = TT.port_statement(HON, 0)
 wrong = p0 | {"domain": TT._h(b"another domain").hex()}
-print(f"\n(7) a verifier port naming another domain: host {WR.refusal(wrong, REG_DOM, entry, bcs)!r}, "
+print(f"\n(7) a verifier port naming another domain: host {host(wrong, entry, bcs)}, "
       f"lean {lean_refusal(wrong, entry, bcs)!r}")
 wrong = p0 | {"leaves": 2 * COUNT}
-print(f"    naming twice the leaves: host {WR.refusal(wrong, REG_DOM, entry, bcs)!r}, "
-      f"lean {lean_refusal(wrong, entry, bcs)!r}")
+print(f"    naming twice the leaves: host {host(wrong, entry, bcs)}, lean {lean_refusal(wrong, entry, bcs)!r}")
 print("\nall assertions hold")
