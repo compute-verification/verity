@@ -69,7 +69,8 @@ FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
 WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
-#: read and write what they did: only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
+#: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
+#: before, pa_w or pa, writes): only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
 #: launches them plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
 PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})

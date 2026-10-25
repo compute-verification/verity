@@ -179,7 +179,9 @@ def test_kernel_constants_match_the_reference():
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
-    read a stale line), the forming and pa_w first; and pd_commit lets the forming launch behind it."""
+    read a stale line), the forming and pa_w first; and pd_commit lets the forming launch behind it.  The Pearl-C GEMMs
+    (LATE) read only P_A of what the launch before them (pa_w, pa) writes, so only their producer waits, before its first
+    P_A box; pa_w waits at its entry, so what they read before that was written by launches that had completed."""
     def body(start):
         at = SOURCE.index(start)
         return SOURCE[at:SOURCE.index("\n}\n", at)]
@@ -188,6 +190,13 @@ def test_a_programmatic_launch_waits_at_its_entry():
     head = gemm[:gemm.index("pdl_entry();")]
     assert "__syncthreads();" in head and "if (wg == NWG)" not in head and "b_row(" not in head
     assert set(re.findall(r"\btma_\w+", head)) == {"tma_prefetch_l2"}
+    assert "constexpr bool LATE = PEEL && !GR;" in head and head.rstrip().endswith("if constexpr (LATE)\n    pdl_launch();\n  else")
+    producer = gemm[gemm.index("if (wg == NWG)"):gemm.index('asm volatile("exit;");')]
+    assert producer.count("pdl_wait();") == 1 and gemm.count("pdl_wait();") == 1
+    assert producer.index("if constexpr (LATE) pdl_wait();") < producer.index("maps->pa, full") and \
+        "maps->pa, full" not in producer[:producer.index("if constexpr (LATE) pdl_wait();")]
+    assert re.search(r"pdl_wait\(\) \{ asm volatile\(\"griddepcontrol\.wait;\"", SOURCE)
+    assert re.search(r"pdl_launch\(\) \{ asm volatile\(\"griddepcontrol\.launch_dependents;\"", SOURCE)
     assert "cp.async.bulk.prefetch.tensor.2d.L2.global" in body("DEV void tma_prefetch_l2")
     for b in (form, pa_w):
         head = b[:b.index("pdl_entry();")]

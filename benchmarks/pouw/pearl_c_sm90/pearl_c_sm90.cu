@@ -89,6 +89,9 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
 // a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
 // before it touches global memory, then lets the next launch start behind this one; both are no-ops in a plain launch
 DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
+// its two halves, for a kernel that reads the launch before it's output late (gemm_body's LATE)
+DEV void pdl_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
+DEV void pdl_launch() { asm volatile("griddepcontrol.launch_dependents;" ::: "memory"); }
 // run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait
 extern "C" __global__ void pdl_waits() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
@@ -252,8 +255,16 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
     const int k0 = MODE == M_WIN ? blockIdx.x % wins : 0, k1 = MODE == M_WIN ? k0 + 1 : min(KB, STAGES);
     for (int kb = k0; kb < k1; kb++) tma_prefetch_l2(maps->b, kb * BK, tn * BN, once ? first : l2_evict_normal());
   }
+  // LATE: of the launch before it (pa_w, or pa), a Pearl-C GEMM reads only P_A, which its producer alone loads, for each
+  // tile's peel; that thread waits there, so the windows run while that launch does.  Everything else it reads (A', B, the
+  // scales) launches before that one wrote, and they had completed when it passed its own entry wait (pa_w's pdl_entry; pa
+  // lets nothing start early)
+  constexpr bool LATE = PEEL && !GR;
   __syncthreads();
-  pdl_entry();
+  if constexpr (LATE)
+    pdl_launch();
+  else
+    pdl_entry();
 
   if (wg == NWG) {
     // the producer exits rather than returns: a path back would join its register budget with the consumers'
@@ -280,6 +291,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
             else
               tma_load(st + T::A_BYTES, maps->b, full, kb * BK, br);
           } else {
+            if constexpr (LATE) pdl_wait();
             tma_load(st, maps->pa, full, 0, tm * TM);
             tma_load(st + T::A_BYTES, maps->pb, full, 0, br);
           }
