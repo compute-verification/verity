@@ -124,7 +124,21 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
-    assert "--mem-gb" not in err, "the slot's mem= is the run's, without a word about a dropped --mem-gb"
+    assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+
+
+def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monkeypatch, capsys):
+    """INF-228: a spill dropped --mem-gb, so a 40-GB research slot held the vllm suite to 2 workers; the slot gets the run's 150."""
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=160))})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--mem-gb", "150", "--", "pytest", "-q"]) == 3
+    (kw,) = launched
+    assert kw["mem_gb"] is None and kw["env"]["CHECK_RUN_MEM_GB"] == "150"
+    assert "--mem-gb 150 goes to the slot" in capsys.readouterr().err
 
 
 def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path, monkeypatch, capsys):

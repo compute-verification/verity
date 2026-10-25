@@ -1,3 +1,4 @@
+import Properties.Proofs.Nci.BodiesOk.Nonneg
 import Proofs.Properties.Nci.BodiesOk.Node
 
 /-!
@@ -41,12 +42,15 @@ def RefIn (b : Body) (r : Ref) : Prop :=
   (r.p = false → r.i < b.nodes.size ∧ r.j < (b.nodes[r.i]!).out.leaves)
 
 /-- What the decoder establishes of the body of Definition `i`: each node calls an earlier Definition as `NodeOk`
-says, its arguments are sequences of parts, and every reference names a leaf. -/
+says, its arguments and its return are sequences of parts, none naming a negative position, and every reference names a
+leaf. -/
 def BodyFacts (defs : Array Defn) (i : ℕ) (b : Body) : Prop :=
   (∀ k < b.nodes.size, (b.nodes[k]!).fn < i ∧ NodeOk defs[(b.nodes[k]!).fn]! (b.nodes[k]!) ∧
-    ∀ a < (b.nodes[k]!).args.size, (∃ ps : Array Part, ((b.nodes[k]!).args[a]!).seq = Seq.ofParts ps) ∧
+    ∀ a < (b.nodes[k]!).args.size,
+      (∃ ps : Array Part, ((b.nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ ∀ q ∈ ps, PartNonneg q) ∧
       ∀ t < ((b.nodes[k]!).args[a]!).seq.count, RefIn b (((b.nodes[k]!).args[a]!).seq.get t)) ∧
-  ∀ t < b.ret.count, RefIn b (b.ret.get t)
+  (∀ t < b.ret.count, RefIn b (b.ret.get t)) ∧
+  ∃ ps : Array Part, b.ret = Seq.ofParts ps ∧ ∀ q ∈ ps, PartNonneg q
 
 def DefOk (defs : Array Defn) (i : ℕ) (c : Defn) : Prop := CalleeOk c ∧ BodyFacts defs i c.body
 
@@ -118,7 +122,8 @@ def StatSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (v : Lean.Json) (s : DecSt
   staticFns fuel desc v s = .ok (u, s') → Grows s s'
 
 theorem default_bodyFacts (defs : Array Defn) (i : ℕ) : BodyFacts defs i default :=
-  ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun _ ht => absurd ht (Nat.not_lt_zero _)⟩
+  ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun _ ht => absurd ht (Nat.not_lt_zero _), #[], rfl,
+    fun _ h => absurd h (by simp)⟩
 
 theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
   intro desc fid s i s' h hs

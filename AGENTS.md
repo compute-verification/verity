@@ -509,8 +509,10 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
   research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
   runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
-  marking, run the Lean check of the packages you touched and `uv run tools/verity/check/suites.py --changed origin/main
-  --quick`, and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
+  marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
+  source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
+  --changed $(git rev-parse origin/main) --quick"` (main's SHA, expanded in your checkout: a shipped tree may hold no
+  `origin/main`), and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
