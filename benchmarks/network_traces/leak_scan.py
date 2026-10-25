@@ -31,6 +31,7 @@ import json
 import re
 import struct
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier"))
@@ -38,6 +39,7 @@ import redigest as RD  # noqa: E402
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.
 STATEMENT = ("program.json", "partition.json", "circuit.txt")
+_SWAP = threading.Lock()
 
 
 def is_stream(name: str) -> bool:
@@ -51,24 +53,26 @@ def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] |
     (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets;
     None when the format doesn't read the whole stream."""
     readers = []
+    # `transcript_check.R` is swapped process-wide while `redigest.layout` reads: one caller at a time, or a recorder
+    # subclasses another's and stays installed (n2_zk scans its members in threads).
+    with _SWAP:
+        class Reads(RD.tc.R):
+            def __init__(s, b, hlen=32):
+                super().__init__(b, hlen)
+                s.reads = []
+                readers.append(s)
 
-    class Reads(RD.tc.R):
-        def __init__(s, b, hlen=32):
-            super().__init__(b, hlen)
-            s.reads = []
-            readers.append(s)
+            def take(s, n):
+                s.reads.append((s.i, n))
+                return super().take(n)
 
-        def take(s, n):
-            s.reads.append((s.i, n))
-            return super().take(n)
-
-    R, RD.tc.R = RD.tc.R, Reads
-    try:
-        off = RD.layout(stream, zk=True)
-    except (AssertionError, ValueError, KeyError, IndexError, struct.error):
-        return None
-    finally:
-        RD.tc.R = R
+        R, RD.tc.R = RD.tc.R, Reads
+        try:
+            off = RD.layout(stream, zk=True)
+        except (AssertionError, ValueError, KeyError, IndexError, struct.error):
+            return None
+        finally:
+            RD.tc.R = R
     got = next((r.reads for r in reversed(readers) if r.i == len(stream)), None)
     nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") for o in os)
     return None if got is None else (tuple(got), nonces)
