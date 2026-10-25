@@ -21,8 +21,8 @@ CHALLENGED = (PH.SCHEME, "ncp-v2")
 
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
-    """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate`` and
-    ``served`` of `raw`, in that order; ValueError names the first bad one."""
+    """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate``,
+    ``served`` and ``graphs`` of `raw`, in that order; ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
         raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
@@ -55,7 +55,11 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
         if not isinstance(served, SV.Served) or served.registered or served.refused:
             raise ValueError("pouw setting 'served' is a fresh pouw_h1_served.Served: each call's A and z/y tables and "
                              "the weights' B committed as the window Program's registered values")
-    return rows, steps, runner, rounds, challenger, session, admission, gate, served
+    graphs = raw.get("graphs", ())
+    if not (isinstance(graphs, (list, tuple))
+            and all(isinstance(z, int) and not isinstance(z, bool) and z > 0 for z in graphs)):
+        raise ValueError("pouw setting 'graphs' is the engine's CUDA-graph capture sizes, positive integers (none when eager)")
+    return rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs)
 
 
 def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:

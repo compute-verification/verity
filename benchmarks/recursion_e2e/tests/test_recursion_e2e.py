@@ -231,15 +231,15 @@ def test_result_command_writes_both_files(tmp_path: Path) -> None:
     assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion bench: K = 4096")
 
 
-def test_job_command_is_a_gpu_host_job_on_node_1(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--N", "16", "--steps", "lean,build"]) == 0
+def test_a_gpu_run_is_a_gpu_host_job_on_node_1s_queue(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--N", "16", "--steps", "lean,build", "--modes", "dev"]) == 0
     cmd = capsys.readouterr().out.split()
     assert cmd[:6] == ["research", "run", "--queue", "--on", "vy-nebius-1", "--gpu-host"]
     assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
     assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion_e2e/job.sh"]
     assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
     assert "--preemptible" not in cmd
-    assert RUN.main(["run", "--dry-run", "--node", "vy-nebius-2", "--preemptible"]) == 0
+    assert RUN.main(["run", "--dry-run", "--node", "vy-nebius-2", "--preemptible", "--oprove-gpu", "1"]) == 0
     cmd = capsys.readouterr().out.split()
     assert cmd[4] == "vy-nebius-2" and "--preemptible" in cmd[:cmd.index("--")]
 
@@ -284,6 +284,26 @@ def test_a_run_id_is_read_from_its_records_not_its_result_file(tmp_path: Path, m
     (out / "out" / "recursion_e2e.json").write_text(json.dumps({"schema": RP.SCHEMA, "rows": [], "stale": True}))
     doc = RUN.load("r20261024-000000-abcd")
     assert "stale" not in doc and doc["run"] == "r20261024-000000-abcd" and row(doc, "inner M0")["ok"] is True
+
+
+def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, capsys) -> None:
+    """`research cancel` ends the scope before job.sh's trap writes a result: `table RUN` reads the records it left."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: None)
+    o = job(tmp_path / ".research" / "runs" / "r20261024-000000-cafe")
+    for step in ("icheck", "vstage", "lean"):
+        shutil.rmtree(o / "steps" / step)
+    stopped = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-firewall"
+    stopped.mkdir()
+    (stopped / "prove.err").write_text("ZKRANK\t{}\n")
+    (o / "steps" / "oprove" / "r1" / "rc").unlink()
+    (o / "result.err").write_text("")
+    assert not (o / "recursion_e2e.json").exists()
+    assert RUN.main(["table", "r20261024-000000-cafe"]) == 0
+    md = capsys.readouterr().out
+    assert "## r20261024-000000-cafe" in md and "Verdict: **not a whole recursive session**" in md
+    assert "| outer L1 | oprove |" in md and "no session finished before the step stopped" in md
+    assert "oprove ?" in md
 
 
 def test_table_refuses_another_schema(tmp_path: Path) -> None:
@@ -354,13 +374,22 @@ def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
     assert sorted(row(doc, "stage alg")["extra"]["units"]) == ["alg-p0", "alg-p1"]
 
 
-def test_the_lease_is_sized_from_the_firewalls_l3_session(capsys) -> None:
-    assert RUN.lease_min(1) == 74 and RUN.lease_min(2) == 148 and RUN.lease_min(1, firewall=False) == 10
+def test_each_statement_has_its_own_lease_from_its_firewalled_session(capsys) -> None:
+    assert RUN.stmt_lease_min("L0") == 94 and RUN.stmt_lease_min("L3") == 12 and RUN.stmt_lease_min("cap-L3") == 2
+    assert RUN.lease_min(1) == 94 and RUN.lease_min(2) == 187 and RUN.lease_min(1, firewall=False) == 10
+    assert RUN.lease_min(1, levels="L3") == 12 and RUN.lease_min(1, levels="alg") == 22      # alg: alg-p0 and alg-p1
+    assert RUN.statements("alg,cap") == ["alg-p0", "alg-p1", "cap"] and len(RUN.statements()) == 10
+    assert RUN.main(["plan"]) == 0
+    assert "leases (min): L0 94, L1 23, L2 21, L3 12, alg-p0 21, alg-p1 22, cap 2," in capsys.readouterr().out
     assert RUN.main(["run", "--dry-run"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert "MODES=firewall" in cmd and "GPU_MAX_MIN=74" in cmd and "OPROVE_RUNS=1" in cmd
-    assert int(cmd[cmd.index("--max-min") + 1]) > 9850 * 1.5 / 60       # every statement's firewalled session, one at a time
-    assert cmd[cmd.index("--mem-gb") + 1] == "128"                       # a queued node's MemoryMax; L0 peaked at 99 GB
+    assert "MODES=firewall" in cmd and "GPU_MAX_MIN=94" in cmd and "OPROVE_RUNS=1" in cmd
+    every = int(cmd[cmd.index("--timeout") + 1].removesuffix("m"))
+    assert every > 7870 * 1.5 / 60                                         # every statement's session, one at a time
+    assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's firewalled session peaked at 99 GB
+    assert RUN.main(["run", "--dry-run", "--env", "LEVELS=L3"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "GPU_MAX_MIN=12" in cmd and int(cmd[cmd.index("--timeout") + 1].removesuffix("m")) < every - 60
     assert RUN.main(["run", "--dry-run", "--lease-min", "30", "--modes", "dev"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "GPU_MAX_MIN=30" in cmd and cmd[cmd.index("--mem-gb") + 1] == "64"
@@ -369,10 +398,27 @@ def test_the_lease_is_sized_from_the_firewalls_l3_session(capsys) -> None:
     assert cmd[cmd.index("--mem-gb") + 1] == "200"
 
 
-def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--node", "vy-nebius-cpu-3"]) == 0
+def test_a_firewalled_run_is_a_plain_run_on_a_cpu_node(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--steps", "vcap", "--repeat", "1"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert "--gpu-host" not in cmd and cmd[4] == "vy-nebius-cpu-3"
+    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-2"] and "--queue" not in head and "--gpu-host" not in head
+    assert head[head.index("--timeout") + 1] == f"{RUN.SETUP_MIN + 1}m"     # a plain run's limit is its --timeout
+    assert job[:5] == ["taskset", "-c", "0-31", "bash", "benchmarks/recursion_e2e/job.sh"]
+    assert "GPU=0" in job and f"FLOCK_WORK={RUN.CPU_WORK}" in job
+    assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-5", "--cores", "32-63", "--env", "FLOCK_WORK=/x"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[3] == "vy-nebius-cpu-5" and cmd[cmd.index("taskset") + 2] == "32-63" and cmd[-1] == "FLOCK_WORK=/x"
+    with pytest.raises(SystemExit, match="only through its slots"):
+        RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-1"])
+    with pytest.raises(SystemExit, match="has no GPU"):
+        RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-2", "--oprove-gpu", "1"])
+
+
+def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--modes", "dev"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "--gpu-host" not in cmd and cmd[3] == "vy-nebius-cpu-2"
     assert "STEPS=build,inner,vstage,vcap,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
 

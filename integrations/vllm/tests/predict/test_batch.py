@@ -397,6 +397,8 @@ def test_workload_labels_by_provenance():
 
 
 def test_compile_steps_passes_its_own_rule():
+    """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p."""
+    from verity_vllm.program.registry.topp_geometry import registered_splits
     steps = pytest.importorskip("verity_vllm.predict.steps")
     I1 = pytest.importorskip("verity.core.protocols.certifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}
@@ -414,8 +416,10 @@ def test_compile_steps_passes_its_own_rule():
                for i, (lp, _, b) in enumerate(reqs)}
         return adv, ing
 
-    adv, ing = session({**greedy, "max_tokens": 2})
-    check_compiled(reg, adv, ing, steps.compile_steps(reg, adv, ing), steps.plan_steps)
-    adv, ing = session(topp)
-    with pytest.raises(BatchDependent, match="request 1: its top-p sampler's split count is derived"):
-        check_compiled(reg, adv, ing, steps.compile_steps(reg, adv, ing), steps.plan_steps)
+    for b1 in ({**greedy, "max_tokens": 2}, {**topp, "top_p": 1.0}, topp):
+        adv, ing = session(b1)
+        c = steps.compile_steps(reg, adv, ing)
+        check_compiled(reg, adv, ing, c, steps.plan_steps)
+        if b1["temperature"]:
+            assert c.requests[1].policy == {"kind": "stochastic", "temperature": 0.8, "top_p": b1["top_p"], "top_k": 0, "seeded": True,
+                                            "splits": registered_splits(RTX["num_sms"])}

@@ -146,6 +146,14 @@ class StoreCompletion:
     def pull(self, commit: str) -> int:
         """Fetch and index the remote's attempts started since `commit` that this store lacks; how many it indexed."""
 
+        indexed = self.pull_since((self._commit_time or (lambda c: commit_time(self.root or repository_root(), c)))(commit))
+        self._pulled.add(commit)
+        return indexed
+
+    def pull_since(self, started: int) -> int:
+        """Fetch and index the remote's attempts started since `started` (Unix seconds, less `COMMIT_MARGIN_S`) that this
+        store lacks; how many it indexed."""
+
         from research.store import ids  # noqa: PLC0415
         from research.store.local import StoreError  # noqa: PLC0415
 
@@ -155,7 +163,6 @@ class StoreCompletion:
             why = getattr(store, "remote_error", None) or "no remote is configured"
             raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
                                "missing; pass --local-only to read this machine's catalog alone")
-        started = (self._commit_time or (lambda c: commit_time(self.root or repository_root(), c)))(commit)
         since = time.strftime("r%Y%m%d", time.gmtime(started - COMMIT_MARGIN_S))
         listed = [key[len("attempts/"):-len(".json")]
                   for key, _ in remote.list_times("attempts/", start_after=f"attempts/{since}")]
@@ -183,7 +190,6 @@ class StoreCompletion:
                         skipped.append(f"{run}: {error}")
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
-        self._pulled.add(commit)
         self._log(f"pulled {indexed} attempts started since {since} from {remote.describe()} "
                   f"({len(listed) - len(missing)} of {len(listed)} were here)")
         for line in skipped[:5]:

@@ -7,6 +7,7 @@ import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.SampledAudit
+import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -21,7 +22,8 @@ import Proofs.NetworkCertifier.Warden
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
 `Schedule` (Theorem 3 for the constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over
-whole windows), `AdviceString` (the leak bound: the advice string's charge) or `Warden` (the warden's channel bound),
+whole windows), `AdviceString` (the leak bound: the advice string's charge), `SampledCharge` (the leak bound under a
+sampled audit: the faulty units' charge) or `Warden` (the warden's channel bound),
 and every lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
@@ -97,6 +99,8 @@ theorem EncardDecodableWithinLeCompiled : NetTiming.Guarantees.EncardDecodableWi
 theorem EncardDecodableWithinLeCompiledPerWindow : NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow :=
   fun I T ss bits hbits b compilerOf env hpre hdet D =>
     NetTiming.encard_decodableWithin_le_compiled_perWindow I T ss bits hbits b compilerOf env hpre hdet D
+
+theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 
 theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := @NetTiming.wardenView_eq_clientView
 theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le

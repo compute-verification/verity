@@ -65,6 +65,8 @@ best effort): the cache is regional and may drop a value at any time, so a cold 
   last published an event. An enqueued time after the done time means events wait. The watchdog rings @comms when that
   has lasted 10 minutes, at most hourly (`crons.stall`): from 19 to 23 Oct production consumed nothing while
   `last_success_at`, which the crons keep fresh, looked healthy.
+- `canary_sent_at` and `canary_done_at`: each hour the watchdog publishes a synthetic `canary` event, stamped as an
+  enqueue, which only the consumer can mark done. So the stall check proves the drain on a day no person posts.
 - `oldest_unprocessed_age_s`: the age now of the oldest unrouted post reconciliation found on its last run (0 when it
   found none); unknown once that finding is 30 minutes old.
 - `dead_letter_count` and `dead_letter_since`: dead letters counted since `since`. The client can't count a topic's
