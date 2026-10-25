@@ -69,7 +69,8 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
 * **What the verifier receives** is `n2_zk.RECEIVED` per window and the advice (``advice.json``, with no tie),
   scanned for every piece of both ends' heads, head salts, siblings and certifier salts but those the public circuit
   or a window's ``pub`` row holds: on an advised link an accepted window's egress counts are its view's public
-  ``released``.
+  ``released``. A member fails on a piece the scan reads ``leaked`` (`leak_scan.classify`, as `n2_zk` decides), not on
+  a ``structured`` find (every find straddles the proof format's fields, or its bytes are public), which is listed.
 """
 from __future__ import annotations
 
@@ -694,7 +695,7 @@ def prove(a) -> int:
         accepted = net["accepted"] and held["ok"]
         good = (all(r["as_expected"] for r in res["windows"]) and accepted == (name == "honest") and held["ok"]
                 and (net["accepted"] is False or net["advice"] == AD.digest(rounds[name].advice))
-                and not rec["verifier_found"] and rec["control"]["holds_all"])
+                and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good, **({"coins": held} if name in checked else {}))
         if "wrong_units" in net:
@@ -715,8 +716,10 @@ def prove(a) -> int:
                if name in checked else "")
             + f"), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
             f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
-            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the "
-            f"public circuit or rows hold left out), control {rec['control']['blobs_found']}; "
+            f"{rec['verifier_found'] or 'none'}, leaked {rec['leaked'] or 'none'}, structured "
+            f"{rec['structured'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the "
+            f"public circuit or rows hold left out), control {rec['control']['blobs_found']} "
+            f"(holds all {rec['control']['holds_all']}, {rec.get('padded_tails', 0)} padded tails not held to it); "
             f"{'as expected' if good else 'UNEXPECTED'}")
     summary["windows"] = {name: [int(r["accepted"]) for r in res["windows"]] for name, res in done.items()}
     costs = [r for res in done.values() for r in res["windows"]]

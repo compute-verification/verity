@@ -521,16 +521,21 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
 def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
     """The scan of what the verifier received for every window's witness pieces, leaving out the pieces the public
     circuit or a received window's ``pub`` row holds; `received`, the windows the verifier got (a sampled period's
-    drawn ones), by default every one."""
+    drawn ones), by default every one. The control (the prover's instance files) is to hold every held piece but a
+    blob's zero-padded last chunk (`leak_scan.cut`), which a head inside its row never shows; the scan of what the
+    verifier received still looks for those."""
     rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows
                     if x.args is not None and (received is None or x.window in received))
-    blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes() + rows)
+    raw, held_blobs = blobs_of(rd)
+    blobs, held, public = public_pieces(M.a8, raw, held_blobs, sg.circuit.read_bytes() + rows)
+    tails = {f"{k} @{len(b) - len(b) % M.a8.PIECE}" for k, b in raw.items() if len(b) % M.a8.PIECE}
     control = out / "prover-instances.bin"
     with open(control, "wb") as f:
         for x in rd.windows:
             f.write((x.statement.dir / "inst-1.bin").read_bytes())
-    got = M.a8.received(out / "verifier", control, blobs, held)
-    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"])}
+    got = M.a8.received(out / "verifier", control, blobs, held - tails)
+    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"]),
+            "padded_tails": len(held & tails)}
 
 
 def prove(a) -> int:
