@@ -17,13 +17,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Test-only: `lake` builds the onsite and remote packages beside this one (each product's executable, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
 # Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean) and PoUW's check (with
-# its window, commitments, and core's identity and randomness). The reference runs the ported components' Python: PoUW's
+# its window, commitments, and core's identity and randomness), and the network certificate check (with the certifier
+# program). The reference runs the ported components' Python: PoUW's
 # `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`, the integrity profile, the
-# proof service) with its generators, and PoUW's check cases, each from its own suite's tests; with them what they import
+# proof service) with its generators, PoUW's check cases, and the network check's difftest (the certifier's `Audit`)
+# with its generators, each from its own suite's tests; with them what they import
 # of `verity.ml` and `verity.errors`.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
+          "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/service/sampled_proofs", "verity/core/service/flock", "verity/core/primitives/lms/lean",
           "verity/core/primitives/identity", "verity/core/primitives/randomness"]

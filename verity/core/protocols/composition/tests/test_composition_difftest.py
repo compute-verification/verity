@@ -69,6 +69,11 @@ OS = R.ONE_STAGE
 ONE_STAGE_CASES = {R.ACCEPT: OS.changed_audits(most=0), R.UNDECIDED: OS.changed_audits([OS.VERDICTS_OF], most=1, least=1),
                    R.REJECT: OS.changed_audits(most=2, least=1)}
 
+NC = R.NETWORK
+#: The network check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
+NETWORK_CASES = {R.ACCEPT: ("honest", "shuffled", "extra"), R.UNDECIDED: ("missing", "refused", "deadline")}
+NETWORK_CASES[R.REJECT] = tuple(m for m in NC.MUTATIONS if m != "case" and not any(m in v for v in NETWORK_CASES.values()))
+
 
 @st.composite
 def ported_case(draw, C: R.Ported, kind: str) -> dict:
@@ -77,6 +82,8 @@ def ported_case(draw, C: R.Ported, kind: str) -> dict:
     if C is R.POUW:
         name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
+    elif C is R.NETWORK_CHECK:
+        case = draw(NC.cases(NETWORK_CASES[kind]))
     else:
         case = OS._case(draw(ONE_STAGE_CASES[kind]))
     root = bytes.fromhex(case["commitment"])
