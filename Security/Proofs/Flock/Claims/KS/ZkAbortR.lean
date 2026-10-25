@@ -175,7 +175,7 @@ theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Co
   obtain ⟨m₀, hm₀⟩ := href x
   obtain ⟨e, ⟨hon, hon₁⟩, hfit, hb⟩ :=
     htab x (Ω × ((Fin (D.V.k x) → Coin) → Coin × A)) (refuser P x (D.V.k x) decC keep m₀)
-  refine ⟨e.toAbortD, hfit, fun ω C hC hg => ?_⟩
+  refine ⟨Escapes.toAbortD e, hfit, fun ω C hC hg => ?_⟩
   exact accPrD_le_of_refuser H P D.V x decC (hVk x) hpc hlast hfree keep m₀ hm₀ e hon hon₁ (D.εtable x)
     (fun s => ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols s 0) p.val = some u ∧ u ≠ C p) ω
     (fun g => hb (ω, g) C hC hg)
