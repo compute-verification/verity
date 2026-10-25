@@ -183,6 +183,7 @@
   "Definitions.Nci",
   "Models.Nci.Assumptions.Threads",
   "Models.Nci.Assumptions.Baseline",
+  "Models.Nci.Assumptions.Cover",
   "NciCheck.Check",
   "NciCheck.Baseline",
   "NciCheck.Desc",
@@ -439,6 +440,9 @@
    "signature": ["NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"],
    "assumptions": [],
    "type_hash": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a"
+  },
+  "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+   "owner": "@training"
   },
   "NciCheck.Properties.SecurityProofs.Decodes": {
    "owner": "@network-accounting",
@@ -2863,6 +2867,10 @@
     "function": "NciCheck.Desc.evaluate",
     "outcome": "accept"
    },
+   "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+    "function": "NciCheck.Baseline.evaluate",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
     "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
     "outcome": "accept"
@@ -2954,8 +2962,7 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "NciCheck.Properties.CheckedCoverTraining": "unstated: SecurityProofs.CheckedCoverTraining (Proofs.Nci.Cover.Checked) proves it from SecurityProofs.DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), but its statement takes the cover theorem's premises Nci.Cover.Assumptions.UpdateHardness and Nci.Cover.MulBlocks.Upstream as hypotheses, named assumptions of Security's lock that this lock doesn't list: listing it rests a guarantee of this lock on them, a claims change for Daniel"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
