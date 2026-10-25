@@ -303,7 +303,14 @@ is the minimum.
   check holds on the model.
 - selftest `zk_session_relations_vary_with_the_seed` (RoPE `m = 25`, one coin seed): the finding's two functionals
   (`session_relations`: 521 F256 values at level 0, 42 at level 1) differ in every word between two prover seeds. A
-  prover that folds rep 0's pair in both reps (rejected by the verifier) reproduces the leak: every word is equal.
+  prover that folds rep 0's pair in both reps (rejected by the verifier) reproduces the leak: every word is equal. The
+  level-1 functional exists only at the positions both reps open at level 1, which the coins draw for each rep
+  independently. On some statements the reps share none: RMSNormTriton_v5 at N 2048 shares none under any of 16 tapes,
+  and then there is no level-1 relation to leak. So the case checks level 1 at every shared position, and it requires:
+  - that each rep opened level-1 positions, so an empty level-1 functional is a disjoint draw, not a lost record;
+  - that the level-1 functional is non-empty whenever a position is shared;
+  - that both sessions of each kind drew the same positions;
+  - that level 0 is non-empty.
 - The statistics (§8) test both functionals as classes of one value per session.
 
 **Assumptions.** The table's argument is exact (perfect hiding) for uniform prover randomness, given the commitments hide.

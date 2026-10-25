@@ -1043,7 +1043,7 @@ def test_r7_reuses_an_earlier_records_registered_value():
             R.check(rec, prog, Q, **kw, outputs=bad)
 
 
-#: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+#: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 
