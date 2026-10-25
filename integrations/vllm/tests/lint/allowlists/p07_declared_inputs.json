@@ -17,7 +17,6 @@
     {"file": "verity_vllm/pipeline/hot.py", "kind": "machine-path", "symbol": "StopOptions", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/hot.py", "kind": "machine-path", "symbol": "SubmitOptions", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "broad-except", "symbol": "_program_dirs_for", "detail": "except Exception"},
-    {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "seed-default", "symbol": "CompiledKernelCheck.__init__", "detail": "seed_source"},
     {"file": "verity_vllm/check/gates.py", "kind": "broad-except", "symbol": "RunArtifacts.C", "detail": "except Exception"},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "environ", "symbol": "inductor_cache_dir", "detail": "TORCHINDUCTOR_CACHE_DIR"},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "environ", "symbol": "triton_cache_dir", "detail": "TRITON_CACHE_DIR"},

@@ -89,7 +89,7 @@ def check_edges(dataflow: dict[str, Any], committed, n_rows: int) -> dict[str, A
 
 class CompiledKernelCheck:
     def __init__(self, committer: Any, model: torch.nn.Module, tokens: list[int] | dict[str, list[int]] | None = None, *, seed: int,
-                 seed_source: str | None = None,
+                 seed_source: str | None,
                  n_random: int = 4, pieces: int | None = None, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                  arrivals: dict[str, int] | None = None, prompts: dict[str, list[int]] | None = None) -> None:
         warm_vml()
