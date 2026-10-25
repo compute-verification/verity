@@ -12,7 +12,9 @@ window is PoUW's ``{context, kind, public}``, not one-stage's provenance:
   SHA-512 is the provenance's ``circuit`` and the circuit the verifier registered (``--circuit``), and the provenance's run
   is the registration's context and the run the loop published (``--run``) (`verifier_window`, `source`);
 * the template is the pinned H1 tile, resolved by `pouw.resolve` and composed by C-Flock's `UnitStager` on the record's
-  statement (`records_audit.composer`).
+  statement (`records_audit.composer`);
+* a member's public header names its set by the window's run, which a PoUW window states as its context
+  (`flock_input_files`).
 
 Then `answer` makes the proof service's answer for the registration in PoUW's evidence form (`core_check.evidence`:
 public ``{"draw": ...}``, the profile at the verifier's δ), written to ``DIR/answer.json``, and `core_check.answer` (and,
@@ -45,7 +47,21 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
 
 import records_audit as RA  # noqa: E402
 
-_source = RA.source
+from verity.ml.windows import flock_inputs as FI  # noqa: E402
+
+_source, _input_files = RA.source, FI.flock_input_files
+
+
+def flock_input_files(window_dir, k, circuit, out_dir, *, write=("pub", "inst"), files=None):
+    """`flock_inputs.flock_input_files`, its header's ``set`` named by the run as for one-stage's window: a PoUW
+    window's run is its context."""
+    d = Path(window_dir)
+    win, rec = files if files is not None else (json.loads((d / "window.json").read_text()),
+                                                json.loads((d / "registration.json").read_text()))
+    w = rec.get("window") or {}
+    if "run" not in w and "context" in w:
+        rec = {**rec, "window": {**w, "run": w["context"]}}
+    return _input_files(window_dir, k, circuit, out_dir, write=write, files=(win, rec))
 
 
 def _provenance(wdir: Path) -> tuple[dict, dict]:
@@ -159,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     law = rec["law"]
     held_prov = {"provenance": prov}
     RA.verifier_window = verifier_window
+    FI.flock_input_files = flock_input_files
     RA.source = lambda w, held: source(w, {**held, **held_prov})
     rc = RA.main(["audit", "--window", str(wdir), "--law", f"{law['law']}:{law['k']}", "--circuit", a.circuit,
                   "--run", a.run, "--m0-pythonpath", a.m0_pythonpath, "--bin", a.bin, "--lean", a.lean,
