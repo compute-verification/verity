@@ -6,14 +6,17 @@ commitment) and a page encoded before its coin (stored before the coin, or after
 the same verdict in Lean and Python, and the reason the case names. The drawn logs are those cases at other seeds and
 sizes, each under one event edit (an event dropped, duplicated, moved or swapped with the next, a hex field's byte
 flipped, a number moved by one, a read made late) or one malformation (a key dropped, hex uppercased or cut odd, a salt
-or coin of the wrong length, an unknown op, a count out of range), which both must refuse.
+or coin of the wrong length, an unknown op, a count out of range), which both must refuse. The space leg's KV window
+(`period.kv_window`) asks the same executable for its verdict, through `obligation.lean_verdict`.
 """
 
 from __future__ import annotations
 
 import copy
 import importlib.util
+import itertools
 import json
+import random
 import shutil
 import sys
 from pathlib import Path
@@ -23,6 +26,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.pous import obligation as O
+from verity.core.protocols.pous import period
 
 LEAN = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[6]
@@ -130,6 +134,19 @@ logs = st.builds(lambda n, seed, pages, blocks: C.CASES[n][0](seed, pages=pages,
                  st.sampled_from(NAMES), st.integers(0, 2 ** 16), st.integers(1, 3), st.integers(1, 5))
 edited = st.builds(_event_edit, logs, st.integers(0, 6), xs, xs)
 malformed = st.builds(_malformed, logs, st.integers(0, 5), xs)
+
+
+def test_the_space_legs_kv_window_agrees():
+    """The space leg's KV window (`period.kv_window`) with the Lean verdict (`obligation.lean_verdict`): accepted by both;
+    `lean_verdict` gives Lean's reject reason for a stale page and raises `ValueError` on a log Lean refuses."""
+    exe = D.build(LEAN, "pous-obligation-difftest")
+    rng = random.Random(0)
+    got = period.kv_window(rng.randbytes(200), C.SALT, 3, 4, 6, exe, coins=rng.randbytes,
+                           clock=itertools.count(0, C.STEP_NS).__next__)
+    assert got["lean"] == got["verdict"] == {"verdict": "accept", "reads": 6, "windows": 1, "writes": 3 + 9}
+    assert O.lean_verdict(exe, C.stale(1)) == O.verdict(C.stale(1))
+    with pytest.raises(ValueError):
+        O.lean_verdict(exe, C.honest(1) | {"salt": "00"})
 
 
 @pytest.mark.slow

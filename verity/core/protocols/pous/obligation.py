@@ -42,6 +42,9 @@ An accepted log answers `{"verdict": "accept", "reads", "windows", "writes"}`, a
 (a field missing or mistyped, hex that isn't lowercase and even, a salt or coin of the wrong length, an unknown event,
 a store of more than 2^16 pages or blocks) raises `ValueError`.
 
+`window` plays one window over a region kept honestly, writes during the window included, and `lean_verdict` asks
+`pous-obligation-difftest` for the Lean verdict; `period.kv_window` runs both in the space leg (`period.leg`).
+
 The commitment here is SHA-512 of the plaintext under a domain, and the verifier decodes each page in the clear, as
 setup's public-encoder check does with `C*` (#4417's tie); deployed, both are proved in zero knowledge over hiding
 commitments. The coins come from `coins` in the memory challenger's process, as `period`'s setup salt comes from the
@@ -51,8 +54,12 @@ node's: `trusted-nebius-host`'s premise for them holds only where that process r
 from __future__ import annotations
 
 import hashlib
+import itertools
+import json
+import os
 import re
 import secrets
+import subprocess
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -156,6 +163,13 @@ class PageChallenger:
     def snapshot(self, root: bytes) -> None:
         self.events.append({"op": "snapshot", "root": root.hex()})
 
+    def draw(self, n: int) -> int:
+        """A uniform index below `n` (at most 2^32), from the memory challenger's coins by rejection: what it reads."""
+        top = (1 << 64) - (1 << 64) % n
+        while (x := int.from_bytes(self.coins(8), "big")) >= top:
+            pass
+        return x % n
+
     def read(self, page: int, block: int, answer: Callable[[int, int], tuple[bytes, Sequence[bytes]]]) -> None:
         """One timed spot read: the clock before the challenge goes out and after the whole answer is in."""
         t0 = self.clock()
@@ -206,6 +220,51 @@ class PageStore:
     def plaintext(self, page: int) -> bytes:
         ts, blocks, _ = self.held[page]
         return decode_page(self.q, ts, blocks)
+
+
+def window(mc: PageChallenger, content: bytes, reads: int) -> tuple[PageStore, list[bytes]]:
+    """One audit window over a KV region the prover keeps honestly, which `mc` logs: every page preallocated as the
+    encoding of zeros (version 0), then `content` written in page-sized pieces (the last zero-padded), piece `i` to page
+    `i mod pages` (a fixed page table), the first half before the window's snapshot and the rest during the window,
+    one after each of its `reads` reads (`mc.draw`), which the snapshot answers. Returns the store and each page's
+    latest plaintext, which decoding it on use must give back."""
+    store = PageStore(mc.salt, mc.pages, mc.blocks)
+    size = store.q.segment_bytes
+    latest = [bytes(size)] * mc.pages
+    pieces = [content[i:i + size].ljust(size, b"\0") for i in range(0, len(content), size)]
+
+    def write(i: int, piece: bytes) -> None:
+        store.write(mc, i % mc.pages, piece)
+        latest[i % mc.pages] = piece
+
+    for p in range(mc.pages):
+        store.write(mc, p, latest[p])
+    half = len(pieces) // 2
+    for i in range(half):
+        write(i, pieces[i])
+    store.snapshot(mc)
+    later = iter(range(half, len(pieces)))
+    for _ in range(reads):
+        n = mc.draw(mc.pages * mc.blocks)
+        mc.read(n // mc.blocks, n % mc.blocks, store.answer)
+        for i in itertools.islice(later, 1):
+            write(i, pieces[i])
+    for i in later:
+        write(i, pieces[i])
+    return store, latest
+
+
+def lean_verdict(exe: str | os.PathLike, log: Mapping[str, Any]) -> dict[str, Any]:
+    """`PousCheck.Obligation.verdict` on `log`, from `exe` (`pous-obligation-difftest`, `Difftest.serve`'s one request
+    a line); `ValueError` when it refuses the log, `RuntimeError` on a fault of the protocol."""
+    line = json.dumps({"fn": "verdict", "input": dict(log)}, separators=(",", ":")) + "\n"
+    out = subprocess.run([str(exe)], input=line, capture_output=True, text=True, check=True).stdout.splitlines()
+    msg = json.loads(out[0]) if len(out) == 1 else {}
+    if "output" in msg:
+        return msg["output"]
+    if "reject" in msg:
+        raise ValueError(msg["reject"])
+    raise RuntimeError(f"pous-obligation-difftest answered {out!r}")
 
 
 def _nat(j: Mapping[str, Any], k: str) -> int:
@@ -339,5 +398,5 @@ def verdict(log: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["C0", "COIN_BYTES", "MAX", "REASONS", "SALT_BYTES", "W", "PageChallenger", "PageStore", "commitment",
-           "decode_page", "encode_page", "keystream", "page_leaves", "page_root", "page_salt", "params", "snapshot_root",
-           "verdict"]
+           "decode_page", "encode_page", "keystream", "lean_verdict", "page_leaves", "page_root", "page_salt", "params",
+           "snapshot_root", "verdict", "window"]

@@ -54,6 +54,7 @@ from verity.ml.randomness import derive
 
 from . import challenger_party
 from . import memory_challenger as mc
+from . import obligation as O
 from . import protocol as pous_protocol
 from . import run as R
 from . import setup
@@ -401,6 +402,43 @@ SETUP_WORKERS = 32
 CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)."""
 
 
+def kv_window(content: bytes, salt: bytes, pages: int, blocks: int, reads: int,
+              exe: str | os.PathLike | None = None, *, coins: Callable[[int], bytes] = secrets.token_bytes,
+              clock: Callable[[], int] = time.perf_counter_ns) -> dict[str, Any]:
+    """The obligation's KV region for one window (`obligation.window`): `pages` pages of `blocks` blocks under tags from
+    the setup's `salt` (the salt `tie` binds to the run's commitment), `content` written into it, the memory
+    challenger in this process with its `coins` and `clock`. Then every page decoded on use against what was written,
+    and the challenger's log judged (`obligation.verdict`) and, with `exe` (`pous-obligation-difftest`), in Lean, which
+    must agree. Returns both verdicts, the region's sizes and each part's seconds, per page written and per page
+    decoded."""
+    mc = O.PageChallenger(salt, pages, blocks, LIMIT_NS, coins=coins, clock=clock)
+    t = time.monotonic()
+    store, latest = O.window(mc, content, reads)
+    window_s = time.monotonic() - t
+    t = time.monotonic()
+    if [store.plaintext(p) for p in range(pages)] != latest:
+        raise RuntimeError("a KV page did not decode to what was written to it")
+    decode_s = time.monotonic() - t
+    log = mc.log()
+    t = time.monotonic()
+    verdict = O.verdict(log)
+    verdict_s = time.monotonic() - t
+    lean, lean_s = None, 0.0
+    if exe is not None:
+        t = time.monotonic()
+        lean = O.lean_verdict(exe, log)
+        lean_s = time.monotonic() - t
+        if lean != verdict:
+            raise RuntimeError(f"pous-obligation-difftest answered {lean}, the Python {verdict}")
+    q, writes = store.q, sum(e["op"] == "store" for e in log["events"])
+    return {"verdict": verdict, "lean": lean, "pages": pages, "blocks": blocks, "reads": reads, "writes": writes,
+            "page_bytes": q.segment_bytes, "encoded_bytes": pages * blocks * q.block_bytes,
+            "challenger": "this process, on the node",
+            "seconds": {"window": round(window_s, 3), "decode": round(decode_s, 3), "verdict": round(verdict_s, 3),
+                        "lean": round(lean_s, 3)},
+            "per_page_s": {"write": window_s / writes, "decode": decode_s / pages}}
+
+
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
     set up once, at the smallest point P2's proved family certifies (`certified_point`): `W` is the node's records at its
@@ -413,9 +451,15 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     verifier of record) and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
     whether `trusted-nebius-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
-    answer's profile (`placement`)."""
+    answer's profile (`placement`).
+
+    With `{"pous": {"kv": {"pages": P, "blocks": B, "reads": R}}}` in `period.json`, the period also plays the
+    obligation's KV region for one window (`kv_window`): a region of `P` pages of `B` blocks, fresh each period, whose
+    content is the period's records, its tags under the store's setup salt, judged by `pous-obligation-difftest` too
+    when it is among the tools. Its result is `pous.json`'s `kv`; the answer is still the run protocol's."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
+    kv = (doc.get("pous") or {}).get("kv")
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
     party = challenger_party.Party.of(doc, node, Path(period_dir).parent / "pous-challenger")
     where = challenger_party.placement(node, party.host)
@@ -446,6 +490,10 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             raise RuntimeError(f"pous-setup refused the setup the Python accepted: {lean['setup']}")
     if answer["profile"] is not None:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}
+    report: dict[str, Any] = {}
+    if kv is not None:
+        report["kv"] = kv_window(records(period_dir), held.published.salt, kv["pages"], kv["blocks"], kv["reads"],
+                                 tools.get("pous-obligation-difftest"))
     out.mkdir(parents=True, exist_ok=True)
     (out / "pous.case.json").write_text(json.dumps(period.case, sort_keys=True))
     if fresh:
@@ -454,10 +502,11 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     (out / "pous.json").write_text(json.dumps({
         "answer": answer, "blocks": q.blocks, "eps": str(period.eps), "lean": lean, "placement": where,
         "s_bits": period.s_bits, "seconds": seconds, "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0},
-        "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
+        "w_bytes": q.w_bytes} | report, sort_keys=True, indent=1))
     return answer
 
 
 __all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
-           "certificate", "certified_point", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
-           "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+           "certificate", "certified_point", "certify", "challenger", "encode", "gaps", "honest", "kv_window", "leg",
+           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store",
+           "tie"]

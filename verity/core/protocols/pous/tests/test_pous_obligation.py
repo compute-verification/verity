@@ -1,17 +1,19 @@
 """PoUS as an obligation at test scale (`obligation`): the KV pages' codec under coin-keyed tags, the memory challenger's
 coin per page write, and the verdict on its log, for the honest run, the three attacks (`obligation_cases.CASES`) and
-an edit reaching each of `obligation.REASONS`. Lean's verdict is held to this one in `check/`'s
-`test_obligation_difftest.py`."""
+an edit reaching each of `obligation.REASONS`; then one window with writes during it, and the space leg's KV window
+(`period.kv_window`). Lean's verdict is held to this one in `check/`'s `test_obligation_difftest.py`."""
 
 from __future__ import annotations
 
 import copy
+import itertools
 import random
 
 import pytest
 
 import obligation_cases as C
 from verity.core.protocols.pous import obligation as O
+from verity.core.protocols.pous import period
 
 
 def test_pages_decode_on_use():
@@ -127,3 +129,27 @@ MALFORMED = {
 def test_a_malformed_log_is_refused(name):
     with pytest.raises(ValueError):
         O.verdict(_edit(C.honest(5), MALFORMED[name]))
+
+
+def test_a_window_writes_during_its_reads():
+    """`window`: every page preallocated, the content's first half written before the snapshot and the rest between its
+    reads, which the snapshot answers; each page decodes to its last write, and the log is accepted."""
+    rng = random.Random(2)
+    mc, size = C.challenger(rng, 3, 4), O.params(4).segment_bytes
+    content = rng.randbytes(7 * size + 5)
+    store, latest = O.window(mc, content, 5)
+    ops = [e["op"] for e in mc.log()["events"]]
+    snap = ops.index("snapshot")
+    assert (ops[:snap].count("store"), ops[snap:].count("store")) == (3 + 4, 4)
+    assert latest[1] == content[7 * size:].ljust(size, b"\0")
+    assert [store.plaintext(p) for p in range(3)] == latest
+    assert O.verdict(mc.log()) == {"verdict": "accept", "reads": 5, "windows": 1, "writes": 11}
+
+
+def test_the_space_legs_kv_window():
+    """`period.kv_window` without Lean: the window accepted, every page decoded on use, its writes counted."""
+    rng = random.Random(3)
+    got = period.kv_window(rng.randbytes(100), C.SALT, 2, 3, 4, coins=rng.randbytes,
+                           clock=itertools.count(0, C.STEP_NS).__next__)
+    assert got["verdict"] == {"verdict": "accept", "reads": 4, "windows": 1, "writes": 8}
+    assert got["lean"] is None and got["writes"] == 8 and got["page_bytes"] == 18
