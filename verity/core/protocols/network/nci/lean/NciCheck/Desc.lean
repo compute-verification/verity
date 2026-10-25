@@ -756,9 +756,7 @@ def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (r
 
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
-  let P ← match decode i.program.toUTF8 with
-    | .ok P => pure P
-    | .error _ => throw "program"
+  let P ← decodeProgram i.program
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"
