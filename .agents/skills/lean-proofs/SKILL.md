@@ -131,7 +131,9 @@ python tools/verity/lean/check.py PKG  once, before pushing
   `G` unfolding to `e`) needs no map.
 - **One shape** (`shape` in `tools/verity/lean/README.md`). A property takes its inputs, one hypothesis that its function returned an outcome
   (`shape.properties`: `function` and `outcome`, `accept` by default), and premises (heads under `shape.premises`, or a
-  conjecture); the rest is its conclusion. A probability statement has its acceptance in the event (`shape.events`).
+  conjecture); the rest is its conclusion. Binder order and a hypothesis `x.f = y.f` between two inputs it accepts don't
+  matter: the check reads the statement reordered and with that field bound once, so don't restate for either. A
+  probability statement has its acceptance in the event (`shape.events`).
   What doesn't fit yet is under `shape.frozen` with a reason starting with its category (`restatable`, `frozen (hash)`,
   `lemma`, `completeness`, `falsified`); the check fails once it fits. A named conjecture is under `shape.conjectures`,
   open with a falsification test that runs (a pytest node id) or falsified with why; a falsified one takes every

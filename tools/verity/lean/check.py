@@ -1645,7 +1645,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
     one, of the tuple of their inputs (a binding property). A hypothesis is read by its body under its leading binders
     (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
-    its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
+    its own (`guarded`); binder order and an equation of one field of two inputs don't matter (`part_refusals`). A
+    `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
     acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
