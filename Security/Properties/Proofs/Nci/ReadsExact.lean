@@ -85,7 +85,7 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
   `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), wherever besides those
   the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`, open), and a
-  composite's return is the sequence of its parts and a primitive's none (`RetParts`, open).
+  composite's return is the sequence of its parts and a primitive's none (`RetParts`, the decoder's).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -6695,10 +6695,11 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
 
 /-! ## The decoder's facts the core reads -/
 
-/-- **Open: the decoder's facts the core reads**, as `Flock.Program.getDef` gives every Definition (its private
-`composite` sets them): a primitive returns one leaf, a composite's return has as many leaves as its type, and each
-node's argument is the sequence of its parts, none naming a negative position, a batch's or scan's argument of no leaves
-to a member going to a parameter of none, where its callee's body has that parameter. -/
+/-- **The decoder's facts the core reads**, as `Flock.Program.getDef` gives every Definition (its private
+`composite` sets them; every decoded Program has them, `BodiesOk.decoded_reads`): a primitive returns one leaf, a
+composite's return has as many leaves as its type, and each node's argument is the sequence of its parts, none naming a
+negative position, a batch's or scan's argument of no leaves to a member going to a parameter of none, where its
+callee's body has that parameter. -/
 def Decoded (P : Prog) : Prop :=
   ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).outLeaves = 1) ∧
     ((P.defs[d]!).prim = false → (P.defs[d]!).outLeaves = (P.defs[d]!).body.ret.count) ∧
@@ -6852,8 +6853,9 @@ def DownShape (c : Desc.Ctx) : Prop :=
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
     Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- **Open: the decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body
-(the default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. -/
+/-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
+default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
+decoded Program has them (`BodiesOk.retParts_reads`). -/
 def RetParts (P : Prog) : Prop :=
   ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).body.ret.count = 0) ∧
     ((P.defs[d]!).prim = false → (P.defs[d]!).body.ret = Seq.ofParts (P.defs[d]!).body.ret.parts ∧

@@ -2,10 +2,10 @@ import Properties.Proofs.Nci.BodiesOk.ForReads
 import Properties.Proofs.Nci.ReadsExact
 
 /-!
-# `ReadsExact.Decoded` and `ReadsExact.ScanOut`, proved
+# `ReadsExact.Decoded`, `ReadsExact.RetParts` and `ReadsExact.ScanOut`, proved
 
 `ReadsExact.PartNonneg` is `BodiesOk.PartNonneg` (`partNonneg_iff`), so `ForReads.decoded` is `ReadsExact.Decoded` of
-every decoded Program (`decoded_reads`). `buildNode`'s `Shape` of a scan node is `ReadsExact.ScanOut` of every body
+every decoded Program (`decoded_reads`), and `BodyFacts`' return is `ReadsExact.RetParts` (`retParts_reads`). `buildNode`'s `Shape` of a scan node is `ReadsExact.ScanOut` of every body
 (`scanOut_of_ok`, `scanOut_reads`).
 -/
 
@@ -23,6 +23,18 @@ theorem decoded_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decod
   refine ⟨h1, h2, fun k hk i hi => ?_⟩
   obtain ⟨a, b, c⟩ := h3 k hk i hi
   exact ⟨a, fun q hq => (partNonneg_iff q).2 (b q hq), c⟩
+
+/-- **The decoder's facts on a Definition's return hold of every decoded Program.** -/
+theorem retParts_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+    ReadsExact.RetParts P := by
+  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
+  have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  intro d hd
+  obtain ⟨hc, -, -, ps, hps, hnn⟩ := hok d hd
+  refine ⟨fun hp => by rw [(hc.1 hp).1]; rfl, fun _ => ?_⟩
+  have hparts : (P.defs[d]!).body.ret.parts = ps := by rw [hps]; exact (Walk.ofParts_spec ps).1
+  exact ⟨by rw [hparts]; exact hps,
+    fun q hq => (partNonneg_iff q).2 (hnn q (by rw [hparts] at hq; exact Array.mem_def.2 hq))⟩
 
 /-- A scan node of a Program whose Definitions are all `DefOk` outputs its final carry's leaves, then its ys'. -/
 theorem scanOut_of_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!)

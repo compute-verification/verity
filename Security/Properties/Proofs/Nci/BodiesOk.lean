@@ -51,7 +51,7 @@ theorem body_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!
     refine ⟨fun k hk => ?_, fun t ht => ?_⟩
     · rw [e] at hk; exact absurd hk (Nat.not_lt_zero _)
     · rw [e] at ht; exact absurd ht (Nat.not_lt_zero _)
-  obtain ⟨-, hnodes, hret⟩ := hok d hd
+  obtain ⟨-, hnodes, hret, -⟩ := hok d hd
   refine ⟨fun k hk => ?_, fun t ht => ?_⟩
   · obtain ⟨hfn, hnd, hargs⟩ := hnodes k hk
     have hfs : ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size := by omega

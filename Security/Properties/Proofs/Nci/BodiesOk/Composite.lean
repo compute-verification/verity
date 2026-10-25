@@ -138,6 +138,21 @@ theorem earlier_nonneg (defs : Array Defn) (outs : Array Ty) (leaves : Bool → 
   rw [← getElem!_pos _ x hx, hps, (Walk.ofParts_spec ps).1] at hq
   exact hv q hq
 
+theorem earlier_nonneg_bind (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ → Option ℕ)
+    (nodes : Array Node) (hn : NodesOk defs outs leaves nodes) :
+    ∀ (k x : ℕ) (s : Seq), (nodes[k]?.bind fun (nd : Node) => (nd.args[x]?).map (fun (a : Arg) => a.seq)) = some s →
+      ∀ q ∈ s.parts, PartNonneg q := by
+  intro k x s h q hq
+  simp only [Option.bind_eq_some_iff, Option.map_eq_some_iff] at h
+  obtain ⟨nd, hnd, a, ha, rfl⟩ := h
+  obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 hnd
+  obtain ⟨hx, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
+  obtain ⟨-, -, -, h4⟩ := hn k hk
+  obtain ⟨ps, hps, -, hv⟩ := h4 x (by rw [getElem!_pos nodes k hk]; exact hx)
+  rw [getElem!_pos nodes k hk, getElem!_pos _ x hx] at hps
+  rw [hps, (Walk.ofParts_spec ps).1] at hq
+  exact hv q hq
+
 theorem st_ite {α : Type} {c : Prop} [Decidable c] {A B : DM α} {s : DecState} {r : Except String (α × DecState)}
     (h : (if c then A else B) s = r) : (c ∧ A s = r) ∨ (¬ c ∧ B s = r) := by
   split at h <;> rename_i hc
@@ -401,7 +416,7 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   have hv := Walk.parsePartsIn_valid _ _ (earlier_ok _ _ _ _ hn5) _ _ _ hret
   have hsz : nodes.size = outs.size := by omega
   have hout : ∀ k < nodes.size, (nodes[k]!).out = outs[k]! := fun k hk => (hn5 k hk).2.2.1
-  refine ⟨hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_⟩⟩
+  refine ⟨hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩⟩
   · simpa using hcnt
   · intro k hk
     obtain ⟨h1, h2, -, h4⟩ := hn5 k hk
@@ -412,6 +427,7 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
     exact refIn_of params outs retType nodes _ offsets hsz hout ps' hv' t ht
   · intro t ht
     exact refIn_of params outs retType nodes _ offsets hsz hout ps hv t ht
+  · exact ⟨ps, rfl, parsePartsIn_nonneg _ _ (earlier_nonneg_bind _ _ _ _ hn5) _ _ _ hret⟩
 
 theorem getSpec_zero : GetSpec 0 := by
   intro desc fid s i s' h
