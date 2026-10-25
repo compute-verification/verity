@@ -187,7 +187,7 @@ theorem sum_filter_map {α : Type} (l : List α) (p : α → Bool) (f : α → �
     ((l.filter p).map f).sum = (l.map fun x => if p x then f x else 0).sum := by
   induction l with
   | nil => rfl
-  | cons a l ih => by_cases hp : p a <;> simp [List.filter_cons, hp, ih]
+  | cons a l ih => by_cases hp : p a <;> simp [hp, ih]
 
 theorem off_eq_sum (C : FlockSoundness.Audit.Circuit) (g : ℕ) :
     off C g = ∑ h : Fin C.N, if h.val < g then gateSize (C.op h) else 0 := by
@@ -203,7 +203,8 @@ theorem off_add_le (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.va
   calc (∑ h : Fin C.N, if h.val < g.val then gateSize (C.op h) else 0) + gateSize (C.op g)
       = ∑ h : Fin C.N, ((if h.val < g.val then gateSize (C.op h) else 0) +
           if h = g then gateSize (C.op g) else 0) := by
-        rw [Finset.sum_add_distrib, Finset.sum_ite_eq' Finset.univ g, if_pos (Finset.mem_univ g)]
+        rw [Finset.sum_add_distrib, Finset.sum_ite_eq' Finset.univ g]
+        simp
     _ ≤ ∑ h : Fin C.N, if h.val < g'.val then gateSize (C.op h) else 0 := by
         refine Finset.sum_le_sum fun x _ => ?_
         rcases eq_or_ne x g with rfl | hx
@@ -245,7 +246,7 @@ section Game
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed FlockSoundness.Discharge.ZkHidden
-  FlockSoundness.Discharge.ZkBind
+  FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -301,6 +302,46 @@ theorem vbOf_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
   have hp : p = Sum.inl (u, q) := congrArg Prod.fst he
   subst hp
   exact congrArg Prod.snd he
+
+/-- **The deployed layout's rows** at a C-Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
+circuit file. -/
+noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
+    Fin ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)).N → Option RowAt := fun g =>
+  (HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n) g).map fun r =>
+    ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
+
+/-- **A shaped registered opening of a row/v2 row opens the deployed commitment** (`TransportsLive` at the shaped
+openings). In `SampledKSLive`'s setting, at a wire `g` held by a registered row `r` of a `sha512/row/v2` port, when the
+registration's port roots are distinct: an opening `(p, v, y)` of `g`'s registered commit string at registration `R`,
+whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes, opens `commitDep` under
+`rootsOf` at `g`'s claims position to `g`'s bit in `v`. -/
+theorem transports_shaped (R : Reg)
+    (hroots : ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOf c pub n).getD q' [] ≠ (rootsOf c pub n).getD q [])
+    {r : RowAt} (hr : rowsOf c hU n g = some r) (hv2 : c.ports[r.port]!.segs.isSome = false ∧ c.ports[r.port]!.v2 = true)
+    (p : PosH c hU n) (v : ValH c) (y : List UInt8) (hv : RowShaped v) (hvw : v.1.val = r.width)
+    (hy : y.length = saltLen)
+    (he : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com (p, v, y) =
+      (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).cs R ((vbOf dj y₀ ht hc hscope hU hpub hpt).pos g)) :
+    ∃ d : Msg, (commitDep ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) (rowsOf c hU n) c n
+        (rootsOf c pub n)).Opens sha512Msg (rootsOf c pub n)
+      ⟨posOf ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) g,
+        (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
+          ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).val (p, v, y)) g, d⟩ = true := by
+  obtain ⟨⟨u, q, k⟩, hx, rfl⟩ := Option.map_eq_some_iff.mp hr
+  have hle : Discharge.Layout.portRowW c q ≤ Finset.univ.sup (Discharge.Layout.portRowW c) + 1 :=
+    (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
+  have hl := vbOf_leaf_row hx R p v y he
+  have henc : HiddenExec.encPortH c.ports[q.val]! v = rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v := by
+    unfold HiddenExec.encPortH
+    rw [hv2.1, hv2.2]
+    rfl
+  rw [henc] at hl
+  have hb : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
+      ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).val (p, v, y)) g = v.get k.val := vbOf_bit_row hx v
+  rw [hb]
+  exact ⟨_, opens_commitDep _ (rowsOf c hU n) c pub n (r := ⟨q.val, u.val, Discharge.Layout.portRowW c q, k.val⟩)
+    (by rw [rowOfPos_posOf]; simp [rowsOf, hx]) q.isLt u.isLt (by simp [Discharge.Layout.portRowW]) k.isLt
+    (fun q' hq' => hroots q.val q' hq' q.isLt) hle hv hvw hy hl⟩
 
 end Game
 
