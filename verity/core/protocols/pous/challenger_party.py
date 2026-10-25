@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import secrets
 import socket
 import subprocess
@@ -160,7 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
     device = Path(a.device)
-    signer = period.challenger(device)
+    signer = period.challenger(device, workers=len(os.sched_getaffinity(0)))
     if not (device / "sessions").exists():
         mc.SessionLog.create(device / "sessions")
     host, _, port = a.listen.rpartition(":")
