@@ -23,7 +23,8 @@
 # request's latency, time to its first token and longest wait between two tokens (against the warden's cell delay,
 # GATE_DEADLINE_S=3), and the engine's step gaps, collections and pauses (pauses.jsonl) meanwhile. GATE_PLAN=PATH (in the tree)
 # sends a certifier rehearsal's own requests instead, each at its send_ms times GATE_STRETCH (1) (its out/plan.json). SEAL_HOLD_GB (64), SEAL_WARM_GB (0)
-# and MAX_NUM_SEQS (8) are serve-openai's --seal-hold-gb, --seal-warm-gb and --max-num-seqs.
+# MAX_NUM_SEQS (8) and MAX_NUM_BATCHED_TOKENS (2048) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs and
+# --max-num-batched-tokens.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -82,6 +83,7 @@ under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free o
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" --window-gb "${WINDOW_GB:-32}" \
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
+  ${MAX_NUM_BATCHED_TOKENS:+--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"} \
   --disk-floor-gb "$DISK_FLOOR_GB" --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
