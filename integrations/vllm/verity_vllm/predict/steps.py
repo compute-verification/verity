@@ -3,8 +3,9 @@
 `compile_steps(registered, advice, ingress)` reads these three and nothing else of the run:
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), the public
   default seed a request without one is sampled under (`engine.served_seed`), and ℓ, the public cap on the advice's length in bits.
-- `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), private: what serving decided that nothing registered predicts. Its
-  canonical bytes, or an `Advice`, which is held to its encoding. Nothing else is advice.
+- `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+  the state of the requests the window carries across its open and close), private: what serving decided that nothing registered
+  predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
   given as the warden's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
@@ -29,6 +30,10 @@
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
+- A request a Commit window carries in (admitted in an earlier window) compiles to the Program it has whole, at the C its
+  admission had, and each window places its own rows: from where it had reached (its carried `made`), its kept outputs counted
+  from its carried `kept`. A request the window leaves with outputs to keep reaches only as far as its rows go. A carried request
+  with no row in the window has no unit there (`Plan.idle`) and needs no body.
 
 The compiler is total: it compiles its input or refuses it by name (`Unexpressible`), deterministically. Refused, in order:
 - advice that isn't I1's bytes or an `Advice`, is over ℓ (before any of it is read), or isn't I1 v0 (`MalformedAdvice`: I1's
@@ -39,7 +44,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - a cache hit whose `sources` don't hold the request's own KV: through each run, the source's certified prompt must equal the
   request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
   the hit (a resume's run of its own KV is I1's replay's to hold);
-- what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported); positions
+- what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported), or on a
+  request a window carries in (its prefix's producers are the admitting window's requests); positions
   past the model's; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1,
   or a parameter this compiler doesn't know);
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
@@ -67,6 +73,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
+from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
 from verity_vllm.program.registry import io_shell as IO
@@ -145,6 +152,8 @@ class RequestUnit:
     C: int = 0
     producers: tuple[int, ...] = ()
     parse: Any = None   # with byte ingress, its `IngressPrompt_v1` binding: the unit that reads the ingress transfer gates
+    carried_in: bool = False    # admitted in an earlier Commit window
+    carried_out: bool = False   # left to the next window with outputs to keep
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else [])], sort_keys=True)
@@ -160,6 +169,7 @@ class Compiled:
     refused: dict[int, str] = field(default_factory=dict)                     # request -> why (partial=True only)
     cap_bits: int = CAP_BITS
     batch_rule: str | None = None         # partial=True only: `predict.batch`'s refusal of this compilation, which it doesn't raise
+    idle: tuple[int, ...] = ()            # carried requests with no row in the window: no unit here
 
     @property
     def transfer_gates(self) -> tuple[str, ...]:
@@ -179,7 +189,9 @@ class Compiled:
                                                      "parse": u.parse and u.parse.id} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
-                "batch_rule": self.batch_rule, "transfer_gates": list(self.transfer_gates)}
+                "batch_rule": self.batch_rule, "transfer_gates": list(self.transfer_gates),
+                "carry": {"in": [u.request for u in self.requests if u is not None and u.carried_in],
+                          "out": [u.request for u in self.requests if u is not None and u.carried_out], "idle": list(self.idle)}}
 
 
 def _number(x: Any) -> bool:
@@ -214,13 +226,14 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
              "splits": registered_splits(int(num_sms))}, int(default_seed if seed is None else seed))
 
 
-def advice_of(registered: Registered, advice: Any) -> I1.Advice:
-    """The advice as I1 v0: its canonical bytes within ℓ, or an `Advice` whose encoding is; anything else refused by name."""
-    if isinstance(advice, I1.Advice):
+def advice_of(registered: Registered, advice: Any) -> WA.Advice:
+    """The advice as a Commit window's (`window_advice`; I1 v0's when it carries nothing): its canonical bytes within ℓ, or an
+    I1 or window `Advice` whose encoding is; anything else refused by name."""
+    if isinstance(advice, (I1.Advice, WA.Advice)):
         try:
-            data = I1.encode(advice)
+            data = (WA if isinstance(advice, WA.Advice) else I1).encode(advice)
         except Exception as e:  # noqa: BLE001 -- an Advice built around its checks has no encoding: a refusal like any other
-            raise Unexpressible(f"ill-formed advice: an Advice with no I1 encoding ({type(e).__name__}: {e})") from None
+            raise Unexpressible(f"ill-formed advice: an Advice with no encoding ({type(e).__name__}: {e})") from None
     elif type(advice) is bytes:
         data = advice
     else:
@@ -228,10 +241,10 @@ def advice_of(registered: Registered, advice: Any) -> I1.Advice:
     if 8 * len(data) > registered.cap_bits:
         raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
     try:
-        return I1.decode(data)
+        return WA.decode(data)
     except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
         raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
-                            f"ill-formed advice: I1's decode failed ({type(e).__name__}: {e})") from None
+                            f"ill-formed advice: its decode failed ({type(e).__name__}: {e})") from None
 
 
 def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
@@ -296,12 +309,14 @@ Rows = list[tuple[int, int, I1.Row]]  # a request's rows as (step, index in the 
 Placed = tuple[tuple[int, int, int] | None, list[tuple[int, int]]]  # a row's part its Program holds, and its parts none holds
 
 
-def shape_of(i: int, prompt_len: int, rows: Rows, output_len: int) -> tuple[int, int, int, int]:
+def shape_of(i: int, prompt_len: int, rows: Rows, output_len: int, carry: WA.Carried | None = None) -> tuple[int, int, int, int]:
     """Request `i`'s (LP, T, first step, C): its prompt length, its live decode rows (`output_len` − 1: one row past the last kept
     output may follow, discarded), and its first row's step and prefix-cache hit (0 without one), which leaves at least the prompt's
-    last position to compute."""
+    last position to compute. A request the window carries in (``carry``) has the C of its admission."""
     LP = int(prompt_len)
     s0, _, first = rows[0]
+    if carry is not None:
+        return LP, int(output_len) - 1, s0, int(carry.C)
     C = int(first.cache_hit)
     if first.start != C or not C < LP:
         raise Unexpressible(f"request {i}: its first row starts at position {first.start} with a cache hit of {C} tokens, for a prompt of "
@@ -309,13 +324,18 @@ def shape_of(i: int, prompt_len: int, rows: Rows, output_len: int) -> tuple[int,
     return LP, int(output_len) - 1, s0, C
 
 
-def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int) -> dict[tuple[int, int], Placed]:
+def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int, carry: WA.Carried | None = None,
+          left: bool = False) -> dict[tuple[int, int], Placed]:
     """Each of request `i`'s rows by (step, index in the step): the part of it its Program holds, (start, n, samples) or None, and
     its parts no Program holds, [(start, n)]. The Program holds positions C..LP+T-1 once each, in the row that first reaches them:
     a resume's positions up to where its request had reached are a recompute, and the row past the last kept output is past the
-    Program. `samples` is 1 where the row's sample is a kept output (I1's rule: the row reaches its request's known tokens)."""
+    Program. `samples` is 1 where the row's sample is a kept output (I1's rule: the row reaches its request's known tokens). A
+    request the window carries in (``carry``) has reached as far as it had computed and kept its carried outputs; one it leaves
+    with outputs to keep (``left``) reaches as far as its rows go."""
     out: dict[tuple[int, int], Placed] = {}
     reached, known, kept = C, LP, 0
+    if carry is not None:
+        reached, known, kept = min(LP + T, max([C, *(hi for _, hi in carry.made)])), LP + carry.kept, carry.kept
     for s, j, row in rows:
         a, b = row.start, row.start + row.n
         sample = b == known and kept < output_len
@@ -327,7 +347,7 @@ def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int) -> dict[
         out[s, j] = ((lo, hi - lo, int(sample)) if lo < hi else None,
                      [(x, y - x) for x, y in ((a, min(b, reached)), (max(a, LP + T), b)) if x < y])
         reached = max(reached, hi)
-    if reached != LP + T:
+    if reached != LP + T and not left:
         raise Unexpressible(f"request {i}: its rows reach position {reached}, not the {LP + T} of its prompt and live decode rows")
     return out
 
@@ -353,6 +373,7 @@ class Plan:
     steps: list[list[tuple[int, int, int, int]]]
     discarded: list[tuple[int, int, int, int]]
     refused: dict[int, str]
+    idle: tuple[int, ...] = ()
 
     def distinct(self) -> list[RequestUnit]:
         """The first request of each (LP, T, policy), in request order: one Program each."""
@@ -399,7 +420,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
-                        cap_bits=registered.cap_bits)
+                        cap_bits=registered.cap_bits, idle=plan.idle)
     from .batch import BatchDependent, check_compiled
     try:
         check_compiled(registered, advice_of(registered, advice), ingress, compiled, plan_steps)
@@ -431,8 +452,17 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             raise Unexpressible(why)
         refused.setdefault(i, why)
 
+    rows: dict[int, Rows] = {i: [] for i in range(len(adv.requests))}
+    for s, step in enumerate(adv.steps):
+        for j, row in enumerate(step.rows):
+            rows[row.request].append((s, j, row))
+    carried = dict(enumerate(adv.carried))
+    idle = tuple(i for i in carried if not rows[i])
+    left = {c.request for c in WA.close(adv) if c.must}
     prompts, params, wired = {}, {}, set()
     for i, q in enumerate(adv.requests):
+        if i in idle:
+            continue
         try:
             body = ingress.get(q.id)
             if type(body) is bytes:
@@ -441,10 +471,8 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             prompts[i], params[i] = request_of(i, q, body, shape.V)
         except Unexpressible as e:
             refuse(i, str(e))
-    rows: dict[int, Rows] = {i: [] for i in range(len(adv.requests))}
     for s, step in enumerate(adv.steps):
-        for j, row in enumerate(step.rows):
-            rows[row.request].append((s, j, row))
+        for row in step.rows:
             if row.sources:
                 try:
                     check_sources(s, row, prompts)
@@ -454,22 +482,27 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
     units: list[RequestUnit | None] = []
     placed: dict[tuple[int, int], Placed] = {}
     for i, q in enumerate(adv.requests):
-        if i not in refused:
+        if i not in refused and i not in idle:
             try:
-                LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len)
+                carry = carried.get(i)
+                LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len, carry)
                 if LP + T > shape.max_pos:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
-                own = place(i, LP, T, C, rows[i], q.output_len)
+                own = place(i, LP, T, C, rows[i], q.output_len, carry, i in left)
                 policy, seed = policy_of(i, params[i], registered.default_seed, phi0.target_profile().num_sms)
                 if C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
                                         f"request wrapper isn't ported)")
+                if C and carry is not None:
+                    raise Unexpressible(f"request {i} is carried into the window with the prefix-cache hit of {C} tokens it was admitted "
+                                        f"on: its Program's prefix is bound to the requests that computed it, in the window that "
+                                        f"admitted it, which v0 doesn't carry")
                 producers = producers_of(i, s0, rows[i][0][2], bs) if C else ()
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=shape.V) if i in wired else None
-                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse))
+                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse, carry is not None, i in left))
                 placed.update(own)
                 continue
         units.append(None)
@@ -478,6 +511,8 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
         refuse(i, f"request {i}: its cache hit reads request {p}'s KV, and request {p} is refused")
         units[i] = None
     if all(u is None for u in units):
+        if not refused:
+            raise Unexpressible("no request has a row in the advice's steps")
         raise Unexpressible(f"every request is refused, request {min(refused)} first: {refused[min(refused)]}")
     steps: list[list[tuple[int, int, int, int]]] = []
     discarded: list[tuple[int, int, int, int]] = []
@@ -491,7 +526,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                 live.append((row.request, *held))
             discarded += [(s, row.request, start, n) for start, n in past]
         steps.append(live)
-    return Plan(units, steps, discarded, dict(sorted(refused.items())))
+    return Plan(units, steps, discarded, dict(sorted(refused.items())), idle)
 
 
 def dead_gates_of(compiled: Compiled) -> dict:

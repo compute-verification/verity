@@ -3,10 +3,14 @@ the steps it served: a stand-in server (its HTTP side and engine loop as `main` 
 under the committer stand-in of `test_serve_openai`) serves two waves of requests, the engine idle between them, so in at least
 two Commit windows; requests.jsonl
 carries each body's `user`, advice_trace.jsonl the scheduler's steps and each window's open and close, and each window's advice,
-committed under w<k>/, compiles (`predict.steps.compile_steps`) to the rows the trace recorded, each request at the shape it ran."""
+committed under w<k>/, compiles (`predict.steps.compile_steps`) to the rows the trace recorded, each request at the shape it ran.
+At windows of 3 steps a request runs in two windows or more: the next window carries it at the state the last one left
+(`window_advice`), each window's advice binds and rebuilds, and the windows' rows place its Program's positions once each; a row
+that isn't where the carry says, or a carry that a refused window never left, is refused."""
 from __future__ import annotations
 
 import json
+import re
 import threading
 import urllib.request
 from pathlib import Path
@@ -20,9 +24,11 @@ from tests.pipeline.test_serve_openai import Committer, Runner, Tokenizer, recor
 from verity.core.protocols.certifier import advice as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
+from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import Registered, compile_steps
 
@@ -31,6 +37,8 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
 FINISH = {0: "stop", 1: "length"}
+REG = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188}),
+                    default_seed=7)
 
 
 class SchedEngine:
@@ -88,11 +96,11 @@ class Server:
     """`serve_openai.main`'s wiring over the stand-ins: the advice trace on the scheduler for the server's lifetime, the Commit's
     windows marking it."""
 
-    def __init__(self, out: Path) -> None:
+    def __init__(self, out: Path, window_steps: int = 64) -> None:
         self.runner = Runner()
         self.engine = SchedEngine(self.runner)
         self.trace = sc.advice_trace(out, self.engine.sched)
-        self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=64, eos_ids=[Tokenizer.eos_token_id],
+        self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
         self.loop = so.EngineLoop(self.engine, self.windows)
         self.server = so.Server(proto=proto.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
@@ -130,8 +138,8 @@ WAVES = [[_body(0, 8, 4, "na-0"), _body(1, 5, 3, "na-1"), _body(2, 12, 5, "na-2"
          [_body(4, 9, 6, "na-4"), _body(5, 9, 6, "na-5")]]
 
 
-def _served(tmp_path: Path) -> Path:
-    with Server(tmp_path) as s:
+def _served(tmp_path: Path, window_steps: int = 64) -> Path:
+    with Server(tmp_path, window_steps) as s:
         for wave in WAVES:
             serve_concurrently(s, wave)
     return tmp_path
@@ -156,8 +164,6 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
     commits = {w["window"]: w for w in records(out, "windows.jsonl") if not w.get("empty")}
     assert rep["refused"] == {} and rep["open"] == [] and sorted(map(int, rep["windows"])) == sorted(commits)
     index = json.loads((out / "advice" / "windows.json").read_text())
-    reg_ = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY},
-                             target={"compute_capability": [12, 0], "num_sms": 188}), default_seed=7)
     bodies = {b.get("user"): b for w in WAVES for b in w}
     reqs = {r["engine_id"]: r for r in records(out, "requests.jsonl")}
     split, _ = ADV.windows_of(ST.load(out / ST.SERVED))
@@ -170,7 +176,7 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
         assert data.hex() not in (d / "registration.json").read_text()
         advice = I1.decode(data)
         ingress = {q.id: bodies.get(q.id) or {**bodies[None], "user": q.id} for q in advice.requests}
-        c = compile_steps(reg_, data, ingress)
+        c = compile_steps(REG, data, ingress)
         steps = ST.steps(split[int(w)])
         order = dict.fromkeys(row[0] for st in steps for row in st["rows"])
         index_of = {reqs[e]["user"] or reqs[e]["http_id"]: i for i, e in enumerate(order)}
@@ -193,3 +199,77 @@ def test_advice_leaves_a_window_still_open_for_a_later_call(tmp_path):
     (tmp_path / "mid" / ST.SERVED).write_text("".join(json.dumps(r) + "\n" for r in recs[:cut]))
     rep = ADV.write(tmp_path / "mid", tmp_path / "mid" / "advice", io=out / "requests.jsonl", compiler=C)
     assert rep["open"] == [last] and str(last) not in rep["windows"] and rep["windows"]
+
+
+def test_a_request_split_across_commit_windows_is_carried_and_each_windows_advice_binds_rebuilds_and_compiles(tmp_path):
+    out = _served(tmp_path, window_steps=3)
+    rep = ADV.write(out, compiler=C)
+    assert rep["refused"] == {} and rep["open"] == []
+    reqs = {r["user"] or r["http_id"]: r for r in records(out, "requests.jsonl")}
+    assert len(reqs["na-4"]["windows"]) > 1 and len(reqs["na-5"]["windows"]) > 1   # 6 outputs take 6 steps, past one 3-step window
+    bodies = {b.get("user"): b for w in WAVES for b in w}
+    last, placed, digests, carried_in = None, {}, {}, 0
+    for w in sorted(map(int, rep["windows"])):
+        d = out / "advice" / f"w{w}"
+        data = (d / "private" / "advice.bin").read_bytes()
+        a = WA.decode(data)
+        assert WA.encode(a) == data
+        salts = [bytes.fromhex(s) for s in json.loads((d / "private" / "opening.json").read_text())["salts"]]
+        root = AW.commit_advice(C, data, salts).root.hex()
+        assert json.loads((d / "registration.json").read_text())["binding"] == AW.binding(C, root, WA.total_bits(a))
+        if last is not None:
+            WA.follows(last, a)
+        last, carried_in = a, carried_in + len(a.carried)
+        c = compile_steps(REG, data, {q.id: bodies.get(q.id) or {**bodies[None], "user": q.id} for q in a.requests})
+        assert c.summary()["carry"]["in"] == list(range(len(a.carried))) and c.idle == ()
+        for u in c.requests:
+            digests.setdefault(u.id, set()).add(u.digest)
+        for rows in c.steps:
+            for r in rows:
+                placed.setdefault(a.requests[r.request].id, []).append((r.start, r.n, r.samples))
+    assert carried_in >= 2
+    for user, rows in placed.items():
+        body = bodies.get(user) or bodies[None]
+        LP, T = len(body["prompt"]), body["max_tokens"] - 1
+        assert len(digests[user]) == 1                   # one Program, whichever window a row runs in
+        assert [p for start, n, _ in sorted(rows) for p in range(start, start + n)] == list(range(LP + T))
+        assert sum(k for *_, k in rows) == body["max_tokens"]
+
+
+def _split(tmp_path: Path) -> tuple[Path, list[dict], str, list[int]]:
+    out = _served(tmp_path, window_steps=3)
+    req = next(r for r in records(out, "requests.jsonl") if r["user"] == "na-4")
+    return out, ST.load(out / ST.SERVED), req["engine_id"], req["windows"]
+
+
+def _rows_in(recs: list[dict], engine_id: str, window: int) -> list[list]:
+    lo, hi = (next(r["before_step"] for r in recs if r["kind"] == "window" and r["window"] == window and r["event"] == e)
+              for e in ("open", "close"))
+    return [row for st in sorted((r for r in recs if r["kind"] == "step"), key=lambda r: r["step"]) if lo <= st["step"] < hi
+            for row in st["rows"] if row[0] == engine_id]
+
+
+def _rewritten(tmp_path: Path, out: Path, recs: list[dict]) -> dict:
+    (tmp_path / "edited").mkdir()
+    (tmp_path / "edited" / ST.SERVED).write_text("".join(json.dumps(r) + "\n" for r in recs))
+    return ADV.write(tmp_path / "edited", tmp_path / "edited" / "advice", io=out / "requests.jsonl", compiler=C)
+
+
+def test_a_carried_request_whose_next_window_row_isnt_at_its_carried_position_is_refused(tmp_path):
+    out, recs, e, (k1, k2, *_) = _split(tmp_path)
+    row = _rows_in(recs, e, k2)[0]
+    at, row[1] = row[1], row[1] + 1
+    rep = _rewritten(tmp_path, out, recs)
+    assert str(k1) in rep["windows"] and str(k2) not in rep["windows"]
+    assert f"request {e}'s row starts at {at + 1}, not where its last row ended ({at})" in rep["refused"][str(k2)]
+
+
+def test_a_request_the_last_window_didnt_carry_is_refused_where_it_starts_past_its_cache_hit(tmp_path):
+    out, recs, e, (k1, k2, *_) = _split(tmp_path)
+    _rows_in(recs, e, k1)[0][1] = 1                       # the window that admits it is refused, so nothing carries it on
+    rep = _rewritten(tmp_path, out, recs)
+    assert str(k1) in rep["refused"] and str(k2) in rep["refused"]
+    m = re.fullmatch(rf"step \d+: request (\S+) is first scheduled at position (\d+), not at its cache hit 0 \(window {k1} before it "
+                     rf"is refused, so it opens on nothing carried\)", rep["refused"][str(k2)])
+    spanning = {r["engine_id"] for r in records(out, "requests.jsonl") if {k1, k2} <= set(r["windows"])}
+    assert m and m[1] in spanning and int(m[2]) == _rows_in(recs, m[1], k2)[0][1] > 0   # na-4, or na-5 if it runs first in k2

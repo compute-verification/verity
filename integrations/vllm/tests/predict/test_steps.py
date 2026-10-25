@@ -193,8 +193,8 @@ def test_ill_formed_advice_is_refused_by_name():
         compile_steps(reg, data[: len(data) // 2], ingress)
     with pytest.raises(Unexpressible, match=rf"the advice is {8 * len(data)} bits, over the registered cap ℓ = {8 * len(data) - 8} bits"):
         compile_steps(_registered(cap_bits=8 * len(data) - 8), data, ingress)
-    with pytest.raises(Unexpressible, match="ill-formed advice: advice version 1"):
-        compile_steps(reg, bytes([1]) + data[1:], ingress)
+    with pytest.raises(Unexpressible, match="ill-formed advice: window advice version 2, not 0 or 1"):
+        compile_steps(reg, bytes([2]) + data[1:], ingress)
     with pytest.raises(Unexpressible, match="not a bytearray"):
         compile_steps(reg, bytearray(data), ingress)
     with pytest.raises(ValueError, match="the cap ℓ is a whole number of bits"):

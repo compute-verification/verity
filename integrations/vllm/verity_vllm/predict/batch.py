@@ -206,15 +206,17 @@ def _check_hit(advice: Any, ingress: Mapping[str, Any], s: int, row: Any) -> Non
 
 def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, int]:
     """``advice`` and ``ingress`` with request ``r`` alone, and r's index there: its record and body, each of its rows in a step of
-    its own, its own release buckets in order. A hit on another request's KV (`_check_hit`) holds the KV of r's first C tokens, so
-    alone a stand-in computes it: a greedy request of those C tokens with one output, admitted just before r in r's first step.
-    Such a hit on a later row (a resume) has no solo form."""
+    its own, its own release buckets in order, and the state a Commit window carries it in with (`pipeline.window_advice`). A hit
+    on another request's KV (`_check_hit`) holds the KV of r's first C tokens, so alone a stand-in computes it: a greedy request of
+    those C tokens with one output, admitted just before r in r's first step. Such a hit on a later row (a resume, or any row of a
+    carried request) has no solo form."""
     I1 = sys.modules[type(advice).__module__]
     q = advice.requests[r]
+    carried = getattr(advice, "carried", ())
     rows = [(s, row) for s, step in enumerate(advice.steps) for row in step.rows if row.request == r]
     for j, (s, row) in enumerate(rows):
         if any(src.request != r for src in row.sources):
-            if j:
+            if j or r < len(carried):
                 raise BatchDependent(f"request {r}: step {s} resumes it on KV another request computed (v0 has no solo form for it)")
             _check_hit(advice, ingress, s, row)
     k = int(any(src.request != r for src in rows[0][1].sources))
@@ -226,6 +228,8 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, i
         requests, release = (I1.RequestAdvice(stand, C, 1, "length"), q), (0, *release)
         bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
         steps[0] = I1.StepAdvice((I1.Row(0, "prefill", 0, C), replace(rows[0][1], request=1, sources=(I1.Source(0, C),))))
+    if r < len(carried):
+        return I1.Advice(requests, tuple(steps), release, carried=(carried[r],)), bodies, k
     return I1.Advice(requests, tuple(steps), release), bodies, k
 
 
@@ -235,7 +239,7 @@ def _unit(u: Any) -> tuple:
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
                    plan: Callable[..., Any]) -> None:
-    """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, I1 v0's `Advice`, and ``ingress``) where a request's
+    """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, a Commit window's `Advice`, and ``ingress``) where a request's
     outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` is `steps.plan_steps`.
     Returns None when every request's Programs read only its own certified inputs and the registration."""
     units = compiled.requests
