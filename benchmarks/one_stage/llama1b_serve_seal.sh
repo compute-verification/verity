@@ -6,7 +6,9 @@
 # idle), `verity-vllm advice` per closed window under a registered cap (--cap), then each window's request Programs and
 # manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
-# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB (default 60) free.
+# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB free (default 300,
+# top's rule for n1: checked before serving and every 10 s). The serve dir's records (requests.jsonl, serve.json, windows.jsonl,
+# advice_trace.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody keeps them.
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
 # varied requests (network-accounting's traffic, `tools/serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
@@ -53,11 +55,26 @@ if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed 
   exit 0
 fi
 
+DISK_FLOOR_GB=${DISK_FLOOR_GB:-300}; floor=$((DISK_FLOOR_GB * 1048576))
+under_floor() { [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ]; }
+keep_records() {
+  for f in requests.jsonl serve.json windows.jsonl advice_trace.jsonl summary.json; do
+    [ -f "$D/$f" ] && cp "$D/$f" "$OUT/.$f.tmp" 2>/dev/null && mv "$OUT/.$f.tmp" "$OUT/$f"
+  done
+}
+under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free on $ROOT; not serving"; exit 15; }
+
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
+trap 'keep_records; kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; keep_records; exit 143' TERM
+( while kill -0 "$SRV" 2>/dev/null; do
+    keep_records
+    under_floor && { echo "$(date -u +%H:%M:%SZ) DISK FLOOR: under $DISK_FLOOR_GB GB free on $ROOT" | tee -a "$OUT/steps.txt"; touch "$D/stop"; kill -TERM "$SRV"; }
+    sleep 10
+  done; keep_records ) &
 for _ in $(seq 1 600); do
   grep -q "SERVE-OPENAI listening" "$OUT/serve.log" && break
   kill -0 "$SRV" 2>/dev/null || { tail -40 "$OUT/serve.log"; echo "SERVER EXITED before listening"; exit 10; }
@@ -250,14 +267,11 @@ fi
 echo "READY $D" | tee -a "$OUT/steps.txt"
 
 end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((end + 86400))   # UNTIL past midnight
-floor=$((${DISK_FLOOR_GB:-60} * 1048576))
-while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do
-  [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ] && { echo "$(date -u +%H:%M:%SZ) DISK FLOOR: under ${DISK_FLOOR_GB:-60} GB free on $ROOT" | tee -a "$OUT/steps.txt"; break; }
-  sleep 30
-done
+while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
+trap - TERM
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
 wait "$ADV"
-cp "$D/summary.json" "$D/windows.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
+keep_records
 "$PY" tools/admit_rows_check.py "$D" --json "$OUT/admit_rows_final.json" > "$OUT/admit_rows_final.txt" 2>&1; tail -1 "$OUT/admit_rows_final.txt"
 tail -3 "$OUT/serve.log"
 exit $rc
