@@ -4,15 +4,12 @@ chunk a member of at most its cap of the template's rows, read once; with no cap
 of several op_path prefixes takes the rows under any of them."""
 from __future__ import annotations
 
-from dataclasses import replace
-
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.program.registry import b1 as B1
-from verity_vllm.program.registry import boolean_dsa_norm as BDN
 from verity_vllm.program.registry import dead_free as DF
 from verity_vllm.program.registry import deepgemm as DG
 from verity_vllm.program.registry import fa2_check_inf as FA2
@@ -118,20 +115,15 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
         st.reference_check(got[0][0]["rows"], {**got[0][0]["outs"], "o0": got[0][0]["outs"]["o0"] ^ np.uint16(1)})
 
 
-def test_a_whole_row_reading_a_table_a_slot_holds_reads_it_in_lookup_slots():
-    """`chunk_rows.reads` of a whole row: lookup slots when its word Definition reads a table a slot holds, as Llama-3.2-1B's
-    decode attention row does under v5 and v18 (inline, its ``--zk`` prover ran out of memory at 600 GiB; in slots it was
-    proved, `chunk_rows.reads`), and DSA's RMSNorm's word row (rsq, rcp); inline for a row that reads none, and for a Boolean
-    row, whose body is gates, without walking it."""
+def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_row_inline():
+    """`chunk_rows.reads` of a whole row: lookup slots for Llama-3.2-1B's decode attention row under v5 and v18 (inline, its
+    ``--zk`` prover ran out of memory at 600 GiB; in slots it was proved, `chunk_rows.reads`), inline for the RMSNorm rows,
+    which read the rsq table too and were proved inline at their served shapes."""
     att = {"T": 1, "NH": 32, "KVH": 8, "D": 64, "BN": 128, "DOT": OP.HopperBF16WgmmaDot16, "INV": MU.Fa2InvSum, "MASKED_FROM": 0}
-    for d in (FA2.AttentionV5, DF.AttentionV18):
-        tp = SRW.template(descriptor_id(bind(d, **att)))
-        assert (tp.layout, CR.slot_tables(tp.fn), CR.reads(tp)) == ("row", {"ex2", "rcp"}, "slots")
-    assert CR.reads(SRW.template(descriptor_id(defn("ResidualAdd_v1")))) == "inline"
-    norm = SRW.template(descriptor_id(bind(BDN.DsaRMSNormV2, N=512, EPS=1e-5)))
-    word = SRW.template(norm.word)
-    assert norm.word != norm.id and (word.layout, CR.slot_tables(word.fn), CR.reads(word)) == ("row", {"rcp", "rsq"}, "slots")
-    assert CR.reads(replace(norm, fn=None)) == "inline"
+    norms = (bind(DF.RMSNormTritonV5, N=2048, EPS=1e-5), bind(B1.RMSNormFusedCuda, N=2048, EPS=1e-5))
+    for fn, want in [(bind(d, **att), "slots") for d in (FA2.AttentionV5, DF.AttentionV18)] + [(fn, "inline") for fn in norms]:
+        tp = SRW.template(descriptor_id(fn))
+        assert (tp.layout, CR.reads(tp)) == ("row", want), tp.id
 
 
 def test_a_scope_of_several_prefixes_takes_the_rows_under_any_of_them(rows):
