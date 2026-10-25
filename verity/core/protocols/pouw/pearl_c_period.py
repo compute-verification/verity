@@ -105,7 +105,7 @@ def _salt_only(ledger: list[str], name: str) -> tuple[str, str] | None:
     entries = [json.loads(line) for line in ledger]
     close = next(e["body"] for e in entries if e["kind"] == "period-close" and e["body"]["period"] == name)
     for j, w in enumerate(close["windows"]):
-        named = {e["kind"]: e for e in entries if e["session"] == w["session"]}
+        named = CC._named(ledger, w["session"])
         reserve, opened = named.get("reserve"), named.get("open")
         if not (reserve is not None and opened is not None
                 and CC._jeq(reserve["body"].get("families"), _SALT_LAYOUT)

@@ -38,6 +38,11 @@ salt-only session the auditor's ledger reserves, opens on the pass's salt epoch'
 read from the session's own files, a drawn `pass_index` and call indices offset within the epoch), compared output for
 output: the salt, or the same refusal.
 
+Its `pearl-c-period` against `pearl_c_period.pearl_c_period_credit`: one `Port`, over the Pearl-C periods
+`pouw_period_cases` generates (one to three salt-only epochs over one or two weights' roots, numbered on from the lane's
+earlier credited epochs, one to three passes each, their call indices running across the epoch, then one mutation each
+aimed at every clause's refusal), compared output for output: the credited manifests, or the same refusal.
+
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
 multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
 """
@@ -59,9 +64,11 @@ import pouw_check_cases as cases
 import pouw_credit_cases as credit_cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
+import pouw_period_cases as period_cases
 import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import pearl_c_period as PP
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import weights as W
 
@@ -642,3 +649,40 @@ def test_live_salt(pass_server):
                  "the salt's coin does not open", "the salt's coin is epoch #", "the salt's coin opening is malformed",
                  *PIN_PARTS):
         assert any(_template(part) in k for k in LIVE_SALTED), part
+
+
+PERIOD_CREDITED: Counter[str] = Counter()
+
+
+def pearl_c_period(case: dict) -> dict:
+    got, refused = PP.pearl_c_period_credit(*period_cases.args(case))
+    PERIOD_CREDITED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return {"credited": got} if refused is None else {"refused": list(refused)}
+
+
+PEARL_C_PERIOD = D.Port("pouw-check-difftest", "pearl-c-period", pearl_c_period, package=LEAN, need_rejects=False,
+                        of_record=V.RECORD_VERDICT,
+                        inputs=st.builds(period_cases.instance, st.randoms(use_true_random=False),
+                                         st.sampled_from(["honest"] * (len(period_cases.NAMES) // 4)
+                                                         + period_cases.NAMES)))
+
+
+def test_pearl_c_period(pass_server):
+    """Generated Pearl-C periods, then each mutation over a few seeds (`replay`): passes or earlier epochs out of form, a
+    session the close lists that no pass presents (an abandoned one among them), a session reserved for another layout
+    or H1's, a pass whose session doesn't count toward the period, a refused pass, an epoch numbered out of turn on its
+    weights' root, and two passes of one epoch sharing a call index (a pass presented twice among them), so every clause
+    of the rule refuses whatever the draw."""
+    PERIOD_CREDITED.clear()
+    stats = D.run(PEARL_C_PERIOD, examples=60, server=pass_server)
+    swept = Counter(D.replay(PEARL_C_PERIOD, period_cases.instance(random.Random(f"{name}/{seed}"), name),
+                             pass_server)[0]
+                    for name in ["honest", *period_cases.NAMES] for seed in range(3))
+    print(f"pouw-check-difftest pearl-c-period: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(PERIOD_CREDITED.items()))}")
+    assert "accept" in PERIOD_CREDITED
+    for code in PP.REFUSALS:
+        assert any(k.startswith(f"{code}: ") for k in PERIOD_CREDITED), code
+    for part in (PP.PASSES_FORM, PP.EARLIER_FORM, PP.NOT_SALT_ONLY, PP.OUT_OF_TURN, PP.REPEATED, ": missing: window ",
+                 ": order: ", "doesn't count toward it"):
+        assert any(_template(part) in k for k in PERIOD_CREDITED), part

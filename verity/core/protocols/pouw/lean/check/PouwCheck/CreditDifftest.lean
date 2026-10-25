@@ -1,5 +1,6 @@
 import PouwCheck.Credit
 import PouwCheck.Difftest
+import PouwCheck.Period
 
 /-!
 # The difftest's functions for a served window's credit (`PouwCheck.Credit`)
@@ -28,6 +29,9 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `steps`, its rounds, and `salt`, its Program salt):
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the descriptor's `layoutOf` and
   `shapeOf` (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
+* `pearl-c-period` (`key`, `ledger`, `pins`, `main`, `name`, `passes`, `earlier`, as
+  `pearl_c_period.pearl_c_period_credit` takes them): `{"credited": [manifests]}`, `pearlCPeriodCredit`, or
+  `{"refused": [code, why]}`.
 -/
 
 namespace PouwCheck.CreditDifftest
@@ -104,9 +108,16 @@ def registeredFileOf (j : Json) : Except String Json := do
     pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)])
   PouwCheck.Difftest.refusal id got
 
+def pearlCPeriodOf (j : Json) : Except String Json := do
+  let f := PouwCheck.Difftest.get j
+  PouwCheck.Difftest.refusal (fun ms => Json.mkObj [("credited", Json.arr ms.toArray)])
+    (PouwCheck.pearlCPeriodCredit (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "name") (← f "passes")
+      (← f "earlier"))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),
-  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
+  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
+  ("pearl-c-period", pearlCPeriodOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name
