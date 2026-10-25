@@ -430,6 +430,7 @@
     {"file": "verity_vllm/program/instances_form.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN", "count": 2},
     {"file": "verity_vllm/program/instances_form.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 3},
     {"file": "verity_vllm/program/instances_form.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
+    {"file": "verity_vllm/program/lifting/continuation.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/lifting/dump.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/kernels/_jit.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/program/kernels/_jit.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},

@@ -24,7 +24,7 @@ independently written three-state reference machine (SERVING / LAG / INACTIVE), 
 (`recurrence`), the named invariants (`invariants`), rev's Match-side checks (`check_transcript`), the slot <-> engine-iteration map
 (revb R1: `slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
 (`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity_vllm/program/registry/lifted.py` (`continuation_chain`); the
-lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
+R17-1 lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
 
 Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
 Everything here is labelled `lifted-padded` and carries `CONTINUATION_VERSION` beside `LIFTED_RULES_VERSION`.
