@@ -166,7 +166,8 @@ widens with the slots before it, and the build is linear in N + H + O.
 
 **The bound.** The unit's charge is `code_v1`'s segment length for the whole window, so "The bound" (PROTOCOL.md) covers
 every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its strings are
-prefix-free. A Lean mirror needs two more facts:
+prefix-free. Lean proves it (`SecurityProofs.EncardChargedLeWhole` and the three bounds `…V1Whole`, in
+`Security/Proofs/NetworkCertifier/WindowCharge.lean`) from two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
   The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
   (⌊(n_j − 1) / 2^15⌋ + 1) · 2^15 ≥ n_j for the two chunks. So
@@ -185,6 +186,13 @@ prefix-free. A Lean mirror needs two more facts:
   So `code_v1._window` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
   the total: bins 0 … bitlen(S) of a count's table reach at most T.
+
+In Lean each fact is a lemma over the coder's symbols: two windows' symbol sequences from one carry split, after a
+common prefix, at one model's disjoint outcomes (`syms_split`), and sequences that pairwise split weigh at most the
+coder's first state (`sum_owt_codeAll_le`), a weight being an interval's width over `2^bits`. The Lean definitions
+(`Security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one, and the window
+difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
+(`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
 
 **The slice.** The compile slice's class runs inside the pool bound with the warden's ingress, so its windows send no
 hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.

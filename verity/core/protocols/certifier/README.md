@@ -201,7 +201,9 @@ the circuits and their evaluator.
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
 from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
-what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`.
+what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
+`lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
+`window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:

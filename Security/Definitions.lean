@@ -13,6 +13,7 @@ import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1
+import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Warden
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
