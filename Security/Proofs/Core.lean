@@ -22,6 +22,7 @@ import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
+import Proofs.Core.AuditorDevice
 
 /-!
 # Proofs of core's guarantees

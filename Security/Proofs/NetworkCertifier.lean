@@ -14,6 +14,7 @@ import Proofs.NetworkCertifier.SampledAuditInstance
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity

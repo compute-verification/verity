@@ -10,6 +10,7 @@ import Definitions.Core.Scalar
 import Definitions.Core.Prims
 import Definitions.Core.TC
 import Definitions.Core.Fp32
+import Definitions.Core.AuditorDevice
 
 /-!
 # Core's protocol: the model every protocol states its guarantees in
@@ -17,7 +18,8 @@ import Definitions.Core.Fp32
 The developer declares a circuit `D` and its baseline `θ` (`Declaration`), runs `D` and commits the values of its
 committed wires, and the verifier draws from its own coins (`Game`). Every protocol package states its guarantees about
 these objects and defines none of its own: a circuit, its transcripts, a partition into units and a unit's correctness
-are the ones here.
+are the ones here. The auditor's device on each server's uplink, whose one code gives the network warden's cells and
+the certifier's records, is `AuditorDevice` (`Verity.TapCode`).
 
 This module, `Assumptions` and `Guarantees` are the trusted text: they import only one another and Mathlib, so their
 diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
