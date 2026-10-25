@@ -14,14 +14,16 @@ The rule:
   straddles two fields, or a hex match a nibble off a message's bytes, doesn't count.
 * A counted find is excused only if the piece's bytes are in what the statement fixes: the public rows (``pub-*.bin``),
   the statement and the circuit definition (``STATEMENT``), or a field the reader fixes: a stream's integers (its lengths
-  and parameters, reads of at most 8 bytes, not its nonces) and a round message's headers, domain and labels. Otherwise
-  the piece is ``leaked`` and fails its statement, whatever its row, its bytes or how few values they take: there is no
-  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails (REDTEAM phase 16,
-  finding 1).
+  and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding nonces ``GRIND`` among them) and a round
+  message's headers, domain and labels. Otherwise the piece is ``leaked`` and fails its statement, whatever its row, its
+  bytes or how few values they take: there is no byte-count or witness-class exemption, so a switch row found in one
+  field of one repetition fails (REDTEAM phase 16, finding 1).
 
-Residual risk: a leak at a byte shift across fields is missed. Witness bytes the prover writes so that they straddle two
-fields of the format, never inside one, are no find. A differential against a proof of a different witness is evidence
-for a manual analysis of a flagged piece; it is not part of this rule.
+A find across fields isn't a missed leak (REDTEAM phase 18): the reads tile a stream with no gaps and C-Flock's writer
+writes each field whole, so an honest writer's leak lands inside one field. A match across two fields is a coincidental
+alignment of their bytes, and a secret split across adjacent fields the prover picks freely (its salts) needs a modified
+prover, outside this scan's model. A differential against a proof of a different witness is evidence for a manual
+analysis of a flagged piece; it is not part of this rule.
 """
 from __future__ import annotations
 
@@ -41,6 +43,11 @@ import redigest as RD  # noqa: E402
 STATEMENT = ("program.json", "partition.json", "circuit.txt")
 _SWAP = threading.Lock()
 
+#: Ligerito's grinding nonces, which `redigest.layout` keys without a "nonce" suffix (consumed by
+#: `transcript_check`'s ``t.pow``, and prover-controlled: `redigest`'s ``lig-query-nonce``/``lig-claim-nonce``
+#: mutants flip them and the verifier accepts), so `reads` counts them among the nonces, not the reader-fixed integers.
+GRIND = ("lig.qn", "lig.cbn", "lig.consn")
+
 
 def is_stream(name: str) -> bool:
     """Whether `name` is a repetition's proof stream, ``S.repK.bin``."""
@@ -50,8 +57,8 @@ def is_stream(name: str) -> bool:
 @functools.lru_cache(maxsize=8)
 def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
     """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read C-Flock's proof format makes of it
-    (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets;
-    None when the format doesn't read the whole stream."""
+    (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets
+    (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`); None when the format doesn't read the whole stream."""
     readers = []
     # `transcript_check.R` is swapped process-wide while `redigest.layout` reads: one caller at a time, or a recorder
     # subclasses another's and stays installed (n2_zk scans its members in threads).
@@ -74,7 +81,7 @@ def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] |
         finally:
             RD.tc.R = R
     got = next((r.reads for r in reversed(readers) if r.i == len(stream)), None)
-    nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") for o in os)
+    nonces = frozenset(o for k, os in off.items() if k.endswith("nonce") or k in GRIND for o in os)
     return None if got is None else (tuple(got), nonces)
 
 
