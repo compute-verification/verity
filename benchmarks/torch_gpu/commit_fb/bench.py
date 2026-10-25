@@ -207,8 +207,11 @@ def main(argv: list[str] | None = None) -> int:
     res["step_fused"] = step_arm([fused] * ns.layers + [head], salts, 11)
     print(json.dumps({"step": res["step"], "step_fused": res["step_fused"]}), flush=True)
     if not ns.no_beside:
-        res["beside"] = beside_arm(every, salts, 20, ns.batch, 16384, gen)
-        print(json.dumps({"beside": res["beside"]}), flush=True)
+        try:
+            res["beside"] = beside_arm(every, salts, 20, ns.batch, 16384, gen)
+        except (RuntimeError, TypeError) as e:
+            res["beside_error"] = repr(e)
+        print(json.dumps({"beside": res.get("beside", res.get("beside_error"))}), flush=True)
     res["share"] = {f"{arm}/{name}": res[arm]["wall_s"] / s for arm in ("step", "step_fused") for name, s in STEP_S.items()}
     res["need_GBps"] = {**{f"rtx_plan/{k}": v for k, v in NEED_GBS.items()},
                         **{f"shape_h_{arm}/{name}": res[arm]["bytes"] / s / 1e9 for arm in ("step", "step_fused")
