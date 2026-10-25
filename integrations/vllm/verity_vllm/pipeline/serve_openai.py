@@ -40,7 +40,7 @@ Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the f
 and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after ``--window-steps`` steps (it
 reopens before the next step): each window is one Commit, with its own run root. At each close the server reads the
 window back from the committed bytes into the served record (`commit.served_record.Record`, COMMIT-ARB's): each request's
-committed input ids (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one), sampled ids and
+committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
 seeds, by position. Once a request has finished, `Record.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
 (off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`).

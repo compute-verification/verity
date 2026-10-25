@@ -8,8 +8,9 @@ attached keeps each step's rows (`Row`: the runner's request id, its token rows 
 its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
-- ``inputs``: position p -> the committed input id at p (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on
-  the eager one), every row that computed p; a recompute must commit the same id again;
+- ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
+  the compiled path or ``model.embed_tokens/in`` on the eager one), every row that computed p; a recompute must commit the
+  same id again;
 - ``sampled``: position p -> the committed id sampled from p's logits, the token at p + 1, for every row whose last position
   reaches its prefill length (Model Runner V2 samples every row and drops a partial prefill's; those are ``discarded``);
 - ``seeds``, ``rows``, the prefix-cache hit (a first row starting past 0) and the preemptions (a row starting before the
@@ -35,9 +36,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 SCHEMA = "verity-vllm/served-record/v1"
-#: The embedding's input ids, by execution: the compiled path's name, then the eager path's (`NativeHostCommitter`'s
-#: ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
-IDS_NAMES = ("c00.input/ids", "model.embed_tokens/in")
+#: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
+PORT_NAMES = ("step.input/ids", "step.input/positions")
+#: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager
+#: path's (`NativeHostCommitter`'s ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
+IDS_NAMES = (PORT_NAMES[0], "c00.input/ids", "model.embed_tokens/in")
 SAMPLED = "runner.sampler/sampled_token_ids"
 #: Each sampled row's seed and the position its draw read, one i64 a row (`SamplerInputsSource`).
 SAMPLER_INPUTS = ("runner.sampler/seed", "runner.sampler/pos")
@@ -126,10 +129,6 @@ class SamplerInputsSource:
         qsl = [int(x) for x in ib.query_start_loc_np[: n + 1]]
         self.rows[job.step] = [(str(ib.req_ids[i]), qsl[i], qsl[i + 1], int(ib.num_computed_tokens_np[i]), int(ib.prefill_len_np[i]))
                                for i in range(n)]
-
-
-#: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
-PORT_NAMES = ("step.input/ids", "step.input/positions")
 
 
 class StepInputPort:

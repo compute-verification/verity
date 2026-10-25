@@ -70,42 +70,66 @@ SERVED_NAMES = {"runner-a": "b0-1", "runner-b": "b0-2"}
 _ITEM = {"bfloat16": 2, "float32": 4, "int32": 4, "int64": 8}
 
 
-def _sealed_parts(tmp_path, with_manifest: bool):
+#: what the window's two steps take in: b0-1's prompt [1, 2, 3] and b0-2's [4, 5] at step 0, then each one's first sample
+PORT = {0: ([1, 2, 3, 4, 5], [0, 1, 2, 0, 1]), 1: ([7, 8], [3, 2])}
+
+
+def _i64(xs, T):
+    return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
+
+
+def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None):
     """The record's committed tensors of steps 0 and 1 (shapes cut to the served window's 5 and 2 token rows) committed and sealed
-    as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not."""
+    as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
+    With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and, as `serve_seal.single_ids`
+    leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
+    its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default)."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import step_rows
+    from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
 
     fx = json.loads(PARTS.read_text())
+    T = 4096 // 8
     steps = {}
     for s, metas in fx["committed"].items():
         tokens = next(m["shape"][0] for m in metas if m["name"] == "model.embed_tokens/in")
         rows = max(hi for _r, _lo, hi, *_ in SERVED_ROWS[int(s)])
-        steps[int(s)] = []
+        steps[int(s)] = [(n, _i64(v, T), 1000 + j, "int64", (T,)) for j, (n, v) in enumerate(zip(PORT_NAMES, port[int(s)]))] if port else []
         for m in metas:
             shape = (rows, *([2] if len(m["shape"]) > 1 else [])) if m["shape"][0] == tokens else (8,)
-            steps[int(s)].append((m["name"], bytes(_ITEM[m["dtype"]] * math.prod(shape)), m["ordinal"], m["dtype"], shape))
+            raw = bytes(_ITEM[m["dtype"]] * math.prod(shape))
+            if m["name"] == "model.embed_tokens/in" and port:
+                if embed_ids is None:
+                    continue
+                raw = b"".join(int(x).to_bytes(4, "little") for x in embed_ids[int(s)])
+            steps[int(s)].append((m["name"], raw, m["ordinal"], m["dtype"], shape))
     com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    if port:
+        com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
+        com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
         com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
     leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
             "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
-    d = tmp_path / ("w5" if with_manifest else "w5-raw")
+    d = tmp_path / (name or ("w5" if with_manifest else "w5-raw"))
     s = ss.seal_window(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
                        request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
     return fx, d, s
 
 
-def _store(d, s):
+def _store(d, s, opened: bool = False):
+    """The sealed window opened as PROVE-PATH opens it: the record, its binding map, and the store its Programs read through, over the
+    bundle's committed bytes verified against the run root (``opened``) or over no bytes."""
     from verity_vllm.check.replay.opening import CommittedStore
+    from verity_vllm.commit.opened import OpenedReader
     from verity_vllm.pipeline import deferred_rows as DR
 
     r = DR.of_record(s["bundle"], str(d))
     bmap = json.loads((d / "commit" / "binding_map_p0.json").read_text())
-    return r, bmap, CommittedStore.of_record(bmap, lambda *_a: None, r.manifest)
+    return r, bmap, CommittedStore.of_record(bmap, OpenedReader(r.store, r.run) if opened else (lambda *_a: None), r.manifest)
 
 
 def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
@@ -137,6 +161,104 @@ def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")
     assert not store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "out")
     assert not store.has("b0-1", 1, "model.layers.1.self_attn.rotary_emb", "query")
+
+
+#: each request's token rows of each step (`SERVED_ROWS`)
+TOKEN_ROWS = {("b0-1", 0): (0, 3), ("b0-2", 0): (3, 5), ("b0-1", 1): (0, 1), ("b0-2", 1): (1, 2)}
+
+
+def _entries(bmap, rid, step, op, member):
+    return [e for e in bmap["entries"] if e.get("kind") == "leaf"
+            and [e["identity"][k] for k in ("request_id", "step", "op_path", "output_member")] == [rid, step, op, member]]
+
+
+def test_a_sealed_windows_programs_read_the_ids_and_positions_at_the_ports_bytes(tmp_path):
+    """The ids the row's Programs read (`model.embed_tokens/in`, the Embedding's input) are the port's bytes [0, 8T), each request's
+    token rows of them, and the port's [8T, 16T) are the positions; the embedding's ids are committed nowhere else, and every other
+    tensor binds as the Commit of record bound it. The row's RoPE reads no committed positions (its rows are ``query`` and ``key``:
+    RoPE_v1's positions are the Program's static structure), so the port's positions bind as themselves, each request's rows."""
+    from verity_vllm.commit.served_record import PORT_NAMES
+
+    fx, d, s = _sealed_parts(tmp_path, True, port=PORT)
+    r, bmap, store = _store(d, s, opened=True)
+    T = 512
+    assert r.ctx["served_window"]["step_input_port"]["binds_as"] == {"step.input/ids": ["model.embed_tokens", "in"]}
+    assert {row["output_member"] for row in fx["identities"] if row["op_path"].endswith("rotary_emb")} == {"query", "key"}
+    for (rid, step), (lo, hi) in TOKEN_ROWS.items():
+        for (op, member), name, at in [(("model.embed_tokens", "in"), PORT_NAMES[0], 0), (("step.input", "positions"), PORT_NAMES[1], 8 * T)]:
+            [e] = _entries(bmap, rid, step, op, member)
+            assert (e["name"], e["stream_offset"], e["width_bytes"], e["element_offset"], e["identity"]["element_range"]) == (name, at, 8 * T, lo, [0, hi - lo])
+        ids, pos = PORT[step]
+        w, why = store.words(rid, step, "model.embed_tokens", "in", 0, hi - lo)
+        assert w is not None and w.tolist() == ids[lo:hi], why
+        assert store.words(rid, step, "step.input", "positions", 0, hi - lo)[0].tolist() == pos[lo:hi]
+    got = {(e["identity"]["step"], e["tensor_ordinal"]): [e["identity"]["op_path"], e["identity"]["output_member"], e["identity"]["invocation"]]
+           for e in bmap["entries"] if e.get("kind") == "leaf" and e["name"] not in PORT_NAMES}
+    assert got == {(int(st), m["ordinal"]): m["bound"] for st, ms in fx["committed"].items() for m in ms if m["name"] != "model.embed_tokens/in"}
+
+
+def test_a_port_byte_changed_is_what_the_programs_read(tmp_path):
+    """b0-2's second prompt id 5 -> 6, one byte of step 0's stream (byte 32): the Embedding's input the Programs read changes with it,
+    and so does the run root."""
+    _fx, d, s = _sealed_parts(tmp_path, True, port=PORT)
+    _fx, d2, s2 = _sealed_parts(tmp_path, True, port={**PORT, 0: ([1, 2, 3, 4, 6], PORT[0][1])}, name="w5-other")
+    opened = [_store(dd, x, opened=True) for dd, x in ((d, s), (d2, s2))]
+    assert [o[2].words("b0-2", 0, "model.embed_tokens", "in", 0, 2)[0].tolist() for o in opened] == [[4, 5], [4, 6]]
+    assert [o[2].words("b0-1", 0, "model.embed_tokens", "in", 0, 3)[0].tolist() for o in opened] == [[1, 2, 3], [1, 2, 3]]
+    assert opened[0][0].run.run_root != opened[1][0].run.run_root
+
+
+@pytest.mark.parametrize("embed_ids", [{0: [1, 2, 3, 4, 9], 1: [7, 8]}, {0: PORT[0][0], 1: PORT[1][0]}], ids=["other-ids", "same-ids"])
+def test_a_window_that_commits_the_models_ids_beside_the_port_is_refused(tmp_path, embed_ids):
+    """A stream carrying the embedding's own ids beside the port's (a committer `single_ids` didn't leave, or a prover's) is refused
+    at the seal whether or not they equal the port's: the row's Programs would read one of two copies of their input."""
+    with pytest.raises(ValueError, match="one copy of \\[\\('model.embed_tokens', 'in'\\)\\].*step 0: model.embed_tokens/in"):
+        _sealed_parts(tmp_path, True, port=PORT, embed_ids=embed_ids)
+
+
+@pytest.mark.parametrize("port,kept,why", [
+    ({**PORT, 1: ([7, 8], [3, 3])}, None,
+     r"step 1: request b0-2's token row 1 \(its rows \[1, 2\) from position 2\) is at position 3, its row ran 2"),
+    ({**PORT, 0: ([1, 2, 3, 4, 5], [0, 1, 1, 0, 1])}, None,
+     r"step 0: request b0-1's token row 2 \(its rows \[0, 3\) from position 0\) is at position 1, its row ran 2"),
+    ({**PORT, 0: ([1, 2, 3, 4, 5], [0, 1, 2, 0, 1, 6])}, None, r"step 0: token 5, past the step's 5 tokens, is position 6, not 0"),
+    (PORT, {0: SERVED_ROWS[0]}, r"step 1: no rows to hold its positions to"),
+], ids=["decode-off-by-one", "prefill-off-by-one", "past-the-tokens", "no-rows"])
+def test_a_window_whose_port_positions_are_not_what_its_rows_ran_is_refused(tmp_path, port, kept, why):
+    """The eager Programs' RoPE positions are static, each request row's start..start+n-1 (the rows the window's served rows
+    register); a port position other than those, or other than 0 past the step's tokens, is refused at the seal, by request."""
+    with pytest.raises(ValueError, match=r"positions aren't the ones the window's rows ran at 1 step\(s\).*" + why):
+        _sealed_parts(tmp_path, True, port=port, kept=kept)
+
+
+def test_the_committer_commits_the_steps_ids_once_as_the_ports():
+    """`single_ids` drops the embedding from the acquisition plan's input sites, so the committer acquires no ``model.embed_tokens/in``."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import committer
+
+    com = committer(commit_scheme="rows-sha512")
+    com.plan_inputs = {"model.embed_tokens", "model.layers.0.mlp.act_fn"}
+    emb = torch.nn.Embedding(4, 2)
+    assert com._acquires_input("model.embed_tokens", emb)
+    ss.single_ids(com, json.loads(PARTS.read_text()))
+    assert com.plan_inputs == {"model.layers.0.mlp.act_fn"} and not com._acquires_input("model.embed_tokens", emb)
+
+
+def test_the_ports_identities_are_the_manifests_ids_and_compiled_positions():
+    """On the eager row the port's ids are the Embedding's input and its positions nothing the Programs read; on the compiled path
+    both are piece 0's inputs, and a tensor of the step under one of those names beside the port is a second copy."""
+    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+
+    assert ss.port_identities(json.loads(PARTS.read_text())) == {PORT_NAMES[0]: ("model.embed_tokens", "in")}
+    compiled = {"identities": [{"op_path": "c00.input", "output_member": m, "family": "served_kernel_values", "engine_step": 0}
+                               for m in ("ids", "positions")] + [{"op_path": "logits_processor", "output_member": "out", "family": "served_kernel_values", "engine_step": 0}]}
+    assert ss.port_identities(compiled) == {PORT_NAMES[0]: ("c00.input", "ids"), PORT_NAMES[1]: ("c00.input", "positions")}
+    b = ss.served_binder(compiled, [0], [StepInputPort(SimpleNamespace(chunk=4096), 512)])
+    assert b.bind(0, [*PORT_NAMES, "c00.input/ids"]) == [("c00.input", "ids", 0, "consumer-input"), ("c00.input", "positions", 0, "consumer-input"),
+                                                          ("c00.input", "ids", 0, "unbound")]
+    two = {"identities": [{"op_path": op, "output_member": "in", "family": "input_token_ids"} for op in ("model.embed_tokens", "model.mm_proj")]}
+    with pytest.raises(ValueError, match="2 input-ids identities"):
+        ss.port_identities(two)
 
 
 def test_a_committer_without_the_commit_of_records_parts_is_named():
@@ -188,7 +310,7 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import step_rows
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+    from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
     from verity_vllm.pipeline import deferred_rows as DR
 
     def i64(xs, T):
@@ -201,7 +323,8 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
              1: [(PORT_NAMES[0], i64([7, 8], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([3, 2], T), 1, "int64", (T,))]}
     com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
-    com.sources = [StepInputPort(com, T)]
+    com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
+    com.sources[1].rows = SERVED_ROWS
     served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
     leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
             "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
