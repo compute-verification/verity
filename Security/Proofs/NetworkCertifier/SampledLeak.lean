@@ -27,6 +27,7 @@ open Claims Claims.Sampling
 theorem faulty_mem_faultySets {H : Msg → Msg} {Cm : Commitment Bool} {δ : ℝ} {s : Stmt} {P : Partition} {w : Wit}
     (hRel : RelS H Cm δ s P w) (hdisj : Disjoint (faulty H Cm s P w) (allSlots s.design P)) :
     faulty H Cm s P w ∈ faultySets s.design P δ := by
+  classical
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
   exact ⟨fun _ hv => (Finset.mem_filter.mp hv).1, hRel, hdisj⟩
 
