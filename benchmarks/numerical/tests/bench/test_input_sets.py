@@ -30,7 +30,8 @@ SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1
          "moe-router-topk": dict(E=16, TOPK=4, VPT=8), "moe-router-topk-norm": dict(E=16, TOPK=4, VPT=8), "moe-sum": dict(TOPK=4, H=16), "bias-add": dict(N=16),
          "bf16-mul-scalar": dict(N=16), "embedding-row": dict(V=50, H=8), "moe-expert-coordinate": dict(E=4, K=64),
          "moe-expert-coordinate-weighted": dict(E=4, K=64), "scaled-mm-fp8-block-coordinate": dict(K=256, G=128),
-         "ingress-prompt": dict(MODEL="m", LP=3, V=1000), "token-select-chunk": dict(C=64), "token-select-combine": dict(V=200, C=64)}
+         "ingress-prompt": dict(MODEL="m", LP=3, V=1000), "token-select-chunk": dict(C=64), "token-select-combine": dict(V=200, C=64),
+         "rmsnorm-triton-v5": dict(N=64, EPS=1e-6), "attention-head-v18": dict(D=16, BN=16, T="1:40")}
 
 
 def test_catalogue_covers_the_101_templates():

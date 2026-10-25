@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Fit
+import Definitions.Nci.Guarantees.Fit
 
 /-!
 # Proof of the fit bound
