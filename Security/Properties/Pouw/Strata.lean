@@ -8,7 +8,7 @@ window's layout hold the window's units call by call, in `h1window.program`'s or
 other unit. `callWork` (`credit.call_work`) lists each call's units and the work of each of them; call `i`'s units are
 `[callStart i, callStart (i + 1))`. So the credited calls' work `established` passes `epsAt` as `C` is the work of their
 units in the strata the draw runs over (`unitWork`), and the window's work it passes as `W` is the strata's
-(`Flock.Draw.totalWork`). Each is a `Prop`, and `Properties.Proofs.Pouw.Strata` proves every one, on Lean core.
+(`Flock.Draw.totalWork`). Each is a `Prop`, and `Proofs.Properties.Pouw.Strata` proves every one, on Lean core.
 -/
 
 namespace Properties.Pouw.Strata

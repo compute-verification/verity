@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS.Grind
+import Definitions.Accounting.Guarantees.TS.Grind
 import Proofs.Accounting.TS.Steer
 import Mathlib.Analysis.MeanInequalitiesPow
 
