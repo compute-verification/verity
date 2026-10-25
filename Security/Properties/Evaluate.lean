@@ -13,7 +13,7 @@ import Definitions.Core.Prims
 The descriptor v1 evaluator (`verity/core/primitives/evaluate/`, package `verity_evaluate`) is code, so it
 requires nothing of `Security/`: where `Definitions.Core` defines a primitive, the evaluator holds a copy, whose doc names
 the definition it must equal. These are those equalities, each a `Prop` stated against the two functions as they are, and
-`Properties.Proofs.Evaluate` proves every one.
+`Proofs.Properties.Evaluate` proves every one.
 
 A function that takes words is equal to its definition on every natural number, not only on words, wherever the two
 are: `Evaluate.Fp32.decode` masks its operand to 32 bits and `Verity.Fp32.decode` does not, and they still decode every

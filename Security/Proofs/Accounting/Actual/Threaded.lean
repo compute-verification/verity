@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Actual.Threaded
+import Definitions.Accounting.Guarantees.Actual.Threaded
 import Proofs.Accounting.Actual.Windows
 import Proofs.Nci.Threads
 
