@@ -12,9 +12,13 @@ claims position whose registered row sits at a `sha512/row/v2` port of `16 w` bi
 value's bits (`dataOf`). The one more condition: no earlier port has the same registered root, since the verifier opens
 at the first port whose root the position names.
 
-The restriction is the deployed check's own (`SamplingDeploy.row_ne_misshaped`, `SamplingDeploy.leaf_misshaped`): a
-misshaped value's leaf is a deployed opening's leaf only by a SHA-512 collision, and so is a leaf under a salt of another
-length once the path is at least one level (`saltOf_length`).
+The restriction is the deployed check's own: a misshaped value's leaf is the leaf of an opening `commitDep` passes only
+by a SHA-512 collision (`leaf_misshaped_dep`), and so is a leaf under a salt of another length once the path has a level,
+`2 ≤ nl` units (`leaf_salt`).
+
+At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
+`opens_commitDep`, and `transportsLiveCS` is `Bridge.TransportsLiveC` with that restriction: the row's port is
+`sha512/row/v2` and not segmented, the opening's salt is `saltLen` bytes, and the registration's port roots are distinct.
 -/
 
 namespace Flock.Bridge
@@ -226,6 +230,23 @@ theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option 
   refine hm96Pair_spec_salt _ _ _ _ (fun e => hy ?_) hl
   rw [e]
   exact saltOf_length (pathOf_length_of_opens C rows c nl roots o h) hd
+
+/-- **The deployed check refuses a misshaped value** (`SamplingDeploy.leaf_misshaped` at `commitDep`): at a position
+whose row has `16 w` bits, a game opening of a value that isn't `RowShaped` of the row's width has the leaf of a
+deployed opening's row only by a SHA-512 collision. -/
+theorem leaf_misshaped_dep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (d : ℕ)
+    (o : Opening Bool) {r : RowAt} (hr : rowOfPos C rows o.pos = some r) (hpl : r.place < r.width)
+    (h16 : r.width % 16 = 0) {W : ℕ} (hW : r.width ≤ W) {v : BitVal W} (hv : ¬ (RowShaped v ∧ v.1.val = r.width))
+    (y : Msg)
+    (h : H512 (hm96Input (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y) =
+      H512 (hm96Input (SamplingDeploy.row (placeOf C rows) (bitsOf d) o) (saltOf o))) :
+    Collides (hm96Pair (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y
+      (SamplingDeploy.row (placeOf C rows) (bitsOf d) o) (saltOf o)) := by
+  have hp := placeOf_eq hr hpl
+  refine hm96Pair_spec _ _ _ _ (Ne.symm (SamplingDeploy.row_ne_misshaped (placeOf C rows) (bitsOf d) o ?_ ?_ ?_)) h
+  · rw [hp]; exact h16
+  · rw [hp]; exact hW
+  · rw [hp]; exact hv
 
 /-! ## Wires and positions -/
 

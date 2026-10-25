@@ -27,5 +27,5 @@ for `Deploy.V false` (`RecordsLiveJ`). `DecodePlain`: at one table, the old one-
 deployed plain decoders right at that writer. `WrongSet`: the claims' faulty set is no larger than the game's
 units wrong on the registration, at a slot map, where each unit lowers and the witness's openings bind. `BindsColl`: those openings bind unless two passing openings'
 checks collide, given that the registered openings read as claims openings and the witness covers the unit.
-`Transports`: at the deployed sampling commitment that reading fails under roots that don't place the gate and at a
-hash that isn't 64 bytes wide, at every `tr`. -/
+`Transports`: the deployed check opens shaped rows only: a misshaped value's leaf is a deployed opening's leaf only by
+a SHA-512 collision (`leaf_misshaped`). -/

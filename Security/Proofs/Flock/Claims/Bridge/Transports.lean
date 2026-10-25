@@ -19,6 +19,8 @@ hashes only `RowV2.enc` of a row of its place's width. So the openings the deplo
   leaf of a shaped value.
 * `leaf_misshaped`: **a misshaped game opening's leaf is the leaf of a deployed opening only by a SHA-512 collision**
   (`Binding.hm96Pair_spec`).
+* `valOf_eq` and `opens_pathCommit`: a shaped value is the value of the row bits it agrees with, and the check of any
+  path commitment over hm96 leaves of deployed rows is the verifier's, for `Proofs.Flock.Bridge.Transports`.
 -/
 
 namespace SamplingDeploy
