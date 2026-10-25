@@ -256,11 +256,11 @@ theorem withCoin_le {s : State} {e : Event} {c : ByteArray} {s₁ : State} (h : 
     · exact hy
 
 theorem eventOn_ok {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
-    (h : Verifier.eventOn s e coin = .ok (r, s₂)) :
+    (h : Verifier.eventOn 2 s e coin = .ok (r, s₂)) :
     ∃ s₁, (∀ c a, W c a s₁ = W c a s) ∧ CoinsLE s s₁ ∧ Session.step s₁ e = .ok (r, s₂) ∧
       Verifier.unset s₂ e (some r) = none := by
   unfold Verifier.eventOn at h
-  simp only [bind, Except.bind] at h
+  simp only [bind, Except.bind, Flight.step_two, Shared.step_one] at h
   repeat' (split at h <;> try dsimp only at h)
   all_goals (try contradiction)
   all_goals
@@ -488,7 +488,7 @@ theorem agree_of_le {c a : Array ByteArray} {s s' : State} (h : CoinsLE s s') (h
 /-- An event the process took on `s` is the same event on the recorded run, at `W c a s`, for coins that agree with
 the ones the process holds after it. -/
 theorem event_W {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State} {c a : Array ByteArray}
-    (h : Verifier.eventOn s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
+    (h : Verifier.eventOn 2 s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
     Session.step (W c a s) e = .ok (r, W c a s₂) ∧ CoinsLE s s₂ := by
   obtain ⟨s₁, hW, hle, hstep, hun⟩ := eventOn_ok h
   obtain ⟨h1, h2⟩ := step_keeps hstep

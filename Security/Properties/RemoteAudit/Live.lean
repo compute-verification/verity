@@ -25,9 +25,12 @@ on a running session, each giving its answer and the event the transcript record
 
 It needs `1 ≤ min_passes` (`Properties.RemoteAudit.Coins`: with none, an empty window drawn at its deadline could take
 a root before its verdict is settled), which the process's `session` request checks (`Difftest.sessionOf`'s
-`positive`). The registry's other sessions, and `abort`, which ends a session with the driver's outcome, are not in the
-model: the process keeps each session's state apart (`Registry.running`, `Registry.update`) and an aborted session is
-not accepted. The process's IO (reading requests and frames, threads, writing answers) is `handle`'s and `serve`'s.
+`positive`). The model is the process at two windows in flight, a session's default, where `Verifier.eventOn`'s
+`Flight.step` is `Session.step` (`Flight.step_two`, `Shared.step_one`); a session at one in flight isn't in it, as no
+property stated on `Session.run` covers one yet (`Flight`). The registry's other sessions, and `abort`, which ends a
+session with the driver's outcome, are not in the model: the process keeps each session's state apart
+(`Registry.running`, `Registry.update`) and an aborted session is not accepted. The process's IO (reading requests and
+frames, threads, writing answers) is `handle`'s and `serve`'s.
 -/
 
 open RemoteAudit
@@ -68,7 +71,7 @@ def Answer.result? : Answer → Option Session.Result
 answer, the event the transcript records for it, and the process after it. -/
 def step (chunk : Nat) (p : Proc) : Req → Except String (Answer × Option Session.Event × Proc)
   | .event e coin => do
-    let (r, s) ← Verifier.eventOn p.session e coin
+    let (r, s) ← Verifier.eventOn 2 p.session e coin
     pure (.result r, some e, { p with session := s })
   | .verify t id frames => do
     if p.checks.any (·.id == id) then throw s!"check {id} is already running"

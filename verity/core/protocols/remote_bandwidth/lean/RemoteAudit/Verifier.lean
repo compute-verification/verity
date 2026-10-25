@@ -26,8 +26,9 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`; `coins` `null`
   takes them live, each with the event that releases it (`event`'s `coin`);
-* `{"op": "event", "node", "session", "event", "coin"}`: one event through session k (`eventOn`, refused as
-  `Registry.step` refuses a session it isn't running), its result as the difftest writes it (`Difftest.resultJ`);
+* `{"op": "event", "node", "session", "event", "coin"}`: one event through session k at its windows in flight
+  (`eventOn`, refused as `Registry.step` refuses a session it isn't running), its result as the difftest writes it
+  (`Difftest.resultJ`);
   `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
   openings coin, an append's pushed onto the session's append coins. A coin set is never replaced by another, and an
@@ -56,8 +57,9 @@ A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the w
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
 with no draws is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
 is refused on every window, as the driver's Python refuses it. `Properties.RemoteAudit.LiveIsRun` states that what
-this loop accepts, its coins arriving one an event and each verdict applied at its settle, is what `Session.run`
-accepts on the events it records. Openings are checked in the clear.
+this loop accepts at two windows in flight, its coins arriving one an event and each verdict applied at its settle, is
+what `Session.run` accepts on the events it records; none yet covers one in flight (`Flight`). Openings are checked in
+the clear.
 -/
 
 namespace RemoteAudit.Verifier
@@ -146,14 +148,15 @@ def unset (s : Session.State) (e : Session.Event) (res : Option Session.Result) 
     else none
   | _, _ => none
 
-/-- Event `e` through running session `s`, the challenger's coin for it set first (`withCoin`), refused as `unset`
-refuses an event that read a coin never sent. -/
-def eventOn (s : Session.State) (e : Session.Event) (coin : Option ByteArray) :
+/-- Event `e` through running session `s` at its `f` windows in flight (`Flight.step f 1`, as `Registry.step` steps
+it), the challenger's coin for it set first (`withCoin`), refused as `unset` refuses an event that read a coin never
+sent. -/
+def eventOn (f : Nat) (s : Session.State) (e : Session.Event) (coin : Option ByteArray) :
     Except String (Session.Result × Session.State) := do
   let s ← match coin with
     | some c => withCoin s e c
     | none => pure s
-  let (res, s) ← Session.step s e
+  let (res, s) ← Flight.step f 1 s e
   if let some why := unset s e (some res) then throw why
   pure (res, s)
 
@@ -231,14 +234,14 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let k ← ofV (nat req "session")
     let e ← ofV (Difftest.eventOf (← ofV (J.get req "event" "request")))
     let coin ← ofV (J.get req "coin" "request")
-    match srv.registry.running node k with
-    | some s =>
+    match runOf srv.registry node k with
+    | some (.running s f) =>
       let coin ← match coin with
         | .null => pure none
         | c => some <$> ofV (unhex (← ofV (J.asStr c "coin")))
-      let (res, s) ← ofV (eventOn s e coin)
+      let (res, s) ← ofV (eventOn f s e coin)
       pure (Difftest.resultJ res, { srv with registry := srv.registry.update node k s })
-    | none =>
+    | _ =>
       let (res, r) ← ofV (srv.registry.step node k e)
       pure ((res.map Difftest.resultJ).getD refusedJ, { srv with registry := r })
   | "openings" =>
