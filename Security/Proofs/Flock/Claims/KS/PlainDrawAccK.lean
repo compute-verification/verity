@@ -14,7 +14,9 @@ decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
 
 * `accepts_oneAnyDK`, `accepts_rep_roundsAnyDK`, `accepts_verdict_hm96AnyDK`: `accepts_oneAny` (with its table's
   registry scheme), `accepts_rep_roundsAny`, `accepts_verdict_hm96Any`, for either tag. `TableVerdictsDK keep lf`:
-  each table's verdict accepting at a model leaf `lf`, which `accepts_verdict_hm96AnyDK` gives at `leaf512`.
+  each table's verdict accepting at a model leaf `lf`, which `accepts_verdict_hm96AnyDK` gives at `leaf512`. `LeafForm`,
+  `LeafForm.TagsOk`, `LeafForm.hm96`: a leaf form at hidden outputs (tag, model leaf, verdicts, digest length), its
+  tags, and `hm96-sha512/v1`'s.
 * `accepts_req0DK`, `accepts_opens₀LDLfK`, `accepts_opens₀LDK`: `accepts_req0`, and `accepts_opens₀L` at a model leaf
   `lf` and at `leaf512`.
 * `accepts_repsOneDLfK`, `accepts_repsOneDK`: `accepts_reps` and `accepts_repsH` at once, the one table's statement
@@ -149,6 +151,35 @@ def TableVerdictsDK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List U
             (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
             true
+
+/-- **A leaf form at hidden outputs**: the tag `merkleLeaf` names, the model leaf `lf`, each table's verdict accepting
+at `lf` under that tag (`TableVerdictsDK`), and the 64-byte digests of the scheme a hidden setup under the tag commits
+with. -/
+structure LeafForm where
+  tag : String
+  lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512
+  verdicts : ∀ (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript},
+    I.tags.hiddenOutputs = true → I.tags.merkleLeaf = tag → AcceptsAtDK keep I dr t → TableVerdictsDK keep lf I dr t
+  digestLen : ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt},
+    Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → tags.merkleLeaf = tag →
+      st.merkle.digestLen = 64
+
+/-- **The verify command's tags under hidden outputs at a leaf form**: `TagsOkH` at `F`'s tag. -/
+def LeafForm.TagsOk (F : LeafForm) (I : Exec.Inputs) : Prop :=
+  I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = F.tag ∧ I.count ≤ 1
+
+/-- **`hm96-sha512/v1` leaves as a leaf form**: `leaf512`, with `accepts_verdict_hm96AnyDK`. -/
+noncomputable abbrev LeafForm.hm96 : LeafForm where
+  tag := "hm96-sha512/v1"
+  lf := leaf512
+  verdicts := by
+    intro keep _ _ _ _ hl h
+    exact accepts_verdict_hm96AnyDK keep hl h
+  digestLen := by
+    intro _ _ _ _ _ _ _ _ _ hst hl
+    rw [HiddenExec.setupHidden_hm96 hl hst]
+    rfl
 
 end Any
 
