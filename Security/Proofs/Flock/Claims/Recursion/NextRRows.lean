@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.DeployTables
 
 `sessionRun_decides` takes that the honest prover's rows fit a message (`RowsFit`): round 0's (`capRows`) and every
 rep's round's (`repRows`). They do, at every statement that sets up, so the honest session decides with no row premise
-(`sessionRun_decides_fit`):
+(`sessionRun_decides_fit`, which still takes the files' `finalC` at the reader's `z`, `FilesFinalC`):
 
 * **Tables** (`setupTables_le`, `setup_tables`): `Stmt.setupTables` refuses more than `Tags.MAX_TABLES = 64` tables, and
   its spec names one table per statement, so `sessionRun_decides`' `sts.size = spec.tables.size` is derived too.
@@ -340,13 +340,13 @@ theorem capRows_fit {caps : Array (Array ByteArray)} (hn : caps.size ≤ 64)
 
 /-- **Rep `k`'s context at a `TableOk` table**: a scheme of at most 64-byte digests, `k_log ≤ 35`, and at most 2,050
 claims where the table has at most 2,048 extra claims. -/
-theorem repCtx_bounds {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {k : ℕ}
+theorem repCtx_bounds {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin} {k : ℕ}
     (hk : k / 2 < sts.size) (hok : FlockComplete.JsonRT.TableOk sts[k / 2])
     (he : ∀ e, sts[k / 2].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) :
-    (repCtx spec sts c₁ r₀ k).st.merkle.digestLen ≤ 64 ∧ (repCtx spec sts c₁ r₀ k).st.kLog ≤ 35 ∧
-      (repCtx spec sts c₁ r₀ k).n ≤ 2050 := by
+    (repCtx spec sts c₁ r₀ cs k).st.merkle.digestLen ≤ 64 ∧ (repCtx spec sts c₁ r₀ cs k).st.kLog ≤ 35 ∧
+      (repCtx spec sts c₁ r₀ cs k).n ≤ 2050 := by
   have ht := tabsOf_get! hk
-  have hst : (repCtx spec sts c₁ r₀ k).st = Flock.Setup.ofCircuit sts[k / 2] := ht
+  have hst : (repCtx spec sts c₁ r₀ cs k).st = Flock.Setup.ofCircuit sts[k / 2] := ht
   refine ⟨?_, ?_, ?_⟩
   · rw [hst]
     exact (FlockComplete.JsonRT.scheme_sizes hok.scheme).2.1
@@ -379,7 +379,7 @@ theorem rowsFit₀ (T : F128) : (∀ rs ∈ repRows c₀ p₀ T, RowsFit rs) ∧
 open FlockComplete Rows in
 /-- **The honest run decides at its own proofs, with no row premise**: `sessionRun_decides`, whose rows fit a message
 at every statement that sets up (`setup_tables`, `capRows_fit`, `repRows_fit`), and whose spec names one table per
-statement. -/
+statement. The files' `finalC` at the reader's `z` (`FilesFinalC`) stays a hypothesis. -/
 theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
@@ -388,26 +388,28 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
-    (hrd : rd last = some fl) (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs) (hrd : rd last = some fl)
+    (hps : fl.ps = filePs spec sts c₁ pfs) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
-      repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) k) (filePs spec sts c₁ pfs)[k]! (Ts k)) last)
-        cs = some d := by
+      repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
+        (Ts k)) last) cs = some d := by
   obtain ⟨h64t, hts⟩ := setup_tables hx
-  obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (fileCaps spec sts c₁ pfs))
-  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS ?_ ?_ hrd hps
+  obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
+  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps
   · refine capRows_fit (by rw [fileCaps_size]; exact h64t) fun a ha => ?_
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi
     have hk2 : 2 * i / 2 < sts.size := by omega
     obtain ⟨-, hsc, hon, -, -⟩ := hall (2 * i) (by omega)
     have hok := htab (2 * i / 2) hk2
-    exact rep_cap_le hsc hon (repCtx_bounds hk2 hok.1 hok.2).1
+    exact rep_cap_le hsc (hon (hfc (2 * i) (by rw [hsz]; omega))) (repCtx_bounds hk2 hok.1 hok.2).1
   · intro k hk rs hrs
     rw [filePs_size, hsz] at hk
     have hk2 : k / 2 < sts.size := by omega
     obtain ⟨-, hsc, hon, -, -⟩ := hall k hk
     have hok := htab (k / 2) hk2
-    obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows (fileCaps spec sts c₁ pfs)) hk2 hok.1 hok.2
-    exact repRows_fit (Ts k) hsc hon hd hkl hn rs hrs
+    obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows (fileCaps spec sts c₁ pfs)) (cs := cs.tail.dropLast) hk2
+      hok.1 hok.2
+    exact repRows_fit (Ts k) hsc (hon (hfc k (by rw [hsz]; omega))) hd hkl hn rs hrs
 
 end FlockDeploy
