@@ -1,7 +1,7 @@
-import Models.NetworkCertifier.Guarantees
-import Models.NetworkCertifier.Guarantees.AdviceString
-import Models.NetworkCertifier.Guarantees.AdviceV1
-import Models.NetworkCertifier.Guarantees.Warden
+import Definitions.NetworkCertifier.Guarantees
+import Definitions.NetworkCertifier.Guarantees.AdviceString
+import Definitions.NetworkCertifier.Guarantees.AdviceV1
+import Definitions.NetworkCertifier.Guarantees.Warden
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting

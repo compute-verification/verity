@@ -1,4 +1,4 @@
-import Models.NetworkCertifier.Guarantees.Warden
+import Definitions.NetworkCertifier.Guarantees.Warden
 import Proofs.NetworkCertifier.AdviceString
 import Mathlib.Data.Finset.Option
 import Mathlib.Data.Fintype.BigOperators

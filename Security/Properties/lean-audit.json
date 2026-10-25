@@ -3,66 +3,34 @@
   "Properties.Pouw",
   "Properties.Pouw.Check",
   "Properties.Pouw.Commit",
-  "Properties.Proofs.Pouw",
-  "Properties.Proofs.Pouw.Check",
-  "Properties.Proofs.Pouw.Commit",
   "Properties.Pouw.Strata",
-  "Properties.Proofs.Pouw.Strata",
   "Properties.Pouw.Credit",
   "Properties.Nci",
   "Properties.Nci.Threads",
-  "Properties.Proofs.Nci",
-  "Properties.Proofs.Nci.DescAgree",
-  "Properties.Proofs.Nci.Walk",
-  "Properties.Proofs.Nci.Novel",
   "Properties.Nci.Baseline",
-  "Properties.Proofs.Nci.BaselineSteps",
-  "Properties.Proofs.Nci.Baseline",
   "Properties.NciDesc",
   "Properties.CertifierDevice",
-  "Properties.Proofs.CertifierDevice",
   "Properties.Pous",
-  "Properties.Proofs.Pous",
   "Properties.NetworkCertifier",
-  "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
-  "Properties.Proofs.CertifierNetwork.Runs",
   "Properties.Identity",
-  "Properties.Proofs.Identity",
   "Properties.Evaluate",
-  "Properties.Proofs.Evaluate",
   "Properties.NetworkRecords",
-  "Properties.Proofs.NetworkRecords",
   "Properties.SampledProofs",
-  "Properties.Proofs.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
-  "Properties.Proofs.SampledProofs.Halt",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
-  "Properties.Proofs.Pous.TimedAudit",
-  "Properties.Proofs.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
-  "Properties.Proofs.Pous.Run",
   "Properties.Accounting.Requirement",
-  "Properties.Proofs.Accounting.Requirement",
   "Properties.RemoteAudit",
-  "Properties.Proofs.RemoteAudit",
   "Properties.RemoteAudit.Coins",
-  "Properties.Proofs.RemoteAudit.Coins",
-  "Properties.Proofs.RemoteAudit.Frozen",
-  "Properties.Proofs.RemoteAudit.Order",
   "Properties.RemoteAudit.Pooled",
-  "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
-  "Properties.Proofs.Accounting.Served",
   "Properties.RemoteAudit.Line",
-  "Properties.Proofs.RemoteAudit.Line",
-  "Properties.RemoteAudit.Schedule",
-  "Properties.Proofs.RemoteAudit.Schedule"
+  "Properties.RemoteAudit.Schedule"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -170,8 +138,8 @@
   "Properties.Nci",
   "Definitions.Core",
   "Definitions.Nci",
-  "Models.Nci.Assumptions.Threads",
-  "Models.Nci.Assumptions.Baseline",
+  "Definitions.Nci.Assumptions.Threads",
+  "Definitions.Nci.Assumptions.Baseline",
   "NciCheck.Check",
   "NciCheck.Baseline",
   "NciCheck.Desc",
@@ -208,15 +176,14 @@
   "Properties.Pous.MemoryChallenger",
   "MemoryChallenger",
   "Definitions.Pous",
-  "Models.Pous.Assumptions",
+  "Definitions.Pous.Assumptions",
   "Properties.RemoteAudit",
   "RemoteAudit",
   "Properties.Accounting",
   "CircuitRequirement",
   "Definitions.Accounting",
   "Definitions.Claims",
-  "Definitions.Pouw.Basic",
-  "Models.Accounting"
+  "Definitions.Pouw.Basic"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -234,8 +201,8 @@
     "Mathlib",
     "Definitions.Core",
     "Definitions.Nci",
-    "Models.Nci.Assumptions.Threads",
-    "Models.Nci.Assumptions.Baseline",
+    "Definitions.Nci.Assumptions.Threads",
+    "Definitions.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "NciCheck.Baseline",
     "Properties.Nci"
@@ -268,7 +235,7 @@
     "PousCheck",
     "Properties.Pous",
     "MemoryChallenger",
-    "Models.Pous.Assumptions",
+    "Definitions.Pous.Assumptions",
     "Properties.Identity"
    ],
    "except": [],
@@ -360,12 +327,12 @@
    "imports": [
     "Definitions.Pouw.Basic",
     "Definitions.Accounting.Remote",
-    "Models.Accounting.Assumptions",
+    "Definitions.Accounting.Assumptions",
     "RemoteAudit",
     "Properties.RemoteAudit.Line"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Models.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],
@@ -1864,7 +1831,7 @@
  "shape": {
   "premises": [
    "Definitions.NetworkCertifier.Premises",
-   "Models.Accounting.Assumptions",
+   "Definitions.Accounting.Assumptions",
    "Properties.RemoteAudit.Line.Premises"
   ],
   "statements": ["Properties"],
@@ -2847,7 +2814,7 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_open (Properties.Proofs.Nci.Novel) proves it from three open statements: OperandsResolve (Properties.Proofs.Nci.Walk) and BodiesOk (Properties.Proofs.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), from which operandsEarlier_of proves OperandsEarlier and gatesLocated_of GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and ReadsExact (Desc.analyze's reads per root node are the unrolled operands outside it), from which novelExact_of proves NovelExact with novelWidthExact (Properties.Proofs.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
+   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_open (Proofs.Properties.Nci.Novel) proves it from three open statements: OperandsResolve (Proofs.Properties.Nci.Walk) and BodiesOk (Proofs.Properties.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), from which operandsEarlier_of proves OperandsEarlier and gatesLocated_of GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and ReadsExact (Desc.analyze's reads per root node are the unrolled operands outside it), from which novelExact_of proves NovelExact with novelWidthExact (Proofs.Properties.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
@@ -3562,6 +3529,46 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
   },
+  "Definitions.Accounting.Assumptions.RemoteDraw": {
+   "digest": "aa61381a6870692a0cb93298f0b695b764f8b55851309f9f214f6a1d47a9deae",
+   "definitions": {
+    "Accounting.Remote.Draw.Assumptions.Counted": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62",
+    "Accounting.Remote.Draw.Assumptions.Live": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9",
+    "Accounting.Remote.Draw.Assumptions.Refused": "a6140fd270d4bdec60585a30263c5c2920e51076d780afbf573b7149ecee25ff"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.RemoteHeld": {
+   "digest": "586d26631fb65638ede7dcd64b816e6f69bc05f77c60a65cc9becfdbc54bdeb4",
+   "definitions": {
+    "Accounting.Remote.Held.Assumptions.ChipCeiling": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae",
+    "Accounting.Remote.Held.Assumptions.Covers": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040",
+    "Accounting.Remote.Held.Assumptions.Disks": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca",
+    "Accounting.Remote.Held.Assumptions.Identity": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236",
+    "Accounting.Remote.Held.Assumptions.Links": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a",
+    "Accounting.Remote.Held.Assumptions.Paced": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e",
+    "Accounting.Remote.Held.Assumptions.Routed": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c",
+    "Accounting.Remote.Held.Assumptions.SquaringCeiling": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.RemoteOutside": {
+   "digest": "377134bf84af8f6b7fb99258f0a023453ca57c668c6164b4c700481b2a3ccc52",
+   "definitions": {
+    "Accounting.Remote.Held.Assumptions.NoOutsideCompute": "00299a3d3e2bb1d72b639c2ab816de31cd74beac5f5ff4436a57510b439cce33",
+    "Accounting.Remote.Held.Assumptions.SketchBoundAt": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+   ]
+  },
   "Definitions.Accounting.Device": {
    "digest": "38694073fcee7324e8f418c09420b5652f8f3999c725f4770f7d5b82fabd9e3e",
    "definitions": {
@@ -4109,6 +4116,31 @@
     "NciCheck.Properties.SecurityProofs.Witnesses"
    ]
   },
+  "Definitions.Nci.Assumptions.Baseline": {
+   "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
+   "definitions": {
+    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
+  "Definitions.Nci.Assumptions.Threads": {
+   "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
+   "definitions": {
+    "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8",
+    "Nci.Assumptions.WeightsIncompressibleSlots": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
   "Definitions.Nci.Dark": {
    "digest": "117ba4e9fdc3414c7c817ed587d8bba3460426a791a4bb00c5a742ce96b17bc9",
    "definitions": {
@@ -4260,6 +4292,14 @@
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing"
    ]
+  },
+  "Definitions.Pous.Assumptions.P2": {
+   "digest": "8a18aecc7bb9cd368f2be5b9bc6adc7d410a46202405278812d9a33d566b8e95",
+   "definitions": {
+    "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
+    "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+   },
+   "guarantees": ["Pous.EndToEnd.SecurityProofs.endToEndRing", "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed"]
   },
   "Definitions.Pous.Game.Oracle": {
    "digest": "f67f97d975757a3b7297ea865771b0cd2796795543ba1d8ec11255776f87a43c",
@@ -5991,79 +6031,6 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
    ]
-  },
-  "Models.Accounting.Assumptions.RemoteDraw": {
-   "digest": "aa61381a6870692a0cb93298f0b695b764f8b55851309f9f214f6a1d47a9deae",
-   "definitions": {
-    "Accounting.Remote.Draw.Assumptions.Counted": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62",
-    "Accounting.Remote.Draw.Assumptions.Live": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9",
-    "Accounting.Remote.Draw.Assumptions.Refused": "a6140fd270d4bdec60585a30263c5c2920e51076d780afbf573b7149ecee25ff"
-   },
-   "guarantees": [
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
-   ]
-  },
-  "Models.Accounting.Assumptions.RemoteHeld": {
-   "digest": "586d26631fb65638ede7dcd64b816e6f69bc05f77c60a65cc9becfdbc54bdeb4",
-   "definitions": {
-    "Accounting.Remote.Held.Assumptions.ChipCeiling": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae",
-    "Accounting.Remote.Held.Assumptions.Covers": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040",
-    "Accounting.Remote.Held.Assumptions.Disks": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca",
-    "Accounting.Remote.Held.Assumptions.Identity": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236",
-    "Accounting.Remote.Held.Assumptions.Links": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a",
-    "Accounting.Remote.Held.Assumptions.Paced": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e",
-    "Accounting.Remote.Held.Assumptions.Routed": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c",
-    "Accounting.Remote.Held.Assumptions.SquaringCeiling": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
-   },
-   "guarantees": [
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
-   ]
-  },
-  "Models.Accounting.Assumptions.RemoteOutside": {
-   "digest": "377134bf84af8f6b7fb99258f0a023453ca57c668c6164b4c700481b2a3ccc52",
-   "definitions": {
-    "Accounting.Remote.Held.Assumptions.NoOutsideCompute": "00299a3d3e2bb1d72b639c2ab816de31cd74beac5f5ff4436a57510b439cce33",
-    "Accounting.Remote.Held.Assumptions.SketchBoundAt": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020"
-   },
-   "guarantees": [
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
-   ]
-  },
-  "Models.Nci.Assumptions.Baseline": {
-   "digest": "d2d5c6d68687c0eb5488d83f1dd3b20249a2b176b80b5921cd1adb65f65d49d9",
-   "definitions": {
-    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
-   },
-   "guarantees": [
-    "NciCheck.Properties.SecurityProofs.Throttles",
-    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
-    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
-    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
-   ]
-  },
-  "Models.Nci.Assumptions.Threads": {
-   "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
-   "definitions": {
-    "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8",
-    "Nci.Assumptions.WeightsIncompressibleSlots": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
-   },
-   "guarantees": [
-    "NciCheck.Properties.SecurityProofs.Throttles",
-    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
-    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
-    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
-   ]
-  },
-  "Models.Pous.Assumptions.P2": {
-   "digest": "8a18aecc7bb9cd368f2be5b9bc6adc7d410a46202405278812d9a33d566b8e95",
-   "definitions": {
-    "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
-    "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
-   },
-   "guarantees": ["Pous.EndToEnd.SecurityProofs.endToEndRing", "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed"]
   },
   "NciCheck.Baseline": {
    "digest": "7cb5f4cf6c88d226bde6f81ca145861723e9b060d2ce38c17bf1ed1ac09fd340",

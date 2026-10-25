@@ -33,7 +33,7 @@ its host is its next LMS leaf and the session ids it has started. That claim's p
 `NetTiming.DeviceIntact`; no statement here takes the rest as a premise, since a statement of one run can't name other
 runs.
 
-`Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
+`Proofs.Properties.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`.
 -/
