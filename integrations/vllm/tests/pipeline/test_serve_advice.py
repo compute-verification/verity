@@ -17,6 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import torch
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, runner_order
@@ -302,7 +303,7 @@ def test_a_request_its_client_aborts_passes_as_an_abort_after_its_k_streamed_ids
     since those are the committed ids' prefix; the same record against a stream that differs at one id, or that says it was
     aborted after more ids than it streamed, fails by name."""
     s, q = _aborted(tmp_path)
-    assert q["finish"] == {"reason": "abort", "stop_reason": None, "k": K_GONE} and q["check"]["passed"], q["check"]
+    assert q["finish"] == {"reason": "abort", "stop_reason": None, "k": K_GONE, "by": "client"} and q["check"]["passed"], q["check"]
     assert q["check"]["streamed_ids"] == K_GONE and q["check"]["problems"] == []
     assert s.windows.summary()["passed"]
 
@@ -321,6 +322,19 @@ def test_a_request_its_client_aborts_passes_as_an_abort_after_its_k_streamed_ids
     cut = check(list(q["streamed_ids"])[:3], k=3)       # two committed outputs it never streamed: more than a step in flight's
     assert not cut["passed"] and cut["problems"] == [
         "finish: aborted after 3 ids, and 2 committed samples run past them, more than the one of the step in flight"]
+
+
+def test_a_request_running_when_the_server_stops_is_an_abort_by_the_server_and_passes_as_its_streamed_prefix(tmp_path):
+    """The server stops while na-ab streams, after 5 of its 12 outputs: the loop's exit ends it, so its record's abort is the
+    server's, not its client's, and its 5 streamed ids are still the committed ones' prefix."""
+    with Server(tmp_path, abort_after={tuple(GONE["prompt"]): K_GONE}) as s:
+        s.engine.client_goes = lambda engine_id: s.loop.stop()
+        serve_concurrently(s, [GONE])
+    (q,) = records(tmp_path, "requests.jsonl")
+    assert q["finish"] == {"reason": "abort", "stop_reason": None, "k": K_GONE, "by": "server"}
+    assert q["streamed_ids"] and len(q["streamed_ids"]) == K_GONE and q["check"]["passed"], q["check"]
+    with pytest.raises(ValueError, match="an abort is by the client or the server, not 'proxy'"):
+        s.windows.aborted(q["engine_id"], "proxy")
 
 
 def test_a_request_its_client_aborts_is_freed_after_its_step_and_every_window_it_ran_in_says_so_and_compiles(tmp_path):

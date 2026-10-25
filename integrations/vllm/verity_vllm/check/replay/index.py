@@ -474,7 +474,7 @@ class ProgramIndex:
         return name, lo - base, hi - base, shape
 
     def weight_bits(self, field: str) -> int:
-        """[R16 fp8] the leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
+        """The leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
         for name, _count, _shape, bits in self.fields:
             if name == field:
                 return int(bits) or 16
