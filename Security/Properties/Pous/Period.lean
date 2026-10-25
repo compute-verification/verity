@@ -99,8 +99,8 @@ def Certified (ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).�
 
 end Audits
 
-/-- **The device is a ring-model server on the period's coins** (`pous-ring-device`, `pous-ring-instantiation` and
-`prf/sha-512`, per run): at each value `o` of the other audits' coins and each bound `B` with
+/-- `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512`, per run: **the device is a ring-model server on
+the period's coins.** At each value `o` of the other audits' coins and each bound `B` with
 `B + S_chip + ∑ cap_i · round` within the ring game's state bound `S₀`, there is one `(D, Q, L)`-bounded server with
 `S₀` bits of state, fixed before the capacity coins (online coins), that passes the ring game's session (`Passes`, at
 the designated id, bound to the published root, on the payload `W`) on every capacity coin where the capacity account
