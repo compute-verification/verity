@@ -52,7 +52,7 @@ theorem mem_gates {P : Partition} {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) {
   exact List.mem_flatten.2 ⟨_, mem_rus hr, mem_ru_gates hu hg⟩
 
 theorem exists_of_mem_gates {P : Partition} {g : ℕ} (h : g ∈ P.gates) :
-    ∃ v r u, P.rus[v]? = some r ∧ u ∈ r ∧ g ∈ u := by
+    ∃ (v : ℕ) (r : RU) (u : List ℕ), P.rus[v]? = some r ∧ u ∈ r ∧ g ∈ u := by
   rw [gates_eq] at h
   obtain ⟨l, hl, hg⟩ := List.mem_flatten.1 h
   obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hl
@@ -175,9 +175,9 @@ theorem runIn_ne_none {C : Prog} (hT : C.Topological) {ref : ℕ → Option Bool
   · refine val_ne_none hxi fun i hi => ?_
     have hlt := hT.1 g x hx i hi
     by_cases hiu : i ∈ u
-    · simp only [hiu, if_true, dif_pos hlt]
+    · simp only [hiu, ite_true, dite_eq_left hlt]
       exact ih i hlt hiu
-    · simp only [hiu, if_false]
+    · simp only [hiu, ite_false]
       exact (hc g hg).1 x hx i hi hiu
 
 /-! ## `C` run with the faulty units' gates held -/
@@ -251,17 +251,17 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
       read_of_not_const fun b h => by rw [hx] at h; cases h]
   congr 1
   refine val_congr hxi fun i hi => ?_
-  dsimp only
+  beta_reduce
   have hlt := hT.1 g x hx i hi
   have hgi := hgood g x hx hgd i hi
-  rw [dif_pos hlt]
+  rw [dite_eq_left hlt]
   by_cases hiu : i ∈ u
-  · rw [if_pos hiu, dif_pos hlt, ih i hlt hgi v r u hr hv hu hiu]
+  · rw [ite_eq_left hiu, dite_eq_left hlt, ih i hlt hgi v r u hr hv hu hiu]
     obtain ⟨b, hb⟩ := Option.ne_none_iff_exists'.1
       (runIn_ne_none hT (hι v r hr hv u hu) (fun g' hg' => hlen g' (mem_gates hr hu hg')) i hiu)
     rw [hb]
     rfl
-  rw [if_neg hiu]
+  rw [ite_eq_right hiu]
   obtain ⟨c, hc⟩ := Option.ne_none_iff_exists'.1 ((hι v r hr hv u hu g hg).1 x hx i hi hiu)
   rw [hc]
   congr 1
@@ -279,7 +279,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
     rw [valOver_const hfree hb]
     rw [read_const hb] at hc
     exact Option.some.inj hc
-  push_neg at hconst
+  push Not at hconst
   have hilt : i < C.gates.length := hlt.trans hglt
   obtain ⟨v', r', u', hr', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst)
   rw [read_of_not_const hconst] at hc
@@ -315,7 +315,7 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
   · obtain ⟨b, hb⟩ := hconst
     rw [valOver_const hfree hb, traceVal, read_const hb]
     rfl
-  push_neg at hconst
+  push Not at hconst
   obtain ⟨v, r, u, hr, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
   have hv : v ∉ F := fun hv => hfg ⟨v, hv, r, hr, mem_ru_gates hu hg, boundary_of_out hout⟩
   obtain ⟨b, hb, hrun⟩ := (hι v r hr hv u hu g hg).2 (boundary_of_out hout)
@@ -340,12 +340,13 @@ theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Op
     obtain ⟨i', hi', he⟩ := List.exists_of_findSome?_eq_some h
     obtain ⟨j', hj', hij⟩ := Option.map_eq_some_iff.1 he
     cases hij
-    have hi : i' < t + 1 := by simpa [hlen] using hi'
+    have hi : i < t + 1 := by simpa [hlen] using hi'
     obtain ⟨hjl, hjg, -⟩ := List.findIdx?_eq_some_iff_getElem.1 hj'
-    obtain ⟨-, -, hop⟩ := hcar i' (by omega)
-    have hins : (ingressUpTo op o t).getD i' [] = (lay.ingress i').map (traceVal C ref) := by
+    obtain ⟨-, -, hop⟩ := hcar i (by omega)
+    have hins : (ingressUpTo op o t).getD i [] = (lay.ingress i).map (traceVal C ref) := by
       rw [List.getD_eq_getElem?_getD]
-      simp [ingressUpTo, List.getElem?_range hi, hop]
+      simp only [ingressUpTo, List.getElem?_map, List.getElem?_range hi, Option.map_some, Option.getD_some]
+      exact hop
     rw [hins, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hjl]
     simp only [Option.map_some, Option.getD_some]
     rw [beq_iff_eq.1 hjg]
@@ -355,7 +356,7 @@ theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Op
       have := List.findSome?_eq_none_iff.1 h i (by simp [hlen, hi])
       rw [Option.map_eq_none_iff, List.findIdx?_eq_none_iff] at this
       simpa using this g hg
-    rw [if_neg]
+    rw [ite_eq_right]
     simp only [List.any_eq_true, List.mem_range, List.contains_iff_mem, not_exists, not_and]
     intro i hik hg
     by_cases hit : i < t + 1
@@ -386,7 +387,7 @@ theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List RU))) (o
           rw [he] at hm
           simp at hm
         have h0 : Rule.Pa ⟨.all, check⟩ (strataSizes c) (ruSizes c) (window o c.flatten.length B) = 0 := by
-          cases check <;> simp [Rule.Pa, OneStage.Pa, hw]
+          cases check <;> simpa [Rule.Pa, OneStage.Pa] using hw
         rw [h0, zero_mul]
       all_goals exact absurd ⟨Finset.disjoint_empty_right B, h2⟩ h
     · rw [classesPa_eq_zero rs cs _ B h2, mul_zero]
@@ -401,6 +402,7 @@ theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset �
 
 /-! ## The relation -/
 
+open Classical in
 /-- **Every unit that isn't faulty has interior values making its proof units correct.** -/
 theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) :
     ∃ ι : ℕ → ℕ → Bool, ∀ v r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
@@ -448,13 +450,14 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} 
     fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (hfit.1 t ht ℓ σ g hg)
       fun t' h1 h2 i hi => hfit.2.2 t ht t' h2 h1 ℓ σ g hg i hi
   funext σ
-  show rowOf (valOver C (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref))
-    (lay.egress t ℓ) σ = rowOf (traceVal C ref) (lay.egress t ℓ) σ
+  show rowOf (traceVal C ref) (lay.egress t ℓ) σ =
+    rowOf (valOver C (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref)) (lay.egress t ℓ) σ
+  symm
   simp only [rowOf]
   rw [heq σ _ (by simp [slotGates]),
     List.map_congr_left fun g hg => heq σ g (by simp [slotGates, hg])]
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+variable {Coin Col T : Type}
 
 /-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
 theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ)
