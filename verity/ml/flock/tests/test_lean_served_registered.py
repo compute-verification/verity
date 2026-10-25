@@ -57,11 +57,12 @@ def fx(request, built, tmp_path_factory):
     return request.param, root
 
 
-def _verify(fx: Path, registered: Path) -> dict:
+def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",)) -> dict:
     st = fx / "stage"
-    p = subprocess.run([str(BIN), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"), "--public",
+    reads = ["--registered", str(registered)] if registered else []
+    p = subprocess.run([str(BIN), "verify", *mode, "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"), "--public",
                         str(st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
-                        str(st / "program.json"), "--registered", str(registered), "--session", str(fx / "session")],
+                        str(st / "program.json"), *reads, "--session", str(fx / "session")],
                        capture_output=True, text=True, check=False)
     (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     return line
