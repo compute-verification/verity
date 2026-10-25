@@ -14,11 +14,13 @@ import Proofs.Flock.Claims.Complete.Json.Goals
   commitment, with its extra claims at the link's points and rep `k % 2`'s salts and nonces, from the empty transcript
   at the rep's domain (`RepRunP`). A rep's proof carries its commitment's cap (`repP_cap`).
 * **The files decode to honest reps** (`sessionS_reps`): at a `sessionS` run whose tables are `TableOk` with at most
-  2,048 extra claims at the first coin's link points, file `k` decodes at `shapeAt` to that proof (`filePs`), an
-  honest rep of `repCtx` (`honestRep_of_repP`) whose cap, its table's, has the table's level-0 node count. So the
-  honest run's last message carries `filesAt` of those proofs (`honestRun_files`).
+  2,048 extra claims at the first coin's link points, file `k` decodes at `shapeAt` to that proof (`filePs`), whose
+  cap, its table's, has the table's level-0 node count, and which is an honest rep of `repCtx` (`honestRep_of_repP`)
+  wherever its `finalC` is the zerocheck's at the reader's `z`. So the honest run's last message carries `filesAt` of
+  those proofs (`honestRun_files`).
 * **The honest run decides at its own proofs** (`sessionRun_decides`): `ReadsBack` at `filePs` and each table's cap
-  (`fileCaps`), wherever their rows fit a message (`RowsFit`) and the last message reads as `filePs`.
+  (`fileCaps`), wherever their rows fit a message (`RowsFit`), the last message reads as `filePs`, and the files'
+  `finalC` are at the reader's `z` (`FilesFinalC`, plain zerocheck completeness at the reader's coin, open here).
 
 The session's tables are taken to number the spec's (`sts.size = spec.tables.size`), as the masked scope proves
 (`ZkTables.tables_of_setup`).
@@ -171,18 +173,22 @@ theorem fileCaps_size (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs
 
 /-- **The honest session's files decode to honest reps**: at a `sessionS` run whose replies start with the coin `c₁`,
 at tables that are `TableOk` with at most 2,048 extra claims at `c₁`'s link points, there are two files a table, and
-file `k` decodes at `shapeAt` to the proof table `k / 2`'s rep returned (`filePs`), an honest rep of `repCtx` whose
-cap is its table's, of the table's level-0 node count. -/
+file `k` decodes at `shapeAt` to the proof table `k / 2`'s rep returned (`filePs`), whose cap is its table's, of the
+table's level-0 node count, and which is an honest rep of `repCtx` at the coins `cs` wherever its `finalC` is the
+zerocheck's at that rep's `z`. -/
 theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg}
     {spec : SessionSpec} {sts : Array Stmt} {w : Claims.Flock.Wit} {ω : Tape} {c₁ : Coin} (hc : resp 0 = c₁.bytes)
     (hts : sts.size = spec.tables.size)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
-    (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (r₀ : List ByteArray) :
+    (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (r₀ : List ByteArray) (cs : List Coin) :
     pfs.size = 2 * sts.size ∧ ∀ k < 2 * sts.size,
       decodeProof (shapeAt (tabsOf sts) (pointsOf spec c₁) k) pfs[k]! = .ok (filePs spec sts c₁ pfs)[k]! ∧
-      SchedOf (repCtx spec sts c₁ r₀ k) ∧ HonestRep (repCtx spec sts c₁ r₀ k) (filePs spec sts c₁ pfs)[k]! ∧
+      SchedOf (repCtx spec sts c₁ r₀ cs k) ∧
+      ((filePs spec sts c₁ pfs)[k]!.zerocheck.finalC =
+          dot (lagrange nodesL den6Inv (repCtx spec sts c₁ r₀ cs k).z) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c →
+        HonestRep (repCtx spec sts c₁ r₀ cs k) (filePs spec sts c₁ pfs)[k]!) ∧
       (filePs spec sts c₁ pfs)[k]!.cap = (filePs spec sts c₁ pfs)[2 * (k / 2)]!.cap ∧
       (filePs spec sts c₁ pfs)[k]!.cap.size = RecDeploy.level0Nodes sts[k / 2]! := by
   have htabs : (tabsOf sts).size = sts.size := by
@@ -194,7 +200,10 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
   replace hsz : pfs.size = 2 * sts.size := hsz
   have hone : ∀ k < 2 * sts.size,
       decodeProof (shapeAt (tabsOf sts) (pointsOf spec c₁) k) pfs[k]! = .ok (filePs spec sts c₁ pfs)[k]! ∧
-      SchedOf (repCtx spec sts c₁ r₀ k) ∧ HonestRep (repCtx spec sts c₁ r₀ k) (filePs spec sts c₁ pfs)[k]! ∧
+      SchedOf (repCtx spec sts c₁ r₀ cs k) ∧
+      ((filePs spec sts c₁ pfs)[k]!.zerocheck.finalC =
+          dot (lagrange nodesL den6Inv (repCtx spec sts c₁ r₀ cs k).z) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c →
+        HonestRep (repCtx spec sts c₁ r₀ cs k) (filePs spec sts c₁ pfs)[k]!) ∧
       (filePs spec sts c₁ pfs)[k]!.cap = cms[k / 2]!.cap ∧
       (filePs spec sts c₁ pfs)[k]!.cap.size = RecDeploy.level0Nodes sts[k / 2]! := by
     intro k hk'
@@ -210,8 +219,8 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
     have ht := tabsOf_get! hk2
     rw [ht] at hs hcm he hrun hf hsh
     have hs' : fast100 sts[k / 2].m = some schs[k / 2]! := hs
-    have hon := honestRep_of_repP (spec := spec) (c₁ := c₁) (r₀ := r₀) (k := k) h64 hk2 (htab _ hk2).1 hs' he
-      ((htab _ hk2).2 e he) resp _ hcm _ _ _ hrun
+    have hon := honestRep_of_repP (spec := spec) (c₁ := c₁) (r₀ := r₀) (cs := cs) (k := k) h64 hk2 (htab _ hk2).1 hs'
+      he ((htab _ hk2).2 e he) resp _ hcm _ _ _ hrun
     have hp := JsonRT.repShapedOk h64 (htab _ hk2).1 hs resp _ hcm ((htab _ hk2).2 e he) _ _ _ l pt l' hrun
     have hdec : decodeProof (shapeAt (tabsOf sts) (pointsOf spec c₁) k) pfs[k]! = .ok pt.1 := by
       rw [hsh, show pfs[k]! = (rec, pfs).2[k]! from rfl, hf]
@@ -219,14 +228,12 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
     have hget := filePs_get (by rw [hsz]; exact hk') hdec
     rw [hget]
     refine ⟨hdec, schedOf_repCtx hk2 (by simp [hs']) he, hon, hcap, ?_⟩
-    obtain ⟨⟨e', -, hsz'⟩, -, -⟩ := hon
+    have hsz' := FlockSoundness.Discharge.DecodeZL.decodeProof_sizes _ _ _
+      (FlockVBridge.Family.decodeProof_encodeProof _ _ hp)
     rw [hsz'.cap]
-    show 2 ^ (((fast100 (tabsOf sts)[k / 2]!.m).getD default).levels.getD 0 default).cap =
+    show 2 ^ (schs[k / 2]!.levels.getD 0 default).cap =
       2 ^ ((fast100 sts[k / 2]!.m).map fun s => (s.levels.getD 0 default).cap).getD 0
-    rw [ht, getElem!_pos sts (k / 2) hk2]
-    show 2 ^ (((fast100 sts[k / 2].m).getD default).levels.getD 0 default).cap =
-      2 ^ ((fast100 sts[k / 2].m).map fun s => (s.levels.getD 0 default).cap).getD 0
-    rw [hs', Option.getD_some, Option.map_some, Option.getD_some]
+    rw [getElem!_pos sts (k / 2) hk2, hs', Option.map_some, Option.getD_some]
   refine ⟨hsz, fun k hk' => ?_⟩
   obtain ⟨h1, h2, h3, h4, h5⟩ := hone k hk'
   obtain ⟨-, -, -, h4', -⟩ := hone (2 * (k / 2)) (by omega)
@@ -245,7 +252,7 @@ theorem honestRun_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {
     (hS : FlockComplete.sessionS H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (rec, pfs), bs)) :
     FlockComplete.honestRun H x w ω r = (bs.toList.map (List.cons 0), Final.encode ⟨x, rec,
       filesAt (tabsOf sts) (pointsOf spec (Claims.coinSeq r 0)) (filePs spec sts (Claims.coinSeq r 0) pfs)⟩) := by
-  obtain ⟨hsz, hall⟩ := sessionS_reps (c₁ := Claims.coinSeq r 0) h64 (by rfl) hts htab hS []
+  obtain ⟨hsz, hall⟩ := sessionS_reps (c₁ := Claims.coinSeq r 0) h64 (by rfl) hts htab hS [] []
   have hf : filesAt (tabsOf sts) (pointsOf spec (Claims.coinSeq r 0)) (filePs spec sts (Claims.coinSeq r 0) pfs) =
       pfs := filesAt_eq (by rw [filePs_size]) fun k hk => by
     have hk' : k < 2 * sts.size := by simpa [filePs_size, hsz] using hk
@@ -256,10 +263,19 @@ theorem honestRun_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {
   rw [hf]
   exact FlockComplete.honestRun_eq H x w ω r hx hS
 
+/-- **The honest files' `finalC` is the zerocheck's at the reader's `z`**: each proof the files decode to
+(`filePs`) has `finalC` at its rep's `z` in the coins `cs` (`repCtx`). This is plain zerocheck completeness at the
+reader's coin, open here: `sessionRun_decides` takes it as a hypothesis. -/
+def FilesFinalC (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List Coin) (pfs : Array ByteArray) :
+    Prop :=
+  ∀ k < pfs.size, (filePs spec sts c₁ pfs)[k]!.zerocheck.finalC =
+    dot (lagrange nodesL den6Inv (repCtx spec sts c₁ [] cs k).z) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c
+
 /-- **The honest run decides at its own proofs**: at a statement that sets up, where the pure session returns at
 replies that start with the first coin `c₁` and its tables are `TableOk` with at most 2,048 extra claims at `c₁`'s link
 points, `decR` decides on the honest messages from the proofs the session's files decode to (`filePs`) and their
-tables' caps (`fileCaps`), wherever their rows fit a message and the last message reads as `filePs`. -/
+tables' caps (`fileCaps`), wherever their rows fit a message, the last message reads as `filePs` and the files'
+`finalC` are at the reader's `z` (`FilesFinalC`). -/
 theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
@@ -269,14 +285,16 @@ theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
+    (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs)
     (hfit0 : RowsFit (capRows (fileCaps spec sts c₁ pfs)))
-    (hfit : ∀ k < (filePs spec sts c₁ pfs).size, ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs))
-      k) (filePs spec sts c₁ pfs)[k]! (Ts k), RowsFit rs)
+    (hfit : ∀ k < (filePs spec sts c₁ pfs).size,
+      ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k)
+        (filePs spec sts c₁ pfs)[k]! (Ts k), RowsFit rs)
     (hrd : rd last = some fl) (hps : fl.ps = filePs spec sts c₁ pfs) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
-      repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) k) (filePs spec sts c₁ pfs)[k]! (Ts k)) last)
-        cs = some d := by
-  obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts htab hS (capRows (fileCaps spec sts c₁ pfs))
+      repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
+        (Ts k)) last) cs = some d := by
+  obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts htab hS (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
   have hcaps : ∀ i < (fileCaps spec sts c₁ pfs).size,
       (fileCaps spec sts c₁ pfs)[i]!.size = RecDeploy.level0Nodes sts[i]! := by
     intro i hi
@@ -286,13 +304,16 @@ theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H
     simp only [fileCaps, JsonRT.range_map_getElem! _ hi]
     exact h
   have hrep : ∀ k < (filePs spec sts c₁ pfs).size,
-      SchedOf (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) k) ∧
-        HonestRep (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) k) (filePs spec sts c₁ pfs)[k]! ∧
+      SchedOf (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) ∧
+        HonestRep (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k)
+          (filePs spec sts c₁ pfs)[k]! ∧
           (filePs spec sts c₁ pfs)[k]!.cap = (fileCaps spec sts c₁ pfs)[k / 2]! := by
     intro k hk
-    rw [filePs_size, hsz] at hk
+    rw [filePs_size] at hk
+    have hf := hfc k hk
+    rw [hsz] at hk
     obtain ⟨-, h2, h3, h4, -⟩ := hall k hk
-    refine ⟨h2, h3, ?_⟩
+    refine ⟨h2, h3 hf, ?_⟩
     simp only [fileCaps, JsonRT.range_map_getElem! _ (show k / 2 < sts.size by omega)]
     exact h4
   exact ⟨_, readsBack rd x last cs s spec sts c₁ (fileCaps spec sts c₁ pfs) (filePs spec sts c₁ pfs) Ts fl hx hcs
