@@ -1848,6 +1848,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.PeriodRun.Sound": {
+   "owner": "@lean",
+   "digest": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba"
   }
  },
  "meaning": [
@@ -3252,6 +3256,12 @@
    "assumptions": [],
    "type_hash": "2349616973612a78bdb833e74d98a7ec19326ddf536e89213964f9e18066707f"
   },
+  "Accounting.SecurityProofs.JointHorizon": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizon : Accounting.Guarantees.JointHorizon"],
+   "assumptions": [],
+   "type_hash": "52c4ce2f8005c313ffa4a0e785a9679cdbb09e369d9d64275a43023bbda85986"
+  },
   "Accounting.SecurityProofs.JointPerRun": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.JointPerRun : Accounting.Guarantees.JointPerRun"],
@@ -3264,11 +3274,11 @@
    "assumptions": [],
    "type_hash": "dc12aa2ed2a07c0007c3d7e72ba8302577bc0a4da2bb06db02379eba87f8b9bd"
   },
-  "Accounting.SecurityProofs.JointHorizon": {
-   "owner": "@lean"
-  },
   "Accounting.SecurityProofs.JointPeriod": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointPeriod : Accounting.Guarantees.JointPeriod"],
+   "assumptions": [],
+   "type_hash": "199c3429112a2415364481b6adda32dad7324bcf045feef1f65fd46b2d7717d1"
   },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
@@ -12633,8 +12643,10 @@
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
+    "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -13425,6 +13437,14 @@
     "Accounting.Guarantees.Joint": "994a9f616574f737ac1bb98ceeb5051f135976d5bf3d90328dece5cffa401887"
    },
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
+  },
+  "Definitions.Accounting.Guarantees.JointPeriod": {
+   "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
+   "definitions": {
+    "Accounting.Guarantees.JointHorizon": "13e5429cabeb841c24bf9031914538c97d8fbe295f591ebc88baa39a906673e3",
+    "Accounting.Guarantees.JointPeriod": "f440ccdd941661360c971df94372c1e981d3ecec5fa9e0c9bd35ccbb8c6a038c"
+   },
+   "guarantees": ["Accounting.SecurityProofs.JointHorizon", "Accounting.SecurityProofs.JointPeriod"]
   },
   "Definitions.Accounting.Guarantees.Localization": {
    "digest": "2375ead4630b5640c3072e6aa1ed43cc3a9fd821a28e01d786c4cc2577d78fe4",
@@ -14344,14 +14364,54 @@
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
+    "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses"
    ]
+  },
+  "Definitions.Accounting.JointPeriod": {
+   "digest": "1bd7aa7b193bcd9a8591295185d5bfac76487671f52e32c46d11e0c8f0a011f5",
+   "definitions": {
+    "Accounting.Audit": "f63dc62d5c08feba2df8b80cb7056be3f03373ad1ce530558c4a5b54162263b6",
+    "Accounting.Audit.casesOn": "8c5ba045db80396171393ed0d92d169a6beaea158cf10b5acc088abe20f7aa0a",
+    "Accounting.Audit.ctorIdx": "92e744439ee9320dde619ebe75e1c6e95ebcda66251030b7fffcbb07f786966e",
+    "Accounting.Audit.network": "b23160edbe17b7f08069f344207755f7397cd626c44ab02951cb325a30458906",
+    "Accounting.Audit.poub": "4482a38493a216bf66c9a91a7e2d58a96236009d062f6a1b145e260b8142099a",
+    "Accounting.Audit.pous": "41a2a09a96bdc9dc508bf8b5ba82d25098310e32953901253fa3ae1db15587a8",
+    "Accounting.Audit.pouw": "2a05880f871bcbeecd6000671cfb12ab0f9ee67b94fb074667640f7ed7c85e4a",
+    "Accounting.Audit.rec": "da8f794cdc917db4fdcbb3c0aa434a5e3f1d8a7069675fc18b8dcc94267e7e54",
+    "Accounting.Audit.sampled": "6408bb1fe1b75abfeeeb5364bb120a0c651748bd043e4b9e261cdf00f46e9e0d",
+    "Accounting.Certificates": "fc83df462e5efd7edfbc1302f881c5cceb9eabeae194e768e2883918462436ed",
+    "Accounting.Certificates.K": "9e3d04110ebb98b4005440ab2599b9e0928b05e55e09de2e97d2966c848630c1",
+    "Accounting.Certificates.Q": "604fc23f2db51505243ce45c571aeb2bc7b882c859384185bafa2fb9da4d666b",
+    "Accounting.Certificates.S": "d961884546f751772d9b9cf3fbcbc4aa8b7aa03823c8a2b2e57c24320835731b",
+    "Accounting.Certificates.W": "4d187c7591cdb0444f77276781b0ec8c687d894db0248ee32c639e7d4d723306",
+    "Accounting.Certificates.ε": "088e88c395306b9ce00599770c82842fe27841b44758c9c786575193d84d09ce",
+    "Accounting.PeriodRun": "27c7512ccfeeef20165e13c5a78f9e0c4bdbd2359da21a5ef0347e7921a61566",
+    "Accounting.PeriodRun.Holds": "93597b4bcd0c480242ea310d15e3cdb2a04d0ced23c96b57a23c8e8c565d371f",
+    "Accounting.PeriodRun.Sound": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba",
+    "Accounting.PeriodRun.accepts": "246639cbb492699197e6367bb72487734503a606448072dc1faf6f1791d80d70",
+    "Accounting.PeriodRun.acct": "aa7dc6a05bc08c377716b91dd0790415ca206b919f0d274d021bab5cf1cf4f5d",
+    "Accounting.PeriodRun.commWithin": "260b264c364a933d9a6a3e448cd972eee4e11ad36925e15805d4e248587cca35",
+    "Accounting.PeriodRun.held": "4bb98d4ecd9fdda93b5e51ba2e926c66aed5c8d315e3ea79217ee6c13f8f8404",
+    "Accounting.PeriodRun.own": "20c4dc87f04315d78211ee21f3dd9e3425fb25e6dd5136b6a022d2ce15f89d38",
+    "Accounting.PeriodRun.parts": "b0a036f62794727b4ff8dd119991f8f8b2ab57e07b4b4a3efe32ea4689f01182",
+    "Accounting.PeriodRun.read": "924f66b5dcfc521a86fe1cd81348760bf649e3fa7e395eb787b6123daed196d5",
+    "Accounting.PeriodRun.schedule": "26ff345a15088968c86c2774474711e86a2af4458c5a8f3fbf3eb929f630c8f0",
+    "Accounting.PeriodRun.transcript": "c7bca93d401247175c85e8ea74958ffc1979c03aab471388e80322cce91f68ce",
+    "Accounting.PeriodRun.units": "0c7063d3dce2a6618f36fb4c9b91a33e04f32ed170652a9fa419b3c7948901c7",
+    "Accounting.PeriodRun.win": "80d4e5812f3db69b114ea8f3bf4be5c962e466ead6984657c30f390af92d183c",
+    "Accounting.PeriodRun.work": "27c0e52af8765509bbce45b3428e2b0bfe368ce8f2d688e55ad8c79cb540cb67",
+    "Accounting.instDecidableEqAudit": "551d5bbb9d5a40c37cbcc687b93b265d4cb0120365b1f1fc79580bc9478d7e60",
+    "Accounting.instFintypeAudit": "dc9e117e0e88e8b554ce66dc5272159cd8ee10f8ae1184a3bfe1034a0b87a87d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.JointHorizon", "Accounting.SecurityProofs.JointPeriod"]
   },
   "Definitions.Accounting.Memory": {
    "digest": "6611399160c026f613e5e66208c6725847cddb1f299db2addf06baedfcf3efef",
@@ -17161,6 +17221,8 @@
     "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
@@ -17513,6 +17575,8 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointPeriod",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -22865,8 +22929,10 @@
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
+    "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
