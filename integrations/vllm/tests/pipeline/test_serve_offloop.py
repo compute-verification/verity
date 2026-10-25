@@ -255,6 +255,47 @@ def test_a_window_closes_once_its_steps_have_committed_window_bytes(tmp_path):
     assert [w["steps"] for w in wins] == [1, 1, 1, 1]
 
 
+def test_a_size_bound_crossed_inside_a_step_closes_its_window_at_the_step_boundary(tmp_path):
+    """The window's bytes pass ``window_bytes`` between a step's input ids and its sampled ids: the window closes only before
+    the next step, so each step's schedule (between its window's marks, as `advice.windows_of` reads them), its committed
+    values and its rows sit in one window, which runs past its bound."""
+    s = Sealed(tmp_path, sealer=None, window_bytes=25)
+    w, engine = s.windows, s.loop.engine
+    w.seal = None
+    scheduled: list[tuple[int, list[str]]] = []
+    commits: list[tuple[int, int, str, int]] = []
+    marks: list[tuple[int, str, int]] = []
+    step, commit = engine.step, w.com._commit
+
+    def traced_step() -> list[Any]:
+        scheduled.append((w.window, sorted(r["internal"] for r in engine.reqs.values())))
+        return step()
+
+    def traced_commit(st: int, name: str, values: list[int], dtype: str) -> None:
+        commit(st, name, values, dtype)
+        commits.append((w.window, st, name, ss.committed_bytes(w.com)))
+
+    w.com._commit, engine.step, w.marks = traced_commit, traced_step, lambda k, ev: marks.append((k, ev, len(scheduled)))
+    with s:
+        status, _ = s.post("/v1/completions", _body(0, n=3))
+    assert status == 200
+    names = [name for k, st, name, _b in commits if (k, st) == (0, 0)]
+    crossed = next((i for i, (k, st, _n, b) in enumerate(commits) if (k, st) == (0, 0) and b >= 25), None)
+    assert crossed is not None and 0 < crossed < len(names) - 1, "window 0 passes its bound part way through step 0's commits"
+    opened = {k: n for k, ev, n in marks if ev == "open"}
+    closed = {k: n for k, ev, n in marks if ev == "close"}
+    traced = records(tmp_path, "step_trace.jsonl")
+    wins = [x for x in records(tmp_path, "windows.jsonl") if not x.get("empty")]
+    assert [x["steps"] for x in wins] == [1, 1, 1] and all(x["committed_bytes"] > 25 for x in wins), "each window runs past its bound"
+    for x in wins:
+        k, steps = x["window"], range(opened[x["window"]], closed[x["window"]])
+        assert all(scheduled[j][0] == k for j in steps), "each step scheduled while its window was open"
+        assert [scheduled[j][1] for j in steps] == [sorted(r[0] for r in t["rows"]) for t in traced if t["window"] == k]
+        for j in steps:
+            assert [name for kk, st, name, _b in commits if (kk, st) == (k, j - opened[k])] == names, "all of its values in its window"
+    assert {(k, st) for k, st, _n, _b in commits} == {(x["window"], 0) for x in wins}
+
+
 def test_below_the_disk_floor_a_window_is_not_sealed_and_the_server_stops_cleanly(tmp_path, monkeypatch):
     monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("a window under the floor is sealed"))
     disk = ss.DiskFloor(tmp_path, 1000, usage=lambda _p: SimpleNamespace(free=1001))

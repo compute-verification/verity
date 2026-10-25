@@ -16,7 +16,9 @@ With ``seal`` each closed window is also sealed as a deferred Commit's row dir (
 (`serve_seal.Sealer`) off the engine loop, over the committer frozen at the close (`serve_seal.freeze`). The window's line in
 ``windows.jsonl`` is written at its close either way and names its row dir (``seal``); what its seal wrote is its line in
 ``seals.jsonl``, once written, in window order. ``window_bytes`` closes a window once its steps have committed that many
-bytes, which bounds its bundle; ``disk`` (`serve_seal.DiskFloor`) refuses the seal of a window that would take the
+bytes, which bounds its bundle. Every close is between engine steps, so a step's schedule, its committed values and its rows
+sit in one window, which runs past its bound by the step that crossed it (and by the steps the committer's worker had not
+yet absorbed); a request may still span windows. ``disk`` (`serve_seal.DiskFloor`) refuses the seal of a window that would take the
 filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`Mirror`) copies the records
 into the run's ``$OUT`` after each close and each seal.
 """
