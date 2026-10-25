@@ -124,10 +124,10 @@ has a `fast100` schedule (`repRounds_size`). -/
 theorem dense_inner {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) :
     ∃ s spec st sch, FlockDeploy.setupOf false (xIOf xo) = some (s, spec, #[st]) ∧
-      s.read.tags = RecCoins.innerTags ∧ fast100 st.m = some sch := by
+      s.read.tags = RecCoins.innerTags ∧ s.read.publicInputs = none ∧ fast100 st.m = some sch := by
   obtain ⟨r, hr, ha, rfl⟩ := parse_read hst
   have hh : r.shape.holo = false := hf.1
-  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, -, -, -, htags⟩ := innerSetup_files hr ha
+  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, -, -, -, htags, hpi⟩ := innerSetup_files hr ha
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
   obtain ⟨⟨⟨⟨ss, hss⟩, -⟩, ⟨u, hsh⟩⟩, -⟩ := ha
@@ -144,7 +144,7 @@ theorem dense_inner {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse
     exact hrs
   obtain ⟨sch, hsch, -⟩ := repRounds_size hrs'
   have hx : xIOf xo = r.w.inner := by unfold xIOf; rw [hst]; rfl
-  refine ⟨s, spec, st, sch, by rw [hx]; exact hset, htags, ?_⟩
+  refine ⟨s, spec, st, sch, by rw [hx]; exact hset, htags, hpi, ?_⟩
   rw [hm, ← e1]
   exact hsch
 
@@ -176,14 +176,14 @@ theorem setup_eq : D.spec = D.d.spec ∧ D.sts = D.d.sts := by
 /-- **Every table is a hidden-output table at untyped plain leaves** where the statement is read at the inner tags:
 `setupTables` sets each table up with `setupHidden` (`setupTables_okH`), at tags naming
 `flock-leaf/sha512-unsalted`. -/
-theorem sts_hidden (hT : D.d.s.read.tags = RecVStar.innerTags) :
+theorem sts_hidden (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none) :
     ∀ t ∈ D.sts, ∃ (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
       (draw partition : Option Lean.Json) (program : Option ByteArray),
       tags.merkleLeaf = "flock-leaf/sha512-unsalted" ∧ tags.typed = false ∧
         Stmt.setupHidden tags cf pf coins tables draw partition program = .ok t := by
   have h := D.read_setup
   unfold Readable.Read.setup at h
-  rw [hT] at h
+  rw [hT.1, hT.2] at h
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH
       FlockSoundness.Discharge.Recursion.innerTags_hiddenOutputs h with
     ⟨-, st, hst, -, hsts⟩ | ⟨-, -, hall, -, -⟩
@@ -202,7 +202,8 @@ theorem tab_eq {i : ℕ} (hi : i < D.sts.size) : (tabsOf D.sts)[i]! = Setup.ofCi
   rw [getElem!_pos (D.sts.map Setup.ofCircuit) i (by simpa using hi), Array.getElem_map]
 
 /-- **Row G's `merkle` and `named`**: table `i`'s setup commits under plain SHA-512, a `Named` scheme. -/
-theorem merkle_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags) {i : ℕ} (hi : i < D.sts.size) :
+theorem merkle_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none) {i : ℕ}
+    (hi : i < D.sts.size) :
     (tabsOf D.sts)[i]!.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" ∧
       (tabsOf D.sts)[i]!.merkle.Named := by
   have hm : (tabsOf D.sts)[i]!.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
@@ -222,7 +223,8 @@ theorem foldKLog_of {i : ℕ} (hi : i < D.sts.size) : (D.files cls i).st.fold.kL
   rfl
 
 /-- **Row G's `kLog_le`**: table `i`'s `k_log` is at most its `m` (`StmtWF`). -/
-theorem kLog_le_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags) {i : ℕ} (hi : i < D.sts.size) :
+theorem kLog_le_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none) {i : ℕ}
+    (hi : i < D.sts.size) :
     (D.files cls i).st.kLog ≤ (D.files cls i).st.m := by
   show (tabsOf D.sts)[i]!.kLog ≤ (tabsOf D.sts)[i]!.m
   rw [D.tab_eq hi]
@@ -236,7 +238,7 @@ ranges fold (`slotOk_of_hidden`) and which is well formed (`setupHidden_wf`). -/
 theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) :
     RowG D cls acc i := by
-  obtain ⟨s, spec, st, sch, hset, htags, hsch⟩ := dense_inner hst hf
+  obtain ⟨s, spec, st, sch, hset, htags, hpi, hsch⟩ := dense_inner hst hf
   rw [← hx] at hset
   obtain ⟨hsp, hsts⟩ := D.setup_eq
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, hv, -, -, -, -, -, hd⟩ := FlockDeploy.decR_some D.dec
@@ -244,7 +246,8 @@ theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursio
   cases hv
   have hds : D.d.s = s := congrArg (·.s) hd
   have hdsts : D.d.sts = #[st] := congrArg (·.sts) hd
-  have hT : D.d.s.read.tags = RecVStar.innerTags := by rw [hds]; exact htags
+  have hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none := by
+    rw [hds]; exact ⟨htags, hpi⟩
   have hsts1 : D.sts = #[st] := hsts.trans hdsts
   have hi0 : i = 0 := by
     have : i < 1 := by simpa [hsts1] using hi
