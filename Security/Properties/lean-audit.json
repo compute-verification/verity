@@ -6211,7 +6211,7 @@
    ]
   },
   "NciCheck.Desc": {
-   "digest": "5758797300cbab2eaac39af049c0fc5ee71bf8e1edea48897c48fdb34e4841f5",
+   "digest": "ee9ac4fe80612a2ac67ab7d67fcf4e542247ec894644550799f0673266292bed",
    "definitions": {
     "NciCheck.Desc.Chain": "c56251016e6ab9c082b7fcec3000e638afb07e0cb4e002fb2fe64b469d9f836c",
     "NciCheck.Desc.Chain.at": "158fc743edceeb48e0afad687e2f4bdbfbfb1dd740c53b5f068ed59a3481b927",
@@ -6275,6 +6275,7 @@
     "NciCheck.Desc.Seg.reps": "f915fdd8762698c6a729f2646ac00af9627b45d085b4916d5f16ed173bfc0527",
     "NciCheck.Desc.Seg.shift": "15f4fde4a88d6d148c1343bd229a374e96c275fd84e8de87d75fece425268d6a",
     "NciCheck.Desc.Seg.slice": "da8da8772d562751b9c130b9fd0b17f152745d9de0b8d688c6d40d34ccb956bb",
+    "NciCheck.Desc.Seg.split": "c45a36e6f563b91d934ef79a306f350cf3520089e0f7bc525e488bda80eadd35",
     "NciCheck.Desc.Summary": "8dfb76b38fab69317897cf18095ed37105c8b8afd8bff978329745d1f57f8a9f",
     "NciCheck.Desc.Summary.ret": "6f1ac1a24843c528e94ceafecc01fa524bf88d3274f05d9c251bea6dff0da0e3",
     "NciCheck.Desc.Summary.used": "d53cbb05bc2862864a04ed1157e6c3a366be33dabedf66ce2f8d38e948937336",
@@ -6335,7 +6336,7 @@
     "NciCheck.Desc.memberRows": "e37f422865d2508bc77ceb0f1c1c6f05e968d4214a2f8931a4933e9801a69eaa",
     "NciCheck.Desc.memberSpans": "1d19f5b80e22efff22c68108f731ce6b0c4e019fe286e72cec1666f28685f3c2",
     "NciCheck.Desc.nodeOf": "c92ff44220306440255ee32730c133280de9b7ea658beba4a9d145bee07ba15a",
-    "NciCheck.Desc.nodeReads": "64028149f314a0599e555495f747429c5d5f07f9b9f27f6fb453ad1741c264fd",
+    "NciCheck.Desc.nodeReads": "6921d30cf4958f99304a5727487e542cc95aaa455354834d449eb0288b49e0bf",
     "NciCheck.Desc.novelWidth": "e294912916a01244e19deb1c4ed6b69223e1b526d005d1bf7e74744da62814b6",
     "NciCheck.Desc.ofPart": "a4316478ad29446d33f80f1e382b2e9600c761758686506d6821cbc76abf5eef",
     "NciCheck.Desc.ofSeq": "fd54f7d2dec50a4d40145bc5da5cfb9c942f938f1f023ce0449ab0802331b4b6",
