@@ -176,7 +176,6 @@
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "doc-round", "symbol": "_Fold._peers_layout", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "doc-date", "symbol": "dump_normalizer", "detail": "date"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},
-    {"file": "verity_vllm/observe/fold/memory.py", "kind": "def-name", "symbol": "MemoryModel", "detail": "_fast_read"},
     {"file": "verity_vllm/observe/observer.py", "kind": "doc-round", "symbol": "_defined_tensor_list", "detail": "R1N"},
     {"file": "verity_vllm/observe/fold/patterns/attention.py", "kind": "doc-round", "symbol": "flash_attn_op_version", "detail": "R1N"},
     {"file": "verity_vllm/observe/fold/patterns/gemm.py", "kind": "doc-round", "symbol": "GemmLaunch", "detail": "R1N"},
