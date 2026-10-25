@@ -18,11 +18,13 @@ draw `c`'s, `W + c`.
   share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
   on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
   the draw's windows, whose passes number its receipts (`lengthsOf`, `passCount`).
-* `SessionDrawsRecords` (`Shared.run`, the session link): in a run, a drawn draw is `draws` over its windows' records
-  (`drawRecords`, `State.record`), each window holding its share, and a window of it is accepted only with an empty
-  share (which the close accepts) or by `verify`'s `checkWindow` of its share, on the appends as they stood then: the
-  hypotheses `AcceptDrawsOpenable` reads, but for the appends, which it takes as one array. It needs `g ≥ 2`
-  (`Session.close` at `g = 1` draws a window whole and accepts none) and `min_passes ≥ 1`.
+* `SessionDrawsRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a drawn draw is `draws` over
+  its windows' records (`drawRecords`, `State.record`), each window holding its share, and a window of it is accepted
+  only with an empty share (which the close accepts at `g ≥ 2`) or with `checkWindow` of its share passing on the
+  session's appends: the hypotheses `AcceptDrawsOpenable` reads, each window's on the one array of appends. It needs
+  `min_passes ≥ 1`.
+* `AcceptedDrawsOpenable` (`Shared.run`, the two joined): in a run that has accepted every window of draw `c`, each
+  value of the draw's sampler is an openable receipt, on the session's appends, of the window it falls in.
 * `OpeningsUnreadUntilDrawn` (`Live`, the coin order): a run that leaves draw `c`'s first window undrawn reads no
   coin at `W + c` or above.
 * `RecordKeptAfterDraw`: once a window is drawn, the rest of the session keeps its draws, its record and its openable
@@ -110,16 +112,16 @@ def AcceptDrawsOpenable : Prop :=
 def drawRecords (g : Nat) (s : Session.State) (c : Nat) : List WindowRecord :=
   (drawWindows g s.params.windows c).map s.record
 
-/-- **The session link**, per draw, at `g ≥ 2` windows a draw: in a run from `State.init` that has drawn draw `c`'s
-first window, the draw is `draws` on the openings key of `c` and the coin `coins[W + c]` over the records `ws` of `c`'s
-windows (`drawRecords`), `U` their receipts (`lengthsOf`); window `k` of it holds its share (`shareOf`, from its
-passes' start, `passCount`); and once window `k` is accepted, its share is empty (the close accepts it) or `verify`
-accepted it: `checkWindow` of its share passed on some openings and the appends then, a prefix of the session's. -/
+/-- **The session link**, per draw, at any `g ≥ 1` windows a draw: in a run from `State.init` that has drawn the first
+window of draw `c` (one of the session's, `c·g < W`), the draw is `draws` on the openings key of `c` and the coin
+`coins[W + c]` over the records `ws` of `c`'s windows (`drawRecords`), `U` their receipts (`lengthsOf`); window `k` of
+it holds its share (`shareOf`, from its passes' start, `passCount`); and once window `k` is accepted, its share is
+empty (the close accepts it) or `checkWindow` of its share passes on some openings and the session's appends. -/
 def SessionDrawsRecords : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
-    ∀ c, 2 ≤ g → 1 ≤ params.minPasses → (drawnOf s (c * g)).isSome →
+    ∀ c, 1 ≤ g → 1 ≤ params.minPasses → c * g < params.windows → (drawnOf s (c * g)).isSome →
       ∃ drawn, draws reg.digest c coins[params.windows + c]! params.samples (lengthsOf (drawRecords g s c)) =
           some drawn ∧
         ∀ k (hk : k < (drawRecords g s c).length),
@@ -127,10 +129,25 @@ def SessionDrawsRecords : Prop :=
             some (shareOf drawn (passCount ((drawRecords g s c).take k)) (drawRecords g s c)[k].passes.size) ∧
           (s.windows[c * g + k]!.verdict = some .accept →
             shareOf drawn (passCount ((drawRecords g s c).take k)) (drawRecords g s c)[k].passes.size = #[] ∨
-            ∃ (appends more : Array Append) (openings : Array Opening), s.appends = appends ++ more ∧
-              checkWindow reg reg.digest appends (drawRecords g s c)[k]
-                (shareOf drawn (passCount ((drawRecords g s c).take k)) (drawRecords g s c)[k].passes.size)
-                openings = .accept)
+            ∃ openings : Array Opening, checkWindow reg reg.digest s.appends (drawRecords g s c)[k]
+              (shareOf drawn (passCount ((drawRecords g s c).take k)) (drawRecords g s c)[k].passes.size)
+              openings = .accept)
+
+/-- **A draw's accepted windows open its values** (`SessionDrawsRecords` and `AcceptDrawsOpenable` joined): in a run
+from `State.init` that has accepted every window of draw `c` (`c·g < W`), the draw's values `us` are the sampler's on
+the openings key of `c` and the coin `coins[W + c]`, `U` its windows' receipts, and each value `v` is an openable
+receipt, on the session's appends, of the window `k` it falls in, its number there `v − receiptCount (ws.take k)`. -/
+def AcceptedDrawsOpenable : Prop :=
+  ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+    ∀ c, 1 ≤ g → 1 ≤ params.minPasses → c * g < params.windows → (drawnOf s (c * g)).isSome →
+      (∀ k, k < (drawRecords g s c).length → s.windows[c * g + k]!.verdict = some .accept) →
+      ∃ L us, FlockSoundness.Randomness.subset (openingsKey reg.digest c coins[params.windows + c]!)
+          (min params.samples (lengthsOf (drawRecords g s c)).toList.sum) (lengthsOf (drawRecords g s c)).toList.sum
+          [.str "openings"] L = some us ∧
+        ∀ v ∈ us, ∃ k, ∃ hk : k < (drawRecords g s c).length, receiptCount ((drawRecords g s c).take k) ≤ v ∧
+          Openable reg s.appends (drawRecords g s c)[k] (v - receiptCount ((drawRecords g s c).take k))
 
 /-- A run from `State.init` that leaves draw `c`'s first window undrawn reads no coin at `W + c` or above: on coins
 `coins'` that agree with `coins` below `W + c`, the same events give the same results and the same state, with
