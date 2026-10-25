@@ -540,6 +540,49 @@ def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):
     assert f["path"] == "notes.md" and "+The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked." in f["hunk"]
 
 
+AREAS = {
+    "tools/move/areas_map.toml": '[words]\n"S/Area" = "S/Area/Check"\n"S.Area" = "S.Area.Check"\n',
+    "P/lakefile.toml": 'name = "p"\n',
+    "P/S/Area.lean": "import S.Area.Check\n",
+    "P/S/Area/Check.lean": "import S.Area.Grid\n\ntheorem t : True := trivial\n",
+    "P/S/Area/Grid.lean": "def g := 1\n",
+    MC.MOVES: json.dumps({"about": "x", "moves": []}, indent=2) + "\n",
+}
+AREAS_MOVED = {"P/S/Area.lean": "P/S/Area/Check.lean", "P/S/Area/Check.lean": "P/S/Area/Check/Check.lean",
+               "P/S/Area/Grid.lean": "P/S/Area/Check/Grid.lean"}
+
+
+def _areas(tmp_path: Path, **over: str) -> dict:
+    """`S.Area` becomes `S.Area.Check` and its `Check` `S.Area.Check.Check`: a file lands where another left, and an
+    aggregator whose every line the words rename goes where the map sends it, as `tools/move/rename.py` writes them."""
+    repo, base = _repo(tmp_path, AREAS)
+    _move(repo, "P/S/Area/Grid.lean", "P/S/Area/Check/Grid.lean")
+    _move(repo, "P/S/Area/Check.lean", "P/S/Area/Check/Check.lean")
+    _move(repo, "P/S/Area.lean", "P/S/Area/Check.lean")
+    _write(repo, {"P/S/Area/Check.lean": "import S.Area.Check.Check\n",
+                  "P/S/Area/Check/Check.lean": "import S.Area.Check.Grid\n\ntheorem t : True := trivial\n",
+                  MC.MOVES: json.dumps({"about": "x", "moves": [{"paths": AREAS_MOVED}]}, indent=2) + "\n", **over})
+    return _check(repo, base)
+
+
+def test_a_file_landing_where_another_left_is_a_move(tmp_path):
+    r = _areas(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert r["lean_modules"] == {"S.Area": "S.Area.Check", "S.Area.Check": "S.Area.Check.Check",
+                                 "S.Area.Grid": "S.Area.Check.Grid"}
+
+
+def test_a_file_landing_where_another_left_is_recorded_where_it_went(tmp_path):
+    swapped = {**AREAS_MOVED, "P/S/Area/Check.lean": "P/S/Area/Grid.lean"}
+    [f] = _areas(tmp_path, **{MC.MOVES: json.dumps({"about": "x", "moves": [{"paths": swapped}]}, indent=2) + "\n"})["refusals"]
+    assert f["path"] == MC.MOVES
+
+
+def test_a_file_landing_where_another_left_is_judged_like_any_edit(tmp_path):
+    [f] = _areas(tmp_path, **{"P/S/Area/Check.lean": "import S.Area.Check.Check\ntheorem u : True := trivial\n"})["refusals"]
+    assert f["path"] == "P/S/Area/Check.lean" and f.get("old") == "P/S/Area.lean"
+
+
 def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     [f] = _worded(tmp_path, **{"p/TRUSTED.sha256": f"{'0' * 64}  ../S/Definitions/Core/A.lean\n"})["refusals"]
     assert f["path"] == "p/TRUSTED.sha256"

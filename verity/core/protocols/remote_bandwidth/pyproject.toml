@@ -19,4 +19,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/tests/fixtures/main-first-parent.txt",
           # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
           # canonical JSON, held to the circuits codec's
-          "verity/core/protocols/pouw/lean/check/models.json"]
+          "verity/core/protocols/pouw/lean/check/models.json",
+          # the claims registry, which test_ledger.py holds the memory line's named PRF claim to
+          "verity/core/claims/__init__.py"]
