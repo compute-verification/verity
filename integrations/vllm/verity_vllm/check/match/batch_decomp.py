@@ -52,6 +52,7 @@ import os
 import time
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
@@ -90,7 +91,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     ops = ops or record_ops()
     t0 = time.time()
     profiling = _profile_on()
-    force_dag = os.environ.get(FORCE_DAG_ENV, "").strip() == "1"
+    force_dag = (settings.get(FORCE_DAG_ENV) or "").strip() == "1"
     run_prof: dict = {"schema": "cb-a/x09-profile/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
                       "force_dag": force_dag, "pid": os.getpid(), "phases": {}, "requests": []}
     if profiling:
