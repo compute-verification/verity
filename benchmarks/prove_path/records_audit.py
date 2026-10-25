@@ -21,11 +21,13 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
 the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
-An integration's labels are never read.
+The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
+it (`leak_count`). An integration's labels are never read.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--forged] [--challenger local --main FILE]
+        --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]]
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -41,6 +43,11 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
   its `interface.RUN_FIELDS` (``run``, ``context``) empty, since it knows no run; the check compares the rest;
 * it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
+
+``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
+takes them: ``local``, a development session on this machine, or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
+deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
 ``--forged``: the window holds a forged unit, and the
 audit passes when every check before the draw passed and Lean refused the outcome (the prover runs with its self-check
@@ -208,6 +215,29 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     return _verdict(ok, {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")})
 
 
+def leak_count(circuit: Mapping[str, Any], bits: int) -> dict[str, Any]:
+    """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
+    ``other_inputs`` is #(otherInputs \\ registered): #4044's ``otherInputs`` (``SampledCharge.lean``), the circuit's input
+    gates no step lists as ingress, less the inputs the registration fixes. The circuit record's input gates are each
+    member's parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per unit, or once
+    per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs (``wired``, which
+    a5's wiring check holds). The records list no steps and register no input (a row table's registered reads are refused,
+    `verifier_window`), so none is ingress or registered yet: ``external`` ports are reported, not subtracted, until a
+    layout lists the ingress at its steps. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
+    inputs = wired = external = 0
+    ext = set(circuit.get("external") or ())
+    for m in circuit["members"]:
+        tables, wires = dict(map(tuple, m.get("tables") or ())), {p for p, _o, _ws in m.get("wired") or ()}
+        for p, words in m["rows"]:
+            n = 16 * int(words) * int(tables.get(p, m["n"]))
+            inputs += n
+            wired += n if p in wires else 0
+            external += n if f"{m['template']}/{p}" in ext and p not in wires else 0
+    other = inputs - wired
+    return {"inputs": inputs, "wired": wired, "ingress": 0, "registered": 0, "external": external, "other_inputs": other,
+            "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+
+
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
     """What the audit refuses before any draw about the records: a registration naming another circuit or another run root,
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
@@ -353,7 +383,8 @@ def audit(a: argparse.Namespace) -> int:
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     if a.challenger:
-        manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main)
+        manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+                                              peer=a.peer, key_record=a.challenger_key)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
@@ -368,6 +399,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
+    row["leak"] = leak_count(doc, int((held["advice"] or {}).get("bits", 0)))
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
     if a.challenger:
@@ -401,6 +433,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
+                                     "leak": {k: row["leak"][k] for k in ("other_inputs", "advice_bits", "bound")},
                                      **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
@@ -428,13 +461,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose ports are free now)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
-    p.add_argument("--challenger", choices=["local"], help="draw on the auditor's challenger's coins (a5_coins), not the verifier's")
+    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
+                   "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
+                   "127.0.0.1 the session's challenger listens on")
+    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
+                   "(infra's challenger-key/v1), never the session's key.json")
+    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     a = ap.parse_args(argv)
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
-    if a.challenger and not a.main:
-        ap.error("--challenger needs --main")
+    if a.challenger:
+        if a.challenger != "local" and not a.challenger.startswith("gate:"):
+            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
+            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main")
     return audit(a)
 
 

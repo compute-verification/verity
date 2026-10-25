@@ -8,8 +8,10 @@
   circuit is another or that writes none, and a length other than the registered one or none;
 * a compiler registered under a commit runs from a checkout of that commit, not the auditing tree's, and a commit whose code
   doesn't hash to the registered digest is refused;
+* the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
+* the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
   compile and charges the length the registration does."""
 from __future__ import annotations
@@ -221,6 +223,26 @@ def test_a_window_is_compiled_at_its_registered_commit_from_a_tree_at_another(tm
     assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
+def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_advices_charge(written):
+    """2a's audited window, 8 units of SiluMul_v2{I=8192}, counts its two bf16 rows of 8192 a unit, 2,097,152 bits, against
+    1,687 declared advice bits: vacuous. A wired port isn't an input, a shared-row port counts its table's rows, and an
+    external port is reported but not subtracted until a layout lists the ingress at its steps."""
+    per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
+    got = RA.leak_count(written.doc, 8 * len(ADVICE))
+    assert got == {"inputs": 5 * per_unit, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
+                   "other_inputs": 5 * per_unit, "advice_bits": 8 * len(ADVICE), "bound": "vacuous"}
+    assert RA.leak_count(written.doc, 5 * per_unit)["bound"] == "within the charge"
+    silu = {"external": [], "members": [{"template": "SiluMul_v2{I=8192}", "n": 8, "rows": [["g", 8192], ["u", 8192]]}]}
+    assert RA.leak_count(silu, 1687)["other_inputs"] == 2_097_152 and RA.leak_count(silu, 1687)["bound"] == "vacuous"
+    m0, m1 = written.doc["members"]
+    x = 16 * dict(map(tuple, m0["rows"]))["x"]
+    doc = {**written.doc, "external": [f"{TID}/wrow"],
+           "members": [{**m0, "wired": [["x", "o0", [0, 1, 2, 3]]]}, {**m1, "tables": [["x", 3]]}]}
+    got = RA.leak_count(doc, 0)
+    assert (got["wired"], got["inputs"]) == (4 * x, 5 * per_unit + 2 * x)
+    assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables
@@ -249,6 +271,37 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
     assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
     late = RA.after_draw(receipt, rec, held)
     assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
+
+
+def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
+    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger."""
+    import a5_coins as AC
+
+    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+            "--port", "10000",
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"), "--main", "main.txt"]
+    for bad in (["--peer", "vy-nebius-1"], ["--challenger-key", "key.json"]):
+        with pytest.raises(SystemExit, match="2"):
+            RA.main([*args, "--challenger", "gate:research@gate", *bad])
+    with pytest.raises(SystemExit, match="2"):
+        RA.main([*args, "--challenger", "remote"])
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def start(challenger, root, ranks, dest, main, **kw):
+        seen.update(challenger=challenger, root=root, ranks=ranks, main=main, **kw)
+        raise Opened
+
+    monkeypatch.setattr(AC, "start", start)
+    with pytest.raises(Opened):
+        RA.main([*args, "--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json",
+                 "--gate-key", "gate.key"])
+    assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
+                    "peer": "vy-nebius-1", "key_record": "key.json"}
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
