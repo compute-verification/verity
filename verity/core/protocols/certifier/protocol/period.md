@@ -5,9 +5,10 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
 `network-period` executable; its formats are its module docstring). Its commitment is one-stage's registration record of
 each of the period's `m` link-windows on one link and of each compute audit; its evidence is one-stage's answer on each,
-and per link-window the two certificates and the clock certificate the certifier issued. It accepts when every
-link-window's registration names the link's Program and the provenance `{"kind": "served", "window": w}`, both
-certificates and the clock certificate verify under the certifier's key in its session and name the link and `w`, the
+and per link-window the two certificates and the clock certificate the certifier issued. The period's link-windows are
+the session's windows `w₀ … w₀ + m − 1` (the parameter `first` is `w₀`), so one certifier session spans many periods.
+It accepts when every link-window's registration names the link's Program and the provenance
+`{"kind": "served", "window": w}`, both certificates and the clock certificate verify under the certifier's key in its session and name the link and `w`, the
 clock certificate signs `clock_digest` of a sync in Σ_sync, and one-stage accepted the window's one unit (`subset:1`),
 whose verifier of record is `LinkWindows.verify` (C-Flock's Lean verifier on the `--zk` proof, then `certified()` and
 the sync); and when every compute audit's answer accepted a subset draw. On acceptance its public output is `K` with its
