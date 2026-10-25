@@ -10610,7 +10610,7 @@
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
-   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash,world-unlisted): Scope now follows from acceptance, but it still takes TableCRZ as a hypothesis and bounds the link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes), DrawOkZK, RecordsLiveZK and their H and J forms, premises that aren't on the list; without --zk its record custody is the listed RecordCustodyExec (RecordCustodyExecH at hidden outputs).",
+   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes TableCRZ as a hypothesis and bounds the link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK": "lemma: leaves the list under the 5:11 PM ruling",
