@@ -26,7 +26,7 @@ that.
   `readRep` reads the honest proof back (`repReadsBack_of`). That gives `ReadsBack`, that `decR` decides on the honest
   messages and reads exactly the honest proofs (`readsBack_of_rep`).
 
-Open: `RepFits`, which matches `RecVStar.repRounds` with `repFrames`' chunks round by round.
+`RepFits`, which matches `RecVStar.repRounds` with `repFrames`' chunks round by round, is `NextRFits`' `repFits`.
 -/
 
 namespace FlockDeploy

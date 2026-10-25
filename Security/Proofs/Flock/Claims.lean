@@ -137,6 +137,7 @@ import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.NextRHonest
+import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
