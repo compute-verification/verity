@@ -105,6 +105,7 @@ a layer's q rows for every token before its k rows, so RoPE's heads are q heads 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -122,6 +123,7 @@ from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import index as IX, row_tables as RTB
+from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
@@ -139,6 +141,8 @@ READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split"
 #: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
 BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
+#: the circuit record's ``name`` (`circuit_record`), opaque to Verity
+CIRCUIT_NAME = "verity-vllm"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
@@ -443,6 +447,17 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
             "partition_digest": window.partition_digest, "population": window.population}
 
 
+def circuit_record(window: CS.Window) -> dict[str, Any]:
+    """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
+    and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it; a template of word rows has none (the verifier's
+    input set lowers it)."""
+    sts = {}
+    for t in dict.fromkeys(m.template for m in window.members if m.schemas):
+        in_rows, out_rows = CR.unit_rows(template(t))
+        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, "reads": CR.reads(template(t))}
+    return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts)
+
+
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
          arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
     """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
@@ -740,7 +755,8 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     gates, which the window's law proves whole (`population`).  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
-    and writes only ``out_dir``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
+    and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
+    the provenance carries as ``circuit``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
     compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
@@ -761,6 +777,9 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
+    body = IF.circuit_bytes(circuit_record(window))
+    (Path(out_dir) / "circuit.json").write_bytes(body)
+    prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
                    registrar=R)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)

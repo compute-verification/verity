@@ -42,9 +42,10 @@ from typing import Any, Protocol
 import numpy as np
 
 from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition
+from verity.ml.circuits.codec import canonical_json, descriptor_id
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.commitments import advice as AC
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS
@@ -53,7 +54,17 @@ from . import rows as CS
 PACKED = (8, 16, 32, 64)
 CIRCUIT = "verity/window-circuit/v1"
 LABELS = "verity/window-labels/v1"
+#: the advice tree's binding tag (`advice_tree_binding`): its bytes are its first records', a later rename
+ADVICE_SCHEME = "verity-vllm/advice-windows/advice/v1"
+#: the advice's bytes as rows of this many bits, the last zero-padded (`advice_rows`)
+ADVICE_ROW_BITS = 256
 _DIGEST = re.compile("[0-9a-f]{128}")
+_ID = re.compile(r"([A-Za-z][A-Za-z0-9]*_v[0-9]+)(?:\{(.*)\})?", re.S)
+
+
+def _verity(d: Any) -> bool:
+    code = d.evaluate if isinstance(d, PrimitiveDefinition) else d.body
+    return d.id in REGISTRY.defs and REGISTRY[d.id] is d and code.__module__.startswith("verity.")
 
 
 def catalog(fn: Any) -> None:
@@ -62,9 +73,62 @@ def catalog(fn: Any) -> None:
     base = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     if not isinstance(base, CompositeDefinition) or (isinstance(fn, SpecializedDefinition) and not fn.complete):
         raise ValueError(f"{getattr(fn, 'id', fn)!r}: a template is a complete binding of a composite Definition")
-    if base.id not in REGISTRY or REGISTRY[base.id] is not base or not base.body.__module__.startswith("verity."):
+    if not _verity(base):
         raise ValueError(f"{base.id}: not a Definition Verity registers (defined in {base.body.__module__}); an integration "
                          "builds its units from Verity's Definitions and silicon semantics, never its own")
+
+
+def _bindings(record: str) -> dict[str, Any]:
+    """A descriptor id's binding record ``k=<canonical JSON>,...`` as its JSON values, in order."""
+    dec, out, at = json.JSONDecoder(), {}, 0
+    while at < len(record):
+        eq = record.index("=", at)
+        key = record[at:eq]
+        if not key.isidentifier() or key in out:
+            raise ValueError(f"binding record {record!r}: {key!r} is not a new static's name")
+        out[key], at = dec.raw_decode(record, eq + 1)
+        if at < len(record):
+            if record[at] != ",":
+                raise ValueError(f"binding record {record!r}: no ',' at {at}")
+            at += 1
+    return out
+
+
+def _static(v: Any) -> Any:
+    if isinstance(v, dict) and set(v) == {"fn"}:
+        return resolve(v["fn"], template=False)
+    if isinstance(v, dict) and set(v) == {"f64"}:
+        return float.fromhex(v["f64"])
+    if isinstance(v, dict) and set(v) == {"dict"}:
+        return {k: _static(x) for k, x in v["dict"].items()}
+    if isinstance(v, list):
+        return tuple(_static(x) for x in v)
+    return v
+
+
+def resolve(tid: str, *, template: bool = True) -> Any:
+    """The Definition descriptor id ``tid`` names in Verity's catalog (every Definition registered from a ``verity`` module):
+    its base and binding record parsed (`codec.descriptor_id`'s form) and bound; a ``template`` refused unless `catalog`'s.
+    Refused (ValueError) unless the Definition it binds is named exactly ``tid``."""
+    from verity.ml.circuits import ops  # noqa: F401  (registers the catalog's Definitions)
+    from verity.ml.circuits.ops import boolean  # noqa: F401
+
+    m = _ID.fullmatch(tid)
+    if m is None or m[1] not in REGISTRY.defs or not _verity(REGISTRY[m[1]]):
+        raise ValueError(f"{tid}: names no Definition in Verity's catalog")
+    base = REGISTRY[m[1]]
+    try:
+        if m[2] is not None:
+            fn = bind(base, **{k: _static(v) for k, v in _bindings(m[2]).items()})
+        else:
+            fn = bind(base) if template and isinstance(base, CompositeDefinition) else base
+    except (TypeError, ValueError, json.JSONDecodeError) as e:
+        raise ValueError(f"{tid}: {type(e).__name__}: {e}") from e
+    if descriptor_id(fn) != tid:
+        raise ValueError(f"{tid}: binds to {descriptor_id(fn)}, not to itself")
+    if template:
+        catalog(fn)
+    return fn
 
 
 def _fields(ret: Any) -> tuple[Any, ...]:
@@ -187,6 +251,43 @@ def advice_binding(compiler: Mapping[str, str], root: str, bits: int) -> dict[st
     return {"compiler": {"name": compiler["name"], "digest": compiler["digest"]}, "advice": {"root": root, "bits": bits}}
 
 
+def advice_tree_binding(compiler: Mapping[str, str]) -> bytes:
+    """The advice tree's domain binding: `ADVICE_SCHEME` and the registered compiler's name and digest, so a root opens only
+    under the compiler it names."""
+    return hashlib.sha512(canonical_json({"scheme": ADVICE_SCHEME, "compiler": {"name": str(compiler["name"]),
+                                                                                "digest": compiler["digest"]}})).digest()
+
+
+def advice_rows(data: bytes) -> list[bytes]:
+    """The advice's bytes as `ADVICE_ROW_BITS`-bit rows, the last zero-padded: as many rows as its public length fixes."""
+    w = ADVICE_ROW_BITS // 8
+    return [bytes(data[i:i + w]).ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
+
+
+def commit_advice(compiler: Mapping[str, str], data: bytes, salts: Sequence[bytes] | None = None) -> AC.Registration:
+    """The advice's hiding commitment (`verity.ml.commitments.advice`: `advice_rows` under `advice_tree_binding`), fresh salts
+    unless ``salts`` is given."""
+    return AC.register(advice_rows(data), ADVICE_ROW_BITS, advice_tree_binding(compiler), salts)
+
+
+def advice_opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:
+    """The advice's opening, the prover's private file: its bytes and every row's salt. Handing it to the verifier stands in for
+    the compile unit (the named gap)."""
+    return {"scheme": ADVICE_SCHEME, "advice": bytes(data).hex(), "salts": [s.hex() for s in reg.salts]}
+
+
+def opened_advice(compiler: Mapping[str, str], doc: Any) -> tuple[bytes, str]:
+    """The verifier's side of `advice_opening`: the advice's bytes and the root they commit to under ``compiler`` with the
+    opening's salts, which the registration's must be. A malformed opening is a ValueError."""
+    if not isinstance(doc, Mapping) or doc.get("scheme") != ADVICE_SCHEME:
+        raise ValueError(f"an advice opening is a {ADVICE_SCHEME} document")
+    try:
+        data, salts = bytes.fromhex(doc["advice"]), [bytes.fromhex(s) for s in doc["salts"]]
+        return data, commit_advice(compiler, data, salts).root.hex()
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"an advice opening holds the advice and one salt a row, in hex: {e}") from e
+
+
 def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]],
                    statements: Mapping[str, Mapping[str, Any]] | None = None, external: Sequence[str] = ()) -> dict[str, Any]:
     """``circuit.json``: everything the verifier's window is (`of_records`), none of its values. ``templates``: each
@@ -205,6 +306,21 @@ def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]]
             "statements": {t: {"in_rows": [[p, s, b, list(ps)] for p, s, b, ps in st["in_rows"]],
                                "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]], "reads": st.get("reads", "inline")}
                            for t, st in sorted((statements or {}).items())}}
+
+
+def templates_of(w: CS.Window) -> list[tuple[str, int]]:
+    """``w``'s templates in its program's order, each ``(descriptor id, units)``: `circuit_record`'s ``templates``."""
+    return [(t, n) for _k, t, _lo, n in CS.template_partition(w.program, w.query).ranges]
+
+
+#: the circuit record's fields its window's run fixes rather than its circuit (the run root, the coins' context), which the
+#: registration binds itself: a compiler's output is the record less these (`circuit_of`)
+RUN_FIELDS = ("run", "context")
+
+
+def circuit_of(doc: Mapping[str, Any]) -> dict[str, Any]:
+    """A circuit record less its `RUN_FIELDS`: what a registered compiler's output on the advice must be."""
+    return {k: v for k, v in doc.items() if k not in RUN_FIELDS}
 
 
 def circuit_bytes(doc: Mapping[str, Any]) -> bytes:

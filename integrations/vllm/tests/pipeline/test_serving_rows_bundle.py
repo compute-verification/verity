@@ -6,6 +6,7 @@ against the verifier's own copies (its population program, the run root of recor
 value, and a partition digest, a template or a binding map that is not the record's is refused."""
 from __future__ import annotations
 
+import hashlib
 import json
 
 import numpy as np
@@ -13,7 +14,7 @@ import pytest
 
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
-from verity.ml.windows import rows as CS
+from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
@@ -55,6 +56,10 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     # the same copies from the record alone, as the audit's verifier derives them (no committed value read)
     mine = DRW.window_of_record(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]))
     assert (mine.partition_digest, mine.run, CS.expected_ports(mine)) == (win["partition_digest"], c["run_root"], ports)
+    # and from the window's own records: its circuit record, whose SHA-512 the registration binds
+    assert w["circuit"] == hashlib.sha512((wdir / "circuit.json").read_bytes()).hexdigest()
+    got, _doc = IF.of_records(wdir, DR.parse_law(LAW), {ROPE: defn}.__getitem__)
+    assert (got.partition_digest, got.run, got.members, CS.expected_ports(got)) == (mine.partition_digest, mine.run, mine.members, ports)
 
     # every hidden row is what was served: x the qkv row's head slice, cs the cache row at the token's position, out the rotated head
     rows = np.frombuffer((wdir / "m0-private.bin").read_bytes()[:heads * 3 * D * 2], dtype="<u2").reshape(heads, 3, D)

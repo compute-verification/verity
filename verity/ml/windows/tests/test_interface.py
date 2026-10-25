@@ -160,3 +160,29 @@ def test_an_advice_binding_is_well_formed():
     for bad in [({"name": "c"}, "ef" * 64, 1), (c, "ef" * 32, 1), (c, "ef" * 64, -1), (c, "ef" * 64, True)]:
         with pytest.raises(ValueError):
             I.advice_binding(*bad)
+
+
+def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
+    assert descriptor_id(I.resolve(TID)) == TID and descriptor_id(I.resolve(AID)) == AID
+    assert [descriptor_id(fn) for fn, _ in I.Circuit("r", ((I.resolve(TID), 3),)).templates] == [TID]
+    own = CompositeDefinition("IntegrationOwnResolve", 1, (), lambda S: ((("x", Array(4, Value(16))),), Array(4, Value(16))),
+                              lambda B, S, x: x)
+    for bad, why in [("NoSuchDefinition_v1", "catalog"), (descriptor_id(bind(own)), "catalog"), (TID + "x", "catalog"), (TID[:-1], "JSONDecodeError"),
+                     (TID.replace("K=64", "K=64,K=64"), "new static"), (TID.replace("K=64", "K=6x"), "no "),
+                     (TID.replace("K=64", "K=65"), "refuses this binding")]:
+        with pytest.raises(ValueError, match=why):
+            I.resolve(bad)
+
+
+def test_the_advice_opens_to_the_root_its_compiler_s_tree_commits():
+    c, data = {"name": "compiler", "digest": "cd" * 64}, bytes(range(70))
+    reg = I.commit_advice(c, data, [bytes([i]) * 192 for i in range(3)])
+    assert [len(r) for r in I.advice_rows(data)] == [32] * 3 and I.advice_rows(data)[-1][6:] == bytes(26)
+    doc = I.advice_opening(data, reg)
+    assert I.opened_advice(c, doc) == (data, reg.root.hex())
+    assert I.opened_advice({**c, "digest": "ce" * 64}, doc)[1] != reg.root.hex()
+    assert I.opened_advice(c, {**doc, "salts": [doc["salts"][1]] + doc["salts"][1:]})[1] != reg.root.hex()
+    assert I.commit_advice(c, data).root != reg.root
+    for bad in [{**doc, "scheme": "x"}, {**doc, "advice": "zz"}, {**doc, "salts": doc["salts"][:2]}, None]:
+        with pytest.raises(ValueError):
+            I.opened_advice(c, bad)
