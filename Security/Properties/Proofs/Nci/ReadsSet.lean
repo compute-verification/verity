@@ -24,7 +24,9 @@ references, resolving before the node.
 At a composite node, what its gates read outside it is what its members' parameter leaves that the callee's `used`
 names resolve to (`compReads`), each member's activation located as its caller's is (`located_child`). One argument's node read reads, outside the
 node, what the members' reads of its parameter leaves resolve to, when its positions are those leaves' `upIdx`
-(`readSet`, through `branch_iff`).
+(`readSet`, through `branch_iff`). Its read succeeding (`nodeReads_comp_ok`, `ArgReadOk`), an argument's read names
+exactly its members' reads of the parameter (`argSet`, `ArgB`) wherever its members' leaves tile it, and the node's
+positions what its gates read outside it wherever its carries' read names the later iterations' (`compSet_of`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -818,5 +820,326 @@ theorem readSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD 
   rw [hg] at hag
   exact branch_iff _ _ B (upIdx node i) hag hcov
     (fun m j a hb h => up_idx c.P sc hnode (hB m j hb) h) hsucc a
+
+/-! ## A composite node's arguments, read as its members read their parameters -/
+
+/-- Argument `i` of `node` is read member by member (`nodeReads`): a batch's mapped argument or a scan's `xs`. -/
+def perMember (node : Flock.Program.Node) (i : Nat) : Bool :=
+  match node.form with
+  | .batch => node.args[i]!.dims.isSome
+  | .scan => decide (1 ≤ i) && decide (i ≤ node.nxs)
+  | _ => false
+
+theorem argPos_eq (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) :
+    argPos c k node i =
+      if (node.form == .scan && i == 0) = true then readPos c k 0 ((c.memo[node.fn]!).used[i]?.getD #[])
+      else if (!perMember node i) = true then readPos c k i ((c.memo[node.fn]!).used[i]?.getD #[])
+      else if ((c.memo[node.fn]!).used[i]?.getD #[]).covers
+          (((c.P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0) = true then
+        readPos c k i #[(0, (c.arg k i).count)]
+      else match Desc.memberRows c node k i ((c.memo[node.fn]!).used[i]?.getD #[]) with
+        | .ok (some ps) => ps.toList.flatMap (downPos c)
+        | _ => (List.range node.members).flatMap fun m =>
+          readPos c k i (Desc.argSpans node i m ((c.memo[node.fn]!).used[i]?.getD #[])) := by
+  unfold argPos perMember
+  cases node.form <;> rfl
+
+/-- `nodeReads`' read of argument `i` of a composite's node `k` succeeds, branch by branch as `argPos` reads it. -/
+def ArgReadOk (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) : Prop :=
+  if (node.form == .scan && i == 0) = true then ReadsOk c k 0 ((c.memo[node.fn]!).used[i]?.getD #[])
+  else if (!perMember node i) = true then ReadsOk c k i ((c.memo[node.fn]!).used[i]?.getD #[])
+  else if ((c.memo[node.fn]!).used[i]?.getD #[]).covers
+      (((c.P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0) = true then
+    ReadsOk c k i #[(0, (c.arg k i).count)]
+  else match Desc.memberRows c node k i ((c.memo[node.fn]!).used[i]?.getD #[]) with
+    | .ok (some ps) => ∀ p ∈ ps.toList, ∃ segs, Desc.down c Flock.Steps.FUEL p = .ok segs
+    | .ok none => ∀ m < node.members,
+      ReadsOk c k i (Desc.argSpans node i m ((c.memo[node.fn]!).used[i]?.getD #[]))
+    | .error _ => False
+
+/-- **A composite's node read succeeding reads each argument as `argPos` does** (`ArgReadOk`), and a scan's carries. -/
+theorem nodeReads_comp_ok (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
+    (hp : (c.P.defs[node.fn]!).prim = false) {rs : Array Seg} (h : Desc.nodeReads c k = .ok rs)
+    (hm : node.members ≠ 0) :
+    (∀ i < node.args.size, ArgReadOk c k node i) ∧
+      ((node.form == .scan && node.n ≥ 2) = true →
+        ∃ segs, Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs) := by
+  unfold Desc.nodeReads at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
+  rw [hn] at hn'
+  injection hn' with e
+  subst e
+  rw [if_neg (by rw [hp]; decide)] at h
+  split at h
+  · rename_i hm'
+    exact absurd (by simpa using hm') hm
+  obtain ⟨r1, h1, h⟩ := Walk.except_bind_ok h
+  refine ⟨fun i hi => forIn_each _ (ArgReadOk c k node) (fun i r y hy => ?_) _ _ _ h1 i
+    (by rw [List.mem_range'_1]; omega), fun hsc => ?_⟩
+  · rw [ArgReadOk]
+    rcases hform : node.form with _ | _ | _ | _ <;> simp only [hform, perMember] at hy ⊢
+    all_goals
+      split at hy
+      · rename_i hs
+        obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        exact ⟨by rw [if_pos hs]; exact readLoop_ok c k 0 _ #[] lift (ok_bind_pure hl), _, hy.symm⟩
+      · rename_i hs
+        split at hy
+        · rename_i hpm
+          obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          exact ⟨by rw [if_neg hs, if_pos hpm]; exact readLoop_ok c k i _ #[] lift (ok_bind_pure hl), _, hy.symm⟩
+        · rename_i hpm
+          split at hy
+          · rename_i hcv
+            obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+            simp only [pure, Except.pure, Except.ok.injEq] at hy
+            exact ⟨by rw [if_neg hs, if_neg hpm, if_pos hcv]; exact readLoop_ok c k i _ #[] lift (ok_bind_pure hl),
+              _, hy.symm⟩
+          · rename_i hcv
+            obtain ⟨mr, hmr, hy⟩ := Walk.except_bind_ok hy
+            rcases mr with _ | ps
+            · have hy := walkAtMost_bind _ _ _ hy
+              obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              refine ⟨?_, _, hy.symm⟩
+              rw [if_neg hs, if_neg hpm, if_neg hcv, hmr]
+              intro m hm
+              refine forIn_each _ (fun m => ReadsOk c k i (Desc.argSpans node i m
+                ((c.memo[node.fn]!).used[i]?.getD #[]))) (fun m r y hy => ?_) _ _ _ hr' m
+                (by rw [List.mem_range'_1]; omega)
+              obtain ⟨lift, hl, hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              exact ⟨readLoop_ok c k i _ #[] lift (ok_bind_pure hl), _, hy.symm⟩
+            · obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              refine ⟨?_, _, hy.symm⟩
+              rw [if_neg hs, if_neg hpm, if_neg hcv, hmr]
+              rw [← Array.forIn_toList] at hr'
+              intro p hp'
+              exact forIn_each _ (fun p => ∃ segs, Desc.down c Flock.Steps.FUEL p = .ok segs) (fun p r y hy => by
+                obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
+                simp only [pure, Except.pure, Except.ok.injEq] at hy
+                exact ⟨⟨segs, hs⟩, _, hy.symm⟩) _ _ _ hr' p hp'
+  · rw [if_pos hsc] at h
+    obtain ⟨cr, hcr, -⟩ := Walk.except_bind_ok h
+    exact ⟨cr, hcr⟩
+
+/-- Member `m`'s leaf `j` of parameter `i`, among those `u` names, as an argument's read reads it (`argPos`): a scan's
+iterations after the first read their carry through `carriesRead`. -/
+def ArgB (node : Flock.Program.Node) (u : Desc.Ivs) (i m j : Nat) : Prop :=
+  m < node.members ∧ (node.form = .scan → i = 0 → m = 0) ∧ Width.inIvs u.toList j
+
+/-- **A composite node's positions name outside it exactly what its gates read there**, where each argument's read
+names its members' reads of the parameter (`ArgB`) and the carries' read the later iterations' reads of their carry. -/
+theorem compSet_of (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) {node : Flock.Program.Node}
+    (hg : (P.defs[sc.d]!).body.nodes[k]! = node) (hp : (P.defs[node.fn]!).prim = false)
+    (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
+    (hU : UsedExact P memo node.fn)
+    (hbig : ∀ i j, Width.inIvs (((memo[node.fn]!).used[i]?.getD #[]).toList) j → i < node.args.size)
+    (hArg : ∀ i < node.args.size, ∀ a, (∃ x ∈ argPos (ctxOf P memo sc.d) k node i, den P sc x = .ok a) ↔
+      ∃ m j, ArgB node ((memo[node.fn]!).used[i]?.getD #[]) i m j ∧
+        Flock.Program.resolve P (P.child sc k m) ⟨true, i, j⟩ = .ok a)
+    (hCarry : ∀ a, ((∃ x ∈ carryPos (ctxOf P memo sc.d) k node, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) ↔
+      ((∃ m, node.form = .scan ∧ 1 ≤ m ∧ m < node.members ∧ ∃ j,
+        Width.inIvs (((memo[node.fn]!).used[0]?.getD #[]).toList) j ∧
+        Flock.Program.resolve P (P.child sc k m) ⟨true, 0, j⟩ = .ok a) ∧ ¬ InNodeAt P sc k a)) (a : Nat) :
+    ((∃ x ∈ nodePos (ctxOf P memo sc.d) node k, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) ↔
+      (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a) := by
+  subst hg
+  rw [compReads P memo hL hk hp hend hloc hU a]
+  have hp' : ((ctxOf P memo sc.d).P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false := hp
+  unfold nodePos
+  simp only [hp', Bool.false_eq_true, ↓reduceIte]
+  by_cases h0 : ((P.defs[sc.d]!).body.nodes[k]!).members = 0
+  · simp only [h0, ↓reduceIte, List.not_mem_nil, false_and, exists_false, Nat.not_lt_zero]
+  simp only [h0, ↓reduceIte]
+  constructor
+  · rintro ⟨⟨x, hx, hxa⟩, hout⟩
+    refine ⟨?_, hout⟩
+    rcases List.mem_append.1 hx with hx | hx
+    · obtain ⟨i, hi, hx⟩ := List.mem_flatMap.1 hx
+      rw [List.mem_range] at hi
+      obtain ⟨m, j, ⟨hm, -, hj⟩, hr⟩ := (hArg i hi a).1 ⟨x, hx, hxa⟩
+      exact ⟨m, hm, i, j, hj, hr⟩
+    · obtain ⟨⟨m, -, -, hm, j, hj, hr⟩, -⟩ := (hCarry a).1 ⟨⟨x, hx, hxa⟩, hout⟩
+      exact ⟨m, hm, 0, j, hj, hr⟩
+  · rintro ⟨⟨m, hm, i, j, hj, hr⟩, hout⟩
+    refine ⟨?_, hout⟩
+    have hi := hbig i j hj
+    by_cases hc : ((P.defs[sc.d]!).body.nodes[k]!).form = .scan ∧ i = 0 ∧ 1 ≤ m
+    · obtain ⟨hs, rfl, h1⟩ := hc
+      obtain ⟨⟨x, hx, hxa⟩, -⟩ := (hCarry a).2 ⟨⟨m, hs, h1, hm, j, hj, hr⟩, hout⟩
+      exact ⟨x, List.mem_append_right _ hx, hxa⟩
+    · obtain ⟨x, hx, hxa⟩ := (hArg i hi a).2
+        ⟨m, j, ⟨hm, fun hs hi0 => Nat.eq_zero_of_not_pos fun h => hc ⟨hs, hi0, h⟩, hj⟩, hr⟩
+      exact ⟨x, List.mem_append_left _ (List.mem_flatMap.2 ⟨i, List.mem_range.2 hi, hx⟩), hxa⟩
+
+/-- Spans whose indices are below `n` end at or before it. -/
+theorem spans_le {spans : Array (Nat × Nat)} {n : Nat} (h : ∀ t ∈ spansPos spans, t < n) :
+    ∀ x ∈ spans.toList, x.1 < x.2 → x.2 ≤ n := by
+  intro x hx hlt
+  have := h (x.2 - 1) ((mem_spansPos spans _).2 ⟨x, hx, by omega, by omega⟩)
+  omega
+
+/-- Where an argument is read as the parameter (a scan's initial carry, or an argument not mapped over the members),
+member `m`'s leaf `j` reads its reference `j`. -/
+theorem upIdx_shared (node : Flock.Program.Node) (i m j : Nat)
+    (h : (node.form == .scan && i == 0) = true ∨ (!perMember node i) = true) :
+    upIdx node i m j = j := by
+  unfold upIdx
+  unfold perMember at h
+  cases hf : node.form with
+  | prim => rfl
+  | call => rfl
+  | batch =>
+    simp only [hf] at h
+    rcases hd : (node.args[i]!).dims with _ | ⟨d, L⟩
+    · simp [Resolve.memberIdx, hd]
+    · simp [hd] at h
+      exact absurd h.1 (by decide)
+  | scan =>
+    simp only [hf] at h
+    dsimp only
+    split
+    · rename_i hc
+      rcases h with h | h <;> simp at h <;> omega
+    · rfl
+
+/-- Member `m`'s spans of a mapped argument (`Desc.argSpans`) are its used leaves' indices `upIdx`. -/
+theorem spansPos_argSpans (node : Flock.Program.Node) (i m : Nat) (u : Desc.Ivs) {lv : Nat}
+    (hpm : perMember node i = true)
+    (hu : ∀ j, Width.inIvs u.toList j → j < lv)
+    (hL0 : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → lv = 0) :
+    spansPos (Desc.argSpans node i m u) = (spansPos u).map (upIdx node i m) := by
+  unfold perMember at hpm
+  cases hf : node.form with
+  | prim => simp [hf] at hpm
+  | call => simp [hf] at hpm
+  | batch =>
+    rw [argSpans_batch node i m u hf (fun d L hd h0 p hp => ?_)]
+    · unfold upIdx; rw [hf]
+    · have := hL0 d L hd h0
+      by_contra hlt
+      have := hu p.1 ⟨p, hp, Nat.le_refl _, by omega⟩
+      omega
+  | scan =>
+    simp only [hf, Bool.and_eq_true, decide_eq_true_eq] at hpm
+    rw [argSpans_xs node i m u hf hpm]
+    unfold upIdx; rw [hf]
+    simp [show i ≠ 0 by omega, hpm.2]
+
+/-- **One argument's read names exactly what its members' reads of the parameter resolve to** (`ArgB`), where its
+members' leaves tile it (`upIdx`, in range wherever used), its reads succeed (`ArgReadOk`), and so do its members'
+reads (`hsucc`); all members at once (`Desc.memberRows`) as `hrows` says. -/
+theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
+    {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
+    (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
+    (hm0 : node.members ≠ 0) (hok : ArgReadOk c k node i) {lv : Nat}
+    (hlv : ((c.P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0 = lv)
+    (hu : ∀ j, Width.inIvs (((c.memo[node.fn]!).used[i]?.getD #[]).toList) j → j < lv)
+    (hL0 : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → lv = 0)
+    (hlo : ∀ m < node.members, ∀ j < lv, (node.form = .scan → i = 0 → m = 0) →
+      upIdx node i m j < (node.args[i]!).seq.count)
+    (htile : ∀ t < (node.args[i]!).seq.count, ∃ m < node.members, ∃ j < lv, upIdx node i m j = t)
+    (hsucc : ∀ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j →
+      ∃ a, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a)
+    (hrows : ∀ ps, Desc.memberRows c node k i ((c.memo[node.fn]!).used[i]?.getD #[]) = .ok (some ps) →
+      (∀ p ∈ ps.toList, ∃ segs, Desc.down c Flock.Steps.FUEL p = .ok segs) → ∀ a,
+      (∃ x ∈ ps.toList.flatMap (downPos c), den c.P sc x = .ok a) ↔
+        ∃ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j ∧
+          Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a)
+    (a : Nat) :
+    (∃ x ∈ argPos c k node i, den c.P sc x = .ok a) ↔
+      ∃ m j, ArgB node ((c.memo[node.fn]!).used[i]?.getD #[]) i m j ∧
+        Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a := by
+  set u := (c.memo[node.fn]!).used[i]?.getD #[] with hudef
+  have hm0' : 0 < node.members := Nat.pos_of_ne_zero hm0
+  have hB : ∀ m j, ArgB node u i m j → node.form = .scan → i = 0 → m = 0 := fun m j h => h.2.1
+  -- a read of `u` as the parameter itself
+  have shared : (node.form == .scan && i == 0) = true ∨ (!perMember node i) = true → ReadsOk c k i u →
+      ((∃ x ∈ readPos c k i u, den c.P sc x = .ok a) ↔
+        ∃ m j, ArgB node u i m j ∧ Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a) := by
+    intro hsh hok'
+    have hup := fun m j => upIdx_shared node i m j hsh
+    refine readSet c sc hd hD hn hA hR (spans_le fun t ht => ?_) hok' _ (fun t => ?_) hB hsucc a
+    · have := hlo 0 hm0' t (hu t ((mem_spansPos u t).1 ht)) (fun _ _ => rfl)
+      rwa [hup] at this
+    · rw [mem_spansPos]
+      constructor
+      · intro ht; exact ⟨0, t, ⟨hm0', fun _ _ => rfl, ht⟩, (hup 0 t).symm⟩
+      · rintro ⟨m, j, ⟨-, -, hj⟩, rfl⟩; rwa [hup]
+  rw [argPos_eq]
+  unfold ArgReadOk at hok
+  rw [← hudef] at hok ⊢
+  by_cases h1 : (node.form == .scan && i == 0) = true
+  · rw [if_pos h1] at hok ⊢
+    have hi0 : i = 0 := by simp only [Bool.and_eq_true, beq_iff_eq] at h1; exact h1.2
+    subst hi0
+    exact shared (.inl h1) hok
+  rw [if_neg h1] at hok ⊢
+  by_cases h2 : (!perMember node i) = true
+  · rw [if_pos h2] at hok ⊢
+    exact shared (.inr h2) hok
+  rw [if_neg h2] at hok ⊢
+  have hpm : perMember node i = true := by simpa using h2
+  have hnc : node.form = .scan → i ≠ 0 := by
+    intro hs h0; subst h0; unfold perMember at hpm; rw [hs] at hpm; simp at hpm
+  have hcnt := argCount_eq hA
+  rw [node_get hn] at hcnt
+  by_cases h3 : u.covers (((c.P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0) = true
+  · rw [if_pos h3] at hok ⊢
+    rw [hlv] at h3
+    refine readSet c sc hd hD hn hA hR (fun x hx _ => ?_) hok _ (fun t => ?_) hB hsucc a
+    · simp only [List.mem_singleton] at hx
+      rw [hx, hcnt]
+    · rw [mem_spansPos]
+      constructor
+      · rintro ⟨x, hx, h1, h2⟩
+        simp only [List.mem_singleton] at hx
+        subst hx
+        rw [hcnt] at h2
+        obtain ⟨m, hm, j, hj, rfl⟩ := htile t h2
+        exact ⟨m, j, ⟨hm, fun hs hi => absurd hi (hnc hs), covers_mem u lv h3 j hj⟩, rfl⟩
+      · rintro ⟨m, j, ⟨hm, hs, hj⟩, rfl⟩
+        refine ⟨(0, (c.arg k i).count), by simp, Nat.zero_le _, ?_⟩
+        rw [hcnt]
+        exact hlo m hm j (hu j hj) hs
+  rw [if_neg h3] at hok ⊢
+  split at hok
+  · rename_i ps hps
+    rw [hps]
+    exact hrows ps hps hok a
+  · rename_i hps
+    rw [hps]
+    simp only [List.mem_flatMap, List.mem_range]
+    have hsp : ∀ m < node.members, ∀ t ∈ spansPos (Desc.argSpans node i m u), t < (node.args[i]!).seq.count := by
+      intro m hm t ht
+      rw [spansPos_argSpans node i m u hpm hu hL0] at ht
+      obtain ⟨j, hj, rfl⟩ := List.mem_map.1 ht
+      exact hlo m hm j (hu j ((mem_spansPos u j).1 hj)) (fun hs hi => absurd hi (hnc hs))
+    have hcov : ∀ m < node.members, ∀ t, t ∈ spansPos (Desc.argSpans node i m u) ↔
+        ∃ m' j, (m' = m ∧ ArgB node u i m' j) ∧ t = upIdx node i m' j := by
+      intro m hm t
+      rw [spansPos_argSpans node i m u hpm hu hL0, List.mem_map]
+      constructor
+      · rintro ⟨j, hj, rfl⟩
+        exact ⟨m, j, ⟨rfl, hm, fun hs hi => absurd hi (hnc hs), (mem_spansPos u j).1 hj⟩, rfl⟩
+      · rintro ⟨m', j, ⟨rfl, -, -, hj⟩, rfl⟩
+        exact ⟨j, (mem_spansPos u j).2 hj, rfl⟩
+    have key := fun m (hm : m < node.members) => readSet c sc hd hD hn hA hR (spans_le (hsp m hm)) (hok m hm)
+      (fun m' j => m' = m ∧ ArgB node u i m' j) (hcov m hm) (fun m' j h => h.2.2.1)
+      (fun m' j h => hsucc m' j h.2) a
+    constructor
+    · rintro ⟨x, ⟨m, hm, hx⟩, hxa⟩
+      obtain ⟨m', j, ⟨rfl, hB'⟩, hr⟩ := (key m hm).1 ⟨x, hx, hxa⟩
+      exact ⟨m', j, hB', hr⟩
+    · rintro ⟨m, j, hB', hr⟩
+      obtain ⟨x, hx, hxa⟩ := (key m hB'.1).2 ⟨m, j, ⟨rfl, hB'⟩, hr⟩
+      exact ⟨x, ⟨m, hB'.1, hx⟩, hxa⟩
+  · exact absurd hok id
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
