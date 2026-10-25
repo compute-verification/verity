@@ -83,7 +83,7 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`Resolve.BodyOk`), its callees' summaries (`RetOk`), the decoder's facts its private `composite` sets (`Decoded`,
   `ScanOut`) and `OpenSteps` do (`specs_decoded`);
 * so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
-  `memoOf_retOk`), a reached composite's callees reached, decoded before it and not the root, wherever besides those
+  `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), wherever besides those
   the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`, open), and a
   composite's return is the sequence of its parts and a primitive's none (`RetParts`, open).
 
@@ -6750,7 +6750,8 @@ theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
 `Desc.summarize` lays the segments `down` gives its return's pieces end to end (`forIn_trace2`), so a summary holds
 `RetOk` wherever those segments name their `len` positions, at or past 0 and none a node's (`DownShape`), keep the gates
 they read (`specs_decoded`) and the return is the sequence of its parts (`RetParts`) (`summarize_retOk`); and so every
-summary `memoOf` makes of a reached Definition other than the root does, callees first (`memoOf_retOk`). -/
+summary `memoOf` makes of a reached Definition other than the root does, callees first (`reached_closed`,
+`memoOf_retOk`). -/
 
 /-- A loop appending what `F` gives each element: the outputs, element by element, after the start. -/
 theorem forIn_trace {β : Type} (F : β → Except String (Array Seg)) :
@@ -6997,14 +6998,139 @@ theorem retOk_push {P : Prog} {r : Array Desc.Summary} {f : Nat} (hf : f < r.siz
   unfold RetOk at h ⊢
   rwa [getElem!_pos (r.push v) f (by simp; omega), Array.getElem_push_lt hf, ← getElem!_pos r f hf]
 
-/-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever a reached
-composite's callees are reached, decoded before it and not the root, and the reached Definitions' references
+theorem set!_size (a : Array Bool) (i : Nat) (v : Bool) : (a.set! i v).size = a.size := by
+  rw [Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
+
+theorem set!_get (a : Array Bool) (i x : Nat) :
+    (a.set! i true)[x]! = true ↔ (x = i ∧ i < a.size) ∨ a[x]! = true := by
+  rw [Array.set!_eq_setIfInBounds]
+  by_cases hx : x < a.size
+  · rw [getElem!_pos _ x (by rw [Array.size_setIfInBounds]; exact hx), Array.getElem_setIfInBounds hx,
+      getElem!_pos a x hx]
+    split
+    · rename_i e; subst e; simp [hx]
+    · rename_i e; simp [Ne.symm e]
+  · rw [getElem!_neg _ x (by rw [Array.size_setIfInBounds]; exact hx), getElem!_neg a x hx]
+    constructor
+    · intro h; cases h
+    · rintro (⟨rfl, h⟩ | h)
+      · exact absurd h hx
+      · cases h
+
+/-- Marking the callees of `ns`: each one marked, nothing else newly. -/
+theorem marks_spec : ∀ (ns : List Flock.Program.Node) (b : Array Bool),
+    (ns.foldl (fun r n => r.set! n.fn true) b).size = b.size ∧
+    (∀ x, (ns.foldl (fun r n => r.set! n.fn true) b)[x]! = true ↔
+      (∃ n ∈ ns, n.fn = x ∧ x < b.size) ∨ b[x]! = true)
+  | [], b => ⟨rfl, fun x => by simp⟩
+  | n :: ns, b => by
+    obtain ⟨h1, h2⟩ := marks_spec ns (b.set! n.fn true)
+    rw [set!_size] at h1
+    refine ⟨by rw [List.foldl_cons]; exact h1, fun x => ?_⟩
+    rw [List.foldl_cons, h2, set!_get, set!_size]
+    constructor
+    · rintro (⟨m, hm, rfl, hx⟩ | ⟨rfl, hx⟩ | hx)
+      · exact .inl ⟨m, List.mem_cons_of_mem _ hm, rfl, hx⟩
+      · exact .inl ⟨n, List.mem_cons_self, rfl, hx⟩
+      · exact .inr hx
+    · rintro (⟨m, hm, rfl, hx⟩ | hx)
+      · rcases List.mem_cons.1 hm with rfl | hm
+        · exact .inr (.inl ⟨rfl, hx⟩)
+        · exact .inl ⟨m, hm, rfl, hx⟩
+      · exact .inr (.inr hx)
+
+theorem forIn_id_yield {α β : Type} (l : List α) (b : β) (g : α → β → β) (f : α → β → Id (ForInStep β))
+    (hf : ∀ a b, f a b = pure (.yield (g a b))) : forIn l b f = pure (l.foldl (fun b a => g a b) b) := by
+  induction l generalizing b with
+  | nil => rfl
+  | cons a l ih => rw [List.forIn_cons, hf, List.foldl_cons]; exact ih (g a b)
+
+/-- **`Desc.reached` is closed under calls**: a composite it marks has its callees marked, its Definitions' callees
+decoded before them. -/
+theorem reached_closed (P : Prog)
+    (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
+    (d : Nat) (hd : (Desc.reached P)[d]! = true) (hp : (P.defs[d]!).prim = false) :
+    ∀ k < (P.defs[d]!).body.nodes.size, (Desc.reached P)[((P.defs[d]!).body.nodes[k]!).fn]! = true := by
+  let N := P.defs.size
+  let G : Nat → Array Bool → Array Bool := fun i s =>
+    if (!s[N - 1 - i]!) = true then s
+    else if (P.defs[N - 1 - i]!).prim = true then s
+    else (P.defs[N - 1 - i]!).body.nodes.foldl (fun b a => b.set! a.fn true) s
+  let Inv : Nat → Array Bool → Prop := fun s b => b.size = N ∧ ∀ d', N - s ≤ d' → d' < N → b[d']! = true →
+    (P.defs[d']!).prim = false → ∀ k < (P.defs[d']!).body.nodes.size, b[((P.defs[d']!).body.nodes[k]!).fn]! = true
+  have step : ∀ s b, s < N → Inv s b → Inv (s + 1) (G s b) := by
+    intro s b hs ⟨hsz, hI⟩
+    have hd0 : N - (s + 1) = N - 1 - s := by omega
+    by_cases hA : (!b[N - 1 - s]!) = true
+    · have e : G s b = b := ite_eq_left hA
+      rw [e]
+      refine ⟨hsz, fun d' h1 h2 h3 h4 k hk => ?_⟩
+      rcases Nat.eq_or_lt_of_le (hd0 ▸ h1) with e' | e'
+      · subst e'; simp [h3] at hA
+      · exact hI d' (by omega) h2 h3 h4 k hk
+    by_cases hB : (P.defs[N - 1 - s]!).prim = true
+    · have e : G s b = b := by simp only [G]; rw [ite_eq_right hA, ite_eq_left hB]
+      rw [e]
+      refine ⟨hsz, fun d' h1 h2 h3 h4 k hk => ?_⟩
+      rcases Nat.eq_or_lt_of_le (hd0 ▸ h1) with e' | e'
+      · subst e'; rw [hB] at h4; cases h4
+      · exact hI d' (by omega) h2 h3 h4 k hk
+    have e : G s b = (P.defs[N - 1 - s]!).body.nodes.foldl (fun b a => b.set! a.fn true) b := by
+      simp only [G]; rw [ite_eq_right hA, ite_eq_right hB]
+    rw [e, ← Array.foldl_toList]
+    obtain ⟨m1, m2⟩ := marks_spec (P.defs[N - 1 - s]!).body.nodes.toList b
+    have hlt : ∀ n ∈ (P.defs[N - 1 - s]!).body.nodes.toList, n.fn < N - 1 - s := by
+      intro n hn
+      obtain ⟨k, hk, rfl⟩ := List.mem_iff_getElem.1 hn
+      have hk' : k < (P.defs[N - 1 - s]!).body.nodes.size := by simpa using hk
+      have := hcf (N - 1 - s) (by omega) k hk'
+      rwa [getElem!_pos _ k hk', ← Array.getElem_toList] at this
+    refine ⟨by rw [m1, hsz], fun d' h1 h2 h3 h4 k hk => ?_⟩
+    rcases Nat.eq_or_lt_of_le (hd0 ▸ h1) with e' | e'
+    · subst e'
+      refine (m2 _).2 (.inl ⟨_, ?_, rfl, ?_⟩)
+      · rw [getElem!_pos _ k hk, ← Array.getElem_toList]; exact List.getElem_mem _
+      · have := hcf _ (by omega) k hk; omega
+    · rcases (m2 d').1 h3 with ⟨n, hn, e2, -⟩ | h3
+      · have := hlt n hn; omega
+      · exact (m2 _).2 (.inr (hI d' (by omega) h2 h3 h4 k hk))
+  have run : ∀ n s b, s + n ≤ N → Inv s b → Inv (s + n) ((List.range' s n).foldl (fun b i => G i b) b) := by
+    intro n
+    induction n with
+    | zero => intro s b _ h; simpa using h
+    | succ n ih =>
+      intro s b hn h
+      rw [List.range'_succ, List.foldl_cons]
+      have := ih (s + 1) (G s b) (by omega) (step s b (by omega) h)
+      rwa [Nat.add_assoc, Nat.add_comm 1 n] at this
+  have hfin : Inv N (Desc.reached P) := by
+    have h0 : Inv 0 ((Array.replicate N false).set! P.root true) :=
+      ⟨by rw [set!_size, Array.size_replicate], fun d' h1 h2 => absurd h2 (by omega)⟩
+    have := run N 0 _ (by omega) h0
+    rw [Nat.zero_add] at this
+    unfold Desc.reached
+    dsimp only
+    rw [Std.Legacy.Range.forIn_eq_forIn_range']
+    rw [forIn_id_yield _ _ G _ (fun a b => ?_)]
+    · simpa using this
+    · dsimp only [G]
+      split
+      · rfl
+      · split
+        · rfl
+        · rw [Array.forIn_pure_yield_eq_foldl]; rfl
+  have hdN : d < N := by
+    by_contra hge
+    rw [getElem!_neg _ d (by rw [hfin.1]; exact hge)] at hd
+    cases hd
+  exact hfin.2 d (by omega) hdN hd hp
+
+/-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever every
+Definition's callees are decoded before it and none is the root, and the reached Definitions' references
 (`Resolve.BodyOk`), the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) and, given their callees' summaries,
 `down`'s open steps (`OpenSteps`) and its segments' shape (`DownShape`) hold. -/
 theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P)
-    (hcl : ∀ d : Nat, (Desc.reached P)[d]! = true → (P.defs[d]!).prim = false →
-      ∀ k < (P.defs[d]!).body.nodes.size, (Desc.reached P)[((P.defs[d]!).body.nodes[k]!).fn]! = true)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
     (hnr : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
     (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
@@ -7045,7 +7171,7 @@ theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok 
       change k < (P.defs[f]!).body.nodes.size at hk
       change (P.defs[f]!).body.nodes[k]! = node at hg
       rw [← hg]
-      exact hI _ (hcf f htP k hk) (hcl f hrf hp k hk) (hnr f htP k hk)
+      exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP k hk)
     refine summarize_retOk P r f v htP hRP (hB f htP hrf) (fun hp => hS r f (hR hp))
       (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) sc hsc
         (hO r f (hR hp) sc hsc) Flock.Steps.FUEL).1) hv (r.push v) ?_
