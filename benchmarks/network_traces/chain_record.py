@@ -135,7 +135,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     if records is None or out["clocks_file"] is None or not kept.is_file() or not kept_clocks.is_file():
         return out | {"verdict": "refused", "why": f"{client}: the client kept no certificates.jsonl or clocks.jsonl, "
                                                    f"or {run} holds no certified.jsonl or clocks.jsonl"}
-    held = client_certificates(dep, kept, kept_clocks)
+    held = client_certificates(dep, windows, kept, kept_clocks)
     certified, refused = cs.read_certified(records)
     clocks = cs.read_clocks(clocks_file)
     public = lambda c: json.dumps(cs.certificate_json(c), sort_keys=True)
@@ -168,7 +168,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     return out | {"verdict": "accepted" if ok else "refused", "why": why}
 
 
-def client_certificates(dep: dict, kept: Path, kept_clocks: Path) -> dict:
+def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) -> dict:
     """The client's kept files (`certifier_serve.keep_certificates`: each certificate's public part with its session,
     no head, sync or salt) held again to the deployment's key and session, window by window, by the client's own
     `check_certificates` on the answer they make up."""
@@ -179,7 +179,7 @@ def client_certificates(dep: dict, kept: Path, kept_clocks: Path) -> dict:
     strip = lambda d: {k: v for k, v in d.items() if k != "session"}
     sessions = {d["session"] for d in certs + clocks if "session" in d}
     refused, seen, by_window, kept_clock = [], {}, {}, []
-    for w in range(dep["windows"]):
+    for w in range(windows):
         answer = {"window": w, "session": dep["session"],
                   "certificates": [strip(d) for d in certs if "unsigned" not in d and d["window"] == w],
                   "clocks": [strip(d) for d in clocks if d["window"] == w],
@@ -337,7 +337,7 @@ def merged_n2(paths: list[str] | None) -> dict | None:
     """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's draw on its own
     challenger session, every one of the same population and K): one summary, its members and sampled draws their
     union, ``ok`` only when every run's is, and each run's challenger session kept."""
-    docs = [d for d in map(_json, paths or []) if d]
+    docs = [d for d in map(_json, [paths] if isinstance(paths, str) else paths or []) if d]
     if len(docs) < 2:
         return docs[0] if docs else None
     draws = {json.dumps({k: (d.get("draw") or {}).get(k) for k in ("law", "k", "population")}) for d in docs}
