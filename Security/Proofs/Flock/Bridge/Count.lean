@@ -45,23 +45,8 @@ drawn at rate `0`, contributes `1`. -/
 theorem pa_partOf_window (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ) :
     (designOf kd).Pa (partOf P) B =
       ((n - (Claims.Sampling.window 0 n B).card).choose kd : ℝ) / (n.choose kd : ℝ) := by
-  first
-  | (simp [Claims.Sampling.Design.Pa, designOf, partOf, Claims.Sampling.classesPa, Claims.Sampling.Rule.Pa,
-      Claims.Sampling.OneStage.Pa, Claims.Sampling.strataSizes]; done)
-  | (have e : (designOf kd).Pa (partOf P) B =
-        (⟨.subset kd, none⟩ : Claims.Sampling.Rule).Pa
-            (Claims.Sampling.strataSizes [(List.finRange n).map fun u => [unitGates P u]])
-            (Claims.Sampling.ruSizes [(List.finRange n).map fun u => [unitGates P u]])
-            (Claims.Sampling.window 0
-              ([(List.finRange n).map fun u => [unitGates P u]] : List (List Claims.Sampling.RU)).flatten.length B) *
-          ((⟨.bernoulli 0 1, none⟩ : Claims.Sampling.Rule).Pa (Claims.Sampling.strataSizes (inputClassOf C))
-              (Claims.Sampling.ruSizes (inputClassOf C))
-              (Claims.Sampling.window
-                (0 + ([(List.finRange n).map fun u => [unitGates P u]] :
-                  List (List Claims.Sampling.RU)).flatten.length)
-                (inputClassOf C).flatten.length B) * 1) := rfl
-     rw [e]
-     simp [Claims.Sampling.Rule.Pa, Claims.Sampling.OneStage.Pa, Claims.Sampling.strataSizes])
+  simp [Claims.Sampling.Design.Pa, designOf, partOf, Claims.Sampling.classesPa, Claims.Sampling.Rule.Pa,
+    Claims.Sampling.OneStage.Pa, Claims.Sampling.strataSizes]
 
 theorem pa_partOf (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf kd).Pa (partOf P) B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
