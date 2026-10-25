@@ -311,8 +311,6 @@
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "doc-round", "symbol": "observe_r17", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "doc-round", "symbol": "r17_samples", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "doc-round", "symbol": "r17_spans", "detail": "R1N"},
-    {"file": "verity_vllm/pipeline/timeline.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/pipeline/timeline.py", "kind": "doc-round", "symbol": "last_attempt", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/pipeline/workload.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/model.py", "kind": "doc-round", "symbol": "dense_layer_weights_type", "detail": "R1N"},
