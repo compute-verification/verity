@@ -6,7 +6,11 @@
 # idle), `verity-vllm advice` per closed window under a registered cap (--cap), then each window's request Programs and
 # manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
-# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`.
+# endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB (default 60) free.
+# VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
+# varied requests (network-accounting's traffic, `tools/serve_load.py --varied`), each numbered under a fresh release run and
+# sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
+# admission order (VLLM-98), else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
 #     gpu-lease 1 --wait --mem-gb 64 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
@@ -124,6 +128,11 @@ EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "ADMIT SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 12; }
 fi
 
+if [ "$ADMIT" = release-order ] && "$PY" -c "import pytest" 2>/dev/null; then   # the pinned vLLM's own sort_batch_req_ids
+  "$PY" -m pytest -q -p no:cacheprovider tests/pipeline/test_serve_admit.py -k "pinned or refused or keeps or verifying or one_token" \
+    > "$OUT/admit_rows_tests.txt" 2>&1; echo "admit-rows tests rc=$?" | tee -a "$OUT/steps.txt"
+fi
+
 if [ "$MAX_MODEL_LEN" -gt 512 ]; then  # one request filling the context: MAX_MODEL_LEN - 64 prompt ids, then all 64 new ones, its window sealed
   "$PY" - "$PORT" "$REPO" "$D" "$MAX_MODEL_LEN" <<'EOF2' 2>&1 | tee "$OUT/long_smoke.txt"
 import json, sys, time, urllib.request
@@ -226,12 +235,29 @@ print(json.dumps({"window": int(k), "committer": json.loads((w / "commit" / "run
                                                        if not store.has(first[0], first[1] + 1, *reads["gemm_out"]) else "bound"}}))
 EOF
 done
+
+if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the warden releases it
+  for i in $(seq 1 "${VARIED_RUNS:-3}"); do
+    run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)")
+    "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
+      --release "$run" --jitter-ms "${VARIED_JITTER_MS:-400}" --seed "$i" --out "$D/varied_$i.jsonl" > "$OUT/varied_$i.log" 2>&1
+    echo "$(date -u +%H:%M:%SZ) varied run $i ($run) rc=$?" | tee -a "$OUT/steps.txt"
+  done
+  sleep 10
+  "$PY" tools/admit_rows_check.py "$D" --json "$OUT/admit_rows.json" 2>&1 | tee "$OUT/admit_rows.txt"
+  [ "${PIPESTATUS[0]}" = 0 ] || { echo "ADMIT ROWS FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 14; }
+fi
 echo "READY $D" | tee -a "$OUT/steps.txt"
 
 end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((end + 86400))   # UNTIL past midnight
-while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
+floor=$((${DISK_FLOOR_GB:-60} * 1048576))
+while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do
+  [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ] && { echo "$(date -u +%H:%M:%SZ) DISK FLOOR: under ${DISK_FLOOR_GB:-60} GB free on $ROOT" | tee -a "$OUT/steps.txt"; break; }
+  sleep 30
+done
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
 wait "$ADV"
 cp "$D/summary.json" "$D/windows.jsonl" "$D/requests.jsonl" "$OUT/" 2>/dev/null
+"$PY" tools/admit_rows_check.py "$D" --json "$OUT/admit_rows_final.json" > "$OUT/admit_rows_final.txt" 2>&1; tail -1 "$OUT/admit_rows_final.txt"
 tail -3 "$OUT/serve.log"
 exit $rc
