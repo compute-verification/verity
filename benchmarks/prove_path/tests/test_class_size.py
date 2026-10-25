@@ -7,7 +7,8 @@
   its keys reach it through one gather a full block, shared, and its first block's own where that block is neither one key
   nor full;
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
-  cells.
+  cells;
+* with no ``--class``, ``prove_path.py`` takes the class of record.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from pathlib import Path
 import pytest
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
-from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
+from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import class_size as CZ  # noqa: E402
@@ -65,3 +66,12 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
     assert CZ.measured("AttnBlockFirst_v1{D=64,NVIS=17,BN=128}")[:2] == (1_231_456, 24)
     with pytest.raises(ValueError, match=r"no measured ANDs or k_log at Llama-3.2-1B for Gemm_v2\{K=4096,N=16\}, Foo_v1\{\}"):
         CZ.size({"Gemm_v2{K=4096,N=16}": 1, "AllGather_v1{WORLD=256,N=16}": 1, "Foo_v1{}": 1})
+
+
+def test_window_circuit_and_class_size_default_to_the_class_of_record():
+    """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the certifier run of record's
+    envelope (4 slots, 1,024 prompt ids, 64 outputs); a given class is read as SLOTS,PROMPT,OUTPUTS."""
+    import prove_path as PP
+
+    assert PP.window_class_of(None) == CLASS_OF_RECORD == WindowClass(4, 1024, 64)
+    assert PP.window_class_of("1,2,2") == PROBE

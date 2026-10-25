@@ -1,8 +1,9 @@
 """The padded size of a window class's circuit (V3b), at a class too large to lower: its units, ANDs and m.
 
-`window_circuit.class_circuit` lowers the class Program once a request. At 2a's class (4 slots, 2,048 prompt ids, 64 outputs:
-2,111 positions a Program) a head reaches 2,111 keys, past the `window_circuit.KEYS` one gather reads until
-`AttentionHead_v19` (#4263) binds, and a Program is some 94M units. So the size is a projection (`project`) from an exact
+`window_circuit.class_circuit` lowers the class Program once a request. At the class of record
+(`window_circuit.CLASS_OF_RECORD`: 4 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a head reaches
+1,087 keys, past the `window_circuit.KEYS` one gather reads until `AttentionHead_v19` (#4263) binds, and a Program is
+some 46M units. So the size is a projection (`project`) from an exact
 lowering of one Program of the same registration at a small probe class:
 
 * every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
@@ -16,7 +17,8 @@ lowering of one Program of the same registration at a small probe class:
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
 interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log).
 
-    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE [--class 4,2048,64] [--probe 1,2,2]
+    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE [--class SLOTS,PROMPT,OUTPUTS] \\
+        [--probe 1,2,2]
 """
 from __future__ import annotations
 

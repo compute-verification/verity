@@ -76,9 +76,10 @@ Two kinds of committed run:
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
-  class ``--class``, 2a's by default): its record (or ``--description``, its description) and its input count, which
-  ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each unit's rows as the
-  record's members (V3c).
+  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 4 slots, 1,024 prompt ids and 64
+  outputs, the certifier run of record's envelope): its record (or ``--description``, its description) and its input
+  count, which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
+  unit's rows as the record's members (V3c).
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program, at the window's Program count and at the class's slots.
@@ -1126,6 +1127,13 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     return {"bits": int(c.total_bits(c.decode(data)))}
 
 
+def window_class_of(arg: str | None) -> Any:
+    """``--class`` or ``--probe``'s SLOTS,PROMPT,OUTPUTS as a `window_circuit.WindowClass`, None the class of record."""
+    from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, WindowClass
+
+    return CLASS_OF_RECORD if arg is None else WindowClass(*(int(x) for x in arg.split(",")))
+
+
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `steps.Compiled.circuit` at ``--class``, a
     class Program a request flattened into units, every input row wired, registered or ingress), written to ``--out`` as its
@@ -1134,11 +1142,9 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     the record's input count."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity_vllm.program.predict.window_circuit import WindowClass
-
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     compile_advice(compiler, data)
-    registered, cls = compiler.inner.registered, WindowClass(*(int(x) for x in a.window_class.split(",")))
+    registered, cls = compiler.inner.registered, window_class_of(a.window_class)
     t0 = time.time()
     try:
         circuit = compile_steps(registered, data, compiler.inner.ingress).circuit(registered, cls)
@@ -1160,11 +1166,11 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from dataclasses import asdict
 
     import class_size as CZ
-    from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
+    from verity_vllm.program.predict.window_circuit import class_circuit
 
     compiler = compiler_of_args(a)
     programs = len(compile_advice(compiler, Path(a.advice).read_bytes()))
-    probe, cls = (WindowClass(*(int(x) for x in s.split(","))) for s in (a.probe, a.window_class))
+    probe, cls = window_class_of(a.probe), window_class_of(a.window_class)
     t0 = time.time()
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
     lowered = time.time() - t0
@@ -1296,8 +1302,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
     for name in ("window-circuit", "class-size"):
-        sub.choices[name].add_argument("--class", dest="window_class", default="4,2048,64", help="the window class "
-                                       "SLOTS,PROMPT,OUTPUTS (`window_circuit.WindowClass`; 2a's by default)")
+        sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS "
+                                       "(`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 4,1024,64)")
     for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)

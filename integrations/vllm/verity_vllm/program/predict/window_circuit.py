@@ -86,8 +86,9 @@ class WindowClass:
         return self.prompt + self.outputs - 1
 
 
-#: 2a's class, w63's (note:network-accounting/20261025T0830Z-report-net68-scan-router): 4 slots, 2,048 prompt ids, 64 outputs
-CLASS_2A = WindowClass(4, 2048, 64)
+#: the class of record, the certifier run of record's envelope: at most 4 requests a window, each of at most 1,024
+#: prompt ids and 64 outputs
+CLASS_OF_RECORD = WindowClass(4, 1024, 64)
 
 
 #: the most keys an attention head reads through one `AllGather_v1{T, D}`, until v19's per-key-block cut is wired
@@ -493,4 +494,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, len(units), grain, name)
 
 
-__all__ = ["CLASS_2A", "FAMILIES", "Grain", "NAME", "Row", "WindowClass", "class_circuit", "class_program", "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "WindowClass", "class_circuit", "class_program",
+           "window_circuit"]
