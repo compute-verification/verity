@@ -8,6 +8,8 @@
   "Properties.Proofs.Pouw.Check",
   "Properties.Proofs.Pouw.Commit",
   "Properties.Proofs.Pouw.LiveSalt",
+  "Properties.Proofs.Pouw.LiveSalt.Ledger",
+  "Properties.Proofs.Pouw.LiveSalt.Period",
   "Properties.Pouw.Strata",
   "Properties.Proofs.Pouw.Strata",
   "Properties.Pouw.Credit",
@@ -15,6 +17,7 @@
   "Properties.Nci.Threads",
   "Properties.Proofs.Nci",
   "Properties.Proofs.Nci.DescAgree",
+  "Properties.Proofs.Nci.ReadsExact",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
   "Properties.Nci.Baseline",
@@ -23,6 +26,7 @@
   "Properties.Proofs.Nci.BodiesOk",
   "Properties.Proofs.Nci.OperandsResolve",
   "Properties.Proofs.Nci.Agrees",
+  "Properties.Proofs.Nci.BodiesOk.ReadsDecoded",
   "Properties.NciDesc",
   "Properties.NciDesc.Verdict",
   "Properties.NciDesc.Cover",
@@ -75,8 +79,7 @@
   "Properties.RemoteAudit.Schedule",
   "Properties.Proofs.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.Proofs.RemoteAudit.Live",
-  "Properties.Proofs.Pouw.LiveSalt.Period"
+  "Properties.Proofs.RemoteAudit.Live"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -1394,13 +1397,14 @@
    "assumptions": [],
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c"
   },
-  "Properties.Pouw.LiveSalt.creditDistinct": {
+  "Properties.Pouw.LiveSalt.acceptMeans": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.LiveSalt.creditDistinct : Properties.Pouw.LiveSalt.CreditDistinct PouwCheck.pearlCPeriodCredit"
-   ],
+   "signature": ["Properties.Pouw.LiveSalt.acceptMeans : Properties.Pouw.LiveSalt.AcceptMeans PouwCheck.liveSaltCheck"],
    "assumptions": [],
-   "type_hash": "7f8f459a36a359fa215289be5869f425f97ffd73640352a2253556868a2150bb"
+   "type_hash": "08ffebe48af4af15238fe6dff6acba886d81b463b52ce075c4ac2481e6477319"
+  },
+  "Properties.Pouw.LiveSalt.creditDistinct": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.LiveSalt.epochRootBinding": {
    "owner": "@compute-accounting",
@@ -3007,6 +3011,10 @@
    },
    "Properties.Pouw.LiveSalt.rowSeedBinding": {
     "function": "Properties.Pouw.LiveSalt.rowSeed",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.acceptMeans": {
+    "function": "PouwCheck.liveSaltCheck",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.creditDistinct": {
@@ -5011,7 +5019,7 @@
     "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
@@ -5098,7 +5106,7 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -5281,7 +5289,7 @@
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.Commit.taggedSize",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.epochRootBinding",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.LiveSalt.rowSeedBinding",
@@ -5363,7 +5371,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
@@ -5445,7 +5453,7 @@
     "Flock.nextPow2": "672248e8c4c082f39e900d47584890b871bb09171798a196ac4378253b873524"
    },
    "guarantees": [
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -5697,7 +5705,7 @@
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -5796,7 +5804,7 @@
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b"
    },
    "guarantees": [
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -5913,8 +5921,7 @@
     "Properties.Pouw.Commit.domainRefusals",
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
-    "Properties.Pouw.Commit.frameSizes",
-    "Properties.Pouw.LiveSalt.creditDistinct"
+    "Properties.Pouw.Commit.frameSizes"
    ]
   },
   "Identity.Tagged": {
@@ -5949,8 +5956,7 @@
     "Properties.Pouw.Commit.domainRefusals",
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
-    "Properties.Pouw.Commit.frameSizes",
-    "Properties.Pouw.LiveSalt.creditDistinct"
+    "Properties.Pouw.Commit.frameSizes"
    ]
   },
   "Lms.Sign": {
@@ -6036,7 +6042,7 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot"
    ]
   },
@@ -7183,7 +7189,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "952efb968c6a22c1489742197cb23bfc447564bdcd035027824ed8696114ce2e",
+   "digest": "d3385d5a624ca6c5fef2354062a55d5f857b5e7fe83d0f0b828aefedc5ae9784",
    "definitions": {
     "PouwCheck.Credit.DELTA": "7f25f6dfa4468aa37ff60109df9adcb1b985976a25b622ea09d3a6f339df33e1",
     "PouwCheck.Credit.Internal.credited._sparseCasesOn_11": "c761395d7fd9a1aacee6e78fbf660be44df3eb53ad0fda9be3ebfc71d763aa36",
@@ -7196,18 +7202,10 @@
     "PouwCheck.Credit.MAX_K": "2a9154d7f728f2d801f02430b30f6dcd8f3531e80d5bb2c1da169c8f35f0cea6",
     "PouwCheck.Credit.callWork": "889bdd65ce27e0c21431d2e8a260ea3ca737d3ba579d1dbe921a658c608ee268",
     "PouwCheck.Credit.creditedWork.match_1": "5eb3a80be149e9bc1ea896cb18f11a58e19ef3878b7b30db6a905c7645496159",
-    "PouwCheck.Credit.digest?": "ea819b7766c2e032d006d9105885cecea69a1320e40e6db6bbd4ef0fef769c99",
-    "PouwCheck.Credit.drawnOf.match_5": "f62034d9d0ed6c269c0399292c1a3e9969d1de2cff4f77bf418c74da4c62d40f",
     "PouwCheck.Credit.established": "ed6ee67e59ffdb08881fd749bfdb0164a1894c7fcade7f80252afd9bff53011e",
-    "PouwCheck.Credit.isHexBytes": "78ada4e8b08a13241b90d37b6529760f7e6953b371323e1030106fe6dfaaeaad",
-    "PouwCheck.Credit.isObj": "d45268c8ed8e7deba95f8d76438bdc02904ac1823b3e9d5ab8134f69c9085688",
-    "PouwCheck.Credit.isObj._sparseCasesOn_1": "3fcbaa3143cf3327c8e5ec50176a4c528c35cdbac790149ca94ce78e4573fda8",
     "PouwCheck.Credit.law": "652c16e7758813e0e4dddd45940ed7a9a92daf8ba15c5315d27fe25182f163ab",
-    "PouwCheck.Credit.layoutOf.match_1": "df0861e0855f9f6b0b7e54e1fa19c1658f9f153008b365c253bc16aa70777ca9",
-    "PouwCheck.Credit.layoutOf.match_5": "3d3054cbe04da073e45426a4f5b9a7592a075c7b2b5887810bbc64a65e7a1f19",
     "PouwCheck.Credit.layoutRefuse": "4a415164f4295a282b8f97dcdb41a093d0fcebc94e4d4b2cdcfd5012294eb2c0",
     "PouwCheck.Credit.listStr": "aadf6d2e3aaa03a76c3cb4a42842ec7351c0f4865dea0a48a4ebf8539472c683",
-    "PouwCheck.Credit.period": "5d6efce87b4839ad6c56e8b8e2dc6e0b15b7d3d53551c9a7412c66b3e41e4aae",
     "PouwCheck.Credit.servedWork": "d285aab7ee369f956aa79f6ec075f131d9316a1c024f64c2f05e2ebc261621f7",
     "PouwCheck.Credit.strata": "e2d329d03e95d7da9358ab66cb13176a27836f47336714b9ae853c1fd46f9a87",
     "PouwCheck.Credit.strata._sparseCasesOn_13": "07b66b6c87de5f757f2f0c4a8369b81b9c1a396833b84a70ec80ad4a64355ce6",
@@ -7218,7 +7216,6 @@
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
-    "Properties.Pouw.LiveSalt.creditDistinct",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -7323,8 +7320,7 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
-    "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Properties.Pouw.LiveSalt.creditDistinct"
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "PouwCheck.Json": {
@@ -7350,33 +7346,20 @@
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
-    "Properties.Pouw.LiveSalt.creditDistinct",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
   "PouwCheck.Pass": {
-   "digest": "c189fb6875130a7c40fb873b0bc3a11799db5eb816b5d08af89ed7f4241f6b50",
+   "digest": "05e1c12948de84ce8b1eeedd5b1d39bdbc385ff2c5b7311b82497b49782facf5",
    "definitions": {
     "PouwCheck.CALL_BOUND": "add6af22980a5c0e786199b5344ea8d7e6c0e1cd40f7807e29ac07349bb7469f",
     "PouwCheck.CALL_RANGE": "3417060730df2ddbde847d3ced7f2d0533d59774105a352f161c9b8a4d48d6a6",
-    "PouwCheck.COINS_RECORDED": "412717383a879cc026d94ece276c569becf87c68e667e1e1f824ca0ea04c2137",
-    "PouwCheck.Coins": "3fed9eedc454d24a10b82f7edfe302eb027055ddf80cd88b1488b7937dc7fd58",
-    "PouwCheck.Coins.epoch": "8c5cd6f8be120f9b9e51e2cc5196b329058e76dc5357fb649a478d926e485ac9",
-    "PouwCheck.Coins.keep": "3b291b2d764a92a7c67d4d5bcff9b1228b1964b08d3cf3c61c43e946ea4a0950",
-    "PouwCheck.Coins.root": "8df941021688ed32eb6ce4c50edbb5786e6414382d211af8df3c550bc8e9bb80",
-    "PouwCheck.Coins.same": "757e32b195ef5c4354c269aea3597049df48d8611e9a742ea3a81703b5eec0bc",
-    "PouwCheck.Coins.scheme": "28b519d23b8ced12d0e385beee9d69fc561202d4f37d668505c1a740bbe5272f",
-    "PouwCheck.Coins.weightsTag": "2a7a690d5b9baa99fbdcb0e6580d49f302a603acf0b2402329f36f13cd4ef9a4",
     "PouwCheck.EPOCH_OPEN_TAG": "14b784a0129482b62cb030a295bd0a42e6efb00344d163058944dacee2a50b06",
     "PouwCheck.INCOMPLETE": "f0e3ab6ab9b8b0ccc6b7941be2c622d991c7b9d417d8c14f04db84664de0283a",
-    "PouwCheck.LIVE_FORM": "ee8e21914fd71b391f65c179cf58ebe0536a0ec5e9797d5f8fe71d03b4485bf1",
     "PouwCheck.LIVE_NOT_RECEIVED": "271a36cca7331e6f8d95028ecb6de6b63c8d8addbaddb720397222710e122cf8",
     "PouwCheck.LIVE_NOT_SIGNED": "a9ca91d786fc19aac548821d6bd94bf4cecb3db6d8de0f35764d9d16dd34c37e",
     "PouwCheck.LIVE_SALT": "011ccd5b66143835c139c2b2790ec90bf7d8a0c953bd66353be4ded83ba228d9",
     "PouwCheck.LIVE_SESSION": "180a186a55d5d473ec9d824c0d33e69ebf72104d5a26a5711171caca61fe6343",
-    "PouwCheck.LIVE_UNHELD": "33f3330da96e4d12b744e078ef3aaf63f3d2a01c6359acbd07cb1d35ce1b9d04",
-    "PouwCheck.MANIFEST_CERTIFIED": "9f1f28c97d72c6eeb5dc65f3660760981e516b16f50d4b1f47ee2f325ea4a0d9",
-    "PouwCheck.MANIFEST_RECORDED": "48af50db406aa301180dc97eb44167f715fd7599d87bf7d70181956b529ed279",
     "PouwCheck.MANIFEST_SCHEMA": "671c8efcdb2c85e525df5448783700cd31119eed34ab9be3facff9ab93e44d38",
     "PouwCheck.MATMULS_FORM": "a58e82f292fe68e9dd173208213da25aef0911d54cddea8df4baa924e0042dbe",
     "PouwCheck.Matmul": "8fd5569f16aa8db9fde97aa947bcd0d794cce127b4b95b1446c776cd18a9031a",
@@ -7386,32 +7369,20 @@
     "PouwCheck.Matmul.n": "078f1cf43868c3d4adb2bdd096b0ce5483ce015a5c8efef57ed5826d2b0c1c47",
     "PouwCheck.Matmul.weight": "7de8be3cc3257cd1fcb51e03ae12b36e8d72cc261324999e0f5f85ba57820cd7",
     "PouwCheck.NO_RESERVE": "145fe9b0a256e9d30f614d6ed9b5338b759d4ba11c73a5f083f8450158853369",
-    "PouwCheck.OPENING_FORM": "049d44520389d4f94748540d455885e4a2ba87c2fc4e810ec37e74a0dc9cfdc0",
     "PouwCheck.PASS_FORM": "172a9719db1f352ce40e8228ed9530ce68e3a4e89f4b26a81a3cd5ab0bc6ba00",
-    "PouwCheck.PROVER_BYTES": "0a31e2480f23fae6715a293fc19ed7df12168d3b28bb0831836ffc50a60b5623",
     "PouwCheck.R": "964561e732885ee32ef80c52d4fd2d41dd01dbcedd1b6eab22be1cc326cb10e7",
-    "PouwCheck.RECORD_TAG": "479fb1600fafc4d6605a70535d536e6d3a8d1a4248f82ed702263e8fb6d60c25",
     "PouwCheck.RESERVE_LAYOUT": "ca852329d5699454c20ee5afb7385be6198a3828e4b058136a25b339693e7ad2",
-    "PouwCheck.SALT_BYTES": "1a3dfc3c86ceade94d79806388cfa068fddf11a2ece93c3467a3adbb94b741c0",
-    "PouwCheck.SALT_TAG": "4e1de5a3773ae9d64e0cbd6a525b5832e49bb787e1f5654bafd43dde9efe8aaf",
-    "PouwCheck.STREAM_BYTES": "42ba11ec692fa0592f9aef0f981fb07553998936e954924da437e44a8dae97f4",
     "PouwCheck.U64": "b47f5a0812caa6508e7f01cf70effc7a80c55d0c1eb896fe25c59e0843b8e35c",
     "PouwCheck.WEIGHTS_FORM": "8ae119af1e2fffa3b70c9fbf7505666690d1a3d779773a9afdc6c4127938c097",
-    "PouwCheck.WEIGHTS_ROOT_BYTES": "2c67e3ddbe69502813281ddc0f4c84fec87154a3a843f6f23cbabe109e3328a5",
-    "PouwCheck.WINDOW_SEGMENT": "3fa8c043806c3e7b0ca700c5348849ceae5cb6d93c3917d2253e15c0526ee213",
     "PouwCheck.at?": "f8df7a5d197063b436f48e572d84143ee929fe0e9e79ec82f5c4dd19143e5f96",
     "PouwCheck.carries": "1e035dc1f8801f7e17e819926c3420745c6653c1250b3346cb9f4831d24a36ee",
-    "PouwCheck.certifiedSalt": "09949e1ed575f30c9bf5031a22220f078268a8fd6d058cde9bd4399669001fa8",
+    "PouwCheck.certifiedSalt.match_3": "a6c8ef79da9c971123df3e72ecdb03a7bf0e57bebf0b50c4a6d09dea14a3b29b",
     "PouwCheck.checkWorkload": "637de35a3b5ce10156471b7e130b18902a43c15066e0a362492ca1988674fd26",
     "PouwCheck.coin": "ed5c30e48ee7c5aa3219944cac43062463c958dc1ea2d4bfbaed719029c42515",
-    "PouwCheck.coinPassSalt": "56a99f23ab0a71bbf6bc392e5934e9d242373623f31a725db2407c8f40d10c18",
-    "PouwCheck.coinReasonAt": "588c89036cbad3a27d14ac02906bace899e2d0b96178f32bf4f6393cdc1a38a0",
-    "PouwCheck.coinVersion": "ee300b9f6ab5d5c52316cb1dc0c9e1fed0103e3c069d4c3a3084031e284d6fbd",
-    "PouwCheck.coinVersionAt": "00477ee53abdf332becd05ced320e33ec2449658fc0c59dca76cbac54c145f76",
-    "PouwCheck.coinsOf": "5505638f3c6073c377582b4643c32148379dc0fdde6180bf1952c13e0092637a",
     "PouwCheck.coinsOf._sparseCasesOn_1": "5dc94031832dcb0e0fd3b0041ca4b5cebc8aba792f5337b114463b978cef616c",
+    "PouwCheck.coinsOf.match_4": "7ce3f1fe2ea2e5f93609f6e8267728e853892a43c0e301f3f312f0b1f1b73384",
+    "PouwCheck.coinsOf.match_6": "13d90adfb9caa9fa8b7a06a22418ba226d5e891a9c2701482974a1ae36bfd3a5",
     "PouwCheck.epochOpenRoot": "db03a8e789063ce055c92087e857ce791ae3da99495647b197e493b120d98913",
-    "PouwCheck.epochSalt": "742aef76e3421b62b858cee9434d70f50499786acbaf4422e21558c012fcd697",
     "PouwCheck.hex?": "0e979e99e2b9105c210ca9af5f3c696ed45f8d202f923257713913c2bf81bc6c",
     "PouwCheck.hex?._sparseCasesOn_1": "070488f23d70d37c0ce56a8e9966787bce4a3523c19791e7a4a467642130108e",
     "PouwCheck.isDecimal": "29a67404a5bb9d93aceab746f938229570b0a6652ebbcd3c5a68583d4298b7cb",
@@ -7419,22 +7390,15 @@
     "PouwCheck.jsonTrue": "70f02ab49c9e48563e5605a39132e180f358c88875d8569a8fd38a1388601785",
     "PouwCheck.jsonTrue._sparseCasesOn_1": "ed809c243d70594b88d208891bc2d150ce807a24df599d6d79a3202502c7bb66",
     "PouwCheck.jsonTrue._sparseCasesOn_2": "151a28aa68a9a8824dcad5e9d6f0371881ba8eb2a26bc750057b7c5ff04e15c3",
-    "PouwCheck.livePassSalt": "05f315b323e807a5e8b2e4a09c98cd3e6b98387e50af86bc5c819c5f06169931",
     "PouwCheck.liveSaltCheck": "78ce0f031451a591aab4a4f811241eef9a28cddf8be737259a36fafa18d4639f",
     "PouwCheck.manifest": "1123235e215a8bb9bb5fd409f511ae2be859b3085dfc7bf30b59eb7ed66b2fb3",
-    "PouwCheck.openingOf": "caf2a3a190f45aa47959db34be9ad67f22d639b440f76f3503382c29dca4b47b",
     "PouwCheck.openingOf._sparseCasesOn_3": "8bf3d7cf637faaf30fda9ace477bcf194c3741bbf477d93fd3bdbd1479560d1a",
-    "PouwCheck.passEpoch": "fcaf2e43cd4635d5397b6b76ed6cafcf48e69ef258efbe989db107a34368ff71",
-    "PouwCheck.passEpoch._sparseCasesOn_1": "a74dd6e98d9b0ab402ce7afb23dd067cb1b1552ec283c2ef08aace375ef7e574",
+    "PouwCheck.openingOf.match_3": "0b4bbd59674b4d077e7fc03b3095a24538d9018d6090d5fb44d0783e3b470b6f",
     "PouwCheck.port": "1b3b825d578004431deaf89dc77152589fb03d44f80063793e50e5c01384106b",
-    "PouwCheck.pouwRecord": "39c854bffc526aaf47e26d99816c92f2c3124ba575259538875632b794eab0fe",
-    "PouwCheck.pouwSalt": "d5fbf366a6f09795b7fdda7b5ea4b89a6a784fe9a9bc37564e28506f5d0e6d7f",
     "PouwCheck.saltSession": "8c653edca97f8f414d9ea239c6a722075c7b4c0ff10ab70c58d3382c17fcbbb0",
     "PouwCheck.sameCommitment": "934fd1c75c87ea4ec1e52e5c2365ea57218993a50fe37c3beac9966654d6d33e",
     "PouwCheck.sessionEntries": "090fdd8823588d422ce6f74ca247b6c8c5781ae8a3891a44984d868b04362fa8",
-    "PouwCheck.taggedSha256": "faccddce67ce9b9a9c4ff7a3a81441eb0e18ef6fc10808cfd63789d69fbe11f0",
     "PouwCheck.weightsRootAt": "752dfb33bfc94f786a5549403cab0006e86e989a949b8c764ad8eeefb97cac4e",
-    "PouwCheck.windowOf": "1497370687f7afd442da1e10862e6b0dfb4620606ea35fa95b5a24eaf81de8ba",
     "PouwCheck.workloadOf": "1dff87176f8f41c2a000b98e9238b309d0014ac0af3408397a70901a134be65f",
     "PouwCheck.workloadOf._sparseCasesOn_1": "eefd4ccef0454fbbd77e58e4aa9ff2cd91bc1279023c2ce31aebd0c9792e3cc4"
    },
@@ -7442,43 +7406,10 @@
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Strata.strataTile"
    ]
-  },
-  "PouwCheck.Period": {
-   "digest": "52bdc27baa25820d1f5bd6c548423945695fcd56cd332466c51c3f0ee532bde3",
-   "definitions": {
-    "PouwCheck.Period.CALL_RANGE_CODE": "04542c14d49ac5d5287369045d85951f8515cae1ceb7a73a6d9b2905cf51518d",
-    "PouwCheck.Period.CIRCUIT": "05ebc674f09a4fc19aa4113669ad19f72b64690f3087fba759b8305c073a20c1",
-    "PouwCheck.Period.EARLIER_FORM": "71679007048823a44260eacd548c29f4390625dfc1015c8ed928182f7bf58a81",
-    "PouwCheck.Period.INDEX": "b8bca599eb9940d81aeee1558d8f8882a9deb0afb9945766e17776adb350529b",
-    "PouwCheck.Period.PASS_REFUSED": "d5464ac0e73a15438eeacc7874f889fa5462c98f440f67d6a47fab21b338ef03",
-    "PouwCheck.Period.PEARL_C_FORM": "5a4969072f50274c60a8196c33d7d7462760e19f2de43be3b37c84a61ba23973",
-    "PouwCheck.Period.PEARL_C_KEYS": "155ddb0a53439f1bde94503a22ca534649e837913a768b030c3fa36bdb33bc6f",
-    "PouwCheck.Period.PERIOD": "1617cce91b458005685b91932d526ffd0e7331ab5298e144a20a8475371e504a",
-    "PouwCheck.Period.REPEATED_CALL": "521cff9dbaaa4b9f8e3e9414399d7a113fc606556f460cdb894fc91c91659b99",
-    "PouwCheck.Period.SALT_ONLY": "8f3a5501502f29621690d735fedacf443e5f852f3965a7c98c78936770213b0c",
-    "PouwCheck.Period.callsOf": "b5cd36f88afec12d272e0ec0837012b730bfee2f2341f10719c2137960c5fca6",
-    "PouwCheck.Period.distinctCalls": "36dc4a7d849bd0cc4cdd7266d70c7e9cb9e857fc24423b89cd9a6f24da3089d6",
-    "PouwCheck.Period.earlierOf": "3419e9501f43947508d51ed0c65f6be0d10c7d2bf8ba8f107f78200da8655296",
-    "PouwCheck.Period.earlierOf._sparseCasesOn_5": "3f7231768f79d667f9e9980596dfe8bc17994ea221ed499ee2a9cbfb8f22519f",
-    "PouwCheck.Period.freshCalls": "13e5f25144927b4601a1749dd180d49dfe74c02745c52faf5a8aa09ba0b5c33f",
-    "PouwCheck.Period.hexBytes?": "abc41a8b85a39316438852f8dbdd8777f149644b2139d8f699d44d4b56e3da62",
-    "PouwCheck.Period.liveEpoch": "35fbf4952257f185fcfe4c9d6971444221edce6e2be0396c2e8e2618216dd283",
-    "PouwCheck.Period.liveEpoch._sparseCasesOn_1": "2aa38ecc197cc9d59c49e5d10aedf226b37d945a7a0e8db7fc4f25bfa4fcef0a",
-    "PouwCheck.Period.manifestOf?": "cc50970d07c276f93d648bcee77b6beb74d16fe2762ecad6c62047b072dfee17",
-    "PouwCheck.Period.manifestOf?._sparseCasesOn_1": "777a062b2d3ec044cee3af9a66a6b008c734d67dfe9fbb28a4af213a231ee443",
-    "PouwCheck.Period.manifestOf?._sparseCasesOn_2": "539faa6d1e95338d959728d583909f76cc71333c1854ee686b128f3e29f0da35",
-    "PouwCheck.Period.namedEpoch": "099948da3370bf166859349c57019f2cfae8b2a163d2516bc6b7e214670e6ff8",
-    "PouwCheck.Period.passesDistinct": "a2dc9777d67fe370ef83aaa63289fd79d931c6eef72085f22d6a3c26695751c6",
-    "PouwCheck.Period.periodChecks": "0f99e7777ec561c3c2dbf77efbc704b67ede555dd3c31b5b522b1b145dfe7af2",
-    "PouwCheck.Period.sameEpoch": "e5008c016dfcb3b89a1457b46f94ecc23d8a5380dd019245e19d6dfa6c5863e2",
-    "PouwCheck.Period.sameEpoch._sparseCasesOn_1": "7ab92ea4cbb0e92aaf900cf398bae3ee4266085ed0ace084b5a851e7a1eea564",
-    "PouwCheck.pearlCPeriodCredit": "19d993112de1f6e6f75e3d64c6c3f1d84abd9147c45b4b59cbd7cd8de7501b93"
-   },
-   "guarantees": ["Properties.Pouw.LiveSalt.creditDistinct"]
   },
   "PouwCheck.Protocol": {
    "digest": "7846a3105fd2f3e8741ab74d912727a749bcefbe4c4f9c4f1127260f7aced9c4",
@@ -7548,8 +7479,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.saltRefusals",
-    "Properties.Pouw.Commit.saltSize",
-    "Properties.Pouw.LiveSalt.creditDistinct"
+    "Properties.Pouw.Commit.saltSize"
    ]
   },
   "PouwCommit.Draws": {
@@ -7576,7 +7506,7 @@
     "Properties.Pouw.Commit.keySize",
     "Properties.Pouw.Commit.saltRefusals",
     "Properties.Pouw.Commit.saltSize",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot"
    ]
   },
@@ -7621,8 +7551,7 @@
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
-    "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.LiveSalt.creditDistinct"
+    "Properties.Pouw.Commit.leafRefusals"
    ]
   },
   "PouwCommit.Py": {
@@ -7642,7 +7571,7 @@
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot"
    ]
   },
@@ -7671,7 +7600,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.taggedSize",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot"
    ]
   },
@@ -7808,7 +7737,7 @@
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Strata.strataTile"
    ]
@@ -7864,21 +7793,6 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.publicItems_eq"
    ]
-  },
-  "PouwWindow.Record": {
-   "digest": "6619c4e19c0e62386b660533a79784e95796fcab87a12fcf60e842f0998ca1d4",
-   "definitions": {
-    "PouwWindow.pyDepth": "6a0d4bf1df5afed6ff5d0161f96dbff27d9739e9df8301e4274894e81cdb60c2",
-    "PouwWindow.pyRepr": "a695ec210dff61797e9f0991418500f60a5e913512fae962d6eefb8d6d99cd2c",
-    "PouwWindow.pyStr": "5a55f751b9b4b81d267138981c4f3509bd5a8c1bf98c37a07a15e8636f40c375",
-    "PouwWindow.pyStr._sparseCasesOn_1": "f8cb7a8d2bcfb2d1356ec78e5d82fbb9ec00b27b33d9de5d8b0e767137e0cc59",
-    "PouwWindow.strictInt?": "93dca2bb281e538df70e48686d909008df925f109062658c614867d9161d9542",
-    "PouwWindow.strictInt?._sparseCasesOn_1": "7634b72a1b71d1728a79d13852a5050c3496709814cf75c7a565ab942921701e",
-    "_private.PouwWindow.Record.0.PouwWindow.pyCanonAux.match_1": "7f9f8cfb7fdbe5f2ead0a436315cdc945295cf61c4ae66c72743071bf1f00e85",
-    "_private.PouwWindow.Record.0.PouwWindow.pyCanonAux.match_3": "38bc3aa8de60218306485c960a1843b0a1ab6239bc319fc389b9178aac1b34ab",
-    "_private.PouwWindow.Record.0.PouwWindow.pyReprAux": "e3d21d6177092b83696c152672078b3b0b1b30fcb62fbffa561c1f899e993d2a"
-   },
-   "guarantees": ["Properties.Pouw.LiveSalt.creditDistinct"]
   },
   "Properties.Accounting.Requirement": {
    "digest": "124de2d82a8c85eff14745ccc7e53aad55dfafaea9506b8a88df4c6658591210",
@@ -8679,32 +8593,28 @@
    ]
   },
   "Properties.Pouw.LiveSalt": {
-   "digest": "0e3a266ba6839ae84cdd782f0e51334ddd9dba87fd89904da4b3d3cdd82be937",
+   "digest": "6a78772fdd0bb097db527c0fcc634c8350df3d8a5fac915656f882e479821181",
    "definitions": {
+    "Properties.Pouw.LiveSalt.AcceptMeans": "7bd676e53caf1f68324c10f6f0e4b1d8ccd43c406e5bd079b0ab5b0e21813b87",
     "Properties.Pouw.LiveSalt.Accepted": "7c40a7fa110222406791f3f0d9987ffeedce52cdf07ac79254d84ba355b902e2",
     "Properties.Pouw.LiveSalt.Check": "8a68ae12cebedce0d0f19541a827ecd676cad92df13ed27afc8b5f76d6a56580",
     "Properties.Pouw.LiveSalt.Collides": "9bceae289d63ff5d6a43b79d80ea65ddfe5125b4d4c7e109eafe81dea042caf2",
     "Properties.Pouw.LiveSalt.Collides32": "722152c52264d30325104f28e893259a121e54135d3e50275895d9ad5160c479",
     "Properties.Pouw.LiveSalt.Counts": "ece6f2e10b3a6465fbac68ac7bfa0c029e84d355ec89df32e34b7bdb4add204f",
-    "Properties.Pouw.LiveSalt.CreditDistinct": "7fd3de28f44d03e027cfe1c7d3202590bace83e7e390c274aa77771fd9b5cf63",
     "Properties.Pouw.LiveSalt.EPOCH_OPEN_TAG": "8525e9e9903995fa12718882645e43e8394bccbb7549aa197f0b35737137a8c9",
     "Properties.Pouw.LiveSalt.EpochRoot": "734e96412b6a31fe7473602101921299262ef9f0d105913acf57be6f58537e80",
     "Properties.Pouw.LiveSalt.EpochRootBinding": "223271095723180eef90305c421f74b74004f14f8ddb8e1f98ff2c6698fe9ed9",
     "Properties.Pouw.LiveSalt.LedgerShows": "b928ec88a3da91dbc538d49d9ac011907841c5e70c92225f7750d32cd1828dc6",
     "Properties.Pouw.LiveSalt.ManifestNames": "3c525356d02186ed6c0e09c3c993602bf990d17a270d9ab6ab6eaab346f6e9d1",
     "Properties.Pouw.LiveSalt.OneRoot": "50264f5bba5ebc226c8e032781f0b46e8d3b82d6264b8b40809c78e4c879b93a",
-    "Properties.Pouw.LiveSalt.PassesDistinct": "ea77ee8a4dac109d75238f2d217fc13a0066e9522653a81ae8317d1f03f33b1f",
-    "Properties.Pouw.LiveSalt.PeriodCredit": "bea11afad529c3734b14ed3067e5927f66ac4fb01f4f774923e38a577439b7e0",
     "Properties.Pouw.LiveSalt.RowSeedBinding": "791f9621227f680a3da6a09d0d6cf5ec0232e8d194c18d483257d17338a67ca6",
     "Properties.Pouw.LiveSalt.SALT_FAMILIES": "f4f50cc08308230b6f381406f2a1499abb1d336ba4afe830cfe753047988c967",
     "Properties.Pouw.LiveSalt.SEED_A_LABEL": "81c03161cb9ae901d806a77dcd9cfc98b451500c60fcd769fdc955da46f2515d",
     "Properties.Pouw.LiveSalt.SaltEpoch": "60ad4c1d4367da5414eae6feeba1f781dbc4062648edfc51c76fe3c626a0f7ca",
     "Properties.Pouw.LiveSalt.WeightsRoot": "cbb0ebc1c3b33ffe7f02db8497c7f260d42527beafb0097274574da663462abd",
-    "Properties.Pouw.LiveSalt.callIndices": "35027a8ad8336da6f2918673e153efded4b76d2d9fb9054cdeceb1a24b00f981",
     "Properties.Pouw.LiveSalt.entries": "0597700585032967511087f46074027df94917135c0aa97c2e01f2076be5dcb3",
     "Properties.Pouw.LiveSalt.entries._sparseCasesOn_1": "38dca2a29ecd23a98207b76e8c8aff3e3ef384a9a6b672c2fcf467c0fb60020d",
     "Properties.Pouw.LiveSalt.epochMessage": "5422862db06a92ffa203021868eda76af3b06537255d6cdeea4b63242e36047d",
-    "Properties.Pouw.LiveSalt.epochOf": "9c6f604c2d208a00006b1447358ed6f5d0a7eb1e6a11d3c7544df02df91e03d3",
     "Properties.Pouw.LiveSalt.epochOpenRoot": "0d2e70b1a73a87e5f246f64a4d7bcd362ee0a4f140f39161df1e7c280de65cca",
     "Properties.Pouw.LiveSalt.le64": "9c1f6e1ad7884bdce2ad57d5d7df436ad712e5491d28c8a696b3bb5f2b85f4eb",
     "Properties.Pouw.LiveSalt.liveSalt": "dcfe248829e593070652001501defc7898045a0b60f818c86b507213fa1bdd5c",
@@ -8714,7 +8624,7 @@
     "Properties.Pouw.LiveSalt.rowSeedMessage": "cd8284de4b566b6df5446eb215814071b2f62ae6eec29276f047fb2ca7362181"
    },
    "guarantees": [
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.epochRootBinding",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.LiveSalt.rowSeedBinding"
@@ -9804,7 +9714,7 @@
     "SampledProofs.Challenger.total": "bb2b44d506387f8f22635e8350313bcab57c3ca10cc25378fbb22c1a4381f609",
     "_private.SampledProofs.Challenger.0.SampledProofs.Challenger.hexAt": "955c0a2b26794035e957cb274044856fa7c1eda21739edc30fc526203c50aa7a"
    },
-   "guarantees": ["Properties.Pouw.LiveSalt.creditDistinct", "Properties.Pouw.LiveSalt.oneRoot"]
+   "guarantees": ["Properties.Pouw.LiveSalt.acceptMeans", "Properties.Pouw.LiveSalt.oneRoot"]
   },
   "SampledProofs.ChallengerRecord": {
    "digest": "d97f33bfd7daabb7f66ea583a0874bf5f2cf6074c90aeff95cb77dcbdece0d48",
@@ -9833,17 +9743,15 @@
     "_private.SampledProofs.ChallengerRecord.0.SampledProofs.Challenger.hexOf?": "a023d8e581ba3716b2a5dcbe4d1e72a9b90dd8db74b18cdd1ca1bcf556b9a6b9",
     "_private.SampledProofs.ChallengerRecord.0.SampledProofs.Challenger.hexOf?._sparseCasesOn_1": "1a17f35f5b069009e84ec6d65f79026154b3c2bf14b6bc75a148865543afe4a3"
    },
-   "guarantees": ["Properties.Pouw.LiveSalt.creditDistinct", "Properties.Pouw.LiveSalt.oneRoot"]
+   "guarantees": ["Properties.Pouw.LiveSalt.acceptMeans", "Properties.Pouw.LiveSalt.oneRoot"]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "731d3f5fb06c4e1fc647202e5d961feaa242592e8d4fafff3fff6c463d58ddbd",
+   "digest": "87d368b27b6a352388a2219a59b4338871aef076e40ae2cb8b40c21f219a653d",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
-    "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
     "SampledProofs.Challenger.Audited.commitment": "468002e4d32fd36d92c016491502672fbffc8b638777f35e073eb3b379bd9b63",
     "SampledProofs.Challenger.Audited.files": "d17fd2c6130d74538b73110e1a638629c5330174310d00dcf50cd1e59c39626a",
     "SampledProofs.Challenger.Audited.host": "1a0288badfd266af28b80565968fb067e9af6294f52eae9c4ca7d0d87234bbd5",
-    "SampledProofs.Challenger.Audited.period": "ec984f5f955c9c133ad26f2336f07a08aa4fd6f0c4b726c16434e9665dd314a1",
     "SampledProofs.Challenger.Audited.recordLeaf": "13dd38e8f463db35c4baeb34eb255270890056a88cc4dc805b3a6b4c53f9551e",
     "SampledProofs.Challenger.Audited.refusedHellos": "f6d0ff9b6d5c7051724d724724c95464339d3ebc0c486a5542d75136c0c2de3b",
     "SampledProofs.Challenger.Audited.session": "4926da88e1e8afbeac609c2e116d6a9fd03b6e0af54bd1f8c22dfda248625e9a",
@@ -9917,9 +9825,7 @@
     "SampledProofs.Challenger.ZERO": "baab14c603e8c5c06ca3ab4b224a31b3089af1dc631ac07600b27d030ebba497",
     "SampledProofs.Challenger.auditedOpen": "280c02bea47d3390683214a737e67a082d78fc6f6b7c75050d95dad9e42aa947",
     "SampledProofs.Challenger.checked": "dd3765be37fdd0b1fa5e3f18f9bce0299f256e053678aeb146dfdf89f01367e8",
-    "SampledProofs.Challenger.circuitReason": "a29991bcd83557b4d8646dbca7ec1426cab7ef62c3605c58120c40476e56d121",
     "SampledProofs.Challenger.closeMessage": "46b75ba121839ec4361e3e2a0df14a4d0c7e0d95c1b8967ac1ac8e8def086188",
-    "SampledProofs.Challenger.creditedSession": "27f3a646aec4d6c8a020555a20b4a06211d11f48cbc9f107153941eae93051e7",
     "SampledProofs.Challenger.event": "be4476225052930e5213d68e407b034ada60824989e7e0e50bc61ec006d3d50f",
     "SampledProofs.Challenger.event._sparseCasesOn_1": "ff42de9044ae37b1abdc1c7990a9e1e2b9149f6c371720dc27a0117ee23afb4c",
     "SampledProofs.Challenger.firstParentReason": "e30b13960d305036dbd68730b4d19da3c76514dad76b0b269a7f50dc135834d0",
@@ -9979,7 +9885,7 @@
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.strOf": "cfa6c52e58391a6848ec180ac6911db0e835d1910764ce9390d18c4c00d4ac82",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.verifies": "b9b71e2ff104e74e2e67b4b245b1ae12ae7baca0dfbf59acd8fb67572395a007"
    },
-   "guarantees": ["Properties.Pouw.LiveSalt.creditDistinct", "Properties.Pouw.LiveSalt.oneRoot"]
+   "guarantees": ["Properties.Pouw.LiveSalt.acceptMeans", "Properties.Pouw.LiveSalt.oneRoot"]
   },
   "SampledProofs.Draw": {
    "digest": "52e7b5a7478dddb26308aabbb93c41548c91480450c21fce2093538be1355905",
@@ -10077,7 +9983,7 @@
     "_private.SampledProofs.Json.0.SampledProofs.hexDigits": "4caf758cb28fc30e4e641ee7f8165b4f2fa6340f153d37dcaa1904c4ed3bfda2"
    },
    "guarantees": [
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -10200,7 +10106,7 @@
     "_private.SampledProofs.PyJson.0.SampledProofs.PyJson.scaled": "b79e42b746949fff933b2307356c191b50aa25b45b1696d2f4b56553dab6e7a0"
    },
    "guarantees": [
-    "Properties.Pouw.LiveSalt.creditDistinct",
+    "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",

@@ -30,7 +30,7 @@ exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
-    Desc.inputsAtRoot P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
+    Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     ∀ k < nodeCount P,
       (∀ s ∈ reads[k]!, s.count ≠ 0 → ∀ q, s.ps[0]? = some q →
         Desc.nodeOf (rootOffs P) q.base.toNat < nodeCount P ∧
@@ -230,7 +230,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
 their widths, the gates outside it that its gates read, θ's taken out, each once; `novelWidth` sums their widths, and so
 does `NciCheck.ius`. -/
 theorem novelExact_of (hR : ReadsExact) : NovelExact := by
-  intro bytes P reads mask own c dv hdec hov hlo hin han hc hms hos hdsz hmask hown hdiv hn u hu
+  intro bytes P reads mask own c dv hdec hov hlo hin hwk han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
   obtain ⟨hcN, -, -, -, -⟩ := circuitOf_ok P c hc
   have hng : ∀ k g, g ∈ nodeGates P k ↔ (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]! := mem_nodeGates P
@@ -243,7 +243,7 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
     intro g hg
     obtain ⟨k, hk, h'⟩ := node_exists (rootOffs P) (nodeCount P) h0 g (by rw [hK]; exact hg)
     exact ⟨k, hk, (hng k g).2 h'⟩
-  have hRk := hR bytes P reads c hdec hov hlo hin han hc
+  have hRk := hR bytes P reads c hdec hov hlo hin hwk han hc
   obtain ⟨-, hI⟩ := intoOf_spec (rootOffs P) own mask reads dv.n
   set segs := (Desc.intoOf (rootOffs P) own mask reads dv.n)[u]! with hsegs
   -- every gate a collected segment names, with its width, its segment and their root nodes

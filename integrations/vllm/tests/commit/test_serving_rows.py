@@ -1,4 +1,4 @@
-"""The opt-in serving rows (`commit.serving_rows`): M0's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
+"""The opt-in serving rows (`ml.windows.rows`): M0's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
 reference on the batch and parallel paths for a two-member population, ChaCha20 salts, core's served-domain rule, the registration
 (core's v1 record, accepted by `registration.check` against the verifier's own copies) and M0's per-member file layout, every output
 a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
@@ -23,7 +23,8 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
-from verity_vllm.commit import flock_inputs as FI, index as IX, serving_rows as SR
+from verity.ml.windows import flock_inputs as FI, rows as SR
+from verity_vllm.commit import index as IX
 from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())

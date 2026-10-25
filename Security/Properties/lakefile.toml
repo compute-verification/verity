@@ -68,7 +68,8 @@ path = "../../verity/core/primitives/requirement"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt", "Properties.Proofs.Pouw",
-  "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Proofs.Pouw.LiveSalt", "Properties.Pouw.Strata",
+  "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Proofs.Pouw.LiveSalt",
+  "Properties.Proofs.Pouw.LiveSalt.Ledger", "Properties.Pouw.Strata",
   "Properties.Proofs.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads", "Properties.Proofs.Nci",
   "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Properties.Proofs.Pous.TimedAudit",
@@ -82,7 +83,8 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Proofs.Nci.OperandsResolve", "Properties.Proofs.Nci.Agrees",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Proofs.SampledProofs.Halt",
-  "Properties.Evaluate", "Properties.Proofs.Evaluate",
+  "Properties.Evaluate", "Properties.Proofs.Evaluate", "Properties.Proofs.Nci.ReadsExact",
+  "Properties.Proofs.Nci.BodiesOk.ReadsDecoded",
   "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.Proofs.RemoteAudit", "Properties.RemoteAudit.Coins", "Properties.Proofs.RemoteAudit.Coins",
