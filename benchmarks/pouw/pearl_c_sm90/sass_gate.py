@@ -29,8 +29,8 @@ def hgmma(n: int) -> str:
 #: (_g) are their ungrouped ones' at the same tile
 WANT = {**{f"{g}{t}": (n, 4, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct") for t, n in (("", 128), ("_n64", 64), ("_d", 64))},
         **{f"{g}{t}": (n, 4, 4) for g in ("gemm_pearlc", "gemm_pearlc_s") for t, n in (("", 128), ("_n64", 64), ("_d", 64))},
-        "gemm_words": (32, 4, 0), "gemm_words_d": (32, 4, 0), "form_s5": (128, 1, 0), "form_s5_scalar": (128, 1, 0),
-        "gemm_pearlc_g_d": (64, 4, 4), "gemm_words_g_d": (32, 4, 0), "form_s5_g": (128, 1, 0)}
+        "gemm_words": (32, 4, 0), "gemm_words_d": (32, 4, 0), "gemm_words_win_d": (32, 4, 0), "form_s5": (128, 1, 0), "form_s5_scalar": (128, 1, 0),
+        "gemm_pearlc_g_d": (64, 4, 4), "gemm_words_g_d": (32, 4, 0), "form_s5_g": (128, 1, 0), "form_s5_ep": (128, 1, 0)}
 #: kernels that may use a little local memory, each with at most these bytes of stack and of spills, and why: none of
 #: them is on the served path or the GEMMs'
 LOCAL_OK = {"s512_rows": (16, "hash_h3.cuh's reference row digest (PEARLC_SHA=ref, or a caller without segdig_<tree>; the served "
