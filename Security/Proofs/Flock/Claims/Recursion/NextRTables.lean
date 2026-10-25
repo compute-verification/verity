@@ -6,8 +6,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 `sessionRun_decides_coins` takes, at every table, `TableOk` and at most 2,048 extra claims at the link's points. A plain
 completeness case gives them at its one table (`Case.tableOk`). Here they hold at every table of a statement that sets
-up (`setupOf false`) and that `verify --plain-tables`'s statement refusals pass (`PlainTablesOk`: `ProvedScope.checkP` as
-`verifyCmd` calls it under the flag, then `sizesOk` on the tables' `m`).
+up (`setupOf false`) and that `verify --plain-tables`'s statement refusals pass (`PlainTablesOk`: `ProvedScope.checkP`
+as `verifyCmd` calls it under the flag, then `sizesOk` on the tables' `m`).
 
 * `tablesOk_of_read`: at an untyped statement that sets up without the verifier's own public input words, every table
   of `22 ≤ m` is `TableOk` with at most 2,048 extra claims. Each table's circuit is the one the scope parses
