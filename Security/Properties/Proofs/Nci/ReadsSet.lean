@@ -2856,8 +2856,8 @@ theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.
   exact ⟨r, by omega, t, ht, by rw [htgt, hje]⟩
 
 /-- **Each leaf `used` names is read by a gate of the activation** (`UsedExact`'s second part), wherever each node
-reads outside itself what its positions name there, its parameter positions resolve, a parameter resolves before the
-activation, and the segments its read splits name positions at or past 0, of pieces of positive count, of a copy at
+reads outside itself what its positions name there, its parameter positions resolve and are in range, a parameter's
+leaf resolves before the activation, and the segments its read splits name positions at or past 0, of pieces of positive count, of a copy at
 least. -/
 theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (sc : Flock.Program.Scope)
     (h : Desc.summarize P memo sc.d = .ok s) (hp : (P.defs[sc.d]!).prim = false) (hL : Laid P sc.d)
@@ -2871,7 +2871,11 @@ theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (s
       ((∃ i, FromDown (ctxOf P memo sc.d) k i g) ∨ FromRows (ctxOf P memo sc.d) k node g ∨
         FromCarry (ctxOf P memo sc.d) k node g) →
       (∀ x ∈ segPos g, 0 ≤ x.2) ∧ g.reps ≠ 0 ∧ ∀ q ∈ g.ps.toList, 0 < q.count)
-    (hlt : ∀ i j a, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a → a < sc.off) :
+    (hpi : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ node, (ctxOf P memo sc.d).node k = .ok node →
+      ∀ i (p : Int), (Tgt.ref true i, p) ∈ nodePos (ctxOf P memo sc.d) node k →
+        i < (P.defs[sc.d]!).body.params.size ∧ p < (((P.defs[sc.d]!).body.params[i]!).2.leaves : Int))
+    (hlt : ∀ i j a, i < (P.defs[sc.d]!).body.params.size → j < ((P.defs[sc.d]!).body.params[i]!).2.leaves →
+      Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a → a < sc.off) :
     ∀ i j, Width.inIvs ((s.used[i]?.getD #[]).toList) j →
       ∃ g, sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates ∧ ∃ ops, LocR P sc g ops ∧
         ∃ a ∈ ops, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a := by
@@ -2881,7 +2885,8 @@ theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (s
   have hr : Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a := by
     simp only [den] at ha
     rwa [if_neg (by omega), Int.toNat_natCast] at ha
-  have hlo := hlt i j a hr
+  have hij' := hpi k hk node hn i j hx
+  have hlo := hlt i j a hij'.1 (by have := hij'.2; omega) hr
   obtain ⟨g, ⟨hg1, hg2⟩, ops, hgl, hag⟩ := hN k hk node hn a ⟨⟨_, hx, ha⟩, fun ⟨h1, _⟩ => by omega⟩
   have hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates := by
     rw [← hlast]
@@ -2991,7 +2996,8 @@ theorem usedExact_of (P : Prog) (r memo : Array Desc.Summary) (f : Nat)
     (hgw : ∀ k < (P.defs[f]!).body.nodes.size, ∀ node, (ctxOf P r f).node k = .ok node →
       ∀ w (p : Int), (Tgt.gate w, p) ∈ nodePos (ctxOf P r f) node k → p < ((P.defs[f]!).gates : Int))
     (hlt : ∀ sc : Flock.Program.Scope, sc.d = f → Resolve.Good P sc →
-      ∀ i j a, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a → a < sc.off) :
+      ∀ i j a, i < (P.defs[f]!).body.params.size → j < ((P.defs[f]!).body.params[i]!).2.leaves →
+        Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a → a < sc.off) :
     UsedExact P memo f := by
   intro sc hd hgood hloc
   subst hd
@@ -3005,6 +3011,9 @@ theorem usedExact_of (P : Prog) (r memo : Array Desc.Summary) (f : Nat)
     (fun k hk node hn => (hNS k hk node hn).2)
     (fun k hk node hn g hg => ⟨fun x hx => ((hsh k hk node hn g hg).1.2.1 x hx).1,
       by have := (hsh k hk node hn g hg).1.2.2.2; omega, (hsh k hk node hn g hg).1.2.2.1⟩)
+    (fun k hk node hn i p hx => by
+      obtain ⟨g, hg, hxg⟩ := nodePos_seg P r sc.d _ h hp hk hn hx
+      exact ((hsh k hk node hn g hg).1.2.1 _ hxg).2.2 i rfl)
     (hlt sc rfl hgood)⟩
   obtain ⟨g, hg, hxg⟩ := nodePos_seg P r sc.d _ h hp hk hn hx
   obtain ⟨-, hnf, hpi⟩ := (hsh k hk node hn g hg).1.2.1 x hxg
@@ -3308,5 +3317,71 @@ theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : La
     obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hv
     obtain ⟨-, -, -, -, -, a', ha', -⟩ := hmem i' hi' t (List.mem_range.1 ht)
     exact ⟨a', hxv a' ha'⟩
+
+/-! ## `NodeSet` at a primitive node from the decoder's facts, over the summaries before a Definition -/
+
+/-- **`NodeSet` at a node calling a primitive, from the decoder's facts** (`RootFacts`, `WidthFacts`): in a reached
+composite, over summaries whose callees' hold `RetOk`, wherever every reference of the node is read by a member. -/
+theorem nodeSet_prim_of (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (hWF : WidthFacts P) {d : Nat}
+    (hd : d < P.defs.size) (hrd : (Desc.reached P)[d]! = true) (hpd : (P.defs[d]!).prim = false)
+    (hR0 : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn) {k : Nat}
+    {node : Flock.Program.Node} {rs : Array Seg} (hn : (ctxOf P r d).node k = .ok node)
+    (hp : (P.defs[node.fn]!).prim = true) (hrs : Desc.nodeReads (ctxOf P r d) k = .ok rs)
+    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+      ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+        ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+      (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
+    NodeSet P r d k := by
+  obtain ⟨-, -, -, hDec, -, hSO, -, -, hB⟩ := hF
+  have hBd := hB d hd hrd
+  have hkb : k < (P.defs[d]!).body.nodes.size := node_lt hn
+  have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
+  have hfn : node.fn < P.defs.size := by have := (hBd.1 k hkb).1; rwa [hg] at this
+  obtain ⟨hL, hlast, -⟩ := (hWF d hd).2 hpd
+  have hend : (P.defs[d]!).body.offsets[k + 1]! ≤ (P.defs[d]!).gates := by
+    rw [← hlast]
+    exact laid_le hL (by omega) (le_refl _)
+  refine nodeSet_prim P r hL hkb hend hn hp ((hWF node.fn hfn).1 hp) hrs
+    (fun sc hsc => (specs_decoded P r hd hDec hBd hR0 (hSO r d) sc hsc Flock.Steps.FUEL).1)
+    (fun i hi => argOk_decoded P r hd hDec k i hkb
+      (by change i < ((P.defs[d]!).body.nodes[k]!).args.size; rw [hg]; exact hi))
+    (fun i _ t ht => ?_) ?_ hCov
+  · have := (hBd.1 k hkb).2.1 i t (by rw [hg]; exact ht)
+    rwa [hg] at this
+  · have := (hBd.1 k hkb).2.2.2.2 (by rw [hg]; exact hp)
+    rwa [hg] at this
+
+/-- **A reached composite's callees hold `RetOk` over the summaries before it** (`memoOf_retOk`, `retOk_congr`). -/
+theorem prefix_retOk (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P) {f : Nat}
+    (hf : f < P.defs.size) (hrf : (Desc.reached P)[f]! = true) (hpf : (P.defs[f]!).prim = false)
+    {r : Array Desc.Summary} (hpre : ∀ f' < f, r[f']! = memo[f']!) :
+    ∀ k node, (ctxOf P r f).node k = .ok node → RetOk P r node.fn := by
+  obtain ⟨-, -, -, hDec, hRP, hSO, hcf, hnr, hB⟩ := hF
+  intro k node hn
+  have hk : k < (P.defs[f]!).body.nodes.size := node_lt hn
+  have hg : (P.defs[f]!).body.nodes[k]! = node := node_get hn
+  have hlt := hcf f hf k hk
+  rw [← hg]
+  exact retOk_congr (hpre _ hlt).symm (memoOf_retOk P memo hm hRP hDec hcf hnr hB hSO _ (by omega)
+    (reached_closed P hcf f hrf hpf k hk) (hnr f hf hrf k hk))
+
+/-! ## A parameter's leaf resolves before the activation -/
+
+theorem good_bodyOk (P : Prog) (hF : RootFacts P) : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hsc => by
+  obtain ⟨hd, hrd, -⟩ := good_reached P hF sc hsc
+  exact hF.2.2.2.2.2.2.2.2 sc.d hd hrd
+
+theorem laidOut_of (P : Prog) (hwk : Desc.walkable P = true) : ∀ d < P.defs.size, Walk.LaidOut P d := by
+  unfold Desc.walkable at hwk
+  simp only [Bool.and_eq_true] at hwk
+  exact (Walk.bodiesLaidOut_spec P hwk.1.2).2.1
+
+/-- **A parameter's leaf resolves before the activation**, in any activation resolution reaches (`Resolve.resolve_lt`). -/
+theorem param_lt (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (sc : Flock.Program.Scope)
+    (hg : Resolve.Good P sc) {i j a : Nat} (hi : i < (P.defs[sc.d]!).body.params.size)
+    (hj : j < ((P.defs[sc.d]!).body.params[i]!).2.leaves)
+    (h : Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a) : a < sc.off :=
+  Resolve.resolve_lt P ⟨hF.1, hF.2.1⟩ (good_bodyOk P hF) (laidOut_of P hwk) sc.off sc ⟨true, i, j⟩
+    ⟨hg, ⟨fun _ => ⟨hi, hj⟩, fun h => by cases h⟩, fun _ => le_refl _, fun h => by cases h⟩ h
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
