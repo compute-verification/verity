@@ -322,7 +322,7 @@ def train(a):
     flops_step = 6 * sum(p.numel() for p in model.parameters()) * a.bs * seq
     os.makedirs(a.out, exist_ok=True)
     rec = {"arm": a.arm, "order": a.order, "task": TAGS[a.order], "H_bits": task.H, "lr": a.lr, "seed": a.seed, "bs": a.bs,
-           "max_steps": a.max_steps, "model": "tiny" if a.tiny else a.model, "trained_params": n_train, "seq_len": seq,
+           "max_steps": a.max_steps, "every": a.every, "model": "tiny" if a.tiny else a.model, "trained_params": n_train, "seq_len": seq,
            "flops_per_step": flops_step, "optimizer": "sign descent, no state" if a.arm.endswith("_sign") else "AdamW, fp32 moments",
            "run_id": os.environ.get("RESEARCH_RUN_ID"), "log": []}
     v0 = evaluate(model, task, val)
@@ -411,12 +411,12 @@ def table(dirs):
             recs.append(r)
     f = lambda x, p=3: "–" if x is None else f"{x:.{p}f}"
     e = lambda x: "not reached" if x is None else f"{x:.2g}"
-    print("| task | arm | lr | seed | run | steps | test exact [95% CI] | test letters | test nll | FLOPs to 50% | FLOPs to 99% | "
-          "exact, bf16 arithmetic | val nll at step 0 | s/step |")
+    print("| task | arm | lr | seed | run | steps (eval every) | test exact [95% CI] | test letters | test nll | FLOPs to 50% | "
+          "FLOPs to 99% | exact, bf16 arithmetic | val nll at step 0 | s/step |")
     print("|" + "---|" * 14)
-    for r in sorted(recs, key=lambda r: (r["task"], ARMS.index(r["arm"]), r["lr"], r["seed"])):
+    for r in sorted(recs, key=lambda r: (r["task"], r.get("every", 25), ARMS.index(r["arm"]), r["lr"], r["seed"])):
         lo, hi = boot_ci(r["test_exact_per_string"])
-        print(f"| {r['task']} | {r['arm']} | {r['lr']:g} | {r['seed']} | {r['run']} | {r['steps']} | {f(r['test_exact'])} "
+        print(f"| {r['task']} | {r['arm']} | {r['lr']:g} | {r['seed']} | {r['run']} | {r['steps']} ({r.get('every', 25)}) | {f(r['test_exact'])} "
               f"[{lo:.3f}, {hi:.3f}] | {f(r['test_letters'])} | {f(r['test_nll'])} | {e(r['flops_to_50'])} | {e(r['flops_to_99'])} | "
               f"{f(r.get('test_exact_bf16_arith'))} | {f(r['val_nll_step0'])} | {r['train_s'] / r['steps']:.2f} |")
 

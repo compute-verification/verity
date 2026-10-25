@@ -1,5 +1,6 @@
 # The NVFP4 training study on one leased GPU: nvfp4_sft.py's arms one after another, one ITEMS entry
-# `ARM:ORDER:LR:SEED:MAX_STEPS` each (comma-separated). An item stops at val exact >= 0.995, MAX_STEPS, ITEM_MAX_MIN minutes
+# `ARM:ORDER:LR:SEED:MAX_STEPS[:EVERY]` each (comma-separated; EVERY, the val-eval interval, default 25). An item stops at
+# val exact >= 0.995, MAX_STEPS, ITEM_MAX_MIN minutes
 # or the deadline, then runs its test eval; an item that would start within 5 min of the deadline is skipped.
 # Writes $OUT/<arm>_<task>_lr<lr>_s<seed>/result.json, its log, and $OUT/table.md.
 set -u
@@ -32,13 +33,14 @@ nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
 
 IFS=, read -ra LIST <<< "$ITEMS"
 for item in "${LIST[@]}"; do
-  IFS=: read -r arm order lr seed steps <<< "$item"
+  IFS=: read -r arm order lr seed steps every <<< "$item"
   now=$(date +%s)
   if [ $((now + 300)) -gt "$DEADLINE_EPOCH" ]; then echo "skip $item: deadline in $((DEADLINE_EPOCH - now))s"; continue; fi
   dl=$(( now + ITEM_MAX_MIN * 60 < DEADLINE_EPOCH - 180 ? now + ITEM_MAX_MIN * 60 : DEADLINE_EPOCH - 180 ))
-  n=${arm}_o${order}_lr${lr}_s${seed}
+  n=${arm}_o${order}_lr${lr}_s${seed}${every:+_e$every}
   echo "== $n $(date -u +%TZ)"
   "$PY" "$D/nvfp4_sft.py" train --arm "$arm" --order "$order" --lr "$lr" --seed "$seed" --max-steps "$steps" --model "$M" \
+    --every "${every:-25}" \
     --deadline-epoch "$dl" --out "$OUT/$n" ${TRAIN_ARGS:-} > "$OUT/$n.log" 2>&1
   echo "$n rc=$? in $(( $(date +%s) - now ))s: $(tail -1 "$OUT/$n.log")"
 done
