@@ -25,7 +25,7 @@
 #      or H1S_OPENED_AT=FILE: a node path (a private directory) the openings are copied to while prepare lowers the lane
 #      circuit, waited for up to H1S_WAIT seconds (14400), then moved into the scratch; with H1S_DESCRIPTOR, prepare's
 #      lane statement is the one derived from that window Program (served.py prepare --descriptor)
-#      H1L_SESSION_GB (~300 at K=4096), H1L_STAGGER (60), H1L_RAMP (900): admit a firewalled session only with that much
+#      H1L_SESSION_GB (~350 at K=4096), H1L_LEAN_GB (115), H1L_STAGGER (60), H1L_RAMP (900): admit a firewalled session only with that much
 #      free in the run's cgroup, its slice and the node, beyond what the sessions still ramping up will take
 #   a session counts as proved only if its live verifier accepted it (prove.out's LIVE line); otherwise out/TAG/FAILED says
 #   why (the live verifier's and the prover's exits, a kill's signal), it gets no Lean check, and the job exits 1
@@ -155,9 +155,11 @@ N=1
 export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
 UNFW=" ${H1S_UNFIREWALLED:-tampered-zy other-call-a} "
 # H1L_SESSION_GB: a firewalled session starts only while that much is free, H1L_STAGGER seconds after the last, so
-# H1L_PAR is a cap and memory decides. A firewalled session holds two processes of ~140 GiB each at K=4096 (the prover
-# and the live verifier, ~300 GB together), and reaches that only after ~H1L_RAMP seconds (900): each session younger
-# than that is charged its whole H1L_SESSION_GB against what's free. Free is the least of the run's cgroup (capped at
+# H1L_PAR is a cap and memory decides. A firewalled session at K=4096 holds the prover (137 GiB), its live verifier
+# (141 GiB) and the firewall's Lean process (~40 GB), ~350 GB together, and reaches that only after ~H1L_RAMP seconds
+# (900): each session younger than that is charged its whole H1L_SESSION_GB against what's free, and so is each Lean
+# check younger than that (H1L_LEAN_GB, 115: a lane's check starts as its session ends, just when the next session is
+# admitted). Free is the least of the run's cgroup (capped at
 # H1L_MEM_GB), every cgroup above it with a memory.max (the user's slice) and the node's MemAvailable: the kernel's OOM
 # killer answers to all three, and kills the largest process, the live verifier, first
 CG=/sys/fs/cgroup$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)
@@ -180,6 +182,14 @@ young() {   # sessions started less than H1L_RAMP seconds ago
   local now n=0 s
   printf -v now '%(%s)T' -1
   for s in ${STARTS[@]+"${STARTS[@]}"}; do [ $(( now - s )) -lt "${H1L_RAMP:-900}" ] && n=$(( n + 1 )); done
+  echo "$n"
+}
+young_lean() {   # Lean checks started less than H1L_RAMP seconds ago (out/lean/TAG.start, written as the session ends)
+  local now n=0 f s
+  printf -v now '%(%s)T' -1
+  for f in "$OUT"/lean/*.start; do
+    [ -e "$f" ] && read -r s < "$f" && [ $(( now - s )) -lt "${H1L_RAMP:-900}" ] && n=$(( n + 1 ))
+  done
   echo "$n"
 }
 oom_kills() { awk '$1 == "oom_kill" {print $2}' /proc/vmstat; }
@@ -238,8 +248,8 @@ while IFS=$'\t' read -r kind tag D; do
   if [[ $UNFW == *" $tag "* ]]; then fw=0; else fw=$FW; fi
   if [ "$fw" = 1 ] && [ -n "${H1L_SESSION_GB:-}" ]; then
     while [ "$(jobs -rp | wc -l)" -gt 0 ] \
-      && [ "$(free_gb)" -lt $(( H1L_SESSION_GB * (1 + $(young)) )) ]; do sleep 15; done
-    log "$tag: $(free_gb) GB free (the least of the run's cgroup, its slice and the node), $(jobs -rp | wc -l) sessions running, $(young) of them ramping"
+      && [ "$(free_gb)" -lt $(( H1L_SESSION_GB * (1 + $(young)) + ${H1L_LEAN_GB:-115} * $(young_lean) )) ]; do sleep 15; done
+    log "$tag: $(free_gb) GB free (the least of the run's cgroup, its slice and the node), $(jobs -rp | wc -l) sessions running, $(young) of them and $(young_lean) Lean checks ramping"
     printf -v now '%(%s)T' -1
     STARTS+=("$now")
   fi
@@ -263,6 +273,7 @@ while IFS=$'\t' read -r kind tag D; do
   ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
     k0=$(oom_kills)
     if session "$D" "$OUT/$tag" && ! why=$(live_failed "$OUT/$tag"); then
+      [ "$EACH" = 1 ] && printf '%(%s)T\n' -1 > "$OUT/lean/$tag.start"
       log "proved $tag: $(cat "$OUT/$tag/prove.time")"
       keep "$tag"
       if [ "$EACH" = 1 ]; then
