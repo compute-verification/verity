@@ -92,6 +92,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
@@ -100,6 +101,7 @@ from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
+from . import pooled as _pooled
 from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
@@ -1345,7 +1347,8 @@ class RequirementLink(Protocol):
     the proof units have shown, for every pass, that its plan holds every complete block the circuit reads at the
     pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
-    map, of a registered block or a written one, is at its values' last read (the memory-map unit, I4's).  The link
+    map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a
+    gather that may select one included (the memory-map unit, I4's; `memory_map.py`).  The link
     is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
     rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
     and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A
@@ -1431,7 +1434,7 @@ class Ledger(_Terms):
     `linked_bits`); without a link
     the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
-    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `RateAuditSketch`'s."""
+    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s."""
 
     timing: float
     sample: float
@@ -1464,17 +1467,27 @@ class Ledger(_Terms):
                           "window": w.window}}
 
 
-def _budget(record: Record) -> tuple[list[int], float]:
-    delta = record.windows[0].profile.delta
-    drawn = [w.profile.drawn["receipt"] for w in record.windows]
-    return drawn, -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
+def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
+    """The pooled bound's inputs (`pooled.bound`): each window's receipts U_t and draws s_t, and δ, the float's exact
+    value."""
+    return [(w.receipts, w.profile.drawn["receipt"]) for w in record.windows], Fraction(record.windows[0].profile.delta)
+
+
+def pooled_bound(record: Record) -> _pooled.Bound:
+    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
+    return _pooled.bound(*pooled_windows(record))
+
+
+def _up(q: Fraction) -> float:
+    """The least float at least `q`."""
+    x = float(q)
+    return math.nextafter(x, math.inf) if Fraction(x) < q else x
 
 
 def floors(record: Record) -> tuple[float, ...]:
     """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
-    at once, except with δ."""
-    drawn, budget = _budget(record)
-    return tuple(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
+    at once, except with δ.  Each is `pooled_bound`'s, rounded up."""
+    return tuple(_up(f) for f in pooled_bound(record).floors)
 
 
 def pooled(record: Record) -> tuple[float, float]:
@@ -1487,15 +1500,14 @@ def pooled(record: Record) -> tuple[float, float]:
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
-    min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states it for windows of one size; at unequal U_t it is the
-    same argument with each window's own."""
-    drawn, budget = _budget(record)
-    floor = max(floors(record))
-    wrong = 0.0
-    for w, s in sorted(zip(record.windows, drawn), key=lambda x: x[0].receipts / x[1], reverse=True):
-        f = min(1 - s / w.receipts, budget / s)
-        wrong, budget = wrong + f * w.receipts, max(0.0, budget - f * s)
-    return wrong, floor
+    min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on a model of the
+    draw (`Accounting.Guarantees.Remote.PooledDraw`).
+
+    Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
+    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
+    the bound `PooledDraw` reads."""
+    b = pooled_bound(record)
+    return _up(b.wrong), _up(b.floor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1572,9 +1584,9 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     through.  All three are the same in every window: the record does not bound them.
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
-    approximation for a large store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose terms
-    add to the failure probability, not to γ: `timing.sketch_failure` of the prover's SHA-512 compressions over the
-    session (`PROTOCOL.md` §4).
+    approximation for a large store).  A sketch-sha512 record's receipts also rest on `SketchBound`
+    (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
+    `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
     that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and

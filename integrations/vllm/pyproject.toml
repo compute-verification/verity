@@ -37,6 +37,7 @@ addopts = "-q -p no:cacheprovider"
 # tests/regression (R19 reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
+    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality on every merge)",
     "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
@@ -77,5 +78,5 @@ parallel = true
 # agent-test job runs 2 workers where the 9 GB default ran 1 and timed out at 60 min
 worker_gb = 8
 # the full suite took 10,187 s on 5 workers (r20261018-214339-1952), past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the
-# tests over 5 s (tests/slow_tests.json and the `slow` marks)
+# tests over 5 s (their `slow` marks)
 timeout_s = 14400

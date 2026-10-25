@@ -328,6 +328,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     assert "MATCH_COMPACT_LOAD" not in os.environ and not hasattr(C, "compact_provenance")
 
 
+@pytest.mark.slow
 def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_path, monkeypatch):
     """[rev S-r17-30 n1 (M-0608), M-0500 (2)] the RECORD checker's document states fold_load (per fold dir: source = the record files,
     instances_schema, operand_refs_form) exactly as the fast one does, so a record document of a v1 store and one of a v2 store of the

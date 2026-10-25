@@ -251,36 +251,73 @@ def rowNums (lines : Array String) (i : Nat) : V (Array Nat) :=
     | some n => pure n
     | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
 
-/-- `t[i]`, else `f i`. -/
-@[inline] def pick {α : Type} (t : Array α) (i : Nat) (f : Nat → α) : α :=
-  match t[i]? with
-  | some v => v
-  | none => f i
+/-- A line's numbers as `parse` reads a row's, `none` when a token isn't one. -/
+def lineNums (s : String) : Option (Array Nat) := (tokens s).mapM String.toNat?
 
-/-- `f 0, …, f (n − 1)`, in tasks of `b`. -/
-def parRows {α : Type} (f : Nat → α) (n b : Nat) : Array α :=
-  ((Array.range (n / b)).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
-    (fun acc t => acc ++ t.get) #[] ++ (Array.range (n - n / b * b)).map fun j => f (n / b * b + j)
+/-- A line and, when read, its numbers (`some (lineNums s)`): read where the file's lines were split
+(`SplitNL.splitTasks`). -/
+structure Row where
+  s : String
+  v : Option (Option (Array Nat))
+  ok : ∀ w, v = some w → w = lineNums s
 
-theorem parRows_eq {α : Type} (f : Nat → α) (n b : Nat) : parRows f n b = (Array.range n).map f := by
-  have hp : ∀ a, ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
-      (fun acc t => acc ++ t.get) #[] = (Array.range (a * b)).map f := by
-    intro a
-    induction a with
-    | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
-    | succ a ih =>
-      rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
-      simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.foldl_toArray', List.foldl_cons,
-        List.foldl_nil, Array.map_append, Array.map_map, Function.comp_def]
-  unfold parRows
-  rw [hp]
-  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n b)]
-  rw [Array.range_add, Array.map_append, Array.map_map]
-  rfl
+/-- `s` with its numbers read when it starts with a digit, as a row does. -/
+def Row.of (s : String) : Row :=
+  if (String.Pos.Raw.get s 0).isDigit then ⟨s, some (lineNums s), fun _ h => (Option.some.inj h).symm⟩
+  else ⟨s, none, fun _ h => nomatch h⟩
 
-/-- `parse` with its rows' numbers read in tasks (`rowNums`, `parRows`): what the firewall's setup runs
-(`HmRow.parseFast`). The verifier runs `parse`. -/
-def parsePar (lines : Array String) : V Net := do
+/-- `lineNums s`, from `t[k]` when it is a row of the line `s` (one pointer comparison when it is the same string). -/
+@[inline] def look (t : Array Row) (k : Nat) (s : String) : Option (Array Nat) :=
+  match t[k]? with
+  | some r => if r.s == s then (match r.v with | some w => w | none => lineNums s) else lineNums s
+  | none => lineNums s
+
+theorem look_eq (t : Array Row) (k : Nat) (s : String) : look t k s = lineNums s := by
+  unfold look
+  split
+  · next r _ =>
+    split
+    · next h =>
+      obtain ⟨rs, rv, rok⟩ := r
+      cases rv with
+      | none => rfl
+      | some w => exact (rok w rfl).trans (congrArg lineNums (eq_of_beq h))
+    · rfl
+  · rfl
+
+theorem mapM_toNat (xs : List String) (m : String) :
+    xs.mapM (fun t => match t.toNat? with | some n => (pure n : V Nat) | none => throw m) =
+      match xs.mapM String.toNat? with | some v => pure v | none => throw m := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.mapM_cons]
+    cases x.toNat? with
+    | none => rfl
+    | some n =>
+      rw [ih]
+      cases xs.mapM String.toNat? <;> rfl
+
+theorem mapM_toNat_arr (xs : Array String) (m : String) :
+    xs.mapM (fun t => match t.toNat? with | some n => (pure n : V Nat) | none => throw m) =
+      match xs.mapM String.toNat? with | some v => pure v | none => throw m := by
+  rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList, mapM_toNat]
+  cases xs.toList.mapM String.toNat? <;> rfl
+
+/-- Row `i` of a `NET` block as numbers, from `t[k]` (`look`). -/
+def rowAt (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) : V (Array Nat) :=
+  match look t k (lines.getD (1 + i) "") with
+  | some v => pure v
+  | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
+
+theorem rowAt_eq (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) :
+    rowAt t k lines i = rowNums lines i := by
+  unfold rowAt rowNums
+  rw [look_eq, lineNums, mapM_toNat_arr]
+
+/-- `parse` with each row's numbers from `t` (`look`): the rows read where the file's lines were split
+(`HmRow.parseFastFrom`), line `base + j` of the file being line `j` of `lines`. `parseWith_eq` holds for any `t`. -/
+def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
   let h := tokens (lines.getD 0 "")
   if h[0]? != some "flock-ir-unit/v2" then throw "not a flock-ir-unit/v2 circuit"
   let name := h.getD 1 ""
@@ -298,9 +335,8 @@ def parsePar (lines : Array String) : V Net := do
   if inWords * WORD > constPos then throw "flock-ir-unit/v2: the input rows reach the constant"
   let mut ra := #[]
   let mut rb := #[]
-  let rows := parRows (rowNums lines) useful 4096
   for i in [0:useful] do
-    let v ← pick rows i (rowNums lines)
+    let v ← rowAt t (base + 1 + i) lines i
     let na := v.getD 0 0
     let nb := v.getD (1 + na) 0
     if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {i} is malformed"
@@ -316,15 +352,9 @@ def parsePar (lines : Array String) : V Net := do
   if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
   ofRows name useful constPos inGroups outGroups ra rb
 
-theorem pick_parRows {α : Type} (f : Nat → α) (n b i : Nat) : pick (parRows f n b) i f = f i := by
-  unfold pick
-  rw [parRows_eq]
-  by_cases h : i < n <;> simp [h]
-
-theorem parsePar_eq : @parsePar = @parse := by
-  funext lines
-  unfold parsePar parse
-  simp only [pick_parRows, rowNums]
+theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines := by
+  unfold parseWith parse
+  simp only [rowAt_eq, rowNums]
 
 end Net
 

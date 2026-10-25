@@ -18,9 +18,9 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
-Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
-(4 CPUs, 16 GiB, 60 min) outside the check slots on vy-nebius-2, or runs it in a slot of vy-nebius-cpu-1's `research` pool
-when it starts sooner there (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` runs an `agent-test` job
+(4 CPUs, 16 GiB, 60 min) in a slot of vy-nebius-cpu-1's or vy-nebius-cpu-5's `research` pool, and queues it outside the check
+slots on vy-nebius-2, the GPU node, only when no pool slot fits it (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
 its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
 once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
 to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).
@@ -107,6 +107,8 @@ a `sys.path` entry another test file added: every suite runs alone.
   reachable`. Under a recorded `check` (`VERITY_STORE_REQUIRED=1`) the guard fails that skip instead, so `check` never passes
   without it. Inside `check` the store is reachable only through the run's custody key (`$CHECK_STORE_CUSTODY`), so fetch
   through a helper that hands it to the store CLI: integrations/vllm's `store_io`, or C-Flock's `verifier/ci.py` `fetch`.
+  `suites.py` inside a `research run --on` does the same with that run's custody key (`store_custody`): the runner drops
+  `RESEARCH_*`, the machine's store among them, so a bare `pytest` there reaches the store where the runner otherwise wouldn't.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
   the `--jobs` slots with pytest-xdist (`--dist worksteal`), one parallel suite at a time, beside the other suites on the few

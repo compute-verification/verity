@@ -881,6 +881,29 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
         al.auditor_seen(log(0, False)[:-4], seen)
 
 
+def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
+    """A prover that repeats a root doesn't make a group's last root early on the challenger's clock: window 2's last
+    root is also its boundary σ_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads each
+    at its openings request, so every L is the honest 1.5 coin intervals (red team (g)1,
+    note:20261024T0330Z-report-redteam-night)."""
+    import json
+
+    import auditor_line as al
+
+    n, X, Y = 6, "a" * 128, "b" * 128
+    seen = [{"released_ns": 1000 * g + 1000, "arrivals_ns": [1000 * g + 2500]} for g in range(n)]
+    lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
+    for g in range(n):
+        for label, after, at in (("challenge", X if g == 3 else f"{2 * g:0128x}", 1000 * g + 999),
+                                 ("openings", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
+            lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after, "received_at": at}))
+            lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
+                                     "released_at": at + 1}))
+    got, how = al.auditor_seen(lines, seen)
+    assert [w["arrivals_ns"] for w in got] == [[1000 * g + 2500] for g in range(n)]
+    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"openings": n}}
+
+
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
     """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
     so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
@@ -896,7 +919,8 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
     """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
     group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
     rebuilds at 2·L_max each and the wrong receipts at Δ_g/n_g (L_max/n in the group after the stretch), and the
-    snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild."""
+    snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild,
+    and so does each block of the routes' burst."""
     N, b = 1000, 4096
     held = {"weights": 600 * b, "hbm": N * b, "host": 0}
     mem = {"windows": [{"held": held, "average": {"held": held}} for _ in range(12)]}
@@ -909,9 +933,11 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
             t += span
         return out
 
-    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0, ingress_per_ns: float = 0.0) -> dict:
+    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0, ingress_per_ns: float = 0.0,
+             burst: float = 0.0) -> dict:
         return verifier.paced_line(mem, seen(stretch), groups=4, wrong=wrong, blocks=N, rebuild_per_ns=rebuild_per_ns,
-                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b, ingress_per_ns=ingress_per_ns)
+                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b, burst_bytes=burst * b,
+                                   ingress_per_ns=ingress_per_ns)
 
     even, burst = line(1, 1e-3, 50.0), line(9, 1e-3, 50.0)
     assert even["snapshot"]["lost_blocks"] == pytest.approx(burst["snapshot"]["lost_blocks"] - 1e-3 * (80 + 2 * 80) / 8)
@@ -925,6 +951,18 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
     assert linked["ingress_blocks"] == pytest.approx(2e-3 * (120 + 180))
     assert linked["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 3e-3 * (120 + 180) / 120)
     assert linked[verifier.AVERAGE]["lost_blocks"] == pytest.approx((50 + 3e-3 * 300) / 8)
+    bursty, T, A = line(9, 1e-3, 50.0, burst=7.0)["stretches"][1], verifier.TIME_HELD, verifier.AVERAGE
+    assert bursty["burst_absent_blocks"] == pytest.approx(2 * 90 * 7 / 120)
+    assert bursty[T]["lost_blocks"] == pytest.approx(s[T]["lost_blocks"] + 2 * 90 * 7 / 120)
+    assert bursty[A]["lost_blocks"] == pytest.approx(s[A]["lost_blocks"] + 7 / 8)
+
+
+def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_its_routes():
+    """`ingress_bursts` is `ledger.Node.stated`'s B: the rebuild batch in flight always, one second at the disks'
+    ceiling for the charge up to it, and a link window once the charge passes the disks (the link-charged line)."""
+    assert verifier.ingress_bursts(0.0) == timing.CHIP_BYTES
+    assert verifier.ingress_bursts(4.4e9) == timing.CHIP_BYTES + 4.4e9
+    assert verifier.ingress_bursts(54.4e9) == timing.CHIP_BYTES + 4.4e9 + timing.LINK_WINDOW_BYTES
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
@@ -940,7 +978,7 @@ def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registere
         held = [whole | (short or {}) if g == at else whole for g in range(groups)]
         return verifier.paced_line({"windows": [{"held": h, "average": {"held": h}} for h in held]}, seen, groups=4,
                                    wrong=0.0, blocks=N, rebuild_per_ns=0.0, chip_bytes=0, block_bytes=b,
-                                   node_bytes=10 * N * b)
+                                   node_bytes=10 * N * b, burst_bytes=0.0)
 
     assert line()["time"]["weights_bytes"] == line()["snapshot"]["weights_bytes"] == 600 * b
     with pytest.raises(ValueError, match="group 2's least pass read 990 of the 1000 registered blocks"):

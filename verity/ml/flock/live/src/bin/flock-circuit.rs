@@ -200,10 +200,13 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 /// Under the Lean session loop (`plan.lean_frames`), a firewalled table's level-0 hiding and salts are the loop's: it draws
 /// them for the host's packed witness `z` and commits level 0 on them (`Flock.Firewall.Level0`). They replace `l0`'s and
 /// the table's level-0 salts, so the prover commits the codeword the loop did, and the loop's root is returned: the root of
-/// record. The loop keeps it for the session whose `Hello` was answered `coins`, until that session ends. Without the loop,
-/// nothing changes and nothing is returned.
+/// record. The loop keeps it for table `j` of the session whose `Hello` was answered `coins`, until that session ends, and
+/// draws a table's level 0 once. Without the loop, nothing changes and nothing is returned. Under `FC_LEVEL0_TAMPER=MODE`
+/// (the selftest's `zk_worker_level0`), table 0 asks the loop for one more level 0 after its own: `second` for table 0
+/// again, `past` for a table the session does not have (index [`LEVEL0_PAST`]); the loop's refusal goes to
+/// [`LEVEL0_REFUSED`] (a draw it answers goes there as `drawn again`), and the session goes on on the first draw.
 #[cfg(feature = "sha512")]
-fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], z: &[F128],
+fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: usize, z: &[F128],
                l0: &mut flock_core::pcs::ligerito::zk::Level0Zk, salts: &Mutex<flock_live::zk_hooks::LeafSalts>)
                -> Result<Option<Vec<u8>>, String> {
     use flock_core::pcs::ligerito::zk::EXTRA_LANES;
@@ -213,16 +216,35 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], z: 
     }
     let pcs = pcs_of(st, lig);
     let lc = pcs.ligerito_prover_config().expect("Ligerito config");
-    let got = flock_live::firewall::lean_level0(addr, &flock_live::firewall::level0_session(coins), st.m, z, 1 << lc.initial_log_msg_cols, (1 << lc.initial_k) + EXTRA_LANES,
-                                                l0.t_pad, pcs.n_leaves())?;
+    let (session, t_pad) = (flock_live::firewall::level0_session(coins), l0.t_pad);
+    let draw = |table: usize| flock_live::firewall::lean_level0(addr, &session, table, st.m, z, 1 << lc.initial_log_msg_cols,
+                                                                (1 << lc.initial_k) + EXTRA_LANES, t_pad, pcs.n_leaves());
+    let got = draw(j)?;
+    let tamper = std::env::var("FC_LEVEL0_TAMPER").unwrap_or_default();
+    if j == 0 && !tamper.is_empty() {
+        let again = match tamper.as_str() {
+            "second" => draw(0),
+            "past" => draw(LEVEL0_PAST),
+            m => panic!("FC_LEVEL0_TAMPER={m}: second or past"),
+        };
+        *LEVEL0_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(match again {
+            Ok(_) => "drawn again".to_string(),
+            Err(e) => e,
+        });
+    }
     l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
     l0.pads = got.pads;
     salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
     Ok(Some(got.root))
 }
 
+/// The table index `FC_LEVEL0_TAMPER=past` asks the loop's level 0 for: one past any session's tables.
+const LEVEL0_PAST: usize = 1_000_000;
+/// What the loop answered `FC_LEVEL0_TAMPER`'s extra level-0 request: its refusal, or `drawn again`.
+static LEVEL0_REFUSED: Mutex<Option<String>> = Mutex::new(None);
+
 #[cfg(not(feature = "sha512"))]
-fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
+fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: usize, _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
                _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
     Ok(None)
 }
@@ -1912,10 +1934,49 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
         return (Vec::new(), bk);
     }
     let t = Instant::now();
-    let lean = fin.lock().unwrap_or_else(PoisonError::into_inner).rep(req.table, req.rep, &body).unwrap_or_else(|e| panic!("{e}"));
+    let tamper = std::env::var("FC_FINISH_TAMPER").unwrap_or_default();
+    let lean = {
+        let mut f = fin.lock().unwrap_or_else(PoisonError::into_inner);
+        let last = FINISH_SENT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 == FINISH_REPS.load(std::sync::atomic::Ordering::SeqCst);
+        let body = if !tamper.is_empty() && last { finish_tampered(&req, &zk.pads, &zk.ic.salts, &zk.lay, &tamper) } else { body };
+        f.rep(req.table, req.rep, &body)
+    };
+    let lean = match lean {
+        Ok(l) => l,
+        Err(e) if !tamper.is_empty() => {
+            *FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(e);
+            return (Vec::new(), bk);
+        }
+        Err(e) => panic!("{e}"),
+    };
     req.dump_lean(&lean);
     bk.as_object_mut().expect("buckets").insert("t.lean_finish".into(), json!(t.elapsed().as_secs_f64()));
     (lean, bk)
+}
+
+/// `FC_FINISH_TAMPER=MODE` (the selftest's `zk_worker_finish`): the session's last rep request to the Lean finish in time
+/// (the [`FINISH_REPS`]-th, counted under the finish's lock, so every other rep's requests went before it) doctored in one
+/// named way: `pads-zero` (the pads `h` all zero), `vals-chosen` (the first passed value plus one), `coins` (the first
+/// round's first coin plus one) or `final-c` (`final_c` plus one). The loop's finish refuses each (`Flock.Firewall.Finish.RepIn.differs`, and
+/// for `final_c`, which no live inner proof answers, its live-only rule: a rep's file is only the one its `inner` request
+/// computed), and the refusal goes to [`FINISH_REFUSED`].
+static FINISH_REPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FINISH_SENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FINISH_REFUSED: Mutex<Option<String>> = Mutex::new(None);
+
+/// The rep request `req` on the draws `pads` and the pads tree's `salts`, doctored per `FC_FINISH_TAMPER`'s `mode`.
+fn finish_tampered(req: &RepReq, pads: &zkv::Pads, salts: &[u8], lay: &Layout, mode: &str) -> Vec<u8> {
+    let mut p = zkv::Pads { h: pads.h.clone(), mu: pads.mu.clone(), pad_h: pads.pad_h.clone(), pad_mu: pads.pad_mu.clone(),
+                            tau_salt: pads.tau_salt.clone() };
+    let (mut vals, mut rounds, one) = (req.vals.clone(), req.rounds.clone(), F128::new(1, 0));
+    match mode {
+        "pads-zero" => p.h.iter_mut().for_each(|h| *h = F128::ZERO),
+        "vals-chosen" => vals[0] = vals[0] + one,
+        "coins" => rounds[0][0] = rounds[0][0] + one,
+        "final-c" => vals[lay.fc()] = vals[lay.fc()] + one,
+        m => panic!("FC_FINISH_TAMPER={m}: pads-zero, vals-chosen, coins or final-c"),
+    }
+    flock_live::firewall::rep_body(&p, salts, &vals, &req.extras, &rounds)
 }
 
 /// The shift of `final_c'` that zeroes the inner proof's batched constraint on the committed pads, from its coins (`ε`, then
@@ -3272,7 +3333,7 @@ struct Prebuilt {
 /// previous session's device work).
 fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed) -> std::thread::JoinHandle<Prebuilt> {
     let (st, inst, plan) = (st.clone(), inst.clone(), plan.clone());
-    std::thread::spawn(move || {
+    flock_live::spawn(move || {
         let mode = witness_mode(&st, &plan);
         let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
         let (wt0, built_s) = witness_uploaded(&st, &w0, mode);
@@ -3409,7 +3470,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
     let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
@@ -3479,7 +3540,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
             // under the firewall the root is the Lean session loop's
             let lean = match (firewall_on(&tb.st), l0.as_mut(), wits[j].1.as_ref()) {
-                (true, Some(l), Some(WitData::Host((z, ..)))) => Some(lean_level0(plan, &tb.st, lig, &commit, z, l, &salts_t[j])?
+                (true, Some(l), Some(WitData::Host((z, ..)))) => Some(lean_level0(plan, &tb.st, lig, &commit, j, z, l, &salts_t[j])?
                     .ok_or_else(|| flock_live::firewall::refused("a firewalled table without the Lean session loop's level 0"))?),
                 _ => None,
             };
@@ -3512,7 +3573,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let tl0 = Instant::now();
             let mut zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
             let lean_root0 = match (j, firewalled, zk_level0.as_mut(), wt0.as_ref()) {
-                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, &commit, z, l0, salts)?,
+                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, &commit, 0, z, l0, salts)?,
                 _ => None,
             };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
@@ -3681,12 +3742,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     Some(g) => {
                                         let (bk, end) = firewalled_end(g, &mut mch, &mut hook, dev)?;
                                         let (t_up, g) = (tp.elapsed().as_secs_f64(), g.clone());
-                                        std::thread::spawn(move || zk_finish_fw(&z, mch, tp, t_up, bk, &g, end))
+                                        flock_live::spawn(move || zk_finish_fw(&z, mch, tp, t_up, bk, &g, end))
                                     }
                                     None => {
                                         let (proof, cm, bk) = dev?;
                                         let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
-                                        std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk))
+                                        flock_live::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk))
                                     }
                                 });
                                 Ok((Vec::new(), Value::Null))
@@ -3931,6 +3992,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_cut_decode", false, false),
     ("zk_worker_cut_tree", false, false),
     ("zk_worker_wire", false, false),
+    ("zk_worker_finish", false, false),
+    ("zk_worker_level0", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -4144,6 +4207,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "zk_worker_wire" {
         return worker_wire_case(gpu);
+    }
+    if name == "zk_worker_finish" {
+        return worker_finish_case(gpu);
+    }
+    if name == "zk_worker_level0" {
+        return worker_level0_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -4850,7 +4919,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (mut s, at) = (server(st, inst), log.clone());
     // the verifier logs each request before it answers it, so every request of the session is logged by the time the
     // session's last answer reaches the prover
-    std::thread::spawn(move || {
+    flock_live::spawn(move || {
         let Ok((conn, _)) = l.accept() else { return };
         conn.set_nodelay(true).unwrap();
         let (mut r, mut w) = (BufReader::new(conn.try_clone().unwrap()), BufWriter::new(conn));
@@ -4876,6 +4945,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         }
     });
     let plan = Plan::default();
+    FINISH_REPS.store(2 * table_names(plan.tables).len(), std::sync::atomic::Ordering::SeqCst);
     let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, None).unwrap_or_else(|e| refuse(e));
     let plan = Plan { lean_session: frames.is_some(), lean_frames: frames, ..plan };
     let tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
@@ -4887,7 +4957,8 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
     let refused = refused.lock().unwrap_or_else(PoisonError::into_inner).clone();
     json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
-           "wire_refused": refused})
+           "wire_refused": refused, "finish_refused": FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+           "level0_refused": LEVEL0_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone()})
 }
 
 /// One firewalled CPU session in a process of its own ([`WORKER_SESSION`]), its controls `env` and none other: its record.
@@ -4897,7 +4968,8 @@ fn worker_subsession(env: &[(&str, String)]) -> Value {
         .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                "--only", WORKER_SESSION])
         .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
-        .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER");
+        .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER")
+        .env_remove("FC_LEVEL0_TAMPER");
     // the verifier's draw, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
         let v = arg(flag, "");
@@ -4952,6 +5024,78 @@ fn worker_wire_case(gpu: bool) -> Value {
                "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "wire": s.get(i)}))})
     }).collect();
     json!({"case": name, "expect": "each doctored frame dropped (the honest session's requests, accepted) or refused (unknown)",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+}
+
+/// `zk_worker_finish` (live PROTOCOL.md §10.4): the proof files that leave are the loop's finish's on its own frames' state,
+/// whatever the host's rep requests carry. Beside an honest firewalled CPU session, one session per `FC_FINISH_TAMPER` mode,
+/// each in a process of its own, whose last rep request to the Lean finish carries zero pads, a chosen passed value, a
+/// chosen coin or a chosen `final_c`: the finish refuses it (the request is not the frame's, or no live inner proof answers
+/// it), no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish`
+/// included, and does not accept.
+fn worker_finish_case(gpu: bool) -> Value {
+    let name = "zk_worker_finish";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the finish's controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["finish_refused"].is_null();
+    let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
+    let modes: Vec<Value> = [("pads-zero", "its pads are not the frame's draws"), ("vals-chosen", "its passed values are not the ones the frame took"),
+                             ("coins", "its coins are not the ones the stream answered"), ("final-c", "computed live")].iter().map(|&(m, why)| {
+        let v = worker_subsession(&[("FC_FINISH_TAMPER", m.to_string())]);
+        let s: Vec<Value> = seen(&v).into_iter().filter(|x| kind(x) != "refused").collect();
+        let refused = v["finish_refused"].as_str().is_some_and(|r| r.contains(why));
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && v["accepted"] != true && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "finish_refused": v["finish_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+}
+
+/// `zk_worker_level0` (live PROTOCOL.md §10.4): the level 0 a session binds is the loop's one draw for each table, never one
+/// the prover picks among several. Beside an honest firewalled CPU session, one session per `FC_LEVEL0_TAMPER` mode, each in
+/// a process of its own, whose table 0 asks the loop's level 0 for one more after its own: for table 0 again (`second`), or
+/// for a table the session does not have (`past`). The loop refuses it, nothing more is drawn, and the session goes on on the
+/// first draw: the verifier gets the honest session's every request, at its sizes, and accepts.
+fn worker_level0_case(gpu: bool) -> Value {
+    let name = "zk_worker_level0";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the level-0 controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["level0_refused"].is_null();
+    let past = format!("a level-0 request for table {LEVEL0_PAST} of a session with ");
+    let modes: Vec<Value> = [("second", "a second level-0 request for table 0 of this session"), ("past", past.as_str())].iter().map(|&(m, why)| {
+        let v = worker_subsession(&[("FC_LEVEL0_TAMPER", m.to_string())]);
+        let s = seen(&v);
+        let refused = v["level0_refused"].as_str().is_some_and(|r| r.contains(why));
+        let first_miss = (0..h.len().max(s.len())).find(|&i| h.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && v["accepted"] == true && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "level0_refused": v["level0_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": h.get(i), "tampered": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each extra level-0 request refused by the loop, the session on its one draw: the honest session's requests, accepted",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
            "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
@@ -5178,7 +5322,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         let ts = Instant::now();
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
-                sc.spawn(move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
+                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
                     let mut s = server(st, inst);
                     fix_verifier_coins(&mut s, [9; 32]);
                     s
@@ -5326,7 +5470,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                         flock_live::gpu_circuit::HostBuf::prepin(h.zab.len(), depth);
                     }
                 }
-                ahead.push_back((0, std::thread::spawn(move || p)));
+                ahead.push_back((0, flock_live::spawn(move || p)));
             }
             if ahead.front().is_some_and(|(r, _)| *r == run) {
                 let (_, h) = ahead.pop_front().expect("this run's witness");
@@ -5369,7 +5513,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
             emit_one(run, finish(), rtt);
             continue;
         }
-        verdicts.push_back((run, rtt, std::thread::spawn(finish)));
+        verdicts.push_back((run, rtt, flock_live::spawn(finish)));
         while verdicts.len() > verify_ahead {
             let (r, rtt, h) = verdicts.pop_front().expect("a session awaiting its verdict");
             emit_one(r, join(h), rtt);
@@ -5507,7 +5651,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             let (conn, _) = l.accept().unwrap();
             let s = make();
             let (one, free) = (&one, &free);
-            sc.spawn(move || {
+            flock_live::spawn_scoped(sc, move || {
                 // a session's panic stops the server
                 if catch_unwind(AssertUnwindSafe(|| one(i, conn, s))).is_err() {
                     std::process::exit(101);
@@ -5651,6 +5795,7 @@ fn stacked() {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     if cmd == "replay-coins" {
         let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
@@ -5709,6 +5854,9 @@ fn main() {
     // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
     if flag("--gpu") && st.circuit.types.len() > 12 {
         refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
+    if flag("--gpu") {
+        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
     }
     // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
     if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {

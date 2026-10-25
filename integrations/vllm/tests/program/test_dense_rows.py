@@ -91,6 +91,7 @@ def test_elementwise_kernels_decline_non_finite_words_and_overflow():
         assert sc.declined > 0, str(sc)
 
 
+@pytest.mark.slow
 def test_bf16_scalar_chain_on_every_bf16_word():
     words = [ALL_BF16.reshape(-1, 16)]
     _check(bind(dense.Bf16Tanh, N=16), words, declined=NONFINITE_INSTANCES)

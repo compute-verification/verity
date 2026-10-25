@@ -75,8 +75,8 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
        "run_ended": "ended rc={rc} after {after} on {node}",
-       "stalled": "streamed nothing for {minutes} min since {since} while RUNNING (a hung call or a suspended VM); the watch "
-                  "{action}",
+       "stalled": "streamed nothing for {minutes} min since {since}, its agent not moving either (a hung call or a suspended "
+                  "VM); the watch {action}",
        "idle_after_run": "sat idle after its run {ended_run} ended ({result}), with nothing resuming it for {minutes} min; the "
                          "watch {action}",
        "relaunch": "needs a fresh launch ({reason}); the watch {action}",

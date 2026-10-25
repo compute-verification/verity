@@ -369,7 +369,6 @@
         "Security/Models/Accounting/Guarantees/RateAuditPartial.lean",
         "Security/Models/Accounting/Guarantees/RateAuditRemote.lean",
         "Security/Models/Accounting/Guarantees/RateAuditSketch.lean",
-        "Security/Models/Accounting/Guarantees/Remote.lean",
         "Security/Models/Accounting/Guarantees/Requirement.lean",
         "Security/Models/Accounting/Guarantees/Responder.lean",
         "Security/Proofs/Accounting/Bandwidth.lean",
@@ -418,8 +417,10 @@
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/"
+        "benchmarks/network_sim/",
+        "benchmarks/prove_path/"
       ],
       "branch_suffixes": [
         "728f",
@@ -588,6 +589,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py"

@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "ReplayAdvance_v1{R=3,W=2,A=3,L=40,NB=20,IW=4,Q=5,D=6,P=3,K=3}": {
+   "and": 616
+  },
+  "ReplayAdvance_v1{R=7,W=2,A=3,L=1024,NB=96,IW=4,Q=14,D=15,P=670,K=14}": {
+   "and": 1677
+  },
+  "ReplayLoad_v1{R=3,W=2,A=3,L=40,NB=20,IW=4,Q=5,D=6,P=3,K=3}": {
+   "and": 795
+  },
+  "ReplayLoad_v1{R=7,W=2,A=3,L=1024,NB=96,IW=4,Q=14,D=15,P=670,K=14}": {
+   "and": 4062
+  }
+ }
+}

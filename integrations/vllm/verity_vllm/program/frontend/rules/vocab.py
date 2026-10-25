@@ -439,7 +439,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
            # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
            "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
-           # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
+           # the same select at a constant split count S (the registered S): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against

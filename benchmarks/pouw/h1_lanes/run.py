@@ -5,9 +5,10 @@ proved as its 32 lanes and its combine (PRF-134, option A:
 statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
-  statement is unit 0 of its own Program, a one-call template over the Definition (STAND-IN for the window Program whose
-  units the 33 statements realize, BRIDGE2's), and the Lean verifier derives its unit from its own copy of that Program
-  (``--program``, ``--partition``). Flat, or templated under ``H1_TMPL`` (`h1unit.layout`).
+  statement is the one unit of the Program a served window's verifier derives for it from its own copy of the window
+  Program (`h1window.leaf_program`, here of a one-call window at K over this leaf's tile), and the Lean verifier derives
+  its unit from its own copy of that Program (``--program``, ``--partition``). Flat, or templated under ``H1_TMPL``
+  (`h1unit.layout`).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
@@ -21,12 +22,14 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
 * **Each statement's rows** are all ports of the verifier's own registered reads (`leaf_lanes.own`): `leaf_lanes.reads`'
   (lane l's ``a0..a3``, ``b0..b7``, ``zy`` and ``partials`` (row l); the combine's ``p0..p31`` and ``receipt``) and its
   known ports (`leaf_lanes.known_rows`, `produced.known_port`): lane l's ``admit`` and ``pub`` (salt, position, roots and the
-  lane index l as a u16 word, `lane_word`, under `h1unit.pub_salt`), and every statement's output ``o0``, the row 1 under
+  lane index l as a u16 word, `h1zy.LANE`, under `h1unit.pub_salt`), and every statement's output ``o0``, the row 1 under
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
-  registration record and produced record alone (`leaf_lanes.verifier_entries`), the public file `h1unit.verifier_pub`'s.
-  Each check is the Lean verifier's verdict and `pouw-leaf-own`'s (PoUW's `PouwWindow.Lanes.leafOwn?`): the file, as
-  flock-verify parses it, holds the layout's data ports at the roots of the records the verifier holds (``holds``), and
-  each of the statement's sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the draw policy).
+  registration record and produced record alone (`leaf_lanes.verifier_entries`), at the leaf's placement in the window's
+  tables (`h1window.place`: unit 0 of the one-call window, one round), the public file `h1unit.verifier_pub`'s.
+  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
+  window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
+  the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
+  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the draw policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -63,7 +66,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
 
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
 WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced r c k
-statement`` a Lean check and `pouw-leaf-own`'s), WORK/plan.json
+descriptor rounds unit statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
 and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every check's verdict
 is the expected one, the honest statements' reported roots are the produced record's (`produced.opened`) and their
 opened rows its openings (`produced.shared`).
@@ -86,12 +89,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
 import h1unit as U  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import Coll, concat  # noqa: E402
-from verity.ml.circuits.types import Array  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
@@ -108,6 +109,8 @@ ROOTS_TAG = b"verity/pouw/h1-lanes/roots/v0\0"
 DRAW_TAG = b"verity/pouw/h1-lanes/stand-in-draw/v0\0"
 SALT_TAG = b"verity/pouw/h1-lanes/stand-in-salt/v0\0"
 REGISTERED = (LL.A, LL.B, LL.ZY, LL.RECEIPT)
+#: the one-call window's rounds (STAND-IN for the window's round log: one round, its call the leaf's)
+STEPS = 1
 #: every negative check's expected verdict
 EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEPT", "lane3-reads-row4": "REJECT",
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
@@ -118,7 +121,7 @@ EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEP
 #: the refusal a negative's verdict names
 WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's",
        "combine-skips-p5-bit": "registered reads: known port p5: no computed row of the circuit reads bit",
-       "other-registration-file": "registered reads: port a0 is not the layout's read of a at the registered root"}
+       "other-registration-file": "registered reads: port a0 is not the layout's read of "}
 #: a check of another check's statement against its registered file without ``complete``
 OPEN = {"lane3-index-from-public-open": "lane3-index-from-public"}
 #: a check of another check's statement against its registered file with one port's ``read_in_full`` mark removed
@@ -162,21 +165,6 @@ def _template(name: str, d):
                                     conformance="protocol-defined", register=False, **ports))
 
 
-def lane_word(d):
-    """STAND-IN: the lane ``d`` with its index read from a whole u16 word, its low `h1zy.lane_bits` bits, the rest unread. A
-    C-Flock row is whole u16 words, and the index (5 bits at 32 × 32) leaves ``pub`` 1605 bits."""
-    params, ret = d.signature()
-    nb = params[-1][1].n
-
-    def body(B, S, *args):
-        *rest, word = args
-        return B.call(d, *rest, Coll(Array(nb, BL.BIT), concat([word[t].refs for t in range(nb)])))
-
-    decl = d.defn.ports
-    return bind(CompositeDefinition("H1LanesLaneWord", 1, (), lambda S: ((*params[:-1], ("lane", Array(16, BL.BIT))), ret), body,
-                                    conformance="protocol-defined", register=False, ports=lambda S: decl(d.S())))
-
-
 def lazy_combine(d, x: int, j: int, i: int):
     """The combine ``d`` reading bit ``i`` of its partials row ``x`` in place of bit ``j``, so that no wire reads bit
     ``j``: a circuit that leaves a ``read_in_full`` row's bit unread (``combine-skips-p5-bit``)."""
@@ -218,6 +206,21 @@ def bound(name: str, d) -> Bound:
     return Bound(d, program, query, part)
 
 
+def window(t, k: int) -> Program:
+    """A window of one call at K over the leaf's tile ``t``: its one unit is the leaf."""
+    return HW.program((("w", k, RC[1]),), (("w", 0),), RC[0], RC, unit=lambda _k: Z.unit(t))
+
+
+def derived(win: Program, k: int, kind: str) -> Bound:
+    """``kind``'s statement at K as a served window's verifier derives it from its own copy of the window Program ``win``
+    (`h1window.leaf_program`): the one-call Program of its wrapper over the lane or combine of ``win``'s template at K."""
+    program, query = HW.leaf_program(win, k, kind)
+    part = P.partition(program, query)
+    if P.units(program, query) != 1:
+        raise AssertionError(f"{kind}: the statement's Program is one unit")
+    return Bound(HW.leaf_unit(win, k, kind), program, query, part)
+
+
 # -- the leaf, its registration and its partials -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -257,24 +260,27 @@ class World:
     reg_record: dict
 
 
-def register(prog: str, leaf: Leaf) -> tuple[dict, tuple, list[int]]:
-    """The leaf's registered values under ``prog``, the roots its seeds read and its receipt."""
-    regs = {LL.A: G.Registered.commit(prog, LL.A, code_words(leaf.a, leaf.sa).tolist(), None, G.WORD_BITS, V2),
-            LL.B: G.Registered.commit(prog, LL.B, code_words(leaf.b, leaf.sw).tolist(), None, G.WORD_BITS, V2),
-            LL.ZY: G.Registered.commit(prog, LL.ZY, [U.record_words(*leaf.zy).tolist()], None, G.WORD_BITS, V2)}
+def register(prog: str, leaf: Leaf, place: dict) -> tuple[dict, tuple, list[int]]:
+    """The leaf's registered values under ``prog``, each in its window table (``place``, the leaf's from its row 0), the
+    roots its seeds read and its receipt."""
+    def commit(v, rows):
+        return G.Registered.commit(prog, place[v][0], rows, None, G.WORD_BITS, V2)
+
+    regs = {LL.A: commit(LL.A, code_words(leaf.a, leaf.sa).tolist()), LL.B: commit(LL.B, code_words(leaf.b, leaf.sw).tolist()),
+            LL.ZY: commit(LL.ZY, [U.record_words(*leaf.zy).tolist()])}
     roots = (hashlib.sha512(ROOTS_TAG + regs[LL.A].root).digest(), regs[LL.B].root)
     z, receipt = H.reference(leaf.a, leaf.b, leaf.salt, leaf.position, roots, stream=U.tile() == "v3")
     assert [v & 0xFFFFFFFF for v in z] == [v & 0xFFFFFFFF for v in leaf.zy[0]], "the record's z is the tile's"
-    regs[LL.RECEIPT] = receipt_reg(prog, receipt)
+    regs[LL.RECEIPT] = receipt_reg(prog, receipt, place)
     return regs, roots, list(receipt)
 
 
-def receipt_reg(prog: str, receipt: list[int], flip: int | None = None) -> G.Registered:
-    """The registered receipt, with bit ``flip`` of it flipped when given."""
+def receipt_reg(prog: str, receipt: list[int], place: dict, flip: int | None = None) -> G.Registered:
+    """The registered receipt in its window table (``place``), with bit ``flip`` of it flipped when given."""
     rc = list(receipt)
     if flip is not None:
         rc[flip // 32] ^= 1 << (flip % 32)
-    return G.Registered.commit(prog, LL.RECEIPT, [U.receipt_words(rc).tolist()], None, G.WORD_BITS, V2)
+    return G.Registered.commit(prog, place[LL.RECEIPT][0], [U.receipt_words(rc).tolist()], None, G.WORD_BITS, V2)
 
 
 def lane_rows(leaf: Leaf, ln: int) -> tuple[list, list, list, list]:
@@ -385,7 +391,7 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     kr = known_rows(ctx, w, kind, ln, index)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, w.registration, schema=V2) for p, (v, row, salt) in kr.items()}
     reads = LL.registered_file(LL.reads(*RC, kind, ln), ent, roots, {v: V2 for v in ent},
-                               {p: kp for p, (kp, _) in vk.items() if p not in dropped})
+                               {p: kp for p, (kp, _) in vk.items() if p not in dropped}, place=ctx.place)
     want = expected(kind, ln, w, ins, lane_index)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: known(row_ok, salt_ok) if LL.OK in free else known_opening(ctx, w, v_ok, row_ok, salt_ok)}
@@ -502,6 +508,7 @@ class Ctx:
     prog: str = ""
     stagers: dict | None = None
     worlds: dict | None = None
+    place: dict | None = None
 
 
 def prepare(args) -> None:
@@ -513,8 +520,14 @@ def prepare(args) -> None:
     ctx = Ctx(work, args.name, args.k, args.position)
     t = tile(args.k)
     ctx.wp = 2 * LL.words(args.k)
-    ctx.lane, ctx.combine = bound("H1LanesLaneStatement", lane_word(Z.lane(t))), bound("H1LanesCombineStatement", Z.combine(t))
+    win = window(t, args.k)
+    ctx.lane, ctx.combine = derived(win, args.k, LL.LANE), derived(win, args.k, LL.COMBINE)
     ctx.reg = ctx.lane
+    ctx.place = HW.place(win, 0, STEPS)
+    if any(base for _t, base in ctx.place.values()):
+        raise AssertionError(f"the one-call window's unit 0 reads its values from row 0, not {ctx.place}")
+    (work / "verifier" / "window.json").write_bytes(canonical_json(encode_program(win)))
+    (work / "verifier" / "rounds.json").write_text(json.dumps([{"round": s} for s in range(STEPS)]))
     ctx.prog = P.program_digest(ctx.reg.program)
     for kind, b in ((LL.LANE, ctx.lane), (LL.COMBINE, ctx.combine)):
         (work / "verifier" / f"{kind}.program.json").write_bytes(canonical_json(encode_program(b.program)))
@@ -524,19 +537,19 @@ def prepare(args) -> None:
 
     salt = hashlib.sha512(SALT_TAG + args.name.encode()).digest()
     la, lb = leaf_data(args.seed, args.k, salt, args.position), leaf_data(args.seed + 1, args.k, salt, args.position + 1)
-    regs, roots, receipt = register(ctx.prog, la)
+    regs, roots, receipt = register(ctx.prog, la, ctx.place)
     pa = partials(la, roots)
     xor = [0] * (ctx.wp // 2)
     for p in pa:
         xor = [x ^ v for x, v in zip(xor, u32_words(p))]
     assert xor == [v & 0xFFFFFFFF for v in receipt], "the honest partials XOR to the receipt"
     A = world("honest", ctx, la, regs, roots, pa)
-    regs_b, roots_b, _ = register(ctx.prog, lb)
+    regs_b, roots_b, _ = register(ctx.prog, lb, ctx.place)
     B = world("other", ctx, lb, regs_b, roots_b, partials(lb, roots_b))
     swapped, mixed = list(pa), list(pa)
     swapped[3], swapped[4] = pa[4], pa[3]
     mixed[5] = list(B.tree.rows[5])
-    regs_r = {**regs, LL.RECEIPT: receipt_reg(ctx.prog, receipt, flip=3 * 32 + 17)}
+    regs_r = {**regs, LL.RECEIPT: receipt_reg(ctx.prog, receipt, ctx.place, flip=3 * 32 + 17)}
     ctx.worlds = {"honest": A, "other": B, "swap": world("swap", ctx, la, regs, roots, swapped),
                   "mixed": world("mixed", ctx, la, regs, roots, mixed), "receipt": world("receipt", ctx, la, regs_r, roots, pa)}
     for nm in ("swap", "mixed"):
@@ -593,13 +606,13 @@ def prepare(args) -> None:
             r = by[tg]
             f.write(f"C\t{tg}\t{r['dir']}\t{r['pub']}\t{r['registered']}\t{r['program']}\t{r['partition']}\t"
                     f"{EXPECT.get(tg, 'ACCEPT')}\t{vd / (r['holds'] + '.registration.json')}\t"
-                    f"{vd / (r['holds'] + '.produced.json')}\t{RC[0]}\t{RC[1]}\t{args.k}\t{r['stmt']}\n")
+                    f"{vd / (r['holds'] + '.produced.json')}\t{vd / 'window.json'}\t{vd / 'rounds.json'}\t0\t{r['stmt']}\n")
     plan = {"checks": {tg: {**by[tg], "expect": EXPECT.get(tg, "ACCEPT")} for tg in checks}, "honest": honest}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     summary = {"k": args.k, "tile": U.tile(), "lanes": LL.lanes(*RC), "words": LL.words(args.k),
                "programs": {kind: P.program_digest(b.program)
                             for kind, b in (("lane", ctx.lane), ("combine", ctx.combine), ("lazy", ctx.lazy))},
-               "registration": A.registration, "draw": A.draw, "produced": A.record, "produced_check": produced_check,
+               "place": ctx.place, "registration": A.registration, "draw": A.draw, "produced": A.record, "produced_check": produced_check,
                "forged_partial": ctx.worlds["mixed"].tree.bcs[5].hex(),
                "ands": {"lane": by["lane0"]["ands"], "combine": by["combine"]["ands"]},
                "ok": {tg: by[tg]["ok"] for tg in checks}, "binding": {tg: by[tg]["binding"] for tg in checks},
@@ -687,7 +700,7 @@ def cost(args) -> None:
     lane = ([(f"a{s}", [f"a[{s}]"]) for s in range(LL.LANE_ROWS)] + [(f"b{s}", [f"b[{s}]"]) for s in range(LL.LANE_COLS)]
             + [(LL.ADMIT, [LL.ADMIT]), (LL.ZY, [LL.ZY]), (LL.PARTIALS, [LL.PARTIALS]), ("pub", list(LL.PUBLIC))])
     units = {"combine": (Z.combine(t), [(f"p{x}", [f"{LL.PARTIALS}[{x}]"]) for x in range(n)] + [(LL.RECEIPT, [LL.RECEIPT])]),
-             "lane": (lane_word(Z.lane(t)), lane)}
+             "lane": (Z.lane(t), lane)}
     out = {"k": args.k, "tile": U.tile(), "lanes": n, "words": LL.words(args.k)}
     for name, (d, rows) in units.items():
         t0 = time.time()

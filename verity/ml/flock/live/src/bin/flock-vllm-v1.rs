@@ -620,6 +620,7 @@ fn selftest(st: &Arc<VllmStmt>, inst: &Arc<Instances>, gpu: bool) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(Instances::load(&arg("--instances", "instances.bin")));

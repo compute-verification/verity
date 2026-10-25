@@ -193,4 +193,72 @@ def OverlapFloorKOneSidedPerProver : Prop :=
     ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
       (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
 
+/-! ### The floors at call scope under J10-R
+
+Each floor of record and its form per prover, restated on J10-R's call design (`Definitions.Pouw.RelativeSecurityJ10R`;
+RT-ALGO-17, card bbf40543): a stage is a call of `n` rows, `n'` columns and `B` segments of `L`, its run one
+straight-line program over the call's bits, both sides shared across the call, each segment's coin × coin part one
+`⟨n, L, n'⟩` product. The premises are the J10-R mirrors of the floors' own (`ServiceSoundStagedJ10R`,
+`KScopeOneSidedJ10R`, `ChargeVF3j16J10R`; overlapped, `ServiceSoundOverlapJ10R`, `KScopeOverlapOneSidedJ10R`,
+`ChargeVF3j16OverlapJ10R`; per prover, the service premises' per-prover forms). The floor and the luck are the per-unit
+floors': `L n n' B` products a call, `M N K`, at the parity luck 0.854 and `2^{−40}`. The frame is a row's dither bits
+and a column's coin bits of one segment, so no plane weight enters. The floors per unit above stay as they are. -/
+
+/-- `StagedFloorKOneSided` at call scope under J10-R: the staged window's service floor for one-sided operands of any
+form, each stage a call. In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` call draws on
+J10-R's call design (`JStage`: `n` rows, `n'` columns, `B` segments of `L`, integers mod `2^32` read mod 2 by `toF2`),
+under the three premises, every adversary that commits first has its accepted runs charged below
+`(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`: `c = 1` on the call's
+one-sided scope (`KScopeOneSidedJ10R`). -/
+def StagedFloorKOneSidedJ10R : Prop :=
+  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
+    (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
+    0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ δz →
+    ServiceSoundStagedJ10R Mc S run e δb δz → KScopeOneSidedJ10R Mc S run → ChargeVF3j16J10R Mc S run e κ Vmax →
+    ServiceFloor Mc S ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
+
+/-- `OverlapFloorKOneSided` at call scope under J10-R: the overlapped window's service floor for one-sided operands of
+any form per call. In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` call draws of any
+shapes (call `t`: `n t` rows, `n' t` columns, `B t` segments of `L`, integers mod `2^32` read mod 2 by `toF2`)
+overlapping at any depth, its check's cell-block drawn uniformly among every call's, under the three premises, every
+adversary that commits first has its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with
+probability at most `2^{−40} + R (δb + δz)`: `c = 1` on the calls' one-sided scope (`KScopeOverlapOneSidedJ10R`). -/
+def OverlapFloorKOneSidedJ10R : Prop :=
+  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
+    (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
+    0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
+    ServiceSoundOverlapJ10R Mc S run e δb δz → KScopeOverlapOneSidedJ10R Mc S run →
+      ChargeVF3j16OverlapJ10R Mc S run e κ Vmax →
+    ServiceFloor Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
+
+/-- `StagedFloorKOneSidedPerProver` at call scope under J10-R: `StagedFloorKOneSidedJ10R` on
+`ServiceSoundStagedJ10RPerProver` at the analysis's finders `fb` and `fz`, every adversary `M` that commits first having
+its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
+`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+def StagedFloorKOneSidedJ10RPerProver : Prop :=
+  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
+    (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+    0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
+    ServiceSoundStagedJ10RPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOneSidedJ10R Mc S run →
+      ChargeVF3j16J10R Mc S run e κ Vmax →
+    ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
+      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+
+/-- `OverlapFloorKOneSidedPerProver` at call scope under J10-R: `OverlapFloorKOneSidedJ10R` on
+`ServiceSoundOverlapJ10RPerProver` at the analysis's finders `fb` and `fz`, every adversary `M` that commits first having
+its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
+`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+def OverlapFloorKOneSidedJ10RPerProver : Prop :=
+  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
+    (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+    0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
+    ServiceSoundOverlapJ10RPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOverlapOneSidedJ10R Mc S run →
+      ChargeVF3j16OverlapJ10R Mc S run e κ Vmax →
+    ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
+      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+
 end Pouw.Guarantees.RelativeSecurity

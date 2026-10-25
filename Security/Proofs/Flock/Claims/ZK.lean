@@ -159,6 +159,8 @@ import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.FinishLane
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
+import Proofs.Flock.Claims.ZK.RepLog
+import Proofs.Flock.Claims.ZK.CutPrefix
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -527,7 +529,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`Flock.Firewall.Link.root_eq`, `cap_eq`), the switched prover's level-0 leaves are the honest prover's
   (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
   encoding of the switched cut (`Masked.enc0_swCutAt`), and at the deployed session `LinkRoundEq` follows from the
-  firewall's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**).
+  firewall's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**). Where the
+  release's link is the loop's own (`Loop.linkOf`, the roots of the level 0 the loop drew, as its `Commit` carries
+  them), `LinkIs` holds at a `Live` statement whose drawn level 0 is the tape's (`Loop.LinkLevel0`, from `Loop.Src`,
+  **`LeanRelease.linkRoundEq_ofLoop`**, `Proofs.Flock.SessionLoop.Link`).
 * `FinishRound`: `FinalRoundEq` split at its branch. On a live history whose last coins the frame takes, every table
   admits the opened coins (`LeanRelease.FrameAdmits`, one of the transport's trusts: the frame refuses each coin fault
   `Admits` excludes, and the state the transport hands it is its own run, the session loop's, `Flock.Firewall.Frames`),
@@ -758,6 +763,12 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`LeanRelease.RoundFrames`, `release_of_roundFrames`), so wherever the device sends the session's frames with each
   pad added back (`RoundHonest`, `roundFrames_of_honest`); that gives `LiveRoundEq` and `FillRoundEq`
   (`LeanRelease.liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
+* `RepLog`: a cut rep's rounds are its log's bodies (`RepLog.repCut_rounds`): round `j` from a log of `L` bodies squeezes
+  at most `B` of `coin (L + j)`'s coins, and its bytes are body `L + j`, the rep's domain frame first at round `0` only
+  and the squeeze's frame last (`RoundAt`).
+* `CutPrefix`: a cut rep stopped at body `n` and one stopped later agree up to the stop (`CutPrefix.repCut_cut_agree`):
+  the same end, or the earlier threw right after body `n` and the later's bodies extend it (`eq_of_agree`,
+  `prefix_of_agree'`); a rep run from a longer history sends the same bodies after it (`repCut_shift`, `go_of_shift`).
 * `FrameOpen`: level 0's masked rounds. The pads enter the masked Ligerito only there, additively (its out-of-domain
   value, its first `k_0` lane messages, the pair's sums), so the firewall's zero-pad round is the rep's round at its pads
   with each pad added back (`oodFr_unmask`, `pairFr_unmask`, characteristic 2), at absorbed positions past the
