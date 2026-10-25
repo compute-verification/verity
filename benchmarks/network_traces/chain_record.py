@@ -1,0 +1,287 @@
+"""chain-record: the network chain's run of record, from the gate's fetched tarballs to one report
+(`chain_record.sh` runs it on a CPU machine). Each step reads what the step before it kept; none drives an endpoint.
+
+    python benchmarks/network_traces/chain_record.py custody --gates DIR --out FILE
+    python benchmarks/network_traces/chain_record.py certs --run DIR [--client DIR] [--deployed] --out FILE
+    python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--n2 SUMMARY] [--scan SUMMARY]
+      [--job FILE] --out DIR
+
+* **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as `vy-challenger-gate
+  fetch` writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
+  files; it proves nothing about what the gate ran.
+* **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
+  ``certificates.jsonl`` or ``certified.jsonl``, the certified records, and ``clocks.jsonl``, the clock certificates.
+  Each window's two records are held to the certifier's key and session in ``--run``'s ``deployment.json`` by the host
+  audit (`certifier_serve._certified`, N2's audit without its head checks) under the syncs the certifier signed
+  (`advised.SignedClocks`), never the plan's. ``--deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`.
+* **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
+  the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` (#4326) summed by
+  `periodLeak_le_sum` (#4324). N2's summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved)
+  or, once it lands, N2-ZK's sampled draw's, read by the same fields; scan's is `scan_zk.py prove`'s, a stand-in on its
+  own synthetic warden run until IO-TIE's ``--warden-run`` takes the gate's warden rows.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import math
+import sys
+from fractions import Fraction
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+SCHEMA = "verity-network-chain/record-report/v1"
+DELTAS = (0.5, 2.0 ** -20)
+
+CLEAR = {
+    "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
+    "certificates": "at the client, on its own kept files: each certificate's and clock certificate's LMS signature "
+                    "under the certifier's key and session, and the host audit of each window's certified heads "
+                    "(the client's own records) against them",
+    "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
+          "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
+          "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
+    "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
+            "(IoTieRequest) stays in the clear tonight, outside the proofs",
+    "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
+}
+
+
+def _json(path) -> dict | None:
+    p = Path(path) if path else None
+    return json.loads(p.read_text()) if p and p.is_file() else None
+
+
+def subset_bound(n: int, k: int, delta: float) -> int | None:
+    """The fewest wrong units b such that an accepted draw of k of n units, uniform without replacement, hides more
+    than b except with probability δ: the least b with C(n − b − 1, k) / C(n, k) ≤ δ. Selection All (k = n) is 0."""
+    if n <= 0 or not 0 < k <= n:
+        return None
+    total = math.comb(n, k)
+    return next(b for b in range(n) if math.comb(n - b - 1, k) <= delta * total)
+
+
+def eps_at_delta(n: int, k: int, law: str) -> dict:
+    return {"law": law, "units": n, "drawn": k,
+            "wrong_units_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
+            "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
+                         "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
+
+
+# --- custody ----------------------------------------------------------------------------------------------------------
+
+def custody(gates: Path) -> dict:
+    runs = []
+    for end in sorted(gates.rglob("end.json")):
+        root, doc = end.parent, json.loads(end.read_text())
+        files = doc.get("files") or {}
+        bad = {}
+        for rel, want in files.items():
+            f = root / "out" / rel
+            got = hashlib.sha512(f.read_bytes()).hexdigest() if f.is_file() else None
+            if got != want:
+                bad[rel] = "missing" if got is None else "sha512 differs"
+        request = _json(root / "request.json") or {}
+        summary = _json(root / "out" / "summary.json") or {}
+        runs.append({"gate_run": root.name, "dir": str(root.relative_to(gates)), "ended": doc.get("ended"),
+                     "ended_utc": doc.get("ended_utc"), "files": len(files), "mismatches": bad,
+                     "request": request, "lms_height": summary.get("lms_height"), "windows": summary.get("windows"),
+                     "profile": summary.get("profile")})
+    ok = bool(runs) and all(r["files"] and not r["mismatches"] for r in runs)
+    return {"verdict": "accepted" if ok else "refused", "gate_runs": runs, "in_the_clear": CLEAR["custody"]}
+
+
+# --- certificates -----------------------------------------------------------------------------------------------------
+
+def certs(run: Path, client: Path, deployed: bool = False) -> dict:
+    import certifier_serve as cs
+    from verity.ml.crypto import lms
+    from verity.core.protocols.certifier import advised as AD
+
+    plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
+                                                                    "deployment.json"))
+    setup, key = cs.ar.Setup(report), cs.read_public(dep["certifier_key"])
+    session, windows = bytes.fromhex(dep["session"]), plan["windows"]
+    profile = plan.get("occupancy") or {}
+    lw = cs.LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, key, dep["run_id"], session,
+                        ingress=setup.ingress_params, proof_deadline=cs.PROOF_DEADLINE_S,
+                        occupancy=(profile.get("egress"), profile.get("ingress")), served=cs.served_profile(plan))
+    kept = next((client / n for n in ("certificates.jsonl", "certified.jsonl") if (client / n).is_file()), None)
+    clocks_file = client / "clocks.jsonl"
+    out: dict = {"client": str(client), "records_file": kept and kept.name,
+                 "clocks_file": clocks_file.name if clocks_file.is_file() else None, "windows": windows,
+                 "key": {"params": list(dep["certifier_key"]["params"]), "key_id": dep["certifier_key"].get("key_id"),
+                         "deployed": tuple(dep["certifier_key"]["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W,
+                                                                               lms.DEPLOYED.H)},
+                 "link": lw.link, "in_the_clear": CLEAR["certificates"]}
+    if kept is None or out["clocks_file"] is None:
+        return out | {"verdict": "refused", "why": f"{client}: the client kept no certified records or no "
+                                                   "clocks.jsonl"}
+    certified, refused = cs.read_certified(kept)
+    clocks = cs.read_clocks(clocks_file)
+    signed = list(AD.SignedClocks(key, session, tuple(clocks)).syncs(lw.link))
+    declared = [cs.ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    rows = []
+    for w in range(windows):
+        pair = certified.get((cs.Direction.EGRESS, w)), certified.get((cs.Direction.INGRESS, w))
+        if None in pair:
+            rows.append({"window": w, "certified": False, "why": "no certified record"})
+        elif w >= len(signed):
+            rows.append({"window": w, "certified": False, "why": "no clock certificate verifies for the window"})
+        else:
+            rows.append({"window": w, "certified": bool(cs._certified(lw, lw.commit(w, *pair), signed))})
+    out |= {"clock_certificates": len(clocks), "clocks_signed": len(signed),
+            "signed_are_declared": signed == declared[:len(signed)] and len(signed) == len(declared),
+            "issuer_refused": refused, "certified_windows": sum(r["certified"] for r in rows), "rows": rows}
+    ok = (out["certified_windows"] == windows and out["clocks_signed"] >= windows and not refused
+          and (out["key"]["deployed"] or not deployed))
+    why = None if ok else ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
+                           else "a window's records or clock don't verify")
+    return out | {"verdict": "accepted" if ok else "refused", "why": why}
+
+
+# --- report -----------------------------------------------------------------------------------------------------------
+
+def n2_step(s: dict | None, certs_doc: dict) -> dict:
+    if s is None:
+        return {"verdict": "not run", "in_the_clear": CLEAR["n2"]}
+    members = {}
+    for name, m in (s.get("members") or {}).items():
+        wins = m.get("windows") or []
+        members[name] = {"network_accepted": (m.get("network") or {}).get("accepted"),
+                         "refused_windows": (m.get("network") or {}).get("refused"),
+                         "windows": len(wins), "accepted_windows": sum(bool(w.get("accepted")) for w in wins),
+                         "lean_proved": sum(bool((w.get("proof") or {}).get("proved")) for w in wins),
+                         "as_expected": sum(bool(w.get("as_expected")) for w in wins),
+                         "leaked": (m.get("received") or {}).get("leaked"), "ok": m.get("ok"),
+                         "prove_s": round(sum((w.get("prove") or {}).get("session_s") or 0 for w in wins), 1),
+                         "verify_s": round(sum(w.get("verify_s") or 0 for w in wins), 1)}
+    honest = members.get("honest") or {}
+    n = honest.get("windows") or (s.get("link") or {}).get("planned_windows", {}).get("honest") or 0
+    drawn = s.get("drawn", n)
+    law = s.get("law", "all")
+    proved = bool(members) and s.get("ok") is True
+    return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
+            ("dry" if "members" in s and not honest.get("windows") else "failed"),
+            "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
+            "negatives": {k: v["network_accepted"] is False for k, v in members.items() if k != "honest"},
+            "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
+                                                                      "found them equal to the signed ones: "
+                                                                      f"{certs_doc.get('signed_are_declared')}"},
+            "eps_at_delta": eps_at_delta(n, drawn, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
+
+
+def scan_step(s: dict | None, warden_run: str | None) -> dict:
+    if s is None:
+        return {"verdict": "not run", "in_the_clear": CLEAR["scan"]}
+    rounds = {}
+    for name, r in (s.get("rounds") or {}).items():
+        a = r.get("audit") or {}
+        rounds[name] = {"accepted": a.get("accepted"), "window_accepted": a.get("window_accepted"),
+                        "verdicts": a.get("verdicts"), "why": a.get("why"),
+                        "wrong_units": (a.get("audit") or {}).get("wrong_units"), "ok": r.get("ok")}
+    honest = rounds.get("honest") or {}
+    units = 2 * int(s.get("T") or 0)
+    return {"verdict": ("accepted" if honest.get("window_accepted") else "refused") if rounds else "dry",
+            "ok": s.get("ok"), "rounds": rounds,
+            "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k != "honest"},
+            "stand_in": None if warden_run else "scan_zk's own synthetic warden run (scan_traffic), not the gate's "
+                                                "rows: IO-TIE's --warden-run takes those",
+            "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(s.get("drawn") or units),
+                                                                    s.get("law") or "all"),
+            "in_the_clear": CLEAR["scan"]}
+
+
+def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict) -> dict:
+    rows = cert.get("rows") or []
+    honest = (n2.get("members") or {}).get("honest") or {}
+    acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
+    return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted (#4326), KS as hypothesis",
+            "sum": "NetTiming.periodLeak_le_sum (#4324): Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
+            "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
+            "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
+            "sum_eps": f"{len(rows)}·(δ + ε_ks + ε_bind)",
+            "a": "log2 #Ss + Σ_c log2(cap_c + 1), charged once a period",
+            "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
+            "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
+            "uncovered": [
+                "the I/O tie (IoTieRequest) is checked in the clear tonight, outside the proofs",
+                "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
+                "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
+                "are run conditions, not yet named assumptions",
+                "B_reg: the trace's values at reg are the registration's (proofs' #4253)",
+                "#(freeInputs \\ reg) is not bounded by the advice bits until V3's padding (NET-68): b_w is vacuous",
+                "no carry across windows: each window's terms stand alone"]}
+
+
+def report(a) -> dict:
+    cust, cert = _json(a.custody) or {}, _json(a.certs) or {}
+    n2 = n2_step(_json(a.n2), cert)
+    scan = scan_step(_json(a.scan), a.warden_run)
+    job = _json(a.job) or {}
+    steps = {"custody": cust, "certificates": {k: v for k, v in cert.items() if k != "rows"}, "n2": n2,
+             "scan": scan, "lean": {"verdict": "accepted" if n2.get("verdict") == "accepted"
+                                    and scan.get("verdict") == "accepted" else n2.get("verdict"),
+                                    "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
+                                    "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
+                                        "lean_proved"),
+                                    "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
+    accepted = all(steps[k].get("verdict") == "accepted" for k in ("custody", "certificates", "n2", "scan"))
+    negatives = {**{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
+                 **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
+    return {"schema": SCHEMA, "job": job, "verdict": "accepted" if accepted else "refused",
+            "negatives_refused": negatives, "steps": steps, "d1": d1_terms(cert, n2, scan, cust)}
+
+
+def markdown(r: dict) -> str:
+    j, s = r["job"], r["steps"]
+    lines = [f"# Network chain run {j.get('run', '?')}", "",
+             f"Tree {j.get('tree', '?')}, gates {', '.join(j.get('gates', [])) or '?'}. Verdict: **{r['verdict']}**.",
+             "", "| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
+    for k in ("custody", "certificates", "n2", "scan", "lean"):
+        e = s[k].get("eps_at_delta") or {}
+        eps = (f"{e['law']}, {e['drawn']} of {e['units']}: wrong ≤ {e['wrong_units_at_delta']}" if e else "")
+        lines.append(f"| {k} | {s[k].get('verdict')} | {eps} | {s[k].get('in_the_clear', '')} |")
+    lines += ["", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
+    d = r["d1"]
+    lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
+              f"- Σ ε_w = {d['sum_eps']}", "- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="command", required=True)
+    c = sub.add_parser("custody", help="each gate run's files against its end.json")
+    c.add_argument("--gates", required=True, type=Path)
+    c.add_argument("--out", required=True, type=Path)
+    v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
+    v.add_argument("--run", required=True, type=Path, help="the certifier rehearsal's honest directory")
+    v.add_argument("--client", type=Path, help="the client's kept files (default --run)")
+    v.add_argument("--deployed", action="store_true", help="refuse a certifier key that isn't LMS at lms.DEPLOYED")
+    v.add_argument("--out", required=True, type=Path)
+    r = sub.add_parser("report", help="one report over the steps' outputs")
+    for f in ("custody", "certs", "n2", "scan", "job"):
+        r.add_argument(f"--{f}")
+    r.add_argument("--warden-run")
+    r.add_argument("--out", required=True, type=Path)
+    a = ap.parse_args(argv)
+    if a.command == "custody":
+        doc = custody(a.gates)
+    elif a.command == "certs":
+        doc = certs(a.run, a.client or a.run, a.deployed)
+    else:
+        doc = report(a)
+        a.out.mkdir(parents=True, exist_ok=True)
+        (a.out / "report.md").write_text(markdown(doc))
+        a.out = a.out / "report.json"
+    a.out.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
+    print(json.dumps({k: doc.get(k) for k in ("verdict", "why", "negatives_refused") if k in doc}))
+    return 0 if doc.get("verdict") == "accepted" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
