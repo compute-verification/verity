@@ -75,8 +75,8 @@ What doesn't change:
 
 ## What an accepted audit means
 
-The sampled step units are the sampled class of proofs' `NetTiming.Guarantees.SampledAuditAccepted` (#3608, proved in
-`NetTiming.SecurityProofs.SampledAuditAccepted`). Its one hypothesis is `Claims.Sampling.KS` at the same deployment. On the statements in scope, at
+The sampled step units are the sampled class of proofs' `NetTiming.Guarantees.SampledAuditAccepted` (#3608, a statement
+with no proof yet). Its one hypothesis is `Claims.Sampling.KS` at the same deployment. On the statements in scope, at
 every δ ≥ 0 and every decoder within Flock's radius, it bounds Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, where `RAcc δ` holds
 when:
 - the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
