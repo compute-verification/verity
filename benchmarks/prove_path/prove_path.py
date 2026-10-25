@@ -43,7 +43,7 @@ Two kinds of committed run:
     prove_path.py circuit --serve-run DIR --window K --row-dir DIR --partition F --advice FILE --out FILE [--hf-config F] \\
         [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
-        [--class SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
+        [--class SLOTS,PROMPT,OUTPUTS] [--pin NAME ...] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE [--class SLOTS,PROMPT,OUTPUTS] \\
         [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
 
@@ -78,7 +78,8 @@ Two kinds of committed run:
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 4 slots, 1,024 prompt ids and 64
   outputs, the certifier run of record's envelope): its record (or ``--description``, its description) and its input
-  count, which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
+  count at the verifier's pins (``--pin``, the parameters whose roots it fixed before the run; a registered read of any
+  other is free), which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members (V3c).
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
@@ -1139,7 +1140,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     ``--class``, a class Program a request flattened into units, every input row wired, registered or ingress), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
-    length in bits and the record's input count."""
+    length in bits and the record's input count at the verifier's pins (``--pin``)."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
     from verity_vllm.program.predict.window_circuit import window_circuit
@@ -1156,7 +1157,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
     c = AW.codec_of()
-    return {"bits": int(c.total_bits(c.decode(data))), "count": IF.input_count(doc),
+    return {"bits": int(c.total_bits(c.decode(data))), "count": IF.input_count(doc, pins=a.pin),
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
 
 
@@ -1298,6 +1299,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement), the record's stated cap")
     p.add_argument("--description", action="store_true", help="write the circuit's description (templates, wires and "
                    "declarations), not its record: no program is built")
+    p.add_argument("--pin", action="append", default=[], help="a registered parameter whose root the verifier fixed before "
+                   "the run, as `records_audit.py count --pin` takes it (repeatable; none: every registered read is free)")
     p = sub.add_parser("class-size", help="a served window's padded size at its class, projected from a small probe class")
     for flag in ("--serve-run", "--row-dir", "--advice"):
         p.add_argument(flag, required=True)

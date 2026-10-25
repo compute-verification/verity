@@ -254,19 +254,24 @@ def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
 
 
 def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_charge(tmp_path, capsys):
-    """A stated record whose inputs are declared is counted from its description alone: with every input row registered
-    nothing is free, so its other inputs are the advice's bits, the charge; a port left free adds its rows and the bound is
-    vacuous. ``records_audit.py count`` prints the same from the record's file."""
+    """A stated record whose inputs are declared is counted from its description alone: with every input row registered at
+    a root the verifier pinned before the run nothing is free, so its other inputs are the advice's bits, the charge; a port
+    left free adds its rows and the bound is vacuous, and so does every registered read when the verifier pins no root.
+    ``records_audit.py count`` prints the same from the record's file."""
     doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
-    assert RA.declared_count(doc, 1687) == {"units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0,
-                                            "free": 0, "other_inputs": 1687, "advice_bits": 1687, "bound": "within the charge"}
+    assert RA.declared_count(doc, 1687, pins={"a"}) == {
+        "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
+        "advice_bits": 1687, "bound": "within the charge"}
+    unpinned = RA.declared_count(doc, 1687)
+    assert (unpinned["registered"], unpinned["free"], unpinned["bound"]) == (0, inputs, "vacuous")
     x = 16 * dict(IF.layout(COORD).rows)["x"]
-    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687)
+    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins={"a"})
     assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
     (tmp_path / "c.json").write_bytes(IF.circuit_bytes(doc))
-    capsys.readouterr()
-    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687"]) == 0
-    assert json.loads(capsys.readouterr().out) == RA.declared_count(doc, 1687)
+    for pins in ([], ["a"]):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins)]) == 0
+        assert json.loads(capsys.readouterr().out) == RA.declared_count(doc, 1687, pins=pins)
     with pytest.raises(ValueError, match="counted from its members"):
         RA.declared_count({"templates": doc["templates"]}, 0)
 
@@ -294,17 +299,17 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     (tmp_path / "advice.bin").write_bytes(s.data)
     bits = s.bound["advice"]["bits"]
     base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--cap", "4"]
+            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a"]
     capsys.readouterr()
     assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
     got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description()))
+    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description(), pins={"a"}))
     rec = json.loads((tmp_path / "c.json").read_text())
     assert rec == IF.descriptor_record(circuit, 4) and (rec["cap"], rec["registered"]) == (4, circuit.registered.doc())
     assert PP.main([*base, "--out", str(tmp_path / "d.json"), "--description"]) == 0
     assert json.loads((tmp_path / "d.json").read_text()) == circuit.description()
     capsys.readouterr()
-    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits)]) == 0
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits), "--pin", "a"]) == 0
     count = json.loads(capsys.readouterr().out)
     assert (count["free"], count["other_inputs"], count["bound"]) == (0, bits, "within the charge")
     refuse.append(True)

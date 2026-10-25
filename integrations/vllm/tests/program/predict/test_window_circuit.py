@@ -152,13 +152,17 @@ def test_a_head_attends_over_every_key_position_through_one_gather(window):
 
 
 def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window):
-    """`interface.input_count` over the circuit's description (JSON, no Program lowered) finds no free input row, so a
-    proof of the window's units leaves nothing but the declared advice to the prover; the ingress is the two slots, 5 i32s
-    each."""
+    """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's one pin, the
+    weights record's root, fixed before the run, finds no free input row, so a proof of the window's units leaves nothing
+    but the declared advice to the prover; the ingress is the two slots, 5 i32s each. Every registered read, table read and
+    opening is of the weights (the GEMM slices', norms' and RoPE tables' rows; the embedding table's root, domain and rows),
+    so with no pin all of them are free."""
     circuit, _ = window
-    doc = json.loads(json.dumps(circuit.description()))
-    assert IF.input_count(doc) == {"units": 2442, "inputs": 17372576, "wired": 2785376, "registered": 14586880,
-                                   "ingress": 2 * 5 * 32, "free": 0}
+    doc, reg = json.loads(json.dumps(circuit.description())), circuit.registered
+    assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params) == {WC.WEIGHTS}
+    count = {"units": 2442, "inputs": 17372576, "wired": 2785376, "registered": 14586880, "ingress": 2 * 5 * 32, "free": 0}
+    assert IF.input_count(doc, pins={WC.WEIGHTS}) == count
+    assert IF.input_count(doc) == {**count, "registered": 0, "free": 14586880}
 
 
 def test_what_the_class_doesnt_take_is_refused_by_name(monkeypatch):
@@ -225,4 +229,4 @@ def test_a_token_select_is_its_function_at_the_grains_chunk():
     assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (20, 10)
     assert not [t for t in n if t.startswith(("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}"))]
     assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(20)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
-    assert IF.input_count(circuit.description())["free"] == 0
+    assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0

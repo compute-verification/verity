@@ -345,10 +345,10 @@ def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_th
     the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused."""
     rec = declared().description()
     words = 3 * (2 + 32 + 32 + 16 + 96 + 64) + 6 * (16 + 128) + 3 * (16 + 256)
-    assert I.input_count(rec) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
-                                  "registered": 16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176), "ingress": 16 * 2 * 2,
-                                  "free": 32}
-    assert I.input_count({**rec, "ingress": [{**rec["ingress"][0], "units": 3}]})["free"] == 0
+    assert I.input_count(rec, pins={"weights"}) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
+                                                    "registered": 16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176),
+                                                    "ingress": 16 * 2 * 2, "free": 32}
+    assert I.input_count({**rec, "ingress": [{**rec["ingress"][0], "units": 3}]}, pins={"weights"})["free"] == 0
     c = declared()
     reg = c.registered
     for edit, why in [
@@ -366,6 +366,19 @@ def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_th
             declared(**edit)
     with pytest.raises(ValueError, match="both fill rows"):
         I.input_count({**rec, "ingress": [*rec["ingress"], {**rec["ingress"][0], "at": 1}]})
+
+
+def test_a_registered_read_is_registered_only_at_a_root_the_verifier_pinned_before_the_run():
+    """The third token read from ``acts``, a parameter whose root the prover commits in the window, is free; the same read
+    at a pinned root is registered. With no pins every read, table read and opening is free, and so with a name not a set."""
+    reg = declared().registered
+    rec = declared(registered=replace(reg, params={**reg.params, "acts": 2}, reads=(
+        *reg.reads, I.Read(EID, "tok", "acts", at=2, radix=(1,), base=0, step=(0,))))).description()
+    pinned = I.input_count(rec, pins={"weights"})
+    assert (pinned["registered"], pinned["free"]) == (16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176), 32)
+    assert I.input_count(rec, pins={"weights", "acts"}) == {**pinned, "registered": pinned["registered"] + 32, "free": 0}
+    assert I.input_count(rec) == I.input_count(rec, pins="weights") == {**pinned, "registered": 0,
+                                                                         "free": pinned["registered"] + 32}
 
 
 def test_coalesce_merges_runs_of_like_patterns():

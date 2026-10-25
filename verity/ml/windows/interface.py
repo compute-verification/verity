@@ -41,7 +41,7 @@ The circuit also declares what fills its other inputs (`Registered`, `Ingress`):
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
-description.
+description, a registered row free unless the verifier pinned its parameter's root before the run.
 
 That the circuit computes what the integration ran is completeness, never proved: the verifier accepts a window exactly
 when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`Window.mismatches` is
@@ -57,7 +57,7 @@ import math
 import pkgutil
 import re
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
@@ -429,7 +429,7 @@ class Table:
 @dataclass(frozen=True)
 class TableRead:
     """Template ``reader``'s units ``[at, at + units)`` read their ``port`` whole as table ``table``'s root or its domain
-    id (``of``): a supplied value (`one_stage.registered`), never a free input."""
+    id (``of``): a supplied value (`one_stage.registered`), free where its parameter's root isn't pinned (`input_count`)."""
     reader: str
     port: str
     table: str
@@ -446,7 +446,8 @@ class Opening:
     """Template ``reader``'s units ``[at, at + units)`` open table ``table``'s row at the hidden position their ``key`` port
     holds: ``ports`` are the opening (the row, its salt, its path), and ``verdict`` the output row whose bit is 1 exactly
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
-    and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: pinned, not free."""
+    and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the table's root is
+    pinned (`input_count`)."""
     reader: str
     table: str
     key: str
@@ -927,13 +928,16 @@ def declarations(doc: Mapping[str, Any]) -> tuple[tuple[Wire, ...], dict[str, di
     return wires, cuts, registered, ingress
 
 
-def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve) -> dict[str, int]:
+def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve, pins: Iterable[str] = ()) -> dict[str, int]:
     """A stated circuit record's inputs by what fills them, in bits, from its description alone (its templates, wires and
     declarations, `Circuit.description`; per template, wire and declaration, never per unit, and never its program): every
     unit's input rows (``inputs``), the rows its wires fill (``wired``, a wire's reader rows times its writer row's bits,
-    `SampledProofs.Wires`' ``wiredBits``), its registered reads, table reads and openings (``registered``) and its ingress
-    (``ingress``); ``free`` the rest, which only the prover chose. Refused unless the declarations are well-formed for the
-    record's templates (`check_wires`, `check_inputs`), so no row counts twice."""
+    `SampledProofs.Wires`' ``wiredBits``), its registered reads, table reads and openings of a pinned parameter
+    (``registered``) and its ingress (``ingress``); ``free`` the rest, which only the prover chose. ``pins`` are the verifier's
+    own, never the record's: the registered parameters, by the names the record gives them, whose roots it fixed before the
+    run. A read of any other parameter, or a table read or opening of a table over one, is free, since a root the prover
+    commits after serving constrains nothing; with no pins every registered read is free. Refused unless the declarations
+    are well-formed for the record's templates (`check_wires`, `check_inputs`), so no row counts twice."""
     if "wires" not in doc:
         raise ValueError("a circuit record whose members are listed is counted from its members, not its description")
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
@@ -947,10 +951,12 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve)
 
     inputs = sum(16 * sum(w for _, w in lay.rows) * n for lay, n in lays.values())
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
-    reg = reg or Registered({})
-    registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads)
-                  + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots)
-                  + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings for p in o.ports))
+    reg, pins = reg or Registered({}), frozenset(pins)
+    pinned = {t.name for t in reg.tables if t.param in pins}
+    registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads if r.param in pins)
+                  + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots if r.table in pinned)
+                  + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings if o.table in pinned
+                        for p in o.ports))
     ingress_bits = sum(g.units * 16 * dict(lays[g.reader][0].rows)[g.port] for g in ingress)
     units = sum(n for _, n in lays.values())
     return {"units": units, "inputs": inputs, "wired": wired, "registered": registered, "ingress": ingress_bits,
