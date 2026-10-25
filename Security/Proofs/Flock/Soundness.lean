@@ -14,9 +14,9 @@ import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Assumptions
 import Definitions.Flock.Arith
-import Proofs.Flock.Soundness.Model.Statement
-import Proofs.Flock.Soundness.Model.Piop
-import Proofs.Flock.Soundness.Model.Ligerito
+import Definitions.Flock.Statement
+import Definitions.Flock.Piop
+import Definitions.Flock.Ligerito
 import Proofs.Flock.Soundness.Model.Session
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Rounds
