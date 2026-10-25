@@ -630,11 +630,46 @@ def ok(report: Mapping[str, Any]) -> bool:
     return report["matched"] == report["units"] and not report["mismatched"] and not report["malformed"]
 
 
-def units_of(bundle: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """A replay bundle's units in `replay`'s form: ``{"units": [...]}`` as it is, or IFACE-B's form once fixed."""
-    if "units" in bundle:
+IFACE_B = "verity/drawn-unit-bundle/v1"
+
+
+def key_at(definition: str, binding: Mapping[str, Any]) -> str:
+    """The key of ``definition`` at an IFACE-B binding (statics as JSON, a DOT as ``{"fn": id}``)."""
+    if definition not in _REGISTRY:
+        raise KeyError(f"no replay for template {definition!r}: one of {sorted(_REGISTRY)}")
+    statics = {k: _DOTS[v["fn"]] if isinstance(v, Mapping) else v for k, v in binding.items()}
+    return _REGISTRY[definition](**statics).key
+
+
+def _unpack(row: bytes, width: int) -> list[int]:
+    return np.frombuffer(row, dtype=f"<u{width // 8}").astype(np.uint64).tolist()
+
+
+def units_of(bundle: Mapping[str, Any], payload: bytes | None = None) -> list[dict[str, Any]]:
+    """A bundle's units in `replay`'s form: ``{"units": [...]}`` already in it, or IFACE-B's drawn-unit bundle
+    (``verity/drawn-unit-bundle/v1``) with its ``payload``: each port's row, u16 words little-endian, read as words of its
+    parameter's width, the output rows joined in port order. Openings are IFACE-B's `check`, not this."""
+    if bundle.get("format") != IFACE_B:
+        if "units" not in bundle:
+            raise ValueError("not a replay bundle: no 'units'")
         return list(bundle["units"])
-    raise ValueError("not a replay bundle: no 'units'")
+    if payload is None:
+        raise ValueError(f"a {IFACE_B} bundle's rows are in its payload")
+    out = []
+    for u in bundle["units"]:
+        tpl = u["template"]
+        try:
+            t = template(key_at(tpl["definition"], tpl.get("binding", {})))
+        except (KeyError, ValueError, TypeError):
+            out.append({"unit": u["unit"], "template": tpl["id"], "coords": u.get("coords"), "inputs": {}, "outputs": []})
+            continue
+        rows = {r["port"]: (r["kind"], payload[r["row"][0]:r["row"][0] + r["row"][1]]) for r in u["rows"]}
+        width = dict((p[0], p[1]) for p in t.params)
+        ins = {p: _unpack(row, width.get(p, 16)) for p, (kind, row) in rows.items() if kind == "in"}
+        outs = b"".join(row for kind, row in rows.values() if kind == "out")
+        out.append({"unit": u["unit"], "template": t.key, "coords": u.get("coords"), "inputs": ins,
+                    "outputs": _unpack(outs, t.out[0])})
+    return out
 
 
 # ---- the draw ----------------------------------------------------------------------------------------------------------
@@ -644,7 +679,8 @@ def draw(population: Sequence[tuple[str, int]], plan: str | Mapping[str, int], c
     """The units of one step to replay. ``population``: each template's unit count in the step's unit order (template-major:
     global unit = the template's base + its index); ``plan``: ``uniform:K``, ``stratified:K`` or ``{template: k}``;
     ``coins``: the challenger's live bytes; ``context``: what the draw must follow (the step's committed root, at least).
-    -> core's draw object: ``{"law", "population", "k", ["strata"], "units"}``, units ascending."""
+    -> core's draw object: ``{"law", "population", "k", ["strata"], "units"}``, units ascending; an explicit plan's law is
+    ``plan`` (its strata's k are the plan's, not core's `stratum_k`)."""
     n = sum(c for _, c in population)
     key = randomness.derive(coins, DRAW_DOMAIN, context)
     if isinstance(plan, str):
@@ -669,4 +705,5 @@ def draw(population: Sequence[tuple[str, int]], plan: str | Mapping[str, int], c
         strata.append({"template": t, "units": [[base, base + c]], "k": ks})
         units += [base + i for i in picked]
         base += c
-    return {"law": "stratified", "population": n, "k": k, "strata": strata, "units": sorted(units)}
+    return {"law": "stratified" if isinstance(plan, str) else "plan", "population": n, "k": k, "strata": strata,
+            "units": sorted(units)}
