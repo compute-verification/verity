@@ -20,7 +20,15 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   `pending-ports` while a leg is missing or has no case, or any of onsite's components (read from `CoreOnsite.lean`) is
   still a stub, since a stub answers for itself, not for the protocol. Once all of them are ports, `onsite check` decides
   on the legs' cases. Bandwidth is not an onsite component yet: a rejection there rejects, but its acceptance completes
-  nothing. `horizon` is the union bound over periods, each audited on its own live coins, `vacuous` once the δs sum to 1.
+  nothing. `horizon` is the union bound over periods, each audited on its own live coins, `vacuous` once the δs sum to 1,
+  and beside it the network certifier's `K` added over periods and pooled over a week, a month and a year of the run's
+  periods with its `eps` (`communication`), with K per link-window.
+- `legs/certifier.py`: communication, real. One network certifier session over the run's periods, in front of the
+  loop's model (`benchmarks/network_traces/torch_loop_stub.py`), a link-window per period; N2's verdict of record on each
+  link-window (`--zk` behind the Lean firewall); the certified outputs checked against the period's registered ones; then
+  `NetworkCheck.Period` (`verity/certifier/v0`, `network-period check`) on the period's link-windows and its compute
+  audit: on acceptance `public.K`, the bits a covert sender in the server can move over the link in the period, except
+  with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's).
 - `verity_all_protocols/runner.py`: the periods, each report in `$OUT/p<P>/report.json` and `$OUT/reports.jsonl`, and one
   `ALLP` line per period. `--tamper P,...` makes those periods' loop record outputs that aren't its model's.
 
@@ -30,7 +38,7 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
 | work | PoUW | `legs/pouw.py` | compute-accounting | missing |
 | space | PoUS | `legs/pous.py` | memory-accounting | missing |
 | bandwidth | the bandwidth audit over PoUS's store, or remote bandwidth | `legs/bandwidth.py` | memory-accounting | missing |
-| communication | the network certifier | `legs/certifier.py` | network-accounting | missing |
+| communication | the network certifier | `legs/certifier.py` | network-accounting | real |
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 32 -- \

@@ -23,8 +23,8 @@ compute audit, the integrity leg's registration and audit record re-decided by o
 and answer at δ = 10⁻⁶ and, for the tampered run, its case and answer (``tamper.*``), which must reject.
 
 Layout terms (`layout`): no free input (the loop's every input is registered), the audit's horizon the loop's steps,
-jitter bound 1 (N2 holds the planned profile's egress counts exactly, so no observation moves), and no warden
-connection but the link, whose counts the profile fixes (``cells`` empty).
+jitter bound 1 (N2 holds the planned profile's egress counts exactly, so no observation moves), and no connection
+through the network certifier but the link, whose counts the profile fixes (``cells`` empty).
 """
 from __future__ import annotations
 

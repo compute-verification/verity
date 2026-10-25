@@ -8,7 +8,8 @@ Onsite's communication component (`Core.Onsite.components`). A period is one nod
 (N2's link-windows, `service.LinkWindows`, Selection `All`) beside the period's compute audits (sampled proofs'
 one-stage, one answer per registered window of the workload). It accepts when every link-window was proved and both its
 ends and its clock were certified, and every compute audit accepted; it then publishes `K`, the bits a covert sender in
-the server can move through the wardens in the period, as `NetTiming.Guarantees.PeriodLeakAccepted` counts them.
+the server can move through the network certifier in the period, as `NetTiming.Guarantees.PeriodLeakAccepted` counts
+them.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own):
 

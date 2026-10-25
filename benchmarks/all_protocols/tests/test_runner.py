@@ -8,7 +8,8 @@
 * each leg reads the answers of the legs before it, and its port's case reaches onsite;
 * `TABLE` names every onsite component once, a leg is its file in `legs/`, and onsite's components are read from
   `CoreOnsite.lean` as written;
-* the horizon's union bound over periods, vacuous at the sum of δ reaching 1;
+* the horizon's union bound over periods, vacuous at the sum of δ reaching 1, and the network certifier's K added over
+  periods and pooled over a week, a month and a year with its eps;
 * the loop's period keeps only the window's public files, and its circuit is the one registered before it ran (slow).
 """
 from __future__ import annotations
@@ -206,6 +207,28 @@ def test_the_horizon_is_a_union_bound_over_periods():
     assert h["integrity"]["delta"] == "1" and h["integrity"]["vacuous"]
     assert h["month"] == {"periods": None, "period_s": 0}
     assert h["composed"] == "reject"
+
+
+def _communication(verdict: str, K: int = 0, eps: str = "0", windows: int = 1) -> dict:
+    row = {"verdict": verdict, "protocol": C.CERTIFIER,
+           "quantity": {"K": K, "eps": eps, "windows": windows} if verdict == "accept" else None}
+    return {"protocols": {"integrity": {"verdict": "missing"}, "communication": row}, "composed": {"verdict": "reject"}}
+
+
+def test_the_network_certifiers_k_adds_over_periods_and_is_pooled_per_span():
+    reports = [_communication("accept", 15000, "1/100", 1), _communication("reject"),
+               _communication("accept", 16001, "1/100", 2)]
+    c = C.horizon(reports, period_s=3600)["communication"]
+    assert {k: c[k] for k in ("periods", "accepted", "refused", "K", "eps", "vacuous", "windows", "K_per_window")} == {
+        "periods": 3, "accepted": 2, "refused": 1, "K": 31001, "eps": "1/50", "vacuous": False, "windows": 3,
+        "K_per_window": "31001/3"}
+    assert c["week"] == {"periods": 168, "K": 2604084, "eps": "1", "vacuous": True}
+    assert c["month"]["periods"] == 720 and c["year"]["periods"] == 8760 and c["year"]["K"] == 135784380
+    tiny = [_communication("accept", 10, "1/1000000", 1)]
+    assert C.horizon(tiny, period_s=3600)["communication"]["year"] == {"periods": 8760, "K": 87600,
+                                                                      "eps": "219/25000", "vacuous": False}
+    none = C.horizon([_report("accept")], period_s=0)["communication"]
+    assert none["K"] == 0 and none["K_per_window"] is None and none["week"] == {"periods": None}
 
 
 @pytest.mark.slow
