@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import socket
 import subprocess
 import sys
@@ -478,6 +479,144 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
             i2.load(rank, world, [])
     with pytest.raises(ValueError, match="request r1: no Build dir under .* holds I2's Program d1d1"):
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
+
+
+#: integrations/vllm's `tests.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
+TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
+        "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
+        "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
+STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+
+
+def _request_program(sampling: dict | None = None, **shape):
+    from verity_vllm.predict.build import build_program
+    from verity_vllm.predict.phi import Phi
+
+    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, workload={"requests": []},
+              target={"compute_capability": [12, 0], "num_sms": 188})
+    return build_program(Phi.from_json({**phi.to_json(), "sampling": sampling or {"kind": "greedy"}}), "request", **shape).program
+
+
+@pytest.fixture(scope="module")
+def requests_of_tiny():
+    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed and splits beside the prompt)
+    and its cached one (a prefix of 16 rows beside the prompt)."""
+    return {"greedy": _request_program(LP=4, T=1), "longer": _request_program(LP=4, T=2),
+            "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
+
+
+def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = None) -> str:
+    """Build dir ``d`` of ``program`` as the Build writes one (`build_instances.write_instances`): its descriptor (``desc``, the
+    program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default); the digest."""
+    import gzip
+
+    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity_vllm.pipeline.build_instances import write_instances
+
+    d.mkdir(parents=True, exist_ok=True)
+    desc = encode_program(program) if desc is None else desc
+    digest = digest or program_digest(desc)
+    with gzip.open(d / "descriptor.json.gz", "wt") as f:
+        json.dump(desc, f)
+    write_instances(str(d), program, digest, None, {})
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": digest}}))
+    return digest
+
+
+def _edit_instances(d: Path, edit) -> None:
+    import gzip
+
+    with gzip.open(d / "instances.json.gz", "rt") as f:
+        inst = json.load(f)
+    edit(inst)
+    with gzip.open(d / "instances.json.gz", "wt") as f:
+        json.dump(inst, f)
+
+
+def _load(root: Path, digest: str):
+    return PP.I2Compiler(registered=None, ingress={}, programs_root=str(root)).load(
+        0, 1, [{"request_id": "r0", "arrive_step": 0, "digest": digest}])
+
+
+def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, requests_of_tiny):
+    """I2's adapter holds each Build dir to the digest I2 compiled (`build_of`) before the window reads its rows: an honest
+    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, splits, prefix,
+    weights)."""
+    for name, program in requests_of_tiny.items():
+        dg = _build(tmp_path / name / "build_request", program)
+        p = _load(tmp_path / name, dg)
+        assert p.digs == {"r0": dg} and len(p.progs["r0"]["rows"]) == len(program.fn.body.nodes), name
+
+
+def test_i2_refuses_a_build_whose_body_was_swapped_under_its_old_digest(tmp_path, requests_of_tiny):
+    """The Build's ``result.json`` (and its instances head) keep the digest I2 compiled, and its body is another Program's:
+    each is refused by name, the descriptor by its recomputed digest, the instances by the descriptor's rows."""
+    from verity.ml.circuits.codec import encode_program, program_digest
+
+    greedy, longer = requests_of_tiny["greedy"], requests_of_tiny["longer"]
+    dg, other = (program_digest(encode_program(p)) for p in (greedy, longer))
+    d = tmp_path / "desc" / "build_request"
+    _build(d, greedy, desc=encode_program(longer), digest=dg)
+    with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))}/descriptor.json.gz is Program {other[:16]}, "
+                                         rf"not I2's {dg[:16]}$"):
+        _load(tmp_path / "desc", dg)
+
+    d = tmp_path / "inst" / "build_request"
+    _build(d, longer, desc=encode_program(greedy), digest=dg)
+    with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))}'s instances.json.gz has {len(longer.fn.body.nodes)} "
+                                         rf"rows, and its descriptor.json.gz {len(greedy.fn.body.nodes)} nodes$"):
+        _load(tmp_path / "inst", dg)
+
+    k = next(k for k, n in enumerate(greedy.fn.body.nodes) if len(n.args) == 2 and n.args[0].refs != n.args[1].refs)
+    for what, edit in (("args", lambda r: r["args"].reverse()), ("spec", lambda r: r.update(spec=r["spec"] + "x")),
+                       ("i", lambda r: r.update(i=r["i"] + 1))):
+        d = tmp_path / what / "build_request"
+        _build(d, greedy)
+        _edit_instances(d, lambda inst: edit(inst["rows"][k]))
+        with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))}'s instances.json.gz row {k} is not its "
+                                             rf"descriptor.json.gz's node {k}: they differ in {what}$"):
+            _load(tmp_path / what, dg)
+
+
+def test_i2_refuses_a_build_that_records_another_digest_or_has_no_descriptor(tmp_path, requests_of_tiny):
+    greedy = requests_of_tiny["greedy"]
+    d = tmp_path / "head" / "build_request"
+    dg = _build(d, greedy)
+    _edit_instances(d, lambda inst: inst.update(digest="ab" * 64))
+    with pytest.raises(ValueError, match=rf"'s instances.json.gz records Program {'ab' * 8}, and its descriptor.json.gz is "
+                                         rf"Program {dg[:16]}$"):
+        _load(tmp_path / "head", dg)
+
+    d = tmp_path / "result" / "build_request"
+    _build(d, greedy)
+    assert PP.build_of(str(d), dg)["instances"]["digest"] == dg
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "ab" * 64}}))
+    with pytest.raises(ValueError, match=rf"'s result.json records Program {'ab' * 8}, and its descriptor.json.gz is Program"):
+        PP.build_of(str(d), dg)
+
+    d = tmp_path / "boolean" / "build_request"
+    _build(d, greedy)
+    _edit_instances(d, lambda inst: inst.update(ir="boolean"))
+    with pytest.raises(ValueError, match="is a Build in IR 'boolean', and I2 compiles word Programs"):
+        _load(tmp_path / "boolean", dg)
+    (d / "descriptor.json.gz").unlink()
+    with pytest.raises(ValueError, match=rf"^request r0: {re.escape(str(d))} has no descriptor.json.gz: its Program's digest "
+                                         rf"can't be recomputed$"):
+        _load(tmp_path / "boolean", dg)
+
+
+def test_a_builds_input_batches_are_its_parameters_as_src_shapes_them():
+    src = 'Derived[X]_v1{SRC={"dict":{"inputs":[[2],[],[0],[2,2]]}}}'
+    assert PP.input_layout({"program_fn": src}, [2, 1, 3, 1, 5, 7]) == [(0, 0), (1, 0), (3, 0), (3, 3), (4, 0), (4, 5)]
+    with pytest.raises(ValueError, match="Input batch 1 runs past parameter 1's 1 leaves"):
+        PP.input_layout({"program_fn": src}, [2, 2, 4])
+    with pytest.raises(ValueError, match="the root's 2 Input batches don't fill the 4 parameters SRC shapes"):
+        PP.input_layout({"program_fn": src}, [2, 1])
+    for pf in ("Derived[X]_v1", 'Derived[X]_v1{SRC={"dict":{}}}', 'Derived[X]_v1{SRC={"dict":{"inputs":[1]}}}'):
+        with pytest.raises(ValueError, match="records no SRC input shapes: not one of I2's Programs"):
+            PP.input_layout({"program_fn": pf}, [1])
+    assert PP.merged([["p", 1, 0, 3], ["p", 1, 3, 5], ["p", 0, 5, 6], ["n", 2, 0, 1], ["n", 2, 2, 3]]) == \
+        [["p", 1, 0, 5], ["p", 0, 5, 6], ["n", 2, 0, 1], ["n", 2, 2, 3]]
 
 
 def test_each_requests_body_is_its_prompt_cap_and_sampling_by_its_i1_id():
