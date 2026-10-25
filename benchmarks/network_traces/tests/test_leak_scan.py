@@ -9,6 +9,9 @@ import random
 import struct
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import leak_scan as LS  # noqa: E402
@@ -138,10 +141,30 @@ def test_a_found_piece_the_driver_cant_name_is_leaked(tmp_path):
         "placed": {"pos @0": [(REPS[0], 39, "across"), (REPS[1], 39, "across")]}}
 
 
+def test_a_rescan_with_a8_searches_the_kept_files_afresh(tmp_path):
+    """With `a8`, `rescan` searches the kept files for the pieces as `cut` now cuts them: one the run's cutter didn't cut
+    (a row's zero-padded last element) is found, and leaked; a run's find of a row the driver recomputes that the fresh
+    search doesn't repeat is dropped; a salt the run drew stays, and is leaked."""
+    row = bytes(16) + b"\x07\x08\x09"
+    pieces = LS.cut({"r 0": row}, 16)
+    assert set(pieces) == {"r 0 @0", "r 0 @3", "r 0 @16"}
+    vdir = _streams(tmp_path, {112: (pieces["r 0 @16"], b"")})
+    got = {**_received({REPS[1]: ["r 0 @3", "wit salt 3 @0"]}), "leaked": ["r 0 @3", "wit salt 3 @0"]}
+    a8 = SimpleNamespace(needles=lambda p: {x: k for k, x in p.items()},
+                         find=lambda data, t: {k: 1 for nd, k in t.items() if nd in data})
+    assert LS.rescan(got, pieces, vdir, reads=_reads) == {
+        "was": ["r 0 @3", "wit salt 3 @0"], "leaked": ["r 0 @3", "wit salt 3 @0"], "structured": {},
+        "placed": {"r 0 @3": [(REPS[1], None, "file")]}}
+    assert LS.rescan(got, pieces, vdir, reads=_reads, a8=a8, rows={"r 0"}) == {
+        "was": ["r 0 @3", "wit salt 3 @0"], "leaked": ["r 0 @16", "wit salt 3 @0"], "structured": {},
+        "placed": {"r 0 @16": [(REPS[0], 112, "field")]}}
+
+
 def test_reads_are_the_formats_fields_and_its_nonces():
     """`reads` on a ``--zk`` stream of the format's shape, every vector empty but one zerocheck nonce, the icap hash, the
-    lig.qn u64s and the zk words: its reads, in order, are the stream's every field (the root's and the tau
-    commitments' empty), its nonce the zerocheck one, and a stream the format doesn't read whole has none."""
+    lig.qn grinding nonces and the zk words: its reads, in order, are the stream's every field (the root's and the tau
+    commitments' empty), its nonces the zerocheck one and the two grinding nonces, and a stream the format doesn't read
+    whole has none."""
     u = lambda v: struct.pack("<Q", v)  # noqa: E731
     f, h, w = b"\xaa" * 16, b"\xbb" * 32, b"\xcc" * 32
     parts = [u(0), u(29), u(0), u(25), struct.pack("<I", 0), b"\x00", struct.pack("<I", 0)]
@@ -149,8 +172,8 @@ def test_reads_are_the_formats_fields_and_its_nonces():
     parts += [b"\x01", w, w, w, u(0), u(0), b"", f, f, u(0), b"", u(0), b"", f] + [u(0)] * 4
     stream = b"".join(parts)
     at = [sum(len(p) for p in parts[:i]) for i in range(len(parts))]
-    assert LS.reads(stream) == (tuple(zip(at, map(len, parts))), frozenset({at[14]}))
-    assert parts[14] == u(7)
+    assert LS.reads(stream) == (tuple(zip(at, map(len, parts))), frozenset({at[14], at[33], at[34]}))
+    assert parts[14] == u(7) and (parts[33], parts[34]) == (u(5), u(9))  # the zerocheck nonce, then lig.qn's two
     assert LS.reads(stream[:-8]) is None
 
 
@@ -205,3 +228,109 @@ def test_the_transcripts_round_messages_are_read_as_their_records(tmp_path):
     vdir = _transcript(tmp_path, (el[1] + POS, m))
     assert LS.placements(_found(vdir), BLOBS, vdir) == {"pos @0": [("s-session.json#rep0.r1", 16, "file")]}
     assert LS.classify(_found(vdir), BLOBS, vdir) == (["pos @0"], {})
+
+
+def _zk_stream(qn: int = 2, fold: int = 2, cbn: int = 2, consn: int = 2, rs: tuple[tuple[int, int], ...] = ()) -> bytes:
+    """A minimal valid ``--zk`` proof stream (Sha256 Merkle kind, unsalted) in `redigest.layout`'s read order, with the
+    Ligerito grinding-nonce vectors ``lig.qn``, ``lig.fold``, ``lig.cbn`` and ``lig.consn`` populated, and the ring
+    switches `rs`, each (its elements, its nonce)."""
+    u, u32 = lambda v: struct.pack("<Q", v), lambda v: struct.pack("<I", v)  # noqa: E731
+    f = b"\xa0" * 16
+    p = [u(0), u(0), u(0), u(0), u32(0), b"\x00", u32(0)]          # cap vec 0; four ints; t=0; k=0 (Sha256)
+    p += [u(0), u(0), u(0), f, f, f, u(0)]                         # zc: ab/c/rounds empty; fa/fb/fc; nonce vec 0
+    p += [u(0), u(0), u(0), u(0)]                                  # lc: rounds/zp/me empty; nonce vec 0
+    p += [u(len(rs))] + [x for n, nonce in rs for x in (u(n), *[f] * n, u(nonce))]  # ring switches: s_hat_v, nonce
+    p += [u(0), u(0)]                                              # batching.nonce vec 0; lig.icap vec 0
+    p += [u(0), u(0), u(0), u(0), u(0), u(0), u(0), u(0), u(0)]    # l0 (2); rcaps; l{i}; yr; final (2); sc; msg
+    p += [u(qn)] + [u(0)] * qn + [u(0)] + [u(fold)] + [u(0)] * fold  # qn; ood vec 0; fold
+    p += [u(cbn)] + [u(0)] * cbn + [u(consn)] + [u(0)] * consn  # cbn; consn
+    p += [b"\x01", b"\xe0" * 32, b"\xe0" * 32, b"\xe0" * 32, u(0)]  # zk.tag; e0/e1/tp; ybar vec 0
+    p += [u(0), f, f, u(0), u(0), f, u(0), u(0), u(0), u(0)]        # in.root 0; rho; sigma; tauc 0; taus 0; tau; y/open/salt/path 0
+    return b"".join(p)
+
+
+def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
+    """``lig.qn``, ``lig.fold``, ``lig.cbn`` and ``lig.consn`` are grinding nonces (`transcript_check`'s ``t.pow``;
+    `redigest`'s ``lig-query-nonce`` and ``lig-claim-nonce`` flip them and the verifier accepts), so the prover controls
+    them and `public_bytes` must not take them for the reader-fixed integers. The switch row leaked in one field, with
+    its bytes also written across two grinding nonces as a ``public`` alibi, is still leaked (REDTEAM phase 16's rule,
+    which a nonce-blind scan lets through)."""
+    stream = _zk_stream()
+    off = LS.RD.layout(stream, zk=True)
+    _fields, nonces = LS.reads(stream)
+    pieces = {"sw_route 0 @0": SW}
+    (tmp_path / "s-session.json").write_text("{}")
+    for k in ("lig.qn", "lig.fold", "lig.cbn", "lig.consn"):
+        assert off[k] and set(off[k]) <= nonces, f"{k} is not counted as a nonce"
+        b = bytearray(stream)
+        b[off["zk.e0"][0]:off["zk.e0"][0] + 16] = SW  # a genuine in-one-field leak (a hiding mask the prover controls)
+        b[off[k][0]:off[k][0] + 16] = SW  # the same bytes across two of k's grinding nonces (the alibi)
+        (tmp_path / REPS[0]).write_bytes(bytes(b))
+        assert LS.classify(_found(tmp_path, pieces), pieces, tmp_path) == (["sw_route 0 @0"], {}), k
+
+
+def test_a_zero_ring_switch_nonce_is_reader_fixed(tmp_path):
+    """The verifier requires each ring switch's grinding nonce to be 0 (C-Flock's PROTOCOL.md §8.3), so a zero one is a
+    field the reader fixes: a piece found inside a field whose bytes are a ring switch's nonce and the next one's length
+    is ``public``, like the stream's other integers. A nonzero one, which the verifier refuses, stays the prover's, and
+    the same find is leaked."""
+    k = "srv 0 @0"
+    (tmp_path / "s-session.json").write_text("{}")
+    for nonce, want in ((0, ([], {k: "public"})), (5, ([k], {}))):
+        stream = _zk_stream(rs=((1, nonce), (3, 0)))
+        off = LS.RD.layout(stream, zk=True)
+        at, e0 = off["rs.0.nonce"][0], off["zk.e0"][0]
+        piece = stream[at:at + 16]
+        assert piece == struct.pack("<QQ", nonce, 3)
+        assert (at in LS.reads(stream)[1]) == (nonce != 0) and off["rs.1.nonce"][0] not in LS.reads(stream)[1]
+        b = bytearray(stream)
+        b[e0:e0 + 16] = piece  # counted: inside one field, zk.e0
+        (tmp_path / REPS[0]).write_bytes(bytes(b))
+        assert LS.classify(_found(tmp_path, {k: piece}), {k: piece}, tmp_path) == want, nonce
+
+
+#: `a8`'s piece size and finder, as `public_pieces` calls them: each piece raw or as hex, found anywhere in the data.
+A8 = SimpleNamespace(PIECE=16, needles=lambda pieces: {nd: k for k, x in pieces.items() for nd in (x, x.hex().encode())},
+                     find=lambda data, table: {k: 1 for nd, k in table.items() if nd in data})
+
+
+def test_a_rows_tail_is_cut_and_a_leak_written_only_there_is_found(tmp_path):
+    """`cut` covers each row whole: its aligned 16-byte pieces, then, when its length isn't a multiple of 16, its last 16
+    bytes over the piece before them (the corpus's ``wit`` tail is 12 bytes, the demo's ``srv`` tail 2). A row whose
+    witness is only in its tail, its aligned bytes zeros the circuit holds, so has a piece to scan for, and that piece
+    written into one field of a stream, or the row into a file whose format isn't read, is leaked. A row shorter than a
+    piece is refused: `a8.needles` wouldn't cut it."""
+    for n in (16, 18, 28, 32, 196):
+        row = bytes(range(n))
+        pieces = LS.cut({"r": row}, 16)
+        at = sorted(int(x.rsplit("@", 1)[1]) for x in pieces)
+        assert at == [*range(0, n - 15, 16)] + [n - 16, n - n % 16] * (n % 16 > 0), n
+        assert all(row[o:o + 16].ljust(16, b"\0") == pieces[f"r @{o}"] for o in at)
+        assert {i for o in at for i in range(o, min(o + 16, n))} == set(range(n))
+    wit = bytes(16) + b"\x07\x00\x09\x00"
+    kept, held, public = LS.public_pieces(A8, {"wit 0": wit}, {"wit 0"}, b"g 1 2\n" + bytes(16).hex().encode())
+    assert (kept, held, public) == ({"wit 0 @4": wit[4:], "wit 0 @16": wit[16:] + bytes(12)}, {"wit 0 @4", "wit 0 @16"},
+                                    [bytes(16).hex()])
+    vdir = _streams(tmp_path, {112: (wit[4:], b"")})
+    assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads) == (["wit 0 @4"], {})
+    (tmp_path / "file").mkdir()
+    vdir = _streams(tmp_path / "file", {})
+    (vdir / "openings.json").write_bytes(wit)
+    assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads) == (["wit 0 @4"], {})
+    with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece"):
+        LS.cut({"cin 0": bytes(12)}, 16)
+
+
+@pytest.mark.parametrize("t", range(1, 16))
+def test_a_row_packed_whole_from_an_element_boundary_is_leaked_by_its_last_element(tmp_path, t):
+    """REDTEAM phase 19 #3984: a row of 16 zeros the circuit holds and then t witness bytes, packed into 16-byte
+    elements from an element boundary (a stream's elements, each its own read; a round message's, each its own record),
+    holds its tail in its last element, zero-padded. The overlapping tail piece straddles that element and the one
+    before it (``across``), so only the zero-padded last chunk is one field's bytes."""
+    row = bytes(16) + bytes(range(1, t + 1))
+    kept = LS.public_pieces(A8, {"wit 0": row}, {"wit 0"}, b"g 1 2\n" + bytes(16).hex().encode())[0]
+    vdir = _streams(tmp_path, {112: (row + bytes(16 - t), b"")})
+    assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads)[0] == ["wit 0 @16"]
+    (tmp_path / "msg").mkdir()
+    vdir = _transcript(tmp_path / "msg", (_framed((3, 2, 2, row + bytes(16 - t))), _framed((3, 1, 1, bytes(range(100, 116))))))
+    assert LS.classify(_found(vdir, kept), kept, vdir)[0] == ["wit 0 @16"]

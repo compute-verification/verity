@@ -365,7 +365,7 @@ def prove(a) -> int:
         log(f"{name}: staged {m['n']} units, {m['ands']} ANDs a unit, k_log {meta['k_log']}, m {meta['k_log'] + m['nbl']}, "
             f"{'registered' if registered else 'fresh'} srb salts, {m['stage_s']} s")
         res = audit(M, N2, av, sg, m, units, d, out / name, a.port + 20 * k)
-        blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
+        blobs, held, public = LS.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
         res["received"].update(LS.scan(res["received"], blobs, out / name / "verifier"))
