@@ -150,7 +150,7 @@ theorem choose_div_le_one_sub_pow (hk : kd ≤ N) {w : ℕ} (hw : w ≤ N) :
     simp
   have hN0 : (N : ℝ≥0∞) ≠ 0 := by exact_mod_cast hN.ne'
   have hq : (1 - (kd : ℝ≥0∞) / N) = ((N - kd : ℕ) : ℝ≥0∞) / (N : ℝ≥0∞) := by
-    rw [Nat.cast_sub hk, ENNReal.sub_div (fun _ _ => hN0), ENNReal.div_self hN0 (ENNReal.natCast_ne_top _)]
+    rw [ENNReal.natCast_sub, ENNReal.sub_div (fun _ _ => hN0), ENNReal.div_self hN0 (ENNReal.natCast_ne_top _)]
   rw [hq, div_eq_mul_inv ((N - kd : ℕ) : ℝ≥0∞), mul_pow, ← ENNReal.inv_pow, ← div_eq_mul_inv]
   have hc : (N.choose kd : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
   have hp : ((N : ℝ≥0∞)) ^ w ≠ 0 := pow_ne_zero _ hN0
