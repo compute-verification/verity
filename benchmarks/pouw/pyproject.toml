@@ -78,6 +78,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_lanes.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
+          "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_passes.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py",

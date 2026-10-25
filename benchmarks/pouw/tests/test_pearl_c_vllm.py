@@ -41,6 +41,7 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
@@ -49,6 +50,7 @@ from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -336,6 +338,7 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     out = run.end()
     man = json.loads(Path(out["manifest"]).read_text())
     assert man["schema"] == PPD.MANIFEST_SCHEMA and man["scheme"] == SCHEME and man["salt"] == salt.hex()
+    assert "session" not in man, "in-process coins: no live session to name"
     assert [(u["m"], u["real_rows"], u["weight"]) for u in man["matmuls"]] == [(32, 20, 0), (32, 32, 1)]
     assert man["commitment"] == {"root": out["transcript_root"], "count": 6}
     assert {w: v["root"] for w, v in man["weights"].items()} == {str(w): r.hex() for w, r in roots.items()}
@@ -408,14 +411,16 @@ class _Engine:
 
 def _served(monkeypatch, kernel, weights, more=None, **run):
     """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
-    with the epoch's coins from a seeded challenger and the further pouw settings `more`; `run` overrides the device run's
-    buffer sizes."""
+    with the epoch's coins from a seeded challenger, the further pouw settings `more` and the hm96 key `SALT_KEY` (an
+    install draws a fresh one, so two installs compared byte for byte share it); `run` overrides the device run's buffer
+    sizes."""
     import functools
 
     from verity_vllm import protocol_options as PO
     from verity_vllm.protocol_options import pouw
     monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
+    monkeypatch.setattr(PPD, "new_salt_key", lambda scheme: SALT_KEY)
     if run:
         monkeypatch.setattr(PPD, "PearlCDeviceRun", functools.partial(PPD.PearlCDeviceRun, **run))
     model = _Model(weights)
@@ -1117,33 +1122,60 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
 
 
 def live_coin(after: bytes, entropy: int = 7):
-    """A live session's coin commitment and its salt coin opened after `after`, from a seeded in-process live challenger
-    (the auditor host's session as `pouw_h1_window.open_session` returns it)."""
-    ch = Wd.live_challenger(0, 1, random.Random(entropy).randbytes)
+    """A live session's coin commitment, Pearl-C's salt coin alone (`window.SALT_FAMILIES`), and that coin opened after
+    `after`, from a seeded in-process live challenger (the auditor host's session as `pouw_h1_window.open_session`
+    returns it)."""
+    ch = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(entropy).randbytes)
     return ch.commitment, ch.open(Wd.SALT, 0, after)
 
 
-def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root(device_run):
-    """A live session's salt coin opened after the weights' root salts the device run's epoch (`audit.salt_of`, as H1's), and
-    the run records the session's coins; one opened after another root (before the weights were committed), one bound to
-    another session's commitment, and a live opening against an in-process commitment or the reverse are refused."""
+def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(device_run, tmp_path):
+    """A live session's salt coin opened after salt epoch k's root (`salt.epoch_open_root` of the weights' root W and
+    k, the run's `pass_index`) salts the device run's epoch (`audit.salt_of` over W, as H1's), and the run records the
+    session's coins and k; a retained pass's manifest names k (``pass_index``) and the session the install carries by its
+    id, ledger seq, root and commitment alone (never the gate's hello secret or the rest of its answer, which core's
+    check of the pass reads from the ledger). One opened after another root (another epoch's, the bare W, or W before
+    the weights were committed), a run naming no epoch number, one bound to another session's commitment, a
+    session of H1's layout (salt, draw and round coins, which a Pearl-C pass leaves unreleased, so its session never
+    ends complete), and a live opening against an in-process commitment or the reverse are refused."""
     _, kernel, weights, roots, _ = device_run
     root = weights_root(roots)
+    r = PS.epoch_open_root(root, 1)
 
-    def make(c, o):
+    def make(c, o, k=1):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
-                                   capacity=1 << 12, salt_key=SALT_KEY)
-    c, o = live_coin(root)
+                                   capacity=1 << 12, salt_key=SALT_KEY, pass_index=k)
+    c, o = live_coin(r)
     run = make(c, o)
     assert run.epoch.salt == salt_of(c, o.coin, root) and run.commits["coins"] == c.to_json()
-    assert run.commits["salt_opening"] == o.to_json()
+    assert run.commits["salt_opening"] == o.to_json() and run.commits["pass_index"] == 1
+    named = {"session": "s20261020T110800Z-0001", "seq": 4, "root": r.hex(), "commitment": c.root.hex()}
+    run.commits["session"] = {**named, "port": 7811, "by": "vllm", "secret": "ab" * 32}
+    run.begin(retain=str(tmp_path))
+    for w in (0, 1):
+        run.gemm(w, torch.randn(20, 1024).to(torch.bfloat16), weights[w], None)
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    assert man["session"] == named and man["coins"] == c.to_json() and man["salt"] == run.epoch.salt.hex()
+    assert man["pass_index"] == 1 and PPD.manifest_epoch(man, c)[0].salt == run.epoch.salt
+    for k in (0, 2):
+        with pytest.raises(DomainError, match="not opened after"):
+            make(c, o, k)
+        with pytest.raises(DomainError, match="not opened after"):
+            PPD.manifest_epoch({**man, "pass_index": k}, c)
+    for k in (None, True, -1):
+        with pytest.raises(DomainError, match="salt epoch's number"):
+            make(c, o, k)
+    with pytest.raises(DomainError, match="salt epoch's number"):
+        PPD.manifest_epoch({k: v for k, v in man.items() if k != "pass_index"}, c)
     with pytest.raises(DomainError, match="not opened after"):
-        make(*live_coin(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])})))
+        make(*live_coin(root))
+    with pytest.raises(DomainError, match="not opened after"):
+        make(*live_coin(PS.epoch_open_root(weights_root({0: roots[0], 1: bytes([9]) * len(roots[1])}), 1)))
     with pytest.raises(DomainError, match="does not open against"):
-        make(live_coin(root, entropy=8)[0], o)
-    with pytest.raises(DomainError, match="pouw/draw coin 0, not its pouw/salt coin 0"):
+        make(live_coin(r, entropy=8)[0], o)
+    with pytest.raises(DomainError, match="not a Pearl-C salt session's"):
         ch = Wd.live_challenger(0, 1, random.Random(7).randbytes)
-        make(ch.commitment, ch.open(Wd.DRAW, 0, root))
+        make(ch.commitment, ch.open(Wd.SALT, 0, r))
     in_process = salt_coin(roots)
     for pair in ((in_process[0], o), (c, in_process[1])):
         with pytest.raises(DomainError, match="live coin commitment, and nothing else"):
@@ -1153,12 +1185,12 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_the_weights_root
 def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessions_commitment():
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
-    c, o = live_coin(weights_root(roots))
-    epoch = PPD.epoch_of(work, roots, c, o)
+    c, o = live_coin(PS.epoch_open_root(weights_root(roots), 0))
+    epoch = PPD.epoch_of(work, roots, c, o, 0)
     man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0},
                                                       {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
            "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
-           "coins": c.to_json(), "salt_opening": o.to_json(), "salt": epoch.salt.hex()}
+           "coins": c.to_json(), "salt_opening": o.to_json(), "salt": epoch.salt.hex(), "pass_index": 0}
     assert PPD.manifest_epoch(man, c) == (epoch, "coin")
     with pytest.raises(DomainError, match="not the epoch's"):
         PPD.manifest_epoch(man, live_coin(weights_root(roots), entropy=8)[0])

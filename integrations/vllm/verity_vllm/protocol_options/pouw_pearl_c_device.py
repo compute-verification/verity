@@ -67,7 +67,6 @@ from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
 from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
-    SCHEDULES,
     SERIAL,
     Schedule,
     SchemeId,
@@ -77,10 +76,12 @@ from verity.core.protocols.pouw.serving import (
 from .pouw_pass import EpochCalls, call_index, pass_dir, room
 from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
+    SCHEDULES,
     SIDE_GROUPS,
     SIDE_IO,
     STEP_GROUPS,
     LaneCalls,
+    admitted,
     rotated,
     schedule_of,
     splits,
@@ -116,6 +117,7 @@ from .pouw_pearl_c_manifest import (  # noqa: F401 - the manifest's readers, kep
     MANIFEST_SCHEMAS,
     manifest_epoch,
     manifest_schema,
+    session_head,
 )
 from .pouw_pearl_c_passes import PassEnds, _Pass
 from .pouw_pearl_c_screen import (
@@ -291,10 +293,11 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
-                 whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None,
+                 pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None,
                  whole_shape_joins: bool = False):
         """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
-        its salt coin, opened after the weights' root (`epoch_of`, which raises `DomainError` otherwise): the salt is the coin's.
+        its salt coin, opened after the weights' root, or a live session's after salt epoch `pass_index`'s root (`epoch_of`,
+        which raises `DomainError` otherwise): the salt is the coin's.
         The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass`
         with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
@@ -313,7 +316,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.torch_stream = _TorchStream()
         self.roots, self.coins, self.opening = dict(roots), coins, opening
         self.epoch = epoch_of(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
-                              self.roots, coins, opening)
+                              self.roots, coins, opening, pass_index)
         self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme, kernel)
@@ -353,7 +356,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "coins": coins.to_json(), "salt_opening": opening.to_json(),
-                                        "transcript_root": None, "units": 0, "tiles": 0}
+                                        "transcript_root": None, "units": 0, "tiles": 0,
+                                        **({} if pass_index is None else {"pass_index": pass_index})}
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
                                                 f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
@@ -660,15 +664,7 @@ class PearlCExecutor:
     controls = frozenset({"poison", "omit"})
 
     def __init__(self, run: PearlCDeviceRun) -> None:
-        self.run, self.name = run, run.entry
-        ok = set()
-        for name in SCHEDULES:
-            try:
-                schedule_of(name, run.scheme, run.kernel)
-            except ValueError:
-                continue
-            ok.add(name)
-        self.schedules = frozenset(ok)
+        self.run, self.name, self.schedules = run, run.entry, admitted(run.scheme, run.kernel)
 
     def refusals(self, sites: Any) -> list[str]:
         return refusals(self.run.scheme.name, {s.weight_id: (s.n, s.k) for s in sites})
