@@ -123,6 +123,14 @@ pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s t
 **`collectives/`** holds the collective record (`collective_record.py`), the communicator hook sites (`collective_sites.py`)
 and the embedding shard layout (`embedding_shard.py`).
 
+**`records/`** holds the typed stage records, one frozen dataclass per record kind one stage writes and another reads, whose `load`
+refuses a missing required field by file and field name (`fields.py`): `required_manifest.py` (the required-value manifest, as the
+replay's coverage reads it), `query_checks.py` (the sampled replay's reconciliation against Q(P), as the C2 rules read it),
+`served_tokens.py` (the driver's served tokens, `capture/tokens.json`, as GM-01's chronology check and the padded conversion,
+`commit/padding_steps.py`, read them) and `declared_stop.py` (the workload Program's declared stop rule and LAG, as the same two read
+them).
+Never: an import of anything else in `verity_vllm`.
+
 **`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
 `*_negative*.sh` runs, `cov_pod.sh`, the gates (`pod_gate.sh`, `verify_lane.sh`), `known_roots.json`.  Never: Python that a layer
 above would import.
@@ -371,7 +379,7 @@ row makes it one, so `records publish`, `records pull` and `records switch` refu
 chain` refuses it before any stage when it would publish (`config_record.index_refusal`; `--no-publish` still runs it); a research
 row keeps its EOS stops.
 
-The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
+The circuit database (`verity_vllm/pipeline/circuit_db.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
 `row=<id>`: its payload is the row's config record (`pipeline/config_record.py`, `verity-vllm/config-record/v1`: the row file without
 its requests and its sha256, the κ profile, each rank's Program digests, the Match and Commit verdicts, every Commit gate, the run
@@ -384,7 +392,7 @@ Programs name (`captures`) for the Programs the Build uses, by the Definitions i
 capture of record (`records capture RUN` preserves a capture run's `<property>.json` as a `property-record/v1`, validated and
 holding) or named a gap with its reason (`--gap PROPERTY=REASON`), and none is left silent.  The record's `stages` is each stage's
 last verdict in `stages.txt`; a Build whose Programs passed while its in-stage manifest alone failed says so (`build.stage`) and
-passes superseded by the manifest of record.  `records.programs(row)` returns `{rank: {part: DecodedProgram}}` (the workload
+passes superseded by the manifest of record.  `circuit_db.programs(row)` returns `{rank: {part: DecodedProgram}}` (the workload
 Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id and
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
 publish` adds a row (a row file not done only at its public cap, a FAIL record, a Commit that committed against another manifest or
@@ -400,11 +408,11 @@ sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/input
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
 A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
-Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
+Build from the row's declared inputs (`verity_vllm/program/predict/`) and compares digests rank by rank; `records switch ROW --comparison
 comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
 `aot` in `manifests/records.json`, and pins the predicted Programs (a row whose file is not done only at its public cap is
 refused).  A switched row's Build (`--build-construction record`, the
-default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
+default) derives each Program with `predict emit` (`verity_vllm/program/predict/aot.py`): the predicted Program, under the trace's annotations (the
 runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
 files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
 row's Build that traced any Program.  Neutrality's rebuild traces every row (`--build-construction trace`), so it checks a switched

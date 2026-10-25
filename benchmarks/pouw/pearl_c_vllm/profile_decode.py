@@ -43,7 +43,7 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",
-            **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa")},
+            **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "form_ep_a", "form_epw_a", "af", "pa")},
             **{x: "hashing" for x in ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "hash_leaf")},
             "commit_a": "hashing"}      # run.Pipeline's FUSED at decode: A's commitment, with E_A's lines
 #: GPU 1's cubin's kernels by category, for nsys's per-kernel sums: short names exactly (``pa`` is not ``paged_attention``),
@@ -154,7 +154,7 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     run_cls = PPD.PearlCDeviceRun
     saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
     saved += [(run_cls, n, vars(run_cls)[n]) for n in ("_shape", "_pipe", "end", "gemm")]
@@ -201,7 +201,7 @@ def run(args) -> dict:
     llm = e2e.engine(args, "arm")
     model = find_model(llm)
     t0 = time.perf_counter()
-    run_, weights, stack = e2e.install(model, args, os.urandom(32))
+    run_, weights, stack = e2e.install(model, args, e2e.Coins(0))
     install_s = time.perf_counter() - t0
     gate = e2e.gate(run_, weights)
 
