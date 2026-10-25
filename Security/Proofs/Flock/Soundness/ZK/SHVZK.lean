@@ -1,3 +1,4 @@
+import Definitions.Flock.ZK.Table
 import Definitions.Flock.ZK.SHVZK
 import Proofs.Flock.Soundness.ZK.Blocks
 import Proofs.Flock.Soundness.ZK.Dist

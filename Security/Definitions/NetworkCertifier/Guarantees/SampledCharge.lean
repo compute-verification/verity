@@ -17,10 +17,11 @@ every status complete, is then `Accepted` with advice held only at that set's co
 than the ingress among `As`, the run's observations are among the sequences this guarantee counts. The leak is then at most
 `c + log2 #faultySets + β + n·log2 D` bits, except with that probability. That the transfer gates carry the run's
 observations is the certifier's trust (`trusted-host`), and the statuses are its published record. The theorem is
-`NetTiming.sampledLeak` (`Proofs.NetworkCertifier.SampledLeak`), with `SampledAuditAccepted` a hypothesis. `RAcc` bounds
-no input besides the ingress, so it takes that inputs among `As` suffice (`AdviceIn`); `sampledLeak_free` proves that for
-every circuit at the inputs `false` off the free inputs, with `c` the number of free inputs. `SampledLeakAccepted` is
-that bound as a guarantee, with `SampledAuditAccepted` its one open hypothesis.
+`NetTiming.sampledLeak` (`Proofs.NetworkCertifier.SampledLeak`), with `SampledAuditAccepted` a hypothesis. `RAcc` pins
+the inputs besides the ingress to the trace's committed values, so it takes that inputs among `As` suffice for the
+trace's (`AdviceIn`); `sampledLeak_reg` proves that for every circuit at the inputs pinned to the trace at the registered
+inputs `reg` and `false` off the free inputs (`AsReg`), with `c` the number of free inputs not in `reg`.
+`SampledLeakAccepted` is that bound as a guarantee, with `SampledAuditAccepted` its one open hypothesis.
 
 **What `As` and `c` are.** `As` is what the circuit's inputs other than the ingress may be. Its count is a premise of the
 run, not an assumption. Under the decided composition the registered inputs are fixed by the registration, and the
@@ -58,26 +59,28 @@ decoder that lists every trace within Flock's radius, and `β` bounding each pos
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`: except with that probability, every observation sequence of length `k` with
   jitter below `Dj` that the trace's transfer gates carry with every status complete is among the sequences
-  `AccSeqsSampled` counts, with the inputs besides the ingress `false` off the free inputs (`AsFree`);
-* those sequences number at most `2^#freeInputs · #faultySets(δ) · 2^β · Dj^k`: the leak is at most
-  `#freeInputs + log2 #faultySets(δ) + β + k·log2 Dj` bits.
+  `AccSeqsSampled` counts, with the inputs besides the ingress the trace's at the registered inputs `reg` and `false`
+  off the free inputs (`AsReg`);
+* at whatever values `ρ` the registered inputs hold, those sequences number at most
+  `2^#(freeInputs \ reg) · #faultySets(δ) · 2^β · Dj^k`: the leak is at most
+  `#(freeInputs \ reg) + log2 #faultySets(δ) + β + k·log2 Dj` bits.
 
-`RAcc`'s advice is any value of the free inputs, so they are charged at every value; a smaller `c` (the registered
-inputs fixed by the registration, advice v1's declared charge) needs `RAcc` to pin that advice. -/
+`reg` is any set of each statement's inputs: the count leaves out the values the trace holds there. Those values are
+public only where something binds them, as the registration's commitment binds the registered inputs. -/
 def SampledLeakAccepted : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ)
       (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (β : Stmt → ℕ) (Dj : ℕ)
-      (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
+      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : Stmt → Finset ℕ) (β : Stmt → ℕ)
+      (Dj : ℕ) (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
       KSLinOn H D.V (ScopeAcc D lay k)
-          (RLeak H D.commit D.parse D.partition L K S lay k δ (fun s => AsFree s.prog (lay s) (k s)) Dj) (E D decode)
-          (κ D δ) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
+          (RLeak H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj)
+          (E D decode) (κ D δ) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
         ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
-          ∀ op : ℕ → List (Obs L K S) → List Bool,
-            (AccSeqsSampled s.prog P s.design (lay s) (k s) (AsFree s.prog (lay s) (k s)) δ op Dj).encard ≤
-              ((2 ^ (freeInputs s.prog (lay s) (k s)).card * (faultySets s.design P δ).card * 2 ^ β s * Dj ^ k s : ℕ) :
-                ℕ∞)
+          ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
+            (AccSeqsSampled s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) δ op Dj).encard ≤
+              ((2 ^ (freeInputs s.prog (lay s) (k s) \ reg s).card * (faultySets s.design P δ).card * 2 ^ β s *
+                Dj ^ k s : ℕ) : ℕ∞)
 
 end NetTiming.Guarantees
