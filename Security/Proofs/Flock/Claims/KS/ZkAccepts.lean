@@ -9,9 +9,10 @@ the sampling record `SamplingDeploy.deploy`). Where its run accepts against SHA-
 at the statement's inputs `s` (`insOf true x = some s`, what flock-verify reads of the statement), on the last message's
 record and proof files `f`, and:
 
-* the record's draw is the statement's up to key order (`Custody.checks_draw`);
-* where it is the statement's as a value, flock-verify `--zk` accepts that transcript at the statement's inputs
-  (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and so `LiveAcceptsZK` at every outcome carrying it).
+* the record's draw is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
+  `Flock.norm`);
+* flock-verify `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
+  so `LiveAcceptsZK` at every outcome carrying it).
 
 This is the `--zk` side of `plainVerdict_of_run`. Equality of the draw as a value is what the setup reads: `Exec.setupOf`
 sets the record up at the record's own draw (`Custody.setupOf_record`).
@@ -29,8 +30,8 @@ theorem deploy_flock_V (rel : Readable.Parsed → Readable.Relation) (c : Sampli
     (SamplingDeploy.deploy rel c).flock.V = V true := rfl
 
 /-- **An accepted run of `V true` is flock-verify `--zk`'s acceptance**: against SHA-512, the run decided at the
-statement's inputs `s` on its last message's record and proof files `f`; the record's draw is the statement's up to key
-order, and where it is the statement's as a value, `verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
+statement's inputs `s` on its last message's record and proof files `f`; the record's draw is the statement's, and
+`verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
 theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
@@ -38,8 +39,7 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
           ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
         .decide s spec sts link c₁ mids f ∧
       insOf true x = some s ∧
-      Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw ∧
-      (Exec.recordDraw f.record = s.read.draw → ZkExec.AcceptsZK s.read.I ⟨f.record, f.proofs⟩) := by
+      Exec.recordDraw f.record = s.read.draw ∧ ZkExec.AcceptsZK s.read.I ⟨f.record, f.proofs⟩ := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hact, -⟩ := acc_decide h
   have hacc := run_acc_next sha512 P (V true) x ω r h
   replace hacc : ((next true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
@@ -49,7 +49,8 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   simp only [ite_true] at hv
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide hact)
   have hzk : s.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  refine ⟨s, spec, sts, link, c₁, mids, f, hact, hins, Claims.Bridge.Custody.checks_draw hc, fun hdraw => ?_⟩
+  have hdraw := Claims.Bridge.Custody.recordDraw_of_checks hins hc
+  refine ⟨s, spec, sts, link, c₁, mids, f, hact, hins, hdraw, ?_⟩
   exact ⟨spec, sts, Claims.Bridge.Custody.setupOf_zkInputs (Ins.setup_read hs) hzk
     (Claims.Bridge.Custody.publicInputs_none_of_checks hc) hdraw, Claims.Bridge.Custody.setup_shapeOk hs hzk, hv⟩
 
@@ -57,10 +58,10 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
 transcript is the last message's record and proof files. -/
 theorem liveAcceptsZK_of_run {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
-    ∃ (s : FlockDeploy.Ins) (f : FlockDeploy.Final), insOf true x = some s ∧ Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw ∧
-      (Exec.recordDraw f.record = s.read.draw → ∀ (R : Reg) (S : Finset (Fin n)),
-        ZkExec.LiveAcceptsZK s.read.I (R, S, (⟨f.record, f.proofs⟩ : Exec.Transcript))) := by
-  obtain ⟨s, -, -, -, -, -, f, -, hins, hrel, hacc⟩ := zkAccepts_of_run h
-  exact ⟨s, f, hins, hrel, fun hd _ _ => hacc hd⟩
+    ∃ (s : FlockDeploy.Ins) (f : FlockDeploy.Final), insOf true x = some s ∧
+      Exec.recordDraw f.record = s.read.draw ∧ ∀ (R : Reg) (S : Finset (Fin n)),
+        ZkExec.LiveAcceptsZK s.read.I (R, S, (⟨f.record, f.proofs⟩ : Exec.Transcript)) := by
+  obtain ⟨s, -, -, -, -, -, f, -, hins, hdraw, hacc⟩ := zkAccepts_of_run h
+  exact ⟨s, f, hins, hdraw, fun _ _ => hacc⟩
 
 end FlockDeploy.KS
