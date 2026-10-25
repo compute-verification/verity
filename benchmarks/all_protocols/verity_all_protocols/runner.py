@@ -151,7 +151,8 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
     got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
-        "window": index, "period": index, "node": a.node, "circuit": registered["circuit"], "run_root": got["run"],
+        "window": index, "period": index - getattr(a, "start", 0), "node": a.node, "circuit": registered["circuit"],
+        "run_root": got["run"],
         "law": a.law, "delta": a.delta, "cap": a.cap, "tools": a.tools, "session_jobs": a.session_jobs,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
