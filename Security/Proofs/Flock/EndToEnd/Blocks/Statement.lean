@@ -59,9 +59,6 @@ noncomputable def game : Game Unit := Period.game S.W S.T
 /-- The horizon's run at the prover strategy `s`: each session's record, in serve order. -/
 noncomputable def run (s : Strategy S.game) : Game (List WindowRec) := Period.run S.W S.T s
 
-/-- `cr/sha-512` and `ecr/sha-512` (`HiddenWindow.CR`) at every session's strategy, on every run of the horizon. -/
-def CR (s : Strategy S.game) : Prop := Period.CR S.W S.T s
-
 /-- Block `b`'s wrong units in a run's records. -/
 def blockWrong (b : ℕ) (l : List WindowRec) : ℕ := ((l.filter fun r => r.idx ∈ S.sessions b).map WindowRec.wrong).sum
 
@@ -84,7 +81,7 @@ def IntegrityBlock : Prop :=
   ∀ (S : ServerBlocks) (b : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t ∈ S.sessions b, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game, S.CR s →
+    ∀ s : Strategy S.game, Period.CR S.W S.T s →
     value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
 /-- **The integrity audit per server-time block, over a horizon of `B` blocks.** In a horizon as in `IntegrityBlock`
@@ -96,7 +93,7 @@ def IntegrityBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game, S.CR s →
+    ∀ s : Strategy S.game, Period.CR S.W S.T s →
     value (fun l => ∃ b < S.B, S.BlockEscapes q δ b l) (S.run s) ≤
       ∑ b ∈ Finset.range S.B, (ENNReal.ofReal δ + S.err b)
 
@@ -109,7 +106,7 @@ def IntegrityHorizonBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game, S.CR s →
+    ∀ s : Strategy S.game, Period.CR S.W S.T s →
     value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b
 
