@@ -42,6 +42,7 @@ theorem choose_lt_of_lt {a b k : ℕ} (hk : 1 ≤ k) (hab : a < b) (hkb : k ≤ 
   omega
 
 theorem count : CountTarget := by
+  classical
   intro C n P kd K₀ hkd hkdn H Cm desc q roots w h
   have hFsub : Claims.Sampling.faulty H Cm (stmtOf P kd desc q roots) (partOf P) w ⊆ Finset.range n := by
     intro v hv
