@@ -272,26 +272,25 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 
 
 def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's compile stubbed, its
-    window's circuit one whose every input is registered): it writes the circuit's record from its description (members
-    stated at its cap, no run) or, ``--description``, the description, prints the length the registration charges with the
-    count, and exits `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the
-    record finds the charge."""
+    """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's window circuit stubbed,
+    one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
+    no run) or, ``--description``, the description, prints the length the registration charges with the count, and exits
+    `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
+    charge."""
     import prove_path as PP
     from test_prove_path import _served
-    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.build import Unexpressible
 
-    s, circuit = _served(tmp_path, monkeypatch), _registered_circuit()
-    stub, refuse = ST.compile_steps, []
+    s, circuit, refuse = _served(tmp_path, monkeypatch), _registered_circuit(), []
 
-    def lower(registered, cls):
-        assert (cls.slots, cls.prompt, cls.outputs) == (4, 2048, 64)
+    def lower(registered, compiled, cls):
+        assert cls == WC.CLASS_OF_RECORD and compiled.requests
         if refuse:
             raise Unexpressible("a family the window's lowering doesn't take")
         return circuit
 
-    monkeypatch.setattr(ST, "compile_steps", lambda *a: SimpleNamespace(requests=stub(*a).requests, circuit=lower))
+    monkeypatch.setattr(WC, "window_circuit", lower)
     (tmp_path / "advice.bin").write_bytes(s.data)
     bits = s.bound["advice"]["bits"]
     base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
