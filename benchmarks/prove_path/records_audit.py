@@ -21,7 +21,8 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
 the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
-An integration's labels are never read.
+The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
+it (`leak_count`). An integration's labels are never read.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
@@ -214,6 +215,29 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     return _verdict(ok, {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")})
 
 
+def leak_count(circuit: Mapping[str, Any], bits: int) -> dict[str, Any]:
+    """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
+    ``other_inputs`` is #(otherInputs \\ registered): #4044's ``otherInputs`` (``SampledCharge.lean``), the circuit's input
+    gates no step lists as ingress, less the inputs the registration fixes. The circuit record's input gates are each
+    member's parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per unit, or once
+    per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs (``wired``, which
+    a5's wiring check holds). The records list no steps and register no input (a row table's registered reads are refused,
+    `verifier_window`), so none is ingress or registered yet: ``external`` ports are reported, not subtracted, until a
+    layout lists the ingress at its steps. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
+    inputs = wired = external = 0
+    ext = set(circuit.get("external") or ())
+    for m in circuit["members"]:
+        tables, wires = dict(map(tuple, m.get("tables") or ())), {p for p, _o, _ws in m.get("wired") or ()}
+        for p, words in m["rows"]:
+            n = 16 * int(words) * int(tables.get(p, m["n"]))
+            inputs += n
+            wired += n if p in wires else 0
+            external += n if f"{m['template']}/{p}" in ext and p not in wires else 0
+    other = inputs - wired
+    return {"inputs": inputs, "wired": wired, "ingress": 0, "registered": 0, "external": external, "other_inputs": other,
+            "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+
+
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
     """What the audit refuses before any draw about the records: a registration naming another circuit or another run root,
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
@@ -375,6 +399,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
+    row["leak"] = leak_count(doc, int((held["advice"] or {}).get("bits", 0)))
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
     if a.challenger:
@@ -408,6 +433,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
+                                     "leak": {k: row["leak"][k] for k in ("other_inputs", "advice_bits", "bound")},
                                      **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
