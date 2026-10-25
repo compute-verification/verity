@@ -17,7 +17,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import interface as I, rows as CS
 
@@ -72,6 +72,21 @@ def test_a_units_rows_are_its_definitions_bit_rows():
     assert np.array_equal(I.words(ins[1], 32, 3, 2)[:, 1], (ins[1] >> 16).astype(np.uint16))
     with pytest.raises(ValueError, match="16-bit"):
         I.words(ins[1], 16, 3, 1)
+
+
+def test_a_boolean_definitions_rows_are_its_ports_words():
+    """A Boolean-profile Definition (every leaf one bit, as network-accounting's egress units) has the bit rows of its
+    `boolean.word_type` view; a port whose words aren't whole u16 words of one width is still refused."""
+    bit = Value(1)
+
+    def boolean(name, params, ret):
+        return bind(CompositeDefinition(name, 1, (), lambda S: (params, ret), lambda B, S, *xs: xs[-1], register=False))
+
+    lay = I.layout(boolean("BooleanRows", (("b", Array(2, Array(8, bit))), ("w", Array(32, bit))), Array(32, bit)))
+    assert lay.rows == (("b", 1), ("w", 2)) and lay.outs == (("o0", 2),) and lay.widths == (8, 32, 32)
+    for bad in (bit, Array(8, bit), Tuple(Array(8, bit), Array(16, bit))):
+        with pytest.raises(ValueError, match="a row is whole u16"):
+            I.layout(boolean("BooleanBad", (("f", bad),), bad))
 
 
 def test_the_window_tiles_the_partition_in_chunks():
