@@ -251,6 +251,8 @@ print(json.dumps({"pauses": {"n": len(pz), "late_max_s": max((p["late_s"] for p 
                   "close_s_max": max(((lines[w].get("seconds") or {}).get("close") or 0 for w in wins if w in lines), default=0),
                   "disk_free_gb": round(shutil.disk_usage(d).free / 1e9, 1)}))
 EOF
+  "$PY" tools/admit_rows_check.py "$D" --json "$OUT/admit_rows_gate.json" > "$OUT/admit_rows_gate.txt" 2>&1
+  echo "$(date -u +%H:%M:%SZ) gate admit-rows rc=$?" | tee -a "$OUT/steps.txt"
 fi
 
 "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
