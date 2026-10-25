@@ -22,6 +22,7 @@ import Definitions.Flock.Game.Lock
 import Definitions.Flock.Game.Seq
 import Definitions.Flock.Game.Prob
 import Definitions.Flock.Game.Batch
+import Definitions.Flock.ZK.Table
 
 /-!
 # C-Flock's definitions

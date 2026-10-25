@@ -281,7 +281,7 @@ Zero knowledge's coverage (closed by the refusal): `Composed.zk_session_view` ho
 prover doesn't refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank
 `128·k`, `ρ₀, ρ₁` independent over F128, and no zerocheck outer coin `1`; the verifier also checks `β` and `ρ`), and
 there is no other kind of coin vector. At an outer coin `r_j = 1` (`inv 0 = 0` in the residual round) the honest pads
-miss the inner proof's constraint by a witness-dependent amount that the view would show (`ZK/Table.lean`'s inner
+miss the inner proof's constraint by a witness-dependent amount that the view would show (`Definitions/Flock/ZK/Table.lean`'s inner
 proof), so the prover refuses it: `zk_veil::Masking` stops as the coin opens, before anything that depends on it is
 sent, reading only the coin. That costs completeness at most `(m − 13)·2^-128` per rep under uniform coins
 (`ZkEveryCoin.outer_one_le`), and no statement charges it. `ZkEveryCoin.zk_session_view_all` holds at every coin vector,
