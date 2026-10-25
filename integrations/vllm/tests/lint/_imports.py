@@ -48,6 +48,7 @@ LAYER = {
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
+    "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
 }
 
 #: The property harnesses.
@@ -58,7 +59,8 @@ VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
     "check.replay", "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
-VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_rules", "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
+VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
+                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
 
 
 def layer_of(module: str) -> str:

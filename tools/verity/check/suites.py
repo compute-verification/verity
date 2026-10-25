@@ -169,7 +169,11 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
-#: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
+#: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both. Lake builds a
+#: package's path requirements in their own `.lake`, so most packages' builds write the verifier's beside lean-build (main
+#: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built sampled-proofs-verifier from the pytest
+#: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
+#: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
@@ -177,7 +181,8 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
               "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
-              "verity/core/primitives/requirement", "benchmarks/remote_session")
+              "verity/core/primitives/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "verity-network-e2e",
+              "benchmarks/live_verifier", "verity-network-traces", "verity-vllm")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '

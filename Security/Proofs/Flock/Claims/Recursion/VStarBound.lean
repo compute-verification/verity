@@ -103,7 +103,8 @@ held whole or fixed), each a part and its segments, in order. A piece's bytes ha
 (`pieceLen`), so each piece sits at an offset the statement fixes. A bit at a position is the one-wire form
 (`segsAt`). V*'s shared registered rows, each read by more than one part (the running sums `acc0` and `acc1`, which
 rec-open units write and rec-residuals units read), are slots: where part `s` holds shared row `r` (`rowAt x s r`, as
-segments, `none` where it holds none), and the one part whose witness the row's value is read off (`rowOwner x r`). -/
+segments, `none` where it holds none), the one part whose witness the row's value is read off (`rowOwner x r`), and
+where the inner messages carry the row, a round and a byte offset (`rowIn x r`, `none` where no message carries it). -/
 structure LayoutB where
   rounds : Msg → ℕ
   msgAt : Msg → ℕ → ℕ → Option (List (Msg × List _root_.Flock.HmNets.Lin))
@@ -112,6 +113,7 @@ structure LayoutB where
   pieceAt : Msg → ℕ → List (ℕ × List (Msg × List _root_.Flock.HmNets.Lin)) := fun _ _ => []
   rowAt : Msg → ℕ → ℕ → Option (List (Msg × List _root_.Flock.HmNets.Lin)) := fun _ _ _ => none
   rowOwner : Msg → ℕ → Option ℕ := fun _ _ => none
+  rowIn : Msg → ℕ → Option (ℕ × ℕ) := fun _ _ => none
 
 /-- Inner round `i`'s message as part `s` holds it whole, off its witness `w`: none at a round the statement fixes. -/
 def LayoutB.held (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : Option Msg :=
@@ -179,6 +181,37 @@ theorem LayoutB.rowsAgree_of_none {L : LayoutB} {x : Msg} {ws : List Flock.Wit}
   intro r s w v _ hv
   simp [LayoutB.rowHeld, h s r] at hv
 
+/-- **Part `s` reads the shared rows where the messages carry them**: each shared row it holds off its witness `w` sits
+in the messages `ms` at the round and offset the layout places it (`rowIn`). -/
+def LayoutB.RowsRead (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (ms : List Msg) : Prop :=
+  ∀ (r : ℕ) (v : Msg) (i o : ℕ), L.rowHeld x s w r = some v → L.rowIn x r = some (i, o) →
+    ((ms.getD i []).drop o).take v.length = v
+
+/-- **The readers' messages carry each placed shared row's value**: where the layout places shared row `r` at round
+`i`, offset `o`, the readers' messages off any witnesses hold there the value the row's owner holds (`LayoutB.row`). -/
+def LayoutB.RowsLaid (L : LayoutB) : Prop :=
+  ∀ (x : Msg) (ws : List Flock.Wit) (r i o : ℕ), L.rowIn x r = some (i, o) →
+    (((L.msgs x ws).getD i []).drop o).take (L.row x ws r).length = L.row x ws r
+
+/-- **The parts read the shared rows where the readers' messages carry them**: wherever the recorded calls of witnesses
+`ws` are true evaluations, each part reads the shared rows it holds where `L.msgs x ws` carries them (`RowsRead`). It
+holds at a layout whose messages carry no shared row (`readsRows_of_rowIn`), and where the messages carry each row's
+owner's value and the parts agree on the rows (`readsRows_of_agree`). -/
+def LayoutB.ReadsRows (H : Msg → Msg) (L : LayoutB) : Prop :=
+  ∀ (x : Msg) (ws : List Flock.Wit), (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
+    ∀ (s : ℕ) (w : Flock.Wit), ws[s]? = some w → L.RowsRead x s w (L.msgs x ws)
+
+theorem LayoutB.readsRows_of_rowIn {H : Msg → Msg} {L : LayoutB} (h : ∀ x r, L.rowIn x r = none) :
+    L.ReadsRows H := by
+  intro x ws _ s w _ r v i o _ hi
+  simp [h] at hi
+
+theorem LayoutB.readsRows_of_agree {H : Msg → Msg} {L : LayoutB} (hl : L.RowsLaid)
+    (ha : ∀ x ws, (∀ e ∈ L.allCalls x ws, H e.1 = e.2) → L.RowsAgree x ws) : L.ReadsRows H := by
+  intro x ws hT s w hw r v i o hv hi
+  rw [ha x ws hT r s w v hw hv]
+  exact hl x ws r i o hi
+
 /-- **A layout at hidden-value positions as a bound layout**: its rounds, holdings and fixed rounds, every position its
 one-wire form (`segsAt`), with no pieces. It holds and records what the layout does (`held_ofLayout`,
 `calls_ofLayout`). -/
@@ -244,11 +277,12 @@ def LayoutB.CmtAgrees (L : LayoutB) (cmt : Msg → ℕ → Msg → Msg) (x xO : 
   ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → L.pieceAt x i = [] → ms.getD i [] = cmt x i xO
 
 /-- **V\* part `s`'s circuit checks the inner check `chk s` at every round it reads** (restating `PartChecks` for option
-(d)). It is `PartChecks`, except that the messages it quantifies over agree with the part in three ways: with its
-holdings at the rounds it holds whole, with its pieces at the assembled rounds, each at its offset, and with the commit
-strings its statement shows at the rounds read whole off the run (`LayoutB.CmtAgrees`). So a part's check can read its
-own pieces of the last message, which no part held whole before, and a round it reads but doesn't hold is the one its
-statement commits to. Or two of its recorded calls collide. -/
+(d)). It is `PartChecks`, except that the messages it quantifies over agree with the part in four ways: with its
+holdings at the rounds it holds whole, with its pieces at the assembled rounds, each at its offset, with the commit
+strings its statement shows at the rounds read whole off the run (`LayoutB.CmtAgrees`), and with the shared rows it
+holds where the messages carry them (`LayoutB.RowsRead`). So a part's check can read its own pieces of the last
+message, which no part held whole before, a round it reads but doesn't hold is the one its statement commits to, and a
+shared row it reads off its own witness is the one the messages carry. Or two of its recorded calls collide. -/
 def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
@@ -257,7 +291,7 @@ def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) →
-      L.CmtAgrees cmt x xO ms →
+      L.CmtAgrees cmt x xO ms → L.RowsRead x s w ms →
       chk s x c ms) ∨
       (findColl (L.calls x s w)).isSome
 

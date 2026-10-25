@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Recursion.VStarBound
 (`partChecks_of_res`, `partChecks_of_reads`, `partChecks_of_open`). The circuit's semantics there (`partCols_of_check`,
 `climb_of_check`) read no layout, so they carry over unchanged; what changes is the input tie, which here reads the
 messages the bound layout's check quantifies over (`LayoutB.Agrees`): those that agree with the part's holdings, its
-pieces and the commit strings its statement shows (`LayoutB.CmtAgrees`).
+pieces, the commit strings its statement shows (`LayoutB.CmtAgrees`) and its shared rows (`LayoutB.RowsRead`).
 
 * **`PartChecksB` at an algebra part** (`partChecksB_of_res`): `ResLinksB`, `ResLinks` at `LayoutB` with the input tie
   over agreeing messages.
@@ -26,13 +26,14 @@ open Claims
 open FlockVBridge.OfVStar
 
 /-- **The messages part `s`'s check reads agree with it** (what `PartChecksB` quantifies over), off its witness `w` at
-its V\* statement `xO`: at each round it holds whole, at each of its pieces at its offset, and at the commit strings
-`xO` shows at the rounds read whole off the run (`LayoutB.CmtAgrees`). -/
+its V\* statement `xO`: at each round it holds whole, at each of its pieces at its offset, at the commit strings `xO`
+shows at the rounds read whole off the run (`LayoutB.CmtAgrees`), and at the shared rows it holds where the messages
+carry them (`LayoutB.RowsRead`). -/
 def LayoutB.Agrees (L : LayoutB) (cmt : Msg → ℕ → Msg → Msg) (x : Msg) (s : ℕ) (w : Flock.Wit) (xO : Msg)
     (ms : List Msg) : Prop :=
   (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
     (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) ∧
-    L.CmtAgrees cmt x xO ms
+    L.CmtAgrees cmt x xO ms ∧ L.RowsRead x s w ms
 
 section Facts
 
@@ -79,10 +80,10 @@ theorem partChecksB_of_res {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deplo
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hR : ResLinksB D decode L shape shows cmt chk s) : PartChecksB H D DO L shape shows cmt chk s := by
   intro x st hst hf xO w hck _
-  refine Or.inl fun c hc ms hhd hpc hcm => ?_
+  refine Or.inl fun c hc ms hhd hpc hcm hrr => ?_
   obtain ⟨p, hx, ht, hpi, t, htl, m, k, cl, j, sh, S, ns, nv, hrc, hp, hsh, hh, hpart, o, g, u, ho, hg, hu, hlink⟩ :=
     hR x st hst hf xO c hc
-  obtain ⟨W, vv, hw0, hv0, hin, hout⟩ := hlink w ms ⟨hhd, hpc, hcm⟩
+  obtain ⟨W, vv, hw0, hv0, hin, hout⟩ := hlink w ms ⟨hhd, hpc, hcm, hrr⟩
   rw [hDO] at hck
   exact hout (Flock.Readable.partCols_of_check hck hx ht hpi htl hrc hp hsh hh hpart ho hg hu W vv hw0 hv0 hin)
 
@@ -171,10 +172,10 @@ theorem partChecksB_of_open {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Depl
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hR : OpenLinksB D decode L shape shows cmt chk s) : PartChecksB H D DO L shape shows cmt chk s := by
   intro x st hst hf xO w hck _
-  refine Or.inl fun c hc ms hhd hpc hcm => ?_
+  refine Or.inl fun c hc ms hhd hpc hcm hrr => ?_
   obtain ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hrec, hp, o, g, u, ho, hg, hu, hlink⟩ := hR x st hst hf xO c hc
   obtain ⟨msch, r, a, cf, rest, idx, ss, hmsch, ⟨hr, ha, hcf, hrest, hss, hrow, haux, hacc, hcoef, hdir⟩, hout⟩ :=
-    hlink w ms ⟨hhd, hpc, hcm⟩
+    hlink w ms ⟨hhd, hpc, hcm, hrr⟩
   rw [hDO] at hck
   exact hout (Flock.Readable.climb_of_check hck hx ht hpi htl ho hg hu rfl msch hmsch hrec hp r a cf rest idx ss hr
     ha hcf hrest hss hrow haux hacc hcoef hdir)
