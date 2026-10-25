@@ -1807,6 +1807,7 @@
   "Models.NetworkCertifier.Assumptions",
   "Models.NetworkCertifier.Guarantees",
   "Definitions.Claims",
+  "Definitions.Flock",
   "Models.Flock.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
