@@ -24,6 +24,9 @@
   prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
+- At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
+  collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
+  one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 
@@ -363,8 +366,10 @@ class Plan:
 
 
 def request_program(registered: Registered, unit: RequestUnit) -> Any:
-    """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows."""
-    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T, C=unit.C)
+    """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows,
+    at φ's rank, in the registered compiler's form (`dead_free`) at any world."""
+    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T, C=unit.C,
+                         dead_free=True)
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Compiled:
@@ -385,7 +390,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
         if dead := dead_units(body := r.program.fn.body):
             raise Unexpressible(f"request {u.request}'s Program {r.digest[:16]} holds {len(dead)} dead units, node {dead[0]} "
                                 f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
-                                f"Build's side and predict's alike (`program.prune.without_dead_units` drops a one-rank request wrapper's)")
+                                f"Build's side and predict's alike (`program.prune.without_dead_units` drops a request wrapper's)")
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r, canon)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
@@ -533,10 +538,12 @@ def trace_dir(u: RequestUnit | dict) -> str:
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
-    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`."""
+    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    world = int(phi.tp.get("world", 1))
+    tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
         if u is None or (d := trace_dir(u)) in seen:
             continue
@@ -546,7 +553,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
-                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling])
+                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
 
 
