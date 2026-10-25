@@ -162,6 +162,12 @@ def seq(t: torch.Tensor) -> torch.Tensor:
     return acc
 
 
+def sqrt_rn(t: torch.Tensor) -> torch.Tensor:
+    """sqrt.rn.f32. torch's f32 sqrt on the CPU is not correctly rounded on its vectorized path; f64's, rounded once to
+    f32, is (53 >= 2 * 24 + 2 bits)."""
+    return torch.sqrt(t.to(torch.float64)).to(torch.float32)
+
+
 def order16(x: np.ndarray) -> np.ndarray:
     x = np.asarray(x).astype(np.int64)
     return np.where(x & 0x8000, -(x & 0x7FFF), x & 0x7FFF)
@@ -218,7 +224,7 @@ class Step:
             for h, part in enumerate(halves(gsw[:, j])):
                 self._r(key("F32SumPart_v1", G=g, HALF=h), {"s": csw[:, j * g:(j + 1) * g]}, part, f"{op}.group")
         mean = seq(gs) / torch.tensor(float(n), dtype=torch.float32)
-        rs = torch.tensor(1.0, dtype=torch.float32) / torch.sqrt(mean + f32(np.array([f.eps], np.uint32)))
+        rs = torch.tensor(1.0, dtype=torch.float32) / sqrt_rn(mean + f32(np.array([f.eps], np.uint32)))
         rsw = words32(rs)
         for h, part in enumerate(halves(rsw)):
             self._r(key("RmsNormRecip_v1", N=n, G=ng, EPS=f.eps, HALF=h), {"s": gsw}, part, f"{op}.recip")

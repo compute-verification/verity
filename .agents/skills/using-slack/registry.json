@@ -228,6 +228,7 @@
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
+        "benchmarks/e2e_h200/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
