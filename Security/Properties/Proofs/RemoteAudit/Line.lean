@@ -16,7 +16,7 @@ are the code's (`stretch_size` … `stretch_longest`, the code's `L` reading one
 code's or below (`stretch_rate`, the closing group's `L/n` at the paced session's `L`). The greedy fill highest rate
 first is the fractional knapsack's optimum (`le_fillR`, over `fillR`, the greedy in the reals, `greedy_cast`), so the
 model's `fill` is at most the code's (`stretch_fill`). `stretch_bound_of` puts the terms together: the code's `lost` is
-`S + (2·L·R + fill)/span` with `S = chip/b` at least the chips' whole blocks.
+`S + (2·L·R + fill)/span` with `S` the chips' blocks, `chip/b` rounded up, as `ChipCeiling` reads them.
 -/
 
 namespace Properties.RemoteAudit.Line
@@ -93,7 +93,8 @@ structure Spec (gs : Array Group) (per N b chip : Nat) (W : Rat) (c : Charge) (m
   lMax : x.lMaxNs = lMaxOf gs per m
   rebuild : x.rebuild = c.rate * ((x.spanNs : Rat) + 2 * (x.lMaxNs : Rat)) + c.burst
   fill : x.fill = (greedy (vOf gs per m) (capOf gs N) (orderOf gs per m) (W, 0)).2
-  lost : x.time.lost = (chip : Rat) / (b : Rat) + (2 * (x.lMaxNs : Rat) * x.rebuild + x.fill) / (x.spanNs : Rat)
+  lost : x.time.lost =
+    (((chip + b - 1) / b : Nat) : Rat) + (2 * (x.lMaxNs : Rat) * x.rebuild + x.fill) / (x.spanNs : Rat)
   weights : x.time.weights = max 0 (x.weights - x.time.lost) * (b : Rat)
 
 /-- Every stretch `stretches` returns is `Spec` at a step `m < G/per − 1`. -/
@@ -530,7 +531,7 @@ theorem stretch_bound_of {gs : Array Group} {per N b chip : ℕ} {W : ℚ} {c : 
       (spanStart gs per x.stretch = (stretchPace (fun _ : Unit => gs) per x.stretch).ended () 0 ∨
         spanStart gs per x.stretch = (stretchPace (fun _ : Unit => gs) per x.stretch).released () 0) ∧
       (x.spanNs : ℝ) * ((N : ℝ) - x.time.lost) ≤
-        (x.spanNs : ℝ) * ((N : ℝ) - (chip / b : ℕ))
+        (x.spanNs : ℝ) * ((N : ℝ) - ((chip + b - 1) / b : ℕ))
           - 2 * (stretchPace (fun _ : Unit => gs) per x.stretch).longest () *
               ((c.rate : ℝ) * ((x.spanNs : ℝ) + 2 * (stretchPace (fun _ : Unit => gs) per x.stretch).longest ()) +
                 c.burst)
@@ -571,13 +572,11 @@ theorem stretch_bound_of {gs : Array Group} {per N b chip : ℕ} {W : ℚ} {c : 
     have hR : (x.rebuild : ℝ) = (c.rate : ℝ) * ((x.spanNs : ℝ) + 2 * (x.lMaxNs : ℝ)) + c.burst := by
       rw [sp.rebuild]; push_cast; ring
     have hlost : (x.spanNs : ℝ) * (x.time.lost : ℝ) =
-        x.spanNs * ((chip : ℝ) / b) + (2 * (x.lMaxNs : ℝ) * x.rebuild + x.fill) := by
+        x.spanNs * (((chip + b - 1) / b : ℕ) : ℝ) + (2 * (x.lMaxNs : ℝ) * x.rebuild + x.fill) := by
       rw [sp.lost]; push_cast; field_simp
     have hfill : K.fill () N W ≤ (x.fill : ℝ) := by
       rw [sp.fill, greedy_cast, Rat.cast_zero, zero_add]
       exact stretch_fill hhi hW
-    have hS : (x.spanNs : ℝ) * ((chip / b : ℕ) : ℝ) ≤ x.spanNs * ((chip : ℝ) / b) :=
-      mul_le_mul_of_nonneg_left (Nat.cast_div_le) hs0.le
     have hcr' : (0 : ℝ) ≤ c.rate := by exact_mod_cast hcr
     have hcb' : (0 : ℝ) ≤ c.burst := by exact_mod_cast hcb
     have hL0 : (0 : ℝ) ≤ K.longest () := Nat.cast_nonneg _

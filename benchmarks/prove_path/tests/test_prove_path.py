@@ -12,7 +12,10 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
-  (the forged TP1 case at step 24) is audited through its negatives."""
+  (the forged TP1 case at step 24) is audited through its negatives.
+* A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
+  engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
+  (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run."""
 from __future__ import annotations
 
 import argparse
@@ -22,7 +25,7 @@ import random
 import socket
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -188,24 +191,26 @@ def test_the_transfer_gates_are_in_the_compilers_registered_digest(monkeypatch):
     assert PP.Capped(Inner()).transfer_gates == ()
 
 
-def test_a_registration_under_the_compiler_listing_no_transfer_gates_is_refused(tmp_path):
-    """Where the registered compiler lists transfer gates, the same window under its twin listing none (which would sample them)
-    is refused by `source1` on ``compiler``; a compiler listing none has no such case."""
+def test_a_registration_under_the_compiler_listing_no_transfer_gates_or_one_fewer_is_refused(tmp_path):
+    """Where the registered compiler lists transfer gates, the same window under its twin listing none, or under it less any one
+    gate (either would sample them), is refused by `source1` on ``compiler``; a compiler listing none has no such case."""
     data = _advice(tmp_path)
-    for gates, has in ((("RoPEHead_v1{D=64}",), True), ((), False)):
+    for i, gates in enumerate((("RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}"), ("RoPEHead_v1{D=64}",), ())):
         compiler = PP.Capped(Listing(transfer_gates=gates))
         opening = AW.opening(data, AW.commit_advice(compiler, data))
         _reqs, bound = PP.open_advice(compiler, opening)
         w, mine, held = _single()
         w, held = {**w, **bound}, {**held, **bound}
-        served = tmp_path / ("listing" if has else "bare")
+        served = tmp_path / str(i)
         served.mkdir()
         (served / "registration.json").write_text(json.dumps({"window": w}))
         assert PP.source1(w, mine, held)["ok"]
         got = PP.more_negatives(argparse.Namespace(bundle="b"), 0, 1, compiler, mine, held, served, opening)
         assert all(v["refused"] for v in got.values()), got
-        key = "registration-under-the-compiler-listing-no-transfer-gates (source)"
-        assert (got[key]["codes"] if has else key not in got) == (["compiler"] if has else True)
+        keys = ["registration-under-the-compiler-listing-no-transfer-gates (source)"][:len(gates)] + [
+            f"registration-under-the-compiler-less-the-gate-{g} (source)" for g in gates]
+        assert {k: got[k]["codes"] for k in keys} == {k: ["compiler"] for k in keys}
+        assert not [k for k in got if ("transfer-gates" in k or "the-gate" in k) and k not in keys]
 
 
 def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monkeypatch):
@@ -480,3 +485,258 @@ def test_a5s_r2_partition_is_another_population_even_of_a_one_unit_window():
                        ([(pair, 1), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)])),
                        ([(pair, 3), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)]))):
         assert P.program_digest(A5.resized_program(defs)) == P.program_digest(want)
+
+
+TARGET = {"device_name": "test-gpu", "execution_label": "bi-eager", "batch_invariant": True}
+
+
+def _serve_request(i: int, prompt: list[int], cap: int, windows: list[int], user: str | None = None) -> dict:
+    return {"http_id": f"cmpl-{i}", "engine_id": f"cmpl-{i}-0", "user": user, "prompt_ids": prompt, "windows": windows,
+            "ingress": {"brought": {"max_tokens": cap, "temperature": 0.0},
+                        "params": {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": cap, "min_tokens": 0,
+                                   "stop": []}}}
+
+
+#: the server's registered compiler in these tests (`served_identity`'s, from `verity-vllm advice` on the server's tree)
+SERVER = ("verity_vllm.predict.steps.compile_steps", "5e" * 64)
+
+
+def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str = SRT.ROWS_SCHEME, published: str | None = None,
+            uncapped: bool = False, gates: tuple[str, ...] | None = None) -> SimpleNamespace:
+    """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
+    another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
+    the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
+    request Programs as vllm's advice compiler writes them (``manifest.json``);
+    the server's compiler identity, I2's compile and the row dir's record stubbed."""
+    from verity_vllm.predict import steps as ST
+
+    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
+    run, rows = tmp_path / "serve", tmp_path / "rows"
+    (run / "advice" / "w0" / "private").mkdir(parents=True)
+    rows.mkdir()
+    (rows / "manifest.json").write_text(json.dumps({"schema": PP.SERVED_PROGRAMS, "window": 0,
+                                                    "requests": {"r0": {"digest": "d0" * 64}, "r1": {"digest": "d1" * 64}}}))
+    pub = root if published is None else published
+    (run / "serve.json").write_text(json.dumps({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+                                                "default_seed": 7, "engine": {"execution": "bi-eager", "pin": {"world": 1}},
+                                                "target": TARGET, "run_id": "RUN"}))
+    reqs = [_serve_request(0, list(range(5)), 3, [0], "r0"), _serve_request(1, list(range(3)), 2, [0], "r1"),
+            _serve_request(2, [9], 1, [1])]
+    (run / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
+    (run / "windows.jsonl").write_text("".join(json.dumps({"window": w, "run_id": f"RUN/w{w}", "run_root": r}) + "\n"
+                                               for w, r in ((0, pub), (1, "bb" * 64))))
+    data = _advice(tmp_path)
+    compiler = PP.Capped(PP.i2_of_serve(str(run), 0, str(rows), None, None))
+    if gates is not None:
+        compiler = PP.Capped(replace(compiler.inner, transfer_gates=tuple(gates)))
+    inner = SimpleNamespace(name=compiler.inner.name, digest=compiler.inner.digest)
+    _r, bound, reg = AW.of_advice(inner if uncapped else compiler, data)
+    adv = run / "advice" / "w0"
+    (adv / "registration.json").write_text(json.dumps({
+        "schema": "verity-vllm/advice-registration/v1", "scheme": AW.SCHEME, "binding": bound,
+        "compiler": {**bound["compiler"], "cap_bits": PP.CAP_BITS, "inner": {"name": SERVER[0], "digest": SERVER[1]}},
+        "window": 0, "commit": {"run_id": "RUN/w0", "run_root": pub}}))
+    (adv / "private" / "advice.bin").write_bytes(data)
+    (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)))
+
+    def compile_steps(registered, data, ingress):
+        assert set(ingress) == {"r0", "r1"} and registered.default_seed == 7
+        return SimpleNamespace(requests=[ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"),
+                                         ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")])
+
+    monkeypatch.setattr(ST, "compile_steps", compile_steps)
+    record = SimpleNamespace(run=SimpleNamespace(run_root=bytes.fromhex(root)), store=SimpleNamespace(commit_scheme=scheme),
+                             digests={"r0": "d0" * 64, "r1": "d1" * 64})
+    monkeypatch.setattr(PP, "record1", lambda bundle, row_dir: record)
+    a = argparse.Namespace(serve_run=str(run), window=0, row_dir=str(rows), bundle=str(rows / "b"),
+                           hf_config=None, target=None, cap_bits=PP.CAP_BITS, opening=str(adv / "private" / "opening.json"),
+                           tp_commit=None, workload=None)
+    return SimpleNamespace(run=run, a=a, data=data, bound=bound, compiler=compiler, root=root)
+
+
+def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, monkeypatch):
+    s = _served(tmp_path, monkeypatch)
+    w = PP.serve_window(str(s.run), 0)
+    assert [PP.serve_id(q) for q in w.requests] == ["r0", "r1"] and w.commit["run_root"] == s.root
+    assert PP.serve_ingress(w.requests) == {"r0": {"max_tokens": 3, "temperature": 0.0, "prompt": [0, 1, 2, 3, 4]},
+                                            "r1": {"max_tokens": 2, "temperature": 0.0, "prompt": [0, 1, 2]}}
+    assert [PP.serve_id(q) for q in PP.serve_requests(s.run, 1)] == ["cmpl-2"]
+    with pytest.raises(ValueError, match="request r0 is recorded twice"):
+        PP.serve_ingress([w.requests[0], w.requests[0]])
+    assert PP.serve_ingress([{**w.requests[0], "ingress": {}}]) == {"r0": {"prompt": [0, 1, 2, 3, 4]}}
+    with pytest.raises(ValueError, match="0 lines for window 2, not one"):
+        PP.serve_window(str(s.run), 2)
+
+
+def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_execution(tmp_path):
+    serve = {"model": "m/x", "revision": "r", "default_seed": 7, "engine": {"execution": "bi-eager"}, "target": TARGET}
+    phi = PP.phi_of_serve(serve)
+    assert (phi.model["repo"], phi.model["revision"], phi.target, phi.execution) == ("m/x", "r", TARGET, "bi-eager")
+    assert phi.model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
+    with pytest.raises(ValueError, match="serve.json records no target profile .* --target F gives it"):
+        PP.phi_of_serve({**serve, "target": None})
+    (tmp_path / "target.json").write_text(json.dumps({**TARGET, "device_name": "other"}))
+    assert PP.phi_of_serve({**serve, "target": None}, target=str(tmp_path / "target.json")).target["device_name"] == "other"
+    with pytest.raises(ValueError, match="no execution label"):
+        PP.phi_of_serve({**serve, "engine": {}})
+    assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
+
+
+def test_a_served_windows_compiler_is_the_servers_whatever_phi_it_compiles_under(monkeypatch):
+    """The registration names the server's compiler (`verity-vllm advice`'s, over its tree's code identity), so the verifier's I2
+    carries that name and digest, and φ (the target, the seed) moves what I2 compiles, not the name it is registered under."""
+    serve = {"model": "m/x", "revision": "r", "default_seed": 7, "execution": "bi-eager", "target": TARGET}
+    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
+    one = PP.Capped(PP.I2Compiler(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), {}, "", name=SERVER[0], registered_digest=SERVER[1]))
+    assert (one.inner.name, one.inner.digest) == SERVER
+    assert one.digest == PP.Capped(SimpleNamespace(name=SERVER[0], digest=SERVER[1])).digest
+    plain = PP.I2Compiler(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), {}, "")
+    assert plain.name == PP.I2 and plain.digest != SERVER[1]
+
+
+def test_the_served_identity_is_verity_vllm_advices_and_refused_where_the_tree_has_none(monkeypatch):
+    import types
+
+    PP.served_identity.cache_clear()
+    fake = types.ModuleType("verity_vllm.pipeline.advice")
+    fake.registered_compiler = lambda: SimpleNamespace(name=PP.CAPPED, digest="ff" * 64, inner=SimpleNamespace(name=SERVER[0], digest=SERVER[1]))
+    monkeypatch.setitem(sys.modules, "verity_vllm.pipeline.advice", fake)
+    assert PP.served_identity() == SERVER
+    PP.served_identity.cache_clear()
+    fake.registered_compiler = lambda: SimpleNamespace(name=SERVER[0], digest=SERVER[1])
+    with pytest.raises(ValueError, match="registers no capped compiler"):
+        PP.served_identity()
+    monkeypatch.setitem(sys.modules, "verity_vllm.pipeline.advice", None)
+    with pytest.raises(ValueError, match="which this tree lacks"):
+        PP.served_identity()
+    PP.served_identity.cache_clear()
+
+
+def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkeypatch, capsys):
+    s = _served(tmp_path, monkeypatch)
+    doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)
+    assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"] == {"name": PP.CAPPED, "digest": s.compiler.digest}
+    assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["default_seed"] == 7 and doc["phi"]["target"] == TARGET
+    assert doc["transfer_gates"] == list(PP.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    assert PP.compiler_doc(str(s.run), None, None, 2 * PP.CAP_BITS)["digest"] != doc["digest"]
+    capsys.readouterr()
+    assert PP.main(["compiler", "--serve-run", str(s.run)]) == 0
+    assert json.loads(capsys.readouterr().out)["digest"] == doc["digest"]
+
+
+def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():
+    """`served_gates`: Llama-3.2-1B's compiler of record lists its RoPE heads (the TP1 stand-in), ``--transfer-gate`` may restate
+    the list and nothing else (another template, or the record's with one more), and a model with no line lists none."""
+    llama, tg = {"model": "unsloth/Llama-3.2-1B"}, "RoPEHead_v1{D=64}"
+    assert PP.served_gates(llama) == PP.served_gates(llama, [tg, tg]) == (tg,)
+    for other in (["SiluMul_v2{I=8192}"], [tg, "SiluMul_v2{I=8192}"]):
+        with pytest.raises(ValueError, match=r"unsloth/Llama-3.2-1B's compiler of record lists \['RoPEHead_v1\{D=64\}'\]"):
+            PP.served_gates(llama, other)
+    assert PP.served_gates({"model": "m/x"}) == ()
+    with pytest.raises(ValueError, match=r"m/x's compiler of record lists \[\]"):
+        PP.served_gates({"model": "m/x"}, [tg])
+
+
+def test_a_served_compiler_lists_its_models_transfer_gates_of_record_beside_the_servers(tmp_path, monkeypatch, capsys):
+    """Its inner digest covers the server's registered one and the model's gates of record, so a registration under the server's
+    compiler alone is refused before any commit (its advice tree's domain is another compiler's too), and one `verity-vllm
+    advice` makes under the name and digest `compiler` prints passes; ``--transfer-gate`` only restates the list."""
+    from verity_vllm.pipeline import advice as ADV
+
+    s, tg = _served(tmp_path, monkeypatch, gates=()), "RoPEHead_v1{D=64}"
+    doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)
+    assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["transfer_gates"] == [tg]
+    assert doc == PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS, [tg])
+    assert doc["inner"]["name"] == SERVER[0] and doc["inner"]["digest"] != SERVER[1] and doc["digest"] != s.bound["compiler"]["digest"]
+    gated = PP.Capped(PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None, transfer_gates=(tg, tg)))
+    assert gated.transfer_gates == (tg,) and {"name": PP.CAPPED, "digest": gated.digest} == {"name": doc["name"], "digest": doc["digest"]}
+    capsys.readouterr()
+    assert PP.main(["compiler", "--serve-run", str(s.run), "--transfer-gate", tg]) == 0
+    assert json.loads(capsys.readouterr().out)["inner"] == doc["inner"]
+    _c, _r, bound, _o = PP.compiled(s.a)
+    assert bound["compiler"] == {"name": doc["name"], "digest": doc["digest"]}
+    assert PP.serve_check_of(s.a, bound)["codes"] == ["compiler", "advice"]
+    with pytest.raises(ValueError, match=r"published records are refused \(compiler, advice\)"):
+        PP.served_advice(s.a)
+    _q, bound, reg = AW.of_advice(ADV.registered_compiler(doc["inner"]["name"], doc["inner"]["digest"], PP.CAP_BITS), s.data)
+    adv = s.run / "advice" / "w0"
+    (adv / "registration.json").write_text(json.dumps({**json.loads((adv / "registration.json").read_text()), "binding": bound}))
+    (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(s.data, reg)))
+    requests, held, _o = PP.served_advice(s.a)
+    assert held == bound and PP.serve_check_of(s.a, held)["ok"] and [q["digest"] for q in requests] == ["d0" * 64, "d1" * 64]
+
+
+@pytest.mark.parametrize("gates", [(), ("SiluMul_v2{I=8192}",), ("RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}")],
+                         ids=["none", "another", "the-records-and-another"])
+def test_a_served_window_registered_under_another_gate_list_than_its_models_of_record_is_refused(tmp_path, monkeypatch, gates):
+    """The verifier's served compiler lists the model's gates of record whatever it is told (`served_gates`), so a registration
+    under any other list names another compiler and is refused before any commit, and the verifier refuses to run under that
+    list instead."""
+    s = _served(tmp_path, monkeypatch, gates=gates)
+    _c, _r, bound, _o = PP.compiled(s.a)
+    assert bound["compiler"] != s.bound["compiler"] and PP.serve_check_of(s.a, bound)["codes"] == ["compiler", "advice"]
+    with pytest.raises(ValueError, match=r"published records are refused \(compiler, advice\)"):
+        PP.served_advice(s.a)
+    if gates:
+        s.a.transfer_gate = list(gates)
+        with pytest.raises(ValueError, match=r"compiler of record lists \['RoPEHead_v1\{D=64\}'\]"):
+            PP.compiled(s.a)
+
+
+def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path, monkeypatch):
+    """The server committed the advice once: the prover's requests are I2's from the opened advice and its binding is the published
+    one (no re-commit, so no fresh root), and the window's records pass `serve_check`."""
+    s = _served(tmp_path, monkeypatch)
+    requests, bound, opening = PP.served_advice(s.a)
+    assert bound == s.bound and opening["advice"] == s.data.hex()
+    assert [q["digest"] for q in requests] == ["d0" * 64, "d1" * 64]
+    assert PP.serve_check_of(s.a, bound) == {"ok": True, "codes": [], "detail": {
+        "window": 0, "published_root": s.root, "commitment": SRT.ROWS_SCHEME, "compiler": s.bound["compiler"],
+        "advice": s.bound["advice"], "run_id": "RUN/w0"}}
+    by_id = PP.i2_against_record(s.a, requests)
+    assert by_id["equal"] and by_id["units"]["r1"] == {"i2": "d1" * 64, "of_record": "d1" * 64, "equal": True}
+    (Path(s.a.row_dir) / "manifest.json").unlink()
+    assert PP.i2_against_record(s.a, requests) == {"units": {"r0": {"i2": "d0" * 64}, "r1": {"i2": "d1" * 64}},
+                                                   "of_record": ["d0" * 64, "d1" * 64], "equal": True}
+
+
+@pytest.mark.parametrize("kw, codes", [
+    ({"uncapped": True}, ["cap", "compiler", "advice"]),
+    ({"published": "aa" * 32}, ["sha512", "run_root"]),
+    ({"scheme": "vllm-v1"}, ["sha512"]),
+    ({"published": "cc" * 64}, ["run_root"]),
+], ids=["compiler-without-the-cap", "vllm-v1-root", "store-not-rows-sha512", "another-commits-root"])
+def test_a_served_window_is_refused_before_any_commit_by_name(tmp_path, monkeypatch, kw, codes):
+    """A registration whose compiler carries no cap (the inner compiler, so its advice tree's domain is another too), a published
+    root of 32 bytes, a row dir whose store isn't rows-sha512, or a published root that isn't the row dir's."""
+    s = _served(tmp_path, monkeypatch, **kw)
+    _c, _r, bound, _o = PP.compiled(s.a)
+    assert PP.serve_check_of(s.a, bound)["codes"] == codes
+    with pytest.raises(ValueError, match=rf"serve-openai window 0's published records are refused \({', '.join(codes)}\)"):
+        PP.served_advice(s.a)
+
+
+def test_a_served_windows_negatives_are_each_refused_by_name(tmp_path, monkeypatch):
+    s = _served(tmp_path, monkeypatch)
+    w = PP.serve_window(str(s.run), 0)
+    assert {k: v["codes"] for k, v in PP.serve_negatives(w, s.compiler, s.bound, s.root, SRT.ROWS_SCHEME).items()} == {
+        "registration-without-the-cap (serve)": ["cap", "compiler"],
+        "registration-of-another-window (serve)": ["window"],
+        "published-root-not-sha512 (serve)": ["sha512", "run_root", "commit"],
+        "published-root-of-another-commit (serve)": ["run_root", "commit"]}
+    ok = PP.source1({}, SimpleNamespace(run=s.root), {"commitment": "x", "served_programs": {}, "stand_in": {"of": 1, "link": 2}})
+    both = PP.with_serve(ok, PP.serve_check(w, s.bound, "cc" * 64, SRT.ROWS_SCHEME))
+    assert not both["ok"] and both["codes"][-1] == "run_root" and both["detail"]["serve"]["published_root"] == s.root
+
+
+def test_a_served_run_is_its_window_and_row_dir_with_the_servers_advice_and_opening(tmp_path, monkeypatch):
+    got = {}
+    monkeypatch.setattr(PP, "commit", lambda a: got.update(vars(a)) or 0)
+    base = ["--serve-run", "RUN", "--partition", "p.json", "--out", "w"]
+    assert PP.main(["commit", *base, "--window", "3", "--row-dir", "R"]) == 0
+    assert (got["bundle"], got["opening"]) == ("R/commit/replay_bundle_p0", "RUN/advice/w3/private/opening.json")
+    for extra in ([], ["--window", "3"], ["--row-dir", "R"], ["--window", "3", "--row-dir", "R", "--workload", "f"],
+                  ["--window", "3", "--row-dir", "R", "--advice", "a.bin"], ["--window", "3", "--row-dir", "R", "--tp-commit", "c"]):
+        with pytest.raises(SystemExit):
+            PP.main(["commit", *base, *extra])
+    assert PP.single(argparse.Namespace(serve_run="RUN")) and PP.ranks_of(argparse.Namespace(serve_run="RUN", ranks=None)) == (1, [0])

@@ -56,6 +56,7 @@ import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
 import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
+import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
@@ -141,6 +142,7 @@ import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.W1Checks
 import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.PearlC.W1Stop
+import Proofs.Pouw.PearlC.W1Tabulate
 import Proofs.Pouw.PearlC.WholeCircuit
 import Proofs.Pouw.PearlC.TileCheck8
 import Proofs.Pouw.PearlC.TileCheck8Words

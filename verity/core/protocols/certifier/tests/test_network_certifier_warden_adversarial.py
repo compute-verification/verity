@@ -190,17 +190,17 @@ def test_the_client_reads_the_relayed_bytes_so_content_is_pinned_only_by_the_all
 
 
 def test_a_fail_ends_the_connection_at_its_cell_so_it_frees_its_lane_early_and_shifts_the_next_admission():
-    """Unlike a connection held to a fixed end, a byte-cell connection ends at its fail bucket, so where connection 0
+    """Unlike a connection held to a fixed end, a byte-cell connection ends at its fail bucket, so where connection 1
     fails changes when its lane frees and so when the queued connection is admitted. No entropy beyond the fail cell
     already charged, but the fail reaches a different client through its admission timing. Cheapest fix (if this matters
     for a targeted leak): hold a failed lane to the admitting connection's scheduled end."""
-    # two lanes fill at bucket 1; a long-running connection 1 keeps its lane, so the queued connection 2 takes 0's
+    # two lanes fill at bucket 1; a long-running connection 2 keeps its lane, so the queued connection 3 takes 1's
     arrivals = {1: [cells(request(5), B), cells(request(5), B)], 2: [cells(request(5), B)]}
     long = [(0, b"z" * ((PARAMS.egress_cells - 2) * P)), (0, EOF)]
-    early, _, _ = run([[(0, b"a" * (0 * P))], long, [(0, b"ok"), (0, EOF)]], arrivals)  # 0 fails at cell 0
-    later, _, _ = run([[(0, b"a" * (4 * P))], long, [(0, b"ok"), (0, EOF)]], arrivals)  # 0 fails at cell 4
+    early, _, _ = run([[(0, b"a" * (0 * P))], long, [(0, b"ok"), (0, EOF)]], arrivals)  # 1 fails at cell 0
+    later, _, _ = run([[(0, b"a" * (4 * P))], long, [(0, b"ok"), (0, EOF)]], arrivals)  # 1 fails at cell 4
     s0 = early.log[0]["admitted"]
     assert early.log[0]["failed_at"] == 0 and later.log[0]["failed_at"] == 4
     assert early.log[0]["ended"] == s0 + D and later.log[0]["ended"] == s0 + D + 4 // R  # the fail bucket
-    admit = lambda w: {e["ordinal"]: e["admitted"] for e in w.log}[2]
+    admit = lambda w: {e["ordinal"]: e["admitted"] for e in w.log}[3]
     assert admit(early) != admit(later)  # the fail cell shifts the next connection's admission

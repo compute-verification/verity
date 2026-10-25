@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -148,3 +149,47 @@ def test_a_dry_probe_sends_nothing(tmp_path, repo):
     assert calls == []
     assert [line.split(" ", 2)[2] for line in (out / "gate.requests").read_text().splitlines()] == \
         ["pubkey", "pins", "ledger", "status"]
+
+
+def fire(tmp_path: Path, status: str, lease_by: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """gate.sh fire with LEASE_BY against a stub ssh that answers every request with the prover node's `gpu-lease status`
+    STATUS; its result and the calls ssh got. Fire opens nothing for a prover lease that began after LEASE_BY or still
+    waits 2 minutes past it."""
+    out, bin_ = tmp_path / "out", tmp_path / "bin"
+    for d in (out, bin_):
+        d.mkdir()
+    (tmp_path / "status").write_text(status)
+    (bin_ / "ssh").write_text(f'#!/bin/sh\necho "$*" | tr "\\n" " " >> {tmp_path}/calls\necho >> {tmp_path}/calls\n'
+                              f'cat {tmp_path}/status\n')
+    (bin_ / "ssh").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "PROVER_RUN": "r1",
+           "PROVER_SSH": "research@n2", "ENGINES": "8", "LEASE_BY": lease_by, "GATE_KEY": str(tmp_path / "key"),
+           "COMMIT": "0" * 40, "PERIOD": "ma-remote-coins-9", "PIN": PIN}
+    p = subprocess.run(["bash", str(GATE), "fire"], cwd=tmp_path, env=env, capture_output=True, text=True)
+    calls = (tmp_path / "calls").read_text().splitlines() if (tmp_path / "calls").exists() else []
+    return p, calls
+
+
+def held(since: str) -> str:
+    return "".join(f"{i} held 1m pid=7 run=r1 who=w uuid=GPU-{i} since={since} until=2026-10-24T14:25:00Z\n"
+                   for i in range(8))
+
+
+@pytest.mark.parametrize("status, lease_by, why", [
+    (held("2026-10-24T13:15:01Z"), "2026-10-24T13:15Z",
+     "r1's lease began at 2026-10-24T13:15:01Z, after LEASE_BY 2026-10-24T13:15Z"),
+    ("0 free\nwaiting 30m pid=7 n=8 run=r1 who=w since=2019-12-31T23:30:00Z max=100\n", "2020-01-01T00:00Z",
+     "r1 holds 0 of 8 GPUs, 2 minutes past LEASE_BY 2020-01-01T00:00Z"),
+], ids=["leased-late", "still-waiting"])
+def test_fire_opens_nothing_for_a_lease_past_lease_by(tmp_path, status, lease_by, why):
+    p, calls = fire(tmp_path, status, lease_by)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert f"{why}: nothing opened" in p.stdout
+    assert len(calls) == 1 and "gpu-lease status" in calls[0]
+    assert (tmp_path / "out" / "gate.requests").read_text() == ""
+
+
+def test_fire_goes_on_for_a_lease_begun_by_lease_by(tmp_path):
+    p, calls = fire(tmp_path, held("2026-10-24T12:45:02Z"), "2026-10-24T13:15Z")
+    assert re.search(r"^\S+Z leased$", p.stdout, re.M) and "nothing opened" not in p.stdout, p.stdout
+    assert len(calls) == 1 and "gpu-lease status" in calls[0]
