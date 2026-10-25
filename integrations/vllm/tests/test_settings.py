@@ -53,7 +53,7 @@ def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPat
     with pytest.raises(ValueError, match="VERITY_WINDOW_SLOTS='four'"):
         S.get("VERITY_WINDOW_SLOTS")
     with pytest.raises(AttributeError):
-        S.VERITY_NOT_A_SETTING  # noqa: B018
+        _ = S.VERITY_NOT_A_SETTING
     with pytest.raises(AttributeError, match="not a declared setting"):
         S.get("VERITY_NOT_A_SETTING")
 
