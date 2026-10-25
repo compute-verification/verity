@@ -3095,4 +3095,104 @@ theorem rootSet_comp (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok
     subst this
     exact ⟨⟨w, hx⟩, hout⟩
 
+/-! ## `RootSet` from its primitive and composite cases -/
+
+/-- **An activation resolution reaches is of a reached composite** (`reached_root`, `reached_closed`). -/
+theorem good_reached (P : Prog) (hF : RootFacts P) : ∀ sc, Resolve.Good P sc →
+    sc.d < P.defs.size ∧ (Desc.reached P)[sc.d]! = true ∧ (P.defs[sc.d]!).prim = false
+  | .top d off st, h => by
+    obtain ⟨rfl, -, -⟩ := h
+    exact ⟨hF.1, reached_root P hF.1, hF.2.1⟩
+  | .child parent d off k m, h => by
+    obtain ⟨hpg, hk, hfn, hc, -, -⟩ := h
+    obtain ⟨hd, hr, hp⟩ := good_reached P hF parent hpg
+    have hcl := reached_closed P hF.2.2.2.2.2.2.1 parent.d hr hp k hk
+    have hlt := hF.2.2.2.2.2.2.1 parent.d hd k hk
+    rw [hfn] at hcl hlt
+    exact ⟨by change d < P.defs.size; omega, hcl, hc⟩
+
+/-- **`RootSet` at a root node calling a primitive**, `rootSet_prim`'s premises from the decoder's facts (`RootFacts`,
+`WidthFacts`, `Desc.walkable`) and resolution staying below the node (`Resolve.start_ok`, `Resolve.resolve_lt`), but
+that every reference of the node is read by a member (`hCov`). -/
+theorem rootSet_prim_of (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    (hWF : WidthFacts P) (hwk : Desc.walkable P = true) (c : Circuit) (hc : circuitOf P = .ok c)
+    (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
+    {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
+    (hp : (P.defs[node.fn]!).prim = true) (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs)
+    (hgt : ∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w)
+    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+      ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+        ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+      (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
+    ∀ a : Nat, (∃ w, (Tgt.gate w, (a : Int)) ∈ rootRead P memo node k) ↔
+      ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! ∧ a ∉ nodeGates P k := by
+  obtain ⟨hr, hpr, -, hDec, -, hSO, -, -, hB⟩ := id hF
+  have hBr := hB P.root hr (reached_root P hr)
+  have hkb : k < (P.defs[P.root]!).body.nodes.size := node_lt hn
+  have hg : (P.defs[P.root]!).body.nodes[k]! = node := node_get hn
+  have hfn : node.fn < P.defs.size := by have := (hBr.1 k hkb).1; rwa [hg] at this
+  have hL : Laid P P.root := ((hWF P.root hr).2 hpr).1
+  have hG : (P.defs[node.fn]!).gates = 1 := (hWF node.fn hfn).1 hp
+  have hR0 := root_retOk P memo hm hF
+  rw [rootCtx_eq] at hR0
+  have hD : DownSpec (rootCtx P memo) P.rootScope Flock.Steps.FUEL :=
+    (specs_decoded P memo hr hDec hBr hR0 (hSO memo P.root) P.rootScope rfl Flock.Steps.FUEL).1
+  have hA : ∀ i < node.args.size, ArgOk (rootCtx P memo) k i := fun i hi =>
+    argOk_decoded P memo hr hDec k i hkb (by change i < ((P.defs[P.root]!).body.nodes[k]!).args.size; rw [hg]; exact hi)
+  have hR : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count,
+      Resolve.RefOk P P.root k ((node.args[i]!).seq.get t) := by
+    intro i _ t ht
+    have := (hBr.1 k hkb).2.1 i t (by rw [hg]; exact ht)
+    rwa [hg] at this
+  have hOp : Resolve.OpOk node (P.defs[node.fn]!) := by
+    have := (hBr.1 k hkb).2.2.2.2 (by rw [hg]; exact hp)
+    rwa [hg] at this
+  have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hr, hpr⟩
+  have hB' : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hsc => by
+    obtain ⟨hd, hrd, -⟩ := good_reached P hF sc hsc
+    exact hB sc.d hd hrd
+  have hLO : ∀ d < P.defs.size, Walk.LaidOut P d := by
+    have hwk' := hwk
+    unfold Desc.walkable at hwk'
+    simp only [Bool.and_eq_true] at hwk'
+    exact (Walk.bodiesLaidOut_spec P hwk'.1.2).2.1
+  have hLow : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∀ a,
+      Flock.Program.resolve P P.rootScope ((node.args[i]!).seq.get t) = .ok a → a < (rootOffs P)[k]! := by
+    intro i hi t ht a ha
+    have := Resolve.resolve_lt P hroot hB' hLO _ P.rootScope _
+      (Resolve.start_ok P hroot hB' hLO P.rootScope ⟨rfl, rfl, rfl⟩ k hkb _ (hR i hi t ht)) ha
+    change a < 0 + (P.defs[P.root]!).body.offsets[k]! at this
+    change a < (P.defs[P.root]!).body.offsets[k]!
+    omega
+  exact rootSet_prim P memo c hc hl hL hk hn hp hG hrs hgt hD hA hR hLow hOp hCov
+
+/-- **`RootSet` from two statements of one root node**, with the decoder's facts (`RootFacts`, `WidthFacts`): at one
+calling a primitive, that every reference of its arguments is read by a member (`rootSet_prim_of`); at one calling a
+composite, `NodeSet` at the root (`rootSet_comp`). -/
+theorem rootSet_of
+    (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
+    (hWF : ∀ bytes P, Flock.Program.decode bytes = .ok P → Desc.walkable P = true → WidthFacts P)
+    (hCov : ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
+      Desc.walkable P = true → ∀ k < nodeCount P, ∀ node, (P.defs[P.root]!).body.nodes[k]! = node →
+      (P.defs[node.fn]!).prim = true →
+      ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+        ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+          ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+        (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t)
+    (hComp : ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+      Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+      Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+      ∀ k < nodeCount P, (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
+      NodeSet P memo P.root k) :
+    RootSet := by
+  intro bytes P memo c hd ho hl hi hw hm hc k hk node rs hn hrs hg a
+  have hgk : (P.defs[P.root]!).body.nodes[k]! = node := node_get hn
+  rcases hp : (P.defs[node.fn]!).prim with _ | _
+  · have := rootSet_comp P memo hm (hF bytes P hd ho) c hc hl hk hn hrs
+      (hComp bytes P memo c hd ho hl hi hw hm hc k hk (by rw [hgk]; exact hp)) a
+    simpa using this
+  · have := rootSet_prim_of P memo hm (hF bytes P hd ho) (hWF bytes P hd hw) hw c hc hl hk hn hp hrs hg
+      (hCov bytes P hd ho hw k hk node hgk hp) a
+    simpa using this
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
