@@ -79,6 +79,10 @@ python tools/verity/lean/check.py PKG  once, before pushing
   result is `lean-fast/v1`, which no merge check accepts. A slot tree another run left mid-way (cancelled, timed out,
   killed for memory) is repaired before the build, with the reason printed, so don't delete or copy a slot tree by hand.
   A spec's failure `proved_in: P's build did not pass` points at P's own report, where its build failed.
+  A package whose records passed on the same Lean inputs on that node (or whose Lean check passed there) is skipped, and
+  so is one where HEAD only merged `main`, taking every Lean input of it whole from main's side and its lock from
+  `merge.py`: that lock is a candidate the train's Lean check rebuilds. With nothing left the run builds nothing and
+  takes no slot (`path: reused`); `--rebuild` runs it anyway.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
   tools/verity/lean/check.py --build --update PKG`, with no wrapper (vy-nebius-1 has no `python`). It exits 0 when the
   check passes; the record is at `lean-audit/audit-TAG/lean-audit.json`. Use `--cwd clone`: runs of one commit share
@@ -147,6 +151,7 @@ python tools/verity/lean/check.py PKG  once, before pushing
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
 - Record your lock at your own head, then mark the PR ready. A train regenerates records that differ only because
   another PR moved what yours reads; re-record yourself only what it can't (a refused conflict, `shape`, a move's map).
+  A clean merge of `main` after your records run needs no new one: the fast path says so and builds nothing.
 
 ## Standing rulings (Daniel)
 

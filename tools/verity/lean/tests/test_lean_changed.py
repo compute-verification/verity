@@ -44,6 +44,8 @@ def fast(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "unlink", lambda *a, **k: None)
     monkeypatch.setattr(LC, "label", lambda _: None)
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
+    monkeypatch.setattr(LC, "reused", lambda *a, **k: {})
+    monkeypatch.setattr(LC, "passed", lambda *a, **k: None)
 
     def sync(_closure, _files, t):
         (t / "pkg" / "lean-audit.json").write_text(OLD)

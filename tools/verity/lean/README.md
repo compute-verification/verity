@@ -411,6 +411,9 @@ old way: take either side and run `check.py --update` on the merged tree.
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
+The fast path (`lean_changed.py --records`) takes such a candidate as it is: after a merge of `main` that takes every Lean
+input of a package it changes whole from main's side and its lock from `merge.py`, on top of a commit whose records passed, it runs
+nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node (`kept`).
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
