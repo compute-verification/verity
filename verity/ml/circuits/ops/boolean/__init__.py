@@ -14,6 +14,8 @@
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
                  (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
+    rowwise      a bf16 row's softmax (its max, a 16-bit half of its reciprocal sum, one output) and RMSNorm's output, each
+                 Definition at most 16 output bits
 
 The builders live elsewhere: `forms`, `gather` and `trace` in `verity.ml.circuits.boolean`; `fp`, `fp4` and `tc_step` in
 `verity.ml.circuits.silicon`; the universal unit in `verity.ml.private_circuits.universal`; `sha512` and `merkle` in
