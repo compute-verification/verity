@@ -509,8 +509,7 @@ def private(out: Path, w: int) -> dict:
 
 
 def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str, priv: dict):
-    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]],
-                            digest_salts=[bytes.fromhex(s) for s in priv["digest_salts"]])
+    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]])
 
 
 def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict], list[dict], list[dict]]:
@@ -524,8 +523,8 @@ def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict],
 def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
     """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
     line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
-    requests' arrival ids, as `served_rows.register` commits them, each slice window's digest the slice's own. The record
-    holds no row or salt."""
+    requests' arrival ids, as `served_rows.register` commits them, each slice window's registered leaf the slice's srv row.
+    The record holds no row or salt."""
     statics = served_statics()
     closed: list[dict] = []
 
@@ -545,16 +544,17 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
     for w in full:
         rec, priv = w["served_rows"], private(tmp_path, w["window"])
         assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
-        assert rec["count"] == -(-w["steps"] // S.P) == len(rec["digests"])
+        assert rec["count"] == -(-w["steps"] // S.P)
         by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
         ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
         assert priv["ids"] == ids
         served, session = recommit(statics, by_step, ids, w["steps"], w["run_root"], priv)
         assert {k: v for k, v in rec.items() if k != "statics"} == served.record()
         for k, win in enumerate(session):
-            assert served.digests[k] == CS.rows_digest(S, win, served.digest_salts[k])
+            assert served.registration.rows[k] == SRW._row(CS.srv_row(S, win))[0]
+            assert SRW.leaf_ok(rec, bytes.fromhex(w["run_root"]), k, served.bc(k), served.registration.open(k).path)
         text = json.dumps(w)
-        assert not any(s in text for s in priv["salts"] + priv["digest_salts"])
+        assert not any(s in text for s in priv["salts"])
 
 
 def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):

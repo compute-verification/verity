@@ -16,9 +16,9 @@ With ``seal`` each closed window is also sealed as a deferred Commit's row dir (
 
 With ``served`` (the compile slice's statics, `served_statics`) each close also commits the step rows the window ran
 (`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
-id, its index in the order the engine admitted the run's requests. The record's public part (the registration's root,
-its count and row width, and each slice window's salted digest) goes into the window's ``windows.jsonl`` line, beside
-its run root, written at the close and so before any draw over it; the rows and both salts go to
+id, its index in the order the engine admitted the run's requests. The record's public part (the registration's binding,
+root, count and row width: each slice window's srv row is a registered leaf) goes into the window's ``windows.jsonl`` line,
+beside its run root, written at the close and so before any draw over it; the rows and their salts go to
 ``served_rows/w<k>.json``, the prover's.
 """
 from __future__ import annotations
@@ -233,7 +233,7 @@ class CommitWindows:
         (d / f"w{rec['window']}.json").write_text(json.dumps({
             "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
             "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
-            "salts": [s.hex() for s in served.registration.salts], "digest_salts": [s.hex() for s in served.digest_salts]}))
+            "salts": [s.hex() for s in served.registration.salts]}))
         return {**served.record(), "statics": self.served}
 
     def _seal(self, rec: dict[str, Any], rc: Any) -> dict[str, Any]:
