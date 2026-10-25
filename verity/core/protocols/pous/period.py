@@ -1,7 +1,8 @@
-"""One PoUS period on one node, at a small point: the setup, the memory challenger's session and the run's check, with the
-answer of PoUS's component of onsite Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in `check/`).
+"""One PoUS period on one node: the setup, the memory challenger's session and the run's check, with the answer of PoUS's
+component of onsite Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in `check/`).
 
-`run(node, store, coins, signer=..., log=...)` plays every party in one process, in the protocol's order:
+`run(node, store, coins, signer=..., log=...)` plays every party in one process, in the protocol's order (`setup_store`
+is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and audited every period):
 
 1. the prover commits to `W`, the node's `store` padded with zeros to the point's payload (`setup.commit`);
 2. the verifier draws the salt after the commitment, from its live `coins` (`setup.draw_salt`);
@@ -13,14 +14,20 @@ answer of PoUS's component of onsite Verity (`verity/pous/p2/v4/run`, `PousCheck
 5. the verifier judges the run (`run.check_at`) and answers in the core interface's canonical form (`answer`).
 
 What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
-at `eps = δ + 2^eps_log2` when P2's one certificate covers the point, else 0 and 0 with the profile naming each gap. The
-certificate is at P2's deployed point only (`run.DEPLOYED`, a 1 GiB `C*`), so a small point's accepted run certifies no
-storage: its verdict is real and its quantity vacuous.
+at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
+`run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
+registered width and prime), else 0 and 0 with the profile naming each gap. `certified_point` is the smallest such point
+holding a store, 256 blocks (526 KB) at least; the small point (`point_for`, 1,024-bit blocks) certifies nothing.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: `W` is the period's records, the coins are
-fresh from the OS, and the signer is a key at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes
-once beside the periods. Every party runs on the one node, so `trusted-nebius-host`'s premise that the memory challenger
-runs on a machine the prover doesn't control is not met by this run: it exercises the code, not the deployment.
+Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path
+(r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
+over processes. An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
+
+`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
+`certified_point` and audits it every period, the coins fresh from the OS, the signer a key at S1's deployed parameters
+(`memory_challenger.LMS`) that `challenger` makes once beside the periods. Every party runs on the one node, so
+`trusted-nebius-host`'s premise that the memory challenger runs on a machine the prover doesn't control is not met by
+this run: it exercises the code, not the deployment.
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ import secrets
 import subprocess
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -64,15 +72,27 @@ def point_for(size: int, w: int = W, c0: int = C0, k: int = K, limit_ns: int = L
     return R.Point(P2.P2Params(w, c0, -(-blocks // segments), segments), k, limit_ns)
 
 
+def certified_point(size: int) -> R.Point:
+    """The smallest point P2's proved family certifies (`p2.family_certificate`) whose payload holds `size` bytes: the
+    registered width and prime, at least `2^8` blocks (`p2.CERT_FAMILY_BLOCKS`), `k = 105` and `Δ + RTT` at the cap."""
+    w, c0, _ = P2.POINT
+    return point_for(max(size, P2.CERT_FAMILY_BLOCKS[0] * ((w - 16) // 8)), w, c0)
+
+
+def certificate(q: P2.P2Params) -> Any:
+    """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
+    else P2's proved family's (`p2.family_certificate`), else none."""
+    registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
+    return registered if registered is not None and registered.segments == q.segments else P2.family_certificate(q)
+
+
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
-    """`PousCheck.RunProtocol.gaps`: P2's certificate at the point, and why it doesn't cover the run (none when it does)."""
+    """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
     q = point.params
-    cert = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
+    cert = certificate(q)
     if cert is None:
-        return None, [f"P2 has no certificate at (w, c0, blocks per segment) = ({q.w}, {q.c0}, {q.blocks_per_segment})"]
-    segments = ([f"W has {q.segments} segments; {cert.theorem} is about {cert.segments}"]
-                if cert.segments is not None and q.segments != cert.segments else [])
-    return cert, [*cert.refusals(point.k, point.limit_ns), *segments]
+        return None, [f"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"]
+    return cert, list(cert.refusals(point.k, point.limit_ns))
 
 
 def certify(point: R.Point) -> dict[str, Any]:
@@ -97,6 +117,11 @@ def point_json(point: R.Point) -> dict[str, Any]:
     q = point.params
     return {"k": point.k, "limit_ns": point.limit_ns,
             "params": {"blocks_per_segment": q.blocks_per_segment, "c0": q.c0, "segments": q.segments, "w": q.w}}
+
+
+def point_of(doc: Mapping[str, Any]) -> R.Point:
+    q = doc["params"]
+    return R.Point(P2.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]), doc["k"], doc["limit_ns"])
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
@@ -160,15 +185,61 @@ class Period:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
-def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer, log: mc.SessionLog, point: R.Point | None = None,
-        trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
-        protocol: str = PROTOCOL, prover: Prover = honest,
-        clock: Callable[[], int] = time.perf_counter_ns) -> Period:
-    """The period's PoUS on `node` (module docstring): `store` is what the node keeps, `coins` the verifier's and the
-    memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its session log.
-    `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the signature schemes
-    it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and `pous_test_signer.SCHEMES`).
-    A setup the verifier refuses raises `ValueError`, since no run of it exists."""
+@dataclass(frozen=True)
+class Store:
+    """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
+    table of it, and the setup protocol's case."""
+
+    point: R.Point
+    published: R.Setup
+    blocks: tuple[bytes, ...]
+    digests: bytes
+    setup_case: dict[str, Any]
+
+    def save(self, directory: str | os.PathLike) -> None:
+        d = Path(directory)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "c-star.bin").write_bytes(b"".join(self.blocks))
+        (d / "digests.bin").write_bytes(self.digests)
+        (d / "setup-case.json").write_text(json.dumps(self.setup_case, sort_keys=True))
+        (d / "store.json").write_text(json.dumps({"point": point_json(self.point), "published": self.published.to_json()},
+                                                 sort_keys=True))
+
+    @classmethod
+    def load(cls, directory: str | os.PathLike) -> Store:
+        d = Path(directory)
+        doc = json.loads((d / "store.json").read_text())
+        point, data = point_of(doc["point"]), (d / "c-star.bin").read_bytes()
+        n = point.params.block_bytes
+        return cls(point, R.Setup.from_json(doc["published"]), tuple(data[i:i + n] for i in range(0, len(data), n)),
+                   (d / "digests.bin").read_bytes(), json.loads((d / "setup-case.json").read_text()))
+
+
+def _encode_part(job: tuple[P2.P2Params, bytes, int, int, bytes]) -> list[bytes]:
+    return P2.encode_blocks(*job)
+
+
+def encode(q: P2.P2Params, salt: bytes, w: bytes, workers: int = 1) -> list[list[bytes]]:
+    """`C*` of `W` under `salt`, segment by segment: in this process, or split by blocks (`p2.encode_blocks`) over a pool of
+    `workers` processes when more than one, which gives the same blocks."""
+    seg, pb, bps = q.segment_bytes, q.payload_bytes, q.blocks_per_segment
+    if workers <= 1:
+        return [P2.encode_segment(q, None, salt, s, w[s * seg:(s + 1) * seg]) for s in range(q.segments)]
+    step = max(1, -(-q.blocks // (4 * workers)))
+    jobs = [(q, salt, s, j, w[s * seg + j * pb:s * seg + min(j + step, bps) * pb])
+            for s in range(q.segments) for j in range(0, bps, step)]
+    with ProcessPoolExecutor(workers) as pool:
+        parts = list(pool.map(_encode_part, jobs))
+    out: list[list[bytes]] = [[] for _ in range(q.segments)]
+    for job, part in zip(jobs, parts, strict=True):
+        out[job[2]] += part
+    return out
+
+
+def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> Store:
+    """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt drawn
+    from the verifier's `coins` after the commitment, `C*` encoded in `workers` processes, and the public-encoder check of
+    it (`setup.verifier_key_from_encoding`), which raises `ValueError` on a setup it refuses."""
     point = point_for(len(store)) if point is None else point
     q = point.params
     if len(store) > q.w_bytes:
@@ -176,21 +247,42 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer, log: mc.Ses
     w = bytes(store) + bytes(q.w_bytes - len(store))
     commitment = setup.commit(q, w)
     salt = setup.draw_salt(coins, commitment)
-    encoded = [P2.encode_segment(q, None, salt, s, w[s * q.segment_bytes:(s + 1) * q.segment_bytes])
-               for s in range(q.segments)]
+    encoded = encode(q, salt, w, workers)
     root = setup.verifier_key_from_encoding(q, None, commitment, salt, encoded).root
-    published = R.Setup(q.blocks, commitment, root, salt)
-    blocks = [b for seg in encoded for b in seg]
-    digests = b"".join(mc.block_digest(b) for b in blocks)
-    session_id = derive(coins, SESSION_DOMAIN, {"node": node, "setup": root}).stream("session", 32)
+    blocks = tuple(b for seg in encoded for b in seg)
+    return Store(point, R.Setup(q.blocks, commitment, root, salt), blocks, b"".join(mc.block_digest(b) for b in blocks),
+                 setup_case(q, commitment, salt, encoded))
+
+
+def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer, log: mc.SessionLog,
+          trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+          protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns) -> Period:
+    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
+    under the id the auditor designates from `coins` and the setup's root, then the run's check and answer."""
+    point, published = held.point, held.published
+    q = point.params
+    session_id = derive(coins, SESSION_DOMAIN, {"node": node, "setup": published.root}).stream("session", 32)
     tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
     challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
-                                     binding=root, clock=clock)
-    signed = challenger.run(prover(blocks))
+                                     binding=published.root, clock=clock)
+    signed = challenger.run(prover(held.blocks))
     session = R.Session(signed, challenger.commitment, challenger.openings())
     trusted = (signer.public_key,) if trusted is None else tuple(trusted)
-    return Period(answer(point, schemes, trusted, published, digests, session, session_id, protocol),
-                  case(point, session_id, trusted, published, digests, session), setup_case(q, commitment, salt, encoded))
+    return Period(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol),
+                  case(point, session_id, trusted, published, held.digests, session), held.setup_case)
+
+
+def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer, log: mc.SessionLog, point: R.Point | None = None,
+        trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+        protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
+        workers: int = 1) -> Period:
+    """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
+    verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
+    session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
+    signature schemes it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and
+    `pous_test_signer.SCHEMES`). A setup the verifier refuses raises `ValueError`, since no run of it exists."""
+    return audit(node, setup_store(store, coins, point, workers=workers), coins, signer=signer, log=log, trusted=trusted,
+                 schemes=schemes, protocol=protocol, prover=prover, clock=clock)
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
@@ -234,19 +326,41 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
     return bytes(out)
 
 
+SETUP_WORKERS = 32
+"""The processes the leg encodes a node's `C*` in, at most (`setup_store`)."""
+
+
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): `run` on the period's
-    records with fresh coins, the memory challenger's key and session log beside the periods. With `pous-run-protocol`
-    and `pous-setup` among the period's tools, the Lean answers (the verifier of record) and must agree with the Python;
-    it writes `out/pous.case.json` (onsite's PoUS case), `out/pous-setup.case.json` and `out/pous.json`."""
-    tools = json.loads((Path(period_dir) / "period.json").read_text()).get("tools") or {}
+    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`), the memory challenger's key
+    and session log beside the periods. By default the node's store is set up once, at the smallest point P2's proved
+    family certifies (`certified_point`): `W` is the node's records at its first period, encoded in up to
+    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh coins,
+    so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With `{"pous": {"point": "small"}}` in
+    `period.json`, each period sets the period's own records up at the small point instead (`run`), certifying nothing.
+    With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean answers (the verifier of record) and
+    must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case), `out/pous.json` and, in a period
+    that set a store up, `out/pous-setup.case.json`."""
+    doc = json.loads((Path(period_dir) / "period.json").read_text())
+    tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     device = Path(period_dir).parent / "pous-challenger"
     signer = challenger(device)
     if not (device / "sessions").exists():
         mc.SessionLog.create(device / "sessions")
-    store = records(period_dir)
+    log, kept = mc.SessionLog(device / "sessions"), Path(period_dir).parent / "pous-store"
     t = time.monotonic()
-    period = run(node, store, secrets.token_bytes(64), signer=signer, log=mc.SessionLog(device / "sessions"))
+    if small or not (kept / "store.json").exists():
+        store = records(period_dir)
+        point = point_for(len(store)) if small else certified_point(len(store))
+        held = setup_store(store, secrets.token_bytes(64), point,
+                           workers=1 if small else min(SETUP_WORKERS, os.cpu_count() or 1))
+        if not small:
+            held.save(kept)
+        fresh = True
+    else:
+        held, fresh = Store.load(kept), False
+    setup_s = round(time.monotonic() - t, 2)
+    t = time.monotonic()
+    period = audit(node, held, secrets.token_bytes(64), signer=signer, log=log)
     seconds = round(time.monotonic() - t, 2)
     answer, lean = period.answer, {}
     if "pous-run-protocol" in tools:
@@ -254,18 +368,22 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
         answer = lean["run"]
-    if "pous-setup" in tools:
+    if fresh and "pous-setup" in tools:
         lean["setup"] = serve(tools["pous-setup"], [period.setup_case])[0]
         if lean["setup"]["verdict"] != "accept":
             raise RuntimeError(f"pous-setup refused the setup the Python accepted: {lean['setup']}")
     out.mkdir(parents=True, exist_ok=True)
     (out / "pous.case.json").write_text(json.dumps(period.case, sort_keys=True))
-    (out / "pous-setup.case.json").write_text(json.dumps(period.setup_case, sort_keys=True))
-    (out / "pous.json").write_text(json.dumps({"answer": answer, "eps": str(period.eps), "lean": lean,
-                                               "s_bits": period.s_bits, "seconds": seconds, "store_bytes": len(store)},
-                                              sort_keys=True, indent=1))
+    if fresh:
+        (out / "pous-setup.case.json").write_text(json.dumps(period.setup_case, sort_keys=True))
+    q = held.point.params
+    (out / "pous.json").write_text(json.dumps({
+        "answer": answer, "blocks": q.blocks, "eps": str(period.eps), "lean": lean, "s_bits": period.s_bits,
+        "seconds": seconds, "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0}, "w_bytes": q.w_bytes},
+        sort_keys=True, indent=1))
     return answer
 
 
-__all__ = ["PROTOCOL", "Period", "Prover", "answer", "case", "certify", "challenger", "gaps", "honest", "leg", "point_for",
-           "profile", "records", "run", "serve", "setup_case"]
+__all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Store", "answer", "audit", "case", "certificate",
+           "certified_point", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for", "point_of", "profile",
+           "records", "run", "serve", "setup_case", "setup_store"]

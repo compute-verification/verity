@@ -6,8 +6,9 @@ Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `
 one edit of the run, of its session or of its JSON, each as the protocol's case, and those under one edit of the case's
 framing. Under the deployed protocol (S1's LMS alone) they are a small period of `pous.period.run`, signed by a key at
 S1's deployed parameters (`mc_cases.deployed_signer`), honest and under a prover that answers every other round with
-zeros; each protocol refuses the other's signer. The period's setup case is the setup protocol's (`pous-setup`), which
-accepts it."""
+zeros; each protocol refuses the other's signer; and the same two at the certified point (`period.certified_point`),
+where the honest one certifies its store. The period's setup case is the setup protocol's (`pous-setup`), which accepts
+it."""
 
 from __future__ import annotations
 
@@ -24,6 +25,8 @@ from test_setup_difftest import setup_port, setup_protocol
 from verity_difftest import protocol as P
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
+from verity.core.protocols.pous import run as R
+from verity.core.protocols.pous.verifier import VerifierKey
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -139,13 +142,41 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
         got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "zeros": "reject"}, got
     assert got["honest"]["public"] == {"certified": False, "eps": "0", "s_bits": 0}, got
-    assert got["honest"]["profile"]["gaps"] == [f"P2 has no certificate at (w, c0, blocks per segment) = "
+    assert got["honest"]["profile"]["gaps"] == [f"P2 has no certificate at (w, c0, blocks) = "
                                                 f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})"]
     for name, p in test.items():
         assert _part(TEST.reference(p.case)) == _part(p.answer), name
         assert json.loads(D.replay(TEST, p.case, test_server)[1])["verdict"] == {"honest": "accept", "zeros": "reject"}[name]
         assert json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])["verdict"] == "reject"
     assert json.loads(D.replay(TEST, deployed["honest"].case, test_server)[1])["verdict"] == "reject"
+
+
+def _certified_store() -> period.Store:
+    """A `C*` of random canonical blocks at the certified point (256 blocks): the run's check reads its table, root and
+    session, not how it was encoded, and a 256-block encode is 16 core-minutes."""
+    pt = period.certified_point(len(STORE))
+    q, salt = pt.params, COINS[:24]
+    blocks = tuple(b"\x00" + hashlib.shake_256(b"C*%d" % i).digest(q.block_bytes - 1) for i in range(q.blocks))
+    digests = b"".join(mc.block_digest(b) for b in blocks)
+    root = VerifierKey.from_row_digests(q, salt, [digests[64 * i:64 * (i + 1)] for i in range(q.blocks)]).root
+    return period.Store(pt, R.Setup(q.blocks, hashlib.sha512(STORE).digest(), root, salt), blocks, digests, {})
+
+
+def test_a_certified_periods_answers_agree(deployed_server) -> None:
+    """The deployed protocol at the certified point (`period.certified_point`, P2's proved family at 256 blocks): the
+    Lean and the Python accept the honest period with `s_bits` = 3,989,072 at `1% + 2^-128` and no gap, under
+    `P2SlackFamilyUncond`, and reject the prover that answers every other block with zeros."""
+    held = _certified_store()
+    kw = dict(signer=M.deployed_signer(), schemes=mc.SCHEMES, protocol=period.PROTOCOL, clock=M.Clock(10 ** 9))
+    got = {}
+    for name, prover in (("honest", period.honest), ("zeros", _zeros_on_odd_rounds)):
+        p = period.audit("n0", held, COINS, log=M.ts.session_log(), prover=prover, **kw)
+        assert _part(DEPLOYED.reference(p.case)) == _part(p.answer), name
+        got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
+        assert _part(got[name]) == _part(p.answer), name
+    assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "zeros": "reject"}, got
+    assert got["honest"]["public"] == {"certified": True, "eps": f"{2 ** 126 + 25}/{25 * 2 ** 128}", "s_bits": 3_989_072}
+    assert got["honest"]["profile"]["gaps"] == [] and got["honest"]["profile"]["certificate"]["segments"] is None
 
 
 def test_a_small_periods_setup_is_accepted(setup_server) -> None:
