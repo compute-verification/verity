@@ -6,7 +6,7 @@ import Definitions.Pouw.PearlC.Game
 A layout's units stacked row by row: unit `u`'s row `i` is the layout's global row `rowIdx L u i = Σ_{v < u} m_v + i`,
 and every global row below `rowsOf L = Σ_u m_u` is a row of exactly one unit. The W1 machine keys each unit's
 activations, ticket words and useful words by global row (`Definitions.Pouw.PearlC.W1`), and the per-row seeds' split
-layout makes each global row a one-row unit (`Models.Pouw.Assumptions.PearlC.TTOutRowSeed`).
+layout makes each global row a one-row unit (`Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed`).
 -/
 
 namespace Pouw.PearlC
