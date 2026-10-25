@@ -11063,6 +11063,39 @@ theorem gateW_shift (P : Prog) {d k m : Nat} {o : Int}
     rw [ho, ← Int.natCast_add, Int.toNat_natCast, Nat.add_comm n]
     exact locW_child P hoff hk hp hm (by omega) hl
 
+/-- **A callee's piece of gates as member `m`'s** (`fromCallee`'s `{ g with base := o + g.base }`): of the callee's
+gates with their widths, it names the caller's with theirs, in a laid-out body. -/
+theorem gateW_oneShift (P : Prog) {d k m : Nat} {o : Int}
+    (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
+      (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
+        (P.defs[((P.defs[d]!).body.nodes[k']!).fn]!).gates)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hp : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false)
+    (hm : m < ((P.defs[d]!).body.nodes[k]!).members)
+    (ho : o = (((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Nat) : Int))
+    {g : Piece} (hW : GateW P ((P.defs[d]!).body.nodes[k]!).fn (Seg.one g))
+    (hin : ∀ w p, (Tgt.gate w, p) ∈ pos g → 0 ≤ p ∧ p < ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Int)) :
+    GateW P d (Seg.one { g with base := o + g.base }) := by
+  intro w p hx
+  rw [segPos_one] at hx
+  unfold pos at hx
+  simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq] at hx
+  obtain ⟨r, hr, t, htl, hgt, rfl⟩ := hx
+  have hmem : (Tgt.gate w, g.base + (r : Int) * g.rowStride + (t : Int) * g.stride) ∈ pos g := by
+    unfold pos
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range]
+    exact ⟨r, hr, t, htl, by rw [hgt]⟩
+  have hl := hW w _ (by rw [segPos_one]; exact hmem)
+  obtain ⟨h0, h1⟩ := hin w _ hmem
+  obtain ⟨n, hn⟩ := Int.eq_ofNat_of_zero_le h0
+  rw [hn, Int.toNat_natCast] at hl
+  have e : o + g.base + (r : Int) * g.rowStride + (t : Int) * g.stride =
+      (((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + n : Nat) : Int) := by
+    rw [ho]
+    push_cast
+    linarith
+  rw [e, Int.toNat_natCast]
+  exact locW_child P hoff hk hp hm (by omega) hl
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
