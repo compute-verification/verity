@@ -10846,6 +10846,70 @@ theorem locW_root {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g : Nat} 
   rw [h0] at h
   exact h
 
+/-- Node `k` is the one `gateStep`'s search finds for a gate of it, offsets nondecreasing. -/
+theorem find_node {offs : Array Nat} {K k x : Nat} (hmono : ∀ k' < K, offs[k']! ≤ offs[k' + 1]!) (hk : k < K)
+    (hx : offs[k]! ≤ x ∧ x < offs[k + 1]!) :
+    (Array.range K).find? (fun k' => offs[k']! ≤ x && x < offs[k' + 1]!) = some k := by
+  rcases hs : (Array.range K).find? (fun k' => offs[k']! ≤ x && x < offs[k' + 1]!) with _ | k'
+  · exfalso
+    have := Array.find?_eq_none.1 hs k (Array.mem_range.2 hk)
+    simp only [Bool.and_eq_true, decide_eq_true_eq, not_and, not_lt] at this
+    exact absurd hx.2 (Nat.not_lt.2 (this hx.1))
+  · obtain ⟨hk', hpk⟩ := DescAgree.find?_range_some hs
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
+    rw [DescAgree.node_unique _ _ hmono hk' hk hpk hx]
+
+/-- **A primitive node's gate**: in a body of Definition `d` whose offsets are nondecreasing, a gate of node `k`
+calling a primitive returning `.value w` has width `w`. -/
+theorem locW_prim (P : Prog) {d k x w : Nat}
+    (hmono : ∀ k' < (P.defs[d]!).body.nodes.size,
+      (P.defs[d]!).body.offsets[k']! ≤ (P.defs[d]!).body.offsets[k' + 1]!)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hp : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = true)
+    (hw : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).ret = .value w)
+    (hx : (P.defs[d]!).body.offsets[k]! ≤ x ∧ x < (P.defs[d]!).body.offsets[k + 1]!) : LocW P d x w :=
+  LocW.prim (find_node hmono hk hx) hp hw
+
+/-- **A member's gate in its caller**: in a laid-out body of Definition `d`, gate `j` of member `m` of composite node
+`k`'s activation is gate `offsets[k] + m * gates + j` of `d`'s, of its width. -/
+theorem locW_child (P : Prog) {d k m j w : Nat}
+    (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
+      (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
+        (P.defs[((P.defs[d]!).body.nodes[k']!).fn]!).gates)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hp : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false)
+    (hm : m < ((P.defs[d]!).body.nodes[k]!).members) (hj : j < (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates)
+    (h : LocW P ((P.defs[d]!).body.nodes[k]!).fn j w) :
+    LocW P d ((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j) w := by
+  have hmono : ∀ k' < (P.defs[d]!).body.nodes.size,
+      (P.defs[d]!).body.offsets[k']! ≤ (P.defs[d]!).body.offsets[k' + 1]! := fun k' hk' => by
+    rw [hoff k' hk']; exact Nat.le_add_right _ _
+  have hxk : (P.defs[d]!).body.offsets[k]! ≤
+        (P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j ∧
+      (P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j <
+        (P.defs[d]!).body.offsets[k + 1]! := by
+    rw [hoff k hk]
+    have hle := Nat.mul_le_mul_right (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates hm
+    rw [Nat.succ_mul] at hle
+    omega
+  have hf := find_node hmono hk hxk
+  have hG : 0 < (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates := by omega
+  have hx : ((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j -
+      (P.defs[d]!).body.offsets[k]!) / (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates = m := by
+    rw [show (P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j -
+        (P.defs[d]!).body.offsets[k]! = j + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates by omega,
+      Nat.add_mul_div_right _ _ hG, Nat.div_eq_of_lt hj, Nat.zero_add]
+  refine LocW.comp m hf hp ?_ ?_
+  · rw [hx]
+    unfold Flock.Program.Node.members at hm
+    revert hm
+    cases ((P.defs[d]!).body.nodes[k]!).form <;> intro hm
+    · exact (Nat.lt_one_iff.1 hm : m = 0)
+    · exact (Nat.lt_one_iff.1 hm : m = 0)
+    · rfl
+    · rfl
+  · rw [show (P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j -
+        (P.defs[d]!).body.offsets[k]! - m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates = j by omega]
+    exact h
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
