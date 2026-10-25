@@ -16,6 +16,8 @@ def sampledProofs : Protocol := stub "verity/stub/sampled-proofs/v0"
 def pouw : Protocol := stub "verity/stub/pouw/v0"
 /-- Proof of useful space: the blocks held, if answered in time. -/
 def pous : Protocol := stub "verity/stub/pous/v0"
+/-- Proof of useful bandwidth: the reads of the store held, over PoUS's store or a node's registered one. -/
+def bandwidth : Protocol := stub "verity/stub/bandwidth/v0"
 /-- The network certifier: what left the site. -/
 def certifier : Protocol := stub "verity/stub/certifier/v0"
 
