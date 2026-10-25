@@ -7,19 +7,27 @@
 # `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt,
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), lean-honest.log (its VERDICT
 # line), fixture.txt.
-# env: CPUS=16  K=16 (the subset draw's units, of the stage's 32)  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget
-#      where /workspace isn't writable (node 1) (the prover build and its venv, shared as 76-read-gadget.sh's)
+# Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
+# env: CPUS=16  K=16 (the subset draw's units, of the stage's 32)  FLOCK_WORK=/workspace, or where /workspace isn't writable
+#      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/plain-hidden (the prover
+#      build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${PH_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
-  hold_slices "" "${CPUS:-16}" || exit 1
-  export PH_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
-  exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
+    . verity/ml/flock/pod/cpu-slices.sh
+    hold_slices "" "${CPUS:-16}" || exit 1
+    export PH_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
+    exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  fi
+  # no slice locks here (a vy-cpu pod): the check slot (research run --pool) has pinned the job to its own cores
+  export PH_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 fi
 export FC_COINS=os
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/plain-hidden}/out; mkdir -p $O
-[ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/pc-read-gadget
+if [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ]; then
+  if [ -d /workspace/jobs ]; then export FLOCK_WORK=/workspace/jobs/pc-read-gadget; else export FLOCK_WORK=/workspace/cache/plain-hidden; fi
+fi
 FW=${FLOCK_WORK:-/workspace}; W=$FW/flock-circuit; mkdir -p $W || exit 1
 [ -w "$HOME" ] || { export HOME=$FW/home; mkdir -p $HOME; }
 S=$FW/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S || exit 1
