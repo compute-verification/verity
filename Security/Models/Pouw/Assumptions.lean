@@ -1,3 +1,5 @@
+import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
+import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Models.Pouw.Assumptions.Deadline
 import Models.Pouw.Assumptions.Dimension.A2Words
 import Models.Pouw.Assumptions.Dimension.Assumptions
