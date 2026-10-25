@@ -1,9 +1,11 @@
 """Sessions of several tables (PROTOCOL.md §16.12, #306's `--session-tables J`, N4): the Lean verifier builds each table's
 statement from its part of the session's draw (without one, of the population's units), never from anything in the record.
-The sessions are #306's live ones on RoPE, all accepted by its server, and none is `--zk`: several tables without `--zk` are a
-form the soundness proof does not cover (§16.15), so the verifier refuses every session, for that once every check has
-passed: a drawn one for its subset draw without `--zk` at setup first, and a draw it sets no statement up from keeps its
-setup's reason."""
+The sessions are #306's live ones on RoPE, all accepted by its server, and none is `--zk`. Without `--plain-tables`, several
+tables without `--zk` are a form the one-table plain claim does not cover (§16.15), so the verifier refuses every session, for
+that once every check has passed: a drawn one for its subset draw without `--zk` at setup first, and a draw it sets no
+statement up from keeps its setup's reason. Under `--plain-tables` (`flock_verify_sound`'s plain multi-table claim, at up to
+64 tables and a subset draw) with the verifier's own program (the RoPE Definition's, META's `program_sha512`), both drawn
+sessions are accepted, a tampered one keeps its check's reason, and the draw-less one meets D12's refusal."""
 from __future__ import annotations
 
 import json
@@ -49,10 +51,10 @@ def _session(root: Path, name: str, k: int = 0) -> Path:
     return sorted(p for p in (root / "sessions" / name).iterdir() if p.is_dir())[k]
 
 
-def _verify(root: Path, tables: int, *sessions: Path, statement: str = STATEMENT) -> list[dict]:
+def _verify(root: Path, tables: int, *sessions: Path, statement: str = STATEMENT, flags: tuple = ()) -> list[dict]:
     p = subprocess.run([str(BIN), "verify", "--statement", statement, "--circuit", str(root / "stage" / "circuit.txt"),
                         "--public", str(root / "stage" / "pub-8.bin"), "--coins", "seed", "--session-tables", str(tables),
-                        "--session", *map(str, sessions)], capture_output=True, text=True, check=False)
+                        *flags, "--session", *map(str, sessions)], capture_output=True, text=True, check=False)
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
 
 
@@ -147,3 +149,67 @@ def test_statements_without_several_tables_refuse_them(rope):
     assert not v["accepted"] and v["why"].startswith("setup: verity/flock-circuit@e51e2b86+seed-injection: one table per session"), v["why"]
     [v] = _verify(rope, 65, _session(rope, "j2"))
     assert not v["accepted"] and v["why"].startswith("setup: tables: at most 64 per session"), v["why"]
+
+
+#: a session without a draw, under `--plain-tables` as without it: every claim is about a drawn session (D12)
+DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+
+
+@pytest.fixture(scope="module")
+def program(tmp_path_factory) -> Path:
+    """The verifier's own program: the RoPE d64 Definition's descriptor, the program META's `program_sha512` names."""
+    pytest.importorskip("verity_numerical")
+    from verity_numerical.bench import templates as TM
+
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.circuits.program import Program
+
+    p = tmp_path_factory.mktemp("program") / "program.json"
+    p.write_bytes(canonical_json(encode_program(Program(TM.rope_head(64).definition()))))
+    return p
+
+
+@pytest.fixture(scope="module")
+def plain(rope, program, tmp_path_factory):
+    """`--plain-tables` verdicts by name, in one verifier run: both drawn J = 2 sessions, the draw-less one, and the drawn
+    session tampered."""
+    w = tmp_path_factory.mktemp("plain")
+    s = _session(rope, "j2-draw")
+    dirs = {"honest": s, "honest, the other session": _session(rope, "j2-draw", 1), "no draw": _session(rope, "j2"),
+            "a missing root": _copy(s, w / "root", lambda rec: rec["link"]["root_b"].pop("circuit-01")),
+            "a short y": _copy(s, w / "y", lambda rec: rec["link"].update(y=rec["link"]["y"][:2])),
+            "swapped digests": _copy(s, w / "digests", _swap_tables)}
+    return dict(zip(dirs, _verify(rope, 2, *dirs.values(), flags=("--plain-tables", "--program", str(program)))))
+
+
+@pytest.mark.slow
+def test_plain_tables_accepts_an_honest_session_of_two_tables(rope, plain):
+    """The honest drawn sessions pass every check and the form `--plain-tables` covers, against the verifier's own program."""
+    meta = json.loads((rope / "stage" / "circuit.txt").read_text().split("\n", 2)[1][len("META "):])
+    for name in ("honest", "honest, the other session"):
+        v = plain[name]
+        assert v["accepted"] is True, (name, v["why"])
+        assert v["program_sha512"] == meta["program_sha512"], v
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name", ["a missing root", "a short y", "swapped digests"])
+def test_plain_tables_refuses_a_tampered_session_at_its_check(plain, name):
+    v = plain[name]
+    assert not v["accepted"] and not v["why"].startswith("refused: "), v["why"]
+
+
+@pytest.mark.slow
+def test_plain_tables_refuses_a_session_without_a_draw(plain):
+    assert plain["no draw"]["why"] == DRAWLESS, plain["no draw"]["why"]
+
+
+def test_plain_tables_refuses_65_tables_and_zk(rope, program):
+    """At most 64 tables a session (refused at setup, before `ProvedScope.checkP`'s own cap), and not with `--zk`."""
+    flags = ("--plain-tables", "--program", str(program))
+    [v] = _verify(rope, 65, _session(rope, "j2-draw"), flags=flags)
+    assert not v["accepted"] and v["why"].startswith("setup: tables: at most 64 per session"), v["why"]
+    p = subprocess.run([str(BIN), "verify", "--zk", "--plain-tables", "--circuit", str(rope / "stage" / "circuit.txt"),
+                        "--public", str(rope / "stage" / "pub-8.bin"), "--session", str(_session(rope, "j2-draw"))],
+                       capture_output=True, text=True, check=False)
+    assert p.returncode == 2 and "verify --zk: --plain-tables is the plain path's (without --zk)" in p.stderr, p.stderr
