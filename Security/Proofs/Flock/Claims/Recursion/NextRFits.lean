@@ -425,7 +425,8 @@ theorem repFits : RepFits := by
     unfold chunksOf
     rw [hn]
   have h1 : (chunksOf c p T).map anyV = c.sched.map (·.2.2.2) := by
-    have := congrArg Prod.fst (roundPat_repFrames c.dom e p T (by omega) hk (q_ne_zero hs) (by omega) (by omega))
+    have := congrArg Prod.fst
+      (roundPat_repFrames (st := c.st) (sch := c.sch) c.dom e p T (by omega) hk (q_ne_zero hs) (by omega) (by omega))
     rw [hch, hsc, map_flag, hft]
     exact this
   have h2 : (c.sched.map (·.2.1.toList)).flatten = p.ligerito.recursiveCaps.toList.map Array.size := by
