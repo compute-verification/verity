@@ -101,7 +101,8 @@ theorem fast100_m {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) : m �
 theorem fast100_bound {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) :
     s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧ ∀ i < 7, (s.levels.getD i default).cap ≤ 7 := by
   have key : ∀ m < 40, (match fast100 m with
-      | some s => decide (s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧ ∀ i < 7, (s.levels.getD i default).cap ≤ 7)
+      | some s => decide (s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧
+          ∀ i : ℕ, i < 7 → (s.levels.getD i default).cap ≤ 7)
       | none => true) = true := by
     decide +kernel
   have h := key m (by have := fast100_m hs; omega)
