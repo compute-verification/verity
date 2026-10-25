@@ -196,7 +196,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardDecodableWithinLeCompiledPerWindowV1`. That `ChargeCount_v1`'s circuit computes the Lean charge is
   circuit-check's (the circuit against `arith_encode.py`'s reference), not proved here.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
-  `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
+  `EncardWardenDecodableLe`, under `trusted-host` (`Verity.Assumptions.TrustedHost`).
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
   `EncardAccSeqsSampledLe`, the count of what `SampledAuditAccepted`'s `RAcc δ` allows: the inputs other than the
   ingress, the faulty units' committed bits and the choice of faulty set. An accepted sampled audit reaches it except
