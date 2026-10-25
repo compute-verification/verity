@@ -2,11 +2,6 @@
   "rule": "P11 (names say the job; versions only in hashed data)",
   "entries": [
     {"file": "verity_vllm/acquire/compiled.py", "kind": "flag-name", "symbol": "BuildOptions", "detail": "--digest-v1"},
-    {"file": "verity_vllm/acquire/sources/compiled_kernel_source.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
-    {"file": "verity_vllm/acquire/sources/compiled_kernel_source.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/compiled_kernel_source.py", "kind": "doc-round", "symbol": "CompiledKernelSource.set_role_maps", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/acquire/fa2_plane_classes.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/acquire/fa2_plane_classes.py", "kind": "doc-round", "symbol": "counts_by_layer", "detail": "R1N"},
     {"file": "verity_vllm/acquire/fa2_plane_classes.py", "kind": "doc-round", "symbol": "uniform_rule", "detail": "R1N"},
@@ -24,7 +19,6 @@
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "doc-round", "symbol": "fa2_tap_words_per_seq", "detail": "R1N"},
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "doc-round", "symbol": "plan_fa2_tap_groups", "detail": "R1N"},
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "doc-round", "symbol": "stream_name", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/moe_source.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 3},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "class-name", "symbol": "<module>", "detail": "NativeHiddenM1Source"},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "class-name", "symbol": "<module>", "detail": "NativeHiddenM1SourceFA3"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "doc-board-id", "symbol": "NativeCollectCommitter._pre_flush_leaf", "detail": "M-nnnn"},
@@ -309,7 +303,6 @@
     {"file": "verity_vllm/program/sampling_event.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/workload.py", "kind": "doc-round", "symbol": "served_lengths_rule", "detail": "R1N"},
     {"file": "verity_vllm/query/compare.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
-    {"file": "verity_vllm/acquire/compiled.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "doc-board-id", "symbol": "tp_ranks_fold_digest", "detail": "M-nnnn"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "doc-round", "symbol": "fa2_geometry", "detail": "R1N"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "doc-round", "symbol": "moe_geometry", "detail": "R1N"},
@@ -338,14 +331,6 @@
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "doc-lane", "symbol": "_load_links", "detail": "[lane"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-board-id", "symbol": "TPPartialSource._bind", "detail": "M-nnnn"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-board-id", "symbol": "TPPartialSource._bind_received", "detail": "M-nnnn", "count": 3},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-board-id", "symbol": "TPPartialSource.compare_match_oracle", "detail": "M-nnnn"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-round", "symbol": "TPPartialSource._bind_received", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-round", "symbol": "TPPartialSource.compare", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-round", "symbol": "TPPartialSource.compare_match_oracle", "detail": "R1N"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-round", "symbol": "_ref_key", "detail": "R1N", "count": 3},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "class-name", "symbol": "<module>", "detail": "TP2CaptureWorkerExtension"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "_tp2_attribution"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "_tp2_binding"},
@@ -369,7 +354,6 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_probe"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_start"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_stop"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"},
-    {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "doc-board-id", "symbol": "late_read_check", "detail": "M-nnnn", "count": 2}
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"}
   ]
 }
