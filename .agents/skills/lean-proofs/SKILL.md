@@ -1,8 +1,8 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
-  scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
+  warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a DM to Daniel (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
@@ -47,19 +47,25 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 ## Build, iterate, check
 
 ~~~text
-bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Mathlib's cache
-cd PKG && lake build                   once per checkout; incremental from then on
-lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
-lake build Pkg.Area.File               after editing a file others import, so they see the change
-python tools/verity/lean/check.py PKG  once, before pushing
+verity lean try PKG/Area/File.lean     each edit: File's imports built, then `lake env lean` on it, on a node's warm tree
+lean_changed.py --records PKG --update the fast path (below), once the proofs elaborate: the lock and the mark
+python tools/verity/lean/check.py PKG  the full check, which the train's check runs; by hand only on a machine of your own
 ~~~
+
+- **The edit loop is `verity lean try FILE`** (FILE from the repository's root). It ships your checkout, uncommitted
+  edits and new files included, through `research run` (default vy-nebius-cpu-1's `research` pool; `--on NODE [--pool P]`
+  for another node with `build` Lean slots, e.g. `--on vy-nebius-cpu-5 --pool proofs`), takes a `build` slot's tree there, the one `--records` keeps warm, builds
+  only what changed among FILE's imports, runs `lake env lean FILE`, and prints Lean's output and the wall time, exiting
+  with lean's status. It never writes a record. After editing a file others import, try the importer: its imports'
+  build rebuilds the edited file.
 
 - **Where it runs.** Build on a CPU machine. Never `lake update`, and never change a `require`, a revision or
   `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB (memory and swap, within its
   cgroup; `VERITY_LEAN_MEM_FLOOR_GIB` overrides, 0 for none) and a whole-Security audit (`Security` with Security/Proofs
   beside it) below 160 GiB, whose replay's resident base is about 120 GiB whatever its threads. The refusal prints where
   to run it instead; a queued Security audit takes `--kind lean-audit`.
-- **The fast path** gives your records, and the `--update` printout Daniel's DM carries, without a build of your own:
+- **The fast path is for the lock and the mark, not the edit loop**: it gives your records, and the `--update` printout
+  Daniel's DM carries, without a build of your own, once `verity lean try` passes on your files:
 
   ~~~text
   research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
@@ -83,7 +89,6 @@ python tools/verity/lean/check.py PKG  once, before pushing
   tools/verity/lean/check.py --build --update PKG`, with no wrapper (vy-nebius-1 has no `python`). It exits 0 when the
   check passes; the record is at `lean-audit/audit-TAG/lean-audit.json`. Use `--cwd clone`: runs of one commit share
   `--cwd source`'s tree, and two Lake builds there break each other.
-- **While proving, check one file at a time**: `lake env lean FILE` prints its errors and writes nothing.
 - **Ask Lean in a scratch file** outside the repository, from the package directory: `lake env lean
   /tmp/scratch/Probe.lean` with `#print axioms X` (a `sorry` shows as `sorryAx`), or `example … := by exact?`. Probe what
   you build on too: a section `variable` whose type goes through a local notation can elaborate to `sorry` silently, or
