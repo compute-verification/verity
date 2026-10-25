@@ -1,0 +1,11 @@
+# A minimal PyTorch serving loop on Verity's stack-neutral serving interface (`verity.ml.serving.interface`). Not a package:
+# its tests run in the workspace environment (torch from the workspace's torch-cpu extra), and
+# `benchmarks/one_stage/a5_torch_loop.py` puts this directory on its path.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: the interface it implements and core's registration and partition, which its tests hold the written window to.
+inputs = ["verity"]
