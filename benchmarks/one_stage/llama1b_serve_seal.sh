@@ -186,20 +186,23 @@ with urllib.request.urlopen(rq, timeout=300) as r:
     resp = json.loads(r.read())
 ch = resp["choices"][0]
 n_out = len(ch.get("token_ids") or [])
-rec, line = {}, {}
-for _ in range(120):
+def at(name, w):   # the window's line of windows.jsonl, or of seals.jsonl, where the off-loop sealer records a seal once done
+    f = d / name
+    return next((x for x in map(json.loads, f.read_text().splitlines()) if x["window"] == w), {}) if f.exists() else {}
+rec, line, seal = {}, {}, {}
+for _ in range(300):
     if (d / "requests.jsonl").exists():
         rec = next((r for r in map(json.loads, (d / "requests.jsonl").read_text().splitlines()) if r.get("user") == "long-smoke"), {})
     if rec and rec.get("windows"):
         w = rec["windows"][-1]
-        line = next((x for x in map(json.loads, (d / "windows.jsonl").read_text().splitlines()) if x["window"] == w), {})
-        if line:
+        line, seal = at("windows.jsonl", w), at("seals.jsonl", w)
+        if line and seal:
             break
     time.sleep(1)
-ok = n_out == 64 and len(rec.get("prompt_ids") or []) == P and bool(line.get("passed")) and bool((line.get("sealed") or {}).get("row_dir"))
+ok = n_out == 64 and len(rec.get("prompt_ids") or []) == P and bool(line.get("passed")) and bool(seal.get("row_dir"))
 print(json.dumps({"max_model_len": L, "prompt": P, "new": n_out, "finish": ch.get("finish_reason"), "windows": rec.get("windows"),
-                  "check": rec.get("check"), "window_passed": line.get("passed"), "sealed": (line.get("sealed") or {}).get("row_dir"),
-                  "port_layout": (line.get("sealed") or {}).get("port_layout"), "ok": ok}))
+                  "check": rec.get("check"), "window_passed": line.get("passed"), "sealed": seal.get("row_dir"),
+                  "port_layout": seal.get("port_layout"), "ok": ok}))
 sys.exit(0 if ok else 1)
 EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
@@ -234,14 +237,15 @@ w = d / "windows" / f"w{k}"
 v = json.loads((w / "commit" / "verdict.json").read_text())
 m = json.loads((w / "manifest.json").read_text()) if (w / "manifest.json").exists() else {}
 sw = DR.of_record(v["replay_deferred"]["bundles"][0]["path"], str(w)).ctx["served_window"]
-line = next((json.loads(x) for x in (d / "windows.jsonl").read_text().splitlines() if json.loads(x).get("window") == int(k)), {})
+seal = next((json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if json.loads(x).get("window") == int(k)), {}) \
+    if (d / "seals.jsonl").exists() else {}
 srw = sw.get("served_rows") or {}
 print(json.dumps({"window": int(k), "row_dir": str(w), "bundle": str(w / "commit" / "replay_bundle_p0"), "run_root": v.get("run_root"),
                   "commit_scheme": v.get("commit_scheme"), "manifest_sha256": v["replay_deferred"]["bundles"][0]["manifest_sha256"],
                   "registration": str(d / "advice" / f"w{k}" / "registration.json"), "programs": len(m.get("requests") or {}),
                   "builds": sorted(p.name for p in w.glob("build_request*")),
                   "ctx_served_rows": {key: srw.get(key) for key in ("schema", "binding", "root", "count", "n_bits", "statics", "error") if key in srw} or srw,
-                  "ctx_step_input_port": sw.get("step_input_port"), "port_layout": (line.get("sealed") or {}).get("port_layout")}))
+                  "ctx_step_input_port": sw.get("step_input_port"), "port_layout": seal.get("port_layout")}))
 EOF
   "$PY" - "$D" "$k" <<'EOF' | tee -a "$OUT/identities.txt"
 import json, sys
