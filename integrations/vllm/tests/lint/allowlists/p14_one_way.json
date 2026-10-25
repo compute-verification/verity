@@ -5,7 +5,6 @@
     {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "vllm-internals", "symbol": "compile_settings", "detail": "llm_engine"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "refusal-class", "symbol": "<module>", "detail": "SkipRefused"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "vllm-internals", "symbol": "NativeHostCommitter._model_geo_digest", "detail": "llm_engine"},
-    {"file": "verity_vllm/commit/serving_rows.py", "kind": "chacha20", "symbol": "<module>", "detail": "verity.ml.crypto.chacha20"},
     {"file": "verity_vllm/engine/arrivals.py", "kind": "vllm-internals", "symbol": "run_requests_arrivals", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/arrivals.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/engine/arrivals.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "llm_engine"},
