@@ -3,8 +3,8 @@
 A rank's need is the coins its `service.Stream` draw reads for its law over its window's counts, plus its longest stream
 once more, known before anything opens. The windows are toy templates at the counts of record. One is 38b2's step-16
 SiluMul_v2 window (675 + 3 units a rank under `stratified:4`, the stratified SiluMul partition). The other is the 18-family
-partition's rank-0 window at step 16 (`glm53_all_families_tp8_step16.json`: 179,552 units under `stratified:1`), whose draw
-reads more than the 16 coins a rank the old reserve held."""
+partition's rank-0 window at step 16 (`glm53_all_families_tp8_step16.json` before EmbeddingShard_v2 rejoined it: 179,552 units
+under `stratified:1`), whose draw reads more than the 16 coins a rank the old reserve held."""
 
 from __future__ import annotations
 

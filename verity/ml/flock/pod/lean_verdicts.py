@@ -6,12 +6,15 @@ kind): V* accepts only when every part does, so a forgery is refused when one of
 refusal, with a VERDICT and none accepting, and every other part of it has a VERDICT (a part the forgery leaves as the
 honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
-neither file and fails, except a forgery's part the firewall held back: its prover's ``LIVE`` lines (``PART.live``, the
-session verdicts oprove kept) stop at ``FIREWALL-REFUSED: …``, so no session reached Lean, and the part counts as
-refused by the firewall. A forged inner session (``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts
-``COVERS`` names for it: without one of them among the parts run, nothing could refuse it, and it is "not covered by the
-parts run", which fails the step like a forgery no part refused. One line per part, then the count; the exit is 0 only
-when there is a part, every honest part passes and every forgery is refused.
+neither file and fails. A forgery's part the verifier never checked is "no proof produced (not exercised)", never a
+refusal: one whose session Lean found missing its files (``session files: …``), and one the firewall held back (its
+prover's ``LIVE`` lines, ``PART.live``, the session verdicts oprove kept, stop at ``FIREWALL-REFUSED: …``, and no session
+reached Lean), since the firewall is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
+which Lean refused, one of them not exercised, fails the step as not exercised. A forged inner session
+(``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts ``COVERS`` names for it: without one of them among the
+parts run, nothing could refuse it, and it is "not covered by the parts run", which fails the step like a forgery no part
+refused. One line per part, then the count; the exit is 0 only when there is a part, every honest part passes and every
+forgery is refused.
 
     python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
     python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
@@ -79,23 +82,32 @@ def firewall_refusal(live: Path) -> str | None:
     return None
 
 
-def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, str]:
-    """``part``'s (passes, refused, line); a forgery's part (``kind``) passes when it has a VERDICT, and is refused when it
-    exited 1 with none accepting, or when no session reached Lean because the firewall refused it."""
+def no_proof(v: dict) -> bool:
+    """Lean refused the session before any check because a file of it is missing (FlockVerify's ``session files: …``): the
+    prover produced no proof, so the verifier checked nothing."""
+    return str(v.get("why") or "").startswith("session files:")
+
+
+def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, bool, str]:
+    """``part``'s (passes, refused, not exercised, line); a forgery's part (``kind``) passes when it has a VERDICT or the
+    firewall held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
+    whose every session is missing its files, or that the firewall held back, is not exercised, never refused."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
     fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
     if fw:
         line = (f"lean {part}{f' (forgery {kind}: one of its parts must be refused)' if kind else ''}: refused by the "
-                f"firewall before Lean, why {fw[:300]!r}{'' if kind else '  <- FAILS'}")
-        return bool(kind), True, line
+                f"firewall before Lean, no proof produced (not exercised), why {fw[:300]!r}{'' if kind else '  <- FAILS'}")
+        return bool(kind), False, True, line
     accepted = [v.get("accepted") is True for v in vs]
-    refused = bool(vs) and rc == REFUSED and not any(accepted)
-    ok = bool(vs) and (refused or rc == 0 and all(accepted) if kind else rc == 0 and all(accepted))
+    unexercised = bool(vs) and all(no_proof(v) for v in vs)
+    refused = bool(vs) and rc == REFUSED and not any(accepted) and not unexercised
+    ok = bool(vs) and (refused or unexercised or rc == 0 and all(accepted) if kind else rc == 0 and all(accepted))
     why = "; ".join(dict.fromkeys(str(v.get("why") or "") for v in vs if v.get("why"))) or ("" if vs else "no VERDICT")
     shown = [v.get("accepted") for v in vs]
+    said = "no proof produced (not exercised)" if unexercised else f"accepted {json.dumps(shown[0] if len(shown) == 1 else shown)}"
     line = (f"lean {part}{f' (forgery {kind}: one of its parts must be refused)' if kind else ''}: exit {rc}, "
-            f"accepted {json.dumps(shown[0] if len(shown) == 1 else shown)}, why {why[:300]!r}{'' if ok else '  <- FAILS'}")
-    return ok, refused, line
+            f"{said}, why {why[:300]!r}{'' if ok else '  <- FAILS'}")
+    return ok, refused, unexercised, line
 
 
 def kind_of(part: str, honest: list[str]) -> str:
@@ -124,7 +136,7 @@ def main(argv: list[str]) -> int:
     honest = [p for p in parts if not p.startswith("forged-")]
     kinds = {p: kind_of(p, honest) for p in parts if p.startswith("forged-")}
     results = {p: check(d, p, kinds.get(p)) for p in parts}
-    for _, _, line in results.values():
+    for *_, line in results.values():
         print(line)
     groups: dict[str, list[str]] = {}
     for p, k in kinds.items():
@@ -132,10 +144,15 @@ def main(argv: list[str]) -> int:
     uncovered = {k for k, ps in groups.items() if covered_by(k, [p.removeprefix(f"forged-{k}-") for p in ps]) == []}
     refused = {k: k not in uncovered and all(results[p][0] for p in ps) and any(results[p][1] for p in ps)
                for k, ps in groups.items()}
+    unexercised = {k: [p for p in ps if results[p][2]] for k, ps in groups.items()}
+    unexercised = {k: ps for k, ps in unexercised.items() if ps and not refused[k] and k not in uncovered}
     for k, ps in groups.items():
         if k in uncovered:
             print(f"lean forgery {k}: not covered by the parts run (needs one of {list(COVERS[k])}, or its parts; ran "
                   f"{[p.removeprefix(f'forged-{k}-') for p in ps]})  <- FAILS")
+        elif k in unexercised:
+            print(f"lean forgery {k}: no proof produced (not exercised) at {unexercised[k]} of {len(ps)}, so the verifier "
+                  f"never checked it  <- FAILS")
         elif len(ps) > 1 or not refused[k]:
             by = [p for p in ps if results[p][1]]
             print(f"lean forgery {k}: refused by {by or 'no part'} of {len(ps)}{'' if refused[k] else '  <- FAILS'}")
@@ -144,6 +161,8 @@ def main(argv: list[str]) -> int:
         count += f", {sum(refused.values())}/{len(groups)} forgeries refused"
     if uncovered:
         count += f", {len(uncovered)} not covered by the parts run"
+    if unexercised:
+        count += f", {len(unexercised)} not exercised (no proof produced)"
     ok = bool(parts) and all(results[p][0] for p in honest) and all(refused.values())
     print(count + ("" if ok else ": the step fails" if parts else ": no part to check, the step fails"))
     return 0 if ok else 1

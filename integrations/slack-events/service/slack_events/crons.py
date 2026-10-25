@@ -4,7 +4,8 @@ what they find next time); both stamp last_success_at in the cache.
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
   again; after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
   list of the chat threads still open goes to @top's inbox.  And `stall`: an event published STALL_S ago or more with no
-  message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it.
+  message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it; and
+  `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour.  A person's post that should ring someone and has
   neither a routing line nor a doorbell in any inbox is enqueued again, keyed on its channel and ts, so a second pass
   changes nothing.  The oldest such post is what health reports as `oldest_unprocessed_age_s`."""
@@ -14,6 +15,7 @@ from datetime import datetime, timezone
 
 from .consumer import ASK_CHANNELS, is_line_for
 from .deps import (
+    CANARY_SENT,
     DEAD,
     LAST_DONE,
     LAST_ENQUEUED,
@@ -38,6 +40,7 @@ DAILY_HEAD = "from watchdog, chat threads still open (daily):"
 STALL_S, STALL_EVERY_S = 10 * 60, 60 * 60                         # waiting this long with nothing done: no working consumer
 STALL_TO = "comms"                                               # who owns the service
 STALL_HEAD = "from slack-events, the queue stalled:"
+CANARY_EVERY_S = 60 * 60                                         # the synthetic event's period, so a quiet day still proves the drain
 
 
 def chats(deps: Deps) -> tuple[dict, list[str]]:
@@ -108,10 +111,28 @@ def watchdog(deps: Deps) -> dict:
                     counts["reminded"] += 1
     if _daily_due(now):
         counts["daily"] = daily(deps, reg, still_open, now)
+    counts["canary"] = canary(deps, now)
     counts["stalled"] = stall(deps, now)
     deps.write(LAST_SUCCESS, now)
     deps.log("watchdog", open=len(still_open), **counts)
     return {"open": len(still_open), **counts}
+
+
+def canary(deps: Deps, now: float) -> bool:
+    """Publish a synthetic event each CANARY_EVERY_S, stamped as an enqueue, so the stall check proves the consumer even on
+    a day no person posts (no person posted in the people's channels for the drain's first two days)."""
+    sent = deps.read(CANARY_SENT)
+    if isinstance(sent, (int, float)) and now - sent < CANARY_EVERY_S:
+        return False
+    eid = f"canary-{int(now)}"
+    try:
+        deps.queue.send(TOPIC, {"kind": "canary", "event_id": eid, "source": "watchdog"}, idempotency_key=eid)
+    except Exception as e:  # noqa: BLE001 - the next run tries again
+        deps.log("canary-failed", error=error(e))
+        return False
+    deps.write(CANARY_SENT, now)
+    deps.write(LAST_ENQUEUED, now)
+    return True
 
 
 def stall(deps: Deps, now: float) -> bool:
