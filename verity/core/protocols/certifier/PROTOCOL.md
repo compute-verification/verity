@@ -3,7 +3,7 @@
 A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
 This package is the reference for the answer, in the terms of its Lean analysis `NetTiming` (`Security/`: the
-areas `Definitions/NetworkCertifier`, `Models/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
+areas `Definitions/NetworkCertifier`, `Definitions/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
 tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
 package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
 
@@ -1285,7 +1285,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The advice string, with a precommitted, deterministic compiler | `Σ_w b_w + min(W, m)·log2 #Σ_sync + n·log2 D` bits, where `b_w` is the public cap on the advice charged to window w (I1's `bits(advice, w)`), fixed before the run. Over all W windows (n = W·T), `b_w + log2 #Σ_sync + T·log2 D` bits per window, cumulative as above | `SecurityProofs.EncardAccSeqsWithinLeConstantRate`; for a decoder of the wire, under W2, J and the compiler's two assumptions, `SecurityProofs.EncardDecodableWithinLeCompiled` and `SecurityProofs.EncardDecodableWithinLeCompiledPerWindow`; with advice v1's charge, no assumption on the charge: `SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`, `SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and a faulty set is one `RAcc δ` allows (in `M_δ`, no unit drawn `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
-| The warden (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. With the data from an advice string within the caps and `k` bits of content no proved unit fixes, `log2 #schedules + Σ_c log2(cells_c + 1) + Σ_w b_w + k` bits for the run | `SecurityProofs.WardenViewEqClientView`, `SecurityProofs.EncardWardenViewsLe`; for a decoder of the client's view, under `trusted-nebius-host` and `BitsCount`, `SecurityProofs.EncardWardenDecodableLe` |
+| The warden (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. With the data from an advice string within the caps and `k` bits of content no proved unit fixes, `log2 #schedules + Σ_c log2(cells_c + 1) + Σ_w b_w + k` bits for the run | `SecurityProofs.WardenViewEqClientView`, `SecurityProofs.EncardWardenViewsLe`; for a decoder of the client's view, under `trusted-host` and `BitsCount`, `SecurityProofs.EncardWardenDecodableLe` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
@@ -1417,7 +1417,7 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Models/NetworkCertifier/Guarantees.lean`'s documentation.
+the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation.
 
 ## Advice for arbitrary serving: what it can carry
 
@@ -1431,7 +1431,7 @@ ingress counts and the advice. The advice's length is the leak, charged as `A_c`
 
 This section is that claim's red team, written as its parts are drafted: the advice codec (`advice.py`, with `encode`,
 `decode` and `bits`), N2's advice mode (`advised`), the I/O tie unit (`io_tie`) and the compiler
-(`verity_vllm.predict.compile_steps`). Nothing in it is proved. It gives the argument, every assumption the argument
+(`verity_vllm.program.predict.compile_steps`). Nothing in it is proved. It gives the argument, every assumption the argument
 rests on, what each attack costs under the design as drafted, the adversarial cases each part's tests must carry, and
 what the drafts do with them.
 
@@ -1493,7 +1493,7 @@ Each assumption, and what breaks without it:
   digest before the run. It reads nothing the prover chooses later.
   - The row's pin and the device pin (`predict.compiled`'s kernel configurations, autotune winners, cuBLAS routes and
     fused-MoE configurations) are registered items. The prover chooses them before the run, so they cost their size
-    once, like a hidden profile list (`Security/Models/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
+    once, like a hidden profile list (`Security/Definitions/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
     auditor fixes them from a reference device of its own.
   - The circuits are the exact silicon semantics. There is no tolerance: a band of t accepted values on a checked value
     frees log2 t bits there. No input names a reduction order, an atomic's interleaving or an autotune choice.
@@ -1538,7 +1538,7 @@ Each assumption, and what breaks without it:
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
     the syncs. A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-nebius-host`, W1 to W6 and J (D = 1
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
@@ -2091,20 +2091,10 @@ them.
     vLLM's stream text).
     - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
       q + 1.
-    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, and the
-      certifier commits whatever ids and finish the server writes: one of three states (none, `length`, `stop`) at
-      each response's end, where an id event marks the end out of band. A stop carries the EOS id the model sampled,
-      so where a response stops can be checked as an id event's can. The rehearsal's certified I/O
-      (`certifier_serve.certified_io`) refuses a mark before a response's last record, a stop on an id that isn't
-      one of the model's EOS ids, an EOS id in any record but the stop, and `COMPACT_LAST` alone short of
-      `max_tokens`. Like an EOS id event, a stop on an EOS id that the model didn't sample there passes it, so the
-      check that refuses a wrong length or finish is the I/O tie's, required of compact framing, against the Commit's
-      sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each carries its
-      sampled id, the response is as long as the Commit's, and it stops only where the Commit sampled EOS
-      (`compact_finish_violations`). IO-TIE's egress tie holds each compact cell's token field to this rule as well
-      as to its id. Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io`
-      accepted it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the
-      model never sampled; that field is now a stop on id 2^30 − 1, which isn't EOS.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, which the
+      certifier commits whatever they say. The certified I/O and the I/O tie hold each response's length and finish
+      to the Commit's sampled ids, a client's abort only where the Commit says so
+      ([protocol/compact-finish.md](protocol/compact-finish.md)).
     - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
@@ -2233,7 +2223,7 @@ them.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
-    challenger's coins (D7, `Security/Models/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
+    challenger's coins (D7, `Security/Definitions/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
     openings on a coin link, and doesn't name the certifier's salt yet.
 - **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and
   verdict is as above.
@@ -2328,7 +2318,7 @@ sealed under an AEAD built from SHA-512 alone.
   - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
     prover's configuration.
   - They are protocol keys, which seal frames, not access keys.
-  - Their custody joins `trusted-nebius-host`, which now also covers each pair's secret on its two hosts and the
+  - Their custody joins `trusted-host`, which now also covers each pair's secret on its two hosts and the
     deployment channel that installs it.
   - A leaked S opens that pair's link for that session. It changes no record and no verdict: the account only loses
     the premise below, and the link is charged as an unsealed one.
@@ -2357,7 +2347,7 @@ sealed under an AEAD built from SHA-512 alone.
     value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
     bits per window.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
-    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
+    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
   - **What it changes:** A1's units are then the facility, not each block.
 - **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on a CPU node: an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
