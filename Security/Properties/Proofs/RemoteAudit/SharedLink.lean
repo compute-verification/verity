@@ -255,7 +255,10 @@ theorem acc_sclose {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s' 
       split at h
       · rename_i hE
         right
-        first | exact congrArg some (Array.isEmpty_iff.1 hE) | simpa using hE
+        first
+          | exact congrArg some (Array.isEmpty_iff.1 hE)
+          | exact Array.isEmpty_iff.1 hE
+          | simpa using hE
       · left
         rwa [finalize_verdict] at h
     · left
@@ -342,7 +345,7 @@ theorem passesBefore_congr (s s' : State) (first u : Nat)
   congr 1
   apply List.map_congr_left
   intro j hj
-  rw [h j (List.mem_range.1 hj)]
+  exact congrArg Array.size (h j (List.mem_range.1 hj))
 
 theorem fold_plans {g : Nat} (s : State) (t : Int) (d : Array (Nat × Nat)) (now v : Nat) :
     (((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1)[v]!.plans =
