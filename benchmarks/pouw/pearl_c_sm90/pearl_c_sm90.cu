@@ -89,10 +89,8 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
 // a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
 // before it touches global memory, then lets the next launch start behind this one; both are no-ops in a plain launch
 DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
-// run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait, and
-// PDL_PD_KERNELS (widen_a, pd_commit) only from one with pdl_pd_waits (PDL_PD_MARK), whose widen_a and pd_commit wait too
+// run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait
 extern "C" __global__ void pdl_waits() {}
-extern "C" __global__ void pdl_pd_waits() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -709,7 +707,6 @@ extern "C" __global__ void widen_bf16(const Args a) {
   if (g < (size_t)a.i[0] * a.i[1] / 8) widen8(reinterpret_cast<const uint4*>(a.p[0]), reinterpret_cast<uint4*>(a.p[2]), g);
 }
 extern "C" __global__ void widen_a(const Args a) {
-  pdl_entry();
   const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x, real = (size_t)a.i[0] * a.i[1] / 8;
   uint4* out = reinterpret_cast<uint4*>(a.p[2]);
   if (g < real)

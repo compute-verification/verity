@@ -37,8 +37,8 @@
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
 // builds the served variants (its PD_VARIANT_LIST); run.py's Pipeline launches them at decode (`PD_SERVED`).  A build that
-// defines PD_PDL (pearl_c_sm90.cu) has pd_commit wait at its entry for the launch before it (a no-op unless it was launched
-// programmatically), then let a programmatic next launch on its stream start, which waits at its entry for pd_commit.
+// defines PD_PDL (pearl_c_sm90.cu) has pd_commit let a programmatic next launch on its stream start at once, which waits at
+// its entry for pd_commit to complete.
 #pragma once
 #include "../pearl_c/hash_h3.cuh"
 #include "hash_fast.cuh"
@@ -863,8 +863,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
   static_assert(!LATE || PAIR, "PD_LATE's helpers are warps 1-3, which PD_PAIR's 2 cw + 2 warps always have");
   static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
 #ifdef PD_PDL
-  // launched programmatically, it waits for the launch before it; a programmatic next launch waits for this one at its entry
-  asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory");
+  asm volatile("griddepcontrol.launch_dependents;" ::: "memory");   // a programmatic next launch waits for this one at its entry
 #endif
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, sw = PAIR ? 2 * cw : cw;
   const int c1 = cw >= 2 ? 1 : 2, p1 = cw >= 2 ? cw + 1 : 3;
