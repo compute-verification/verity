@@ -7,7 +7,8 @@ advice that is not a schedule, its unit
 composes into C-Flock's unit statement, a tampering loop's outputs are not its Definition's, and it loads no vLLM. With
 registered weights its record leaves half its input bits free, every unit's weight rows open the pinned root at the rows
 the verifier derives from the record (Lean's registered reads, mirrored on the host), and other weights served under the
-registered salts open none."""
+registered salts open none. Its activation rows are committed per window, each the rows its units recorded, under domains
+binding the run root, named in the registration (so fixed before the draw) and taking nothing from the free inputs."""
 from __future__ import annotations
 
 import hashlib
@@ -215,6 +216,46 @@ def test_a_tampering_loop_with_registered_weights_is_still_its_definitions_refus
     mine, doc = IF.of_records(tmp_path, D.parse_law("subset:2"), IF.resolve)
     files = IF.registered_reads(doc, mine, L.held_pin(L.pin(L.Model(), WEIGHTS)), registered=REG)
     assert opened_reads(c, 0, written["members"][0]["registered"], files[mine.members[0].key]) is None
+
+
+def test_its_activations_are_the_units_rows_committed_under_the_run_and_take_nothing_from_the_free_inputs():
+    loop, win = served()
+    with pytest.raises(ValueError, match="has not served"):
+        L.TorchLoop(L.Model(), [3]).commit_activations()
+    acts = loop.commit_activations()
+    tid, h, calls = descriptor_id(L.template(L.H)), L.H, 2 * 2 * 2
+    recorded = win._recorded[tid]
+    assert [len(recorded)] * 2 == [acts[v].leaves for v in L.ACTIVATIONS] == [calls] * 2
+    for g, v in enumerate(L.ACTIVATIONS):
+        assert all(b.n == h and (b.words[g] == b.words[g][0]).all() and tuple(b.words[g][0]) == acts[v].rows[i]
+                   for i, b in enumerate(recorded))
+        r = acts[v]
+        assert r.words == dict(IF.layout(L.template(h)).rows)[v] and r.window == loop.run_root
+        assert r.domain.domain_id == REG.domain(L.Model().name, v, r.words, calls, window=loop.run_root).domain_id
+        assert all(REG.verify_read(r.domain, r.root, i, r.bcs[i], r.path(i), REG.SCHEMA_V2) for i in range(calls))
+    other = L.TorchLoop(L.Model(), [3, 7], steps=2, run_id="other")
+    other.window(LAW, cap=16)
+    theirs = other.commit_activations()
+    assert all(theirs[v].rows == acts[v].rows and theirs[v].domain.domain_id != acts[v].domain.domain_id for v in L.ACTIVATIONS)
+    n = IF.input_count(win.circuit_record())
+    assert n["free"] == n["inputs"] == 2_162_688
+
+
+def test_serving_names_its_activations_in_the_registration_and_keeps_their_salts_private(tmp_path, capsys):
+    shape = ["--law", "subset:2", "--requests", "3", "--steps", "1", "--cap", "32"]
+    assert S.main(["--out", str(tmp_path), *shape]) == 0
+    got = json.loads(capsys.readouterr().out)
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    acts = rec["window"]["activations"]
+    assert acts["program"] == L.Model().name and {v: e["root"] for v, e in acts["values"].items()} == got["activations"]
+    assert [acts["values"][v]["leaves"] for v in L.ACTIVATIONS] == [2, 2] and R.digest(rec) == got["registration"]
+    private = tmp_path / S.ACTIVATIONS_PRIVATE
+    opening = json.loads(private.read_text())
+    assert private.stat().st_mode & 0o077 == 0 and opening["window"] == got["run"] == rec["window"]["run"]
+    assert all(len(opening["salts"][v]) == 2 for v in L.ACTIVATIONS)
+    w = IF.of_records(tmp_path, D.parse_law("subset:2"), IF.resolve)[0]
+    layer = CS.leaf_layer({m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(w.members)})
+    assert R.check(rec, w.program, w.query, w.law, CS.SCHEME, CS.expected_ports(w), leaf_layer=layer).ok
 
 
 def test_the_weights_pin_names_the_role_and_its_domains_are_their_programs(tmp_path, capsys):

@@ -23,6 +23,13 @@
   ``tamper_weights``: a loop that serves another model's weights (bit 0 of every weight code row's first word flipped)
   under the registered value's salts, its outputs its own weights' (so its Definition holds), which Lean's registered
   reads must refuse: the rows open no pinned root.
+* **Committed activations** (`TorchLoop.commit_activations`, CMP-91): each window's activation rows, ``x`` (every linear's
+  s8 input row, ``H / 2`` words) and ``sx`` (its f32 scale, 2 words), one row a (request, step, layer) in unit order (unit
+  u's rows are row ``u // H``), committed as core's registered values in ``hm96-sha512/row/v2`` under fresh salts, each
+  domain binding the window's run root, so a window's rows open under no other window's domain. Their entries go in the
+  registration's window (`activations`), which the draw comes after, so they are fixed before the window's draw coin;
+  their salts are the prover's (`activations_opening`). The circuit declares no read of them: they are per-window values
+  the prover chose, so they take no input bit out of the free count (only a pinned value does).
 """
 from __future__ import annotations
 
@@ -51,6 +58,9 @@ PIN = "verity-torch-loop/weights-pin/v1"
 OPENING = "verity-torch-loop/weights-opening/v1"
 #: the registered values, each by the template port that reads it
 WEIGHTS = (("w", "wrow"), ("sw", "sw"))
+#: the committed activations, each the template port whose rows it holds
+ACTIVATIONS = ("x", "sx")
+ACTIVATIONS_OPENING = "verity-torch-loop/activations-opening/v1"
 
 
 def template(k: int):
@@ -146,6 +156,18 @@ def held_pin(doc: dict) -> dict[str, dict]:
     return dict(doc["values"])
 
 
+def activations(model: Model, values: dict[str, REG.Registered]) -> dict:
+    """What the registration's window names of a run's committed activations: their program and each value's entry."""
+    return {"program": model.name, "values": {v: r.entry() for v, r in values.items()}}
+
+
+def activations_opening(model: Model, values: dict[str, REG.Registered]) -> dict:
+    """The prover's private file of a run's committed activations: their window and each row's salt."""
+    window, = {r.window for r in values.values()}
+    return {"format": ACTIVATIONS_OPENING, "program": model.name, "window": window,
+            "salts": {v: [s.hex() for s in r.salts] for v, r in values.items()}}
+
+
 def bits(t: torch.Tensor) -> np.ndarray:
     """A tensor's elements as unsigned integers of their width (`evaluate_batch`'s convention)."""
     if t.dtype == torch.bfloat16:
@@ -163,6 +185,7 @@ class TorchLoop:
         self.model, self.requests, self.steps, self.tamper, self.run_id = model, list(requests), steps, tamper, run_id
         self.registered, self.tamper_weights = registered, tamper_weights
         self.outputs: dict[tuple[int, int], torch.Tensor] = {}
+        self.activations: dict[str, list[np.ndarray]] = {v: [] for v in ACTIVATIONS}
 
     @property
     def units(self) -> int:
@@ -194,6 +217,7 @@ class TorchLoop:
         if self.tamper_weights:
             w = torch.from_numpy(self.model.weights(tamper=True)["w"].view(np.int8).reshape(2, h, h).copy())
             layers = [Layer(w[k], lin.sw) for k, lin in enumerate(layers)]
+        self.activations = {v: [] for v in ACTIVATIONS}
         for r, tok in enumerate(self.requests):
             x = self.model.embed[tok][None, :]
             for step in range(self.steps):
@@ -205,8 +229,19 @@ class TorchLoop:
                         out = out ^ np.uint16(1)
                     window.record(coord, [np.repeat(bits(xq), h, 0), np.repeat(bits(sx), h), bits(lin.wq), bits(lin.sw)], [out],
                                   {"request": f"r{r}", "step": step, "layer": layer, "op": self.model.op_path(layer)})
+                    self.activations["x"].append(IF.words(bits(xq), 8, 1, h // 2)[0])
+                    self.activations["sx"].append(IF.words(bits(sx), 32, 1, 2)[0])
                     x = torch.relu(y.to(torch.float32)) if layer == 0 else y.to(torch.float32)
                 self.outputs[r, step] = x
+
+    def commit_activations(self, salts: dict[str, list[bytes]] | None = None) -> dict[str, REG.Registered]:
+        """The run's activation rows committed as per-window values (module docstring), fresh salts unless ``salts`` (by
+        value); refused before the loop has served."""
+        if not self.activations["x"]:
+            raise ValueError("the loop has not served: its activations are committed after its run, before its registration")
+        return {v: REG.Registered.commit(self.model.name, v, np.stack(rows).tolist(), (salts or {}).get(v),
+                                         schema=REG.SCHEMA_V2, window=self.run_root)
+                for v, rows in self.activations.items()}
 
     def window(self, law: dict, cap: int = 16, advice: dict | None = None,
                weights: dict[str, REG.Registered] | None = None) -> IF.Window:
