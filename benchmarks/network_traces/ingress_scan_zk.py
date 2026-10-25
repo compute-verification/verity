@@ -24,10 +24,10 @@ warden run's ingress record, each one unit, proved by C-Flock `prove --zk` behin
   each unit's ``o0`` under the salt the prover sends: 1 on the honest buckets, 0 on the negatives.
 * **Standalone**: the rows are committed under fresh salts, not yet registered reads (the warden's signed row, the
   scan's own state rows); the scan's state chain is the reference's here.
-* **What the verifier receives** is scanned for every piece of every unit's three rows and every salt (`a8.received`)
-  less the pieces the public circuit holds, the pads (`warden.cell(PAD, q)`, fixed by the ordinal) and the sparse ones
-  (at most one nonzero byte: a small integer in a zero field, which a proof's encoding holds whatever the witness); the
-  prover's instance file, which holds them, is the control.
+* **What the verifier receives** is scanned for every piece of every unit's three rows and every salt but ``o0``'s,
+  which it is sent (`a8.received`), less the pieces the public circuit holds, the pads (`warden.cell(PAD, q)`, fixed
+  by the ordinal) and the sparse ones (at most one nonzero byte: a small integer in a zero field, which a proof's
+  encoding holds whatever the witness); the prover's instance file, which holds them, is the control.
 """
 from __future__ import annotations
 
@@ -332,9 +332,10 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], out: Path, port: int)
 
 
 def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: every unit's rows and every salt of the statement."""
+    """The witness pieces the verifier must not receive: every unit's rows and the salts of every row but ``o0``,
+    whose salts the prover sends (``openings.json``) so the verifier opens each unit's public ok bit."""
     blobs = {f"{r} {i}": w[r] for i, w in enumerate(m["words"]) for r in ROWS}
-    blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() for i, s in enumerate(ss)})
+    blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() if p != "o0" for i, s in enumerate(ss)})
     return blobs, set(blobs)
 
 
