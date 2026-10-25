@@ -26,8 +26,9 @@ bits a covert sender in the server can move through the network certifier in the
      "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
 each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-horizon `k`), each network certifier connection's cell cap over the period (`cap_c`), the session's window the period
-starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many periods),
+monitoring period `k`), each network certifier connection's cell cap over the period (`cap_c`), the session's window
+the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
+periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
 (32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
@@ -156,7 +157,7 @@ def failReasons : List String := ["late", "limit", "upstream", "ingress", "malfo
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
 
-/-- A compute audit's layout terms: its free inputs it doesn't register, and its horizon. -/
+/-- A compute audit's layout terms: its free inputs it doesn't register, and its monitoring period. -/
 structure Audit where
   free : Nat
   steps : Nat

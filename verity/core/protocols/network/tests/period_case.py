@@ -58,8 +58,8 @@ UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
-ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session",
-                    "windows"]
+ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
+                    "session", "windows"]
 SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
@@ -589,7 +589,8 @@ def schedule_json(s: WardenParams) -> dict:
 
 
 def _small_schedule(r: random.Random, small: bool) -> WardenParams:
-    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if `small`)."""
+    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
+    `small`)."""
     return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                         delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8),
                         window=r.randint(1, 2 if small else 3), ingress_cells=r.randint(1, 8),
@@ -668,7 +669,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             doc, c = regs[i], regs[i]["certificate"]
             sig, dig = bytes.fromhex(c["signature"]), bytes.fromhex(c["digest"])
             if m == "reg-forged":
-                doc = r.choice([doc | {"certificate": c | {"signature": s.hex()}} for s in (_flip(sig, seed), sig[:-1], b"")]
+                doc = r.choice([doc | {"certificate": c | {"signature": s.hex()}}
+                                for s in (_flip(sig, seed), sig[:-1], b"")]
                                + [doc | {"certificate": c | {"digest": _flip(dig, seed).hex()}}]
                                + [doc | {k: r.randbytes(n).hex()} for k in ("root", "wiring") for n in (64, 63)])
             elif m == "reg-window":
@@ -737,8 +739,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "answer-profile":
                 lv = answer["profile"]["levels"][0]
                 answer["profile"]["levels"] = r.choice([
-                    [lv, lv | {"name": "token", "size": 3}], [lv | {"draw": {"bernoulli": "1/2"}}], [lv | {"draw": None}],
-                    []])
+                    [lv, lv | {"name": "token", "size": 3}], [lv | {"draw": {"bernoulli": "1/2"}}],
+                    [lv | {"draw": None}], []])
             elif m == "answer-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])
@@ -918,15 +920,17 @@ def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
                    x | {"answer": x["answer"] | {"verdict": "maybe"}}, x | {"answer": x["answer"] | {"reason": "r"}}]
     if "clock" in x:
         clock = x["clock"]
-        bad_windows += [{k: v for k, v in x.items() if k != "clock"}, x | {"clock": {"certificate": clock, "sync": [0, 1, 1]}},
-                        x | {"clock": clock | {"x": 0}}, x | {"clock": {k: v for k, v in clock.items() if k != "signature"}},
+        bad_windows += [{k: v for k, v in x.items() if k != "clock"},
+                        x | {"clock": {"certificate": clock, "sync": [0, 1, 1]}}, x | {"clock": clock | {"x": 0}},
+                        x | {"clock": {k: v for k, v in clock.items() if k != "signature"}},
                         x | {"clock": clock | {"direction": "up"}}, x | {"clock": [clock]}]
     else:
         doc = x["registrations"][0]
         lay, c = doc["layout"], doc["certificate"]
         bad_rows = [{k: v for k, v in doc.items() if k != "root"}, doc | {"x": 0}, doc | {"layout": lay | {"x": 0}},
                     doc | {"layout": {k: v for k, v in lay.items() if k != "slots"}}, doc | {"layout": [lay]},
-                    doc | {"layout": lay | {"buckets": -1}}, doc | {"certificate": {k: v for k, v in c.items() if k != "key"}},
+                    doc | {"layout": lay | {"buckets": -1}},
+                    doc | {"certificate": {k: v for k, v in c.items() if k != "key"}},
                     doc | {"certificate": c | {"signature": c["signature"] + "0"}}, doc | {"certificate": "x"},
                     doc | {"root": doc["root"][:-1]}, doc | {"root": "g" + doc["root"][1:]}, doc | {"wiring": 0},
                     doc | {"window": "0"}, doc | {"window": -1}, doc | {"cell_bytes": True}, doc | {"format": 1},
