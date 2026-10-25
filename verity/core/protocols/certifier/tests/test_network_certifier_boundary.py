@@ -166,13 +166,15 @@ def test_a_record_that_fits_only_at_the_gate_grain_is_refused():
     assert BD.refusal(doc).startswith("Layout.Fits, causal: egress bucket 0 of link 0 (unit 2) depends on ingress bucket 1")
 
 
-def test_prog_fits_is_layout_fits_on_its_three_conjuncts():
+def test_prog_fits_is_layout_fits_on_its_conjuncts():
     eg = lambda gs: (lambda t, ell, s: gs[t])  # noqa: E731
     gates = [("input", ()), ("input", ()), ("xor", (0, 1)), ("not", (3,)), ("and", (1,))]
     assert BD.prog_fits(gates, [2, 4], eg({0: (4, []), 1: (2, [])}), lambda t: [[1], [0]][t], 1, 1, 2)
     # step 0's slot reads step 1's ingress gate 0
     assert not BD.prog_fits(gates, [2, 4], eg({0: (2, []), 1: (4, [])}), lambda t: [[1], [0]][t], 1, 1, 2)
-    # reflexive: a returned input gate is step 0's presence and step 1's ingress
+    # a returned input gate as a slot gate, with no ingress, and as step 1's ingress too
+    assert not BD.prog_fits(gates, [0, 2], eg({0: (0, [])}), lambda t: [], 1, 1, 1)
+    assert not BD.prog_fits(gates, [0, 2], eg({0: (2, [0])}), lambda t: [], 1, 1, 1)
     assert not BD.prog_fits(gates, [0, 2], eg({0: (0, []), 1: (2, [])}), lambda t: [[1], [0]][t], 1, 1, 2)
     # past the horizon nothing is read
     assert BD.prog_fits(gates, [2, 4], eg({0: (2, []), 1: (4, [])}), lambda t: [[], [0]][t], 1, 1, 1)

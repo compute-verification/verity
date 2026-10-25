@@ -30,8 +30,9 @@ Oct: arrival steps and prompt lengths stay private, the certifiers' observations
 link ℓ at unit `Boundary.unit` (``reads_from`` of `warden_rows.bucket_port` is link ℓ's bucket 0).
 
 **The check** (`refusal`), by `Layout.Fits`' conjuncts over the horizon: every egress gate is one the circuit returns
-(the frame and presence rows are output rows of the egress template, and every unit's output rows are returned and
-committed); every ingress gate is an input of the circuit
+and not an input (the frame and presence rows are output rows of the egress template, every unit's output rows are
+returned and committed, and a unit's outputs are its computing gates, never a pass-through of an input:
+`verity/ml/circuits/PROTOCOL.md` §11); every ingress gate is an input of the circuit
 (the frame is a parameter row of the ingress template that no wire and no row table fills); and no egress gate of a step
 depends on an ingress gate of a later step. Dependence is taken at the record's grain: each output row of a unit depends
 on each of its input rows, a wired input row is its writer's output row (`Member.wired`), and a row table's rows are
@@ -259,12 +260,12 @@ def prog_fits(gates: Sequence[tuple[str, Sequence[int]]], outs: Sequence[int],
     """`NetTiming.Layout.Fits lay C k` itself on a flattened program `C` (`Claims.Sampling.Prog`: ``gates`` each ``(kind,
     reads)``, kind one of ``input``, ``const``, ``not``, ``and``, ``xor``; ``outs`` its returned gates) and a layout
     (``egress(t, ℓ, σ)``, a slot's presence gate and frame gates, and ``ingress(t)``): before ``k``, every slot gate is in
-    ``outs``, every ingress gate is an input, and no slot gate of a step reaches (`Depends`, reflexive) an ingress gate of
-    a later step."""
+    ``outs`` and not an input, every ingress gate is an input, and no slot gate of a step reaches (`Depends`, reflexive)
+    an ingress gate of a later step."""
     returned = set(outs)
     slot = {t: [g for ell in range(L) for s in range(S) for g in (egress(t, ell, s)[0], *egress(t, ell, s)[1])]
             for t in range(k)}
-    if any(g not in returned for t in range(k) for g in slot[t]):
+    if any(g not in returned or (0 <= g < len(gates) and gates[g][0] == "input") for t in range(k) for g in slot[t]):
         return False
     if any(not 0 <= g < len(gates) or gates[g][0] != "input" for t in range(k) for g in ingress(t)):
         return False
