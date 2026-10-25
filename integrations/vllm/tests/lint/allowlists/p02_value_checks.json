@@ -1,5 +1,4 @@
 {
   "rule": "P2 (value checks read opened values only)",
-  "entries": [
-  ]
+  "entries": []
 }
