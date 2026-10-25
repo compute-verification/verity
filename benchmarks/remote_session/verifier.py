@@ -512,16 +512,23 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
+def recorded_chip_bytes(mem: dict) -> int:
+    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `timing.CHIP_BYTES` where that is
+    larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
+    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under `timing.HOST_CHIP_BYTES`."""
+    return max(mem["chip_bytes"], timing.CHIP_BYTES)
+
+
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
     """An accepted paced session's line (`paced_line`) from its record in `verifier.json`, against its HBM and
-    `host_bytes`, with `ingress_bytes_per_s` of other routes into node memory charged, and their bursts
-    (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
+    `host_bytes`, its S_chip at least the auditor's (`recorded_chip_bytes`), with `ingress_bytes_per_s` of other routes
+    into node memory charged, and their bursts (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
     lg, mem = session["ledger"], session["ledger"]["memory"]
     b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
     return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
                       blocks=registration["blocks"],
                       rebuild_per_ns=line.number(lg["inputs"]["squarings_per_s"]) / codec.encode_squarings / line.NS,
-                      chip_bytes=mem["chip_bytes"], block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
+                      chip_bytes=recorded_chip_bytes(mem), block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
                       burst_bytes=ingress_bursts(ingress_bytes_per_s),
                       ingress_per_ns=line.number(ingress_bytes_per_s) / b / line.NS)
 
@@ -577,7 +584,8 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
     passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
     each window beside it (`record_seen`, on the clock its `windows_seen` read), against its HBM and `host_bytes`, at
-    `rates` (`recorded_rates`). Refused unless the record is of `registration`."""
+    `rates` (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`). Refused unless the
+    record is of `registration`."""
     mem, record = session["ledger"]["memory"], lean_record(session)
     if record["registration"] != registration["digest"]:
         raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
@@ -585,7 +593,7 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     return line.record_inputs_json(
         record, samples=session["samples"],
         seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
-        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=recorded_chip_bytes(mem),
         node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates)
 
 
