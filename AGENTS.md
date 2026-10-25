@@ -90,6 +90,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
   Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
+- Nothing under `verity/` imports a serving stack (`verity_vllm` or `vllm`), apart from the files `SERVING_IMPORTERS`
+  names, each with why, until the list is empty (Design rules, "A serving stack is one integration among many").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
 check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
@@ -109,8 +111,8 @@ the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
-- **Everything zero-knowledge.** Every protocol is zero-knowledge, PoUS included, with no clear mode. Only four kinds of
-  things are public, each with its reason:
+- **Everything zero-knowledge.** Every protocol is zero-knowledge, PoUS included. Only four kinds of things are public,
+  each with its reason:
   - protocol structure;
   - the protocol's outputs;
   - the verifier's coins and draws;
@@ -119,6 +121,11 @@ the standing rulings stated nowhere else.
   Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
   two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
   provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
+
+  A plain path, C-Flock without `--zk`, stays beside the zero-knowledge ones, for a deployment whose values needn't be
+  hidden (Daniel, 24 Oct). It has to work end to end, every zero-knowledge path keeps working, and tests cover both. Its
+  guarantee is soundness alone, and `flock-verify` refuses a plain session past what the plain theorem covers (one table
+  today).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
@@ -171,6 +178,16 @@ the standing rulings stated nowhere else.
 - **Soundness and zero knowledge in Lean; completeness may be Python** (Daniel, 18 Oct). What a guarantee says about a
   cheating prover, soundness and zero knowledge, is proved in Lean or rests on an auditor-trusted device. That honest
   serving passes (completeness: the Commit's gates, pre-flights, other prover-side checks) may be checked in Python.
+- **That a circuit computes what the model computes is completeness, never proved** (Daniel, 24 Oct). Whether a
+  Definition, its silicon semantics included, matches what the served model computes on its hardware decides only whether
+  honest serving passes. No guarantee rests on it (exfiltration security, infiltration security, work soundness), since
+  each is stated about the registered circuit. The developer validates it empirically: circuit-check, the hardware
+  captures, the served outputs. Nobody proves it, lists it as an assumption, or counts it as an open gap in a guarantee.
+- **A serving stack is one integration among many** (Daniel, 24 Oct). Verity meets serving at one stack-neutral
+  interface: a stack builds its workload's circuit from Verity's Definitions and silicon semantics, commits the values in
+  a `verity.ml.commitments` scheme, and closes and registers its windows with the proof service, which does the rest.
+  `integrations/vllm/` is the only implementation so far. Another stack implements the same interface without changing
+  `verity/`, and nothing under `verity/` imports an integration (the import rules, above).
 
 ## Tests
 

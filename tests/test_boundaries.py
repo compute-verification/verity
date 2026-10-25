@@ -7,8 +7,9 @@
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
-    imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;  only
-    tests name a function past a guard (``TEST_ONLY``).
+    imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
+    nothing under ``verity/`` imports a serving stack (``SERVING_IMPORTERS``);  only tests name a function past a guard
+    (``TEST_ONLY``).
 
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
@@ -137,6 +138,42 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
                                                 "deploy and Slack code in the follow-up to the platform layout move (#1450)",
+}
+#: The serving stacks' import names: the vLLM integration and vLLM itself.
+SERVING_STACKS = ("verity_vllm", "vllm")
+_DEFS = "the model Definitions in `verity_vllm.program.registry`"
+#: Nothing under ``verity/`` imports a serving stack (Daniel, 24 Oct; AGENTS.md "Design rules", "A serving stack is one
+#: integration among many"): ``verity``'s units can't (``FORBIDDEN_EXTERNAL``), and C-Flock and every suite under
+#: ``verity/`` are to read circuits and values through ``verity`` too.  The files that still import one, each with what it
+#: reads; an entry goes when what it reads moves out of ``integrations/vllm/``.
+SERVING_IMPORTERS = {
+    "ml/flock/python/verity_flock/boolean_export.py": f"lowers {_DEFS}, the query's words and the encoded program graph",
+    "ml/flock/python/verity_flock/class_statement.py": "reads the encoded program graph (`verity_vllm.pipeline.program_graph`)",
+    "ml/flock/python/verity_flock/ir_lower.py": f"lowers {_DEFS} and their kernels",
+    "ml/flock/python/verity_flock/ir_sampling.py": f"lowers the sampling Definitions of {_DEFS}",
+    "ml/flock/python/verity_flock/partition_units.py": f"partitions circuits built from {_DEFS}",
+    "ml/flock/python/verity_flock/tail.py": f"builds the tail statement from {_DEFS}",
+    "ml/flock/python/verity_flock/tail_pieces.py": f"builds the tail's pieces from {_DEFS}",
+    "ml/flock/python/verity_flock/templates/silu_mul_v2.py": f"its template is the Boolean SiLU of {_DEFS}",
+    "ml/flock/python/verity_flock/topp_word.py": f"builds the top-p word from the top-p gates of {_DEFS}",
+    "ml/flock/tests/test_boolean_export.py": f"builds its statements from {_DEFS}",
+    "ml/flock/tests/test_circuit.py": f"builds its statements from {_DEFS} and their kernels",
+    "ml/flock/tests/test_class_statement.py": f"builds its statements from {_DEFS}",
+    "ml/flock/tests/test_derive.py": f"skips without {_DEFS}",
+    "ml/flock/tests/test_flock_rows.py": f"skips without {_DEFS}",
+    "ml/flock/tests/test_ir_lowering.py": f"lowers {_DEFS}",
+    "ml/flock/tests/test_ir_sampling.py": f"lowers the sampling Definitions of {_DEFS}",
+    "ml/flock/tests/test_lean_rope.py": f"skips without {_DEFS}",
+    "ml/flock/tests/test_lean_typed_statement.py": f"skips without {_DEFS}",
+    "ml/flock/tests/test_partition_units.py": f"partitions circuits built from {_DEFS}",
+    "ml/flock/tests/test_stage_typed.py": f"skips without {_DEFS}",
+    "ml/flock/tests/test_topp_word.py": f"checks the top-p word against {_DEFS}",
+    "ml/flock/tests/test_typed_statement.py": f"skips without {_DEFS}",
+    "core/primitives/evaluate/tests/test_difftest.py": f"holds the Lean primitives to {_DEFS}",
+    "core/primitives/requirement/tests/test_requirement_difftest.py": f"holds the Lean requirement to {_DEFS}",
+    "core/primitives/requirement/tests/test_census_and_memory_map.py": "reads the vLLM integration's program builder, "
+                                                                        "query events, commit memory map and page layout",
+    "core/service/sigma/tests/test_sigma_difftest.py": f"holds the Lean sigma to {_DEFS} and the integration's replayer",
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
@@ -352,6 +389,30 @@ def test_nothing_outside_infra_imports_it() -> None:
     assert not offenders, "\n".join(offenders)
     stale = sorted(set(INFRA_IMPORTERS) - set(found))
     assert not stale, f"INFRA_IMPORTERS entries that no longer import infra/; remove them: {stale}"
+
+
+def _serving_importers() -> dict[str, list[str]]:
+    """Each file under ``verity/`` (its tests and ``SEPARATE`` trees included) that names a serving stack's module, with
+    where."""
+    out: dict[str, list[str]] = {}
+    for path in sorted(SRC.rglob("*.py")):
+        rel = path.relative_to(SRC)
+        if {".lake", "__pycache__"} & set(rel.parts) or "vllm" not in path.read_text(encoding="utf-8", errors="replace"):
+            continue
+        hits = [f"{line}: {name}" for name, line, _ in _imports(path) if name.split(".")[0] in SERVING_STACKS]
+        if hits:
+            out[rel.as_posix()] = hits
+    return out
+
+
+def test_nothing_in_verity_imports_a_serving_stack() -> None:
+    found = _serving_importers()
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in SERVING_IMPORTERS for hit in hits]
+    assert not offenders, ("a serving stack is one integration among many (AGENTS.md \"Design rules\"): read circuits and "
+                           "values through verity, moving what this reads out of integrations/, or list the file in "
+                           "SERVING_IMPORTERS with why\n" + "\n".join(offenders))
+    stale = sorted(set(SERVING_IMPORTERS) - set(found))
+    assert not stale, f"SERVING_IMPORTERS entries that no longer import a serving stack; remove them: {stale}"
 
 
 def _is_test(rel: str) -> bool:

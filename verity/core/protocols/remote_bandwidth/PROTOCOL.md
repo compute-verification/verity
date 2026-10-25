@@ -978,7 +978,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
 
 ## 8. What deployment changes, and what is open
 
-- **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
+- **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
   proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
