@@ -55,6 +55,7 @@ theorem bitsVal_eq_sum : ∀ m : List Bool,
     Flock.HmRow.bitsVal m = ∑ t : Fin m.length, if m[t.val] then 2 ^ t.val else 0
   | [] => by simp [Flock.HmRow.bitsVal]
   | b :: m => by
+    show _ = ∑ t : Fin (m.length + 1), _
     rw [Fin.sum_univ_succ]
     simp only [Flock.HmRow.bitsVal, bitsVal_eq_sum m, List.length_cons, Fin.val_zero, List.getElem_cons_zero,
       pow_zero, Fin.val_succ, List.getElem_cons_succ, Finset.mul_sum]
@@ -83,21 +84,22 @@ theorem packBits_eq_rowBytes {ℓ : ℕ} (f : Fin ℓ → Bool) (h16 : ℓ % 16 
     congr 1
     rw [← Fin.sum_congr' _ hl]
     refine Finset.sum_congr rfl fun t _ => ?_
-    have ht : 8 * j + t.val < ℓ := by have := t.isLt; simp only [Fin.coe_cast] at *; omega
-    simp only [Fin.coe_cast, List.getElem_take, List.getElem_drop, List.getElem_ofFn,
-      FlockSoundness.Discharge.Layout.BitVal.get, show 8 * j + t.val < W by omega, dite_true, padBits, ht]
+    have ht : 8 * j + t.val < ℓ := by have := t.isLt; omega
+    simp only [Fin.val_cast, List.getElem_take, List.getElem_drop, List.getElem_ofFn,
+      FlockSoundness.Discharge.Layout.BitVal.get, padBits]
+    rw [dif_pos (show 8 * j + t.val < W by omega), dif_pos ht]
 
 /-- **A deployed opening's row is `rowEncP` of its value**, at a place of `16 w` bits. -/
 theorem row_eq_rowEncP (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) :
     row place bits o = rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf place bits o W) := by
   obtain ⟨hs, hw⟩ := valOf_shaped (bits := bits) h16 hW
   unfold rowEncP
-  rw [if_pos hs, hw]
+  rw [ite_cond_eq_true _ _ (eq_true hs), hw]
   unfold row FlockLevel3.RowV2.enc
   rw [rowBits_eq, List.length_ofFn]
   congr 1
   · unfold FlockSoundness.Discharge.Hidden.rowPre
-    rw [if_pos rfl, show 16 * ((place o.pos).1 / 16) = (place o.pos).1 by omega]
+    rw [ite_cond_eq_true _ _ rfl, show 16 * ((place o.pos).1 / 16) = (place o.pos).1 by omega]
   · exact packBits_eq_rowBytes _ h16 hW
 
 /-- **A misshaped value's bytes are no deployed opening's row**: a value that isn't `RowShaped` of the place's width. -/
