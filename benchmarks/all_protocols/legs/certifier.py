@@ -384,7 +384,7 @@ def _hex(text: bytes) -> bytes | None:
 
 
 def io(rw: Mapping[str, Any], period: int, windows: Sequence[int], outputs: Mapping[tuple[str, int], bytes],
-       steps: int, h: int) -> dict:
+       steps: int) -> dict:
     """The period's certified outputs against its registered ones, request by request: request ``r`` of the period is
     the plan's request ``period · n + r``, whose egress stream in the period's link-windows carries its steps'
     outputs as hex, 2H bytes a step (``by: stream``); else, for each request, a stream there that carries them
@@ -393,12 +393,22 @@ def io(rw: Mapping[str, Any], period: int, windows: Sequence[int], outputs: Mapp
     import certifier_serve as cs
 
     setup = cs.ar.Setup(rw["calibration"])
-    got = {s: _hex(t) for s, t in certified_outputs(rw["run"], setup.egress_params.frame_bytes, windows).items()}
+    got = certified_outputs(rw["run"], setup.egress_params.frame_bytes, windows)
+    per = len({r for r, _ in outputs})
+    return match_outputs(rw["plan"]["requests"][period * per:(period + 1) * per], got, outputs, steps)
+
+
+def match_outputs(requests: Sequence[Mapping[str, Any]], got: Mapping[int, bytes],
+                  outputs: Mapping[tuple[str, int], bytes], steps: int) -> dict:
+    """`io`'s comparison: the period's plan ``requests`` in order against its registered requests ``r0, r1, …``, each
+    stream's certified text ``got`` read as hex."""
+    got = {s: _hex(t) for s, t in got.items()}
     reqs = sorted({r for r, _ in outputs}, key=lambda r: int(r.lstrip("r")))
+    if len(requests) != len(reqs):
+        raise ValueError(f"{len(requests)} plan requests for the period's {len(reqs)} registered requests")
     want = {r: b"".join(outputs[r, k] for k in range(steps)) for r in reqs}
     rows = []
-    for i, r in enumerate(reqs):
-        q = rw["plan"]["requests"][period * len(reqs) + i]
+    for q, r in zip(requests, reqs):
         by = "stream" if got.get(q["stream"]) == want[r] else \
             "content" if want[r] in got.values() else None
         rows.append({"request": r, "session": q["session"], "stream": q["stream"], "by": by,
@@ -434,7 +444,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         missing = [w for w in ws if w not in rw["windows"]]
         if missing:
             raise RuntimeError(f"{strategy}: N2 decided no link-window {missing} of period {index}")
-        row = {"windows": ws, "io": io(rw, index, ws, outputs, sess["steps"], sess["h"])}
+        row = {"windows": ws, "io": io(rw, index, ws, outputs, sess["steps"])}
         tag = "" if strategy == "honest" else "tamper."
         if strategy == "honest" and not row["io"]["equal"]:
             (out / "io.json").write_text(json.dumps(row["io"], indent=1, sort_keys=True))
@@ -458,4 +468,5 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
 
 __all__ = ["DELTAS", "PROTOCOL", "answer_of_outcome", "audit_answer", "case_of", "certified_outputs", "check", "io",
-           "layout", "leg", "loop_units", "period_windows", "registered_outputs", "requests_of", "session"]
+           "layout", "leg", "loop_units", "match_outputs", "period_windows", "registered_outputs", "requests_of",
+           "session"]
