@@ -315,11 +315,11 @@ def fixOf : String → Option String
   | "theta-width" => some "the cited value's rows, words and word bits must give the theta node's parameter"
   | _ => none
 
-/-- A refusal of `j` as JSON: `{"error": code}`, with its `message` (`fixOf`, else `NciCheck.refusalOf`'s). -/
+/-- A refusal of `j` as JSON: `{"error": code}`, with its `message` (`fixOf`, else as `NciCheck.Desc.refusal` writes it). -/
 def refusal (j : Json) (code : String) : Json :=
   match fixOf code with
   | some m => Json.mkObj [("error", Json.str code), ("message", Json.str m)]
-  | none => NciCheck.refusalOf j code
+  | none => Desc.refusal j code
 
 def check (j tr : Json) : Json :=
   match evaluate j tr with
