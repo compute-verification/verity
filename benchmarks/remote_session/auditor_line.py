@@ -371,8 +371,8 @@ def outcome(got: object) -> str:
 def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean: lv.Lean | None = None, *,
            clock: str = "record", transcript: dict | None = None) -> dict:
     """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
-    (`clock`: the record's, which holds its times, or the challenger's), from its line (`line_of_record`, the Lean's
-    with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
+    (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
+    Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
     return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
                                                       rates=V.recorded_rates(session, registration, **rates),
                                                       clock=clock, transcript=transcript), lean))

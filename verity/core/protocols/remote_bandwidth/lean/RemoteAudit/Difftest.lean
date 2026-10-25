@@ -561,8 +561,8 @@ private def seenOf (j : Json) : V Line.Seen := do
 /-- `line.record_run_json`: the line of an accepted session's record, `{"record", "samples", "seen", "per",
 "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives it,
 `summaryJ`'s), read off the record (`Line.lineOfRecordOn`), or why it has none. `clock`, if given, says whose clock
-the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or `challenger`,
-the challenger's release log's, which the record doesn't hold.
+the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or `challenger`
+(the challenger's release log's) or `replay` (a replay's at another round trip), which the record doesn't hold.
 
 With `session`, the session's transcript (`sessionFn`'s input: its registration, parameters, `not_before_ns`, events
 and coins), the line is of the record `Session.run` makes of it (`Line.lineOfRun`, `LineHeld`'s `lineOf`, its run
@@ -572,8 +572,8 @@ run's (`summaryJ`'s form). -/
 def lineRecordFn (j : Json) : V Json := do
   let onRecord ← if !J.has j "clock" then pure true else match ← J.str j "clock" "input" with
     | "record" => pure true
-    | "challenger" => pure false
-    | c => throw s!"clock: record or challenger, not {c}"
+    | "challenger" | "replay" => pure false
+    | c => throw s!"clock: record, challenger or replay, not {c}"
   let seen ← (← J.arr j "seen" "input").mapM seenOf
   let samples ← nat j "samples"
   let per ← nat j "per"

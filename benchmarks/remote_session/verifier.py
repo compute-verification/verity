@@ -584,8 +584,8 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
     passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
     each window beside it (`record_seen`, on the clock its `windows_seen` read: `clock` record, the verifier's, which
-    the record's times must be, or challenger), against its HBM and `host_bytes`, at `rates` (`recorded_rates`); with
-    `transcript`, the session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself.
+    the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
+    (`recorded_rates`); with `transcript`, the session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself.
     Refused unless the record is of `registration`."""
     mem, record = session["ledger"]["memory"], lean_record(session)
     if record["registration"] != registration["digest"]:

@@ -455,9 +455,10 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen]) -> tuple[lis
              for w, x in zip(ws, seen)], [(receipts(w), w["drawn"]) for w in ws])
 
 
-CLOCKS = ("record", "challenger")
+CLOCKS = ("record", "challenger", "replay")
 """Whose clock a line's times seen are on (`RemoteAudit.Line.lineOfRecordOn`): the record's own, which holds them
-(`times_off`), or the challenger's release log's, which it doesn't."""
+(`times_off`), the challenger's release log's, or a replay's at another round trip (`gate_whatif`), which it
+doesn't."""
 
 
 def last_ns(window: Mapping) -> int:
@@ -479,8 +480,8 @@ def line_of_record(record: Mapping, *, samples: int, seen: Sequence[Seen], per: 
                    chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`) and its registered
     blocks (the record's `blocks`, the registration the session ran on). On the record's `clock` the times seen are
-    held to the record's, refused after `of_summary`'s refusals where they differ (`times_off`); on the challenger's
-    they are its release log's, which the record doesn't hold."""
+    held to the record's, refused after `of_summary`'s refusals where they differ (`times_off`); on another
+    (`CLOCKS`) the record doesn't hold them."""
     groups, windows = of_summary(record, samples, seen)
     if clock == "record" and (why := times_off(record, seen)) is not None:
         raise Refused(why)
@@ -548,7 +549,7 @@ def of_record_json(j: Mapping) -> dict:
         raise Malformed("seen: not a list")
     clock = j.get("clock", "record")
     if clock not in CLOCKS:
-        raise Malformed(f"clock: record or challenger, not {clock}")
+        raise Malformed(f"clock: record, challenger or replay, not {clock}")
     try:
         delta = pooled.of_json({"windows": [], "delta": _field(j, "delta")})[1]
     except pooled.Malformed as e:
