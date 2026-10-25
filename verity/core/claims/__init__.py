@@ -119,7 +119,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Models/Accounting/Guarantees/Bandwidth.lean): the
+    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Definitions/Accounting/Guarantees/Bandwidth.lean): the
     # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
     # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
     # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
@@ -151,7 +151,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("bandwidth-instantiation", "assumption",
           "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
           "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
-    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Models/Accounting/Guarantees/RateAudit.lean): the
+    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Definitions/Accounting/Guarantees/RateAudit.lean): the
     # bandwidth device with a certified stream on its side link and rebuilds paid in compute
     Entry("rate-device", "model",
           "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
@@ -167,7 +167,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
     # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
     # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
-    # (Security/Models/Accounting/Assumptions/RateAudit.lean)
+    # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
           "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
@@ -193,7 +193,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
     # a live coin drawn after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
-    # (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # (Security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
     # encoding, and each coin keys a block apart (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
@@ -212,7 +212,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
           "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
@@ -281,9 +281,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # EPS1's tensor–scalar model (Security/Models/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
-    # (Security/Models/Accounting/Assumptions/Stages.lean)
+    # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
           "Measured facets are ceilings for the stated device on the measured vector its statement names (sm_120 RTX "
           "PRO 6000: VF3s-16, the measured headline's (I1)): on every run the counts and cycles are nonnegative and the "
@@ -325,7 +325,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
@@ -483,7 +483,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Models/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
