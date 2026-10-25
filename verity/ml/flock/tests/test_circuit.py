@@ -200,6 +200,18 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"nope": reg["cs"]}, **shared)
 
 
+def test_registered_reads_refuse_a_circuit_naming_a_port_twice():
+    """A registered read names its port by name, so with registered reads the writer refuses a circuit naming a port twice,
+    as the Lean verifier does (`Registered.namesOnce`); `test_lean_registered_bit_rows.py` holds the two to one case."""
+    from types import SimpleNamespace
+
+    meta = {"ports": [["x", 4, 0], ["x", 4, 0]], "input_ports": 2, "out_ports": []}
+    tables = {"x": np.zeros((1, 4), np.uint16)}
+    with pytest.raises(ValueError, match="the circuit names port x twice, and a registered read names one port"):
+        FC.write("", SimpleNamespace(subcircuit=None), 0, 1, None, None, meta=meta, outs={}, share_rows=True, tables=tables,
+                 refs={"x": [0]}, salts={}, registered={"x": {"value": "v", "positions": [0], "paths": ["00" * 64]}})
+
+
 @pytest.mark.slow
 def test_the_header_carries_an_rfc8785_identifier(tmp_path):
     """The header's identifier (PROTOCOL.md §16.10) is both files' as given; anything but a JSON object on which canonical
