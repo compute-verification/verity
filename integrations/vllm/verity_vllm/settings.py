@@ -11,8 +11,9 @@ setting can change:
 Read a setting as an attribute, ``settings.VERITY_WINDOW_MB`` (or `get` by name): its value parsed from the process environment
 at that read, never cached, or its default when the variable is unset or empty (`Setting.empty` keeps an empty string).  An
 undeclared name is an AttributeError.  A string that doesn't parse is a ValueError naming the variable.  A flag (`flag`)
-reads ``1``/``true``/``yes``/``on`` and ``0``/``false``/``no``/``off``, in any case, and refuses anything else.  `put` and
-`unset` write a declared variable, for the processes this one starts.
+reads ``1``/``true``/``yes``/``on`` and ``0``/``false``/``no``/``off``, in any case, and refuses anything else.  `put`,
+`setdefault` and `unset` write a declared variable, for the processes this one starts and the libraries it loads.  `environ` is a
+copy of the whole environment, for code that passes it on.
 
 `validate_environ` refuses a ``VERITY_*`` variable that neither this registry nor the rest of the tree reads (`ELSEWHERE`), naming
 it: ``verity-vllm`` runs it at startup, so a misspelt or retired setting fails the run instead of being ignored.
@@ -57,6 +58,11 @@ def stripped(raw: str) -> str:
 
 def lowered(raw: str) -> str:
     return raw.strip().lower()
+
+
+def not_zero(raw: str) -> bool:
+    """On unless the stripped string is ``0`` (an A/B switch that reads ``false`` as on)."""
+    return raw.strip() != "0"
 
 
 @dataclass(frozen=True)
@@ -134,7 +140,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
     S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
-    S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic"),
+    S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
+      "empty is refused", empty=True),
     # ---- Build, Match and the row (pipeline/, check/, query/)
     S("VERITY_CAMPAIGN", str, "r15", VALUE, "the campaign label the TP Match record carries"),
     S("VERITY_CORE", str, None, WHERE, "the core tree a row's stages import (the row sets it)"),
@@ -155,6 +162,19 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
     S("VERITY_WORD_CHECK", str, None, VALUE, "the strict word check's widths, X/W"),
+    S("MATCH_IMPL", str, None, VALUE, "the global match's checker, fast or record (the audit); unset, `global_match`'s default, fast, "
+      "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
+    S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request legs; empty, min(cpu_count, 8)"),
+    S("MATCH_COMPACT", not_zero, True, VALUE, "the match holds operands as run progressions; 0, as runs (the representation's A/B)"),
+    S("X09_PROFILE_OUT", str, None, DEBUG, "the file X-09's decomposition writes its phase profile to; unset or blank, no profile"),
+    S("X09_FORCE_DAG", str, None, VALUE, "1 runs X-09's DAG diagnostic even when the sequence criterion held, adding its fields to "
+      "the record (diagnostic only, never on a row of record)"),
+    # ---- the hot Commit worker (pipeline/hot.py) and the native builds it keys on
+    S("HOT_RELEASING_MARKER", str, "/workspace/cp/RELEASING", WHERE, "the marker pod_release.sh holds while it ships a release"),
+    S("HOT_RELEASE_JSON", str, "/workspace/cp/RELEASE.json", WHERE, "the release (tag, commit) of the tree on the pod"),
+    S("RELEASING_STALE_S", float, 900.0, WHERE, "seconds after which a release marker nobody refreshed is stale"),
+    S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
+    S("HIDDEN_GPU_BUILD", str, None, WHERE, "the directory of the hidden-GPU committer's builds"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),
     S("VERITY_NUMERICS_BUILD_DIR", str, None, WHERE, "where the numerics' JIT-built libraries live"),
@@ -163,8 +183,12 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_RELEASE_TAG", str, None, WHERE, "the release a compiled Commit logs"),
     S("VERITY_TREE_COMMIT", str, None, WHERE, "the commit of VERITY_TREE a compiled Commit logs"),
     # ---- other programs' variables the library reads
+    S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build sets its own default"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
+    S("HF_HOME", str, None, WHERE, "Hugging Face's cache root; unset, ~/.cache/huggingface"),
+    S("MAX_JOBS", str, None, VALUE, "parallel compile jobs of torch's extension builds; a tap build sets its own default"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
+    S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
 )
 del S
 
@@ -239,6 +263,18 @@ def put(name: str, value: str) -> None:
 def unset(name: str) -> None:
     setting(name)
     os.environ.pop(name, None)
+
+
+def setdefault(name: str, value: str) -> str:
+    """Set a declared variable unless the environment holds it (empty included), as ``os.environ.setdefault``; its string."""
+    setting(name)
+    return os.environ.setdefault(name, value)
+
+
+def environ() -> dict[str, str]:
+    """A copy of the whole process environment, to pass on: a child process's environment, or an identity that keys on it.  Read
+    one variable through its declaration instead."""
+    return dict(os.environ)
 
 
 def __getattr__(name: str) -> Any:
