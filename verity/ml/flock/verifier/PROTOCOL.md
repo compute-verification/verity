@@ -1677,9 +1677,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
    than 65536`;
 5. no public input ports: `public input ports (--public-inputs)`;
-6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
-   own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
-   table row): `a shared-row public file (header shared_rows)`;
+6. no shared-row public file, except at a statement with hidden outputs and `hm96-sha512/v1` leaves whose verifier holds
+   its own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
+   table row), with or without `--zk` (plain leaves stay refused): `a shared-row public file (header shared_rows)`;
 7. wherever the wires feed the unit or the outputs (the unit reads more than one input group, or a tail stage returns
    the outputs: `ProvedScope.wiresFeed`), an order of the wires that fills every slot's input ports from the leaves, each
    slot reading only port bits among its inputs (`ProvedScope.wiresAcyclic`): `a slot no order of the wires computes from
@@ -1710,10 +1710,13 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
-design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
-design, with or without `--zk`, and under `--zk` by the subset one (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is
-`refused: <why>: no soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`,
-`a work draw with a closure` and `a subset draw without --zk`. A session without a draw is refused too, since every
+design (`Flock.ProvedScope.drawLaw`, by the one rule `Flock.ProvedScope.lawWhy`), whatever flags the verifier holds:
+the claims draw by the stratified sampling design, with or without `--zk`, and by the subset one under `--zk`
+(`FailClosed.SoundZJ`, `SoundZHJ`) and, at one table, at a statement with hidden outputs without it
+(`FailClosed.SoundExecH`, the plain hidden-output claim, which takes its sampling design as a parameter,
+`DrawDesign`: the stratified design or the subset one; rule 4 keeps a plain session to one table). The verdict is `refused: <why>: no soundness claim draws by this law`,
+`<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and `a subset draw without --zk` (at a
+statement with public outputs only). A session without a draw is refused too, since every
 claim is about a drawn session (each claim's record hypothesis reads the record's draw): it is verified against the
 population's statement, and its verdict is
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every check has
@@ -1746,9 +1749,10 @@ the wires don't feed passes `scopeOkH`, and the headlines at the unit's program 
 passed `wiresAcyclic`, and the headlines at the template instance's program (`instProg`, `FailClosed.Inst`) cover it. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
-`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose
-rows read no `pub.tables = none` and so cover rule 6's shared-row exception), and elsewhere `--registered F` accepts no
-more than the verifier does without it. The live server refuses the same statements with the same reason
+`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`; without
+`--zk`, `--registered F` at hidden outputs, `FailClosed.SoundExecHR` over `VerifiesR`, the hidden headline with every
+drawn unit's registered reads checked; both on rows that read no `pub.tables = none` and so cover rule 6's shared-row
+exception), and elsewhere `--registered F` accepts no more than the verifier does without it. The live server refuses the same statements with the same reason
 (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise. Its rule 6 reads the registered reads off the public header
 (`registered`): the Lean verifier holds `--registered F` exactly when the header names them, refusing either without the
@@ -1860,7 +1864,7 @@ expectation):
   in `vectors.json` expects that refusal of each session that upstream accepts, and of every other session its own reason
   (`agree.py --lean-refuses`): a session refused for its form alone passed every check, and is compared as accepted. So,
   too, a draw by a sampling design no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a
-  closure, and a subset draw without `--zk`), which the Lean verifier alone refuses, at setup (the live server and
+  closure, and a subset draw without `--zk` at a statement with public outputs), which the Lean verifier alone refuses, at setup (the live server and
   upstream verify it): a set marked `lean_refuses_drawn` expects that refusal of every drawn session
   (`agree.py --lean-refuses-drawn`). `verity/ml/flock/tests/test_lean_draw_laws.py` runs each sampling design on the
   Lean verifier. So, too, a session without a draw (§16.15), which the Lean verifier alone refuses, and only once every

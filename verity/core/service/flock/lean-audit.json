@@ -34,6 +34,7 @@
   "Flock.Test.SpillRows",
   "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
+  "Flock.Test.PlainShared",
   "Flock.Test.Wires",
   "Flock.Test.TableCap",
   "Flock.Test.ProofCanon",
@@ -56,6 +57,7 @@
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
+  "Flock.Test.PlainHidden",
   "VStar"
  ],
  "exempt": {
