@@ -53,8 +53,8 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
 ~~~
 
 - **The edit loop is `verity lean try FILE`** (FILE from the repository's root). It ships your checkout, uncommitted
-  edits and new files included, through `research run` (default vy-nebius-cpu-1's `warm` pool; `--on NODE [--pool P]`
-  for another node with `build` Lean slots), takes a `build` slot's tree there, the one `--records` keeps warm, builds
+  edits and new files included, through `research run` (default vy-nebius-cpu-1's `research` pool; `--on NODE [--pool P]`
+  for another node with `build` Lean slots, e.g. `--on vy-nebius-cpu-5 --pool proofs`), takes a `build` slot's tree there, the one `--records` keeps warm, builds
   only what changed among FILE's imports, runs `lake env lean FILE`, and prints Lean's output and the wall time, exiting
   with lean's status. It never writes a record. After editing a file others import, try the importer: its imports'
   build rebuilds the edited file.

@@ -7,7 +7,7 @@
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity lean try FILE [--on NODE] [--pool P]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
-                                    print Lean's output: the edit loop (default vy-nebius-cpu-1, pool warm)
+                                    print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 #: where `verity lean try` runs when --on names no node, and that node's pool for it
-TRY_NODE, TRY_POOL = "vy-nebius-cpu-1", "warm"
+TRY_NODE, TRY_POOL = "vy-nebius-cpu-1", "research"
 #: `research run --on`'s line naming the run it started (or refused)
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on ", re.M)
 
