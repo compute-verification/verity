@@ -72,7 +72,9 @@ window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, w
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
 and \(s'_t\), which follow the prover's play: \(|L_t|\), the most receipts a window of the session can have, is its
 pass cap (the pace's \(k\), unpaced `STEP_LIMIT` − 1) times its extent (\(N\), or the codec's `max_blocks` when the
-session reserves append coins), and \(s_t = \min(s, |L_t|)\). It takes the chance that the two runs' roots differ as
+session reserves append coins), and \(s_t = \min(s, |L_t|)\). Drawn \(g > 1\) windows a coin (`groups_per_coin`), its
+\(t\) is a draw: \(\lceil W/g \rceil\) of them, each with at most \(g\) times a window's \(|L_t|\) receipts and the
+cap \(s\) over them together. It takes the chance that the two runs' roots differ as
 0, which the deployed protocol doesn't yet ensure (the gap `binding-split`, §8). The windows' PRF advantages are the draw's fourth term: named with their claim
 (`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the hiding and binding terms
 beside its \(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,

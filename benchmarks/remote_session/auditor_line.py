@@ -515,11 +515,11 @@ def recorded_append_coins(session: dict) -> int | None:
 
 
 def recorded_binding(session: dict) -> Fraction:
-    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its
-    windows, the most receipts a window of it can have (`ledger.window_receipts`, at its pace's k, its registered
-    blocks and, when its append coins aren't recorded (`recorded_append_coins`), the codec's `max_blocks`) and its
-    draw cap `samples`, F·C the queries its sketch term (`sketch_failure`) charged; 0 for a record with no sketch
-    term, which states no C."""
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its draws
+    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a draw of it can have (g times
+    `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
+    (`recorded_append_coins`), the codec's `max_blocks`) and its draw cap `samples`, F·C the queries its sketch term
+    (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
         return Fraction(0)
@@ -528,8 +528,8 @@ def recorded_binding(session: dict) -> Fraction:
     appends = recorded_append_coins(session)
     L = ledger.window_receipts(None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), public["blocks"],
                                1 if appends is None else appends, wire.codec_named(public["codec"]).max_blocks)
-    return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), L, session["samples"],
-                                        sf.get("outside", 1) * sf["compressions"]))
+    return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), public.get("groups_per_coin", 1) * L,
+                                        session["samples"], sf.get("outside", 1) * sf["compressions"]))
 
 
 def union_error(rows: list[dict]) -> dict:
