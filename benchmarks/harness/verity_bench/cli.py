@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import breakdown, jobs, served_table
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -22,15 +22,22 @@ from verity_bench.vllm.table import render
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("spec", help="a spec under benchmarks/specs, or its path")
+    parser.add_argument("--local-only", action="store_true",
+                        help="find passing runs in this machine's catalog alone, not the store's remote")
+
+
+def _make_plan(args: Any) -> jobs.Plan:
+    root = jobs.repository_root()
+    return jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
 
 
 def _plan(args: Any) -> int:
-    print(json.dumps(jobs.plan_json(jobs.make_plan(args.spec)), indent=1, sort_keys=True))
+    print(json.dumps(jobs.plan_json(_make_plan(args)), indent=1, sort_keys=True))
     return 0
 
 
 def _check(args: Any) -> int:
-    plan = jobs.make_plan(args.spec)
+    plan = _make_plan(args)
     done = sum(item.passing_run is not None for item in plan.points)
     print(f"{plan.spec.id}: {done}/{len(plan.points)} points have a passing result")
     for item in plan.points:
@@ -39,8 +46,7 @@ def _check(args: Any) -> int:
 
 
 def _run(args: Any) -> int:
-    plan = jobs.make_plan(args.spec)
-    return jobs.dispatch(plan, args.spec)
+    return jobs.dispatch(_make_plan(args), args.spec, direct=args.direct)
 
 
 def _point(args: Any) -> int:
@@ -120,6 +126,24 @@ def _table(args: Any) -> int:
     return 0
 
 
+def _served_table(args: Any) -> int:
+    table = served_table.build(local_only=args.local_only)
+    if args.json:
+        print(json.dumps(table, indent=1, sort_keys=True))
+    else:
+        print(served_table.render(table), end="")
+    return 0
+
+
+def _breakdown(args: Any) -> int:
+    doc = breakdown.from_results(args.results) if args.results else breakdown.build(local_only=args.local_only)
+    if args.json:
+        print(json.dumps(doc, indent=1, sort_keys=True))
+    else:
+        print(breakdown.render(doc), end="")
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
     commands = parser.add_subparsers(dest="command", required=True, metavar="BACKEND")
@@ -134,6 +158,8 @@ def _parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="launch one recorded research run per incomplete point")
     _spec_argument(run)
+    run.add_argument("--direct", metavar="NODE", default=None,
+                     help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")
@@ -148,6 +174,20 @@ def _parser() -> argparse.ArgumentParser:
     table.add_argument("results", type=Path, nargs="+")
     table.add_argument("--out", type=Path, default=None, help="also write the merged result here")
     table.set_defaults(run=_table, command_parser=table)
+
+    served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's runs of record")
+    served.add_argument("--json", action="store_true", help="the rows as JSON, not markdown")
+    served.add_argument("--local-only", action="store_true",
+                        help="read this machine's catalog alone, not the store's remote")
+    served.set_defaults(run=_served_table, command_parser=served)
+
+    split = commands.add_parser("breakdown", help="where the bandwidth audit's time goes, by span, from its breakdown spec")
+    split.add_argument("results", type=Path, nargs="*",
+                       help="result files (benchmark.json) to read instead of the store's newest passing runs")
+    split.add_argument("--json", action="store_true", help="the breakdown as JSON, not markdown")
+    split.add_argument("--local-only", action="store_true",
+                       help="read this machine's catalog alone, not the store's remote")
+    split.set_defaults(run=_breakdown, command_parser=split)
 
     point = commands.add_parser("_vllm-point", help=argparse.SUPPRESS)
     point.add_argument("--spec", required=True)

@@ -14,7 +14,7 @@ import pytest
 
 import ra_cases as M
 import replay as R
-from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.remote_bandwidth import audit, wire
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -40,7 +40,7 @@ def verifier_json(r: M.Run) -> dict:
         "k": 0, "accepted": s.outcome == "accepted",
         "failure": None if v is None else {"t": v.window, "failure": v.failure, "at": None if v.at is None else list(v.at)},
         "allowance_ns": r.params.deadline_ns, "samples": r.params.samples, "window_ns": r.params.window_ns,
-        "windows": r.params.windows, "registration": reg.digest.hex(),
+        "windows": r.params.windows, "lifetime": r.params.lifetime, "registration": reg.digest.hex(),
         "pace": None if pace is None else {"k": pace.k, "t_ms": pace.window_ns / 1e6},
         "draws": {str(t): [list(d) for d in w.draws] for t, w in enumerate(s.windows) if w.draws},
         "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
@@ -81,6 +81,49 @@ def test_a_transcript_replays_to_the_definitions_verdict(server, tmp_path, name)
     row, = R.replay_transcript(path, server)
     assert row["agree"] and row["held"], row
     assert row["lean"]["outcome"] == M.SCENARIOS[name][3] == outcome
+
+
+def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tmp_path) -> None:
+    """A transcript's `verify` carries the window's frames as the wire did (`frames`), which both verifiers read as the
+    live ones do (`Wire.openingsOf`, `wire.openings_of`): every frame's openings in turn, or none once a frame doesn't
+    decode. So a window whose openings all came, beside a frame neither can read, is malformed on replay as it was
+    live; a transcript that kept the frames that decoded replayed it accepted (RD-11)."""
+    case, _ = M.recorded("honest")
+
+    def framed(extra: list[bytes]) -> dict:
+        c = copy.deepcopy(case)
+        for e in c["events"]:
+            if e["kind"] == "verify":
+                openings = [M.opening_of(o) for o in e.pop("openings")]
+                h = len(openings) // 2
+                e["frames"] = [b.hex() for b in (wire.encode_openings(openings[:h]), wire.encode_openings(openings[h:]),
+                                                  *extra)]
+        return c
+
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(framed([])))
+    row, = R.replay_transcript(path, server)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted", row
+    first = next(e["t"] for e in case["events"] if e["kind"] == "verify")
+    path.write_text(json.dumps(framed([b"\0"])))
+    row, = R.replay_transcript(path, server)
+    assert row["agree"] and row["lean"]["rejected"] == {"failure": "malformed", "window": first, "at": None}, row
+
+
+@pytest.mark.parametrize("key", ["samples", "min_passes"])
+def test_a_transcript_whose_windows_could_draw_nothing_is_refused_by_both(server, tmp_path, key) -> None:
+    """Both verifiers reject a window with no draws `malformed` whatever its frames (`Session.verify`), and no session
+    has one: with `samples` or `min_passes` at 0, the transcript, a frame neither can read beside each window's
+    openings, is refused by both before its first event."""
+    case = copy.deepcopy(M.recorded("honest")[0])
+    case["params"][key] = 0
+    for e in case["events"]:
+        if e["kind"] == "verify":
+            e["frames"] = [wire.encode_openings([M.opening_of(o) for o in e.pop("openings")]).hex(), "00"]
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(case))
+    row, = R.replay_transcript(path, server)
+    assert row["agree"] and row["held"] is False and "reject" in row["lean"] and "reject" in row["python"], row
 
 
 def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier_json_gives(server, tmp_path) -> None:
@@ -238,7 +281,7 @@ def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     assert case["params"] == {
         "deadline_ns": s["allowance_ns"], "deferred": False, "lifetime": s["record"]["public"]["lifetime"],
         "min_passes": 1, "pace": None, "samples": s["samples"], "window_ns": s["window_ns"], "windows": s["windows"]}
-    assert s["record"]["public"]["lifetime"] == audit.LIFETIME
+    assert s["record"]["public"]["lifetime"] == s["lifetime"] == audit.lifetime_windows(s["window_ns"])
     receives = [e for e in case["events"] if e["kind"] == "receive"]
     assert [e["now"] for e in receives] == [x for w in s["windows_seen"] for x in w["arrivals_ns"]]
     assert [e["step"] for e in receives] == [x for w in s["record"]["profile"]["windows"] for x in w["steps"]]

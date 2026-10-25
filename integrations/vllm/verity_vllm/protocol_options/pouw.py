@@ -20,8 +20,8 @@ layer's weight root); `commitment` is the scheme, the salt, the weights root the
 commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
-weights were served.  Pearl-C commits one pass per engine step: its option ends the pass when the model runner's
-``execute_model`` returns (`pouw_pass`), so serving needs no caller to end it.  The audit (drawing tiles, opening
+weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
+retained in its own directory under ``transcript_dir`` when given.  The audit (drawing tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
@@ -72,6 +72,7 @@ from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 from verity_vllm.protocol_options import pouw_h1_settings as PHS
+from verity_vllm.protocol_options.pouw_h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 from verity_vllm.protocol_options import pouw_h1_window as PHW
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
@@ -97,7 +98,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -180,8 +181,10 @@ class Settings:
     #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
     #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
     gate: Any = None
-    #: H1's served tables (`pouw_h1_served.Served`): each call's and the weights' registered values, under the round roots
+    #: H1's served tables (`pouw_h1_served.Served`): each call's and the weights' registered values, under the round roots;
+    #: ``graphs`` the engine's CUDA-graph capture sizes, none when eager (`pouw_h1_static.graph_pad`)
     served: Any = None
+    graphs: tuple[int, ...] = ()
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -243,7 +246,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
-        out += PHS.refusals(scheme, settings, ctx.stage)
+        out += PHS.refusals(scheme, settings, ctx.stage, ctx.filled_of(NAME))
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
@@ -252,7 +255,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
 
 def requires_build(scheme: str, ctx: Context) -> bool:
     """The circuit-backed executor is lowered into the row's Build."""
-
     return scheme in pouw_circuit.SCHEMES
 
 
@@ -714,7 +716,7 @@ def install(scheme: str, target: Target) -> Option:
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-        PP.hook_steps(h, run)
+        PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
         return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
                       end_pass=run.end_pass)
     else:
@@ -760,8 +762,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
-    declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in
-                              ((int(w), s) for w, s in committed["shapes"].items())))
+    declared = Workload(tuple(Matmul(int(w), Shape(16, k, n), int(w)) for w, (n, k) in committed["shapes"].items()))
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
@@ -780,11 +781,10 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
         salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
         draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
     source = PH.CHALLENGER if session is not None else "in-process"
-    run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps,
-                   retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
-                   commit=target.context.stage != "capture", rounds=rounds, draw=draw,
+    run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
+                   transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
                    admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served,
-                   session=session.reserved["session"] if session is not None else None)
+                   session=session.reserved["session"] if session is not None else None, graphs=settings.graphs)
     run.commits.update(weights_root=wroot.hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())

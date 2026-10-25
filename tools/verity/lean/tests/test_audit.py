@@ -29,7 +29,7 @@ def sha(s: str) -> str:
 
 #: the functions whose failures make up a report, and where in what each returns its failures are (None: all of it)
 EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
-            "assumption_records": 1, "shape": None, "spec_reads": None, "scans": None, "listings": 0, "dependency_scans": 0,
+            "assumption_records": 1, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
             "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None}
 
 
@@ -320,6 +320,95 @@ def test_layers_hold_on_direct_imports():
     assert A.judge(pol, facts(), FILES)[0] == []
     pol["layers"]["P.Model"] = {"imports": []}
     assert A.judge(pol, facts(), FILES)[0] == ["layers: P.Model matches no audited module; remove the entry"]
+
+
+def test_a_sealed_layer_answers_only_to_its_own_rule_and_is_reached_only_by_name():
+    """A sealed layer under a vocabulary prefix (an area's `Guarantees` under the area): the vocabulary's rule doesn't hold
+    its modules, and the vocabulary's own prefix doesn't admit them, so the vocabulary imports them only by listing them."""
+    thms = {"imports": ["P.Assumptions", "P.Defs"]}
+    pol = recorded() | {"layers": {"P": {"imports": ["P"]}, "P.Thms": thms}}
+    assert A.judge(pol, facts(), FILES)[0] == []
+    pol["layers"]["P.Thms"] = thms | {"sealed": True}
+    assert A.judge(pol, facts(), FILES)[0] == ["layers: P imports P.Thms, outside P's layer (P)"]
+    pol["layers"]["P"] = {"imports": ["P", "P.Thms"]}
+    assert A.judge(pol, facts(), FILES)[0] == []
+    pol["layers"]["P.Thms"] = {"imports": ["P.Defs"], "sealed": True}
+    assert A.judge(pol, facts(), FILES)[0] == ["layers: P.Thms imports P.Assumptions, outside P.Thms's layer (P.Defs)"]
+
+
+TREES = {"P.Defs": "definitions", "P.Assumptions": "definitions", "P.Props": "properties", "P.Thms": "proofs",
+         "P.Props.Proofs": "proofs"}
+AUX = [{"name": "P.aux", "module": "P.Thms", "kind": "def", "hash": "5" * 32, "own": ["P.aux.match_1"]},
+       {"name": "P.aux.match_1", "module": "P.Thms", "kind": "def", "hash": "6" * 32}]
+
+
+def test_a_module_s_tree_is_its_longest_prefix_s_and_reaches_the_packages_requiring_it(tmp_path):
+    assert [A.tree_of(TREES, m) for m in ("P.Props.Proofs.X", "P.Props.X", "P.Thms", "P.Thmsx", "Q")] == [
+        "proofs", "properties", "proofs", None, None]
+    spec, props = tmp_path / "spec", tmp_path / "props"
+    for d in (spec, props):
+        d.mkdir()
+    (spec / A.POLICY).write_text(json.dumps({"roots": ["P"], "trees": {"definitions": ["P.Defs"], "proofs": ["P.Thms"],
+                                                                       "except": {"P.Thms.Old": "the dependency's own"}}}))
+    (props / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "spec", "dir": "../spec"}]}))
+    assert A.tree_roles(props, {"trees": {"properties": ["P.Props"], "proofs": ["P.Props.Proofs"]}}) == {
+        "P.Defs": "definitions", "P.Thms": "proofs", "P.Props": "properties", "P.Props.Proofs": "proofs"}
+    assert A.tree_roles(props, {}) == {"P.Defs": "definitions", "P.Thms": "proofs"}
+    assert A.tree_failures({}, facts(), A.tree_roles(props, {})) == [], "a dependency's `except` is its own"
+
+
+def test_a_statement_reads_nothing_of_the_proofs_tree_and_the_trusted_trees_import_none_of_it():
+    """Daniel's three trees (24 Oct): a guarantee's or property's statement reads only the definitions tree and the code, and
+    no module of the definitions or properties tree imports the proofs tree; each refusal says what to move where."""
+    assert A.tree_failures({}, spec_facts(), TREES) == []
+    read = A.tree_failures({}, spec_facts(reads=fact()["reads"] + AUX), TREES)
+    assert read == [
+        "trees: P.t read P.aux in P.Thms, a module of the proofs tree (P.Props.Proofs, P.Thms): a guarantee's or property's "
+        "statement reads only the definitions tree (P.Assumptions, P.Defs), the code it is about and pinned dependencies. "
+        "Move the definitions into the definitions tree (Definitions/<Area>/), or take the statement off the lock's "
+        "guarantees: one over proof-only definitions is a lemma of the proofs tree"]
+    assert read[0].code == "trees.reads" and read[0].entry == "P.Thms"
+    assert A.tree_failures({}, spec_facts(outside=[("P.lemmaDef", "P.Props.Proofs.X")]), TREES)[0].startswith(
+        "trees: P.t read P.lemmaDef in P.Props.Proofs.X, a module of the proofs tree"), "where the walk stops too"
+    imports = facts()["imports"] | {"P.Defs": ["Init", "P.Thms"], "P.Props": ["P.Defs", "P.Props.Proofs.Y"],
+                                    "P.Props.Proofs.Y": ["P.Thms"]}
+    modules = facts()["modules"] + ["P.Props", "P.Props.Proofs.Y"]
+    assert A.tree_failures({}, facts(imports=imports, modules=modules), TREES) == [
+        "trees: P.Defs, of the definitions tree, imports P.Thms, of the proofs tree (P.Props.Proofs, P.Thms): what the "
+        "definitions and the properties say never rests on a proof. Move what P.Defs uses from P.Thms into the definitions "
+        "tree (Definitions/<Area>/), or move P.Defs into the proofs tree",
+        "trees: P.Props, of the properties tree, imports P.Props.Proofs.Y, of the proofs tree (P.Props.Proofs, P.Thms): what "
+        "the definitions and the properties say never rests on a proof. Move what P.Props uses from P.Props.Proofs.Y into "
+        "the definitions tree (Definitions/<Area>/), or move P.Props into the proofs tree"]
+    assert A.tree_failures({}, spec_facts(reads=fact()["reads"] + AUX), {}) == [], "a package without trees"
+
+
+def test_an_exception_to_the_trees_names_a_prefix_and_a_reason_and_excepts_something():
+    both = facts(pins={"P.t": fact(reads=fact()["reads"] + AUX)}, imports=facts()["imports"] | {"P.Defs": ["P.Thms"]})
+    why = "C-Flock is excepted until proofs extracts its spec"
+    assert A.tree_failures({"trees": {"except": {"P.Thms": why, "P.Defs": why}}}, both, TREES) == []
+    assert A.tree_failures({"trees": {"except": {"P": why}}}, both, TREES) == [], "a prefix covers its modules"
+    assert A.tree_failures({"trees": {"except": {"P.Thms": why, "P.Defs": why, "P.Old": why}}}, both, TREES) == [
+        "trees: `except` lists P.Old, under which no statement reads the proofs tree and no module of the definitions or "
+        "properties tree imports it; remove the entry"]
+    assert [f.code for f in A.tree_failures({"trees": {"except": {"P.Defs": why}}}, both, TREES)] == ["trees.reads"]
+    for bad, code in (({"proofs": "P.Thms"}, "trees.form"), ({"proof": ["P.Thms"]}, "trees.form"), ([], "trees.form"),
+                      ({"except": {"P.Thms": " "}}, "trees.except-form"), ({"except": ["P.Thms"]}, "trees.except-form"),
+                      ({"except": {"": why}}, "trees.except-form")):
+        assert [f.code for f in A.tree_failures({"trees": bad}, both, TREES)] == [code], bad
+
+
+def test_the_reads_check_leaves_the_proofs_tree_to_the_trees_check():
+    """A read of the proofs tree is the trees check's: `reads_exempt` covers none, so an exception has one place."""
+    pol = recorded() | {"layers": {"P.Defs": {"imports": []}, "P.Assumptions": {"imports": []}},
+                        "meaning": ["P.Defs", "P.Assumptions", "P.Thms"]}
+    home = dict.fromkeys(["P", "P.Defs", "P.Assumptions", "P.Thms"], A.spec_of(pol))
+    f = spec_facts(reads=fact()["reads"] + AUX)
+    assert A.spec_reads(pol, f, home)[0].startswith("reads: P.t read P.aux in P.Thms, outside the spec")
+    assert A.spec_reads(pol, f, home, TREES) == []
+    assert A.spec_reads(pol | {"reads_exempt": {"P.Thms": "why"}}, f, home, TREES) == [
+        "reads: `reads_exempt` lists P.Thms, in the proofs tree, whose reads the trees check judges: remove the entry (an "
+        "exception to the trees rule is listed under `trees`' `except`)"]
 
 
 def test_a_changed_statement_or_meaning_fails_until_updated():
@@ -1339,6 +1428,34 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
     assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
 
 
+def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
+    """A predicate under `claims.modules` that is also a named assumption (a claim a guarantee takes as a premise, as
+    `SampledLeakAccepted` takes `Claims.Sampling.KS`) keeps its `claims.witnesses` or `claims.not` entry, whose witnesses are
+    still checked, and needs none; an entry naming no predicate is stale, and a claim that is no assumption needs one."""
+    defs = [{"name": n, "module": "P.Claims", "kind": "def", "statement": False, "predicate": True}
+            for n in ["P.KS", "P.Within", "P.Other"]]
+    within = {"head": "P.Within", "defs": ["P.Within"], "refl": False, "assumed": False}
+    pins = {"P.t": fact(), "P.KS_fails": fact() | {"body": {"head": "P.KS", "negated": True}},
+            "P.KS_meets": fact() | {"body": {"head": "P.Within", "negated": False, "conclusion": [within], "absurd": False}}}
+    rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}},
+            "not": {"P.Within": "a decoder's bound, which the claims read", "P.Other": "a helper"}}
+    policy = {**POLICY, "assumptions": {**POLICY["assumptions"], "P.KS": {"owner": "@proofs"}, "P.Within": {"owner": "@proofs"}},
+              "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    f = facts(pins=pins, spec_definitions=defs)
+    assert A.claim_failures(policy, f) == []
+    assert A.claim_failures({**policy, "claims": {**rule, "not": {**rule["not"], "P.Gone": "moved"}}}, f) == [
+        "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
+    assert A.claim_failures({**policy, "claims": {**rule, "witnesses": {}, "not": {"P.Other": "a helper"}}}, f) == []
+    assert A.claim_failures({**policy, "claims": {**rule, "not": {"P.Within": rule["not"]["P.Within"]}}}, f) == [
+        "claims: P.Other (P.Claims) is a claim definition with no witnesses: name its `P.Other_fails` (a theorem that it "
+        "is false at a toy instance) and `P.Other_meets` (its checkable antecedents hold at each deployed record) under "
+        "`claims.witnesses`, or list it under `claims.not` with the reason it is no claim"]
+    swapped = {**rule, "witnesses": {"P.KS": {"fails": "P.KS_meets", "meets": ["P.KS_meets"]}}}
+    assert A.claim_failures({**policy, "claims": swapped}, f) == [
+        "claims: P.KS_meets does not state that P.KS fails: past its ∀ and ∃ binders its statement must be `¬ P.KS …`, "
+        "and it is P.Within …"]
+
+
 def test_a_meets_witness_says_something_about_the_deployment():
     """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
     hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
@@ -1800,6 +1917,33 @@ def test_a_package_proving_anothers_guarantees_is_audited_beside_it(tmp_path, mo
     assert events.index(("built", "s")) < events.index(("start", "p")) < events.index(("built", "p")) < events.index(("read", "s"))
     doc = json.loads((tmp_path / "out" / "audit.json").read_text())
     assert [r["package"] for r in doc["packages"]] == [str(s), str(p)]
+
+
+def test_a_spec_never_reads_a_proving_package_whose_build_did_not_pass(tmp_path, monkeypatch):
+    """`p`'s build fails (killed for memory, say): `s`'s `ready` says so, and `proved` refuses to read `p`'s `.lake`, which
+    holds whatever an earlier or interrupted build left, rather than report a module it lacks as a missing import."""
+    s, p = tmp_path / "s", tmp_path / "p"
+    for d, rel in ((s, "S/Defs.lean"), (p, "SP/Thms.lean")):
+        (d / rel).parent.mkdir(parents=True)
+        (d / rel).write_text("")
+    (s / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../p"]}))
+    (p / A.POLICY).write_text(json.dumps({"roots": ["SP"]}))
+    (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "s", "dir": "../s"}]}))
+    seen = {}
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None, ready=lambda q: None, **kw):
+        if pkg.name == "s":
+            built()
+            seen["ready"] = ready(p.resolve())
+            return {"package": str(pkg), "seconds": {}, "failures": []}
+        return {"package": str(pkg), "seconds": {}, "failures": ["build: exit 137"]}
+
+    monkeypatch.setattr(A, "audit", fake)
+    assert A.main([str(s), "--out", str(tmp_path / "out")]) == 1
+    assert seen["ready"] is False
+    with pytest.raises(RuntimeError, match=r"\.\./p's build did not pass"):
+        A.proved(s, json.loads((s / A.POLICY).read_text()), facts(modules=[], pins={}), tmp_path / "work",
+                 ready=lambda q: False)
 
 
 CORE = {"Core/Protocol.lean": "namespace Core\ndef double (n : Nat) : Nat := 2 * n\nend Core\n",

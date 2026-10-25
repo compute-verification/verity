@@ -104,6 +104,7 @@ def test_the_replay_row_is_v2_past_expf_overflow():
     assert RK.EVALUATORS["SiluMul_v2"].startswith("verity_vllm.program.kernels.act_rows.silu_mul_expf_rows")
 
 
+@pytest.mark.slow
 def test_the_replay_row_is_the_element_on_every_gate_word():
     ups = (POS_ZERO, NEG_ZERO, ONE, NEG_ONE, POS_INF, NEG_INF, 0x7FC0, 0x0001, 0x4049)
     for u in ups:

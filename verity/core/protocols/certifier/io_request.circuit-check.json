@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "IoTieRequestEnd_v1": {
+   "and": 65
+  },
+  "IoTieRequestFrame_v1{B=512}": {
+   "and": 20876
+  },
+  "IoTieRequestStep_v1": {
+   "and": 135
+  },
+  "IoTieRequest_v1{B=512,L=1,R=2}": {
+   "and": 42082
+  }
+ },
+ "digests": {
+  "IoTieRequest_v1{B=512,L=1,R=2}": {
+   "sha512": "d5549b88b09fb0b469dc3185634928d1f8ece88dfeca9f8c1ca94b77931d2f7ecba980d318119553c489d138b328abb276fa733d6b7f8f8074438af2e8467432"
+  },
+  "IoTieRequest_v1{B=512,L=2,R=2}": {
+   "sha512": "50e912adef6d213b639226f539f98b0073753c03acc7eb2893127e28b5eafd62a02fae4773d710a347835462a10fc523366e78cf23a47741fc6bef8c719832bd"
+  }
+ }
+}

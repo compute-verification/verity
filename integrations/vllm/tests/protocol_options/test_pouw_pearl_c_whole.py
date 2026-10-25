@@ -18,6 +18,7 @@ from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.serving import SERIAL
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.linear.api import Arm, PassSpec, Stack
+from verity_vllm.protocol_options import pouw_pass as PP
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options import pouw_pearl_c_graphs as PG
 from verity_vllm.protocol_options.pouw_pearl_c_whole import VLLM, WholeStep
@@ -237,7 +238,7 @@ class Event:
         self.recorded += 1
 
 
-class Calls(PG.GraphCalls):
+class Calls(PG.GraphCalls, PP.EpochCalls):
     """`GraphCalls` over CPU tensors: three weights, keys that name their call."""
 
     def __init__(self, torch):
@@ -289,11 +290,11 @@ def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_wer
     assert keys[2, :168].tobytes() == run.keys(run.roots[9], 2, 32) and keys[0, :168].tobytes() == run.keys(run.roots[7], 3, 32)
     assert offs[2].tolist() == [64 * 40, 2 * 64, 64 * 2] and offs[0].tolist() == [64 * 48, 2 * 96, 64 * 3]
     assert run._predicted == {9: (2, 32, 40, 64), 7: (3, 32, 48, 96)} and run._slots_copied.recorded == 2
-    run.cur = PPD._Pass(None)                                 # a new pass is elsewhere: it makes its own
+    run.cur = PPD._Pass(None)                                 # a new pass is elsewhere (numbered on from the epoch's 4)
     assert run.whole_replay(calls) is False and offs[2].tolist() == [0, 0, 0]
     run.whole_replayed(calls)
     assert run.whole_replay(calls[:1]) is False               # and so do other calls
-    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 2, 32)
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 4 + 2, 32)
 
 
 def test_a_replay_without_hashing_appends_the_matmuls_only():

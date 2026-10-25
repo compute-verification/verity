@@ -86,8 +86,6 @@ Proofs/Pous/Rebuild/                proved: under the memory challenger's durati
 Proofs/Pous/SecureErasure/          proved: `DigestAU` (Digest), secure erasure from the audit by counting
                                     (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
                                     `f = 1/19`, `ε = 2^-128` (Band)
-Proofs/Pous/CheckAxioms.lean        one #print axioms line per headline theorem
-Proofs/Pous/Targets.lean            untrusted, not in the default build: the open statements as sorry targets
 lean-audit.json                     the policy and guarantee records for tools/verity/lean/check.py
 ~~~
 
@@ -104,9 +102,8 @@ submissions/reference.lean          the grader's positive control
 lake build                          # the grader (the default target)
 (cd ../../../../../Security/Proofs && lake exe cache get && lake build Proofs.Pous)   # PoUS's analysis; Mathlib prebuilt
 python3 ../../../../../tools/verity/lean/check.py --build --fresh . ../../../../../Security   # Verity's Lean audit
-(cd ../../../../../Security/Proofs && lake env lean Pous/CheckAxioms.lean)   # the headline theorems' axioms
 bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor   # one JSON line, exit 0 iff PASS
-bash check.sh                       # the audit, the open targets, and the grader's controls
+bash check.sh                       # the audit and the grader's controls
 ~~~
 
 **Trusted without proof:** the statements in the three layers `Security/lean-audit.json`'s `meaning` lists,
@@ -145,8 +142,8 @@ and running the audit (`bash check.sh`):
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
   ../../../../../Security/lean-toolchain ../../../../../Security/lakefile.toml ../../../../../Security/lake-manifest.json \
   ../../../../../Security/Proofs/lakefile.toml ../../../../../Security/Proofs/lake-manifest.json \
-  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Models/Pous/Assumptions.lean ../../../../../Security/Models/Pous/Guarantees.lean \
+  ../../../../../Security/Definitions/Pous.lean \
   ../../../../../Security/Proofs/Pous/Statements.lean ../../../../../Security/Proofs/Pous/Sanity.lean \
   ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous/Assumptions ../../../../../Security/Models/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
+  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~

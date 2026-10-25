@@ -60,6 +60,11 @@ theorem pump_publishes (st : State) (s : Nat) : publishes (st.pump s).2.toList =
   obtain ⟨s, b, d, rfl⟩ := (pump_spec st s).2 a (Array.mem_toList_iff.1 ha)
   cases he
 
+theorem saltPump_publishes (st : State) : publishes st.saltPump.2.toList = [] := by
+  refine publishes_nil fun a ha r p he => ?_
+  obtain ⟨b, rfl⟩ := (saltPump_keeps st).2.2.2 a (Array.mem_toList_iff.1 ha)
+  cases he
+
 theorem checkForwarding_bucketer (st : State) (now : Nat) : BuRel st.bucketer (st.checkForwarding now).bucketer := by
   unfold State.checkForwarding
   dsimp only
@@ -90,11 +95,25 @@ theorem linkRead_bucketer (st : State) (now : Nat) (data : ByteArray) :
     rw [Std.Legacy.Range.forIn_eq_forIn_range']
     exact forIn_inv (fun (b : Bucketer) => BuRel st.bucketer b) (BuRel.refl _) (fun _ _ b hb => hb)
 
+theorem egressFrame_bucketer (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) :
+    (st.egressFrame s position bytes ready).bucketer = st.bucketer := by
+  unfold State.egressFrame
+  dsimp only
+  split <;> rfl
+
 theorem egressEvent_bucketer (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
     (st.egressEvent s event ready).bucketer = st.bucketer := by
   unfold State.egressEvent
-  dsimp only
-  split <;> rfl
+  split
+  · exact egressFrame_bucketer _ _ _ _ _
+  · rfl
+
+theorem egressRecord_bucketer (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
+    (st.egressRecord s position record ready).bucketer = st.bucketer := by
+  unfold State.egressRecord
+  split
+  · exact egressFrame_bucketer _ _ _ _ _
+  · rfl
 
 theorem upstreamEnd_bucketer (st : State) (s now : Nat) : (st.upstreamEnd s now).bucketer = st.bucketer := by
   unfold State.upstreamEnd
@@ -107,10 +126,25 @@ theorem upstreamRead_bucketer (st : State) (s now : Nat) (data : ByteArray) :
   dsimp only
   split
   · exact upstreamEnd_bucketer _ _ _
-  · refine Id.bind_inv (fun (r : State) => r.bucketer = st.bucketer) (fun (r : State) => r.bucketer = st.bucketer) _ _ ?_
-      (fun _ h => h)
-    exact forIn_inv_arr (fun (r : State) => r.bucketer = st.bucketer) rfl
-      (fun _ _ b hb => (egressEvent_bucketer _ _ _ _).trans hb)
+  · split
+    · refine Id.bind_inv (fun (r : State) => r.bucketer = st.bucketer) (fun (r : State) => r.bucketer = st.bucketer) _ _
+        ?_ (fun _ h => h)
+      refine forIn_inv_arr (fun (r : State) => r.bucketer = st.bucketer) rfl (fun u _ b hb => ?_)
+      rcases u with ⟨position, record⟩
+      exact (egressRecord_bucketer _ _ _ _ _).trans hb
+    · refine Id.bind_inv (fun (r : State) => r.bucketer = st.bucketer) (fun (r : State) => r.bucketer = st.bucketer) _ _
+        ?_ (fun _ h => h)
+      exact forIn_inv_arr (fun (r : State) => r.bucketer = st.bucketer) rfl
+        (fun _ _ b hb => (egressEvent_bucketer _ _ _ _).trans hb)
+
+theorem opened_bucketer (st : State) (s : Nat) : (st.opened s).1.bucketer = st.bucketer := by
+  rw [opened_fst, pump_bucketer]
+  rfl
+
+theorem opened_publishes (st : State) (s : Nat) : publishes (st.opened s).2.toList = [] := by
+  refine publishes_nil fun a ha r p he => ?_
+  obtain ⟨s, b, d, rfl⟩ := (opened_spec st s).2 a (Array.mem_toList_iff.1 ha)
+  cases he
 
 theorem egressPre_bucketer (st : State) (now backlog : Nat) : (egressPre st now backlog).bucketer = st.bucketer := by
   unfold egressPre
@@ -155,19 +189,25 @@ theorem ingressTail_bucketer (st : State) (t : Nat) :
     (fun (r : State × Array Action) => r.1.bucketer = b ∧ publishes r.2.toList = record.toList) _ _ ?_ ?_
   · refine forIn_inv_arr (fun (r : State × Array State.Started) => r.1.bucketer = b) rfl ?_
     intro slot _ y hy
-    split
-    · exact hy
-    · repeat' split
-      all_goals exact hy
+    repeat' split
+    all_goals first
+      | exact hy
+      | exact (releaseSalt_keeps _ _).2.2.trans hy
   · intro y hy
     have h0 : ∀ acts : Array Action, publishes acts.toList = record.toList →
         (Id.run (forIn y.2 (y.1, acts) fun x r => match x with
           | .connect s => pure (ForInStep.yield (r.1, r.2.push (.connect s)))
           | .pump s => match r.1.pump s with
+            | (st', more) => pure (ForInStep.yield (st', r.2 ++ more))
+          | .saltConnect => pure (ForInStep.yield (r.1, r.2.push .connectSalt))
+          | .saltPump => match r.1.saltPump with
             | (st', more) => pure (ForInStep.yield (st', r.2 ++ more)))).1.bucketer = b ∧
           publishes (Id.run (forIn y.2 (y.1, acts) fun x r => match x with
           | .connect s => pure (ForInStep.yield (r.1, r.2.push (.connect s)))
           | .pump s => match r.1.pump s with
+            | (st', more) => pure (ForInStep.yield (st', r.2 ++ more))
+          | .saltConnect => pure (ForInStep.yield (r.1, r.2.push .connectSalt))
+          | .saltPump => match r.1.saltPump with
             | (st', more) => pure (ForInStep.yield (st', r.2 ++ more)))).2.toList = record.toList := by
       intro acts hacts
       refine forIn_inv_arr (fun (r : State × Array Action) => r.1.bucketer = b ∧
@@ -182,6 +222,17 @@ theorem ingressTail_bucketer (st : State) (t : Nat) :
         have p1 := pump_bucketer r.1 s
         have p2 := pump_publishes r.1 s
         generalize r.1.pump s = z at p1 p2 ⊢
+        rcases z with ⟨st', more⟩
+        refine ⟨p1.trans hr.1, ?_⟩
+        show publishes (r.2 ++ more).toList = record.toList
+        rw [Array.toList_append, publishes_append, hr.2, p2, List.append_nil]
+      · refine ⟨hr.1, ?_⟩
+        show publishes (r.2.push _).toList = record.toList
+        rw [Array.toList_push, publishes_append, hr.2]
+        exact List.append_nil _
+      · have p1 := (saltPump_keeps r.1).2.2.1
+        have p2 := saltPump_publishes r.1
+        generalize r.1.saltPump = z at p1 p2 ⊢
         rcases z with ⟨st', more⟩
         refine ⟨p1.trans hr.1, ?_⟩
         show publishes (r.2 ++ more).toList = record.toList
@@ -234,6 +285,16 @@ theorem step_other {c : Config} {st : State} (hg : Good c st) (ev : Event)
     intro st' s y hq hy
     subst hy
     exact ⟨BuRel.of_eq ((pump_bucketer st' s).trans hq), pump_publishes st' s⟩
+  have opened_ok : ∀ (s : Nat) (y : State × Array Action), st.opened s = y →
+      BuRel st.bucketer y.1.bucketer ∧ publishes y.2.toList = [] := by
+    intro s y hy
+    subst hy
+    exact ⟨BuRel.of_eq (opened_bucketer st s), opened_publishes st s⟩
+  have saltPump_ok : ∀ (st' : State) (y : State × Array Action), st'.bucketer = st.bucketer → st'.saltPump = y →
+      BuRel st.bucketer y.1.bucketer ∧ publishes y.2.toList = [] := by
+    intro st' y hq hy
+    subst hy
+    exact ⟨BuRel.of_eq ((saltPump_keeps st').2.2.1.trans hq), saltPump_publishes st'⟩
   unfold step
   split
   · exact ⟨BuRel.refl _, rfl⟩
@@ -252,7 +313,7 @@ theorem step_other {c : Config} {st : State} (hg : Good c st) (ev : Event)
       · cases heq; exact ⟨linkRead_bucketer _ _ _, rfl⟩
       · cases heq; exact none_ok
     · split at heq
-      · exact pump_ok _ _ _ (by rfl) heq
+      · exact opened_ok _ _ heq
       · cases heq; exact none_ok
     · split at heq
       · cases heq; exact ⟨BuRel.fault _ _, rfl⟩
@@ -263,6 +324,23 @@ theorem step_other {c : Config} {st : State} (hg : Good c st) (ev : Event)
     · dsimp only at heq
       split at heq
       · exact pump_ok _ _ _ (by rfl) heq
+      · cases heq; exact none_ok
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          rfl
+        · cases heq; exact none_ok
+      · cases heq; exact none_ok
+    · split at heq
+      · split at heq
+        · cases heq; exact ⟨BuRel.fault _ _, rfl⟩
+        · cases heq; exact none_ok
+      · cases heq; exact none_ok
+    · split at heq
+      · split at heq
+        · refine saltPump_ok _ _ ?_ heq
+          rfl
+        · cases heq; exact none_ok
       · cases heq; exact none_ok
 
 /-! ## A bucketer tick -/
@@ -290,15 +368,13 @@ theorem bucketerTick_spec {c : Config} {b : Bucketer} (hb : BuGood c b) (hT : 0 
       ∀ r, b.tick.2.2 = some r → (b.t + 1) % c.ingress.buckets = 0 ∧ r.link = c.ingressLink ∧
         r.window = b.t / c.ingress.buckets ∧ r.grid.size = c.ingress.buckets ∧
         ∀ row ∈ r.grid, Packed c.ingress row := by
+  obtain ⟨ht1, -, -, hr1, hw1, hs⟩ := pre_rel b
+  have hs1 := hs _ _ hb.shape
   unfold Bucketer.tick
   dsimp only
-  have hc := foldl_inv (fun (c' : Certifier) => Shape c' c.ingressLink c.ingress ∧ c'.rows = b.certifier.rows ∧
-      c'.window = b.certifier.window)
-    (l := b.waiting.extract 0 (b.waiting.takeWhile fun (x, _) => x ≤ b.t).size) (b := b.certifier)
-    (f := fun c x => match x with | (_, f) => c.enqueue f) ⟨hb.shape, rfl, rfl⟩
-    (fun x _ c hc => ⟨hc.1.enqueue _, (enqueue_rows _ _).trans hc.2.1, (enqueue_window _ _).trans hc.2.2⟩)
-  generalize Array.foldl _ b.certifier _ = c1 at hc ⊢
-  obtain ⟨hs1, hr1, hw1⟩ := hc
+  generalize b.takeOwn.enter = b1 at ht1 hr1 hw1 hs1 ⊢
+  simp only [follow_certifier, follow_t, ht1]
+  generalize b1.certifier = c1 at hr1 hw1 hs1 ⊢
   obtain ⟨t1, t2, t3, t4, t5⟩ := certTick_keeps c1
   have hrow := certTick_row hs1
   have hsh := hs1.tick

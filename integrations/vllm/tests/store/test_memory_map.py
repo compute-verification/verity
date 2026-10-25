@@ -18,6 +18,7 @@ import pytest
 from verity.core.protocols.remote_bandwidth import audit, codec, memory_map
 from verity.core.protocols.remote_bandwidth.memory_map import MemoryMapError, Replay
 from verity_vllm.store.interface import Append, PageLayout
+from verity_vllm.store.memory_map import LIFETIME
 from verity_vllm.store.registry import ArrayBacking, Store
 
 from .test_registry import CODEC, RECEIPT
@@ -410,7 +411,7 @@ def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
 PAGE0, PAGE1 = [3, 4, 5, 6, 19, 20, 21, 22], [7, 8, 9, 10, 23, 24, 25, 26]
 
 
-def deferred(s: Store, lifetime: int = audit.LIFETIME):
+def deferred(s: Store, lifetime: int = LIFETIME):
     """A map in a session: each append to ``sent`` as (first, digests, payloads), its encode landing when the test
     says (`MemoryMap.encoded`)."""
     sent: list = []
@@ -446,9 +447,10 @@ def test_a_completed_blocks_write_is_recorded_in_the_line_open_when_its_encode_l
 
 
 def test_a_block_freed_before_its_encode_lands_is_written_when_it_lands_and_freed_a_step_later():
-    """Page 1, completed at step 0, is freed after step 1's forward, its last read, before its encode lands in step
-    2's line: its write is recorded at step 2 all the same (its indices are the session's, and the record takes them
-    in order), and its free in step 3's line.  Its slots are dirty meanwhile, so no write's reach frees them again."""
+    """Page 1, completed at step 0, is freed after step 1's forward, its last structural reader, before its encode lands
+    in step 2's line: its write is recorded at step 2 all the same (its indices are the session's, and the record takes
+    them in order), and its free in step 3's line, past that reader (memory-map/v1 would withdraw it, which the map
+    doesn't emit yet).  Its slots are dirty meanwhile, so no write's reach frees them again."""
     s, _ = store()
     m, _ = deferred(s)
     s.kv_alloc([1])

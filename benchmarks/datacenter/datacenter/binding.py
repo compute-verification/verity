@@ -148,10 +148,13 @@ class Placement:
 
     def _exported(self, plan: Plan) -> dict[Port, float]:
         """The committed bits each egress port carries out of its block in the epoch: every crossing from a block, to
-        another block or outside, at the first egress port on its path, read within `plan.epoch`."""
+        another block or outside, at the first egress port on its path, read within `plan.epoch`. With the
+        datacenter's pair links sealed (`Datacenter.sealed`), a crossing to another block is ciphertext between the two
+        blocks' certifiers, which only they open, so only a crossing to a reader off every block counts: the export at
+        the facility boundary."""
         dc, out = self.datacenter, {}
         for x in crossings(self):
-            if self.block(x.src) is None or x.at not in plan.epoch:
+            if self.block(x.src) is None or x.at not in plan.epoch or (dc.sealed and self.block(x.dst) is not None):
                 continue
             port = next((q for hop in hops(x.path, x.src) if (q := dc.port(*hop)) and q.direction == "egress"), None)
             if port is not None:

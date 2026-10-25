@@ -142,6 +142,62 @@ def test_an_entry_that_fails_to_uninstall_does_not_keep_the_others() -> None:
     assert "sample" not in vars(r) and h.entries == () and hooks.live() == before
 
 
+def _tagged(tag: str):
+    return lambda o: (lambda x: (tag, o(x)))
+
+
+def test_an_inner_patch_refuses_to_come_off_under_another_components_patch() -> None:
+    """The out-of-order uninstall that used to drop the outer wrapper silently (it stopped running while `live()` listed
+    it) and bring the inner one back once both were off: it is refused, and nothing changes."""
+    r = Runner()
+    before = hooks.live()
+    inner, outer = hooks.Hooks(tag="inner"), hooks.Hooks(tag="outer")
+    pi = inner.wrap(r, "sample", _tagged("inner"))
+    po = outer.wrap(r, "sample", _tagged("outer"))
+    with pytest.raises(RuntimeError, match=r"refused to uninstall Hooks\(tag='inner'\): the patch of a Runner\.sample "
+                                           r"\(value .*, tag 'outer'\) was installed on its patch of a Runner\.sample"):
+        inner.uninstall()
+    with pytest.raises(RuntimeError, match=r"refused to uninstall the patch of a Runner\.sample .*tag 'inner'.*tag 'outer'"):
+        pi.uninstall()
+    assert r.sample(1) == ("outer", ("inner", ("sample", 1)))
+    assert pi.installed and inner.entries == (pi,) and hooks.live() == (*before, pi, po)
+    outer.uninstall()
+    assert r.sample(1) == ("inner", ("sample", 1)) and hooks.live() == (*before, pi)
+    inner.uninstall()
+    assert "sample" not in vars(r) and r.sample(1) == ("sample", 1) and hooks.live() == before
+
+
+def test_a_refused_uninstall_leaves_every_entry_of_the_component_on() -> None:
+    log: list[str] = []
+    r, s = Runner(), Settings()
+    a, b = hooks.Hooks(tag="a"), hooks.Hooks(tag="b")
+    a.wrap(r, "execute_model", _tagged("a"))
+    a.wrap(r, "sample", _tagged("a"))
+    a.patch(s, "level", "1")
+    a.service("responder", lambda: log.append("start"), lambda handle: log.append("stop"))
+    b.patch(s, "level", "2")
+    entries = a.entries
+    with pytest.raises(RuntimeError, match=r"the patch of a Settings\.level \(value str, tag 'b'\)"):
+        a.uninstall()
+    assert a.entries == entries and log == ["start"] and s.level == "2"
+    assert r.execute_model(1) == ("a", ("runner", 1)) and r.sample(1) == ("a", ("sample", 1))
+    b.uninstall()
+    a.uninstall()
+    assert log == ["start", "stop"] and s.level == "0" and not vars(r) and a.entries == ()
+
+
+def test_two_components_on_one_attribute_unwind_in_order() -> None:
+    r = Runner()
+    before = hooks.live()
+    with hooks.Hooks(tag="inner") as inner:
+        inner.wrap(r, "sample", _tagged("inner"))
+        with hooks.Hooks(tag="outer") as outer:
+            outer.wrap(r, "sample", _tagged("outer"))
+            assert r.sample(1) == ("outer", ("inner", ("sample", 1))) and hooks.live() == (*before, *inner.entries, *outer.entries)
+        assert r.sample(1) == ("inner", ("sample", 1)) and hooks.live() == (*before, *inner.entries)
+    assert "sample" not in vars(r) and hooks.live() == before
+
+
 def test_triton_launch_restores_jitfunction_run() -> None:
     jit = pytest.importorskip("triton.runtime.jit")
     from verity_vllm.observe import triton_adapter
@@ -215,6 +271,7 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     assert hooks.live() == live
 
 
+@pytest.mark.slow
 def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() -> None:
     """A plain kernel object keeps the original scale object; the shim refreshes it after export swaps the module Parameter."""
     torch = pytest.importorskip("torch")

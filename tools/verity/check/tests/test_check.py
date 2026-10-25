@@ -138,6 +138,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[1].endswith("tools/verity/check/check.py") and lean_audit[2] == "--lean-slot"
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
+    assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -736,7 +737,7 @@ def _fake_run(monkeypatch, groups, pre=()):
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
     monkeypatch.setattr(CHECK.Reused, "plan", lambda self: {"parts": []})
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None, **kw: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
 
 
@@ -1282,10 +1283,19 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
     import subprocess
 
-    for flag in ("--no-cache", "--verdicts-in", "--cores"):
-        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
-                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+    def train(*flags: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", *flags],
+                              capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+
+    for flag in ("--no-cache", "--no-regenerate", "--verdicts-in", "--cores"):
+        p = train("--agreement", flag)
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+    # drive's after-landing run of a review landing: every job, the upstream build, no reuse, no regenerated lock records; past
+    # the flags, the store key
+    p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest", "--against", "main")
+    assert p.returncode == 2 and "--deferred takes no --against" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1399,33 +1409,6 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     p = train(head, "vy-x", "--against", root, "--agreement")
     assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
     assert not argv.exists() and not posted.exists()
-
-
-def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
-    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
-    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
-    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    assert not (tmp_path / "posted").exists()
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
-    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
-    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
-    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
-
-    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
-                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
 
 
 def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):

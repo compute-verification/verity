@@ -48,6 +48,7 @@ members = [
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
+    "verity-network-e2e",
     "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
@@ -2431,6 +2432,17 @@ requires-dist = [
 provides-extras = ["torch"]
 
 [[package]]
+name = "verity-network-e2e"
+version = "0.0.0"
+source = { virtual = "benchmarks/network_e2e" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
+
+[[package]]
 name = "verity-network-sim"
 version = "0.0.0"
 source = { virtual = "benchmarks/network_sim" }
@@ -2547,7 +2559,7 @@ requires-dist = [
 [[package]]
 name = "verity-slack-events"
 version = "0.0.0"
-source = { virtual = "integrations/slack-events" }
+source = { virtual = "infra/slack-events" }
 dependencies = [
     { name = "fastapi" },
     { name = "tzdata" },

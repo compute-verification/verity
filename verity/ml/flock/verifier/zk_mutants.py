@@ -6,7 +6,8 @@ A proof edit reaches the record as a prover that sent the edited proof would hav
 (`rounds[k].msg`) of that rep holding the old bytes gets the new ones, with its `msg_sha512` rebuilt, and the rep's
 `proof_sha512` follows the file. The coins stay: the coin tree (live PROTOCOL.md §9) commits them at `Hello`, before any
 message, so only the check the edit breaks can reject it. A value no round absorbs (`τ`'s opening, the opened columns,
-their salts and paths, which follow the last coin) changes the file alone. Record edits change one field of
+their salts and paths, which follow the last coin) changes the file alone, and so does a nonce edit, whose rounds keep the
+prover's absorbed `0` (no replacement carries a nonce's eight zero bytes alone). Record edits change one field of
 `session.json`. The edits are table `T`'s (the first by default); a session of several tables adds its first two tables'
 rep-0 proofs swapped.
 
@@ -107,6 +108,14 @@ PROOF = [
     ("zk-rep1-lane-message", 1, flip("lig.msg", 2), reject("zk inner: the batched constraint fails")),
 ]
 
+#: (name, rep, edit, expect): a nonce of the file made 1, its rounds left as they are: the decoder refuses it before any replay
+#: (verifier PROTOCOL.md R4, D21), and upstream's replay rejects it at the rounds' digests.
+NONCES = [
+    ("zk-lig-query-nonce", 0, flip("lig.qn"), reject("grinding_nonce ≠ 0 (R4)")),
+    ("zk-lig-claim-nonce", 0, flip("lig.cbn", 1), reject("claim_batch_grinding_nonce ≠ 0 (R4)")),
+    ("zk-lig-consistency-nonce", 0, flip("lig.consn"), reject("consistency_batch_grinding_nonce ≠ 0 (R4)")),
+]
+
 
 def rep_stream(rec, table, rep):
     return next(s for s in rec["streams"] if s["stream"] == f"{table}/rep{rep}")
@@ -158,7 +167,7 @@ def write(out, name, rec, src, files):
     """Case `name`: `rec`, every proof file of `src`, and `files` (`{file name: bytes}`) in their place."""
     d = out / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "session.json").write_text(json.dumps(rec))
+    (d / "session.json").write_text(rd.session_text(rec))
     for f in src.glob("*.rep*.bin"):
         if f.name not in files:
             shutil.copy(f, d / f.name)
@@ -183,14 +192,14 @@ def main(src, out, table=None):
     table = table or tables[0]
     proof = lambda rep: f"{table}.rep{rep}.bin"
     manifest = []
-    for name, rep, edit, expect in PROOF:
+    for (name, rep, edit, expect), rebuild in [(c, True) for c in PROOF] + [(c, False) for c in NONCES]:
         rec = json.loads(json.dumps(base))
         before = (src / proof(rep)).read_bytes()
         off = rd.layout(before, zk=True)
         b = bytearray(before)
         edit(b, off)
         rounds = []
-        for _key, old, new in edited_values(before, b, off):
+        for _key, old, new in edited_values(before, b, off) if rebuild else ():
             rounds += carry(rec, table, rep, old, new)
         set_proof_digest(rec, f"{table}/rep{rep}", b)
         write(out, name, rec, src, {proof(rep): bytes(b)})

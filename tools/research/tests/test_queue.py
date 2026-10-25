@@ -19,7 +19,7 @@ import pytest
 
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
-from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
+from research.queue import DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -262,6 +262,66 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
+#: a landing gate: refuses a head whose change touches a file `gates/banned.txt` at `main` names, and can't judge one touching
+#: crash.txt
+GATE = """\
+import json, subprocess, sys
+main, head = sys.argv[1:3]
+git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout
+banned = git("show", f"{main}:gates/banned.txt").split()
+files = git("diff", "--name-only", git("merge-base", main, head).strip(), head).split()
+if "crash.txt" in files:
+    print("gate: can't read crash.txt", file=sys.stderr)
+    sys.exit(2)
+bad = sorted(set(files) & set(banned))
+failures = [{"commit": head, "why": f"touches {', '.join(bad)}", "fix": [f"delete {f}" for f in bad]}] if bad else []
+print(json.dumps({"failures": failures}))
+sys.exit(1 if failures else 0)
+"""
+GATED = {DRIVE_FLAGS: 'landing_gates = ["gates/g.py"]\n', "gates/g.py": GATE, "gates/banned.txt": "bad.txt\n"}
+
+
+def _gate_says(main: str, what: str) -> str:
+    f = what.split(" ", 1)[1]
+    return (f"the landing gate gates/g.py at `main` {main[:12]}: {what}; delete {f} (`python3 gates/g.py origin/main HEAD` in "
+            "the branch runs it)")
+
+
+def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
+    """ci and top, 24 Oct: a landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
+    member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one
+    it merges again after `main` moved is, and is left out once the gate at the new `main` refuses it."""
+    from research import queue as Q
+
+    main = _move_main(world, GATED)
+    real, judged = Q.gate_refusal, []
+    monkeypatch.setattr(Q, "gate_refusal", lambda repo, m, head, gates: judged.append(head) or real(repo, m, head, gates))
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"bad.txt": "2\n", "gates/g.py": "import sys\nsys.exit(0)\n"}))   # its own copy is moot
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=h2))
+    world.gh.put(4, h4 := world.change({"d.txt": "4\n"}))
+    world.gh.put(5, h5 := world.change({"crash.txt": "5\n"}))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 4] == world.on_next(q)
+    assert entries[2].state == "refused" and entries[2].why == _gate_says(main, "touches bad.txt")
+    assert entries[3].state == "waiting" and entries[3].why == "contains #2, which didn't merge"
+    assert entries[5].state == "refused" and entries[5].why == (f"the landing gate gates/g.py can't judge {h5[:12]} on `main` "
+                                                                f"{main[:12]} (exit 2: gate: can't read crash.txt)")
+    assert {n: c["why"] for n, c in q.load_state()["conflicts"].items()} == {"2": entries[2].why, "5": entries[5].why}
+    assert q.status()[2].why == entries[2].why + " (at the last sync)"
+
+    judged.clear()
+    world.gh.put(4, h4b := world.change({"d.txt": "4 fixed\n"}, base=h4))     # #1 is kept, #4 merged again at its new head
+    members, _ = q.sync()
+    assert [(m.pr, m.head) for m in members] == [(1, h1), (4, h4b)] and h1 not in judged and set(judged) == {h2, h4b, h5}
+
+    main = _move_main(world, {"gates/banned.txt": "bad.txt\na.txt\n"})       # `main` moves: `next` is rebuilt on it
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [4]
+    assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt")
+
+
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
     """14 Oct: status on circuits' VM called #1959/#1961/#1969 'admitted' for about 80 min while each conflicted with `main`,
     because only the drive VM's last sync had recorded the conflict."""
@@ -284,6 +344,33 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     world.gh.ready.add((5, parent))
     members, _ = q.sync()
     assert [m.pr for m in members] == [5, 4]
+
+
+def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owner_withdrew_it(world):
+    """24 Oct: drive held a PR containing another open PR's head until that one closed, and no one's tooling may close a PR,
+    so lanes rebuilt #3401, #3570 and #3554 by hand.  A rebuild by the same owner, or one whose owner withdrew the PR it
+    contains, carries that change and lands without it."""
+    parent = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, parent, ready=False, body="Lane `Lane-4`.")
+    world.gh.put(4, world.change({"c.txt": "stacked\n"}, base=parent))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [4] and entries[4].after == () and entries[5].state == "waiting"
+    world.gh.put(5, parent, ready=False)                                    # another lane's PR: #4 waits behind it
+    members, entries = q.sync()
+    assert members == [] and entries[4].why == "contains #5, which isn't admitted"
+    q.marked_by = lambda n, h: "lane-5" if n == 5 else None                 # #5's owner wrote its `ready = false`
+    assert [m.pr for m in q.sync()[0]] == [4]
+    q.before_cutoff = lambda n, h: "2026-10-01T00:00Z" if n == 5 else None   # its owner's `ready = true`, but before cutoff
+    assert q.sync()[0] == []
+    q.marked_by = q.before_cutoff = None
+    assert q.sync()[0] == []
+    world.gh.put(5, parent)
+    q.eject(5, "superseded by #4", "lane-5")
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [4] and entries[5].state == "refused"
+    world.gh.put(5, parent, ready=False, labels=("hold",))                  # a hold isn't carried
+    assert q.sync()[0] == []
 
 
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
@@ -789,6 +876,30 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
+def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
+    """24 Oct (benchmarks): `research queue ready N --mark` seconds after a push preflighted GitHub's old head, which conflicted
+    with `next`, and a retry passed at the same commit. Without --sha, the branch's tip (git's refs, which a push moves at once)
+    is the head to mark, and GitHub's PR head is waited for as with --sha."""
+    import dataclasses
+
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    old, new = world.change({"s.txt": "old\n"}), world.change({"s.txt": "new\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], branch="lane-5/work")
+    monkeypatch.setattr(world.gh, "branch_tip", lambda branch: new if branch == "lane-5/work" else None, raising=False)
+    reads = []
+
+    def sleep(s):
+        reads.append(s)
+        world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], head=new)
+
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sleep=sleep) == 0
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert reads and labels.ready(5, new) is True and labels.ready(5, old) is False
+
+
 def test_ready_sha_waits_for_github_to_show_the_pushed_head_and_never_marks_another(world, capsys):
     """20 Oct: `git push && research queue ready 2848 --mark` marked the old head, since GitHub's headRefOid lagged the push."""
     from research.queue import SHA_READS, MarkOnly, StoreLabels, ready
@@ -1014,6 +1125,24 @@ def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
 
 
+def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_and_notes_one_that_cant_judge(world, capsys):
+    """The sync leaves out what a landing gate refuses; the preflight says so at mark time, and a gate that can't judge there is
+    a note, since the sync judges again."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, GATED)
+    main = _git(world.origin, "rev-parse", "main")
+    world.gh.put(2, h2 := world.change({"bad.txt": "2\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [f"  - {_gate_says(main, 'touches bad.txt')}"], err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+    world.gh.put(3, h3 := world.change({"crash.txt": "3\n"}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
+    assert "nothing refused" in said and f"the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said
+
+
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
     """`PREFLIGHT_LINTS` add up to a minute, so a change outside their prefixes doesn't run them: a head breaking the vllm lint's
     stand-in without touching integrations/vllm is marked, and the train's check runs the lint."""
@@ -1036,7 +1165,8 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     err = capsys.readouterr().err
     assert (f"it contains #5's head {parent[:8]}, which isn't marked ready at {parent[:8]}, so drive holds this PR behind it: "
-            f"close #5 if this PR carries its change, or mark #5 ready so it lands first") in err
+            f"if this PR carries its change, #5's owner withdraws its mark (`research data label pr:5@{parent[:12]} ready false "
+            f"--by OWNER`), or a PR of the same owner carries it; else mark #5 ready so it lands first") in err
     assert "merged onto `main` at" in err                                                    # no `next` yet
     world.gh.put(5, parent, labels=("hold",), ready=False)
     assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), preflight=pre) == 0
@@ -1044,6 +1174,9 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     assert "which is held (`hold` label)" in capsys.readouterr().err
     world.gh.put(5, parent, ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: drive lands it first
+    world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
+    world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
@@ -1501,6 +1634,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
+    assert "lands on an eyeball review, and the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
@@ -1747,3 +1881,10 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
     with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
         M._gh_cli(Path("."), "pr", "view", "1")
     assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
+
+
+def test_a_lane_line_names_its_handle_without_a_trailing_period():
+    """23 Oct: #3427's body said `Lane proofs.`, and the queue's owner was `proofs.`, a handle no one holds."""
+    for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),
+                       ("Lane: vllm\n\nmore", "vllm")):
+        assert PR(1, "h", "t", body).owner == lane, body

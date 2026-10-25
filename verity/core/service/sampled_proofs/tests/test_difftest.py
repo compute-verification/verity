@@ -159,7 +159,7 @@ class Setup:
         self.population = P.units(program, query)
         self.templates = [t for t, _ in P.strata(program, query)]
         part = P.partition(program, query)
-        self.ports = {p: {"domain": R.served_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
+        self.ports = {p: {"domain": R.window_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
                       for p, schema, leaves in (("out", "u16", 2 * self.population),
                                                 ("x", "hm96-sha512/row/v1", self.population))}
 
@@ -1844,6 +1844,31 @@ def test_an_accepted_case_is_compared_whole(server):
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (kind, line)
 
 
+def committed_bits(j):
+    """`Q_call` v1 at X over a program of root Calls (`partition_object.evaluate`): per distinct Definition, in Call order,
+    its units' committed bits (`partition._committed_bits`), twice, as Lean gives them read off its layout and by the walk
+    that layout replaced."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, x = _obj(j.get("program"), "program"), j.get("X")
+    if not (_int(x) and x >= 0):
+        raise D.Reject("X is not a natural number")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        part = PO.evaluate(PROGRAMS[sha], PO.call_query(x))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    cuts = {codec.descriptor_id(cut.fn): cut for _k, cut in part.calls}
+    out = []
+    for fid, cut in cuts.items():
+        bits = P._committed_bits(cut.fn, [(lo, hi) for lo, hi, _path in cut.units])
+        out.append([fid, bits, bits])
+    return out
+
+
 PIECES = "sampled-proofs-difftest"
 
 
@@ -1868,6 +1893,10 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         "partition": {"program": PO.program_sha512(pq[0]), "query": pq[1]} if pre else None}},
         changed_audits(most=0, setups=SETUPS), partitions(), laws(24),
         st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})), st.booleans()),
+    JSON), package=PACKAGE)
+COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
+    st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
+              st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
     JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
@@ -2863,7 +2892,7 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
@@ -3217,6 +3246,41 @@ def test_a_root_with_a_trailing_newline_is_refused(pieces):
     r7["record"]["registered"][0]["root"] = r7["record"]["registered"][0]["root"][:127] + "\n"
     for b, codes in ((r3, ["R3-root"]), (r7, ["R7-root", "R7-held"])):
         assert D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces) == ("output", D.canonical({"codes": codes}))
+
+
+def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
+    """`a` with `n` more ports, a MoE window's shape (64 experts' tiles of 8), registered at roots in shuffled order."""
+    b = copy.deepcopy(a)
+    roots = []
+    for i in range(n):
+        p = f"w13/e{i // 8:04d}/t{i % 8}"
+        b["params"]["ports"][p] = {"domain": hashlib.sha512(p.encode()).hexdigest(), "leaves": 1 + i % 64}
+        roots.append({"port": p, "root": f"{i:0128x}", **b["params"]["ports"][p]})
+    random.Random(seed).shuffle(roots)
+    b["record"]["roots"] = [*b["record"]["roots"], *roots]
+    return b
+
+
+def test_a_many_port_registration_agrees(pieces):
+    """R3 over a window of 4096 ports, the shape whose quadratic walk `Registration.portIndex` replaced, Lean and Python
+    agreeing: accepted as registered, and each change to one port reaches its code and no other."""
+    a = _many_ports(_REGISTRATION_OF(_v1_audit("subset")), 4096)
+
+    def codes(change):
+        b = copy.deepcopy(a)
+        change(b["record"]["roots"])
+        kind, out = D.replay(REGISTRATION, _json(b), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    def bump(r, k):
+        r[k] = r[k] + 1 if k == "leaves" else "ab" * 64
+
+    assert codes(lambda rs: None) == []
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
+    assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
+    assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]
+    assert codes(lambda rs: bump(rs[4000], "domain")) == ["R3-domain"]
 
 
 def test_every_public_items_code_is_reached(pieces):

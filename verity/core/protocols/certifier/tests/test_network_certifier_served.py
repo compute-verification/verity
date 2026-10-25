@@ -3,13 +3,16 @@ idle run, and served link-windows through the proof service: honest traffic acce
 and a late block, an extra frame, a dropped frame and a request whose response straddles the window's end each
 refused."""
 
+import json
 import random
 from dataclasses import replace
 from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.certifier import served as SV
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import bind
+from verity.core.protocols.certifier import head_check as HC, served as SV
 from verity.core.protocols.certifier.active import Bucketer
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
@@ -18,6 +21,7 @@ from verity.core.protocols.certifier.service import PUBLIC_SERVED, LinkWindows
 from verity.core.protocols.sampled_proofs import service as S
 
 import signers
+import standin
 
 LINK = "responses"
 P = GridParams(buckets=8, allocation=2, frame_bytes=1)
@@ -28,6 +32,11 @@ SYNCS = [ClockSync(1, 1), ClockSync(2, 1), ClockSync(1, 2)]
 #: requests per bucket at the ingress certifier, each window idle by its end under its sync
 ARRIVALS = ([1, 0, 1, 0, 0, 0, 0, 0], [0, 1, 1, 0, 0, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0, 0])
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(WINDOWS)]
+
+
+@pytest.fixture(autouse=True)
+def lean(monkeypatch):
+    monkeypatch.setattr(standin.SVC.PF, "verify", standin.lean)
 
 
 def frames_of(arrivals, request_frames=FIN, response_frames=F):
@@ -59,6 +68,7 @@ class Run:
     """A served link with its certifier's signer and the challenger's stream, on injected coins and clock."""
 
     def __init__(self, tmp_path, profile=PROFILE) -> None:
+        self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-served-test", signers.SESSION,
@@ -73,8 +83,7 @@ class Run:
         reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
         self.previous = reg.digest
         draw = self.stream.select(reg)
-        assert self.stream.deliver(draw, [self.lw.session(opening, draw)]) is None
-        return self.lw.outcome(self.stream, draw, opening, SYNCS)
+        return standin.decide(self.lw, self.stream, draw, opening, SYNCS, self.tmp / f"proof-{reg.order}")
 
 
 def test_honest_served_traffic_is_accepted_in_every_window(tmp_path):
@@ -269,7 +278,7 @@ def test_the_served_unit_is_n2s_beside_the_served_counts(tmp_path):
     """The served unit holds N2's checks and the served counts as one gate, the spec declares the window's sync and the
     served sizes public, and a served link has no egress occupancy profile and one T and τ_b on both ends."""
     lw = Run(tmp_path).lw
-    assert lw.unit.id == "NetworkServedLinkWindow_v2{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2,0)}"
+    assert lw.unit.id == "NetworkServedLinkWindow_v4{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2,0)}"
     assert lw.spec.public == PUBLIC_SERVED and {"sync", "served"} <= {p.item for p in lw.spec.public}
     assert lw.spec.digest() != replace(lw, served=SV.ServedProfile(4, 1, WINDOWS)).spec.digest()
     assert replace(lw, served=replace(PROFILE, own=1)).unit.id.endswith("SERVED=(8,3,1,2,2,1)}")
@@ -283,3 +292,22 @@ def test_the_served_unit_is_n2s_beside_the_served_counts(tmp_path):
         SV.ServedProfile(3, 3, 1)
     with pytest.raises(ValueError, match="0 or 1 own"):
         SV.ServedProfile(3, 1, 1, 2)
+
+
+def _derives_any_counts(B, S_, *args):
+    return B.call(BL.constant(1))
+
+
+@pytest.mark.parametrize("key", [(8, 3, 1, 2, 2, 0), (12, 3, 2, 2, 2, 1)])
+def test_the_served_gate_names_its_pinned_circuit_digest(key):
+    """The served counts' gate names its Definition's circuit digest as `served.circuit-check.json` pins it, which is the
+    Definition's own (`head_check.expand`, cheap at the tests' sizes, where circuit-check holds the deployed ones), and
+    served counts with the same id and signature that accept any counts expand no gate of it."""
+    d, gate = SV.unit(*key), SV.gate(*key)
+    pinned = json.loads(SV.PINS.read_text())["digests"][d.id]["sha512"]
+    assert gate.id == f"Gate[{d.id}@{pinned}]_v2" and HC.pinned(gate) and HC.expand(gate, d) is d
+    forged = bind(replace(SV.NetworkServedCounts, body=_derives_any_counts, register=False),
+                  **dict(zip(("T", "FOUT", "FIN", "R", "RIN", "OWN"), key)))
+    assert forged.id == d.id and forged.signature() == d.signature()
+    with pytest.raises(ValueError, match="another circuit"):
+        HC.expand(gate, forged)

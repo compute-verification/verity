@@ -246,10 +246,10 @@ SWITCH = {
              writes=("/workspace/jobs/dispatch", "/workspace/verity-guest", "/workspace/monitoring/alerts/outbox")),
         Loop("vy-custody.timer", None, root=True, code=("/usr/local/bin/vy-custody", "/workspace/custody"),
              writes=("/workspace/research/custody-n1",)),
-        Loop("vy-monitors.timer", None),
     ),
     "vy-nebius-2": (
         Loop("vy-write-probe@vy-nebius-2.service", "write-probe"),
+        Loop("vy-monitors.timer", None),
     ),
 }
 COMMON_CODE = ("/etc/vy/env", K3S_CONFIG)

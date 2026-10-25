@@ -7,20 +7,21 @@ id = "llama31-8b-1gpu-pouw-h1"
 # int8's on every gate and timed rep. T (`rows`) is the engine's max_num_batched_tokens, 64 as in kernels' served_h1 and
 # dither rows, with max_num_seqs 64 (vLLM refuses more sequences than a step's tokens).
 #
-# The harness installs H1 on the built engine (its settings take the engine's model runner), one window a run (gate,
-# warm-up and timed rep), its S the run's step bound (`arms.window_steps`), opened before the clock starts and closed
-# after it stops; each window's coins are in-process (a salt coin and S round coins, the Lean verifier's entropy), so it
-# credits nothing (`pouw_h1.IN_PROCESS`): this row measures cost only. Each served call commits its A table and its z/y
-# records' table on the host inside the forward; no receipts are computed (that is a listener's, kernels' dither arm).
-# The arm's own gate: every window static (each call inside its S steps and T rows, in order), the credit gate passing
-# every served call, every request entered. One rep: a b32 run is about 290 steps of host commitments.
+# The harness builds H1 through `verity_vllm.LLM`'s `protocols` with only its public parameters (the LLM fills the
+# engine's model runner and coins after the build), one window a run (gate, warm-up and timed rep) opened by `reinstall`,
+# its S the run's step bound (`arms.window_steps`), opened before the clock starts and closed after it stops; each
+# window's coins are in-process (a salt coin and S round coins, the Lean verifier's entropy), so it credits nothing
+# (`pouw_h1.IN_PROCESS`): this row measures cost only. Each served call commits its A table and its z/y records' table
+# inside the forward, with the row-table kernels on the GPU (`pouw_h1_tables_device`); no receipts are computed (that is a
+# listener's, kernels' dither arm). The arm's own gate: every window static (each call inside its S steps and T rows, in
+# order), the credit gate passing every served call, every request entered. Three reps, for an interval: a b32 window is
+# about 290 steps of commitments, five a point.
 #
-# int8_exact's attention refuses a chunked prefill's later chunk (`verity_vllm.engine.int8_ops._requests`), and at T = 64
-# every quick prompt is chunked, so this spec's points fail at their first prefill, in stock-int8 as in H1's arm, until
-# that attention takes chunks. A T that holds each whole prompt multiplies H1's per-step host commitments with it.
+# At T = 64 every quick prompt is chunked: int8_exact's attention takes each chunk as the last rows of its window (#3387),
+# one batched call per layer step over the step's requests (`verity_vllm.engine.int8_ops.paged_attention`).
 arms = ["stock-int8", "pouw:eps1-sm120-h1fx1"]
 sweep = "quick"
-reps = 1
+reps = 3
 eager = true
 setup = "benchmarks/harness/setup/int8_pin.sh"
 

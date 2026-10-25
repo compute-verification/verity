@@ -346,6 +346,33 @@ def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (recor
     let c1 ← verifyRepWith hs spec st sch tPad sess i 1 proofs[2 * i + 1]!
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
+/-- `Zk.verifyWithM` at the record's parsed value `j` (`Record.decodeJWith`); at a record that parses to `j` it is
+`Zk.verifyWithM` (`verifyWithM_of_parse`). -/
+def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json) (proofs : Array ByteArray) :
+    M Unit := do
+  if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
+  if spec.coinTree.isNone then throw "zk: the session's coins are not the keyed coin tree"
+  let sess ← Record.decodeJWith hs spec j
+  for (st, p) in tabs.zip sess.publics do st.publics p
+  let schs ← tabs.mapM fun st => schedule st.m
+  let want := spec.repStreams
+  if proofs.size != want.size then throw s!"{want.size} proofs expected"
+  if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
+    throw s!"S17: proof_{spec.dk} does not list exactly the tables' rep streams"
+  for ((_, _, w), b) in want.zip proofs do
+    if (sess.proofSha.find? (·.1 == w)).map (·.2) != some (hexOf (← spec.dgWith hs b)) then
+      throw s!"S17: {w}: the proof is not the one the server received"
+  for i in [0:tabs.size] do
+    let (st, (sch, tPad)) := (tabs[i]!, schs[i]!)
+    let c0 ← verifyRepWith hs spec st sch tPad sess i 0 proofs[2 * i]!
+    let c1 ← verifyRepWith hs spec st sch tPad sess i 1 proofs[2 * i + 1]!
+    if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
+  simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
+
 /-- The `--zk` verifier with SHA-512 replaced by `h`, every other hash the deployed one; `Zk.verifyWith Sha512.hash` is
 `Zk.verify` (`Flock.Zk.verify_eq_verifyWith`). -/
 def verifyWith (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)

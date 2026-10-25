@@ -75,7 +75,7 @@ theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Ms
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -83,8 +83,8 @@ theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Ms
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro L Bd D bL hrb hP hRT
-  refine ksLin2_deployed_plain_parts b L (heldWhole_layoutBTops fin) wE join final w canonicalProofFiles
-    plainCallsBindOrSlack_sha512 untr hrb ?_ hRT
+  refine ksLin2_deployed_plain_parts b L (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl)
+    (heldWhole_layoutBTops fin) wE join final w canonicalProofFiles plainCallsBindOrSlack_sha512 untr hrb ?_ hRT
   intro shape hsh
   obtain rfl := List.mem_singleton.1 hsh
   obtain ⟨hF, chk, hPC, hPO, hD⟩ := hP _ hsh
@@ -108,7 +108,7 @@ theorem bitsLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →

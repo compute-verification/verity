@@ -350,9 +350,12 @@ def form_kernels() -> list[str]:
 
 def grouped_kernels() -> list[str]:
     """The grouped calls' kernels (grouped.py), which run.py never launches: form_s5_g, the GEMM_G GEMMs and their probes,
-    and PD_GROUPED's pd_commit_g and pd_tiles_g."""
+    and PD_GROUPED's pd_commit_g and pd_tiles_g, PD_GROUPED_TILES' pd_tiles_g and pd_tiles_gw and PD_GROUPED_ROWS'
+    pd_commit_gm."""
     names = [n for n, *_ in gemms("GEMM_G")]
     pd = [f"pd_{kind}_g_{v}" for v in re.findall(r"^PD_GROUPED\((\d+)\)", SOURCE, re.M) for kind in ("commit", "tiles")]
+    pd += [f"{name}_{v}" for v, name in re.findall(r"^PD_GROUPED_TILES\((\d+), \w+, (\w+)\)", SOURCE, re.MULTILINE)]
+    pd += [f"pd_commit_gm_{v}" for v in re.findall(r"^PD_GROUPED_ROWS\((\d+)\)", SOURCE, re.MULTILINE)]
     return [n for n in re.findall(KERNEL, SOURCE) if n.endswith("_g")] + names + [g + "_smem" for g in names] + pd
 
 

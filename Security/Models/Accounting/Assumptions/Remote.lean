@@ -3,11 +3,13 @@ import Definitions.Accounting.Remote
 /-!
 # The remote audit's named assumptions (trusted)
 
-What the remote audit's node-level guarantees assume beyond the model's rows, each a named `Prop` on a run:
+What the remote audit's node-level bounds (`Accounting.SecurityProofs.Remote`) assume beyond the model's rows, each a
+named `Prop` on a run:
 
 * `Identity` is statement C's: no undeclared device of any kind. Every location that could read, hold or rebuild a
   word is a declared device of the node (a fleet audited at once is one node, `Node.fleet`), so outside the node
-  nothing reads, holds or rebuilds one. Conservation (`Accounting.Guarantees.Remote.Conservation`) assumes no location.
+  nothing reads, holds or rebuilds one. Conservation (`Accounting.SecurityProofs.Remote.Conservation`) assumes no
+  location.
 * `ComputeAdditive` is W at the rebuild pricing: the node's work at π_r outside PoUW's account and PoUW's account's add
   within the Compute row's `Φ_r · T`. PoUW certifies `W_r` of the latter (`Run.Certified`), and the two give the
   rebuild's fit beside `W_r` (`Run.Fit`); at `W_r = 0` the fit needs only the Compute row.

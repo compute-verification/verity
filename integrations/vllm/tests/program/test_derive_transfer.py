@@ -430,7 +430,7 @@ def _record(rec: dict) -> None:
         f.write(json.dumps(rec, default=str) + "\n")
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c.id for c in CASES])
+@pytest.mark.parametrize("case", [pytest.param(c, marks=pytest.mark.slow) if c.id == "gpt2_greedy_f32" else c for c in CASES], ids=[c.id for c in CASES])
 def test_transfer_case(case: Case):
     torch.manual_seed(0)
     module = case.make().eval()

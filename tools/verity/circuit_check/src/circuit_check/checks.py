@@ -30,15 +30,17 @@
                      beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
                      warning, ``partition/unchecked``)
-    lowering pins    a lowering's AND/XOR/NOT counts against its pin (a piece's, a Boolean Definition's whole lowering's,
+    lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
+                     must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template unit's, in the sidecar of the module that defines it or its file in ``pins/``, `sidecars`; a Boolean
                      Definition's lowering has at most its own And gates, besides its builder's commits), a template unit's
                      circuit digest against its C-Flock module's `PINS`, and the Boolean export's gate lists checked against the
-                     unit circuit (`verity_flock.boolean_export`)
+                     unit circuit (`verity_flock.boolean_export`); a gated Definition's circuit digest (``gated``: a Program
+                     holds it as one gate naming the digest, such as N2's head check) against its ``digests`` pin
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
-gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering
-is a warning.
+gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
+and a pin without its lowering's ``type``, is a warning.
 """
 from __future__ import annotations
 
@@ -455,17 +457,54 @@ def _owner_names(root: Any, n: int) -> Callable[[int], str]:
     return lambda v: BE.DISPLAY.get(own[v].fn, own[v].fn) if own[v] is not None and own[v] is not root else "unit"
 
 
+def lowering_type(C: Any) -> str:
+    """A lowering's digest pin (a pin's ``type``): the digest of the gf2 circuit ``C`` as a flat ``program`` circuit type
+    (`circuit_type`; ``SHA-512("verity/circuit-type/v1" ‖ 0 ‖ canon(content))``, which Lean's `Flock.CircuitType.digest`
+    computes from the same content), so it reads nothing but ``C``."""
+    return circuit_type(C).digest()
+
+
+def circuit_type(C: Any) -> Any:
+    """The gf2 circuit ``C`` as a flat ``program`` circuit type (`verity_flock.circuit_types.from_gf2`), validated. Its input
+    ports are ``C``'s named inputs in order, ``[1, bits]`` each; its items the ANDs and table reads the outputs and assertions
+    reach, in the order ``C`` made them; its output ports ``C``'s named outputs, ``[1, bits]`` each, then its assertion forms
+    (each 0 on an accepted input) as one port ``[n, 1]`` when it has any; a table is named by the SHA-512 of its words."""
+    from verity_flock import circuit_types as CT
+    from verity_flock import tail_pieces as TP
+    from verity_flock import type_trace as TT
+
+    ins = [w for w in C.inputs.values() if w]
+    outs = [w for w in C.outputs.values() if w]
+    asserts = [f for _name, f in C.asserts]
+    tables = {name: (TT.table_sha512(name), TP.TABLE_BITS[name], TP.TABLE_VALUE_BITS.get(name, TP.VALUE_BITS))
+              for name, _idx, _width in C.lookups}
+    t = CT.from_gf2(C, [b for w in ins for b in w], [b for w in outs for b in w] + asserts, [(1, len(w)) for w in ins],
+                    [(1, len(w)) for w in outs] + ([(len(asserts), 1)] if asserts else []), "program", tables)
+    CT.validate(t, lambda d: None)
+    return t
+
+
+def _shown(v: Any) -> Any:
+    return f"{v[:16]}..." if isinstance(v, str) and len(v) > 16 else v
+
+
 def _counts_against_pin(kind: str, key: str, got: dict, pins: dict, F: Findings, definition: str) -> dict:
+    """``got`` (the lowering's counts and its ``type``, `lowering_type`) against its pin: a pin that differs in any field it holds
+    is refused by name. A pin without the lowering's ``type`` is a warning (``untyped``), as an unpinned lowering is, since a
+    branch written before ``type`` lands with count-only pins; `--update-pins` writes it."""
     pinned = pins.get(kind, {}).get(key)
     rec = {"pin": key, "counts": got, "pinned": pinned}
     if pinned is None:
-        F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pinned counts", pins=kind, pin=key, counts=got)
+        F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pin", pins=kind, pin=key, counts=got)
         rec["status"] = "unpinned"
-    elif any(pinned.get(k) != v for k, v in got.items() if k in pinned):
-        diff = {k: [pinned.get(k), v] for k, v in got.items() if pinned.get(k) != v}
-        F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {a} -> {b}" for k, (a, b) in diff.items()), pins=kind,
-               pin=key, counts=got, pinned=pinned)
+    elif diff := {k: [pinned[k], v] for k, v in got.items() if k in pinned and pinned[k] != v}:
+        F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {_shown(a)} -> {_shown(b)}" for k, (a, b) in diff.items())
+               + " (`circuit-check --update-pins` pins what it measures; review the diff)", pins=kind, pin=key, counts=got, pinned=pinned)
         rec["status"] = "mismatch"
+    elif "type" in got and "type" not in pinned:
+        F.warn("lowering", "untyped", definition, 1, f"[{key}]: no type (`circuit-check --update-pins` pins it)", pins=kind,
+               pin=key, counts=got)
+        rec["status"] = "untyped"
     else:
         rec["status"] = "ok"
     return rec
@@ -531,7 +570,7 @@ def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> 
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
     """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
-    reference on the correspondence vectors; its redundant ANDs; a primitive's AND count against the piece pins.  A composite's
+    reference on the correspondence vectors; its redundant ANDs; a primitive's AND count and digest against the piece pins.  A composite's
     mismatch names the pieces that already differ from their own primitive (``memo["pieces"]``: piece -> mismatching vectors)."""
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
@@ -598,7 +637,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if red:
         F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its C-Flock lowering")
     if isinstance(t, PrimitiveDefinition):
-        rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"]}, pins, F, t.id)
+        rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
     elif is_boolean(t):
         from verity.ml.circuits.evaluation.bits import compile as compile_bits
 
@@ -607,7 +646,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         if counts["ands"] - commits > own:
             F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands'] - commits} ANDs (and {commits} commits) for the "
                    f"Definition's {own} And gates", via="c-flock:ir_lower", ands=counts["ands"], commits=commits, definition_ands=own)
-        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"]}, pins, F, t.id)
+        rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
     return rec
 
 
@@ -846,9 +885,21 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
+    if getattr(getattr(t, "defn", t), "gated", False):
+        entry["digest"] = circuit_digest_pin(t, pins, F)
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
+
+
+def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
+    """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
+    names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    place of the digest is the Definition's."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.program import Program
+
+    return _counts_against_pin("digests", t.id, {"sha512": program_digest(Program(t))}, pins, F, t.id)
 
 
 # --- one subcircuit -----------------------------------------------------------------------------------------------------------
@@ -927,11 +978,12 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         def build():
             return S.lane_circuit(int(sub.params["V"]))
     C, root = _traced(build)
+    typ = lowering_type(C)
     counts = _export_counts(build, f"{name} unit")
     rec["export"] = counts
     if counts["flat_ands"] != rec["ands"]:
         F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
-    rec["pin"] = _counts_against_pin("units", sub.id, {k: counts[k] for k in ("and", "xor", "not")}, pins, F, sub.id)
+    rec["pin"] = _counts_against_pin("units", sub.id, {**{k: counts[k] for k in ("and", "xor", "not")}, "type": typ}, pins, F, sub.id)
     red, by = redundant_ands(C, _owner_names(root, len(C.kind)))
     rec["redundant_ands"] = {"count": red, "where": dict(by.most_common())}
     if red:
