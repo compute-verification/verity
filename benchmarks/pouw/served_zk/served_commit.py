@@ -374,9 +374,9 @@ def _frame(tag: str, fields: dict, count: int) -> CommitmentDomain:
 
 
 def _served(params: dict, ell: int, port: str, schema: str, count: int) -> CommitmentDomain:
-    """One-stage's served domain (`registration.served_domain`) of the window's program and partition at level `ell`."""
+    """One-stage's window domain (`registration.window_domain`) of the window's program and partition at level `ell`."""
     _, _, part = population(params["k"], work_at(params, ell).n)
-    return _frame(R.SERVED_DOMAIN, {"program": part["program"], "partition": PT.digest(part), "port": port, "schema": schema,
+    return _frame(R.WINDOW_DOMAIN, {"program": part["program"], "partition": PT.digest(part), "port": port, "schema": schema,
                                     "leaves": int(count), "run": params["context"]}, count)
 
 

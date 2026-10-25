@@ -29,7 +29,7 @@ blocks, committed under its own salt like an input row (an output is a value: no
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
 Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
-served-domain rule (``verity.ml.commitments.served``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
+window-domain rule (``verity.ml.commitments.window``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
@@ -71,7 +71,7 @@ from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.served import SERVED_DOMAIN, served_domain
+from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
@@ -84,7 +84,7 @@ ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW
 BIT_ROW_SCHEMAS = (SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
 UNITS_SCHEMA = "verity-vllm/serving-rows/units/v0"
 WORD_SCHEMA = "u16"
-DOMAIN_TAG = SERVED_DOMAIN
+DOMAIN_TAG = WINDOW_DOMAIN
 OWNER = -1
 ORDER = "verity-vllm/serving-rows/order/v0"
 LEAF_LAYER = "SHA-512 of canon({template: SHA-512 of m<k>-public.bin}) over the window's members"
@@ -672,11 +672,11 @@ def port_leaves(m: Member) -> dict[str, int]:
 
 def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
-    domain}}``, each domain ``served_domain`` (core's ``registration.served_domain``) over the window's program, partition and run."""
+    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run."""
     prog, part, steps = window.partition["program"], window.partition_digest, len(window.steps)
-    return {m.port(p): {"leaves": n, "domain": served_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
+    return {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
             for m in window.members for p, n in port_leaves(m).items()} | \
-        ({TABLE_PORT: {"leaves": steps, "domain": served_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
+        ({TABLE_PORT: {"leaves": steps, "domain": window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
          if steps else {})
 
 
