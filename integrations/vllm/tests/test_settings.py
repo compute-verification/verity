@@ -116,6 +116,15 @@ def test_the_record_carries_the_value_settings_and_families_in_force() -> None:
     assert S.record({})["values"] == {}
 
 
+def test_the_record_names_a_credential_and_never_holds_its_value() -> None:
+    """``VLLM_API_KEY`` is declared ``secret``; an undeclared ``VLLM_*_TOKEN`` is one by its name."""
+    key, token = "dummy-not-a-real-key", "dummy-not-a-real-token"
+    rec = S.record({"VLLM_API_KEY": key, "VLLM_DUMMY_TOKEN": token, "HF_TOKEN": token, "VLLM_BATCH_INVARIANT": "1"})
+    assert rec["values"] == {"VLLM_API_KEY": S.REDACTED, "VLLM_BATCH_INVARIANT": "1", "VLLM_DUMMY_TOKEN": S.REDACTED}
+    assert key not in json.dumps(rec) and token not in json.dumps(rec)
+    assert S.setting("VLLM_API_KEY").secret and S.is_secret("NCCL_X_SECRET") and not S.is_secret("VLLM_BATCH_INVARIANT")
+
+
 def test_an_unknown_verity_variable_is_refused_by_name() -> None:
     assert S.unknown({"VERITY_WINDOW_MB": "1", "VERITY_SUITE_ROOT": "x", "VERITY_REGRESSION": "1", "PATH": "x"}) == []
     with pytest.raises(S.UnknownSetting, match="unknown setting VERITY_WINDOW_MBB: nothing in the tree reads it"):
