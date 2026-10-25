@@ -70,6 +70,7 @@ variable {r : (u : Fin U) → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 210
     {P : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Audits ΩW ΩQ}
     {o : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → ΩW × ΩQ}
 
+omit [Fintype ι] in
 theorem FixedBefore.adapted (h : FixedBefore r P o) (S : ℝ) :
     Periods.Adapted (Ω := fun _ => (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
       (ShortAccepted r P o S) := fun u x x' hx => by
