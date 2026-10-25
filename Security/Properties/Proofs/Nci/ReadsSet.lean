@@ -3014,4 +3014,85 @@ theorem usedExact_of (P : Prog) (r memo : Array Desc.Summary) (f : Nat)
   subst hw
   exact hgw k hk node hn w p hx
 
+/-! ## `RootSet` at a root node calling a composite -/
+
+/-- At the root every position a node reads names a gate: `down`'s segments name no node's output and the root has no
+parameters (`rootShape`). -/
+theorem rootRead_gate (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node) {rs : Array Seg}
+    (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs) :
+    ∀ x ∈ rootRead P memo node k, ∃ w, x.1 = .gate w := by
+  intro x hx
+  rw [rootRead_eq] at hx
+  obtain ⟨out, -, -, hpos, hfrom⟩ := nodeReads_out _ k node hn hrs
+  rw [← hpos] at hx
+  obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx
+  obtain ⟨-, hnf, hpi⟩ := (rootShape P memo hm hF hn (hfrom g (Array.mem_toList_iff.1 hg))).2.1 x hxg
+  obtain ⟨t, p⟩ := x
+  cases t with
+  | gate w => exact ⟨w, rfl⟩
+  | ref b i =>
+    cases b with
+    | false => exact absurd rfl (hnf i)
+    | true =>
+      have := (hpi i rfl).1
+      rw [hF.2.2.1] at this
+      omega
+
+/-- **`RootSet` at a root node calling a composite, from `NodeSet` at the root's activation**: the root's activation
+is one resolution reaches, its gates located (`locR_root`), each with `circuitOf`'s operands. -/
+theorem rootSet_comp (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    (c : Circuit) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
+    {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
+    (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs) (hN : NodeSet P memo P.root k) :
+    ∀ a : Nat, ((∃ w, (Tgt.gate w, (a : Int)) ∈ rootRead P memo node k) ∧ a ∉ nodeGates P k) ↔
+      ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! ∧ a ∉ nodeGates P k := by
+  obtain ⟨-, -, hK, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+  have hend := DescAgree.offs_mono (rootOffs P) (nodeCount P) hmono (k + 1) (nodeCount P) (by omega) le_rfl
+  have hgood : Resolve.Good P P.rootScope := ⟨rfl, rfl, rfl⟩
+  have hloc : Located P P.rootScope := fun g _ h2 =>
+    ⟨_, locR_root hc (g := g) (by change g < 0 + (P.defs[P.root]!).gates at h2; unfold gates; omega)⟩
+  have hin : ∀ a, InNodeAt P P.rootScope k a ↔ a ∈ nodeGates P k := by
+    intro a
+    rw [DescAgree.mem_nodeGates]
+    change 0 + (P.defs[P.root]!).body.offsets[k]! ≤ a ∧ a < 0 + (P.defs[P.root]!).body.offsets[k + 1]! ↔ _
+    simp only [Nat.zero_add]
+    rfl
+  have hrd : ∀ a, NodeReadsAt P P.rootScope k a ↔ ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! := by
+    intro a
+    constructor
+    · rintro ⟨g, hg, ops, hl', ha⟩
+      have hg' := (hin g).1 hg
+      have hgr := (DescAgree.mem_nodeGates P k g).1 hg'
+      have := locR_unique hl' (locR_root hc (g := g) (by omega))
+      subst this
+      exact ⟨g, hg', ha⟩
+    · rintro ⟨g, hg, ha⟩
+      have hgr := (DescAgree.mem_nodeGates P k g).1 hg
+      exact ⟨g, (hin g).2 hg, _, locR_root hc (by omega), ha⟩
+  obtain ⟨hiff, -⟩ := hN P.rootScope rfl hgood hloc node (by rw [← rootCtx_eq]; exact hn)
+  have hgt := rootRead_gate P memo hm hF hn hrs
+  intro a
+  have key := hiff a
+  rw [← rootCtx_eq, ← rootRead_eq] at key
+  constructor
+  · rintro ⟨⟨w, hw⟩, hout⟩
+    have hden : den P P.rootScope (Tgt.gate w, (a : Int)) = .ok a := by
+      simp only [den]
+      rw [if_neg (by omega)]
+      change Except.ok (0 + (a : Int).toNat) = _
+      simp
+    obtain ⟨hr, -⟩ := key.1 ⟨⟨_, hw, hden⟩, fun h => hout ((hin a).1 h)⟩
+    obtain ⟨g, hg, ha⟩ := (hrd a).1 hr
+    exact ⟨g, hg, ha, hout⟩
+  · rintro ⟨g, hg, ha, hout⟩
+    obtain ⟨⟨x, hx, hxa⟩, -⟩ := key.2 ⟨(hrd a).2 ⟨g, hg, ha⟩, fun h => hout ((hin a).1 h)⟩
+    obtain ⟨w, hw⟩ := hgt x hx
+    obtain ⟨t, p⟩ := x
+    simp only at hw
+    subst hw
+    have := den_root_gate P hxa
+    subst this
+    exact ⟨⟨w, hx⟩, hout⟩
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
