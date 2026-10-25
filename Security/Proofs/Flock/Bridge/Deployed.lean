@@ -93,7 +93,7 @@ def portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : Array Flock.Regi
 registers at the `hm96-sha512/row/v2` schema are then the circuit file's own. -/
 def RowsV2 (c : Flock.Circuit) : Prop := c.ports.all (fun p => p.v2 && p.segs.isNone) = true
 
-instance (c : Flock.Circuit) : Decidable (RowsV2 c) := inferInstanceAs (Decidable (_ = true))
+instance instDecidableRowsV2 (c : Flock.Circuit) : Decidable (RowsV2 c) := inferInstanceAs (Decidable (_ = true))
 
 /-- **The registered tree leaf of row `(u, q)`**: C-Flock's hm96 tree leaf of the public file's `b ‖ c` there. -/
 def regLeafOf (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : ByteArray :=
