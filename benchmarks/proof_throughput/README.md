@@ -28,7 +28,7 @@ stratified law the Lean verifier's soundness covers:
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
-   rows (`ProvedScope.sharedRowsOk` covers that only for a registered ZK session), so x is committed once per coordinate
+   rows (`ProvedScope.sharedRowsOk` covers that only with the verifier's own registered reads), so x is committed once per coordinate
    rather than once per Call, and that cost is in the numbers. It puts the circuit,
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.

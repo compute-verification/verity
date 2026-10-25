@@ -64,7 +64,9 @@ class Runner:
 
 
 class Executor:
-    """The multiprocess executor as the holder uses it: ``execute_model`` and ``collective_rpc`` over its ranks' workers."""
+    """The multiprocess executor as the holder uses it: ``execute_model`` and ``collective_rpc`` over its ranks' workers.
+    Its ranks share this process, so their patches stack; ``h1rank_release`` releases them newest first, which separate
+    processes never need, and answers in the workers' order."""
 
     def __init__(self, workers):
         self.workers, self.steps = workers, 0
@@ -73,7 +75,12 @@ class Executor:
         self.steps += 1
 
     def collective_rpc(self, method, kwargs=None):
-        return [getattr(w, method)(**(kwargs or {})) for w in self.workers]
+        """vLLM's: a worker method by name, or a callable called with each worker first."""
+        def call(w):
+            return method(w, **(kwargs or {})) if callable(method) else getattr(w, method)(**(kwargs or {}))
+        if method == "h1rank_release":
+            return [call(w) for w in reversed(self.workers)][::-1]
+        return [call(w) for w in self.workers]
 
 
 def _layers():

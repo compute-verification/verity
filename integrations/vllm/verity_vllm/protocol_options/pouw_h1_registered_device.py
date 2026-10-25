@@ -8,8 +8,8 @@ digest, salt, hm96-sha512 string, tree leaf and frame leaf) and then the pads an
 returns the strings and levels as `Registered` holds them (64-byte nodes, 128-byte strings, as bytes). `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is the one on the path, else ``$CUDA_HOME``'s or
-``/usr/local/cuda``'s.
+(`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
+or the one on the path).
 """
 from __future__ import annotations
 
@@ -23,7 +23,8 @@ import numpy as np
 
 from verity_vllm.commit import row_tables_device as RTD
 
-__all__ = ["CHUNK_BYTES", "Table", "available", "device_commit", "device_lib", "host_commit", "host_lib", "nvcc", "table"]
+__all__ = ["CHUNK_BYTES", "Pub", "Table", "available", "device_commit", "device_lib", "device_public_salts", "host_commit",
+           "host_lib", "host_public_salts", "nvcc", "pub", "table"]
 
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
@@ -31,6 +32,8 @@ HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_
 CHUNK_BYTES = 1 << 28
 #: rows a value may have: row j's salt is ChaCha20 blocks 3j .. 3j + 2 under a 32-bit low counter word
 MAX_ROWS = (1 << 32) // 3
+#: a public salt head's words (`registered_rows.cuh`'s ``PUB_WORDS``)
+PUB_WORDS = 40
 
 
 class Table(ctypes.Structure):
@@ -59,6 +62,22 @@ def table(n: int, row_bytes: int, key: bytes, nonce: int, salted: bool, domain_i
     return t
 
 
+class Pub(ctypes.Structure):
+    """`registered_rows.cuh`'s ``Pub``."""
+    _fields_ = [("w", ctypes.c_uint64 * PUB_WORDS), ("len", ctypes.c_uint32), ("n", ctypes.c_uint32), ("first", ctypes.c_uint64)]
+
+
+def pub(head: bytes, first: int, n: int) -> Pub:
+    """The layout of ``n`` public salts from position ``first`` under the salt head ``head`` (at most 320 bytes)."""
+    if len(head) > 8 * PUB_WORDS or not 0 < n < 1 << 32 or first < 0 or first + n > 1 << 64:
+        raise ValueError(f"{n} public salts from {first} under a {len(head)}-byte head: at most {8 * PUB_WORDS} bytes, "
+                         "1 to 2^32 - 1 salts, u64 positions")
+    p = Pub()
+    p.w[:] = np.frombuffer(head.ljust(8 * PUB_WORDS, b"\0"), ">u8").tolist()
+    p.len, p.n, p.first = len(head), n, first
+    return p
+
+
 def nvcc() -> str | None:
     """`pouw_device`'s nvcc: its configured `TOOLCHAIN`'s, or nvcc on the path."""
     from verity_vllm.protocol_options import pouw_device
@@ -78,6 +97,8 @@ def host_lib() -> ctypes.CDLL:
     dll = RTD._build(cxx, HOST_SOURCES, RTD.CFLAGS, "libregistered_rows_host.so")
     dll.rr_commit_host.argtypes = [ctypes.POINTER(Table), _u64, _u64, _u64, _u64]
     dll.rr_commit_host.restype = ctypes.c_int
+    dll.rr_public_salts_host.argtypes = [ctypes.POINTER(Pub), _u64]
+    dll.rr_public_salts_host.restype = ctypes.c_int
     return dll
 
 
@@ -86,13 +107,14 @@ def device_lib(arch: str) -> ctypes.CDLL:
     """`registered_rows.cu` built with nvcc for ``sm_<arch>`` (``"120"``: the RTX PRO 6000)."""
     tool = nvcc()
     if tool is None:
-        raise RuntimeError("no nvcc on the path, in $CUDA_HOME or in /usr/local/cuda")
+        raise RuntimeError("no nvcc (pouw_device.TOOLCHAIN, or on the path)")
     dll = RTD._build(tool, DEVICE_SOURCES, (*RTD.NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
                      "libregistered_rows_cuda.so")
     dll.rr_midstates.argtypes = [_vp, _vp, _vp]
     dll.rr_leaves.argtypes = [_vp, ctypes.POINTER(Table), ctypes.c_uint32, ctypes.c_uint32, _vp, _vp, _vp, _vp]
     dll.rr_tree.argtypes = [_vp, ctypes.POINTER(Table), _vp]
-    dll.rr_midstates.restype = dll.rr_leaves.restype = dll.rr_tree.restype = ctypes.c_int
+    dll.rr_public_salts.argtypes = [_vp, ctypes.POINTER(Pub), _vp]
+    dll.rr_midstates.restype = dll.rr_leaves.restype = dll.rr_tree.restype = dll.rr_public_salts.restype = ctypes.c_int
     return dll
 
 
@@ -109,15 +131,15 @@ def _salts(row_salts: bytes, n: int) -> np.ndarray:
 
 def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
     """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``."""
-    b, lv = bcs.byteswap().tobytes(), levels.byteswap().tobytes()
+    nodes = levels.byteswap().view("V64").tolist()
     out, off, w = [], 0, W
     while True:
-        out.append(tuple(lv[o:o + 64] for o in range(64 * off, 64 * (off + w), 64)))
+        out.append(tuple(nodes[off:off + w]))
         off += w
         if w == 1:
             break
         w //= 2
-    return tuple(b[o:o + 128] for o in range(0, len(b), 128)), tuple(out)
+    return tuple(bcs.byteswap().view("V128").tolist()), tuple(out)
 
 
 def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
@@ -134,6 +156,14 @@ def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | No
     if rc:
         raise ValueError(f"rr_commit_host refused the value's layout ({rc})")
     return _out(bcs, levels, t.W)
+
+
+def host_public_salts(head: bytes, first: int, n: int) -> bytes:
+    """`pouw_h1_registered.public_salts` by the kernels' function on the CPU: the device path's twin."""
+    out = np.empty(24 * n, np.uint64)
+    if host_lib().rr_public_salts_host(ctypes.byref(pub(head, first, n)), out):
+        raise ValueError("rr_public_salts_host refused the salt head")
+    return out.tobytes()
 
 
 class _Device:
@@ -210,3 +240,16 @@ def device_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | 
             raise RuntimeError(f"rr_tree: CUDA error {rc}")
         got_bcs, got_levels = bcs.cpu().numpy().view(np.uint64), levels.cpu().numpy().view(np.uint64)
     return _out(got_bcs, got_levels, t.W)
+
+
+def device_public_salts(head: bytes, first: int, n: int) -> bytes:
+    """`pouw_h1_registered.public_salts` on the current CUDA device, on its stream, returned once done."""
+    import torch
+
+    d, p = _device(torch), pub(head, first, n)
+    with torch.cuda.stream(d.stream):
+        out = torch.empty(24 * n, dtype=torch.int64, device=d.hm.device)
+        rc = d.lib.rr_public_salts(d.stream.cuda_stream, ctypes.byref(p), out.data_ptr())
+        if rc:
+            raise RuntimeError(f"rr_public_salts: CUDA error {rc}")
+        return out.cpu().numpy().tobytes()

@@ -96,7 +96,7 @@ def row(monkeypatch):
             def words(self, rid, step, op, member, lo, hi):
                 return y[lo:hi], None
 
-        monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g: [ops[g[0][1]]])
+        monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g, **_k: [ops[g[0][1]]])
         return ("r0", None, r, d), ops, y, Store()
     return make
 
@@ -156,9 +156,75 @@ def test_a_window_s_slices_are_chunks_of_the_stager_s_bit_rows_read_once(row, fa
         st.reference_check(got[0][0]["rows"], {"o0": got[0][0]["outs"]["o0"] ^ np.uint16(1)})
 
 
+class TokenIndex:
+    """The ProgramIndex calls the real `_slices` makes for a vocabulary shard's row: argument 0 is the sampler's committed token of
+    dtype ``dt``, argument 1 the shard's registered weight."""
+    pnames = ["weights"]
+
+    def __init__(self, dt: str = "i64"):
+        self.dt = dt
+
+    def member_at(self, a, lo, hi):
+        return ({"members": [["sampled_token_ids", 1, self.dt]], "step": 15, "op_path": "runner.sampler", "row": 0},
+                "sampled_token_ids", lo, hi, self.dt)
+
+    def weight_slice(self, lo, hi):
+        return "model.embed_tokens.weight", lo, hi, (lo, hi)
+
+
+def token_row(tok: int, dt: str = "i64", unit: bool = True):
+    """EmbeddingShard_v1{VS=5,H=4,START=2}'s row reading the sampler's token ``tok`` as its committed u64 word, its table a
+    registered weight, through the real `_slices`: as its four slice units, or (``unit`` false) as the whole row."""
+    family = "EmbeddingShard_v1"
+    _tok, table = operands(family, 3)
+    y = np.asarray(evaluate_batch(defn(family), np.array([[4]], np.uint64), table.astype(np.uint64).reshape(1, -1))).reshape(-1)
+    r = {"i": 9, "spec": descriptor_id(defn(family)), "args": [[["n", 0, 0, 1]], [["p", 0, 0, table.size]]]}
+    d = {"statics": ROWS[family][1], "op_path": "model.embed_tokens", "members": [("out", y.size, "bf16")], "row": 0, "step": 16}
+
+    class Store:
+        def words(self, rid, step, op, member, lo, hi):
+            return (np.array([tok], np.uint64) if member == "sampled_token_ids" else y.astype(np.uint16))[lo:hi], None
+
+    x = ("r0", TokenIndex(dt), r, d)
+    (m,) = SRW.members([descriptor_id(defn(family, unit=True))], [[x]], [4]) if unit else SRW.members([r["spec"]], [[x]])
+    return m, x, Store(), (lambda _f, lo, hi: table[lo:hi]), y
+
+
+def test_the_samplers_i64_token_is_read_by_value_into_the_vocabulary_shards_32_bit_tok():
+    """Token ids are 32-bit words: the shard's ``tok`` is the sampler's committed i64's low word, so every unit reads the token's
+    value, low half first, and computes the row's output column; the whole row, a packed row template, reads it the same way."""
+    m, x, store, weights, y = token_row(4)
+    data, _entries = SRW.read(m, [x], store, weights)
+    assert data["rows"]["in0"].tolist() == [[4, 0]] * 4
+    assert data["outs"]["out.out"].reshape(-1).tolist() == y.tolist()
+    T = descriptor_id(defn("EmbeddingShard_v1", unit=True))
+    bits = SRW.template(T).packed
+    ref = evaluate_batch(defn("EmbeddingShard_v1", unit=True), *(leaves(data["rows"][f"in{g}"], b) for g, b in enumerate(bits[:-1])))
+    assert np.asarray(ref).reshape(-1).tolist() == y.tolist()
+    m, x, store, weights, y = token_row(4, unit=False)
+    assert SRW.template(m.template).layout == "row" and SRW.template(m.template).packed[0] == 32
+    data, _entries = SRW.read(m, [x], store, weights)
+    assert data["rows"]["in0"].tolist() == [[4, 0]] and data["outs"]["out.out"].reshape(-1).tolist() == y.tolist()
+
+
+@pytest.mark.parametrize("unit", [True, False])
+@pytest.mark.parametrize(("tok", "shown"), [(2**32 + 4, 2**32 + 4), (2**64 - 1, -1)])
+def test_a_token_whose_high_word_is_not_zero_is_refused(tok, shown, unit):
+    m, x, store, weights, _y = token_row(tok, unit=unit)
+    with pytest.raises(ValueError, match=rf"member sampled_token_ids of runner.sampler: element 0 of a uint64 member is {shown}, not in "
+                                         rf"a 32-bit port's \[0, 2\^32\)"):
+        SRW.read(m, [x], store, weights)
+
+
+def test_an_unsigned_member_wider_than_the_tok_port_is_not_read_by_value():
+    m, x, store, weights, _y = token_row(4, dt="u64")
+    with pytest.raises(ValueError, match=r"argument 0: uint64 elements, the template's port is 32-bit elements"):
+        SRW.read(m, [x], store, weights)
+
+
 def test_a_row_whose_operand_is_not_its_dimensions_is_refused(row, monkeypatch):
     x, ops, _y, store = row("Gemm_v2")
-    monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g: [ops[g[0][1]][:-1]])
+    monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g, **_k: [ops[g[0][1]][:-1]])
     (m,) = SRW.members([descriptor_id(defn("Gemm_v2", unit=True))], [[x]], [3])
     with pytest.raises(ValueError, match=r"row 9 \(model.layers.3.mlp.gate\) argument 0: 31 elements, not its dimensions \[32\]"):
         SRW.read(m, [x], store, None)

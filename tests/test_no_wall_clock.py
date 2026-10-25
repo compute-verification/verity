@@ -56,14 +56,19 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::period_program":
         "the GPU run records the period Program's declare and digest seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::await_end":
+        "the live run polls the live gate's status for a window's session end entry before reserving the next: it has no wait verb",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::await_listener":
         "the live run waits for the challenger's ssh -R listener (ss -ltn) once a second; a probe connect would take its one client",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::served_measures":
         "the GPU run records its step seconds and when serving ended; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill_close": "the close stage records its seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::credit_check": "the credit check records its seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_ranks_gpu.py::serve":
         "the GPU run records its build, serve and release seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_ranks_gpu.py::commit_window":
+        "the GPU run records each Commit window's install, serve and release seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_rehearsal.py::build_program":
         "the by-hand rehearsal (not collected) records the declared Program's build and encode seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_rehearsal.py::serve":

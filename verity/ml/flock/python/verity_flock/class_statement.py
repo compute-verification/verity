@@ -95,7 +95,7 @@ CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
 PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
 LEAF_SCHEME = FC.LEAF_SCHEME_PLAIN if PLAIN_LEAVES else None
 #: FLOCK_OWN_ROWS=1: an unwired class is staged with every instance's own rows (`stage`'s ``share_rows=False``), the public
-#: file the verifier covers outside a registered ZK session (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
+#: file a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
 #: once per instance rather than once
 OWN_ROWS = os.environ.get("FLOCK_OWN_ROWS") == "1"
 #: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
@@ -1056,7 +1056,8 @@ class UnitStager:
     that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
     (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
     `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
-    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s)."""
+    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
+    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
@@ -1094,7 +1095,7 @@ class UnitStager:
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
                                seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
                                partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
-                               tail=getattr(self.low, "tail", None))
+                               tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
         self.meta = FC.meta_of(self.text)
         self.ports = FC._meta_ports(self.meta)

@@ -33,7 +33,10 @@ static schedule's check (`engine.static_schedule.check`) of every request. Compi
 challenger, in the session infra's gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
 (`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one session a window, so the fill
-workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
+workload serves only the 64's window. With ``--peer NAME`` in place of ``--session`` each window the run serves reserves
+a session of its own (`window_sessions`: ``CMD reserve --peer NAME``) just before it is installed, and the next is
+reserved only once that session's end entry is in the gate's ``status`` (`session_end`), so ``--commit``'s windows
+and the solo window all take the auditor host's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
 ...] --pins HEAD [--pins HEAD ...] --main FILE`` is the verifier's side on no GPU, ``--ledger`` given once per head
 infra published, ``--pins`` once per head of the host's pins log infra published and ``--main`` the auditor's ``git
 rev-list --first-parent origin/main`` (without them every window is refused). With ``--window WINDOW_JSON``
@@ -65,9 +68,18 @@ serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `re
 the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
 registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
 window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step).
+(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
+them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
+J10-R's tile unit (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
+and they are held to `h1tile.j10r_reference`; v1's unit is the default.
 
-``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
+``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
+(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
+opens each drawn unit's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the drawn units the first and last of each kept call; then a receipt word flipped (with and
+without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
+
+``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
 ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
 records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``). Its
@@ -78,6 +90,10 @@ Commit window is also held to core's ROOTS1 steps over its own evidence (`core_v
 window twice more with an honest Commit, H1 handed all-zero A codes or one A row off (`NEGATIVES`), each to be refused at
 ``arow``, and on a MoE (``--role OLMOE_INT8 --int8-exact linears``) once more with one routed expert call's codes zero
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
+Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
+`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window draws its salt, round and draw coins from a
+session of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, session and credit gate,
+``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -122,19 +138,36 @@ PERIOD_DIGEST = """
 import json, resource, sys, time
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity_vllm.protocol_options import pouw_h1_served as SV
-shapes, modules, rows, steps = json.loads(sys.argv[1])
+shapes, modules, rows, steps, j10r = json.loads(sys.argv[1])
+unit = None
+if j10r:
+    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
 t = time.monotonic()
-digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps))
+digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps,
+                                      unit=unit))
 print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
                   "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
 """
 
 
-def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[str, Any]]:
-    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run),
-    its digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares
-    them. The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window
-    pays, so this process's RSS is the windows' own."""
+def period_unit(j10r: bool) -> Any:
+    """The window Program's tile unit at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
+    v1's (`h1window.tile_unit`'s default), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy` (``--j10r``)."""
+    if not j10r:
+        return None
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
+
+
+def period_program(model: Any, rows: int, steps: int, j10r: bool = False) -> tuple[Any, str, dict[str, Any]]:
+    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
+    over `period_unit`'s tile unit), its digest (the period's ``--circuit``) and what declaring them cost, once before
+    any window, as a period declares them. The digest is taken in a child process, since at FILL it alone takes minutes
+    and tens of GB, which no window pays, so this process's RSS is the windows' own."""
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -142,10 +175,10 @@ def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[st
     layers = PHK.layers(model, pouw.linear_types())
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
-    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps])],
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r])],
                              stdout=subprocess.PIPE, text=True)
     t = time.monotonic()
-    program = SV.declared(shapes, modules, rows, steps)
+    program = SV.declared(shapes, modules, rows, steps, unit=period_unit(j10r))
     declare_s = round(time.monotonic() - t, 1)
     out, _ = child.communicate()
     if child.returncode:
@@ -188,10 +221,23 @@ def await_listener(port: int, polls: int = 300) -> int | None:
     return None
 
 
+def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
+    """`status()` (the gate's ``status S``) once session S has its ``end`` entry (serve.py's exit after the window's
+    close), was never opened or is refused, polled once a second at most `polls` times: the live gate has no ``wait``."""
+    for _ in range(polls):
+        s = status()
+        if s.get("end") is not None or s.get("open") is None or "refused" in s:
+            return s
+        time.sleep(1)
+    return status()
+
+
 def gate_command(argv: list[str]) -> Any:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
-    S``, and the answer returned once its ``port`` listens on this host (`await_listener`)."""
+    S``, and the answer returned once its ``port`` listens on this host (`await_listener`). ``reserve(peer, steps)`` is
+    the gate's reserve of a window of S = `steps` rounds served on `peer` (its answer; ValueError naming what the gate
+    said when it refuses), and ``ended(session)`` the session's ``status`` once it has its end entry (`await_end`)."""
     def verb(*args: str) -> dict[str, Any]:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
@@ -204,8 +250,54 @@ def gate_command(argv: list[str]) -> Any:
             print(f"[gate] session {session}: port {answer['port']} "
                   + (f"listening after {polls} polls" if polls is not None else "not listening after 300 polls"), flush=True)
         return answer
-    gate.argv = argv
+
+    def reserve(peer: str, steps: int) -> dict[str, Any]:
+        from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+        p = subprocess.run(gate_argv(argv, ["reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families",
+                                            PHC.families(steps)]), capture_output=True, text=True)
+        try:
+            answer = json.loads(p.stdout)
+        except ValueError:
+            answer = None
+        if p.returncode or not isinstance(answer, dict) or "refused" in answer:
+            raise ValueError(f"the gate refused the reserve (exit {p.returncode}): {(p.stdout + p.stderr)[-1000:]}")
+        return answer
+
+    gate.argv, gate.reserve, gate.ended = argv, reserve, lambda session: await_end(lambda: verb("status", session))
     return gate
+
+
+def window_sessions(gate: Any, peer: str, steps: int) -> Any:
+    """With ``--peer``: each window the run serves gets a session of its own, reserved at the gate (``gate.reserve``) just
+    before the window is installed, since the auditor host's challenger serves one window a session and a session opens
+    once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
+    is refused (ValueError), as is a reserve the gate refuses. ``sessions.held`` maps each window to its answer."""
+    from verity_vllm.protocol_options import pouw_h1_window as PHW
+    held: dict[str, dict[str, Any]] = {}
+
+    def sessions(name: str) -> dict[str, Any]:
+        if name in held:
+            raise ValueError(f"window {name} has its session ({held[name]['session']}) already: one session a window")
+        answer = gate.reserve(peer, steps)
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)})
+        if reserved is None or reserved["session"] in {r["session"] for r in held.values()}:
+            raise ValueError(f"window {name}: the gate's reserve answer {answer!r} is no fresh session")
+        held[name] = reserved
+        print(f"[gate] window {name}: reserved session {reserved['session']} on {peer}", flush=True)
+        return reserved
+    sessions.held = held
+    return sessions
+
+
+def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
+    """Window's session `reserved` (its reserve answer) once released: its ``end`` entry as the gate's ``status`` gives it,
+    ``ok`` when the challenger's client closed it and every coin family released all its coins (``complete``). The next
+    window's session is reserved only after this one has ended."""
+    s = gate.ended(reserved["session"])
+    end = ((s.get("end") or {}).get("body") or {}) if isinstance(s.get("end"), dict) else {}
+    return {"session": reserved["session"], "seq": reserved.get("seq"), "opened": s.get("open") is not None,
+            "end": {k: end.get(k) for k in ("rc", "closed", "complete", "commitment")} if end else None,
+            "ok": bool(end.get("closed") and end.get("complete"))}
 
 
 def model_key_of(gate: Any, model: str, circuit: str) -> Any:
@@ -488,9 +580,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     except ValueError as e:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
-    period = period_program(eng.model, decl.rows, decl.steps) if a.served else None
+    period = period_program(eng.model, decl.rows, decl.steps, a.j10r) if a.served else None
     if period is not None:
-        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
+        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {
+            "circuit": period[1], "noise": "j10r" if a.j10r else "v1"}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
@@ -504,12 +597,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     "solo_is_first_of_fill": plain_solo[0]["token_ids"] == plain[0]["token_ids"], "gpu": plain_gpu}
     print(f"[fill] plain {json.dumps(doc['plain'])}", flush=True)
     layers = None
+    sessions = window_sessions(a.gate, a.peer, decl.steps) if a.peer else None
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path, commit: bool = False, edit: str | None = None
                ) -> dict[str, Any]:
         nonlocal layers
         from verity_vllm.engine.hooks import Hooks
         rss0 = rss_gib()
+        reserved = sessions(name) if sessions is not None else a.session
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         com = tap = None
         if commit:
@@ -556,7 +651,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             served.commit = timed
             SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
+                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, reserved, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
@@ -644,8 +739,15 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             out["hook_bad"] = bad[:20]
             return out
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
+        if sessions is not None:
+            out["session"] = session_end(a.gate, reserved)
+            out["ok"] = bool(out["ok"] and out["session"]["ok"])
+            print(f"[fill] {name} session {json.dumps(out['session'])}", flush=True)
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
+        if a.credit and edit is None and tap is not None and made is not None:
+            out["credit"] = credit_check(h1, served, made)
+            out["ok"] = bool(out["ok"] and out["credit"]["ok"])
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
@@ -680,12 +782,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"),
+                         "committer": c.get("committer"), "coins": coins_summary(doc, bool(a.challenger)), "receipts": c.get("receipts"),
+                         "credit": {k: (c.get("credit") or {}).get(k) for k in ("ok", "lines", "units", "s")},
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
                                     and all(v["refused"] for v in negs.values())
-                                    and len(negs) == len(negatives_of(layers)) * a.negatives)}
+                                    and len(negs) == len(negatives_of(layers)) * a.negatives
+                                    and coins_summary(doc, bool(a.challenger))["ok"])}
         print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
-    elif a.challenger:
+    elif a.challenger and not a.peer:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
     elif a.baseline_h1:
         doc["h1_solo"] = {"skipped": "--baseline-h1 serves the H1 window without Served in its place"}
@@ -969,14 +1073,16 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
     (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
-    the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
+    leaves a row past K = 4096). ``tied`` when none refuses."""
     from verity.core.protocols.pouw import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
+    rows = CR.table_rows(layout, len(rounds), CR._prefix(raw)) if why is None and isinstance(rounds, list) else None
     out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
-                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+                           "a_link": CR._a_link(rounds, entries, len(ev["calls"]), rows), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
     out["commit_values"] = len(got[1]) if got else None
@@ -994,6 +1100,33 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
     return {"refused": refused, "arow": arow, "roots1": r1.get("reason"), "own_trees": r1.get("own_trees"),
             "edited": out.get("edited"),
             "manifest": core.get("manifest"), "a_link": core.get("a_link"), "same_tokens": out.get("same_tokens")}
+
+
+def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
+    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
+    its session and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
+    with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
+    when every window's coins are the auditor host's from a session of its own that ended closed and complete, and the
+    honest Commit window's gate passes rows and refuses none of its calls."""
+    wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
+            "fill": doc.get("h1")}
+    rows: dict[str, dict[str, Any]] = {}
+    for name, w in wins.items():
+        if not w:
+            continue
+        g, s = w.get("gate") or {}, w.get("session") or {}
+        passed, refused = g.get("gate_passed") or {}, g.get("refused") or {}
+        served = (passed.get("macs") or 0) + (refused.get("macs") or 0)
+        rows[name] = {"coin_source": w.get("coin_source"), "session": s.get("session"), "session_ok": s.get("ok"),
+                      "gate_passed_rows": passed.get("rows"), "refused_calls": refused.get("calls"),
+                      "credited_share": round((passed.get("macs") or 0) / served, 6) if served else None,
+                      "reasons": refused.get("reasons")}
+    sessions = [r["session"] for r in rows.values()]
+    c = rows.get("commit") or {}
+    ok = not challenger or bool(rows and all(r["coin_source"] == "challenger" and r["session_ok"] for r in rows.values())
+                                and None not in sessions and len(set(sessions)) == len(sessions)
+                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows"))
+    return {"windows": rows, "ok": ok}
 
 
 def core_from(directory: str, out: str) -> dict[str, Any]:
@@ -1078,10 +1211,13 @@ def producer() -> Any:
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
     `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
-    on the GPU), keeping the first block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`."""
+    on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
+    block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
+    v1's or J10-R's (``--j10r``)."""
     P = producer()
-    made = P.Receipts(served, h1, P.Units(so), weight=lambda c: layers[c.layer].weight,
-                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1))
+    kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
+    made = P.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
+                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
@@ -1099,6 +1235,30 @@ def receipts_check(made: Any) -> dict[str, Any]:
     return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
             "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
             "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
+
+
+def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
+    """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
+    on, the drawn units the first and last of each kept call (`receipts_producer`'s: the first block's linears at step 0
+    and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
+    (`pouw_h1_credit.NEGATIVES`) at the first of them."""
+    from tests.protocol_options import pouw_h1_credit as PC
+    from verity.core.protocols.pouw import credit as CR
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    t0 = time.monotonic()
+    w = PC.of_run(h1, served)
+    units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
+    got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
+                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
+    got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
+    got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
+                      if e["value"].startswith(f"{w.prefix}b/")]
+    got["kept"] = [{"call": c, "k": w.k_of(c), "units": CR.call_work(w.layout)[c][0]} for c in sorted(made.kept)]
+    print(f"[fill] credit weights {json.dumps(got['weights'])} kept {json.dumps(got['kept'])}", flush=True)
+    for line in got["lines"]:
+        print(f"[fill] {line}", flush=True)
+    print(f"POUW-H1-CREDIT {'OK' if got['ok'] else 'FAIL'} units={len(units)} s={got['s']}", flush=True)
+    return got
 
 
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
@@ -1259,6 +1419,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate", type=lambda v: gate_command(shlex.split(v)), metavar="CMD",
                     help="with --challenger: the command the gate's verbs follow (ssh -i KEY -o BatchMode=yes "
                          "research@HOST), which opens the reserved session on the window's open root")
+    ap.add_argument("--peer", metavar="NAME", help="fill with --challenger and --gate, in place of --session: each window "
+                                                   "the run serves reserves a session of its own at the gate (reserve --peer "
+                                                   "NAME), NAME this node's name in the gate's peers, and the next window's "
+                                                   "is reserved once that session has ended (window_sessions)")
     ap.add_argument("--period", metavar="NAME", help="with --check-challenger: the lane's period the window is one of, which "
                                                      "the ledger must credit with it accepted")
     ap.add_argument("--descriptor", metavar="PROGRAM", help="with --check-challenger: the period's declared window Program "
@@ -1294,13 +1458,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "
                                                                 "passed it")
     ap.add_argument("--commit", action="store_true",
-                    help="fill with --served, in-process coins: after the 64's window, serve it again with the Commit in "
-                         "the engine (pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory "
-                         "and step time beside the plain run's and the Commit's tie (no solo window, no --registered files)")
+                    help="fill with --served: after the 64's window, serve it again with the Commit in the engine "
+                         "(pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory and step "
+                         "time beside the plain run's and the Commit's tie (no solo window, no --registered files); its "
+                         "coins are this process's unless --challenger with --peer gives each window a session of its own")
     ap.add_argument("--receipts", metavar="SO",
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
-                         "first block's linears' calls at step 0 and the last step held to h1tile.reference")
+                         "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
+                         "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+    ap.add_argument("--j10r", action="store_true",
+                    help="fill with --served: declare the period's window Program over J10-R's tile unit "
+                         "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "
+                         "receipts and public rows are J10-R's; v1's unit otherwise")
     ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
                          "of pouw_h1.FILL's 64,16,64,18")
@@ -1308,6 +1478,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--credit", action="store_true",
+                    help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
+                         "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
                     help="fill with --served: profile each served window's registration (Served.commit) and write its "
                          "functions by cumulative time to <window out>/register-profile.txt")
@@ -1321,10 +1496,20 @@ def main(argv: list[str] | None = None) -> int:
     if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
-    if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
-        ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
+    if a.j10r and not (a.served and a.workload == "fill"):
+        ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
+    if a.commit and not (a.served and a.workload == "fill" and not a.handoff):
+        ap.error("--commit is the fill workload's, with --served, without --handoff")
+    if a.commit and a.challenger and not a.peer:
+        ap.error("--commit with --challenger needs --peer: it serves several windows, and each takes a session of its own "
+                 "(one --session is one window's)")
+    if a.peer and not (a.challenger and a.gate and a.workload == "fill" and not a.handoff and a.session is None):
+        ap.error("--peer is the fill workload's, with --challenger and --gate, without --session or --handoff (each window "
+                 "reserves its own session)")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
+    if a.credit and not (a.commit and a.receipts):
+        ap.error("--credit is --commit's, with --receipts (a window's receipt tables are what its statements' o0 reads)")
     if a.declare and (a.workload != "fill" or len(a.declare) != 4):
         ap.error("--declare is the fill workload's, SLOTS,CAP,T,S")
     if a.close_from:
