@@ -1848,6 +1848,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Hash.EmbeddingRead.ok": {
+   "owner": "@proofs",
+   "digest": "73696546bac79ee16ad2c05ca0bb24e36f024e4c37114acd714e1160e0bf8c35"
   }
  },
  "meaning": [
@@ -7679,7 +7683,10 @@
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
   "Hash.SecurityProofs.EmbeddingReadBinding": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Hash.SecurityProofs.EmbeddingReadBinding : Hash.Guarantees.EmbeddingReadBinding"],
+   "assumptions": [],
+   "type_hash": "c0490a64c93269da77a51fd49be5835792c0659fce6b3962e9750167c044c221"
   },
   "Hash.SecurityProofs.RowBinding": {
    "owner": "@kernels",
@@ -15133,6 +15140,7 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
@@ -17334,7 +17342,22 @@
     "Hash.uint": "54f1380cede20ece799c577d798408019afc86701c15097bc10064e1b29ac7bf",
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
+   "guarantees": [
+    "Hash.SecurityProofs.EmbeddingReadBinding",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding"
+   ]
+  },
+  "Definitions.Hash.EmbeddingRead": {
+   "digest": "6d8abddb35b01ea8434d37aa1522b3f9973f698db76116215f51c3dfd976c5cf",
+   "definitions": {
+    "Hash.EmbeddingRead.FILL_WORD": "0d56a4964d71bcc7c34c10236c7f57ffb45883d28965dd1be72751f133e8c120",
+    "Hash.EmbeddingRead.fill": "8473642ac7be2d62d95ed40411b107f78f3fb042e9183743e3b4311287ec5e40",
+    "Hash.EmbeddingRead.h": "e32e4776a5c9672af071ce5d8f33cbfb5101573b25ced4402337404cc4c89e62",
+    "Hash.EmbeddingRead.ok": "73696546bac79ee16ad2c05ca0bb24e36f024e4c37114acd714e1160e0bf8c35",
+    "Hash.EmbeddingRead.verifier": "44a465880256ba5a4dee2b876927b9339bcffd997721ffd2ab4da4064e476c41"
+   },
+   "guarantees": ["Hash.SecurityProofs.EmbeddingReadBinding"]
   },
   "Definitions.Hash.Hm96": {
    "digest": "a25e93ee3e42e5c6fb4928fcbc844fa373b338928a514b95d66128aac4291dc7",
@@ -17349,7 +17372,7 @@
     "Hash.Hm96.maskBit": "84c9847922cdabdcf8f9e4803039807462219e01b65429a93936bed110e7fbac",
     "Hash.Hm96.saltPrefix": "74d72964af334edfdb91fc4be5b5e9a07fbb5c930ebc4b745ab2246293d83aa6"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": ["Hash.SecurityProofs.EmbeddingReadBinding", "Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowLeaf": {
    "digest": "a332210454866a3b88c93c3c35906dc941366fe79a3b6566ebb3dfa4e8544ec7",
@@ -17375,7 +17398,7 @@
     "Hash.RowLeaf.leafMsg": "b6618d2baacea640c3f31fd3b3604c634198f8e03b74fbd9e97e8afbf34756cd",
     "Hash.RowLeaf.outerHashed": "2d80b04f02a6dbb598aede89f6ff2c3008d0ca0f96d2d9a3afa9eddfb0461f11"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": ["Hash.SecurityProofs.EmbeddingReadBinding", "Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowSeg": {
    "digest": "90bfdb254a02577fb455c429e2b39538b1096a953cb4aa4b3a604bec66068775",
@@ -17394,7 +17417,7 @@
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": ["Hash.SecurityProofs.EmbeddingReadBinding", "Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowV2": {
    "digest": "52e1b6519c9a37823278a704e4fa649e244d97074670631af94edaf015eb29f6",
@@ -17404,7 +17427,7 @@
     "Hash.RowV2.msg": "73f58fbc3bc895270bcc2e61559234430c03d76b31dcb1d1bd053200796feff0",
     "Hash.RowV2.rowPrefix": "5685bbc629d745a50fd750e1c773369607d76b2a4e18288590e2c6164197eb0e"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": ["Hash.SecurityProofs.EmbeddingReadBinding", "Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.Tree": {
    "digest": "c4b8c7ea14f3c9a159c9a52d84b0b56922af0b7ecce92dc113116c019277fdc5",
@@ -17422,7 +17445,11 @@
     "Hash.Tree.leafMsg": "c03f78eb03c50bae57d161e89fa7af3fe26e1c1584952f654cf4057b3f4b2d77",
     "Hash.Tree.nodeMsg": "f0246edca6110f84d6a81bbf1e435afe3a2e8da1f97e4b4ee3a97741dff654a8"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
+   "guarantees": [
+    "Hash.SecurityProofs.EmbeddingReadBinding",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding"
+   ]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -32347,12 +32374,17 @@
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Models.Hash.Guarantees": {
-   "digest": "19e9fcea482aa5af527ceb48166741b5c12059a2133c4b0f9d00d9ae6ab64713",
+   "digest": "f2b8af9c96d4c2b6cf862175f78ebd52043e0a7207342c310db358c27c83a9d7",
    "definitions": {
+    "Hash.Guarantees.EmbeddingReadBinding": "fb62619313fdc15cf07ebedef7c3c73009727b9e8a501c6cf130b2da65e8b3b8",
     "Hash.Guarantees.RowBinding": "eb2b5136f8ce060b9e18a900cd57bd9df1a732e36d8756e3a59b202fc98e2edf",
     "Hash.Guarantees.TreeBinding": "5a6ac8239b2f217ee43962de29f8aca8baceb9c73ebc5f095fa328da95bd9d1a"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
+   "guarantees": [
+    "Hash.SecurityProofs.EmbeddingReadBinding",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding"
+   ]
   },
   "Models.Nci.Assumptions": {
    "digest": "83716c466c58f7f4f5e7659d570bcb6fda1c73d0d559a67e915b389928fd4778",
