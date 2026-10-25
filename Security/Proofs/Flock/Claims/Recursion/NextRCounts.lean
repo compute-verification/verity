@@ -113,8 +113,8 @@ theorem closeNs_ones : ∀ l : List F128, closeNs (l.map Frame.one) = []
 theorem closeNs_chFr (p : Flock.LigeritoProof) : ∀ msg k, closeNs (chFr p msg k) = List.replicate k 2
   | _, 0 => rfl
   | msg, k + 1 => by
-    rw [chFr, closeNs_cons, closeNs_append, closeNs_kFr, closeNs_chFr p (msg + 1) k, sqN_sq _ (by decide)]
-    rfl
+    simp only [chFr, closeNs_append, closeNs_cons, closeNs_kFr, closeNs_chFr p (msg + 1) k,
+      sqN_sq _ (show (2 : ℕ) ≠ 0 by decide), List.replicate_succ, List.cons_append, List.nil_append, List.append_nil]
 
 theorem closeNs_introFr (p : Flock.LigeritoProof) {dim : ℕ} (hd : dim ≠ 0) (ood msg cbn : ℕ) :
     closeNs (introFr p dim ood msg cbn) = [dim, 1] := by
@@ -133,7 +133,8 @@ theorem closeNs_queryFr (p : Flock.LigeritoProof) {lv : Flock.Level} (hq : 2 ≤
 theorem closeNs_zc {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (p : Flock.ZerocheckProof) :
     closeNs (zcFrames m digest cap p) = 6 :: (m - 13) :: 1 :: List.replicate (m - 6) 1 := by
   have hB := closeNs_blocks (F := fun i => [Frame.one (p.rounds[i]!).1, .one (p.rounds[i]!).2, .sq 1 1]) (x := 1)
-    (fun i => by simp only [closeNs_cons, closeNs_nil, sqN_one, sqN_sq _ Nat.one_ne_zero, List.nil_append]) 0 (m - 6)
+    (fun i => by
+      simp only [closeNs_cons, closeNs_nil, sqN_one, sqN_sq _ Nat.one_ne_zero, List.nil_append, List.append_nil]) 0 (m - 6)
   unfold zcFrames
   simp only [closeNs_append, hB, closeNs_cons, closeNs_nil, sqN_label, sqN_bytes, sqN_vec, sqN_one,
     sqN_sq _ (by decide : (6 : ℕ) ≠ 0), sqN_sq _ (show m - 13 ≠ 0 by omega), sqN_sq _ Nat.one_ne_zero,
@@ -142,7 +143,8 @@ theorem closeNs_zc {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (p : Flock
 theorem closeNs_lc (k : ℕ) (p : Flock.LincheckProof) :
     closeNs (lcFrames k p) = 1 :: 1 :: (List.replicate (k - 6) 1 ++ [1]) := by
   have hB := closeNs_blocks (F := fun j => [Frame.one (p.rounds[j]!).1, .one (p.rounds[j]!).2, .sq 1 1]) (x := 1)
-    (fun i => by simp only [closeNs_cons, closeNs_nil, sqN_one, sqN_sq _ Nat.one_ne_zero, List.nil_append]) 0 (k - 6)
+    (fun i => by
+      simp only [closeNs_cons, closeNs_nil, sqN_one, sqN_sq _ Nat.one_ne_zero, List.nil_append, List.append_nil]) 0 (k - 6)
   unfold lcFrames
   simp only [closeNs_append, hB, closeNs_cons, closeNs_nil, sqN_label, sqN_vec, sqN_sq _ Nat.one_ne_zero,
     List.nil_append, List.cons_append]
@@ -152,9 +154,9 @@ theorem closeNs_rs {n : ℕ} (hn : n ≠ 0) (rs : Array (Array F128)) :
   have hB := closeNs_blocks
     (F := fun k => [Frame.label "flock-ring-switch-v0".toUTF8, .vec (rs[k]!).toList, .sq 2 7]) (x := 7)
     (fun i => by simp only [closeNs_cons, closeNs_nil, sqN_label, sqN_vec, sqN_sq _ (by decide : (7 : ℕ) ≠ 0),
-      List.nil_append]) 0 n
+      List.nil_append, List.append_nil]) 0 n
   unfold rsFrames
-  simp only [closeNs_cons, closeNs_append, hB, closeNs_nil, sqN_label, sqN_sq _ hn, List.nil_append]
+  simp only [closeNs_cons, closeNs_append, hB, closeNs_nil, sqN_label, sqN_sq _ hn, List.nil_append, List.append_nil]
 
 /-! ## The counts a rep's rounds squeeze -/
 
@@ -278,7 +280,7 @@ theorem repRounds_counts {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Arra
           simp [passC, lvC, hi, rep3, e]
         · simp [h4, hi] at ht
           refine ⟨_, ht.symm, ?_, fun h' => absurd h' (by omega)⟩
-          simp [passC, hi, rep3]) _ _ _ _ (fun _ => by simp [hc0]) hl
+          simp [passC, hi, rep3]) _ _ _ _ (fun _ => by rw [hc0]) hl
   refine key.trans ?_
   simp [schedCnt, lvC]
 
@@ -394,7 +396,7 @@ theorem wi_T (sh : Shape) : wi sh .T = some ((preRounds sh).flatten.size + 128 *
       simp at he
 
 theorem pairs_flat_size (f g : ℕ → Key) : ∀ n, ((Array.range n).map fun i => #[f i, g i]).flatten.size = 2 * n
-  | 0 => by simp
+  | 0 => by simp [Array.range]
   | n + 1 => by
     have h1 : (((#[n] : Array ℕ).map fun i => #[f i, g i]).flatten).size = 2 := by simp
     rw [Array.range_succ, Array.map_append, Array.flatten_append, Array.size_append, pairs_flat_size f g n, h1]
@@ -407,8 +409,7 @@ theorem preRounds_size {sh : Shape} (hh : sh.holo = false) :
   have h2 : (#[#[Key.fa, Key.fb]] : Array (Array Key)).flatten.size = 2 := by simp
   have h3 : (#[(Array.range 64).map Key.zp] : Array (Array Key)).flatten.size = 64 := by simp
   have h4 : (hRound sh).flatten.size = 0 := by simp [hRound, hh]
-  simp only [preRounds, Array.flatten_append, Array.size_append, pairs_flat_size, h1, h2, h3, h4]
-  omega
+  simp only [preRounds, Array.flatten_append, Array.size_append, pairs_flat_size, h1, h2, h3, h4] <;> omega
 
 /-! ### The frames' values -/
 
@@ -445,8 +446,7 @@ theorem vals_zc_length {m : ℕ} (digest cap : ByteArray) {p : Flock.ZerocheckPr
     (h2 : p.round1c.size = 64) : (vals (zcFrames m digest cap p)).length = 128 + 2 * (m - 6) + 2 := by
   unfold zcFrames
   simp only [vals_append, List.length_append, vals_pairs_length, vals_cons_one, vals_cons_vec, vals_cons_label,
-    vals_cons_bytes, vals_cons_sq, vals_nil, List.length_cons, List.length_nil, Array.length_toList, h1, h2]
-  omega
+    vals_cons_bytes, vals_cons_sq, vals_nil, List.length_cons, List.length_nil, Array.length_toList, h1, h2] <;> omega
 
 theorem vals_lc_length (k : ℕ) {p : Flock.LincheckProof} (h : p.zPartial.size = 64) :
     (vals (lcFrames k p)).length = 2 * (k - 6) + 64 := by
@@ -464,17 +464,17 @@ theorem vals_rs_length {n : ℕ} {rs : Array (Array F128)} (hs : rs.size = n) (h
   rfl
 
 theorem vals_repFrames (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArray) (n : ℕ) (p : Flock.Proof)
-    (T : F128) : ∃ Y, vals (repFrames st sch d n p T) =
+    (T : F128) : ∃ ys, vals (repFrames st sch d n p T) =
       vals (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck) ++
-        vals (lcFrames st.fold.kLog p.lincheck) ++ vals (rsFrames n p.ringSwitches) ++ T :: Y := by
-  have hY : ∃ Y, vals (ligFrames sch T p.cap p.ligerito) = T :: Y := ⟨_, by unfold ligFrames; rw [vals_append]; rfl⟩
-  obtain ⟨Y, hY⟩ := hY
-  refine ⟨Y, ?_⟩
+        vals (lcFrames st.fold.kLog p.lincheck) ++ vals (rsFrames n p.ringSwitches) ++ T :: ys := by
+  have hY : ∃ ys, vals (ligFrames sch T p.cap p.ligerito) = T :: ys := ⟨_, by unfold ligFrames; rw [vals_append]; rfl⟩
+  obtain ⟨ys, hY⟩ := hY
+  refine ⟨ys, ?_⟩
   unfold repFrames
   rw [vals_cons_dom, vals_append, vals_append, vals_append, hY]
 
-theorem getElem!_mid (X Y : List F128) (T : F128) (acc : Array F128) : ((X ++ T :: Y).toArray ++ acc)[X.length]! = T := by
-  rw [getElem!_def, Array.getElem?_append_left (show X.length < (X ++ T :: Y).toArray.size by simp),
+theorem getElem!_mid (xs ys : List F128) (T : F128) (acc : Array F128) : ((xs ++ T :: ys).toArray ++ acc)[xs.length]! = T := by
+  rw [getElem!_def, Array.getElem?_append_left (show xs.length < (xs ++ T :: ys).toArray.size by simp),
     List.getElem?_toArray,
     List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero]
 
@@ -489,7 +489,7 @@ theorem valOf_T {st : Flock.Setup} {sch : Flock.Schedule} {e : ℕ} (d : ByteArr
     have h := chunks_flatten (repFrames st sch d (2 + e) p T)
     rw [repFrames_chunks_snd, List.append_nil] at h
     rw [List.flatMap_def, ← vals_flatten, h]
-  obtain ⟨Y, hY⟩ := vals_repFrames st sch d (2 + e) p T
+  obtain ⟨ys, hY⟩ := vals_repFrames st sch d (2 + e) p T
   have hz := vals_zc_length (m := st.m) st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) hs.r1ab hs.r1c
   have hl := vals_lc_length st.fold.kLog hs.zPartial
   have hr := vals_rs_length (n := 2 + e) hs.rs hs.rsEach
@@ -504,6 +504,6 @@ theorem valOf_T {st : Flock.Setup} {sch : Flock.Schedule} {e : ℕ} (d : ByteArr
     simp only [FlockSoundness.Refine.shapeOf]
     omega
   rw [hi]
-  exact getElem!_mid _ Y T acc
+  exact getElem!_mid _ ys T acc
 
 end FlockDeploy
