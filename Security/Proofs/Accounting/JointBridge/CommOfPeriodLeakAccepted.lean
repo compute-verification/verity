@@ -1,20 +1,21 @@
-import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
-import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
+import Proofs.NetworkCertifier.Period
 import Proofs.Accounting.PouwWork
 
 /-!
 # The network certifier's per-period guarantee from its period of sampled audits (proof)
 
-`Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted`: on a run that realizes the network certifier's period of
-`n` sampled audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), the network audit's
-`PeriodRun.Sound` holds at `n · (δ + ε_ks + ε_bind)`. The network certifier accepting with the claim failing means some
-window fails `WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most
-the sampled verifier's `PrBad` at `RLeak` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
+`Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted`: `comm_of_periodLeak` at network accounting's proof of
+`PeriodLeakAccepted` (`NetTiming.periodLeak`). On a run that realizes the network certifier's period of `n` sampled
+audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
+`n · (δ + ε_ks + ε_bind)`. The network certifier accepting with the claim failing means some window fails
+`WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
+verifier's `PrBad` at `RLeak` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
 `κ + √(γ·Pr[B]) + Pr[B_ext]`, at most `δ + ε_ks + ε_bind` at each window's prover.
 
-The per-window conjunct of `PeriodLeakAccepted` doesn't read the period's windows or the tap, so it is read off at the
-period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at `K` stands for, and the
-error doesn't use it.
+The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
+so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at
+`K` stands for, and the error doesn't use it.
 -/
 
 namespace Accounting.SecurityProofs.Bridge
@@ -52,11 +53,8 @@ theorem ksLin_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin Col T :
     (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ h => h.elim)
     (fun _ => ()) (fun _ h => h.elim) (fun _ => Fin.elim0) (fun _ => Fin.elim0)).1
 
-/-- **The network certifier's per-period guarantee.** On a run that realizes the network certifier's period of `n`
-sampled audits at the claim `c.K`, at the deployment `D` where `Claims.Sampling.KS` holds, `δ ≥ 0` and a decoder that
-lists every trace within Flock's radius, where each window's prover has `κ − δ + √(γ·Pr[B]) ≤ ε_ks` and
-`Pr[B_ext] ≤ ε_bind`, `PeriodLeakAccepted` gives the network audit's `PeriodRun.Sound` at `n · (δ + ε_ks + ε_bind)`. -/
-theorem CommOfPeriodLeakAccepted (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
+/-- `Guarantees.Bridge.CommOfPeriodLeakAccepted` from `PeriodLeakAccepted`. -/
+theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
     [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ}
@@ -96,5 +94,10 @@ theorem CommOfPeriodLeakAccepted (hsrc : Guarantees.PeriodLeakAccepted) {ι : Ty
         linarith
     _ = n * (δ + εks + εbind) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+
+/-- **The network certifier's per-period guarantee**, at network accounting's proof of `PeriodLeakAccepted`. -/
+theorem CommOfPeriodLeakAccepted : Guarantees.Bridge.CommOfPeriodLeakAccepted := by
+  intro ι d α _ C I Ω _ _ Coin Col T _ _ _ _ _ r c p H D L Kₒ S lay k δ decode reg Dj n R
+  exact comm_of_periodLeak NetTiming.periodLeak c p R
 
 end Accounting.SecurityProofs.Bridge
