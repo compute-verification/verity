@@ -23,8 +23,9 @@ tables whose regions fit (`FlockComplete.RegionsFit`) and an honest record that 
 soundness headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`). Every conjunct is a fact about one
 concrete inner statement and its witness: #2468's inner session is one, as its run `r20261018-053343-99cf` measured
 (Lean `verify` without `--zk` accepts it, its record holding the full stratified draw), and none is proved here. Only
-an inner statement whose public file holds each instance's own rows can be one: without `--zk` Flock's statement check
-refuses a shared-row public file (`ProvedScope.sharedRowsOk`), which `RecVStar.innerOf` sets up. -/
+an inner statement whose public file holds each instance's own rows can be one: Flock's statement check refuses a
+shared-row public file at plain leaves (`ProvedScope.sharedRowsOk` passes one only at `hm96-sha512/v1` leaves under
+`--registered F`), which `RecVStar.innerOf` sets up. -/
 def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : Prop :=
   ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner)
     (w : Claims.Flock.Wit) (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
