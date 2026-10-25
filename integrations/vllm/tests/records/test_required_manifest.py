@@ -15,6 +15,7 @@ import pytest
 
 from verity_vllm.check.c2_rules import _query_population_scope
 from verity_vllm.check.replay import coverage as COV, opening as OP
+from verity_vllm.query.manifest import format as MF
 from verity_vllm.records.fields import MissingField, RecordError
 from verity_vllm.records.required_manifest import SCHEMA, RequiredManifest
 
@@ -42,7 +43,7 @@ def _sha256(record: dict) -> str:
 def test_a_writers_manifest_loads():
     doc = _doc()
     m = RequiredManifest.load(MANIFEST)
-    assert m.where == str(MANIFEST) and doc["schema"] == SCHEMA
+    assert m.where == str(MANIFEST) and doc["schema"] == SCHEMA == MF.SCHEMA
     assert (m.program_digest, m.manifest_digest, m.requests, m.identities) == (doc["program_digest"], doc["manifest_digest"], ["r0"],
                                                                                doc["identities"])
     assert m.query == doc["query"] and m.query["query_id"] == "Q_module_body_v1"
