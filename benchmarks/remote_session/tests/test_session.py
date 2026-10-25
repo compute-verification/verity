@@ -593,7 +593,8 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     pages, in HBM.  At a draw of every receipt the floor is 0, so each window credits the weights every pass holds,
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
-    credited only on the property's verdict, then less its carriers; the share and residual are of the node's HBM.
+    credited only on the property's verdict and the session's schedule check (its verdict stood in here: the check's
+    own tests are `remote_bandwidth`'s), then less its carriers; the share and residual are of the node's HBM.
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -634,8 +635,14 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
         assert x["credited"]["weights"] == pytest.approx(8 * B - x["lost_blocks"] * B)
         assert x["epsilon"] == pytest.approx(x["lost_blocks"] * B / x["basis"])
         assert x["credited"]["hbm"] == pytest.approx((1 - x["epsilon"]) * x["basis"])
-    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
-    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), **kw)
+    with pytest.raises(ValueError, match="schedule check"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
+    other = audit.Scheduled(record.registration, bytes(len(record.coins)), 0)
+    with pytest.raises(ValueError, match="schedule check"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), schedule=other, **kw)
+    checked = audit.Scheduled(record.registration, record.coins, 0)
+    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), schedule=checked, **kw)
+    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), schedule=checked, **kw)
     assert whole["kv_credited"] and whole["credited_bytes"] >= mem["credited_bytes"]
     for w, c, posts in zip(whole["windows"], carried["windows"], (w.post_seed for w in record.windows)):
         lost = w["lost_blocks"] * B
@@ -763,6 +770,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
         reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:
         if isinstance(x, dict):

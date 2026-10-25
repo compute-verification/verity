@@ -146,7 +146,7 @@ def _range_passes(stack) -> None:
 CATEGORIES = (
     ("pearlc:gemm", r"^gemm_pearlc|^gemm_ct"),
     ("pearlc:lines_a", r"^lines$"),
-    ("pearlc:a_commit", r"^pd_commit_|^pd_tree_|^pd_heads$"),
+    ("pearlc:a_commit", r"^pd_commit_|^pd_tree_|^pd_heads$|^pl_(leaves|levels|seed_a|seeds)_"),
     ("pearlc:tile_hash", r"^pd_tiles_"),
     ("pearlc:forming", r"^(stats_s5|stats_r|form_s5|eprime|words|words_u|words_k|gemm_words|pa|pb|quant_s5|plainq|diff_words|gen_f32)$"
                        r"|^(stats_s5|form_s5|gemm_words)"),

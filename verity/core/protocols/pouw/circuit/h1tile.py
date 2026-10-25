@@ -633,9 +633,14 @@ def _digits(B: Any, x: Coll, z: list[Coll], lay: Layout) -> list[Coll]:
     Y = B.batch(SG.PouwSx8, x[0:32], axes=(0,))
     for s in range(1, lay.ks):
         Y = B.batch(SG.PouwResAdd, Y, x[32 * s:32 * s + 32], axes=(0, 0))
+    return _sum_digits(B, Y, z, lay.m)
+
+
+def _sum_digits(B: Any, Y: Coll, z: list[Coll], m: int) -> list[Coll]:
+    """A row's digits A_0 .. A_(m-1) of its residue sums Y themselves (32 u32 words)."""
     out, R = [], Y
-    for d in range(lay.m - 1):
-        zd = B.batch(SG.PouwDigitZ, R, z[d], axes=(0, 0)) if d == lay.m - 2 else z[d]
+    for d in range(m - 1):
+        zd = B.batch(SG.PouwDigitZ, R, z[d], axes=(0, 0)) if d == m - 2 else z[d]
         out.append(B.batch(SG.PouwDigitLo, R, zd, axes=(0, 0)))
         R = B.batch(SG.PouwDigitHi, R, zd, axes=(0, 0))
     out.append(B.batch(SG.PouwLow8, R, axes=(0,)))

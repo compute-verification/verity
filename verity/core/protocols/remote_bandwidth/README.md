@@ -98,7 +98,10 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
-  releases and plan changes.
+  releases and plan changes, and as the schedule the prover publishes (`schedule`).
+- `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
+  verifier's plan of the published schedule at its step, and the schedule's bits are the layout's steering
+  (`audit.Session.scheduled`). Of record in `lean/RemoteAudit/Schedule.lean`.
 - `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
   lays out the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler
   (`arena`, `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`).

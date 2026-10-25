@@ -1,6 +1,7 @@
 import Difftest
 import RemoteAudit.Line
 import RemoteAudit.Registry
+import RemoteAudit.Schedule
 import RemoteAudit.Store
 import RemoteAudit.Wire
 
@@ -18,7 +19,8 @@ the verifier's process starts it and holds each hello to it, its `bind` and `hol
 line (`line` of groups and windows given, `line_record` read off an accepted session's record, `RemoteAudit.Line`:
 rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
-so their reasons are compared. `remote-audit-difftest` serves them.
+so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
+`remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -556,11 +558,49 @@ def lineRecordFn (j : Json) : V Json := do
   pure (lineJ (Line.lineOfRecord sm (← nat j "samples") seen (← nat j "per") (← nat j "block_bytes")
     (← nat j "chip_bytes") (← nat j "node_bytes") (← ratIn j "delta" "input") (← ratesOf j)))
 
+private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
+  let xs ← J.asArr j ctx
+  if xs.size ≠ n then throw s!"{ctx}: {n} integers"
+  xs.mapM (J.asNat · ctx)
+
+private def blockOf (j : Json) : V Schedule.Block := do
+  match j with
+  | .null => pure none
+  | v =>
+    let xs ← J.asArr v "block"
+    if xs.size ≠ 2 then throw "an appended block is null or [write, free]"
+    let free ← match xs[1]! with
+      | .null => pure none
+      | f => some <$> J.asNat f "free"
+    pure (some (← J.asNat xs[0]! "write", free))
+
+/-- `schedule.run_json`: the schedule check of `{"blocks", "schedule": {"registered", "appends", "steps"}, "passes":
+[[step, runs], ...], "appends": [[first, count], ...]}`, to `{"bits"}` or why not. -/
+def scheduleFn (j : Json) : V Json := do
+  let s ← J.get j "schedule" "input"
+  let registered ← (← J.arr s "registered" "schedule").mapM fun r => do
+    let xs ← natsOfN r 3 "registered"
+    pure (xs[0]!, xs[1]!, xs[2]!)
+  let appends ← (← J.arr s "appends" "schedule").mapM fun a => do (← J.asArr a "append").mapM blockOf
+  let steps ← (← J.arr s "steps" "schedule").mapM (J.asNat · "steps")
+  let passes ← (← J.arr j "passes" "input").mapM fun p => do
+    let xs ← J.asArr p "pass"
+    if xs.size ≠ 2 then throw "a pass is [step, runs]"
+    let runs ← (← J.asArr xs[1]! "runs").mapM fun r => do
+      let ys ← natsOfN r 2 "run"
+      pure (ys[0]!, ys[1]!)
+    pure (← J.asNat xs[0]! "step", runs)
+  let made ← (← J.arr j "appends" "input").mapM fun a => do
+    let ys ← natsOfN a 2 "append"
+    pure (ys[0]!, ys[1]!)
+  let got := Schedule.check ⟨registered, appends, steps⟩ (← nat j "blocks") passes made
+  pure (refusedOr ((fun b => Json.mkObj [("bits", toJson b)]) <$> got))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
+  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn), ("schedule", scheduleFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn)]

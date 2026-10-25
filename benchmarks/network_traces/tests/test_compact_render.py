@@ -61,12 +61,13 @@ def test_the_fixture_covers_held_back_bytes_stops_and_non_ascii():
 def test_a_rendered_chunk_is_vllms_completion_chunk():
     """The renderer's chunk is a stock completions chunk in vLLM's own spelling: given vLLM's id and created, it is
     byte for byte the line vLLM streamed, less the fields a stock request doesn't ask for (`prompt_token_ids` and
-    `token_ids`, which `return_token_ids` adds, and the committing server's `usage`)."""
+    `token_ids`, which `return_token_ids` adds, and the committing server's `usage`). `[DONE]` follows the finish
+    only."""
     sample = FIXTURE["sse_sample"]
     doc = json.loads(sample["line"].removeprefix("data: "))
     stream = FIXTURE["streams"][sample["stream"]]
     _, ids, finish = stream["chunks"][0]
-    renderer = cr.Renderer(VOCAB, stream["prompt"], doc["model"], id=doc["id"], created=doc["created"])
+    renderer = cr.Renderer(VOCAB, stream["prompt"], doc["model"], request=1, id=doc["id"], created=doc["created"])
     expected = dict(doc)
     expected.pop("usage", None)
     expected["choices"] = [{k: v for k, v in c.items() if k not in ("prompt_token_ids", "token_ids")}
@@ -74,6 +75,10 @@ def test_a_rendered_chunk_is_vllms_completion_chunk():
     record = ar.compact_records(_sse("", ids, finish), 1, EOS)[0]
     assert renderer.chunk(record) == b"data: " + json.dumps(expected, ensure_ascii=False,
                                                             separators=(",", ":")).encode() + b"\n\n"
+    assert finish is None
+    with pytest.raises(ValueError):
+        renderer.done()
+    renderer.text(active.compact_record(1, FIXTURE["eos_token_ids"][0], "stop"))
     assert renderer.done() == b"data: [DONE]\n\n"
 
 

@@ -245,7 +245,7 @@ def average_line(windows: list[dict]) -> dict:
 
 
 def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: audit.Rebuild, chip_bytes: int = 0,
-           credit_post_seed: audit.PostSeedVerdict | None = None) -> dict:
+           credit_post_seed: audit.PostSeedVerdict | None = None, schedule: audit.Scheduled | None = None) -> dict:
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
@@ -261,14 +261,17 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
 
     A registered block counts as the layout labels it (`regions_of`; None, the drivers' stores: the whole store
     filler in HBM), HBM only toward the share; an appended block
-    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict, less the most
-    its carriers hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
+    (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict and the session's
+    schedule check (`schedule`, `audit.Session.scheduled`, as `audit.ledger` requires them), less the most its carriers
+    hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
     own: the lost blocks come off each.  The session's line is its worst window's: `credited_bytes`, `share` of
     `hbm_bytes` and `residual` = 1 − share, the HBM it doesn't show used, with ε, the share of the window's held
     basis the losses took, at δ.  ε is this reading's (the floor and rebuilds against held blocks), not a composed
     guarantee's."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    if credit_post_seed is not None and (type(schedule) is not audit.Scheduled or not schedule.of(record)):
+        raise ValueError("KV is credited only on this session's schedule check (`audit.Session.scheduled`)")
     if len(plans) != len(record.windows) or any(len(p) != w.passes for p, w in zip(plans, record.windows)):
         raise ValueError("a plan for each pass of each window of the record")
     if rebuild.codec != record.codec:
@@ -368,6 +371,24 @@ def memory_error(ledgers: dict) -> float | None:
         if "error" in ledgers.get(name, {}):
             return ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
     return None
+
+
+def sketch_at(session: dict, registration: dict, outside: int | None = None) -> dict | None:
+    """A session's SketchBound δs from its record (`Verifier.ledgers`' `sketch_failure`) against Q = F·C queries, C the
+    compressions the verifier charged the node over the span and F the outside-compute factor: the record's (1 for one
+    written before F was recorded, which charged the node's alone), or `outside` to read it at another; with the memory
+    line's error there, the horizon's plus δs (`memory_error` at F).  None for a session whose record has no sketch
+    term."""
+    lg = session.get("ledger") or {}
+    sf, inputs = lg.get("sketch_failure"), lg.get("inputs") or {}
+    if not sf or not inputs.get("rows"):
+        return None
+    f = sf.get("outside", 1) if outside is None else outside
+    c = sf["compressions"]
+    d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
+    horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
+    return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
+            "error": None if horizon is None else horizon + float(d)}
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -1464,7 +1485,8 @@ class Verifier:
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
-        there are some (`checks.Checks.bounds`)."""
+        there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
+        (`slack_log2`); a record without it was charged 41 bits a pass."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
@@ -1484,7 +1506,7 @@ class Verifier:
                           "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes,
+                          "slack_log2": audit.SLACK_LOG2, "reads_bytes": record.receipts * record.block_bytes,
                           "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
                           "post_seed_credited": False}}
         tiers = cal.get("read_tiers")
@@ -1516,11 +1538,11 @@ class Verifier:
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
                                                                        if n not in readings)})
-        # SketchBound's δ: every compression the node's GPUs could make over the span a guess or a key.
-        compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
-        out["sketch_failure"] = {"compressions": compressions,
+        # SketchBound's δ: every compression the prover could make over the span a guess or a key, Q = F·C.
+        compressions, outside = ledger.compressions(record, stated), stated.sketch_outside
+        out["sketch_failure"] = {"compressions": compressions, "outside": outside,
                                  "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows,
-                                                                           blocks=record.blocks))}
+                                                                           blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=timing.CHIP_BYTES)

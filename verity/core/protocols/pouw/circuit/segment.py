@@ -784,7 +784,11 @@ def digit_words(X, z, m: int) -> list[list[list[int]]]:
     """H1's digits A_0 .. A_(m-1) (int8 encodings, 4 rows x 32 residues each) of the residue sums Y_r[rho] = sum_s X_s[r][rho]
     (`checked_strip.digits` with z (m - 1 x 4 x 32 bits): A_d = (R_d mod 128) - 128 z_d, R_(d+1) = floor(R_d / 128) + z_d,
     z_(m-2) taken as 0 where floor(R / 128) = 127, A_(m-1) = R_(m-1))."""
-    Y = [[sum(_sx8(X[s][r][rho]) for s in range(len(X))) for rho in range(32)] for r in range(4)]
+    return sum_digits([[sum(_sx8(X[s][r][rho]) for s in range(len(X))) for rho in range(32)] for r in range(4)], z, m)
+
+
+def sum_digits(Y, z, m: int) -> list[list[list[int]]]:
+    """`digit_words` of the residue sums themselves, Y (4 rows x 32 integers)."""
     A = [[[0] * 32 for _ in range(4)] for _ in range(m)]
     for r in range(4):
         for rho in range(32):

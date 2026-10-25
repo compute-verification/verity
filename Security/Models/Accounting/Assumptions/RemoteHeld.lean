@@ -30,7 +30,8 @@ completing.
   model of the receipts' sketch (`Accounting.Remote.Sketch`) at every parameter
   (`Accounting.Guarantees.Remote.SketchBoundSession`) and at the deployed receipts, at `timing.sketch_failure`'s `δ`
   (`Accounting.Guarantees.Remote.SketchBoundDeployed`), under the model's own premises
-  (`Accounting.Remote.Sketch.Assumptions`).
+  (`Accounting.Remote.Sketch.Assumptions`) and the named random-oracle premise on SHA-512's keys
+  (`Accounting.Assumptions.SketchHashRandom`).
 * `LiveCoins W δ`: except with probability `δ`, the credited passes' wrong receipts are at most `W`: each window's
   openings, from a live coin released after its roots, are uniform over its receipts, and pooled over the session they
   bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
