@@ -3195,4 +3195,118 @@ theorem rootSet_of
       (hCov bytes P hd ho hw k hk node hgk hp) a
     simpa using this
 
+/-! ## `NodeSet` at a node calling a primitive -/
+
+/-- **`NodeSet` at a node calling a primitive**, in any activation: its positions name outside it exactly what its
+gates read there, given its arguments' references in range, its operands' indices in range (`hOp`) and every reference
+read by a member (`hCov`), and each position it reads resolves, the member's gate being located (`Located`). -/
+theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : Laid P d)
+    (hkb : k < (P.defs[d]!).body.nodes.size) (hend : (P.defs[d]!).body.offsets[k + 1]! ≤ (P.defs[d]!).gates)
+    {node : Flock.Program.Node} {rs : Array Seg} (hn : (ctxOf P memo d).node k = .ok node)
+    (hp : (P.defs[node.fn]!).prim = true) (hG : (P.defs[node.fn]!).gates = 1)
+    (hrs : Desc.nodeReads (ctxOf P memo d) k = .ok rs)
+    (hD : ∀ sc : Flock.Program.Scope, sc.d = d → DownSpec (ctxOf P memo d) sc Flock.Steps.FUEL)
+    (hA : ∀ i < node.args.size, ArgOk (ctxOf P memo d) k i)
+    (hR : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, Resolve.RefOk P d k ((node.args[i]!).seq.get t))
+    (hOp : Resolve.OpOk node (P.defs[node.fn]!))
+    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+      ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+        ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+      (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
+    NodeSet P memo d k := by
+  intro sc hd _ hloc node' hn'
+  rw [hn] at hn'
+  injection hn' with e
+  subst e
+  subst hd
+  have hg : (P.defs[sc.d]!).body.nodes[k]! = node := node_get hn
+  have hoff : (P.defs[sc.d]!).body.offsets[k + 1]! = (P.defs[sc.d]!).body.offsets[k]! + node.members := by
+    have := hL k hkb
+    rw [hg, hG, Nat.mul_one] at this
+    exact this
+  have hloc' : ∀ m < node.members, ∀ ops, LocR P sc (sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m)) ops ↔
+      Flock.Program.operands P sc node m = .ok ops := by
+    intro m hm ops
+    have := locR_prim P (sc := sc) (k := k) (m := m) hL hkb (by rw [hg]; exact hp) (by rw [hg]; exact hG)
+      (by rw [hg]; exact hm) (ops := ops)
+    rw [hg] at this
+    exact this
+  have hpc : ((ctxOf P memo sc.d).P.defs[node.fn]!).prim = true := hp
+  by_cases hb : (node.form == .batch && node.n == 0) = true
+  · have hm0 : node.members = 0 := by
+      simp only [Bool.and_eq_true, beq_iff_eq] at hb
+      unfold Flock.Program.Node.members
+      rw [hb.1, hb.2]
+      simp
+    have hnil : nodePos (ctxOf P memo sc.d) node k = [] := by
+      unfold nodePos
+      rw [if_pos hpc, if_pos hb]
+    rw [hnil]
+    refine ⟨fun a => ?_, fun i p hx => by simp at hx⟩
+    simp only [List.not_mem_nil, false_and, exists_false, false_iff, not_and]
+    rintro ⟨g, ⟨h1, h2⟩, -⟩
+    rw [hoff, hm0] at h2
+    omega
+  have hg' : (ctxOf P memo sc.d).body.nodes[k]! = node := node_get hn
+  have hok := nodeReads_prim_ok (ctxOf P memo sc.d) k node hn hpc hrs hb
+  have hag : ∀ i < node.args.size, Agree P sc
+      (readPos (ctxOf P memo sc.d) k i #[(0, ((ctxOf P memo sc.d).arg k i).count)])
+      ((List.range (node.args[i]!).seq.count).map fun t =>
+        Flock.Program.resolve P sc ((node.args[i]!).seq.get t)) := by
+    intro i hi
+    have hc0 := argCount_eq (hA i hi)
+    have := readPos_agree (ctxOf P memo sc.d) sc (hD sc rfl) (hA i hi) (by rw [hg']; exact hR i hi)
+      (spans := #[(0, ((ctxOf P memo sc.d).arg k i).count)])
+      (fun x hx _ => by simp only [List.mem_singleton] at hx; subst hx; exact hc0.le) (hok i hi)
+    rw [hg'] at this hc0
+    have hsp : spansPos #[(0, ((ctxOf P memo sc.d).arg k i).count)] = List.range (node.args[i]!).seq.count := by
+      simp [spansPos, List.range_eq_range', hc0]
+    rw [hsp] at this
+    exact this
+  have hread : nodePos (ctxOf P memo sc.d) node k = (List.range node.args.size).flatMap fun i =>
+      readPos (ctxOf P memo sc.d) k i #[(0, ((ctxOf P memo sc.d).arg k i).count)] := by
+    unfold nodePos
+    rw [if_pos hpc, if_neg hb]
+  have hmem : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members, ∃ ops,
+      LocR P sc (sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m)) ops ∧
+      Flock.Program.operands P sc node m = .ok ops ∧ ∃ a,
+        Flock.Program.resolve P sc ((node.args[i]!).seq.get t) = .ok a ∧ a ∈ ops := by
+    intro i hi t ht
+    obtain ⟨m, hm, t', ht'', hidx⟩ := hCov i hi t ht
+    obtain ⟨ops, hl⟩ := hloc (sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m)) (by omega) (by omega)
+    have hops := (hloc' m hm ops).1 hl
+    obtain ⟨a', ha'⟩ := operands_ok P _ _ m hops i hi t' ht''
+    refine ⟨m, hm, ops, hl, hops, a', by rw [ref_get, hidx] at ha'; exact ha',
+      (operands_mem P _ _ m _ hops a').2 ⟨i, hi, t', ht'', ha'⟩⟩
+  refine ⟨fun a => ⟨?_, ?_⟩, fun i p hx => ?_⟩
+  · rintro ⟨⟨x, hx, hxa⟩, hout⟩
+    rw [hread] at hx
+    obtain ⟨i, hi, hx⟩ := List.mem_flatMap.1 hx
+    have hi' := List.mem_range.1 hi
+    obtain ⟨v, hv, hxv⟩ := agree_src (hag i hi') hx
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hv
+    obtain ⟨m, hm, ops, hl, -, a', ha', hin⟩ := hmem i hi' t (List.mem_range.1 ht)
+    rw [hxv a' ha'] at hxa
+    obtain rfl : a' = a := Except.ok.inj hxa
+    exact ⟨⟨_, ⟨by omega, by omega⟩, ops, hl, hin⟩, hout⟩
+  · rintro ⟨⟨g, ⟨hg1, hg2⟩, ops, hl, ha⟩, hout⟩
+    obtain ⟨m, rfl⟩ : ∃ m, g = sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m) :=
+      ⟨g - sc.off - (P.defs[sc.d]!).body.offsets[k]!, by omega⟩
+    have hm : m < node.members := by omega
+    have hops := (hloc' m hm ops).1 hl
+    obtain ⟨i, hi, t', ht', hres⟩ := (operands_mem P _ _ m _ hops a).1 ha
+    rw [ref_get] at hres
+    have hlt := hOp i hi m hm t' ht'
+    obtain ⟨x, hx, hxa⟩ := agree_tgt (hag i hi) (List.mem_map.2 ⟨_, List.mem_range.2 hlt, rfl⟩) hres
+    refine ⟨⟨x, ?_, hxa⟩, hout⟩
+    rw [hread]
+    exact List.mem_flatMap.2 ⟨i, List.mem_range.2 hi, hx⟩
+  · rw [hread] at hx
+    obtain ⟨i', hi, hx⟩ := List.mem_flatMap.1 hx
+    have hi' := List.mem_range.1 hi
+    obtain ⟨v, hv, hxv⟩ := agree_src (hag i' hi') hx
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hv
+    obtain ⟨-, -, -, -, -, a', ha', -⟩ := hmem i' hi' t (List.mem_range.1 ht)
+    exact ⟨a', hxv a' ha'⟩
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
