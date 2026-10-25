@@ -15,8 +15,8 @@ accepts it, and `Session.verify` refuses it, as it refuses any window with a ver
 `Session.run` (`step_one`, `run_one`): the properties of the code stated on `Session.run` are about the
 one-coin-a-window session, and `Properties.RemoteAudit.Shared` states the draw's for every g. The difftest's `session`
 and the registry run `run g` and `step g` (`Flight`, `Registry.step`), the verifier's process takes a draw's openings
-coin with its last window's close only (`Verifier.withCoin`), and the line of record has no line for a record drawn
-g > 1 a coin (`Line.SHARED`).
+coin with its last window's close only (`Verifier.withCoin`), and the line of record reads a record drawn g > 1 a coin
+by its draws (`Line.ofSummaryAt`), at two windows in flight only (`Line.SHARED`).
 -/
 
 namespace RemoteAudit.Shared
