@@ -127,8 +127,8 @@ theorem sum_ite_lt (c : ℝ) : ∑ t : Fin 144, (if t.val < 128 then c else 0) =
   have h1 : ∀ i : Fin 128, (if (Fin.castAdd 16 i).val < 128 then c else 0) = c := fun i => if_pos i.isLt
   have h2 : ∀ i : Fin 16, (if (Fin.natAdd 128 i).val < 128 then c else 0) = 0 := fun i =>
     if_neg (by show ¬ (128 + i.val < 128); omega)
-  simp only [h1, h2, Finset.sum_const, Finset.sum_const_zero, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
-    add_zero, mul_zero, smul_zero, Nat.cast_ofNat] at h
+  simp only [h1, h2, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, add_zero, smul_zero,
+    Nat.cast_ofNat] at h
   exact h
 
 theorem sum_shareCone : ∑ t : Fin 144, shareCone Honest.scheme circuit 144 t = 1 := by
@@ -277,7 +277,9 @@ theorem liveAt_period : ∀ (n : ℕ) (x : Paths Ω1 n) (w : Fin n), (period n).
     · exact liveAt_period n x.2 w'
 
 theorem liveWords_true (t : Fin 144) :
-    liveWords Honest.scheme circuit 144 (fun _ => true) t = tileWords Honest.scheme circuit 144 t := rfl
+    liveWords Honest.scheme circuit 144 (fun _ => true) t = tileWords Honest.scheme circuit 144 t := by
+  unfold liveWords
+  exact if_pos rfl
 
 /-- **The accepted prefix's live words are `128·n`.** -/
 theorem checkedLive_all (n : ℕ) (x : Paths Ω1 n) :
@@ -308,6 +310,16 @@ theorem acceptsUpTo_period (wt : (Fin 144 → Bool) → Fin 144 → ℝ) (a b : 
   | _ + 1, 0, _ => trivial
   | n + 1, j + 1, x =>
     ⟨fun v _ => by simp [stages, SplitStages.joint, SplitStages.sameAt], acceptsUpTo_period wt a b n j x.2⟩
+
+theorem ite_words_le (c : Prop) [Decidable c] (j : Fin 144) :
+    (if c then (tileWords Honest.scheme circuit 144 j : ℝ) else 0) ≤ tileWords Honest.scheme circuit 144 j := by
+  split_ifs
+  exacts [le_rfl, Nat.cast_nonneg _]
+
+theorem ite_zero_le (c : Prop) [Decidable c] (j : Fin 144) :
+    (if c then 0 else (tileWords Honest.scheme circuit 144 j : ℝ)) ≤ tileWords Honest.scheme circuit 144 j := by
+  split_ifs
+  exacts [Nat.cast_nonneg _, le_rfl]
 
 theorem sum_div_le {n : ℕ} (hn : 0 < n) (f : Fin n → Fin 144 → ℝ)
     (hf : ∀ w j, f w j ≤ tileWords Honest.scheme circuit 144 j) : (∑ w, ∑ j, f w j) / n ≤ 128 := by
@@ -384,8 +396,8 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   · refine le_of_eq (Honest.prob_none ?_)
     rintro x ⟨i, -, h⟩
     exact h (funext fun _ => Subsingleton.elim _ _)
-  · split_ifs <;> simp
-  · split_ifs <;> simp
+  · exact ite_words_le _ j
+  · exact ite_zero_le _ j
 
 /-- **`H1CheckedCreditPeriod`'s conclusion at the honest live-salt period**: `h1_meets` gives the instance every
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `128·n` live words. -/
