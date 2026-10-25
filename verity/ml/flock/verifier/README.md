@@ -31,7 +31,7 @@ Those statements still parse, set up and verify (`statement` prints their digest
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
 sampling design no soundness claim draws by is refused at setup, with
 `refused: <why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with
-or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). So is a session without a draw, with
+or without a closure, and a subset draw without `--zk` at a statement with public outputs (`lean_refuses_drawn`). So is a session without a draw, with
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
 its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)
