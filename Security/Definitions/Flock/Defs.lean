@@ -89,6 +89,12 @@ def Model.Statement.shape (S : Statement) (mPts : ℕ) : Stmt := ⟨S.kLog, S.re
 
 /-! ## The witness's A-side and B-side, and the pin's extension -/
 
+theorem Model.Statement.block_index_lt (S : Statement) (a : Fin (2 ^ S.m)) :
+    a.val / 2 ^ S.kLog < 2 ^ S.nbl := by
+  have h : 2 ^ S.m = 2 ^ S.nbl * 2 ^ S.kLog := by rw [← pow_add, Nat.sub_add_cancel S.hk]
+  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← h]
+  exact a.isLt
+
 /-- The A-side bits: `(A·z)` at address `a = o·2^k_log + i` is `(A₀·z_o)_i`. -/
 def aVec (S : Statement) (z : Witness S.m) : Witness S.m := fun a =>
   (S.A₀.mulVec (S.block z ⟨a.val / 2 ^ S.kLog, S.block_index_lt a⟩))
