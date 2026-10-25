@@ -72,7 +72,7 @@ def _timed(fn, key: str):
 
 def _patch_pearl() -> None:
     """`PEARL_PHASES` on the class that defines each, before any run exists."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     for name, key in PEARL_PHASES:
         owner = next((c for c in PPD.PearlCDeviceRun.__mro__ if name in c.__dict__), None)
         if owner is not None:
