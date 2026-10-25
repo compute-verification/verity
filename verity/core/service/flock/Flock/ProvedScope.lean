@@ -216,10 +216,13 @@ def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
   | some m => .error (refusal s!"m = {m}, below {mMin zk}{if zk then " under --zk" else " without --zk"}")
   | none => .ok ()
 
-/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a `--zk` session of a statement
-with hidden outputs whose verifier holds its own registered reads (`--registered F`), the setting of
-`EndToEndRegistered` (an untyped statement, which `statementRules` requires of every form). -/
-def sharedRowsOk (tags : Tags) (zk registered : Bool) : Bool := zk && tags.hiddenOutputs && registered
+/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a statement with hidden outputs and
+`hm96-sha512/v1` leaves whose verifier holds its own registered reads (`--registered F`), with or without `--zk`: under
+`--zk` the setting of `EndToEndRegistered` (`FailClosed.SoundZHJR`), without it `FailClosed.SoundExecHR`. A statement with
+plain SHA-512 leaves (a recursive session's inner statement, whose registered reads `Registered.checkDescription` reads)
+keeps its own rows. `zk` is unread: `--zk` needs `hm96-sha512/v1` leaves (`leafOk`), so the rule is the same in both. -/
+def sharedRowsOk (tags : Tags) (_zk registered : Bool) : Bool :=
+  tags.hiddenOutputs && registered && tags.merkleLeaf == "hm96-sha512/v1"
 
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
 file as the proof reads them, a shared-row public file only where `sharedRowsOk`, wherever the wires feed the unit or the
