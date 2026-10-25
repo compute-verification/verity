@@ -150,7 +150,7 @@ theorem windows_of_accepted {s : RemoteAudit.Session.State} (hout : s.outcome = 
   split at hout
   · rename_i f _
     have := Option.some.inj hout
-    cases hf : f.failure <;> simp [hf, RemoteAudit.Session.Failure.name] at this
+    cases hf : f.failure <;> simp [hf, _root_.RemoteAudit.Failure.name] at this
   · split at hout
     · rename_i hc
       simp only [Bool.and_eq_true, beq_iff_eq, Array.all_eq_true] at hc

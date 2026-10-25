@@ -1024,7 +1024,7 @@ theorem acceptedDrawsOpenable : AcceptedDrawsOpenable := by
   refine hus (fun k => if hk' : k < (drawRecords g s c).length then Classical.choose (hex k hk') else #[])
     (fun k hk' => ?_)
   try dsimp only
-  rw [dif_pos hk']
+  rw [dite_eq_left hk']
   exact Classical.choose_spec (hex k hk')
 
 end Properties.RemoteAudit.Shared
