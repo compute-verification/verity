@@ -80,10 +80,17 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   trading one for a unit of the rest (`check_draw`), and the registration's law drawing them as the rest is (R1).
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
-  --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
-  PROTOCOL §16.15). Each prover runs behind the firewall's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
+  --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset draw only at hidden outputs and one
+  table, verifier PROTOCOL §16.15). Each prover runs behind the firewall's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
   PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
   `--partition` and `--program` (units derived).
+* **Plain sessions** (``--plain``; `--zk` is the default): C-Flock's unmasked protocol, which Lean's soundness covers at one
+  table under a stratified draw, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
+  So a plain audit takes only a stream's draw (``--challenger`` or ``--coins verifier``) by a ``stratified:K`` law, over a
+  window of one member with no registered reads or shared rows, and refuses any other before the draw (`plain_refusal`).
+  The member's one session is served the stream's draw itself and runs on per-round OS coins (``FC_COINS=os``), and Lean
+  `verify --coins os --stratified K` holds it to the stratified law it derives from its own `--program` and `--partition`.
+  C-Flock's firewall checks only a `--zk` statement's sends, so a plain prover isn't behind it (the summary's ``plain``).
 * **The draw from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   service's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the draw and planned the coins its draw reads (`a5_coins.need`), and only under a reserve that covers
@@ -168,6 +175,11 @@ from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # no
 from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
+#: what a plain audit covers until proofs' multi-table coverage lands (verifier PROTOCOL §16.15, `ProvedScope.drawLaw`)
+PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
+               "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
+               "shared rows wait for proofs' PRs A, B and C")
+PLAIN_FIREWALL = "none: C-Flock's firewall checks only a --zk statement's sends (flock-circuit `firewalled`)"
 
 
 def template_sets(root: Path) -> dict[str, tuple[Path, object]]:
@@ -448,6 +460,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
+    if (why := plain_refusal(a, mine, registered)) is not None:
+        raise SystemExit(f"--plain: {why}")
     if not streamed(a) and law.get("law") != "subset":
         raise SystemExit(f"a5 draws by the subset law with Lean's own coins; the partition file's is {law}: draw it through "
                          "a rank's service.Stream (--challenger or --coins verifier, a TP Commit)")
@@ -455,6 +469,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     want = CS.expected_ports(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
+    if plain(a):
+        summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "os", "firewall": PLAIN_FIREWALL})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
@@ -584,18 +600,21 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             continue
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
-        (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
+        # a plain session is served the stream's stratified draw itself, its one member the whole window (`plain_refusal`)
+        session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
+                                     ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
+        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + time.time() - t, 1)
         summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
         t = time.time()
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json", zk=True,
-                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])},
-                                  prove_timeout=a.session_timeout)
+        env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json",
+                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
-        v = V.check_draw(draw_t, {"population": m.n}, {"law": "subset", "k": len(local)})
+        v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
         served_units += [m.base + u for u in draw_t.get("units", [])]
         session_roots.update({m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()})
         proved += a0.proved_units(mm["header"], live or {})
@@ -606,7 +625,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                                          and (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"] and v.ok,
                                          "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
+        if plain(a):
+            flags = ("--coins", "os", "--stratified", str(drawn_law["k"]))
+            verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
+                                             "tool": f"flock-verify verify {' '.join(flags)} --archive"}
+        else:
+            verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
         if m.key in reads:
             row_verdicts[m.key] = verdicts[f"lean-verify/m{k}"]
             linked = linked or (mm, sdir)
@@ -727,6 +751,28 @@ def streamed(a: argparse.Namespace) -> bool:
     return a.coins is not None or a.verifier_coins
 
 
+def plain(a: argparse.Namespace) -> bool:
+    """The sessions are plain (``--plain``), not `--zk`."""
+    return bool(getattr(a, "plain", False))
+
+
+def plain_refusal(a: argparse.Namespace, mine: CS.Window, registered: dict | None) -> str | None:
+    """Why a plain audit (``a.plain``) of ``mine`` is outside `PLAIN_SCOPE`, refused before the draw; None inside it (and for
+    a `--zk` audit)."""
+    if not plain(a):
+        return None
+    m = mine.members[0] if len(mine.members) == 1 else None
+    rules = [(streamed(a), "a plain audit draws through a rank's service.Stream (--challenger or --coins verifier)"),
+             (mine.law.get("law") == "stratified",
+              f"a plain session's draw is stratified (Lean refuses a plain {mine.law.get('law')} draw, ProvedScope.drawLaw)"),
+             (m is not None, f"plain covers one table: the window has {len(mine.members)} members"),
+             (m is None or (m.base == 0 and m.n == mine.population), "plain covers one table: its member is the whole window"),
+             (not (mine.row_tables or registered or (m is not None and (m.tables or m.wired))),
+              "registered reads, shared rows and wires wait for proofs' PR C")]
+    why = [w for ok, w in rules if not ok]
+    return "; ".join(why) + f" ({PLAIN_SCOPE})" if why else None
+
+
 def resized_program(defs: list[tuple]) -> Program:
     """R2's other partition: the window's population, `(template, n)` per template, with its first template one instance
     short, or one over where it has a single instance (a population has at least one)."""
@@ -831,7 +877,8 @@ def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) ->
             a.coins.skip(r)
     return {"ok": ok, "seconds": round(time.time() - t0, 1),
             **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding")}}
+                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding")},
+            **({"plain": s["plain"]} if "plain" in s else {})}
 
 
 def tp_rank_job(a: argparse.Namespace, out: Path, world: int, r: int) -> dict:
@@ -949,6 +996,9 @@ def main() -> int:
     ap.add_argument("--coins", dest="coin_source", choices=["verifier"], help="with --tp-commit, instead of --challenger: draw each rank through its "
                     "own service.Stream on the verifier's own live coins (the service's default, the Lean's IO.getRandomBytes), "
                     "read once the stream received the rank's registration; no challenger session")
+    ap.add_argument("--plain", action="store_true", help="with --challenger or --coins verifier: plain sessions, not --zk, "
+                    "under the partition's stratified:K law, a window of one member with no registered reads or shared rows "
+                    "(PLAIN_SCOPE)")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
@@ -962,6 +1012,8 @@ def main() -> int:
     a.coins, a.rule, a.window_root, a.verifier_coins = None, None, None, a.coin_source == "verifier"
     if a.challenger and a.verifier_coins:
         ap.error("--challenger and --coins verifier are two coin sources: give one")
+    if a.plain and not (a.challenger or a.verifier_coins):
+        ap.error("--plain draws through a rank's service.Stream: give --challenger or --coins verifier")
     if a.challenger or a.verifier_coins:
         flag = "--challenger" if a.challenger else "--coins verifier"
         if a.bundle:

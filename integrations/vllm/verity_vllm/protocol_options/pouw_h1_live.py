@@ -1,5 +1,6 @@
-"""H1's live tables (VLLM-85): the served path's side of `PouwLiveSlots_v1{T}` (`verity.core.protocols.pouw.circuit.live`),
-the unit that makes each round's served rows m_s a proved value, one ``live@<s>`` a round.
+"""H1's live tables (VLLM-85): the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
+the unit that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
+public max_tokens.
 
 * **The tables.** With the Commit (`pouw_h1_served.Served`'s ``tap``) a window registers its round tables as values of
   the live Program, under the window Program's digest as its other values (`Served._tree`):
@@ -20,11 +21,12 @@ the unit that makes each round's served rows m_s a proved value, one ``live@<s>`
   `pouw_h1.H1Run.open_request` and `open_slot` refuse them (`Table`). Row j's salt is the run's key's at `nonce`.
 * **m_s** is step s's served rows, the scheduler's: its batch's rows (`pouw_h1.H1Run.owners`). Under CUDA graphs a call's
   A rows are padded to the graph's size, past them (`pouw_h1.Call.pad`), and those rows are no slot of the step's.
-* **The statements.** ``live@<s>`` is unit s of the live Program (`live.program` of T, the window's S and its prefix), on
-  round s's slot table, the request headers, the public m_s and the public round s: `statement` gives its rows and its
-  ``--registered`` file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round
-  committed and its rows to `live.live_ok` at m_s and s (each request named at most its prompt length's slots in the
-  round that admitted it, one in each of its cap's later rounds, `live.takes`).
+* **The statements.** ``live@<s>`` is unit s of the live Program (`live.program_v2` of T, the window's S and its prefix),
+  on round s's slot table, the request headers, the public m_s, the public round s and the public caps (`caps`: round 0's
+  requests' max_tokens, the fixed length the period's open commits): `statement` gives its rows and its ``--registered``
+  file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round committed and its rows to
+  `live.live_ok_v2` at m_s, s and the caps (each request named at most its prompt length's slots in the round that admitted
+  it, one in each of its cap's later rounds, `live.takes`, and each live request's cap the public one).
 """
 from __future__ import annotations
 
@@ -65,6 +67,12 @@ def request_words(entries: Sequence[RQ.RequestEntry], rows: int) -> np.ndarray:
         raise ValueError(f"round 0 admits {len(entries)} requests, past its {rows} leaves")
     hs = headers(entries) + [(0,) * LR.HEADER] * (rows - len(entries))
     return np.asarray(LR.header_words(hs), np.uint16)
+
+
+def caps(entries: Sequence[RQ.RequestEntry]) -> list[int]:
+    """The public max_tokens of round 0's requests in admission order, the fixed length the period's open commits
+    (`credit.committed_length`) and so the live unit's public caps (`live_reads.caps`)."""
+    return [e.max_tokens for e in entries]
 
 
 def slot_leaves(owners: Sequence[int | None], rows: int) -> list[int]:
@@ -147,27 +155,30 @@ def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndar
     rows |= {f"req_{i}": w for i, w in enumerate(request_words(run.admitted.get(0, []), T))}
     rows["m"] = np.asarray(LR.slot_words([m])[0], np.uint16)
     rows["s"] = np.asarray(LR.slot_words([s])[0], np.uint16)
+    mt = caps(run.admitted.get(0, []))
+    rows |= {f"cap_{i}": w for i, w in enumerate(LR.slot_words(LR.caps(mt, T)))}
     doc = LR.reads_file(served.program_digest, T, run.steps, s, roots, served.root, served.live[value(served, LR.REQUESTS)].session,
-                       m, served.program.fn.bindings["PREFIX"])
+                       m, served.program.fn.bindings["PREFIX"], mt)
     return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, doc
 
 
 def evaluated(run: Any, s: int, m: int | None = None) -> int:
-    """``live@<s>``'s ok: `PouwLiveSlots_v1{T}` evaluated on its statement's rows (`statement`, at m_s or ``m``), each
+    """``live@<s>``'s ok: `PouwLiveSlots_v2{T}` evaluated on its statement's rows (`statement`, at m_s or ``m``), each
     row's u16 words low bit first."""
     rows, _doc = statement(run, s, m)
     bits = {p: [(int(w) >> j) & 1 for w in r[0] for j in range(16)] for p, r in rows.items()}
     T = run.rows
-    (ok,) = evaluate(bind(L.PouwLiveSlots, T=T), sum((bits[f"slot_{i}"] for i in range(T)), []),
-                     sum((bits[f"req_{i}"] for i in range(T)), []), bits["m"], bits["s"])
+    (ok,) = evaluate(bind(L.PouwLiveSlotsV2, T=T), sum((bits[f"slot_{i}"] for i in range(T)), []),
+                     sum((bits[f"req_{i}"] for i in range(T)), []), bits["m"], bits["s"],
+                     sum((bits[f"cap_{i}"] for i in range(T)), []))
     return int(ok)
 
 
 def verdicts(run: Any) -> list[dict[str, Any]]:
     """Each round's ``live@<s>``: its slot table's root is the one round s's row commits (``slots``) and is listed whole
-    there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok` of its rows at m_s, as is its
-    unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's `admission_gap` of a per-round
-    window). Empty without live tables."""
+    there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok_v2` of its rows at m_s and the
+    public caps, as is its unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's
+    `admission_gap` of a per-round window). Empty without live tables."""
     served = run.served
     if served is None or not served.live or served.refused:
         return []
@@ -176,6 +187,7 @@ def verdicts(run: Any) -> list[dict[str, Any]]:
     req = served.live.get(value(served, LR.REQUESTS))
     heads = headers(run.admitted.get(0, []))
     heads += [(0,) * LR.HEADER] * (run.rows - len(heads))
+    cap = LR.caps(caps(run.admitted.get(0, [])), run.rows)
     out = []
     for s, row in enumerate(run.round_log):
         slots, m = served.live.get(value(served, LR.SLOTS, s)), m_of(run, s)
@@ -185,7 +197,7 @@ def verdicts(run: Any) -> list[dict[str, Any]]:
                or slots.value not in row["a"]
                else "round 0's request headers aren't its request_table" if req is None
                or req.root.hex() != run.round_log[0].get("request_table")
-               else f"live_ok is 0 at m = {m}" if not L.live_ok(leaves, heads, m, s)
+               else f"live_ok is 0 at m = {m}" if not L.live_ok_v2(leaves, heads, m, s, cap)
                else f"its unit evaluates to 0 at m = {m}" if not evaluated(run, s) else None)
         out.append({"round": s, "m": m, "admitted": L.admitted(leaves, heads), "ok": why is None,
                     **({} if why is None else {"reason": f"live@{s}: {why}"})})
@@ -194,8 +206,8 @@ def verdicts(run: Any) -> list[dict[str, Any]]:
 
 def dump(run: Any, out: Path) -> dict[str, Any]:
     """The prover's ``live@<s>`` of each closed round, for `benchmarks/pouw/h1_prove/live.py`: ``out/window.json`` (public:
-    T, S, the prefix, the window Program's digest, the open root, the session, the live tables' roots and each round's
-    served rows m_s) and ``out/<s>/rows.npz`` in `window.py open`'s form (``w_``, ``s_``, ``v_``, ``r_`` and ``p_`` of each
+    T, S, the prefix, the window Program's digest, the open root, the session, the live tables' roots, each round's
+    served rows m_s and round 0's requests' max_tokens, the caps) and ``out/<s>/rows.npz`` in `window.py open`'s form (``w_``, ``s_``, ``v_``, ``r_`` and ``p_`` of each
     port: its words, salt, registered value, position and path, one instance, unit s), with ``out/<s>/opening.json``, each
     registered row's ``b || c`` and path, which is all of it the verifier sees. Every row is the prover's own: ``out`` is
     the prover's directory, never a run's ``out/``."""
@@ -204,13 +216,15 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     req = served.live[value(served, LR.REQUESTS)]
     pub = {"T": T, "S": run.steps, "prefix": prefix, "program": prog, "window": window, "session": req.session,
            "roots": {v: r.root.hex() for v, r in served.live.items()},
-           "served": [m_of(run, s) for s in range(len(run.round_log))]}
+           "served": [m_of(run, s) for s in range(len(run.round_log))], "max_tokens": caps(run.admitted.get(0, []))}
+    cap = LR.caps_table(prog, prefix, window, T, pub["max_tokens"])[2]
     out.mkdir(parents=True, exist_ok=True)
     (out / "window.json").write_text(json.dumps(pub, indent=1))
     for s, m in enumerate(pub["served"]):
         rows, _doc = statement(run, s)
         reads = {f"slot_{i}": (served.live[value(served, LR.SLOTS, s)], i) for i in range(T)}
         reads |= {f"req_{i}": (req, i) for i in range(T)}
+        reads |= {f"cap_{i}": (cap, i) for i in range(T)}
         reads |= {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0), LR.OK_PORT: (LR.ok_table(prog, prefix, window, run.steps)[2], s)}
         rows[LR.OK_PORT] = np.asarray([CC.OK_ROW], np.uint16)
         z: dict[str, Any] = {"units": np.array([s])}
@@ -225,5 +239,5 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     return {"dir": str(out), "rounds": len(pub["served"])}
 
 
-__all__ = ["REQUESTS", "SLOTS", "Table", "admission_gap", "dump", "evaluated", "headers", "m_of", "nonce", "request_words", "slot_leaves",
-           "slot_words", "statement", "table", "value", "verdicts"]
+__all__ = ["REQUESTS", "SLOTS", "Table", "admission_gap", "caps", "dump", "evaluated", "headers", "m_of", "nonce", "request_words",
+           "slot_leaves", "slot_words", "statement", "table", "value", "verdicts"]

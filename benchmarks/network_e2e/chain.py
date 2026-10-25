@@ -475,7 +475,8 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     nxt = (closed or {}).get(w + 1) if isinstance(w, int) else None
     held = held_to(w, adv.get("root"), g.get("registration"), adv_dir,
                    {"run_id": rec["run_id"], "run_root": rec["run_root"]} if rec else None, (closed or {}).get(w), nxt,
-                   None if not order or None in order else all(x is True for x in order), record,
+                   False if False in order else None if not order or None in order else all(x is True for x in order),
+                   record,
                    record["ended"] if record and nxt is None and record["last"] == w else None)
     return {"window": w, "run_id": d.get("run_id"), "run_root": s.get("run_root"),
             "sealed_while_serving": serve.get("ok") is True and not serve.get("codes"),

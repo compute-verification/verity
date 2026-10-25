@@ -903,7 +903,7 @@ The deployed V* never reads the inner session's framed transcript. It binds what
 * never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
 
 The firewall drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
-(never checked, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
+(each `0`, the only one the verifier accepts, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
 the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
 (`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
 key, its last message their openings with the element-level last message. `KSBound` is the recursion's KS there, and
