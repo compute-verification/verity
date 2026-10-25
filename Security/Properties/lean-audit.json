@@ -8,6 +8,7 @@
   "Properties.Proofs.Pouw.Check",
   "Properties.Proofs.Pouw.Commit",
   "Properties.Proofs.Pouw.LiveSalt",
+  "Properties.Proofs.Pouw.LiveSalt.Ledger",
   "Properties.Pouw.Strata",
   "Properties.Proofs.Pouw.Strata",
   "Properties.Pouw.Credit",
