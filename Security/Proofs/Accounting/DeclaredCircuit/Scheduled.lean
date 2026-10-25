@@ -171,11 +171,11 @@ theorem scheduledRequirement : ScheduledRequirement := by
     by_cases hacc : ∀ v i, accepted (SketchPrefix.of x.2 v i) x.1
     swap
     · have h0 : rd x.1 x.2 w =
-          ((win x w).correctOn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (128 * 256) := if_neg hacc
+          ((win x w).correctOn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (128 * 256) := ite_eq_right hacc
       rw [h0] at hw
       exact absurd hw (Nat.not_lt.mpr (Nat.le_add_right _ _))
     have h1 : rd x.1 x.2 w = (win x w).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w) +
-        (P * (N * 32768) - ∑ j, credit x (bind x w j)) := if_pos hacc
+        (P * (N * 32768) - ∑ j, credit x (bind x w j)) := ite_eq_left hacc
     rw [h1] at hw
     by_cases hr : RankGood 12 (x.2 w).1
     swap
@@ -207,11 +207,11 @@ theorem scheduledRequirement : ScheduledRequirement := by
       exact Requirement.sum_lt_of_credit (fun w => rd x.1 x.2 w)
         (fun w => (win x w).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w))
         (fun w => ∑ j, credit x (bind x w j)) (P * (N * 32768)) (0.0015 + γ) (n * P * N * 32768)
-        (fun _ => if_pos hacc) (hcs x) (by push_cast; ring) hT
+        (fun _ => ite_eq_left hacc) (hcs x) (by push_cast; ring) hT
     · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
       exact Requirement.lt_of_credit (rd x.1 x.2 w)
         ((win x w).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w))
-        (∑ j, credit x (bind x w j)) (P * (N * 32768)) (0.01 + γ) (P * N * 32768) (if_pos hacc) (hcs x w)
+        (∑ j, credit x (bind x w j)) (P * (N * 32768)) (0.01 + γ) (P * N * 32768) (ite_eq_left hacc) (hcs x w)
         (by push_cast; ring) hw
   · ring
 
