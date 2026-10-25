@@ -1,6 +1,6 @@
 import Proofs.Flock.Bridge.Targets
 import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
+import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 
 /-!
 # The draw at `stmtOf` and `partOf`: one class, `subset kd`, `n` replay units
@@ -13,7 +13,7 @@ import Proofs.Flock.Claims.Sampling.EndToEndDraw
 * (iii) `partRus : PartRusTarget`: that class has `n` replay units, one per unit of `P`.
 
 From them, `pa : PaTarget` (the design's `P_a` is the subset miss over `n`) and `count : CountTarget` (outside `RelS` at
-`δ = C(n − K₀, kd)/C(n, kd)`, at least `min K₀ (n − kd + 1)` units are faulty).
+`δ = C(n − K₀, kd)/C(n, kd)`, at least `min K₀ (n − kd + 1)` units are faulty, `EndToEndDraw.ratio_le_iff`).
 -/
 
 namespace Flock.Bridge
@@ -37,17 +37,9 @@ theorem pa : PaTarget := fun P kd B hB => by
   rw [Claims.Sampling.EndToEndDraw.Pa_subset (d := designOf kd) (kd := kd) rfl (partOf_classes P) B, partRus P,
     Claims.Sampling.EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
 
-/-- `C(a, k) < C(b, k)` for `a < b` and `1 ≤ k ≤ b`. -/
-theorem choose_lt_choose {a b k : ℕ} (hab : a < b) (hk : 1 ≤ k) (hkb : k ≤ b) : a.choose k < b.choose k := by
-  obtain ⟨b, rfl⟩ : ∃ b', b = b' + 1 := ⟨b - 1, by omega⟩
-  obtain ⟨k, rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
-  rw [Nat.choose_succ_succ']
-  have h1 := Nat.choose_pos (n := b) (k := k) (by omega)
-  have h2 := Nat.choose_le_choose (k + 1) (show a ≤ b by omega)
-  omega
-
 theorem count : CountTarget := by
   intro C n P kd K₀ hkd hkn H Cm desc q roots w hrel
+  classical
   set F := Claims.Sampling.faulty H Cm (stmtOf P kd desc q roots) (partOf P) w
   have hF : F ⊆ Finset.range n := by
     intro v hv
@@ -56,11 +48,6 @@ theorem count : CountTarget := by
   have hrel' : ¬ (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) < (designOf kd).Pa (partOf P) F) := hrel
   have hle := not_lt.1 hrel'
   rw [pa P kd F hF] at hle
-  have hpos : (0 : ℝ) < (n.choose kd : ℝ) := by exact_mod_cast Nat.choose_pos hkn
-  have hle' : (n - F.card).choose kd ≤ (n - K₀).choose kd := by
-    exact_mod_cast (div_le_div_iff_of_pos_right hpos).1 hle
-  by_contra hlt
-  rw [not_le, lt_min_iff] at hlt
-  exact absurd hle' (not_le.2 (choose_lt_choose (by omega) hkd (by omega)))
+  exact (Claims.Sampling.EndToEndDraw.ratio_le_iff hkd hkn).1 hle
 
 end Flock.Bridge
