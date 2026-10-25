@@ -207,7 +207,7 @@ theorem zk_check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b w
 theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
-  unfold Record.decodeWith at h
+  unfold Record.decodeWith Record.decodeJWith at h
   dsimp only at h
   split at h
   rotate_left

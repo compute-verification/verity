@@ -1,27 +1,36 @@
 import Models.NetworkCertifier.Guarantees
 import Models.NetworkCertifier.Guarantees.AdviceString
+import Models.NetworkCertifier.Guarantees.AdviceV1
+import Models.NetworkCertifier.Guarantees.Warden
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
+import Proofs.NetworkCertifier.SampledAudit
+import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
 import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Accepted
 import Proofs.NetworkCertifier.AdviceString
+import Proofs.NetworkCertifier.AdviceV1
+import Proofs.NetworkCertifier.Warden
 
 /-!
 # Proofs of the network certifier's guarantees
 
-One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the theorem of the same statement
-in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
-constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over whole windows) or `AdviceString`
-(the leak bound: the advice string's charge), and every lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program (`certifier_program`,
-`NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions. `Accepted` proves
-`security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate check accepts is a run
-of the constant-rate Program under the declared advice, so the guarantees here count it.
+One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
+theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
+`Schedule` (Theorem 3 for the constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over
+whole windows), `AdviceString` (the leak bound: the advice string's charge), `AdviceV1` (advice v1's charge counts, and
+the leak bound with it), `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
+(the warden's channel bound),
+and every lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
+(`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
+`Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
+check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -93,5 +102,22 @@ theorem EncardDecodableWithinLeCompiled : NetTiming.Guarantees.EncardDecodableWi
 theorem EncardDecodableWithinLeCompiledPerWindow : NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow :=
   fun I T ss bits hbits b compilerOf env hpre hdet D =>
     NetTiming.encard_decodableWithin_le_compiled_perWindow I T ss bits hbits b compilerOf env hpre hdet D
+
+theorem EncardChargedLe : NetTiming.Guarantees.EncardChargedLe := NetTiming.AdviceV1.encard_charged_le
+theorem EncardAccSeqsWithinLeConstantRateV1 : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1 :=
+  fun bk N b T ss frames op n D m _ hm => NetTiming.encard_accSeqsWithin_le_constantRate_v1 bk N b T ss frames op n D m hm
+theorem EncardDecodableWithinLeCompiledV1 : NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1 :=
+  fun I T ss bk N b compilerOf env hpre hdet n D m _ hm =>
+    NetTiming.encard_decodableWithin_le_compiled_v1 I T ss bk N b compilerOf env hpre hdet n D m hm
+theorem EncardDecodableWithinLeCompiledPerWindowV1 : NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1 :=
+  fun I T ss bk N b compilerOf env hpre hdet D =>
+    NetTiming.encard_decodableWithin_le_compiled_perWindow_v1 I T ss bk N b compilerOf env hpre hdet D
+
+theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
+
+theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := @NetTiming.wardenView_eq_clientView
+theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le
+theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
+  @NetTiming.encard_wardenDecodable_le
 
 end NetTiming.SecurityProofs

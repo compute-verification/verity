@@ -61,6 +61,7 @@ def test_numpy_twins_match_word_definitions_on_random_and_special_words(cls, eps
         assert rep["status"] == "pass" and not rep["mismatches"], rep
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("fused,block", [(False, 2), (True, 16)])
 def test_boolean_v2_has_the_word_v1_view_and_matches_it(fused: bool, block: int) -> None:
     N, EPS = 16, 1e-5

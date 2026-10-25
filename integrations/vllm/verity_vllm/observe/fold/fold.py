@@ -1134,7 +1134,10 @@ class _Fold:
         if len(sample.sampled_token_ids) != len(start.logits_rows):
             raise FoldError(f"step {start.step}: {len(sample.sampled_token_ids)} sampled ids for {len(start.logits_rows)} logits rows")
         for j, (req, pos) in enumerate(start.logits_rows):
-            tok = int(sample.sampled_token_ids[j])
+            try:
+                tok = SE.circuit_token_id(sample.sampled_token_ids[j])
+            except ValueError as e:
+                raise FoldError(f"step {start.step}: sampled row {j} of {req!r}: {e}") from None
             refs: Refs | None = None
             failure: Exception | None = None
             if sample.sampled_view is not None:

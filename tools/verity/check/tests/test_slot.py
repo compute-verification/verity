@@ -713,8 +713,28 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* eyeball review.*research run --on vy-nebius-cpu-K"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
+
+
+def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_only_when_there_is_none(tmp_path, monkeypatch):
+    """CI-164: n2's and cpu-1's default pools are all only=trains, and the refusal sent a lane check to another machine though
+    each has a lane pool beside it (`gpu/slots`, `research/slots`)."""
+    (tmp_path / "slots").write_text("d 0 only=trains\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
+    with pytest.raises(SystemExit) as e:
+        SLOT.main(["--", "check.py"], now=lambda: NOW)
+    assert "a lane check runs on another machine" in str(e.value) and "research run --on vy-nebius-cpu-K" in str(e.value)
+    for name, text in (("gpu", "g 1\n"), ("trains", "t 2 only=trains\n"), ("gpu.bak-20261024", "b 2\n")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "slots").write_text(text)
+    with pytest.raises(SystemExit) as e:
+        SLOT.main(["--", "check.py"], now=lambda: NOW)
+    msg = str(e.value)
+    assert f"CHECK_SLOTS={tmp_path / 'gpu' / 'slots'} python3 tools/verity/check/slot.py" in msg
+    assert "another machine" not in msg and "trains/slots" not in msg and ".bak-" not in msg
+    assert "research run --on vy-nebius-cpu-K" in msg
 
 
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):

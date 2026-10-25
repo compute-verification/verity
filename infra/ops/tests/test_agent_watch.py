@@ -214,7 +214,7 @@ def test_a_run_stuck_in_creating_or_background_work_is_recorded_once_never_cance
 
 def test_a_background_wait_past_two_hours_shows_stuck_while_it_is_followed(tmp_path):
     clock = Clock(W.epoch("2026-10-18T18:10:00Z"))
-    api = FakeApi([{"id": "bc-b", "status": "ACTIVE", "latestRunId": "run-b"}],
+    api = FakeApi([{"id": "bc-b", "status": "ACTIVE", "latestRunId": "run-b", "updatedAt": "2026-10-18T18:09:00.000Z"}],
                   {"run-b": {"status": "WAITING_FOR_BACKGROUND_WORK", "updatedAt": "2026-10-18T16:05:00.000Z"}})
     w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
     w.sweep(started.append)
@@ -412,6 +412,7 @@ def test_a_turn_that_ended_is_held_only_while_the_run_still_reads_running(tmp_pa
     held_tool_call(w)
     w.on_event("run-1", "interaction_update", {"type": "turn-ended"})
     clock.t += 2 * W.HELD_BG_S
+    api._agents[0]["updatedAt"] = W.iso(clock.t)
     w.sweep(started.append)
     assert api.posts == []
     api2, clock2, w2, started2 = setup(tmp_path / "running")
@@ -424,7 +425,7 @@ def test_a_turn_that_ended_is_held_only_while_the_run_still_reads_running(tmp_pa
 
 def test_a_background_wait_with_working_subagents_is_left_alone_and_a_silent_one_recorded_stuck(tmp_path):
     """A coordinator's run waits on its workers, whose progress streams as `tool-call-delta`: cancelling it may take them. A wait
-    with nothing at all streamed for 2 h is recorded as stuck, once, and never cancelled."""
+    with nothing at all streamed for 2 h, while its agent's `updatedAt` moves, is recorded as stuck, once, and never cancelled."""
     api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
     w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
     w.on_event("run-1", "interaction_update", {"type": "step-started", "stepId": "s2"})
@@ -436,10 +437,33 @@ def test_a_background_wait_with_working_subagents_is_left_alone_and_a_silent_one
         w.sweep(started.append)
     assert api.posts == [] and records(tmp_path) == []
     clock.t += W.STUCK["WAITING_FOR_BACKGROUND_WORK"]
+    api._agents[0]["updatedAt"] = W.iso(clock.t - 60)
     w.sweep(started.append)
     w.sweep(started.append)
     assert [(r["kind"], r["status"], r["minutes"]) for r in records(tmp_path)] == [("stuck", "WAITING_FOR_BACKGROUND_WORK", 120)]
     assert api.posts == []
+
+
+def test_a_background_wait_on_a_suspended_vm_is_stalled_cancelled_and_continued(tmp_path):
+    """INF-192: compute-accounting's research lane sat WAITING_FOR_BACKGROUND_WORK from 05:26 to 23:40Z on 23 Oct, its VM
+    suspended: nothing streamed and its agent's `updatedAt` still. Its local subagents are gone with the VM, so the wait is
+    cancelled and continued after 2 h, once an hour at most; 2 h with nothing streamed while the agent moves stays recorded only."""
+    api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
+    api._agents[0]["updatedAt"] = W.iso(clock.t)
+    held_tool_call(w)
+    w.on_event("run-1", "interaction_update", {"type": "turn-ended"})
+    quiet_from = clock.t
+    clock.t += W.STUCK["WAITING_FOR_BACKGROUND_WORK"] - 60
+    w.sweep(started.append)
+    assert api.posts == [] and records(tmp_path) == [], "1 h 59 min is not yet stalled"
+    clock.t += 60
+    w.sweep(started.append)
+    (cancel, cont) = api.posts
+    assert cancel == ("/v1/agents/bc-a/runs/run-1/cancel", None)
+    assert cont[0] == "/v1/agents/bc-a/runs" and "WAITING_FOR_BACKGROUND_WORK" in cont[1]["prompt"]["text"]
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["status"], rec["since"], rec["minutes"], rec["new_run"]) == (
+        "stalled", "WAITING_FOR_BACKGROUND_WORK", W.iso(quiet_from), 120, "run-new")
 
 
 def test_a_worker_finishing_is_not_the_parent_finishing_a_tool_call(tmp_path):
@@ -1919,7 +1943,7 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         assert body["name"] == "vllm worker ZKS10 (relaunch of 1111)", "a worker's name, never a coordinator's `verity: LANE`"
         assert "You are a worker, not a coordinator" in text and "`research msg send --as vllm --thread " in text
         assert "stopped mid-step (its last message: \u201cThe lock didn't change. Committing the fix" in text
-        assert "the agent watch rings your coordinator's inbox (`research msg ring-run`)" in text
+        assert "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`)" in text
         assert relaunches[0]["new_agent"] == "bc-77777777-7777-7777-7777-777777777777"
         new = json.loads((d / "workers.d" / "vllm-bc-77777777-7777-7777-7777-777777777777.json").read_text())
         assert new == {"agent_id": "bc-77777777-7777-7777-7777-777777777777", "lane": "vllm", "launched_by": NEW,
@@ -2312,3 +2336,13 @@ def test_a_worker_learned_from_a_former_coordinators_task_call_inherits_that_coo
         w.sweep(lambda r: None)
     (rec,) = records(tmp_path)
     assert (rec["kind"], rec["agent"], rec["lane"], rec["handle"]) == ("worker_idle", g2, "vllm", "vllm")
+
+
+def test_a_lane_named_after_a_handle_belongs_to_that_handle():
+    """kernels' workers run lanes like `kernels-hashproof`; the watch rang infra for each of their idle workers and runs (24 Oct)."""
+    names = {"kernels", "proofs", "infra", "kernels-x"}
+    assert W.lane_handle("kernels", names) == "kernels"
+    assert W.lane_handle("kernels-hashproof", names) == "kernels"
+    assert W.lane_handle("kernels-x-y", names) == "kernels-x"
+    assert W.lane_handle("kernelsy", names) is None
+    assert W.lane_handle("", names) is None
