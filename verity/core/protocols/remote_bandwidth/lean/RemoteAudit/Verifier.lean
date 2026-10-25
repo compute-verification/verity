@@ -203,7 +203,7 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
       | .null => pure none
       | v => some <$> ofV (J.asInt v "index")
     let some reg := (srv.registry.live.find? (·.node == node)).bind (·.drawn) | pure (refusedJ, srv)
-    match srv.registry.session reg params coins appendCoins notBeforeNs index with
+    match srv.registry.session reg params coins appendCoins notBeforeNs index (← ofV (Difftest.flightOf req)) with
     | some (k, r) => pure (Json.mkObj [("session", toJson k)], { srv with registry := r })
     | none => pure (refusedJ, srv)
   | "event" =>
@@ -264,8 +264,8 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let node ← ofV (bytesOf req "node")
     let k ← ofV (nat req "session")
     let out := match runOf srv.registry node k with
-      | some (.running s) => Json.mkObj [("outcome", match s.outcome with | some o => .str o | none => .null),
-          ("record", match s.summary with | some x => Difftest.summaryJ s.digest x | none => .null)]
+      | some (.running s f) => Json.mkObj [("outcome", match s.outcome with | some o => .str o | none => .null),
+          ("record", match s.summary with | some x => Difftest.summaryJ s.digest x f | none => .null)]
       | some (.read o) => Json.mkObj [("outcome", .str o), ("record", .null)]
       | none => refusedJ
     pure (out, srv)
