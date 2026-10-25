@@ -41,8 +41,8 @@ theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.u
   have hg : g.val < 2 + n * Discharge.Layout.keyB c hU := by
     simp only [Bridge.constsOf] at h
     split_ifs at h with h1 h2
-    · subst h1; simp [Discharge.Layout.oneG, Discharge.Placed.oneGate]
-    · subst h2; simp [Discharge.Layout.zeroG, Discharge.Placed.zeroGate]
+    · subst h1; show 0 < 2 + n * Discharge.Layout.keyB c hU; omega
+    · subst h2; show 1 < 2 + n * Discharge.Layout.keyB c hU; omega
   exact (((keyProg c hU n).partition outs).input_iff g).1
     (Discharge.Layout.unit_uniform_input (k := Discharge.Placed.inGates n (Discharge.Layout.keyB c hU))
       (R := Discharge.Placed.circuitRows c hU)

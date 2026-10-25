@@ -260,7 +260,7 @@ theorem reads_lower_args {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g
   cases hop : C.op g with
   | input =>
     rw [hop] at hx
-    split at hx <;> (rcases j with _ | j <;> simp at hx; subst hx; simp [BGate.reads] at hi)
+    rcases j with _ | j <;> cases hk : κ g <;> simp [hk] at hx <;> subst hx <;> simp [BGate.reads] at hi
   | and a b =>
     rw [hop] at hx
     rcases j with _ | j <;> simp at hx
