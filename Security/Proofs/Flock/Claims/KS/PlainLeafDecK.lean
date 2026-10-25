@@ -1,18 +1,34 @@
 import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainLeafDec
+import Proofs.Flock.Claims.KS.PlainLive
 
 /-!
 # The deployed plain decoders at plain SHA-512 leaves, at `VK keep`
 
-`PlainLeafDec`'s lemmas at `AcceptsAtDK keep`, by its proofs on the walkers of `verifyWithMK keep` and
-`Record.decodeWithK keep`, as `PlainDrawAccK` and `PlainDrawDecK` port `PlainDrawAcc` and `PlainDrawDec`:
+The scope admits hidden outputs under plain SHA-512 leaves (`flock-leaf/sha512-unsalted`) without `--zk`
+(`ProvedScope.leafOk`). Their model leaf is `Refine.leafPlain` (`Refine.leafOfId`), not the salted `leaf512` that
+`PlainDrawAccK` and `PlainDrawDecK` read, and the decoders there are right at `leafPlain` by the same proofs, through
+`keep` and at any record writer, with `table_verdict_plain` and `setupHidden_plain` for `table_verdict_hm96` and
+`setupHidden_hm96`. At `keep := id` and `wrPD` they are `PlainLeafDec`'s:
 
-* `accepts_verdict_plainAnyDK`, `accepts_opens₀LDUK`, `accepts_repsOneDUK`: `accepts_verdict_plainAnyD`,
-  `accepts_opens₀LDU`, `accepts_repsOneDU`.
-* `decodesTable_wrPDK_scHU`: `decodesTable_wrPD_scHU` with the verdict read through `keep`, the rounds up to their
-  digests (`PlaysCoin.repRun_of_erase`).
-* `plain_hdecHUAtK`: `plain_hdecHUAt` with `plainVerdictAtK keep`.
+* `accepts_verdict_plainAnyDK`, `accepts_opens₀LDUK`, `accepts_repsOneDUK`: `accepts_verdict_hm96AnyDK`,
+  `accepts_opens₀LDK`, `accepts_repsOneDK` at `leafPlain`.
+* `TagsOkHU`, `decodesTable_wrK_scHU_of`: `TagsOkH` and `decodesTable_wrK_scH_of` under plain SHA-512 leaves;
+  `decodesTable_wrPDK_scHU` at `wrPDK`.
+* `plain_setupHiddenU`, `plain_hdecHUAtK_of`: `plain_setupHidden` and `plain_hdecHAtK_of` there; `plain_hdecHUAtK` at
+  `wrPDK`, with `plainVerdictAtK keep`.
 -/
+
+namespace FlockSoundness.Discharge.HiddenDec
+
+open FlockSoundness.Discharge.Exec (Inputs)
+
+/-- **The verify command's tags under hidden outputs and plain SHA-512 leaves, without `--zk`**: `TagsOkH` with
+`flock-leaf/sha512-unsalted` for `hm96-sha512/v1`. -/
+def TagsOkHU (I : Inputs) : Prop :=
+  I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted" ∧
+    I.count ≤ 1
+
+end FlockSoundness.Discharge.HiddenDec
 
 namespace FlockSoundness.Discharge.AtDraw
 
@@ -258,21 +274,22 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at `wrPDK` at hidden outputs under plain SHA-512 leaves**:
-`decodesTable_wrPD_scHU` through `keep`, from `accepts_repsOneDUK`, `accepts_opens₀LDUK` and `setupHidden_plain`. -/
-theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
+/-- **The deployed plain decoders are right at a record writer at hidden outputs under plain SHA-512 leaves**:
+`decodesTable_wrK_scH_of` at `leafPlain`, from `accepts_repsOneDUK`, `accepts_opens₀LDUK` and `setupHidden_plain`. -/
+theorem decodesTable_wrK_scHU_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
-    (rootB₀ : Array ByteArray) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
+    (rootB₀ : Array ByteArray) (wr : Tables.LiveOutJ 1 mPts → Exec.Transcript)
+    (hwr : ∀ o, RecordsLiveAtDK keep I (dj S) o (wr o)) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
     Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leafPlain cap pend os)
       (fun _ o => o.accepted = true ∧ ¬ (Off₀L H512 enc512 leafPlain (tablesAtH (Reg := Reg) dj x₀ S R).sch
         (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
         ¬ SelfClashL H512 enc512 leafPlain (tablesAtH (Reg := Reg) dj x₀ S R).sch o))
-      (fun o => AcceptsAtDK keep I (some (dj S)) (wrPDK keep I (dj S) o) ∧ o.rootB[0]! = rootB₀[0]! ∧
-        TxNoOffAtK keep I (dj S) C (wrPDK keep I (dj S) o))
+      (fun o => AcceptsAtDK keep I (some (dj S)) (wr o) ∧ o.rootB[0]! = rootB₀[0]! ∧
+        TxNoOffAtK keep I (dj S) C (wr o))
       (fun ps _ => opnAtH (tablesAtH dj x₀) I dj S R ps)
       (fun _ => decAt (tablesAtH dj x₀) wOP wLIG S R) (fun _ _ => true)
       (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
@@ -283,8 +300,6 @@ theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
     omega
   obtain rfl : j = ⟨0, Nat.one_pos⟩ := Fin.ext hj
   rintro o ⟨hacc, hr₀, hno⟩
-  change AcceptsAtDK keep I (some (dj S)) (wrPDK keep (J := 1) I (dj S) o) at hacc
-  change TxNoOffAtK keep I (dj S) C (wrPDK keep (J := 1) I (dj S) o) at hno
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   have h := PlaysCoin.decodesOfRuns (fun cap pend os => tableOutL H512 enc512 leafPlain cap pend os)
     (fun o' => o' = oneOf o)
@@ -298,7 +313,7 @@ theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
   · obtain ⟨pend, h0, h1, hok⟩ := h
     exact ⟨pend, h0, h1, hok⟩
   rintro o' rfl
-  obtain ⟨hprf, hrec⟩ := recordsLive_wrPDK1 keep I (dj S) o hacc
+  obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o (hwr o) hacc
   obtain ⟨hSD, hmPts⟩ := hS
   obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsDK keep ht hc hh hc1 dj x₀ hacc hSD hmPts
   obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneDUK keep hrr hh hl hc1 hacc
@@ -333,7 +348,7 @@ theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
   obtain ⟨hver, hent⟩ := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot rootB₀[0]!)
     (tableOutL H512 enc512 leafPlain (capOfRoot rootB₀[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPDK keep (J := 1) I (dj S) o).proofs[0]!, (wrPDK keep (J := 1) I (dj S) o).proofs[1]!]))
+        #[(wr o).proofs[0]!, (wr o).proofs[1]!]))
     hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl) hv'
   rw [hn'] at hent
   rw [hmP, hpts] at hreps
@@ -358,7 +373,7 @@ theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
   refine ⟨(pend 0, pend 1), hrep 0, hrep 1, ?_⟩
   have hopn : opnAtH (tablesAtH (Reg := Reg) dj x₀) I dj S R (oneOf o).proofs =
       opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPDK keep (J := 1) I (dj S) o).proofs[0]!, (wrPDK keep (J := 1) I (dj S) o).proofs[1]!] := by
+        #[(wr o).proofs[0]!, (wr o).proofs[1]!] := by
     rw [← hprf]
     unfold opnAtH
     rw [hst]
@@ -376,6 +391,29 @@ theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
   exact Claims.Flock.exists_ne_of_entries H512 enc512 leafPlain (schedOf sch) (capOfRoot rootB₀[0]!) _ hN C _ _ rfl
     hver hent hoff hsc
 
+open DecodeZL HiddenExec HiddenDec in
+/-- **The deployed plain decoders are right at `wrPDK` at hidden outputs under plain SHA-512 leaves**
+(`decodesTable_wrK_scHU_of` at `wrPDK`). -/
+theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
+    {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
+    (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
+    (rootB₀ : Array ByteArray) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
+    Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leafPlain cap pend os)
+      (fun _ o => o.accepted = true ∧ ¬ (Off₀L H512 enc512 leafPlain (tablesAtH (Reg := Reg) dj x₀ S R).sch
+        (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+        ¬ SelfClashL H512 enc512 leafPlain (tablesAtH (Reg := Reg) dj x₀ S R).sch o))
+      (fun o => AcceptsAtDK keep I (some (dj S)) (wrPDK keep I (dj S) o) ∧ o.rootB[0]! = rootB₀[0]! ∧
+        TxNoOffAtK keep I (dj S) C (wrPDK keep I (dj S) o))
+      (fun ps _ => opnAtH (tablesAtH dj x₀) I dj S R ps)
+      (fun _ => decAt (tablesAtH dj x₀) wOP wLIG S R) (fun _ _ => true)
+      (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+      (fun j => repsOf (D := Dig) execArith ([tablesAtH (Reg := Reg) dj x₀ S R].get j)) j :=
+  decodesTable_wrK_scHU_of keep ht hc dj x₀ hT hS R hN C rootB₀ (wrPDK keep I (dj S))
+    (recordsLiveAtDK_wrPDK keep I (dj S)) j
+
 end Claims.Bridge.PlainDraw
 
 namespace FlockDeploy.KS
@@ -385,10 +423,53 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
+/-- **A plain statement in scope with hidden outputs and plain SHA-512 leaves sets up its one table at its draw**:
+`plain_setupHidden` with `TagsOkHU` for `TagsOkH`. -/
+theorem plain_setupHiddenU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") {d : Json}
+    (hd : ins.read.draw = some d) :
+    ins.read.I.tags.typed = false ∧ HmOut.parse ins.read.I.tags ins.read.I.circuitFile ins.read.I.tables = .ok st.c ∧
+      HiddenDec.TagsOkHU ins.read.I ∧
+      Stmt.setupHidden ins.read.I.tags ins.read.I.circuitFile ins.read.I.publicFile ins.read.I.coins
+        ins.read.I.tables (some d) ins.read.I.partition ins.read.I.program = .ok st ∧ spec = st.spec ∧ 22 ≤ st.m ∧
+      st.m ≤ 35 := by
+  have hm₁ := hin.1
+  have hm₂ := hin.2.1
+  obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
+  obtain ⟨-, hpr, hsr⟩ := parseBytes_setup hp hset
+  have hzk : ins.read.zk = false := readOf_zk (x := x) (by unfold readOf; rw [(setupOf_some hset).1]; rfl)
+  have htags : ins.read.tags = ins.read.I.tags := by simp [Readable.Read.tags, hzk]
+  have hform : (Readable.toReadable Readable.relation p).form = ins.read.form := by rw [← hpr]; rfl
+  obtain ⟨-, -, -, -, -, ht, hrr, -, hc1, hpi, -⟩ := hin
+  rw [hform] at ht hrr hc1 hpi
+  simp only [Readable.Read.form, htags] at ht hrr hc1 hpi
+  simp only [Bool.not_eq_true] at ht
+  simp only [Bool.false_eq_true, ↓reduceIte] at hc1
+  have hpi' : ins.read.publicInputs = none := Option.not_isSome_iff_eq_none.1 hpi
+  have hcoins : ins.read.coins = ins.read.I.coins := by simp [Readable.Read.coins, hzk]
+  unfold Readable.Read.setup at hsr
+  rw [htags, hcoins, hpi', hd] at hsr
+  rcases HiddenExec.setupTables_okH hh hsr with ⟨-, st', hst, hsp, rfl⟩ | ⟨hc, -⟩
+  swap
+  · omega
+  have e : st' = st := by
+    unfold tables at h
+    rw [hset] at h
+    simpa using h
+  subst e
+  have hc := HiddenExec.setupHidden_parseC hst
+  have hm := parse_m hs hset (by simp)
+  simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
+  refine ⟨ht, hc, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
+  · simpa [hm] using hm₁
+  · simpa [hm] using hm₂
+
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
-SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtK keep` for `plainVerdictAt`, from `decodesTable_wrPDK_scHU`. -/
-theorem plain_hdecHUAtK (keep : Bool → Bool)
+SHA-512 leaves, at a record writer**: `plain_hdecHAtK_of` at `leafPlain`, from `decodesTable_wrK_scHU_of`. -/
+theorem plain_hdecHUAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -398,12 +479,14 @@ theorem plain_hdecHUAtK (keep : Bool → Bool)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts)
-    (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) :
+    (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray)
+    (wr : Tables.LiveOutJ 1 spec.mPts → Exec.Transcript) (hwr : ∀ o, RecordsLiveAtDK keep ins.read.I d o (wr o)) :
     ∀ j, DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leafPlain cap pend os)
       (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leafPlain
         ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
         ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leafPlain ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
-      (plainVerdictAtK keep ins.read.I d C rootB₀)
+      (fun o => AcceptsAtDK keep ins.read.I (some d) (wr o) ∧ o.rootB[0]! = rootB₀[0]! ∧
+        TxNoOffAtK keep ins.read.I d C (wr o))
       (fun ps _ => HiddenDec.opnAtH (fun (_ : Finset (Fin 0)) (_ : Unit) =>
         plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I (fun _ => d) ∅ () ps)
       (fun _ => DecodeZL.decAt (fun (_ : Finset (Fin 0)) (_ : Unit) =>
@@ -436,9 +519,39 @@ theorem plain_hdecHUAtK (keep : Bool → Bool)
       2 ^ (lvOf (HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ ∅ ()).sch 0).logLen := by
     rw [e]
     exact plain_wordLen h h22 h35 hsch
-  have hdec := decodesTable_wrPDK_scHU keep ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () hN C
-    rootB₀
+  have hdec := decodesTable_wrK_scHU_of keep ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () hN C
+    rootB₀ wr hwr
   rw [e] at hdec
   exact hdec
+
+open Classical Discharge.Tables Claims.Bridge.PlainDraw in
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
+SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHUAtK_of` at
+`wrPDK`). -/
+theorem plain_hdecHUAtK (keep : Bool → Bool)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
+    {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts)
+    (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) :
+    ∀ j, DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leafPlain cap pend os)
+      (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leafPlain
+        ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+        ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leafPlain ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+      (plainVerdictAtK keep ins.read.I d C rootB₀)
+      (fun ps _ => HiddenDec.opnAtH (fun (_ : Finset (Fin 0)) (_ : Unit) =>
+        plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I (fun _ => d) ∅ () ps)
+      (fun _ => DecodeZL.decAt (fun (_ : Finset (Fin 0)) (_ : Unit) =>
+        plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) DecodeZL.wOP DecodeZL.wLIG ∅ ())
+      (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+      (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+      j :=
+  plain_hdecHUAtK_of keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay C rootB₀ (wrPDK keep ins.read.I d)
+    (recordsLiveAtDK_wrPDK keep ins.read.I d)
 
 end FlockDeploy.KS
