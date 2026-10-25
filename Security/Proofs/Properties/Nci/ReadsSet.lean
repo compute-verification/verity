@@ -1,5 +1,5 @@
 import Proofs.Properties.Nci.ReadsOneNode
-import Properties.Proofs.Nci.OperandsResolve
+import Proofs.Properties.Nci.OperandsResolve
 
 /-!
 # `ReadsExact.RootSet` from the decoder's facts: gates located with their operands, and the statements it is proved through
