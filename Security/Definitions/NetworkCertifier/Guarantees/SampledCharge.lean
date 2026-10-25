@@ -21,7 +21,8 @@ observations is the certifier's trust (`trusted-host`), and the statuses are its
 the inputs besides the ingress to the trace's committed values, so it takes that inputs among `As` suffice for the
 trace's (`AdviceIn`); `sampledLeak_reg` proves that for every circuit at the inputs pinned to the trace at the registered
 inputs `reg` and `false` off the free inputs (`AsReg`), with `c` the number of free inputs not in `reg`.
-`SampledLeakAccepted` is that bound as a guarantee, with `SampledAuditAccepted` its one open hypothesis.
+`SampledLeakAccepted` is that bound as a guarantee. It takes `SampledAuditAccepted` as a hypothesis, which
+`SecurityProofs.SampledAuditAccepted` proves, and `Claims.Sampling.KS` at each deployment.
 
 **What `As` and `c` are.** `As` is what the circuit's inputs other than the ingress may be. Its count is a premise of the
 run, not an assumption. Under the decided composition the registered inputs are fixed by the registration, and the
@@ -52,7 +53,8 @@ def EncardAccSeqsSampledLe : Prop :=
     (AccSeqsSampled C P d lay n As δ op D).encard ≤
       ((2 ^ c * (faultySets d P δ).card * 2 ^ β * D ^ n : ℕ) : ℕ∞)
 
-/-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`.** At every deployment `D` of the sampled
+/-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`** (proved:
+`SecurityProofs.SampledAuditAccepted`). At every deployment `D` of the sampled
 verifier where `Claims.Sampling.KS` holds, every public layout `lay` and horizon `k` of its statements, `δ ≥ 0`, a
 decoder that lists every trace within Flock's radius, and `β` bounding each possible faulty set's committed bits
 (`faultyBits`), on the statements in scope:

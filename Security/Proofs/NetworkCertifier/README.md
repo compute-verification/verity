@@ -244,8 +244,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
   (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. It is `SampledLeak.lean`'s
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
-  registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
-  `Claims.Sampling.KS` are named assumptions in the lock.
+  registration's commitment binds them is a separate statement, not yet proved. `SampledAuditAccepted` is proved
+  (`SecurityProofs.SampledAuditAccepted`); as premises, it and `Claims.Sampling.KS` are named assumptions in the lock.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
