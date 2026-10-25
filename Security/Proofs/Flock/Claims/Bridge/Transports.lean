@@ -80,8 +80,10 @@ theorem deploy_opens_of_short (c : Code) (H : Msg → Msg) (hH : ∀ m, (H m).le
   unfold Commitment.Opens commit pathCommit
   dsimp only
   split
-  · rw [ocBind_eval, hm96Leaf_fst, if_neg fun h => hH _ h.1]
-    rfl
+  · rw [ocBind_eval, hm96Leaf_fst]
+    split_ifs with h
+    · exact absurd h.1 (hH _)
+    · rfl
   · rfl
 
 end SamplingDeploy
