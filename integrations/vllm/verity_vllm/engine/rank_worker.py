@@ -35,11 +35,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm import settings
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm import settings
 
 
 def repo_modules_loaded() -> dict[str, Any]:

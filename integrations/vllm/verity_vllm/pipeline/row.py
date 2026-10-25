@@ -31,11 +31,11 @@ from importlib import metadata
 from typing import Any
 
 from verity_vllm import protocols as PO
-from verity_vllm import settings
 from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
                                 done_source_refusal, group, option, row_world)
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
+from verity_vllm import settings
 
 STAGES = "build,match,commit"
 EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"

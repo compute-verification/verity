@@ -34,11 +34,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
+from verity_vllm import settings
 
 
 def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
