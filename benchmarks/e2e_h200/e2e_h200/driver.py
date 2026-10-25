@@ -50,8 +50,10 @@ class StepResult:
 
 class Driver:
     def __init__(self, shape: Shape, store: Store, batch: int, committer: Committer, device: str = "cpu",
-                 clock: Callable[[], float] = time.perf_counter) -> None:
-        self.shape, self.store, self.batch, self.committer = shape, store, batch, committer
+                 clock: Callable[[], float] = time.perf_counter, tamper: str | None = None) -> None:
+        """``tamper``: an op path whose committed words have bit 0 flipped at every step (a loop whose committed outputs
+        are not its model's), which replay must find."""
+        self.shape, self.store, self.batch, self.committer, self.tamper = shape, store, batch, committer, tamper
         self.device, self.clock = torch.device(device), clock
         w = store.weights
         dev = self.device
@@ -146,6 +148,9 @@ class Driver:
         logits = self._put(st, "lm_head", O.s8_linear(q, self.head, self.sw["head"]))
         nxt = O.argmax(logits)
         st.put("argmax", nxt.to(torch.int16)[:, None])
+        if self.tamper:
+            codes, word = st.tables[self.tamper]
+            st.tables[self.tamper] = (codes ^ 1, word)
         roots = self._timed(sec, "commit", lambda: self.committer.commit(st))
         out = nxt.cpu().numpy().astype(np.int64)
         res = StepResult(st.step, t, tokens.copy(), out, roots.root, roots.tables, st.value_bytes(), sec)
