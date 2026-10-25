@@ -26,8 +26,8 @@ failure message carries its fix.
  only shrinks, and every failure prints the exact entry lines.
 
 **The rule on every change: no growth** (Daniel's delegation to the vLLM coordinator, 25 Oct 09:40Z). No PR adds a ratchet
-exception or raises a recorded count: against its merge base with `main`, no ratchet holds more entries and no entry's
-`count` is higher. An entry may move with the violation it allows. A change to a lint's own code or thresholds is judged
+exception or raises a recorded count: against its merge base with `main` (the merge of its merge bases, when a branch that
+merged both `main` and a since-landed branch has several), no ratchet holds more entries and no entry's `count` is higher. An entry may move with the violation it allows. A change to a lint's own code or thresholds is judged
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. Once drive.toml's `landing_gates` names it, the merge

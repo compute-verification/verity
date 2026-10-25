@@ -5,11 +5,12 @@ delegation to the vLLM coordinator, 25 Oct 09:40Z).  Dedicated cleanup lanes pay
 
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
-them (a branch's own commits against its merge base).  A ratchet is a shrink-only allowlist under ``integrations/vllm/tests``
-(``**/allowlists/*.json`` or ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a
-rule number (``p10_size.json`` and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the
-change adds starts at its own count and is not compared.  A change is judged when it touches a ratchet or a ``*.py`` file
-under ``integrations/vllm/tests/lint/`` (the lints' code), and passes when:
+them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
+ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
+holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json`` and ``size.json`` are
+both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own count and is not
+compared.  A change is judged when it touches a ratchet or a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
+code), and passes when:
 
 * no ratchet its base has holds more entries after it than before;
 * no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
@@ -205,9 +206,24 @@ class Change:
                 "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed}
 
 
+def merge_base(base: str, top: str) -> str:
+    """``base``'s and ``top``'s merge base.  When they have several (a branch that took ``base``'s commits by two routes: it
+    merged ``main``, and a branch ``main`` has landed since), no one of them holds all they share, and against it what ``base``
+    brought by the other route would count as the branch's; so the base is their merge, as git's own merge takes it."""
+    first, *rest = git("merge-base", "--all", base, top).split()
+    for other in rest:
+        r = subprocess.run(["git", "merge-tree", "--write-tree", "--no-messages", first, other], capture_output=True, text=True)
+        if r.returncode:
+            raise GitError(f"{top[:12]}'s merge bases with {base[:12]} don't merge cleanly, so it has no one base to be judged "
+                           f"against: merge {base[:12]} into the branch, which leaves it one")
+        first = git("-c", "user.name=ratchet gate", "-c", "user.email=ratchet-gate@invalid", "commit-tree", r.stdout.split()[0],
+                    "-p", first, "-p", other, "-m", "ratchet gate: the merge of the merge bases").strip()
+    return first
+
+
 def changes(base: str, top: str) -> list[Change]:
     """The changes on ``top``'s first-parent chain above its merge base with ``base``, oldest first."""
-    mb = git("merge-base", base, top).strip()
+    mb = merge_base(base, top)
     out: list[Change] = []
     lo, group = mb, []
     for line in reversed(git("log", "--first-parent", "--format=%H %P%x00%s", f"{mb}..{top}").splitlines()):
