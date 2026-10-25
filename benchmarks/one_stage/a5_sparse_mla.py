@@ -32,7 +32,8 @@ import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
-from verity_vllm.commit import index as IX, serving_rows as CS  # noqa: E402
+from verity_vllm.commit import index as IX  # noqa: E402
+from verity_vllm.commit import serving_rows as CS  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/sparse-mla-split-stand-in/v1").hexdigest()

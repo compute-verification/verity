@@ -85,7 +85,8 @@ from verity.core.protocols.certifier.certificate import Certificate  # noqa: E40
 from verity.core.protocols.certifier.grid import Record  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
-from verity_vllm.commit import index as IX, serving_rows as CS  # noqa: E402
+from verity_vllm.commit import index as IX  # noqa: E402
+from verity_vllm.commit import serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
