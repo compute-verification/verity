@@ -111,7 +111,7 @@ def tied(monkeypatch):
     monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
 
     def stub(rows):
-        monkeypatch.setattr(NG, "tie_run", rows)
+        monkeypatch.setattr(NG, "tie_run", lambda run, ids, aborted=(): rows(run, ids))
     return stub
 
 

@@ -820,10 +820,10 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     forms', exactly; a refused form records none), beside its five parts (verifier.json's `delta`,
     `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
     sum to it, give no line. The hiding part, n·2^-191, is below the float δ's precision, so the exact parts exceed
-    the recorded total by it. A ledger that didn't charge the draw's rejection has Σ_t k_t/2^64 of its windows' draws
-    added, so it reads as one that did. Every error names the windows' PRF advantages (claim prf/sha-512) with no
-    value, in no total. The line at each T, and over every T, fails with at most the sum over its credited sessions,
-    and a T that credits none has error 0."""
+    the recorded total by it. A ledger that didn't charge the draw's rejection has Σ_t k_t/2^64 added at the session's
+    `samples`, so it reads as one that did, a window that opened all its receipts included. Every error names the
+    windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
+    fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
     def session(profile: float, passes: int, sketch: float, *, charged: bool = True) -> dict:
         d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": al.ledger.hiding_over(passes),
              "sketch": sketch}
@@ -834,7 +834,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
             total += x
         memory = {f: {"delta": total} for f in al.ledger.FORMS} | {al.ledger.TIME_HELD: {"refused": "unpaced"}}
         window = {"lengths": [4096], "profile": {"delta": profile, "drawn": {"receipt": 48}}}
-        return {"k": 0, "record": {"public": {}, "profile": {"windows": [window] * passes}},
+        return {"k": 0, "samples": 48, "record": {"public": {}, "profile": {"windows": [window] * passes}},
                 "ledger": {"delta": d, "inputs": {"passes": passes}, "declared": {"memory": memory}}}
 
     a, b = session(2.0 ** -40, 700, 2.0 ** -60), session(2.0 ** -30, 96, 0.0)
@@ -851,6 +851,10 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     uncharged = session(2.0 ** -40, 700, 2.0 ** -60, charged=False)
     assert Fraction(uncharged["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]) == total - Fraction(
         48 * 700, 2 ** 64) and al.session_error(uncharged) == e
+    opened = json.loads(json.dumps(uncharged))
+    opened["record"]["profile"]["windows"] = [{"lengths": [32], "profile": {"delta": 2.0 ** -40,
+                                                                            "drawn": {"receipt": 32}}}] * 700
+    assert al.session_error(opened) == e, "a window that opens all 32 of its receipts is charged its 48 requested"
     bad = json.loads(json.dumps(a))
     bad["ledger"]["delta"]["sketch"] = 2.0 ** -31
     with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
@@ -875,7 +879,8 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
 
 # Gate runs 8 and 9's accepted sessions (fire runs r20261024-090758-3b8a and r20261024-112611-902d, their
 # verifier.json): (passes, the memory line's δ every form records, the sketch's log2 its `sketch_failure` records,
-# each window's draws, one window a pass, every one of 9.75·10^7 receipts or more: r20261024-210802-42c2).
+# the session's samples, which each window drew, one window a pass, every one of 9.75·10^7 receipts or more:
+# r20261024-210802-42c2).
 GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
              (8, 2): (96, 4.4565254207300316e-11, -56.00597544028051, 232),
              (9, 0): (2118, 9.6406468008027e-10, -51.58427317163358, 48),
@@ -888,13 +893,14 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     session's error is the memory line's δ its ledger recorded, bit for bit, plus the coin commitment's hiding and the
     draw's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
-    which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 over its windows' draws
-    (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its slack is split at it: at 67 bits the total is
-    2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995 and 2^-40.0000 before the rejection."""
+    which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
+    which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
+    slack is split at it: at 67 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
+    and 2^-40.0000 before the rejection."""
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
     window = {"lengths": [2 ** 27], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": drawn}}}
     memory = {f: {"delta": delta} for f in al.ledger.FORMS}
-    s = {"k": k, "record": {"public": {}, "profile": {"windows": [window] * passes}},
+    s = {"k": k, "samples": drawn, "record": {"public": {}, "profile": {"windows": [window] * passes}},
          "ledger": {"inputs": {"passes": passes}, "declared": {"memory": memory}}}
     e = al.session_error(s)
     parts = {n: al.line.number(e["exact"][f"delta_{n}"]) for n in al.ledger.DELTA_PARTS}

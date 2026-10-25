@@ -516,6 +516,8 @@ def refusal(port_: Mapping[str, Any], dom: CommitmentDomain, entry: Mapping[str,
     `reads_from + i` and reads table row i, whose `b ‖ c` is `bcs[i]`: None when they accept, else why not. The entry
     must name the port's value, each row must climb its path to the root at its position under `dom`, and row i must
     be at the position the port reads for its unit."""
+    if (port_.get("domain"), port_.get("leaves")) != (dom.domain_id.hex(), dom.count):
+        raise ValueError("the port names another domain or leaf count than `dom`, and the Lean verifier climbs the port's")
     if entry.get("value") != port_["value"]:
         return f"registered reads: the port reads {port_['value']}, not another value ({entry.get('value')})"
     positions, paths = list(entry.get("positions", ())), list(entry.get("paths", ()))
