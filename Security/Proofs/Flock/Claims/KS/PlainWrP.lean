@@ -37,6 +37,7 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
+  obtain ⟨_, h, -⟩ := Refine.ebind_ok h
   cases hd : s.read.draw with
   | none => simp [hd, ProvedScope.drawLaw] at h
   | some d => exact ⟨d, rfl⟩
