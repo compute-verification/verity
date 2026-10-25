@@ -12,7 +12,8 @@ before any coin.
      "ingress": {"template": "<id>", "frame": "<parameter>", "links": LI, "buckets": T, "slots": RI, "frame_bytes": BI}}
 
 Unit ℓ·T + t of a side's template, in its units' order (the partition's), is bucket t of link ℓ: the template has exactly
-links·T units. Step t is bucket t of the window on both sides, so the sides share T, the horizon k.
+links·T units. Step t is bucket t of the window on both sides, so the sides share T, the horizon k. An integration writes
+the field with `Boundary.record`, and the verifier reads it with `parse`.
 
 * **Egress** (N2's encoder, `note:network-accounting/20261025T0720Z-draft-n2-egress-encoder`): ``frame`` is an output
   row of R·B bytes, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, and row bit 8k + i is bit i of byte k, the order of the
@@ -96,6 +97,10 @@ class Boundary:
 
     def ports(self) -> set[str]:
         return {p for _, s in self.sides() for p in s.ports()}
+
+    def record(self) -> dict[str, Any]:
+        """The circuit record's ``boundary`` field, which `parse` reads back: what an integration writes."""
+        return {"format": FORMAT, **{name: {k: getattr(s, k) for k in FIELDS[name]} for name, s in self.sides()}}
 
     def unit(self, doc: Mapping[str, Any], side: str, link: int, t: int) -> int:
         """The global unit (the population's index) that holds bucket t of link ``link`` of ``side``."""

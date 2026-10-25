@@ -263,4 +263,7 @@ def test_parse_reads_only_the_boundary():
     b = BD.parse(copy.deepcopy(doc))
     assert b.egress == BD.Side("Egr_v1", "o0", 1, 2, 1, 2, "o1") and b.ingress == BD.Side("Ing_v1", "row", 1, 2, 1, 2)
     assert b.horizon == 2 and b.ports() == {"Egr_v1/o0", "Egr_v1/o1", "Ing_v1/row"}
+    assert b.record() == doc["boundary"] and BD.parse({"boundary": b.record()}) == b
+    egress_only = BD.Boundary(b.egress)
+    assert egress_only.record() == {"format": BD.FORMAT, "egress": doc["boundary"]["egress"]}
     assert BD.parse({"format": BD.CIRCUIT}) is None
