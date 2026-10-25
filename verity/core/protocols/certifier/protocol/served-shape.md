@@ -143,22 +143,30 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
   window 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
 - `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
-- `CompileSlice_v1` doesn't take it yet. Two parts are missing:
-  - **The reference at AS = 1.** Its entries are sync tuples (`_state`, `_row`, `_inputs`, and `check`'s decoding of
-    `cert` and `arr`) where at AS = 1 its rows' are `replay_chain.running_names`', `waiting_names`' and
-    `arrival_names`', so on w1 `case` raises `MalformedRow` (`run: an entry is (id, P, O, out, comp, cap, fin) at this
-    shape`). The build feeds the step by name, so it needs nothing more.
+- `CompileSlice_v1` takes it at AS = 1, with two parts that sync didn't need:
+  - **The reference at AS = 1.** It reads its entries by `replay_chain`'s names at its shape (`running_names`,
+    `waiting_names`, `arrival_names`) in `_state`, `_row`, `_inputs` and `check`'s decoding of `cert` and `arr`,
+    where it built sync tuples and `case` raised `MalformedRow` on w1's first state row. The build fed the step by
+    name already.
   - **The served rows matched by request.** `served_rows.step_rows` gives a row the slot of its position in the
-    runner's batch, and ``rows`` compares it with the scheduler's running slot. At w1 they differ at two units: at unit
-    0 the batch is requests 4, 6, 5, 7, and at unit 5 request 5 holds slot 0 while its last output is in flight, so
-    request 6, in slot 1, is the batch's first row. The rows are the replay's at every unit as (request, kind, start, n)
-    (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w1.py`), so the check needs a
-    witnessed injective map from batch positions to slots, or rows keyed by request.
-- With both (the reference reading the chain's entries by name, and the seal's rows put at the replay's slot for
-  their request; a scratch patch on this tree, run r20261024-205551-716a), the slice accepts w1 (0x3F, 21 bits), the
-  four negatives fail as at w212 (late admission 0x2E, `load` and `rows`; charge 0x37; longer prompt 0x2F; dropped
-  row 0x2F), and the circuit is its reference on all five. It is 898,182 ANDs, built in 19 s at 3.0 GB (6.9 GB with
-  the five evaluations): AS = 1 adds 40,316 to sync w212 at the same class on the same tree (857,866 ANDs, run
-  r20261024-205722-af0a). With the reference fixed alone, the honest window fails only ``rows`` (0x2F). The test of
-  what the slice must do on w1 is a strict xfail in that test file.
+    runner's batch, and at w1 that isn't the scheduler's running slot at two units: at unit 0 the batch is requests 4,
+    6, 5, 7, and at unit 5 request 5 holds slot 0 while its last output is in flight, so request 6, in slot 1, is the
+    batch's first row. The rows are the replay's at every unit as (request, kind, start, n)
+    (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w1.py`). At AS = 1 ``wit`` carries
+    ``map``, R × R bits a step, and ``rows`` holds served row b to the slot its map row names: at most one 1 in each
+    map row and column, a slot's column set iff the slot has a row, and the served row equal to that slot's (an empty
+    map row's served row zero). The map is then unique, the identity when the batch is in slot order, so the check is
+    as strict as the slot-for-slot one, which AS = 0 keeps. It costs R² products of a slot's row and 2·R·(R − 1)
+    one-to-one ANDs a step.
+- The slice accepts w1 (0x3F, 21 bits) at its own statics (4, 1, 5), Q 4, D 3, P 38, K 4
+  (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w1.json`) and at the class. The negatives fail as
+  at w212: late admission 0x2E (`load` and `rows`; at the class only, past w1's own D), charge 0x37, longer prompt
+  0x2F, dropped row 0x2F. So does the one the map opens: unit 0's first two served rows (requests 4 and 6) with their
+  requests swapped, 0x2F. The circuit is its reference on all of them: at w1's own statics 314,936 ANDs, and at the
+  class 1,021,302, built in 19.5 s at 3.0 GB (7.3 GB with the six evaluations, 77 s; run r20261024-220244-255c).
+  Without the map (the reference fixed and the seal's rows put at their request's slot, run r20261024-205551-716a)
+  the class unit was 898,182 ANDs, 40,316 more than sync w212 at the same class (857,866, run
+  r20261024-205722-af0a). The map adds 123,120: its products P·R²·32 = 110,592 at the class's 33-bit rows (P 54,
+  R 8), its one-to-one checks 54·2·8·7 = 6,048, and 6,480 in the zero check over its 20,736 mismatch bits, against
+  the 14,256 bits the slot-for-slot comparison reads.
 - The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
