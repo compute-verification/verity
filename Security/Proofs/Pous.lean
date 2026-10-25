@@ -166,6 +166,7 @@ theorem ChainDenseMeets111 : Pous.Guarantees.ChainDenseMeets111 := PousSpongeCha
 theorem BandGradedMeetsFamily : Pous.Guarantees.BandGradedMeetsFamily := PousGraded.band_graded_meets_family
 theorem PerAnswer : Pous.Guarantees.PerAnswer := PousContinuous.per_answer
 theorem ContinuousAudit : Pous.Guarantees.ContinuousAudit := PousContinuous.continuous_audit
+theorem ContinuousAuditProved : Pous.Guarantees.ContinuousAuditProved := PousContinuous.continuous_audit_proved
 theorem BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded :=
   PousRebuild.background_rebuild_excluded
 theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuous.continuous_complete

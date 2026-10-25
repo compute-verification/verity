@@ -8532,6 +8532,9 @@
    "assumptions": [],
    "type_hash": "dbade472967b66a53ada2360e678ce0be1f0f9b075e5a349029a3acd7281df67"
   },
+  "Pous.SecurityProofs.ContinuousAuditProved": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.DenseMeets": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.DenseMeets : Pous.Guarantees.DenseMeets"],
@@ -11320,6 +11323,7 @@
    "Pous.SecurityProofs.BandPubMeetsFamilyD2": "frozen (no-function,hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs.",
    "Pous.SecurityProofs.ChainDenseMeets111": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.ContinuousAudit": "frozen (no-function): the guarantee `PROTOCOL.md` and `continuous.py` cite, over the model's memory challenger (`contAccepts`), not `MemoryChallenger.verdict`.",
+   "Pous.SecurityProofs.ContinuousAuditProved": "frozen (no-function): `ContinuousAudit` at a verdict proved through the proof service, over the model's memory challenger (`contAccepts`) and an abstract verifier sound against it (`ProofSound`), not `MemoryChallenger.verdict` or the sampled-proofs verifier.",
    "Pous.SecurityProofs.DenseMeets": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.DenseMeets64": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.P3ConcreteMeets14GB": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",

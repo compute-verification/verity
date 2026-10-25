@@ -5,6 +5,7 @@ import Proofs.Pous.Continuous.Band
 import Proofs.Pous.Continuous.Complete
 import Proofs.Pous.Continuous.TimeAverage
 import Proofs.Pous.Continuous.BandTimeAverage
+import Proofs.Pous.Continuous.Proved
 
 /-!
 # The continuous audit
