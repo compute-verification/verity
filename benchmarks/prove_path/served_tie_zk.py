@@ -30,8 +30,8 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of C-Flock's proof format
   (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
   out before the scan (`public_pieces`).
-* **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`) from its summary and the verifier's
-  files, the pieces recomputed from the sealed run.
+* **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`): the verifier's files searched afresh
+  for the pieces recomputed from the sealed run, under the current cutter and rule.
 """
 from __future__ import annotations
 
@@ -434,10 +434,10 @@ def statements(d: SimpleNamespace, per: int) -> list[tuple[str, list]]:
 
 
 def rescan(a) -> int:
-    """`prove`'s statements under `--from` scanned again (`leak_scan.rescan`): each one's found pieces (its summary's
-    ``received``) against the verifier's files it kept, the pieces recomputed from the sealed run as `prove` cut them (its
-    units, then the honest blocks it filled the statement with). A found salt isn't recomputed (`prove` draws them), so it
-    reads leaked."""
+    """`prove`'s statements under `--from` scanned again (`leak_scan.rescan`): the verifier's files each one kept searched
+    afresh for its pieces, recomputed from the sealed run as `prove` cut them (its units, then the honest blocks it filled
+    the statement with, and their ``srv`` salts, less the pieces the kept circuit holds). A found salt `prove` drew isn't
+    recomputed, so its summary's find of it stays and reads leaked."""
     d = units_of(a)
     N2 = __import__("n2_zk")
     M = N2._one_stage()
@@ -449,12 +449,14 @@ def rescan(a) -> int:
             continue
         if [[u.kind, u.j] for u in us] != [list(x) for x in summary["statements"][name]]:
             raise SystemExit(f"{name}: these units aren't the run's {summary['statements'][name]}")
-        units = fill(us, honest, summary[name]["staged"]["n"])
-        blobs = LS.public_pieces(M.a8, *blobs_of(units, {}), b"")[0]
+        units, vdir = fill(us, honest, summary[name]["staged"]["n"]), src / name / "verifier"
+        rows, held = blobs_of(units, {"srv": [u.reg.registration.salts[0] for u in units]})
+        blobs = LS.public_pieces(M.a8, rows, held, (vdir / "circuit.txt").read_bytes())[0]
         got = summary[name]["received"]
-        res[name] = r = LS.rescan(got, blobs, src / name / "verifier")
+        res[name] = r = {"pieces": len(blobs), **LS.rescan(got, blobs, vdir, a8=M.a8, rows=rows)}
         ok &= not r["leaked"]
-        log(f"{name}: found {got['verifier_found'] or 'none'}, leaked {r['leaked'] or 'none'} (was {r['was'] or 'none'}), "
+        log(f"{name}: {len(blobs)} pieces, found {sorted({*r['leaked'], *r['structured']}) or 'none'} (the run found "
+            f"{got['verifier_found'] or 'none'}), leaked {r['leaked'] or 'none'} (was {r['was'] or 'none'}), "
             f"structured {r['structured'] or 'none'}")
     out.mkdir(parents=True, exist_ok=True)
     (out / "rescan.json").write_text(json.dumps({"from": str(src), "ok": ok, "statements": res}, indent=1, sort_keys=True))

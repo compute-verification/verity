@@ -282,8 +282,19 @@ def scan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=read
     return {"leaked": leaked, "structured": structured, "placed": placements(_known(received, pieces), pieces, vdir, reads)}
 
 
-def rescan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=reads) -> dict:
+def rescan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=reads, a8=None, rows=()) -> dict:
     """A finished run's scan (its summary's ``received``) taken again under this rule from the verifier's files it kept,
     with the pieces the driver recomputes: `scan`'s result, and the run's own ``leaked`` as ``was``. A found piece the
-    driver can't recompute (a salt the run drew) reads leaked."""
+    driver can't recompute (a salt the run drew) reads leaked. With `a8`, each kept file is searched afresh for `pieces`
+    (`a8.find`), so a piece the run's cutter didn't cut is searched too, and of the run's own finds only those of a blob
+    the driver didn't recompute (not in `rows`) stay."""
+    if a8 is not None and vdir is not None:
+        table, files = a8.needles(pieces), {}
+        for f, rec in received["files"].items():
+            if not (vdir / f).is_file():
+                files[f] = rec
+                continue
+            old = {k: n for k, n in rec.get("found", {}).items() if k.rsplit(" @", 1)[0] not in rows}
+            files[f] = {**rec, "found": {**old, **a8.find((vdir / f).read_bytes(), table)}}
+        received = {**received, "files": files, "verifier_found": sorted({k for x in files.values() for k in x["found"]})}
     return {"was": received.get("leaked"), **scan(received, pieces, vdir, reads)}
