@@ -137,10 +137,10 @@ blocks `encode_segment`'s, the root `vk.root`. -/
 private def MANIFEST : String :=
   "{\"blocks_per_segment\":2,\"c0\":189,\"expander\":\"sha512-ctr-v4\",\"profile\":\"p2-6B\",\"scheme\":\"p2\"," ++
   "\"segments\":1,\"w\":64}"
-private def COMMITMENT : String :=
+def COMMITMENT : String :=
   "6d5b09e192a58823e26422f4e6d3c34410236172c5ddb9886114759c094fbeee4a9c1d42141a3f5007f556b8913182bce67cd5c07db82f7f21b1" ++
   "34aea9f7acf3" ++ "6465666768696a6b6c6d6e6f707172737475767778797a7b"
-private def ROOT : String :=
+def ROOT : String :=
   "e276477790a18d9f3f1044d19863367ebde2fdf6bce07c5d03f651c4462bd2de912ac9bc6a156686831bbbe6b63967a251453153481383a8cb" ++
   "bb49db8d35e1e6"
 
@@ -149,7 +149,7 @@ private def run (blocks : Array String) (params : String := MANIFEST) (commitmen
   let segment := (blocks.mapM Flock.unhex).toOption.getD #[]
   protocol.answer params.toUTF8 ((Flock.unhex commitment).toOption.getD .empty) (encodeEvidence #[segment] ++ trailing)
 
-private def HONEST : Array String := #["03c7dc4c7c6466f2", "16f7feeb615c1874"]
+def HONEST : Array String := #["03c7dc4c7c6466f2", "16f7feeb615c1874"]
 
 #guard (run HONEST).published.map (·.getObjValD "root") == some (.str ROOT)
 #guard ((run HONEST).published.bind fun j => (Public.ofJson j).toOption).map (·.blocks) == some 2
