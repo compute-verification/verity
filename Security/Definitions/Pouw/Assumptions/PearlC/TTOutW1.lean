@@ -7,7 +7,7 @@ import Definitions.Pouw.PearlC.W1
 /-!
 # TT_OUT at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
 
-`TTOut` (`Models.Pouw.Assumptions.PearlC.TTOut`) is stated over any `CostModel`, and which one it is believed at (W1 at
+`TTOut` (`Definitions.Pouw.Assumptions.PearlC.TTOut`) is stated over any `CostModel`, and which one it is believed at (W1 at
 the device's measured prices) is prose in its docstring. Here that cost model is a term: TT_OUT's game with
 `CM := W1.w1Priced dv salt`, the W1 machine on the device `dv` with the salt's bytes `salt`, priced with no refund
 (Daniel, item 9). A strategy's cost is W1's cost, so an attack on these assumptions is a W1 program.
@@ -36,6 +36,16 @@ weaker as they grow.
 **The noise.** W1 runs no oracle, so at a `sem` whose noise reads `H` a W1 program cannot evaluate the noise and these
 assumptions say nothing about the deployment. They speak at `NoiseSha512.sha512Sem base salt rootB` with the same `salt`,
 the deployment's noise, which a W1 program computes with `sha` instructions.
+
+**One salt.** Each form here, and each guarantee stated at `W1.w1Priced dv salt` and a semantics `sem`, takes the two
+separately. It speaks at the deployment when `sem := NoiseSha512.sha512Sem base salt rootB` with the `salt` its cost
+model reads: one salt, which the program reads as its salt bytes (`W1.init`'s region 1) and the protocol reads as the
+noise's. At any other pair it is still proved, but about a game the deployment doesn't play.
+
+**The program's text is bounded** (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64` constants, W1RT-1's
+fix F2). W1 charges only the path a run takes, so a strategy with unbounded text could hold the reference at
+`sha512Sem` as a table of one leaf per salt in its code (W1RT-1). A W1 program can't
+(`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`).
 
 **The honest program** pays the weight side and the weight read, neither in `W_ref`, so `AdmitsRef (W1.w1Priced …)`
 fails at decode. No reader of these assumptions takes `AdmitsRef`: it is completeness, and γ bounds credited work.

@@ -16,7 +16,12 @@ transcript root.
 
 Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
 build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
-``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``.
+``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
+is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
+as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
+peers) are set: then it is a live session's on the auditor host, reserved at install, opened on the weights' root and its
+salt coin opened after it (`_LiveSession`), which the device run checks (`pouw_pearl_c_host.epoch_of`); the gate's result
+names the session (``coins``), and the arm's close ends it.
 """
 from __future__ import annotations
 
@@ -53,6 +58,40 @@ class _Coins:
         return self.opened[label]
 
 
+class _LiveSession:
+    """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
+    prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
+    node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
+    construction (`commit_coins.Gate`: ``reserve --peer NAME``, a live epoch's layout with one round coin), opened on the
+    weights' root once they are committed, its salt coin opened after it (`pouw_h1_window.open_session`), closed with the
+    arm."""
+
+    def __init__(self, gate: str, peer: str, epoch: int) -> None:
+        import json
+
+        from verity.core.protocols.pouw import window as Wd
+        from verity_vllm.pipeline.commit_coins import Gate
+
+        self.gate = Gate(gate)
+        families = json.dumps([list(f) for f in Wd.live_families(1)], separators=(",", ":"))
+        self.reserved = self.gate.call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
+                                       "--epoch", str(epoch))
+        self.client = self.commitment = None
+        self.carried: dict[str, Any] = {}
+
+    def open(self, entry: str, root: bytes) -> Any:
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        self.client, self.commitment, opening, _, _, self.carried = PHW.open_session(
+            entry, self.gate.call, self.reserved["session"], root)
+        return opening
+
+    def close(self) -> None:
+        if self.client is not None:
+            client, self.client = self.client, None
+            client.close()
+
+
 class PearlCArm:
     id = "pouw-pearl-c"
     protocols: tuple[str, ...] = ()
@@ -68,7 +107,10 @@ class PearlCArm:
         self.scheme = os.environ.get("PEARLC_SCHEME") or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = os.environ.get("PEARLC_SCHEDULE", "deferred")
         self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
-        self.run = self.stack = self.weights = None
+        self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
+        self.peer = os.environ.get("PEARLC_CHALLENGER_PEER") or None
+        self.run = self.stack = self.weights = self.session = None
+        self.coins: dict[str, Any] = {"source": "in-process"}
 
     def install(self, target: Any) -> "PearlCArm":
         return self
@@ -100,10 +142,10 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.core.protocols.pouw.audit import weights_root
-        from verity_vllm.linear import vllm_site
-        from verity_vllm.linear.api import Arm as StackArm
-        from verity_vllm.linear.api import PassSpec, Stack
-        from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+        from verity_vllm.protocols.linear import vllm_site
+        from verity_vllm.protocols.linear.api import Arm as StackArm
+        from verity_vllm.protocols.linear.api import PassSpec, Stack
+        from verity_vllm.protocols.pouw import pearl_c as PPD
 
         scheme = self.scheme
         sites = vllm_site.discover(target.model)
@@ -111,16 +153,35 @@ class PearlCArm:
         bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))
+        if (self.gate_command is None) != (self.peer is None):
+            raise RuntimeError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
+                               "(this node's name in the challenger host's peers) together")
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
+        if self.gate_command is not None:
+            self.session = _LiveSession(self.gate_command, self.peer, self.epoch)
         salt_key = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
-        coins = _Coins(self.epoch)
-        opening = coins.open("salt", weights_root(roots))
+        if self.session is not None:
+            opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
+            commitment = self.session.commitment
+            self.coins = {"source": "challenger", "session": self.session.carried,
+                          "salt_after": weights_root(roots).hex()}
+        else:
+            coins = _Coins(self.epoch)
+            opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment
         tiles, rows = self._capacity(target, kernel.run.TILE, PPD.ROW_ALIGN,
                                      [t.shape[0] for t in weights.values()], PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
-                                  coins.commitment, opening, schedule=self.schedule,
-                                  capacity=tiles, flag_rows=rows, salt_key=salt_key, **self.run_options)
+        try:
+            run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+                                      commitment, opening, schedule=self.schedule,
+                                      capacity=tiles, flag_rows=rows, salt_key=salt_key, **self.run_options)
+        except BaseException:
+            if self.session is not None:
+                self.session.close()
+            raise
+        run.commits["coin_source"] = self.coins["source"]
+        if self.session is not None:
+            run.commits["session"] = self.session.carried
         stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
         bad = stack.refusals()
         if bad:
@@ -156,9 +217,9 @@ class PearlCArm:
             seen.add(tuple(W.shape))
             for m in (16, 64):
                 x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-                commits, served = [], None
+                commits, served, at = [], None, run.epoch_calls()
                 for omit in ((), (), ("hash_leaf",)):
-                    run.begin()
+                    run.begin(at=at)
                     run.poison()
                     run.omit = frozenset(omit)
                     y = run.gemm(w, x, W, None)
@@ -173,41 +234,60 @@ class PearlCArm:
                                "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
         run.details["passes"].clear()
         return {"passed": all(c["ok"] for c in checks), "scheme": run.scheme.name, "schedule": self.schedule,
-                "checks": checks}
+                "coins": self.coins, "checks": checks}
 
     def spans(self, target: Any) -> dict[str, Any]:
         return {} if self.stack is None else {"passes": float(len(self.stack.passes))}
 
     def close(self, target: Any = None) -> None:
-        if self.stack is not None and self.stack.open_pass is None:
-            self.stack.activate(None)
+        try:
+            if self.stack is not None and self.stack.open_pass is None:
+                self.stack.activate(None)
+        finally:
+            if self.session is not None:
+                self.session.close()
 
 
 class PearlCWholeArm(PearlCArm):
     """`PearlCArm` with each decode step replayed as one CUDA graph (`pouw_pearl_c_whole.WholeStep`, `e2e.py
-    --graphs --whole-step --whole-defer --whole-defer-a`): vLLM's FULL decode graphs at the preset's capture sizes, without
-    torch.compile, each captured with every call's graph steps inside it, each call's tile hashing beside the next call
-    and its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline splits A's
-    commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39, r20261024-130722-5c44),
-    so a decode step launches one graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each
-    call of at most `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one
-    pass per engine step as `PearlCArm`'s, and its gate is `PearlCArm`'s call check with the calls graphed, then
+    --graphs --whole-step --whole-defer --whole-defer-a --whole-fork-stats`): vLLM's FULL decode graphs at the preset's
+    capture sizes, without torch.compile, each captured with every call's graph steps inside it, each call's tile hashing
+    beside the next call, its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline
+    splits A's commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39,
+    r20261024-130722-5c44), the GEMM leaving the tree's CTA its SM (`whole_tree_sm`), and its A scales beside its A
+    commitment (`whole_fork_stats`), so a decode step launches one
+    graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each call of at most
+    `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one pass per engine
+    step as `PearlCArm`'s, each pass's commitment read back at the next pass's end (`lag_ends`), so the host prepares the
+    next step while the GPU runs this one; its gate is `PearlCArm`'s call check with the calls graphed, then
     `e2e.whole_check`: a forward's calls captured whole and replayed, bit for bit the eager calls' commitment.
 
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
-    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it).
+    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
+    ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
+    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
+    commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
+    default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
-    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True}
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True,
+                   "whole_tree_sm": True, "aside_ends": True}
 
     def __init__(self) -> None:
         super().__init__()
-        if os.environ.get("PEARLC_WHOLE_DEFER_A") == "0":
-            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_defer_a"}
+        for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
+                            ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
+                            ("aside_ends", "PEARLC_ASIDE_ENDS")):
+            if os.environ.get(env) == "0":
+                self.run_options = {k: v for k, v in self.run_options.items() if k != option}
+        if "whole_defer_a" not in self.run_options:
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
+        if "lag_ends" not in self.run_options:
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "aside_ends"}
         self.schedule = "serial"
         self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
@@ -224,7 +304,7 @@ class PearlCWholeArm(PearlCArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.engine.engine_profile import get_model_runner
-        from verity_vllm.protocol_options.pouw_pearl_c_whole import WholeStep
+        from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
 
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, get_model_runner(target.engine.vllm), target.hooks)

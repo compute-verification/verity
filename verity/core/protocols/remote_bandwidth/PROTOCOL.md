@@ -865,7 +865,9 @@ commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z
 (`post_seed`), the blocks the session appended and released (`appended`, `released`), the lifetime cap \(L\) it held
 the appended blocks to (`lifetime`, §4), the chain \(a\) over its appends in the order received (`appends`, §4's
 `a_(t,i)` after the last append, null without one: a hash over hiding roots and their indices, which the memory-map
-unit's verdict is on, §8), and the session's span. The
+unit's verdict is on, §8), the receipts each draw requested (`samples`, the session's \(s\): a draw of \(U\) receipts
+drew \(\min(s, U)\), and the memory line's δ charges the draw's rejection at \(s\) a draw, one draw a window unless
+`groups_per_coin` draws several from one coin), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
@@ -968,21 +970,26 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
   (`ledger.hiding`), plus the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\)
-  (`ledger.rejection`, over every window's draws): the ledger's parts (`ledger.DELTA_PARTS`), the horizon's profile
-  and slack and then these three. `LineHeld`'s error also carries the windows' PRF advantages,
-  \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names them by their claim
-  (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
+  (`ledger.rejection`), at the receipts each draw requested, \(k_t\) the record's `samples`, not the
+  \(\min(k_t, U_t)\) it drew: a draw that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is.
+  These are the ledger's parts (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these three.
+  `LineHeld`'s error also carries the windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no
+  numeric value: the ledger names them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
   Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
   outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
   a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
   block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
   takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed), and the line of record says it is conditional on it (`auditor_line.json`'s
-  `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
-  node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
-  credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
-  of the boundary links over its span show other ingress.
+  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
+  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
+  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
+  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
+  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
+  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
+  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
+  conditional on `ProviderLockdown` (`trusted-host`), which names what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -996,7 +1003,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
 
 ## 8. What deployment changes, and what is open
 
-- **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
+- **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
   proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
@@ -1106,18 +1113,28 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
     and the verifier sees the same messages, so what it accepts is unchanged.
 - **The schedule check.** Credit after the seed waits on it (`schedule.py`, of record in
-  `lean/RemoteAudit/Schedule.lean`, held by the difftest). The prover publishes the session's schedule: when each
-  appended block is written and freed, which registered blocks are freed and when, and each pass's step. The verifier
-  computes each pass's plan from it (`Schedule.plan`, the blocks resident when the step begins, in store order) and
-  the session's appends (`Schedule.appendRuns`), refuses the session if a pass's plan or an append differs, and
-  counts the schedule's bits (`Session.scheduled`, a `Scheduled` verdict; `Ledger.steering`). `ledger` credits nothing
-  after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function of a
-  schedule whose bits it counts, and a plan that follows a coin at that schedule is refused: the `a` of the stacked
-  guarantee's `SteeredLayout` premise is at most those bits plus one (`Properties.RemoteAudit.steered_of_checked`,
-  under `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. Open: the schedule is witness (a
+  `lean/RemoteAudit/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
+  \(a\) on its schedule's bits, with the session's parameters (`Params.schedule_cap`; none, the default, and nothing
+  after the seed is credited). After the session it publishes the schedule: when each appended block is written and
+  freed, which registered blocks are freed and when, and each pass's step. The verifier refuses a schedule over the
+  cap, computes each pass's plan from it (`Schedule.plan`, the blocks resident when the step begins, in store order)
+  and the session's appends (`Schedule.appendRuns`), and refuses the session if a pass's plan or an append differs
+  (`Session.scheduled`, a `Scheduled` verdict carrying the cap; `Ledger.steering` is the cap). `ledger` credits
+  nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
+  of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
+  `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
+  own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
+  the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
+  \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
+  understate `DeclaredCircuitRequirement`'s \(\delta\), which grows as \(2^a\), by \(2^{100}\) (red team round 5,
+  RD-18). Under a cap of 300 both are credited at 300; under one of 200 its 300-bit schedules are refused, and those
+  sessions credit nothing after the seed. Open: the schedule is witness (a
   request's arrivals and lengths), in the clear here as v0's plans are, so deployed it is committed and the check is
   a proof unit whose output is the bits; the bits are the whole session's schedule, an upper bound on what the prover
-  chose after a pass's coins; and A7's sessions send their circuit's read sets as plans, not the resident sets, so
+  chose after a pass's coins; the cap travels with the session's parameters, and `benchmarks/remote_session`'s hello
+  carries none, so its sessions credit nothing after the seed; and A7's sessions send their circuit's read sets as
+  plans, not the resident sets, so
   the check refuses them and they are credited nothing after the seed until they send the replay's plans.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three

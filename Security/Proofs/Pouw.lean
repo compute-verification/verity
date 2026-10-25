@@ -78,6 +78,7 @@ import Proofs.Pouw.PearlC.ChainCapKernelGamma
 import Proofs.Pouw.PearlC.ChainCapLoopGamma
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Proofs.Pouw.PearlC.Completeness
+import Proofs.Pouw.PearlC.DeadlineWitness
 import Proofs.Pouw.PearlC.DeviceCapGamma
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceChainCapGamma
@@ -177,7 +178,7 @@ import Proofs.Pouw.Witness
 /-!
 # PoUW's proofs
 
-Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Models.Pouw.Assumptions`'
+Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
 `Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/

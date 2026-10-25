@@ -113,6 +113,25 @@ def test_one_group_in_flight_holds_the_same_line_for_fewer_passes_and_the_code_r
     assert s["chain"] and s["k"] / s["r"] >= si.least_period(slow, s["k"]) > 1
 
 
+def test_a_point_s_own_c_at_one_in_flight_moves_only_the_one_flight_plan():
+    """`c1_s` (`--one-flight-c`) is the chain's and the line rule's c at one group in flight; two in flight's plan
+    still reads the recorded c."""
+    p = {"blocks": 8 * 2_359_296, "gpus": 8, "shard_bytes": 9_663_676_416, "weights_bytes": 8 * (6.98e9 + 2 * 1.05e9),
+         "c_s": 0.0333, "xi": 2.638e6, "chip": 743_590.5, "codec_loss": None}
+    prices = {"fit": 0.544, "floor": 0.08, "fit_deployed": 1.09, "floor_deployed": 0.16}
+    own = dict(p, c1_s=0.0012)
+    assert si.c_at(p, 1) == si.c_at(p, 2) == si.c_at(own, 2) == 0.0333 and si.c_at(own, 1) == 0.0012
+    assert si.solve(own, prices, 0.01, theta=600.0, line_rule=True) == si.solve(p, prices, 0.01, theta=600.0,
+                                                                                 line_rule=True)
+    for g in (1, 4):
+        a, b = (si.solve(x, prices, 0.01, theta=600.0, line_rule=True, flight=1, per_coin=g) for x in (p, own))
+        assert b["k"] / b["r"] <= si.one_flight_room(own, 0.01)["longest_period_s"] * (1 + 1e-12)
+        assert b["least_period_s"] == pytest.approx(si.pass_s(own) + 0.0012) and b["chain"]
+        assert 2 * (b["l_max_s"] - 0.0012) * own["xi"] / own["blocks"] <= 0.01 * (1 + 1e-12)
+        assert b["l_max_s"] < a["l_max_s"] and b["r"] > a["r"]
+        si.coin_check(own, b)
+
+
 def test_one_group_in_flight_has_no_plan_when_a_pass_outlasts_the_line_rule():
     p = {"blocks": 1_000_000, "gpus": 1, "shard_bytes": 1.539e12 * 0.1, "weights_bytes": 4e9, "c_s": 0.01,
          "xi": 2.0e6, "chip": 0.0, "codec_loss": None}

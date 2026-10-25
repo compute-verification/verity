@@ -167,7 +167,7 @@ def stock_arms(Ws: list, dense: list, counts, x) -> tuple[dict, dict]:
 def check_shape(a, n: int, k: int) -> dict:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
+    from verity_vllm.protocols.pouw.pearl_c import grouped as PG
 
     run, weights, kernel, gen = T.device_run([(n, k)] * EXPERTS, a.scheme, a.cubin, graphs=a.graphs)
     R, G = run.kernel.run, PG.module(run)
@@ -198,14 +198,16 @@ def check_shape(a, n: int, k: int) -> dict:
         pearls = {"dense": ("serial", False, dense),
                   **{("grouped" if sc == "serial" else f"grouped-{sc}") + ("-graph" if gr else ""): (sc, gr, grouped)
                      for gr in ((False, True) if a.graphs else (False,)) for sc in a.schedule}}
-        ys, ends, replayed = {}, {}, {}
+        ys, ends, replayed, at = {}, {}, {}, None
         for name, (sc, gr, f) in pearls.items():
             if gr:                                       # its layout's graphs made on every ring set, so the pass replays them
                 begin(sc, gr)
                 for _ in range(WARM_GRAPHS):
                     f()
                 done = PG.group(run, ws).replays
+            run.repeat_at = at        # every arm's retained pass numbered from the first's, so their manifests compare
             begin(sc, gr, retain=str(d / f"{name}-{pat}"), run=f"grouped-check {n}x{k} {pat}")
+            at = run.cur.base
             ys[name] = f()
             if gr:
                 replayed[name] = PG.group(run, ws).replays > done

@@ -28,8 +28,8 @@ coin to the later of its last root and the next coin. The recorded sessions run 
 flight (each group's coin leaves before the root of the group before it arrives), so L_max = 2·k/r + c there, with c
 measured. At f = 1 each coin leaves only once the root before it is in, a record naming f = 1 is refused otherwise,
 so every stretch but the last ends at the next coin: L_max = k/r, the coin's period, and the chain bounds that period
-below, k/r ≥ k·t_pass + c (k passes, then the root's and the next coin's round trips). No GPU session has run f = 1,
-so c there is modeled as the recorded f = 2 c.
+below, k/r ≥ k·t_pass + c (k passes, then the root's and the next coin's round trips). c there is each point's own,
+`--one-flight-c POINT=S` (measured), else modeled as the recorded f = 2 c.
 
 One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s draws a coin. The script
 solves each point's plan at g = 1, 2, 4, 8 and holds each to the code's reading (`coin_check`: `audit.pooled` on a
@@ -257,10 +257,16 @@ def pass_s(p: dict) -> float:
     return p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
 
 
+def c_at(p: dict, flight: int) -> float:
+    """c at `flight` groups in flight: at one the point's `c1_s` when it has one (`--one-flight-c`), else the recorded
+    f = 2 c."""
+    return p.get("c1_s", p["c_s"]) if flight == 1 else p["c_s"]
+
+
 def least_period(p: dict, k: float) -> float:
     """At one group in flight, a group's coin to the next: its k passes and the root's and the next coin's round trips,
-    c (modeled: the recorded f = 2 c)."""
-    return k * pass_s(p) + p["c_s"]
+    c at one in flight (`c_at`)."""
+    return k * pass_s(p) + c_at(p, 1)
 
 
 def line_at(p: dict, *, o: float, d: float, k: float, r: float, theta: float, flight: int = 2) -> dict:
@@ -270,7 +276,7 @@ def line_at(p: dict, *, o: float, d: float, k: float, r: float, theta: float, fl
     snap, held = closed(o=o, d=d, k=k, r=r, l_max=l_max, theta=theta)
     N = p["blocks"]
     rebuild = 2 * l_max * p["xi"] * (theta + 2 * l_max) / (theta * N)
-    excess = 2 * (l_max - p["c_s"]) * p["xi"] * (theta + 2 * l_max) / (theta * N)
+    excess = 2 * (l_max - c_at(p, flight)) * p["xi"] * (theta + 2 * l_max) / (theta * N)
     chip = p["chip"] / N
     lost = (held + rebuild + chip) * N * BLOCK
     return {"l_max_s": l_max, "eps_snapshot": snap, "eps_held": held, "rebuild_held": rebuild,
@@ -282,7 +288,7 @@ def one_flight_room(p: dict, eps: float) -> dict:
     """At one group in flight under the line rule (`solve`), a group's period k/r is at most τ + c and at least
     `least_period`, k·t_pass + c: a plan at k only while k·t_pass ≤ τ, whatever c is."""
     tau = eps * p["blocks"] / (2 * p["xi"])
-    return {"tau_s": tau, "longest_period_s": tau + p["c_s"], "least_period_s": least_period(p, 1),
+    return {"tau_s": tau, "longest_period_s": tau + c_at(p, 1), "least_period_s": least_period(p, 1),
             "k_max": math.floor(tau / pass_s(p))}
 
 
@@ -307,7 +313,7 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
     g): one openings coin over g groups, the pooled bound's window a draw of g groups, so d is s/g at s ≥ 1 draws a
     coin."""
     tau = eps * p["blocks"] / (2 * p["xi"]) if line_rule else math.inf
-    t_s, c = pass_s(p), p["c_s"]
+    t_s, c = pass_s(p), c_at(p, flight)
     ds = [s / per_coin for s in range(1, 4096 * per_coin + 1)] if per_coin > 1 else list(range(1, 4097))
     best = None
     for k in range(1, 9):
@@ -401,6 +407,8 @@ def main() -> None:
                     help="the node's disks, as the record charged them")
     ap.add_argument("--window", type=float, default=60.0, help="T, s")
     ap.add_argument("--horizon", type=float, default=600.0, help="the pooled reading's session, s")
+    ap.add_argument("--one-flight-c", action="append", default=[], metavar="POINT=S",
+                    help="a point's c at one group in flight, s, measured (default: its recorded f = 2 c, modeled)")
     a = ap.parse_args()
     v = json.loads(a.verifier.read_text())
     T, H = a.window, a.horizon
@@ -409,6 +417,13 @@ def main() -> None:
     uniform = check_closed_form()
     prices = opening_prices(json.loads(a.cost_model.read_text()))
     pts = points(recorded)
+    for spec in a.one_flight_c:
+        name, _, s = spec.rpartition("=")
+        if name not in pts:
+            raise SystemExit(f"--one-flight-c {spec!r}: the points are {', '.join(map(repr, pts))}")
+        pts[name]["c1_s"] = float(s)
+    c1 = ", ".join(f"{name} {c_at(p, 1) * 1e3:.1f} ms" + (" measured" if "c1_s" in p else " modeled")
+                   for name, p in pts.items())
     md = []
 
     md.append("## Recorded sessions, recomputed (each stretch matches the ledger to 1e-9)\n")
@@ -477,19 +492,19 @@ def main() -> None:
                      "pass serving a GPU (GPUs)", "proving GPUs, fit / floor", "deployed unit, fit / floor"], rows))
 
     md.append("\n## The line rule's L_max at either f, L_max − c ≤ τ = ε·N/(2·(X_r + I)): at two groups in flight a "
-              "period k/r ≤ τ/2, at one k·t_pass + c ≤ k/r ≤ τ + c (c measured at two in flight, modeled at one)\n")
-    rooms = [{"point": name, "eps": eps, "pass_s": pass_s(p), "c_s": p["c_s"], **one_flight_room(p, eps)}
-             for name, p in pts.items() for eps in (0.005, 0.01, 0.02)]
-    md.append(table(["point", "ε*", "τ", "t_pass", "c", "L_max at most",
+              f"period k/r ≤ τ/2, at one k·t_pass + c ≤ k/r ≤ τ + c (c measured at two in flight; at one {c1})\n")
+    rooms = [{"point": name, "eps": eps, "pass_s": pass_s(p), "c_s": p["c_s"], "c1_s": c_at(p, 1),
+              **one_flight_room(p, eps)} for name, p in pts.items() for eps in (0.005, 0.01, 0.02)]
+    md.append(table(["point", "ε*", "τ", "t_pass", "c, two / one in flight", "L_max at most at one",
                      "the rule's least passes/s at k = 1, two / one in flight", "k at one in flight, at most"],
                     [[x["point"], pct(x["eps"]), f"{x['tau_s'] * 1e3:.1f} ms", f"{x['pass_s'] * 1e3:.1f} ms",
-                      f"{x['c_s'] * 1e3:.1f} ms", f"{x['longest_period_s'] * 1e3:.1f} ms",
+                      f"{x['c_s'] * 1e3:.1f} / {x['c1_s'] * 1e3:.1f} ms", f"{x['longest_period_s'] * 1e3:.1f} ms",
                       f"{2 / x['tau_s']:.3g} / {1 / x['longest_period_s']:.3g}", x["k_max"] or "none"]
                      for x in rooms]))
 
     coin_plans, coin_fixed = [], []
     md.append(f"\n## One openings coin over g groups (`groups_per_coin`): the cheapest plan at ε* = 1% held over time "
-              f"pooled over {H:g} s, the line rule, two groups in flight and one (`in_flight`; c modeled at one), each "
+              f"pooled over {H:g} s, the line rule, two groups in flight and one (`in_flight`; c at one {c1}), each "
               f"plan read by the code (`coin_check`)\n")
     for flight in (2, 1):
         for name in ("32B x8", "8B x8"):
