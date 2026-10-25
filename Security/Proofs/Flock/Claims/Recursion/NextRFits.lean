@@ -458,17 +458,19 @@ def zeroBytes (n : ℕ) : ByteArray := ⟨Array.replicate n 0⟩
 
 theorem zeroBytes_size (n : ℕ) : (zeroBytes n).size = n := Array.size_replicate
 
-/-- **A proof with the lengths `sh` fixes** (`ProofSizes`): every entry zero or `default`, every nonce 0. -/
-def sizedProof (sh : Flock.Shape) : Flock.Proof where
+/-- **A proof with the lengths `sh` fixes** (`ProofSizes`): every entry zero or `default`, every nonce 0, and the
+unabsorbed fields as V\* takes them at `st`, `sch` and the point `z` (`sizedProof_unabsorbed`). -/
+def sizedProof (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) : Flock.Proof where
   cap := .replicate (2 ^ (sh.sched.levels.getD 0 default).cap) (zeroBytes sh.hashLen)
-  params := default
+  params := pcsParams st.merkle sch
   zerocheck :=
     { round1ab := .replicate 64 default, round1c := .replicate 64 default, rounds := .replicate (sh.m - 6) default
-      finalA := default, finalB := default, finalC := default }
+      finalA := default, finalB := default, finalC := dot (lagrange nodesL den6Inv z) (.replicate 64 default) }
   lincheck := { rounds := .replicate (sh.kLog - 6) default, zPartial := .replicate 64 default }
   ringSwitches := .replicate sh.claims (.replicate 128 default)
   ligerito :=
-    { initialCap := #[], initialProof := default
+    { initialCap := .replicate (2 ^ (sh.sched.levels.getD 0 default).cap) (zeroBytes sh.hashLen)
+      initialProof := default
       recursiveCaps := (Array.range (sh.sched.levels.size - 1)).map fun i =>
         .replicate (2 ^ (sh.sched.levels.getD (i + 1) default).cap) (zeroBytes sh.hashLen)
       recursiveProofs := #[]
@@ -479,8 +481,9 @@ def sizedProof (sh : Flock.Shape) : Flock.Proof where
       claimNonces := .replicate (3 * (sh.sched.levels.size - 1) + 2) 0
       consistencyNonces := .replicate (sh.sched.levels.size - 1 + 1) 0 }
 
-/-- `sizedProof sh` has `sh`'s lengths. -/
-theorem sizedProof_sizes (sh : Flock.Shape) : FlockSoundness.Discharge.DecodeZL.ProofSizes sh (sizedProof sh) where
+/-- `sizedProof st sch z sh` has `sh`'s lengths. -/
+theorem sizedProof_sizes (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) :
+    FlockSoundness.Discharge.DecodeZL.ProofSizes sh (sizedProof st sch z sh) where
   r1ab := Array.size_replicate
   r1c := Array.size_replicate
   zcRounds := Array.size_replicate
@@ -504,11 +507,20 @@ theorem sizedProof_sizes (sh : Flock.Shape) : FlockSoundness.Discharge.DecodeZL.
   consistencyNonces := Array.size_replicate
 
 /-- `sizedProof`'s nonces are 0. -/
-theorem sizedProof_nonces (sh : Flock.Shape) :
-    (∀ n ∈ (sizedProof sh).ligerito.queryNonces, n = 0) ∧ (∀ n ∈ (sizedProof sh).ligerito.claimNonces, n = 0) ∧
-      ∀ n ∈ (sizedProof sh).ligerito.consistencyNonces, n = 0 :=
+theorem sizedProof_nonces (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) :
+    (∀ n ∈ (sizedProof st sch z sh).ligerito.queryNonces, n = 0) ∧
+      (∀ n ∈ (sizedProof st sch z sh).ligerito.claimNonces, n = 0) ∧
+      ∀ n ∈ (sizedProof st sch z sh).ligerito.consistencyNonces, n = 0 :=
   ⟨fun _ h => (Array.mem_replicate.1 h).2, fun _ h => (Array.mem_replicate.1 h).2,
     fun _ h => (Array.mem_replicate.1 h).2⟩
+
+/-- `sizedProof`'s unabsorbed fields are V\*'s: the pinned `params`, the cap as `initialCap`, and `finalC` at `z`. -/
+theorem sizedProof_unabsorbed (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) :
+    (sizedProof st sch z sh).params = pcsParams st.merkle sch ∧
+      (sizedProof st sch z sh).ligerito.initialCap = (sizedProof st sch z sh).cap ∧
+      (sizedProof st sch z sh).zerocheck.finalC =
+        dot (lagrange nodesL den6Inv z) (sizedProof st sch z sh).zerocheck.round1c :=
+  ⟨rfl, rfl, rfl⟩
 
 /-- A setup at `m = 22`, `k_log = 6`, folding at its own `k_log`; everything else `default`. -/
 def st₀ : Flock.Setup :=
@@ -518,7 +530,7 @@ def st₀ : Flock.Setup :=
 def sch₀ : Flock.Schedule := (fast100 22).getD default
 
 /-- The honest proof at `st₀`, no extra claims: `sizedProof` at its shape. -/
-def p₀ : Flock.Proof := sizedProof (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)
+def p₀ : Flock.Proof := sizedProof st₀ sch₀ default (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)
 
 /-- A rep at `st₀` with two claims, `repRounds`' schedule and `p₀`'s cap. -/
 def c₀ : RepCtx where
@@ -528,6 +540,7 @@ def c₀ : RepCtx where
   n := 2
   sched := ((RecVStar.repRounds 22 6 2).getD #[]).toList
   cap0 := p₀.cap.toList
+  z := default
 
 theorem fast100_22 : fast100 22 = some sch₀ := by
   obtain ⟨s, hs⟩ := Option.isSome_iff_exists.1 (by decide +kernel : (fast100 22).isSome)
@@ -545,8 +558,9 @@ theorem honest₀ : SchedOf c₀ ∧ HonestRep c₀ p₀ ∧ p₀.cap.toList = c
   have hL : 2 ≤ sch₀.levels.size := by
     show 2 ≤ ((fast100 22).getD default).levels.size
     decide +kernel
-  exact ⟨hs, ⟨⟨0, rfl, sizedProof_sizes (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)⟩, hL,
-    sizedProof_nonces (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)⟩, rfl⟩
+  obtain ⟨h1, h2, h3⟩ := sizedProof_unabsorbed st₀ sch₀ default (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)
+  exact ⟨hs, ⟨⟨0, rfl, sizedProof_sizes _ _ _ (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)⟩, hL,
+    sizedProof_nonces _ _ _ (FlockSoundness.Refine.shapeOf st₀ sch₀ 0), h1, h2, h3⟩, rfl⟩
 
 /-- **An honest rep reads back** at `c₀`, at every `T`: `repReadsBack`'s conclusion on a run that exists. -/
 theorem readRep₀ (T : F128) : readRep c₀ (repRows c₀ p₀ T) p₀ = some (p₀, framesOf c₀ p₀ T) :=
@@ -554,9 +568,9 @@ theorem readRep₀ (T : F128) : readRep c₀ (repRows c₀ p₀ T) p₀ = some (
 
 /-- **`ReadsBack`'s `SchedOf` at a set-up rep**: rep `k`'s schedule is its frames' wherever its table has a `fast100`
 schedule and extra claims at the first coin's link points. -/
-theorem schedOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {k : ℕ}
-    {extras : Array Flock.Claim} (hk : k / 2 < sts.size) (hf : (fast100 sts[k / 2].m).isSome)
-    (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok extras) : SchedOf (repCtx spec sts c₁ r₀ k) := by
+theorem schedOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin}
+    {k : ℕ} {extras : Array Flock.Claim} (hk : k / 2 < sts.size) (hf : (fast100 sts[k / 2].m).isSome)
+    (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok extras) : SchedOf (repCtx spec sts c₁ r₀ cs k) := by
   have hk' : k / 2 < (tabsOf sts).size := by
     unfold tabsOf
     rw [Array.size_map]
@@ -570,13 +584,13 @@ theorem schedOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
   obtain ⟨out, hout⟩ := Option.isSome_iff_exists.1 (key _ (by omega) hf)
   obtain ⟨T, -, hall⟩ := FlockC3.Compose.repRounds_tail hout
   have h2 := hall sts[k / 2].c.kLog (2 + spec.points * sts[k / 2].regions.size)
-  have hst : (repCtx spec sts c₁ r₀ k).st = Setup.ofCircuit sts[k / 2] := ht
-  have hsch' : (repCtx spec sts c₁ r₀ k).sch = sch := by
+  have hst : (repCtx spec sts c₁ r₀ cs k).st = Setup.ofCircuit sts[k / 2] := ht
+  have hsch' : (repCtx spec sts c₁ r₀ cs k).sch = sch := by
     show (fast100 (tabsOf sts)[k / 2]!.m).getD default = sch
     rw [ht]
     show (fast100 sts[k / 2].m).getD default = sch
     rw [hsch, Option.getD_some]
-  have hn : (repCtx spec sts c₁ r₀ k).n = 2 + spec.points * sts[k / 2].regions.size := by
+  have hn : (repCtx spec sts c₁ r₀ cs k).n = 2 + spec.points * sts[k / 2].regions.size := by
     show 2 + (match (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) with
       | .ok e => e.size
       | .error _ => 0) = _
@@ -591,7 +605,7 @@ theorem schedOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
       rw [extraClaims_size he, hpts, Nat.mul_comm]
     rw [he]
     exact congrArg (2 + ·) hsz
-  have hsc : (repCtx spec sts c₁ r₀ k).sched = RecDeploy.repSchedAt spec sts[k / 2] := by
+  have hsc : (repCtx spec sts c₁ r₀ cs k).sched = RecDeploy.repSchedAt spec sts[k / 2] := by
     show RecDeploy.repSchedAt spec sts[k / 2]! = _
     rw [getElem!_pos sts (k / 2) hk]
   unfold SchedOf

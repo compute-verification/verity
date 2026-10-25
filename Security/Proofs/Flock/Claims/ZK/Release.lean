@@ -736,12 +736,12 @@ theorem nextD_of_fail {W R : Type} (L : LeanRelease W R)
 def HelloRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W) : Prop :=
   ∀ ρ, (((P w).next x [] ρ).eval H).1 = L.hello x ρ
 
-/-- **The firewall's own rounds**: after every history at the link or the `Finish` on which the deferred release
-releases a frame, the firewall's own message there (`ownMsg`) is `P`'s message. -/
+/-- **The firewall's own rounds**: after every history of the deferred release's own run (`ZkServer.OwnHist`) at the
+link or the `Finish` on which it releases a frame, the firewall's own message there (`ownMsg`) is `P`'s message. -/
 def OwnRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
     (wk : L.toSrv.Worker) (x : Msg) (w : W) : Prop :=
   ∀ ρ κ h, L.kindAt x h.length = .recomputed → (h.length + 1 < n x ∨ L.toSrv.live wk x w ρ κ h = true) →
-    (((P w).next x h ρ).eval H).1 = L.ownMsg x w ρ h
+    L.toSrv.OwnHist L.fillOf wk x w ρ κ h → (((P w).next x h ρ).eval H).1 = L.ownMsg x w ρ h
 
 /-- **The frame rounds the worker passed**: after every history at a frame round on which every round so far passed and
 whose last coins the frame takes, the Lean frame's release of the worker's round is `P`'s message. -/
@@ -778,11 +778,11 @@ def ItemsRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → 
   L.HelloRefine H P x w ∧ L.OwnRefine H P n wk x w ∧ L.LiveRefine H P wk x w ∧ L.FillRefine H P n wk x w ∧
     L.StopRefine H P n wk x w
 
-/-- **`hRef` at the deferred Lean release**: the item-stream refinement gives `ZkServer.RefD` at the stand-in
+/-- **`hRef` at the deferred Lean release**: the item-stream refinement gives `ZkServer.RefDOwn` at the stand-in
 `fillOf`. -/
 theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
     (wk : L.toSrv.Worker) (x : Msg) (w : W)
-    (hI : L.ItemsRefine H P n wk x w) : L.toSrv.RefD H P L.fillOf n wk x w := fun ρ κ h hcond => by
+    (hI : L.ItemsRefine H P n wk x w) : L.toSrv.RefDOwn H P L.fillOf n wk x w := fun ρ κ h hown hcond => by
   cases hk : L.kindAt x h.length with
   | fixed => unfold kindAt at hk; split_ifs at hk
   | own =>
@@ -792,7 +792,7 @@ theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pro
     exact hI.1 ρ
   | recomputed =>
     rw [L.frameD_recomp L.fillOf wk x w ρ κ h hk]
-    exact hI.2.1 ρ κ h hk hcond
+    exact hI.2.1 ρ κ h hk hcond hown
   | masked =>
     cases hl : L.toSrv.live wk x w ρ κ h with
     | true =>

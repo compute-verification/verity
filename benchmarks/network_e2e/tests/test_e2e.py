@@ -36,7 +36,7 @@ e2e = _load()
 def _args(src, out) -> SimpleNamespace:
     return SimpleNamespace(sources=[str(src)], upstream=None, vllm=None, out=str(out), work=None, bin=None, lean=None,
                            delta=2.0 ** -20, no_prove=True, proofs=None, advice=None, serving_config=None,
-                           prove_path=None, no_negatives=False)
+                           prove_path=None, ids=None, no_negatives=False)
 
 
 @pytest.fixture(scope="module")
@@ -85,8 +85,8 @@ def test_the_claim_is_in_both_files(virtual):
 
 def test_the_claims_gaps_are_the_ones_the_certifier_readme_names():
     readme = (ROOT / e2e.README).read_text()
-    gaps = readme.split("## Not yet zero-knowledge", 1)[1]
-    for named, ours in (("N2's unit isn't proved yet", "N2's unit isn't proved as the verifier of record"),
+    gaps = readme.split("## Zero knowledge: what N2's verdict reads, and what's open", 1)[1]
+    for named, ours in (("A run that proves nothing", "N2's verdicts here are decided in the clear"),
                         ("NET-42", "NET-42"), ("CertifiedRecord.verify", "CertifiedRecord.verify")):
         assert named in gaps and any(ours in g for g in e2e.CLAIM["zero_knowledge_gaps"]), named
     assert "counts only" in readme and any("N3" in x for x in e2e.CLAIM["not_covered"])
@@ -174,6 +174,15 @@ def _kept(d: Path, runs: dict) -> Path:
             (session / f"circuit.rep{rep}.bin").write_bytes(b"p" * 30)
     (d / "summary.json").write_text(json.dumps({"ok": True, "members": members, "cost": cost}))
     return d
+
+
+def test_n2_zks_proofs_of_the_registered_unit_are_not_taken_yet_and_the_report_says_why(rehearsal, tmp_path):
+    (tmp_path / "n2zk").mkdir()
+    (tmp_path / "n2zk" / "summary.json").write_text(json.dumps({"ok": True, "members": {"honest": {"windows": []}}}))
+    with pytest.raises(SystemExit, match="one member a round"):
+        e2e.adopt(tmp_path / "n2zk", e2e.collect([rehearsal.runs], tmp_path / "runs"))
+    got = e2e.prove({}, None, tmp_path)
+    assert got["rc"] == 1 and got["why"] == e2e.NOT_YET and not got["summary"]
 
 
 def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tmp_path):

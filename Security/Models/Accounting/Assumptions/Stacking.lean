@@ -16,8 +16,9 @@ remote audit's own and `Accounting.Assumptions.EncodeChainHardness`, each a name
   the audit's windows (`RateSketch.Provenance.OfCircuit`). Registered tiles, whose keys are fixed for the
   registration, are not bounded.
 * `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
-  coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule's code: a check
-  that the engine's schedule is deterministic.
+  coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule check's
+  (`Accounting.ScheduleDeterministic`, `RemoteAudit.Schedule.check`): the bits of the schedule each credited plan is
+  the verifier's plan of.
 -/
 
 namespace Accounting.Assumptions
@@ -127,12 +128,17 @@ most `2^a` values as the codec and the append coins `y` vary, and the pass's dev
 step begins. The memory map makes it a function of the served steps (frees at the values' last structural reader,
 writes at production, re-keys at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and the
 summary is the part of it the layout reads. The prover that steers the layout knows that part, so its devices are told
-it, and this premise is only that the layout reads nothing more of `y`. That the served steps are a function of the
-run inputs, each request's arrival step at the engine and the coins is the engine's code, held by a check that its
-schedule is deterministic (`ScheduleDeterministic`, specified, not written). Under that check the summary is the run
-inputs and arrival steps the prover chose after the coins of the blocks the pass holds, within their life (arrivals,
-lengths, prefix-cache hits and preemptions, and every run input that moves them), and `a` is their bits. Without it
-the engine's timing may follow the encodings, and no `a` is known. -/
+it, and this premise is only that the layout reads nothing more of `y`. It holds of every layout at `a = |Y|`, so `a`
+is what the schedule check counts (`Accounting.ScheduleDeterministic`): the verifier credits nothing after the seed
+unless every pass's plan is its own plan (`RemoteAudit.Schedule.plan`) of the schedule the prover publishes (when each
+block is written and freed, and each pass's step), and it counts that schedule's bits (`audit.Ledger.steering`). A
+layout that is the verifier's plan of a schedule of at most `a` bits is `SteeredLayout` at `a + 1`
+(`Properties.RemoteAudit.steered_of_checked`, under `Properties.RemoteAudit.ScheduleLayoutGap`: the model's layout
+is the verifier's positions of the plan the pass sent), and a layout that follows a
+coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
+schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds
+(arrivals, lengths, prefix-cache hits and preemptions, and every run input that moves them), and more: the whole
+session's, so its bits bound theirs from above. -/
 def SteeredLayout {Pfx Y : Type} {N T M a : ℕ} (layout : Pfx → Y → Fin N ↪ Fin T × Fin M)
     (steer : Pfx → Y → Pous.Bits a) : Prop :=
   ∃ slot : Pfx → Pous.Bits a → Fin N ↪ Fin T × Fin M, ∀ c y, layout c y = slot c (steer c y)

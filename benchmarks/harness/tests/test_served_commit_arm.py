@@ -176,7 +176,6 @@ def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_e
 
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
-    vars(direct).pop("_engine", None)
     com = _ready(monkeypatch, direct).committer
     assert (com.engine.runner, com.engine.model) == (runner, runner.model)
     assert com.engine.cp == {"repo": "/models/local", "revision": None}
@@ -201,7 +200,6 @@ def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without
     prof, ranges = _prof_module(monkeypatch)
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
-    vars(direct).pop("_engine", None)
     prof.StockProfArm("stock-prof").ready(SimpleNamespace(engine=direct))
     assert runner.execute_model(SimpleNamespace(total_num_scheduled_tokens=7)) == "executed"
     assert runner.sample() == "sampled"

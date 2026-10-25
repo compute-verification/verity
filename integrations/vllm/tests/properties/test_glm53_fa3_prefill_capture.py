@@ -101,6 +101,7 @@ def _split_plan(splits: dict[tuple, list[int]]):
     return plan
 
 
+@pytest.mark.slow
 def test_a_split_job_takes_the_split_twins_words_and_checks_the_rules_split_count(tmp_path, monkeypatch) -> None:
     """A 100-row sequence the stubbed plan runs as 3 splits of one 80-key block each (rows 80..99 see two splits), alone and
     beside a 3-row one: its rows against the split twin, its sampled rows' heads against `AttentionHeadSplit_v1`, a flipped word
