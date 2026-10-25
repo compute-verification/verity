@@ -17030,6 +17030,39 @@
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
    ]
   },
+  "Definitions.Flock.Game.Batch": {
+   "digest": "f9f0690582ae0bcdecb753b48e10befb83ab30ad4b1b4bd0b9c5e6d646c23764",
+   "definitions": {
+    "FlockSoundness.Game.Lock.batchLock": "0dc2af159ab7e3ab9a80acf0c54da774c35338ee3c10dea64c6f9867154ff612",
+    "FlockSoundness.Game.Lock.leftSame": "0f2b2d2ac8a18fae79a162f0a2a1b97a4020e6cb967d1c38b386b03161d7bcb2",
+    "FlockSoundness.Game.Lock.lockWithL": "3f691a260c3414450a819ed90e6311b0db6e327e9048fd8d9f30008bb6805b9c",
+    "FlockSoundness.Game.Lock.lockWithSame": "db30a7953ef5d164e8816964d3f430ce80fd2db58c909ff2c3b3b7c1d062db66",
+    "FlockSoundness.Game.Lock.mapL": "e43573454c35ecc523e41b20590cd0ba095556b477ab427b01bc0747f095c5e8",
+    "FlockSoundness.Game.Lock.rightSame": "5862737402dd4fa5698408b4e82402a781248ac98f64b037fbb40ebdcc745a80",
+    "FlockSoundness.Game.Lock.sameThen": "e4782358818edfb2c52e8ba5a525969ef2c6559d99eddd4a5579f3223653e70e",
+    "FlockSoundness.Game.batch": "866b22834bce610eb069a1c2285d79a65d6f80912da3c475c04ff81491f5e5fa"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveSoundExec",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
   "Definitions.Flock.Game.Expect": {
    "digest": "8a60b2c86069428a952a6d96c35c8ec16d76c74ddd86ae6dfe8583b375d285a5",
    "definitions": {
@@ -17114,6 +17147,71 @@
     "FlockSoundness.Game.Lock.same": "037c2874df279b5d885a4c57fcb6b4190bc00a35e9be14981427cd66c17cfb86",
     "FlockSoundness.Game.Lock.send": "6ca1c0f7ff3759029e279dc1c7448d44e24b82578e71a696cbc16c82665ac209",
     "FlockSoundness.Game.Lock.table": "6049cad8749939632d9ca49981ee41aa2bccb2e38ca1301be6285b068d6fc07f"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveSoundExec",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Definitions.Flock.Game.Prob": {
+   "digest": "82e09bc18f6dbab83b318051fcb130ba9b87d1bd93c41f6818017d83f4a853e1",
+   "definitions": {
+    "FlockSoundness.Game.Strategy.ofBind": "e636ca798ccbc7a027623ac7b1c49711cbcb025ea1bbb8fa626166e47c3843ae",
+    "FlockSoundness.Game.Strategy.ofMap": "d45c1c43a350061bcf18d74128ee9d5b0e766c26ccbe1bc90098f0a774247d72"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveSoundExec",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget",
+    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
+    "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockSoundness.Audit.Partition.audit_influence",
+    "FlockSoundness.Audit.audit_profile",
+    "FlockSoundness.Audit.audit_window_split_of_record",
+    "FlockSoundness.Audit.audit_work_floor",
+    "FlockSoundness.Audit.audit_work_whole_stratum",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Definitions.Flock.Game.Seq": {
+   "digest": "38373dad14e4d314c023b3dd770dd8d67e91fcb3f580d7c2513b5c65b60faed0",
+   "definitions": {
+    "FlockSoundness.Game.Strategy.bind": "7d256258f928b24c47f5c06ecada4e55dea8243a6a1b3d88303bb80496db187e",
+    "FlockSoundness.Game.Strategy.map": "bad5abb986f2207189caf9e5af090dde11420aaf85df0d3c60d9a44bc4d258fb",
+    "FlockSoundness.Game.drawStrat": "72cc1d05df3b5005a4ef16f1c4910cc9a8f45ff4612e4cf7131310c7f32e536d",
+    "FlockSoundness.Game.runsG": "37a20524966b329cc1b5f54fa4210e657ae3dfc69b11deb24bd0b70f0b93cea0",
+    "FlockSoundness.Game.runsStrat": "1e0f6d5c51b72b47a858300d8ee46099ad04dd70d57be6e710392a3c7f474502"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -41224,104 +41322,6 @@
    "definitions": {
     "FlockSoundness.Extract.firsts": "b47885d37cbed2be86d3e21a87fded89b2543f66f5c41e9510a6ff38a05107e6",
     "FlockSoundness.Extract.waitCost": "b3de93a3322597557e3361342d1a3bd3e2d3a2cdb12e87060e7a85bfb643f4ee"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEnd",
-    "Flock.SecurityProofs.EndToEndDrawn",
-    "Flock.SecurityProofs.EndToEndHidden",
-    "Flock.SecurityProofs.EndToEndHiddenDrawn",
-    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
-    "Flock.SecurityProofs.EndToEndHiddenFlat",
-    "Flock.SecurityProofs.EndToEndRegistered",
-    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
-    "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
-    "Flock.SecurityProofs.RecursiveRanRegistered",
-    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
-    "Flock.SecurityProofs.RecursiveSound",
-    "Flock.SecurityProofs.RecursiveSoundExec",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
-   ]
-  },
-  "Proofs.Flock.Soundness.Game.Batch": {
-   "digest": "f9f0690582ae0bcdecb753b48e10befb83ab30ad4b1b4bd0b9c5e6d646c23764",
-   "definitions": {
-    "FlockSoundness.Game.Lock.batchLock": "0dc2af159ab7e3ab9a80acf0c54da774c35338ee3c10dea64c6f9867154ff612",
-    "FlockSoundness.Game.Lock.leftSame": "0f2b2d2ac8a18fae79a162f0a2a1b97a4020e6cb967d1c38b386b03161d7bcb2",
-    "FlockSoundness.Game.Lock.lockWithL": "3f691a260c3414450a819ed90e6311b0db6e327e9048fd8d9f30008bb6805b9c",
-    "FlockSoundness.Game.Lock.lockWithSame": "db30a7953ef5d164e8816964d3f430ce80fd2db58c909ff2c3b3b7c1d062db66",
-    "FlockSoundness.Game.Lock.mapL": "e43573454c35ecc523e41b20590cd0ba095556b477ab427b01bc0747f095c5e8",
-    "FlockSoundness.Game.Lock.rightSame": "5862737402dd4fa5698408b4e82402a781248ac98f64b037fbb40ebdcc745a80",
-    "FlockSoundness.Game.Lock.sameThen": "e4782358818edfb2c52e8ba5a525969ef2c6559d99eddd4a5579f3223653e70e",
-    "FlockSoundness.Game.batch": "866b22834bce610eb069a1c2285d79a65d6f80912da3c475c04ff81491f5e5fa"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEnd",
-    "Flock.SecurityProofs.EndToEndDrawn",
-    "Flock.SecurityProofs.EndToEndHidden",
-    "Flock.SecurityProofs.EndToEndHiddenDrawn",
-    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
-    "Flock.SecurityProofs.EndToEndHiddenFlat",
-    "Flock.SecurityProofs.EndToEndRegistered",
-    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
-    "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
-    "Flock.SecurityProofs.RecursiveRanRegistered",
-    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
-    "Flock.SecurityProofs.RecursiveSound",
-    "Flock.SecurityProofs.RecursiveSoundExec",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
-   ]
-  },
-  "Proofs.Flock.Soundness.Game.Prob": {
-   "digest": "82e09bc18f6dbab83b318051fcb130ba9b87d1bd93c41f6818017d83f4a853e1",
-   "definitions": {
-    "FlockSoundness.Game.Strategy.ofBind": "e636ca798ccbc7a027623ac7b1c49711cbcb025ea1bbb8fa626166e47c3843ae",
-    "FlockSoundness.Game.Strategy.ofMap": "d45c1c43a350061bcf18d74128ee9d5b0e766c26ccbe1bc90098f0a774247d72"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEnd",
-    "Flock.SecurityProofs.EndToEndDrawn",
-    "Flock.SecurityProofs.EndToEndHidden",
-    "Flock.SecurityProofs.EndToEndHiddenDrawn",
-    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
-    "Flock.SecurityProofs.EndToEndHiddenFlat",
-    "Flock.SecurityProofs.EndToEndRegistered",
-    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
-    "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
-    "Flock.SecurityProofs.RecursiveRanRegistered",
-    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
-    "Flock.SecurityProofs.RecursiveSound",
-    "Flock.SecurityProofs.RecursiveSoundExec",
-    "FlockSoundness.Audit.Adaptive.life_harm_budget",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
-    "FlockSoundness.Audit.Partition.audit_exfiltration",
-    "FlockSoundness.Audit.Partition.audit_influence",
-    "FlockSoundness.Audit.audit_profile",
-    "FlockSoundness.Audit.audit_window_split_of_record",
-    "FlockSoundness.Audit.audit_work_floor",
-    "FlockSoundness.Audit.audit_work_whole_stratum",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
-   ]
-  },
-  "Proofs.Flock.Soundness.Game.Seq": {
-   "digest": "38373dad14e4d314c023b3dd770dd8d67e91fcb3f580d7c2513b5c65b60faed0",
-   "definitions": {
-    "FlockSoundness.Game.Strategy.bind": "7d256258f928b24c47f5c06ecada4e55dea8243a6a1b3d88303bb80496db187e",
-    "FlockSoundness.Game.Strategy.map": "bad5abb986f2207189caf9e5af090dde11420aaf85df0d3c60d9a44bc4d258fb",
-    "FlockSoundness.Game.drawStrat": "72cc1d05df3b5005a4ef16f1c4910cc9a8f45ff4612e4cf7131310c7f32e536d",
-    "FlockSoundness.Game.runsG": "37a20524966b329cc1b5f54fa4210e657ae3dfc69b11deb24bd0b70f0b93cea0",
-    "FlockSoundness.Game.runsStrat": "1e0f6d5c51b72b47a858300d8ee46099ad04dd70d57be6e710392a3c7f474502"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
