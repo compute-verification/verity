@@ -437,6 +437,7 @@ theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : Lis
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, hc, -⟩ := FlockSoundness.Refine.ebind_ok hc
   cases hd : s.read.draw with
   | none => simp [hd, Flock.ProvedScope.drawLaw] at hc
   | some d => exact ⟨d, rfl⟩

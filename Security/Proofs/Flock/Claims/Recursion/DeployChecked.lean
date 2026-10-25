@@ -18,7 +18,7 @@ and proves what follows from it.
 * **`Decomp` at the checked reader** (`decomp_checked_iff`): at every statement the reader parses, the inner statement
   passes Flock's statement check and carries a draw (`parse_innerOk`), so the cut `decomp_deployed_iff` asks of the
   parts is the inner run's conditions alone (`InnerRun`, `RunCut`: the link and last messages, the verdict, the record's
-  statement and draw, the custody), every other condition of `FlockDeploy.checks` being the reader's (`checks_iff`).
+  statement and draw, the custody, the record's canonical text), every other condition of `FlockDeploy.checks` being the reader's (`checks_iff`).
   The inner statement's draw (`InnerDrawn`) holds at the checked reader (`innerDrawn_checked`): since #2468 the
   recursion's inner session carries the verifier's full stratified draw, `readX` refuses an inner statement without a
   draw (`innerOk`), and the compiled verifier refuses, last in each V* session's verdict, a session over an inner
@@ -245,13 +245,15 @@ theorem ready_of_admitted {rel : Flock.Readable.Parsed → Flock.Readable.Relati
 /-! ## `Decomp` at the checked reader -/
 
 /-- **The checks after the verdict that read the run**: the last message's statement is `x`, the record's draw is the
-statement's, and the live session's custody (`FlockDeploy.checks` before the scope check and the draw law). -/
+statement's, the live session's custody, and the record's canonical text (S0) (`FlockDeploy.checks` without the scope
+check and the draw law). -/
 def checksRun (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (x : Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Msg × Coin)) (f : FlockDeploy.Final) : Flock.V Unit := do
   Flock.Record.check (f.stmt == x) "live: the last message's statement is not the statement"
   Flock.Record.check (FlockDeploy.drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
   FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids
+  Flock.RecordText.check f.record
 
 /-- **The checks after the verdict are the run's, the statement check and a draw.** -/
 theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {x : Msg}
@@ -266,7 +268,8 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
     obtain ⟨lv, hlv, h⟩ := FlockSoundness.Refine.ebind_ok h
     obtain ⟨u4, h4, h⟩ := FlockSoundness.Refine.ebind_ok h
     obtain ⟨u5, h5, h⟩ := FlockSoundness.Refine.ebind_ok h
-    cases u1; cases u2; cases u4; cases u5
+    obtain ⟨u6, h6, h7⟩ := FlockSoundness.Refine.ebind_ok h
+    cases u1; cases u2; cases u4; cases u5; cases u6
     refine ⟨?_, h5, ?_⟩
     · unfold checksRun
       rw [h1]
@@ -274,16 +277,19 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
       rw [h2]
       show (FlockDeploy.liveOf spec f.record >>= _) = _
       rw [hlv]
-      exact h4
+      show (FlockDeploy.custody spec lv link c₁ mids >>= _) = _
+      rw [h4]
+      exact h7
     · cases hd : s.read.draw with
-      | none => simp [hd, Flock.ProvedScope.drawLaw] at h
+      | none => simp [hd, Flock.ProvedScope.drawLaw] at h6
       | some _ => rfl
   · rintro ⟨hr, hc, hd⟩
     unfold checksRun at hr
     obtain ⟨u1, h1, hr⟩ := FlockSoundness.Refine.ebind_ok hr
     obtain ⟨u2, h2, hr⟩ := FlockSoundness.Refine.ebind_ok hr
-    obtain ⟨lv, hlv, h4⟩ := FlockSoundness.Refine.ebind_ok hr
-    cases u1; cases u2
+    obtain ⟨lv, hlv, hr⟩ := FlockSoundness.Refine.ebind_ok hr
+    obtain ⟨u4, h4, h7⟩ := FlockSoundness.Refine.ebind_ok hr
+    cases u1; cases u2; cases u4
     unfold FlockDeploy.checks
     rw [h1]
     show (Flock.Record.check _ _ >>= _) = _
@@ -294,12 +300,12 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
     rw [h4]
     show (s.read.check >>= _) = _
     rw [hc]
-    show (if s.read.draw.isNone = true then Flock.ProvedScope.drawLaw zk none else pure ()) = _
+    show ((if s.read.draw.isNone = true then Flock.ProvedScope.drawLaw zk none else pure ()) >>= _) = _
     cases hdr : s.read.draw with
     | none =>
       rw [hdr] at hd
       cases hd
-    | some _ => rfl
+    | some _ => exact h7
 
 /-- **The inner verifier's run conditions**: `InnerAccSha` with the run's checks (`checksRun`) in place of
 `FlockDeploy.checks`, so without the statement check and the draw law. -/
