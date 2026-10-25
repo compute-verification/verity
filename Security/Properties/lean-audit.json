@@ -7,6 +7,7 @@
   "Properties.Proofs.Pouw",
   "Properties.Proofs.Pouw.Check",
   "Properties.Proofs.Pouw.Commit",
+  "Properties.Proofs.Pouw.LiveSalt",
   "Properties.Pouw.Strata",
   "Properties.Proofs.Pouw.Strata",
   "Properties.Pouw.Credit",
@@ -1360,6 +1361,15 @@
    "signature": ["Properties.Pouw.Credit.SecurityProofs.workDrawMisses : Properties.Pouw.Credit.WorkDrawMisses"],
    "assumptions": [],
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c"
+  },
+  "Properties.Pouw.LiveSalt.epochRootBinding": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.LiveSalt.oneRoot": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.LiveSalt.rowSeedBinding": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
@@ -2839,6 +2849,18 @@
    "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.oneRoot": {
+    "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.epochRootBinding": {
+    "function": "Properties.Pouw.LiveSalt.epochOpenRoot",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.rowSeedBinding": {
+    "function": "Properties.Pouw.LiveSalt.rowSeed",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2852,7 +2874,10 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on",
+   "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on",
+   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
