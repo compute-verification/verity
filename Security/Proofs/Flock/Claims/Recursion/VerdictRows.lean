@@ -82,13 +82,11 @@ def sh (i : ℕ) : Shape := shapeOf (D.files cls i).st (D.files cls i).sch (D.fi
 
 /-! ## A rep's values -/
 
-include D in
 /-- Round 0's rows, as the decision read them. -/
-def r₀ : List ByteArray := (rowsOf (ms.headD [])).getD []
+def r₀ (_ : DecAt rd x ms cs) : List ByteArray := (rowsOf (ms.headD [])).getD []
 
-include D in
 /-- The later rounds' rows, as the decision read them. -/
-def rss : List (List ByteArray) := (ms.tail.dropLast.mapM rowsOf).getD []
+def rss (_ : DecAt rd x ms cs) : List (List ByteArray) := (ms.tail.dropLast.mapM rowsOf).getD []
 
 /-- Rep `k`'s context, as `decR` reads its proof (`decR_fits`). -/
 def ctx (k : ℕ) : RepCtx := repCtx D.d.spec D.d.sts D.d.c₁ D.r₀ cs.tail.dropLast k
