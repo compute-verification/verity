@@ -31,7 +31,8 @@ def test_every_module_of_the_suite_is_in_exactly_one_part(n):
 def test_the_suite_has_its_test_modules_and_none_of_its_helpers():
     names = SP.modules()
     assert "tests/conftest.py" not in names and "tests/program/crosscheck.py" not in names
-    assert "tests/tools/test_suite_parts.py" in names and all(Path(m).name.startswith("test_") or m.endswith("_test.py") for m in names)
+    assert "tests/tools/test_suite_parts.py" in names
+    assert all(Path(m).name.startswith("test_") or m.endswith("_test.py") for m in names)
 
 
 def test_the_modules_are_those_pytest_collects(tmp_path):
@@ -41,7 +42,8 @@ def test_the_modules_are_those_pytest_collects(tmp_path):
              "tests/.hidden/test_e.py", "tests/build/test_f.py", "tests/venv/test_g.py", "tests/sub/__init__.py"]
     for f in files:
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / f).write_text("def test_x():\n    pass\n" if Path(f).name.startswith("test_") or f.endswith("_test.py") else "")
+        test = Path(f).name.startswith("test_") or f.endswith("_test.py")
+        (tmp_path / f).write_text("def test_x():\n    pass\n" if test else "")
     (tmp_path / "pyproject.toml").write_text('[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
     env = {k: v for k, v in os.environ.items() if k != "PYTEST_ADDOPTS"}
     r = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-p", "no:xdist"],
@@ -75,8 +77,24 @@ def test_launch_runs_each_part_as_a_suites_run_of_its_modules():
         at = cmd.index("--")
         assert cmd[:at] == ["research", "run", "--on", "auto", "--mem-gb", str(SP.JOB_MEM_GB), "--cwd", "source"]
         assert cmd[at + 1:at + 3] == ["bash", "-lc"] and len(cmd) == at + 4
-        assert "tools/verity/check/suites.py verity-vllm --jobs \"$(nproc)\" --fresh -- " in cmd[-1]
-        assert cmd[-1].endswith(f"$(python3 integrations/vllm/tools/suite_parts.py {k}/3)")
+        assert f"P=$(python3 integrations/vllm/tools/suite_parts.py {k}/3) && test -n \"$P\" && " in cmd[-1]
+        assert cmd[-1].endswith("tools/verity/check/suites.py verity-vllm --jobs \"$(nproc)\" --fresh -- $P")
+
+
+def test_a_parts_job_runs_its_modules_and_stops_on_an_empty_part(tmp_path):
+    """The job's shell, with `uv` a stand-in that prints its arguments: suites.py gets the part's modules, one argument each,
+    and a part that lists nothing runs nothing (suites.py with no modules would run the whole suite)."""
+    (tmp_path / "uv").write_text('#!/bin/sh\n[ "$1" = sync ] || printf "%s\\n" "$@"\n')
+    (tmp_path / "uv").chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"}
+    job = SP.jobs(3)[1][-1].replace("python3 ", f"{sys.executable} ")
+    r = subprocess.run(["bash", "-c", job], cwd=SP.ROOT, env=env, capture_output=True, text=True)
+    out = r.stdout.split("\n")
+    assert r.returncode == 0 and out[out.index("--") + 1:-1] == SP.part("2/3"), r.stderr
+    for lister in ("true", "false"):
+        r = subprocess.run(["bash", "-c", job.replace(f"{sys.executable} integrations/vllm/tools/suite_parts.py 2/3", lister)],
+                           cwd=SP.ROOT, env=env, capture_output=True, text=True)
+        assert r.returncode != 0 and "verity-vllm" not in r.stdout
 
 
 def test_the_cli_prints_a_parts_modules(capsys):
@@ -89,4 +107,4 @@ def test_the_cli_prints_a_parts_modules(capsys):
 def test_the_seconds_table_prints_from_a_report(tmp_path, capsys):
     (tmp_path / "r.json").write_text(json.dumps({"passed": {"tests/test_a.py::t": 25.0}}))
     assert SP.main(["--seconds", str(tmp_path / "r.json")]) == 0
-    assert capsys.readouterr().out.strip() == "'tests/test_a.py': 25,"
+    assert capsys.readouterr().out.strip() == '"tests/test_a.py": 25,'
