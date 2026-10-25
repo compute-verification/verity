@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serving's per-step row-table hashing: what ``verity_vllm.commit.row_tables.step_roots`` costs at the serving loop's step
+"""Serving's per-step row-table hashing: what ``verity.ml.serving.row_tables.step_roots`` costs at the serving loop's step
 boundary, for one decode step of Llama-3.1-8B int8 at batch ``--batch``.
 
     research run --on auto --cwd source --cpus 16 --mem-gb 32 -- python benchmarks/commitments/step_root_cost.py --workers 1,4,8,16
@@ -34,7 +34,7 @@ import numpy as np
 
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
-from verity_vllm.commit import row_tables as RTB, serving_rows as SR
+from verity.ml.serving import row_tables as RTB, rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears and their K
@@ -139,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
             "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "step_root_cost", "model": "Llama-3.1-8B int8", "linears": LINEARS, "batch": ns.batch,
                                      "layers": ns.layers, "k_scale": ns.k_scale, "row_schema": RT.SCHEMA, "roots_schema": RT.ROOTS_SCHEMA,
-                                     "implementation": "verity_vllm.commit.row_tables.step_roots (hashlib SHA-512, numpy ChaCha20, fork pool)",
+                                     "implementation": "verity.ml.serving.row_tables.step_roots (hashlib SHA-512, numpy ChaCha20, fork pool)",
                                      "workers": ns.workers, "reps": ns.reps, "cpu": platform.processor() or platform.machine(),
                                      "nproc": os.cpu_count(), "python": sys.version.split()[0]},
             "validation": {"status": "passed" if ok else "failed",

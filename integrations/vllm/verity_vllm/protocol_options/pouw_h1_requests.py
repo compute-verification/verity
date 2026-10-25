@@ -181,7 +181,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
     keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
     8439's stream (`commit.serving_rows.chacha20`) with the counter's high word, 0 below 2^32 blocks, first in its nonce.
     The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call."""
-    from verity_vllm.commit.serving_rows import chacha20
+    from verity.ml.serving.rows import chacha20
     y = chacha20(key, bytes(4) + nonce.to_bytes(8, "little"), len(values) * HM96_SALT)
     rows = {i: v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)}
     return MerkleTree(rows_domain(binding, owner, len(values), HM96), rows, lambda _: ROW_SCHEMA)

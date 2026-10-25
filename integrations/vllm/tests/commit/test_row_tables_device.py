@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity.ml.commitments import row_table as RT
-from verity_vllm.commit import row_tables as RTB
+from verity.ml.serving import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
 
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))

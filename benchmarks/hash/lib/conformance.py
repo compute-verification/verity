@@ -84,7 +84,7 @@ def rfc_salts_identity(key: bytes, nonce: int, n: int) -> bytes:
 def rfc_salts(key: bytes, nonce: int, n: int) -> tuple[bytes, str]:
     try:
         sys.path.insert(0, str(ROOT / "integrations/vllm"))
-        from verity_vllm.commit.serving_rows import salts
+        from verity.ml.serving.rows import salts
         return salts(key, nonce, n), "serving_rows.salts"
     except Exception:  # noqa: BLE001 - its numpy-side dependencies may be absent on a node
         return rfc_salts_identity(key, nonce, n), "audit.chacha20_block identity"

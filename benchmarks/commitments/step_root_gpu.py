@@ -44,7 +44,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity_vllm.commit import row_tables as RTB
+from verity.ml.serving import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
 from verity_vllm.engine import int8_exact as E
 

@@ -32,7 +32,7 @@ import numpy as np
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.merkle import CommitmentDomain
 
-from . import serving_rows as CS
+from verity.ml.serving import rows as CS
 
 __all__ = ["StepRoots", "Table", "check_row_tables", "find", "of_dir", "of_registration", "opening", "registered_reads", "reported_reads",
            "step_roots", "verify", "witness"]
