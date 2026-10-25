@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import gc
 import hashlib
 import json
@@ -222,8 +223,10 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 
 
 #: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
-#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call.
-public_pieces = LS.public_pieces
+#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
+#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: and the instance holds its salt after it, never its zero-padded last chunk.
+public_pieces = functools.partial(LS.public_pieces, fields=True)
 
 
 # --- a run on an injected clock ---------------------------------------------------------------------------------------
@@ -524,20 +527,21 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
     """The scan of what the verifier received for every window's witness pieces, leaving out the pieces the public
     circuit or a received window's ``pub`` row holds; `received`, the windows the verifier got (a sampled period's
     drawn ones), by default every one. The control (the prover's instance files) is to hold every held piece but a
-    blob's zero-padded last chunk (`leak_scan.cut`), which a head inside its row never shows; the scan of what the
-    verifier received still looks for those."""
+    head's zero-padded last chunk, which `public_pieces` (``fields``) leaves out of the held ones since a head inside
+    its row never shows it (``padded_tails`` counts them); the scan of what the verifier received still looks for
+    those."""
     rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows
                     if x.args is not None and (received is None or x.window in received))
     raw, held_blobs = blobs_of(rd)
     blobs, held, public = public_pieces(M.a8, raw, held_blobs, sg.circuit.read_bytes() + rows)
-    tails = {f"{k} @{len(b) - len(b) % M.a8.PIECE}" for k, b in raw.items() if len(b) % M.a8.PIECE}
+    tails = {f"{k} @{len(b) - len(b) % M.a8.PIECE}" for k, b in raw.items() if k in held_blobs and len(b) % M.a8.PIECE}
     control = out / "prover-instances.bin"
     with open(control, "wb") as f:
         for x in rd.windows:
             f.write((x.statement.dir / "inst-1.bin").read_bytes())
-    got = M.a8.received(out / "verifier", control, blobs, held - tails)
+    got = M.a8.received(out / "verifier", control, blobs, held)
     return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"]),
-            "padded_tails": len(held & tails)}
+            "padded_tails": len(tails & blobs.keys())}
 
 
 def prove(a) -> int:
