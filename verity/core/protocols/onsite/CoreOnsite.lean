@@ -3,11 +3,12 @@ Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier
 accounts for space, bandwidth and communication. Its components are integrity by sampled proofs' one-stage audit
 (`SampledProofs.OneStage.protocol`), work by proof of useful work (`PouwCheck.protocol`), space by PoUS's check of a run
 (`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandwidth audit's session (`RemoteAudit.Protocol.protocol`),
-and communication by the network certificate check (`NetworkCheck.Check.protocol`). `Core.Composition.product` composes
+and communication by the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
+period's link-windows certified and proved, and the bound `K` on what left the site). `Core.Composition.product` composes
 them: every component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others answer.
 -/
 import CoreComposition.Cases
-import NetworkCheck.Check
+import NetworkCheck.Period
 import PousCheck.RunProtocol
 import PouwCheck.Protocol
 import RemoteAudit.Protocol
@@ -19,7 +20,7 @@ open Composition
 
 /-- Onsite's components, in the order of their ids. -/
 def components : List Protocol :=
-  [NetworkCheck.Check.protocol, PousCheck.RunProtocol.protocol, PouwCheck.protocol, RemoteAudit.Protocol.protocol,
+  [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.protocol, RemoteAudit.Protocol.protocol,
     SampledProofs.OneStage.protocol]
 
 def protocol : Protocol := product "verity/onsite/v0" components
@@ -33,17 +34,17 @@ private def answer (xs : List Case) : Answer := Cases.answerCases protocol xs 鉄
 private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard ordered components
-#guard components.map (路.id) == ["verity/network-certificate/v4", "verity/pous/p2/v4/run", "verity/pouw/v1",
+#guard components.map (路.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/v1",
   "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v1"]
 
 -- every component refuses its case: onsite rejects on each, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.verdict == .reject
 #guard allRefused.published.isNone && allRefused.profile.isNone
-#guard allRefused.reason.map (路.startsWith "verity/network-certificate/v4 reject: params: ") == some true
+#guard allRefused.reason.map (路.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard components.all fun P => (allRefused.reason.map (contains 路 s!"{P.id} reject: params: ")).getD false
 -- remote's components alone are not onsite's
 #guard (answer [refused PouwCheck.protocol, refused SampledProofs.OneStage.protocol]).reason ==
-  some "params: verity/network-certificate/v4 is missing"
+  some "params: verity/certifier/v0 is missing"
 
 end Core.Onsite

@@ -7,7 +7,7 @@
   "CoreOnsite": {
    "imports": [
     "CoreComposition.Cases",
-    "NetworkCheck.Check",
+    "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Protocol",
     "RemoteAudit.Protocol",
