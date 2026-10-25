@@ -31,8 +31,11 @@ the integration's own check before it commits).
 """
 from __future__ import annotations
 
+import functools
 import hashlib
+import importlib
 import json
+import pkgutil
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -106,13 +109,21 @@ def _static(v: Any) -> Any:
     return v
 
 
+@functools.cache
+def _load_catalog() -> None:
+    """Import every module of `verity.ml.circuits.ops`, the catalog's: each registers its Definitions as it loads."""
+    from verity.ml.circuits import ops
+
+    for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
+        if ".tests" not in m.name:
+            importlib.import_module(m.name)
+
+
 def resolve(tid: str, *, template: bool = True) -> Any:
     """The Definition descriptor id ``tid`` names in Verity's catalog (every Definition registered from a ``verity`` module):
     its base and binding record parsed (`codec.descriptor_id`'s form) and bound; a ``template`` refused unless `catalog`'s.
     Refused (ValueError) unless the Definition it binds is named exactly ``tid``."""
-    from verity.ml.circuits import ops  # noqa: F401  (registers the catalog's Definitions)
-    from verity.ml.circuits.ops import boolean  # noqa: F401
-
+    _load_catalog()
     m = _ID.fullmatch(tid)
     if m is None or m[1] not in REGISTRY.defs or not _verity(REGISTRY[m[1]]):
         raise ValueError(f"{tid}: names no Definition in Verity's catalog")

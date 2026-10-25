@@ -1,8 +1,9 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
 commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, and
-the verifier's window is rebuilt from the circuit record alone. Core's acceptance of the written registration, and
-`of_records` against it, are the torch loop's tests (`integrations/torch_loop/tests`), since these may not import core."""
+the verifier's window is rebuilt from the circuit record alone. A window written under core's registration, and
+`of_records` against it, are the records audit's tests (`benchmarks/prove_path/tests/test_records_audit.py`), since these
+may not import core."""
 from __future__ import annotations
 
 import json

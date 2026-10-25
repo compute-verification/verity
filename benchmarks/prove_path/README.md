@@ -182,6 +182,15 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
   (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
+- **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
+  what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds
+  by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
+  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
+  catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
+  table names for it (`prove_path.py circuit` for a served window), on advice that opens the registered root, and holds its
+  output to the circuit record (less the run root and the coins' context) and its charged length to the registered one. It
+  imports no `verity_vllm` code. The exception is a template whose Definition is still vLLM's (`SiluMul_v2`, `RoPEHead_v1`):
+  the input set loads it from `verity_vllm.program.registry` until #3927 moves those Definitions into `verity`.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   Programs come from `--row-dir`, and the Build manifest falls back to `<row dir>/manifest.json`, checked against the record's
