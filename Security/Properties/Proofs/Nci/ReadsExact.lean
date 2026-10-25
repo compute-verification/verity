@@ -1796,6 +1796,32 @@ theorem ctxOf_arg (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
   generalize (((P.defs[d]!).body.nodes[k]!).args[i]!).seq = s at hs ⊢
   rw [hs, partsPos_get, (Walk.ofParts_spec _).1]
 
+/-- A sequence as segments (`Desc.ofSeq`) has pieces each of positive count: one to a segment, empty ones dropped. -/
+theorem ofSeq_count (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
+  intro g hg q hq
+  unfold Desc.ofSeq at hg
+  rw [of_segs, Array.toList_filter, List.mem_filter, Array.toList_map, List.mem_map] at hg
+  obtain ⟨⟨p, -, rfl⟩, hc⟩ := hg
+  have hq' : q = p := by simpa [Desc.Seg.one] using hq
+  subst hq'
+  have h1 : (Desc.Seg.one q).count > 0 := of_decide_eq_true hc
+  have h2 : (Desc.Seg.one q).count = q.count := Nat.one_mul _
+  omega
+
+/-- **The context's arguments' pieces are of positive count** (`ofSeq_count`). -/
+theorem ctxOf_argCount (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hi : i < ((P.defs[d]!).body.nodes[k]!).args.size) :
+    ∀ g ∈ ((ctxOf P memo d).arg k i).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
+  have harg : (ctxOf P memo d).arg k i = Desc.ofSeq (((P.defs[d]!).body.nodes[k]!).args[i]!).seq := by
+    unfold Desc.Ctx.arg ctxOf
+    dsimp only
+    generalize (P.defs[d]!).body.nodes = ns at hk hi ⊢
+    rw [getElem!_pos ns k hk] at hi ⊢
+    rw [Array.getElem?_map, Array.getElem?_eq_getElem hk, Option.map_some, Option.bind_some, Array.getElem?_map,
+      Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, getElem!_pos _ i hi]
+  rw [harg]
+  exact ofSeq_count _
+
 /-- **A loop that appends each element's segments** names, in order, each element's positions, when each element's
 segments name `D` of it. -/
 theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D : β → List (Tgt × Int))
