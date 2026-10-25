@@ -32,7 +32,9 @@
 // the producer one called copy (`pd_serve`), since each inlined paired site is about 7 KB (the producer's 23 KB) fetched
 // cold on the CTA's SM, and the last CTA's tail runs each of its sites once; PD_LATE (with PD_PAIR), pd_commit's salt,
 // templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
-// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers.
+// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; in mode 1, which builds no
+// templates, warp 2 computes the fold's round inputs a chunk ahead of warp 0's rounds instead (`pd_fold_sched`; with
+// PD_ROUNDS, at most 32 blocks), so the fold's rounds start without waiting for every block's schedule.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
@@ -153,9 +155,13 @@ DEV void pd_prefetch(const void* p) {   // the 128-byte line at p into L1
 // inputs K_i + W_i (rs_sched / rl_sched).
 DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
                   uint64_t kwi) {
-  const uint64_t t1 = h + (rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + kwi;
+  // h and d are the e and a of three rounds back, so h + K_i W_i + d is summed off e's chain.  a is e - d + T2, which is
+  // T1 + T2 without also holding h + K_i W_i (holding it spills in pd_commit_g_851)
+  const uint64_t hkd = h + kwi + d;
+  const uint64_t s1 = rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), ch = (e & f) ^ (~e & g);
   const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
-  h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  const uint64_t e1 = hkd + ch + s1, a1 = e1 - d + t2;
+  h = g; g = f; f = e; e = e1; d = c; c = b; b = a; a = a1;
 }
 DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
 #pragma unroll
@@ -409,6 +415,46 @@ template <int V> DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int 
     }
   }
 }
+// pd_fold's rounds-only form split over two warps (pd_commit's fold in mode 1, s / 2 + 1 <= 32 blocks): pd_fold_sched, on
+// a whole warp, lane b block b, stores K_t + W_t at kw[32 t + b] a chunk of 16 t at a time for every block, arriving on
+// barrier 1 + q after chunk q, while pd_fold_rounds, on another whole warp (every lane the same rounds), runs the blocks'
+// rounds in order, block 0 waiting there for each chunk.  Barriers 1-5, 64 threads; st out on every lane
+DEV void pd_fold_rounds(const uint64_t* qst, int nb, uint64_t* st, const uint64_t* kw) {
+#pragma unroll
+  for (int t = 0; t < 8; t++) st[t] = qst[t];
+#pragma unroll 1
+  for (int b = 0; b < nb; b++) {
+    uint64_t a = st[0], bb = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll 1
+    for (int q = 0; q < 5; q++) {
+      if (b == 0) pd_bar_sync(1 + q, 64);
+      uint64_t k16[16];
+#pragma unroll
+      for (int i = 0; i < 16; i++) k16[i] = kw[32 * (16 * q + i) + b];
+#pragma unroll
+      for (int i = 0; i < 16; i++) rs_round(a, bb, c, d, e, f, g, h, k16[i]);
+    }
+    st[0] += a; st[1] += bb; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+  }
+}
+DEV void pd_fold_sched(const uint64_t* dig, int s, int lane, uint64_t* kw) {
+  const int nb = s / 2 + 1, b = lane < nb ? lane : 0;
+  const bool on = lane < nb;
+  uint64_t w[16];
+  pd_fold_block(dig, s, b, w);
+#pragma unroll
+  for (int t = 0; t < 16; t++)
+    if (on) kw[32 * t + b] = RS_K[t] + w[t];
+  pd_bar_arrive(1, 64);
+#pragma unroll 1
+  for (int q = 1; q < 5; q++) {
+    rs_next16(w);
+#pragma unroll
+    for (int i = 0; i < 16; i++)
+      if (on) kw[32 * (16 * q + i) + b] = RS_K[16 * q + i] + w[i];
+    pd_bar_arrive(1 + q, 64);
+  }
+}
 // the hm96 salt pieces of leaf i (hm_leaves' work before x), by one whole warp: lanes 0-2 the three ChaCha20 blocks of y
 // (into shared ys), each lane 6 of the mask's 192 byte-table rows (4 q + r for y[q]'s byte r, an L2 or DRAM load each: one
 // lane alone waits on 192 of them in turn), XORed across the warp (`pd_hm_mask`), then lane 0 c's state.  Out on lane 0:
@@ -463,16 +509,29 @@ DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, 
 #pragma unroll
   for (int j = 0; j < 8; j++) c[j] = st[j];
 }
-// H_seed-A(salt ‖ x ‖ root_B ‖ u64 LE iota) from the label's midstate, and its line key (s512_seeds' bytes); x as 8 words
+// line `line`'s block under line key `key`: H_line's message after its label (key ‖ 0 ‖ 0 ‖ line u32 LE), padded
+DEV void pd_line_block(const uint32_t* key, uint32_t line, uint64_t* w) {
+#pragma unroll
+  for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(key[2 * i], key[2 * i + 1]) : 0;
+  w[4] = (uint64_t)(line & 0xFF) << 40 | (uint64_t)(line >> 8 & 0xFF) << 32 | (uint64_t)(line >> 16 & 0xFF) << 24 |
+         (uint64_t)(line >> 24) << 16 | 0x80ull << 8;
+  w[15] = 8 * (128 + 38);
+}
+// H_seed-A(salt ‖ x ‖ root_B ‖ u64 LE iota) from the label's midstate, and its line key (s512_seeds' bytes); x as 8 words,
+// lab the label states (PD_LABELS, or a copy of it).  With PD_LOOP and line, also the hash of the key's line 0
+// (pd_line_hash's) into h, from the same paired site; a flag rather than a null h, since selecting between h and key would
+// put both in local memory
 template <int V, int P = 0>
-DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_t* seed, uint32_t* key) {
+DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_t* seed, uint32_t* key,
+                 const uint64_t* lab = &PD_LABELS[0][0], uint32_t* h = nullptr, bool line = false) {
   uint64_t st[8], w[16];
   if constexpr ((V & PD_LOOP) != 0) {
+    const int blocks = line ? 4 : 3;
 #pragma unroll 1
-    for (int b = 0; b < 3; b++) {
+    for (int b = 0; b < blocks; b++) {
       if (b == 0) {
 #pragma unroll
-        for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
+        for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_SEED_A + t];
 #pragma unroll
         for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? x[i - 4]
                                                   : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
@@ -482,20 +541,27 @@ DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_
         w[4] = rs_be64((uint32_t)iota, (uint32_t)(iota >> 32));
         w[5] = 0x8000000000000000ull;
         w[15] = 8 * (128 + 168);
-      } else {
+      } else if (b == 2) {
         s512_out32(st, seed);
 #pragma unroll
-        for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_NOISE_LINE][t];
+        for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_NOISE_LINE + t];
 #pragma unroll
         for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
         w[4] = 0x8000000000000000ull;
         w[15] = 8 * (128 + 32);
+      } else {
+        s512_out32(st, key);
+#pragma unroll
+        for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_LINE + t];
+        pd_line_block(key, 0, w);
       }
       pd_cmp<V, P>(st, w);
     }
+    if (line) s512_out32(st, h);
+    else s512_out32(st, key);
   } else {
 #pragma unroll
-    for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
+    for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_SEED_A + t];
 #pragma unroll
     for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? x[i - 4]
                                               : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
@@ -508,19 +574,19 @@ DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_
     pd_cmp<V, P>(st, w);
     s512_out32(st, seed);
 #pragma unroll
-    for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_NOISE_LINE][t];
+    for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_NOISE_LINE + t];
 #pragma unroll
     for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
     w[4] = 0x8000000000000000ull;
     w[15] = 8 * (128 + 32);
     pd_cmp<V, P>(st, w);
+    s512_out32(st, key);
   }
-  s512_out32(st, key);
 }
 
 // ---------------------------------------------------------------- E_A's lines
 // pearl_c_sm120.cu's `lines` at E_A's side 0, factor 0 and norm 256 (its NORM_256): H_line(key ‖ 0 ‖ 0 ‖ line u32 LE) from
-// the label's midstate, then the line rule's codes, with that file's BF16 and FP8 helpers
+// the label's midstate (pd_line_hash), then the line rule's codes (pd_line_codes), with that file's BF16 and FP8 helpers
 constexpr uint16_t PD_NORM_E = 0x4600;
 DEV uint32_t pd_isqrt(uint32_t v) {
   uint32_t r = (uint32_t)sqrt((double)v);
@@ -531,18 +597,16 @@ DEV uint32_t pd_isqrt(uint32_t v) {
 DEV float pd_bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }
 DEV uint16_t pd_bmul(uint16_t a, uint16_t b) { return pd_f2bf(__fmul_rn(pd_bf2f(a), pd_bf2f(b))); }
 DEV uint16_t pd_bdiv(uint16_t a, uint16_t b) { return pd_f2bf(__fdiv_rn(pd_bf2f(a), pd_bf2f(b))); }
-template <int V, int P = 0> DEV void pd_line(const uint32_t* key, uint32_t line, uint64_t out, bool on = true) {
+template <int V, int P = 0>
+DEV void pd_line_hash(const uint32_t* key, uint32_t line, uint32_t* h, const uint64_t* lab = &PD_LABELS[0][0]) {
   uint64_t st[8], w[16];
 #pragma unroll
-  for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_LINE][t];
-#pragma unroll
-  for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(key[2 * i], key[2 * i + 1]) : 0;
-  w[4] = (uint64_t)(line & 0xFF) << 40 | (uint64_t)(line >> 8 & 0xFF) << 32 | (uint64_t)(line >> 16 & 0xFF) << 24 |
-         (uint64_t)(line >> 24) << 16 | 0x80ull << 8;
-  w[15] = 8 * (128 + 38);
+  for (int t = 0; t < 8; t++) st[t] = lab[8 * PD_LINE + t];
+  pd_line_block(key, line, w);
   pd_cmp<V, P>(st, w);
-  uint32_t h[8];
   s512_out32(st, h);
+}
+DEV void pd_line_codes(const uint32_t* h, uint64_t out, bool on) {
   int xs[32];
   uint32_t sumsq = 0;
 #pragma unroll
@@ -563,6 +627,11 @@ template <int V, int P = 0> DEV void pd_line(const uint32_t* key, uint32_t line,
   uint4* o = reinterpret_cast<uint4*>(out);
   o[0] = make_uint4(c[0], c[1], c[2], c[3]);
   o[1] = make_uint4(c[4], c[5], c[6], c[7]);
+}
+template <int V, int P = 0> DEV void pd_line(const uint32_t* key, uint32_t line, uint64_t out, bool on = true) {
+  uint32_t h[8];
+  pd_line_hash<V, P>(key, line, h);
+  pd_line_codes(h, out, on);
 }
 // the pairs' consumer index (0-63: warp 0's lanes, then pair 1's) and whether this warp has any of [base, end)
 DEV int pd_ci() { return (threadIdx.x >= 32 ? 32 : 0) + (threadIdx.x & 31); }
@@ -593,7 +662,7 @@ constexpr int PD_NODES = 128 * 8 + 64 * 8;   // pd_levels' shared node states: l
 // CTA r at row r (PS_*), the tail (pd_commit's last CTA or pd_tree) at row i0 (PT_*: PT_LEVEL + l after level l + 1 is
 // built, PT_ROW holding (r, SM id))
 constexpr int PD_SLOTS = 16;
-enum { PS_START, PS_SEGS, PS_SALT, PS_FRAME, PS_SYNC1, PS_FOLD, PS_SYNC2, PS_LEAF, PS_SEED };
+enum { PS_START, PS_SEGS, PS_SALT, PS_FRAME, PS_SYNC1, PS_FOLD, PS_SYNC2, PS_LEAF, PS_SEED, PS_SEG1, PS_SEG8, PS_SEED0, PS_LINE };
 enum { PT_START = 0, PT_LEVEL = 1, PT_SEED_A = PT_LEVEL + PD_MAX_LEVELS, PT_FILLERS, PT_ENTRY, PT_ROW = PD_SLOTS - 1 };
 template <int V> DEV void pd_stamp_at(uint64_t buf, int row, int slot, uint64_t x, uint64_t y) {
   if constexpr ((V & PD_STAMP) != 0) {
@@ -767,19 +836,29 @@ DEV void pd_row_leaf(uint64_t hm, const uint64_t* xr, const uint64_t* mk, const 
     pd_cmp<V, P>(lt, w);
   }
 }
-// row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr (shared); stored if on
+// row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr, the unit block and the
+// label states lab (all shared); stored if on.  With PD_LOOP the line's hash is pd_seed's fourth block
 template <int V, int P = 0>
-DEV void pd_row_seed(const Args& a, const uint32_t* unit, uint64_t index, int r, const uint64_t* xr, bool on) {
+DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, uint64_t index, int r, const uint64_t* xr,
+                     bool on) {
   uint64_t x[8];
-  uint32_t seed[8], key[8];
+  uint32_t seed[8], key[8], h[8];
+  const bool line = a.p[12] != 0;
 #pragma unroll
   for (int q = 0; q < 8; q++) x[q] = xr[q];
-  pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key);
+  if (on) pd_stamp<V>(a.p[13], r, PS_SEED0);
+  if constexpr ((V & PD_LOOP) != 0) {
+    pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab, h, line);
+  } else {
+    pd_seed<V, P>(unit, x, index << 32 | (uint64_t)r, seed, key, lab);
+    if (line) pd_line_hash<V, P>(key, 0, h, lab);
+  }
+  if (on) pd_stamp<V>(a.p[13], r, PS_LINE);
   if (on) {
     store_cv(a.p[3] + 32ull * r, seed);
     store_cv(a.p[4] + 32ull * r, key);
   }
-  if (a.p[12]) pd_line<V, P>(key, 0, a.p[12] + 32ull * r, on);
+  if (line) pd_line_codes(h, a.p[12] + 32ull * r, on);
 }
 // the tree's levels above level 0 (tm the templates, nodes PD_NODES words, root 8, lk 8: shared), seed_A and line_a, E_A's
 // filler lines (p12 nonzero), and the counter at scratch reset (scratch nonzero).  PD_PAIR: by pair 0 (warps 0 and pw0) and
@@ -859,7 +938,8 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
-  __shared__ uint32_t ys[48], lk[8];
+  __shared__ uint64_t lab[3 * 8];   // PD_LABELS and the unit block, for the row's seed chain
+  __shared__ uint32_t ys[48], lk[8], un[26];
   __shared__ int last;
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
   constexpr bool PAIR = (V & PD_PAIR) != 0, LATE = (V & PD_LATE) != 0;
@@ -906,6 +986,10 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
     pd_stamp<V>(sb, r, PS_FRAME);
   };
   if (tid == 0) pd_stamp<V>(sb, r, PS_START);
+  if (warp == (int)blockDim.x / 32 - 1) {           // the last warp, which no segment's chain is on
+    if (lane < 24) lab[lane] = (&PD_LABELS[0][0])[lane];
+    if (lane < 26) un[lane] = unit[lane];
+  }
   if (PAIR && warp < sw) {                          // the row's segments, paired: lane tid's segment (a stand-in past s)
     if (warp < cw) {
       if (!zero) {
@@ -933,6 +1017,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
             pd_padw(w, 128 + RS_SEG);
           }
           pd_cmp<V, 1>(st, w);
+          if (tid == 0 && (c == 0 || c == RS_SEG / 128 - 1)) pd_stamp<V>(sb, r, c == 0 ? PS_SEG1 : PS_SEG8);
         }
         if (on) {
 #pragma unroll
@@ -973,12 +1058,16 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   }
   __syncthreads();
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
+  // in mode 1 no templates are built, so with PD_LATE warp 2 computes the fold's round inputs while warp 0 runs its rounds
+  const bool split = !zero && LATE && (V & PD_ROUNDS) && a.i[2] == 1 && s / 2 + 1 <= 32;
   if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
     if (zero) {
       const uint64_t* z = reinterpret_cast<const uint64_t*>(a.p[14]);
 #pragma unroll
       for (int q = 0; q < 8; q++) st[q] = z[q];
+    } else if (split) {
+      pd_fold_rounds(RS_Q_HEADS + 8 * s, s / 2 + 1, st, kw);
     } else {
       pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
     }
@@ -991,7 +1080,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
   } else if (LATE && warp == 1) {
     salt();
   } else if (LATE && warp == 2) {                   // a lane a level; the pairs' buffers are idle until the leaf
-    templates(lane, pd_dyn());
+    if (split) pd_fold_sched(dig, s, lane, kw); else templates(lane, pd_dyn());
   } else if (LATE && warp == 3 && lane == 0) {
     frame();
   }
@@ -1021,7 +1110,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
       }
     } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
       if (warp == c1) {
-        pd_row_seed<V, 1>(a, unit, index, r, xr, lane == 0);
+        pd_row_seed<V, 1>(a, un, lab, index, r, xr, lane == 0);
         if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
       } else {
@@ -1044,7 +1133,7 @@ template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r)
     s512_store(tree + 64ull * r, lt, 8);
     pd_stamp<V>(sb, r, PS_LEAF);
   } else if (tid == 32 * cw) {
-    pd_row_seed<V>(a, unit, index, r, xr, true);
+    pd_row_seed<V>(a, un, lab, index, r, xr, true);
     pd_stamp<V>(sb, r, PS_SEED);
   }
   if (a.i[2] == 1) return;

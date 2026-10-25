@@ -51,11 +51,14 @@ computed as before, by another CTA.
 
 With ``whole_fork_stats`` too (deferring), a whole capture forks each call's A scales (``stats_a``, which reads A's words
 alone and writes its shape's alpha, beta, ia and aux) onto a stats stream before the call's A commitment, which reads and
-writes none of them, and the capturing stream joins it in its place, before the forming steps that read them.  Nothing
-past that join is reordered, so the same kernels write the same bytes.  With ``whole_prefetch_b`` (deferring) the stats
-stream then prefetches the call's B̃ into L2 (`run.Pipeline.prefetch_b`, which writes nothing) while the call's A commitment
-leaves DRAM idle; the join waits for the scales alone (an event after ``stats_a``), and the forward's last call joins the
-stats stream.
+writes none of them, and the capturing stream joins it in its place, before the forming steps that read them.  The fork
+waits on the A words before the commitment, but ``stats_a`` is launched into it after the commitment's first steps, so
+those come first in the graph's launch order: the commitment's CTAs, each holding an SM whole, take the SMs the call
+before's tile hashing leaves free, rather than waiting for the scales' CTAs to end (r20261025-115836-c84d: at k = 14336
+beside gate_up's 112 tile CTAs, pd_commit took 143 us against 125 alone).  Nothing past that join is reordered, so the
+same kernels write the same bytes.  With ``whole_prefetch_b`` (deferring) the stats stream then prefetches the call's B̃
+into L2 (`run.Pipeline.prefetch_b`, which writes nothing) while the call's A commitment leaves DRAM idle; the join waits
+for the scales alone (an event after ``stats_a``), and the forward's last call joins the stats stream.
 
 With a `statement` enabled (and hashing), a whole capture also copies each call's A words to the statement's stage, and
 `whole_replayed` launches its commitment of the forward's rows after the replay; its key says so.
@@ -587,10 +590,11 @@ class GraphCalls:
         after its A tree and forks its own after its GEMM; the forward's last call (every weight called once) joins them.
         Deferring A's trees (`_defers_a`, where the call's graph has one, ``tree_at``), the call forks its tree after its
         per-row keying, then joins the call before's side steps; the last call joins the tree stream too.  Forking A's
-        scales (`_forks_stats`, ``stats_at``), the call forks ``stats_a`` before its A commitment and joins it in its
-        place, before the forming steps that read it; prefetching B̃ (`_prefetches`), it starts the prefetch on the
-        stats stream after its scales, and the last call joins that stream too.  Joining by shape (``whole_shape_joins``),
-        the call doesn't join the call before's side steps; `join_before` joins its shape's."""
+        scales (`_forks_stats`, ``stats_at``), the call opens the stats stream before its A commitment, launches
+        ``stats_a`` there after the commitment's first steps, and joins it in its place, before the forming steps that
+        read it; prefetching B̃ (`_prefetches`), it launches the prefetch on the stats stream after its scales, and the
+        last call joins that stream too.  Joining by shape (``whole_shape_joins``), the call doesn't join the call before's
+        side steps; `join_before` joins its shape's."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -608,9 +612,11 @@ class GraphCalls:
                 s = g.stats_at if self._forks_stats() else None
                 prefetch = getattr(pipe, "prefetch_b", None) if self._prefetches() else None
                 if s is not None or prefetch is not None:
-                    self._fork_stats(None if s is None else g.steps[s], raw, prefetch)
+                    self._open_stats()
                 for f in g.steps[:a if t is None else t]:
                     f()
+                if s is not None or prefetch is not None:
+                    self._fork_stats(None if s is None else g.steps[s], raw, prefetch)
                 if t is not None:
                     self._fork_tree(g.steps[t:a], raw)
                 if not self.whole_shape_joins:
@@ -652,13 +658,17 @@ class GraphCalls:
             self.kernel.dev.stream = raw
         self._tree_open = True
 
+    def _open_stats(self) -> None:
+        """The stats stream waits for everything the capturing stream has launched so far (the call's A words)."""
+        import torch
+        self._stats_stream.wait_stream(torch.cuda.current_stream(self.device))
+
     def _fork_stats(self, step: Any, raw: int, prefetch: Any = None) -> None:
         """`step` (the call's ``stats_a``) when given, then `prefetch` (its B̃ into L2) when given, on the stats stream after
-        everything the capturing stream has launched so far (the call's A words); `_join_stats` joins the step before the
-        call's forming, and `_join_prefetch` the prefetch at the forward's end."""
+        `_open_stats`'s wait, whatever the capturing stream launched since; `_join_stats` joins the step before the call's
+        forming, and `_join_prefetch` the prefetch at the forward's end."""
         import torch
         stats = self._stats_stream
-        stats.wait_stream(torch.cuda.current_stream(self.device))
         self.kernel.dev.stream = stats.cuda_stream
         try:
             with torch.cuda.stream(stats):

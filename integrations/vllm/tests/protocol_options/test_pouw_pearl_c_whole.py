@@ -747,10 +747,10 @@ def test_a_shape_joining_capture_joins_a_calls_side_steps_only_before_the_next_c
 def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitment_and_joins_them_in_their_place(
         monkeypatch):
     """Under ``whole_fork_stats`` a call's ``stats_a``, which reads A's words alone, goes on the stats stream after the
-    call's A words, beside its A commitment (``rows_a``) and tree, and the capturing stream joins it in its place, before
-    ``eprime_a`` reads A's scales (the mark after it); every other step keeps its stream and order.  Under
-    ``whole_prefetch_b`` B̃'s prefetch follows ``stats_a`` there, which the join doesn't wait for and the forward's last
-    call joins; alone, the prefetch forks only itself."""
+    call's A words, beside its A commitment (``rows_a``) and tree, launched after the commitment (so the graph launches
+    the commitment first), and the capturing stream joins it in its place, before ``eprime_a`` reads A's scales (the mark
+    after it); every other step keeps its stream and order.  Under ``whole_prefetch_b`` B̃'s prefetch follows ``stats_a``
+    there, which the join doesn't wait for and the forward's last call joins; alone, the prefetch forks only itself."""
     torch = pytest.importorskip("torch")
     run, log = Calls(torch), []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
@@ -777,31 +777,31 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
 
     assert [c.w for c in forward()] == [7, 8, 9]
     main = lambda w, *xs: [f"{w}:{x} on main (1)" for x in xs]  # noqa: E731
-    stats = lambda w, *xs: ["stats waits for main", f"{w}:stats_a on stats (4)", "stats marks",  # noqa: E731
-                            *(f"{w}:{x} on stats (4)" for x in xs)]
+    stats = lambda w, *xs: [f"{w}:stats_a on stats (4)", "stats marks", *(f"{w}:{x} on stats (4)" for x in xs)]  # noqa: E731
     joined = "main waits for stats's mark"
     tree = lambda w: ["tree waits for main", f"{w}:tree_seed_a on tree (3)"]  # noqa: E731
+    commit = lambda w, *xs: ["stats waits for main", *main(w, "rows_a"), *stats(w, *xs), *tree(w)]  # noqa: E731
     side = lambda w: ["side waits for main", f"{w}:hash_leaf on side (2)", "side waits for tree",  # noqa: E731
                       f"{w}:scatter on side (2)"]
-    assert log == [*stats(7), *main(7, "rows_a"), *tree(7), joined, *main(7, "eprime_a", "gemm"), *side(7),
-                   *stats(8), *main(8, "rows_a"), *tree(8), "main waits for side", joined,
+    assert log == [*commit(7), joined, *main(7, "eprime_a", "gemm"), *side(7),
+                   *commit(8), "main waits for side", joined,
                    *main(8, "eprime_a", "gemm"), *side(8),
                    "main waits for side",                     # 9's call is of 8's shape: joined before it writes A's words
-                   *stats(9), *main(9, "rows_a"), *tree(9), joined, *main(9, "eprime_a", "gemm"), *side(9),
+                   *commit(9), joined, *main(9, "eprime_a", "gemm"), *side(9),
                    "main waits for side", "main waits for tree"]
     assert run.kernel.dev.stream is None
     log.clear()
     run.whole_prefetch_b = True                               # B̃'s prefetch after stats_a, joined at the forward's end
     forward()
-    call = lambda w: [*stats(w, "prefetch_b"), *main(w, "rows_a"), *tree(w),  # noqa: E731
-                      *(["main waits for side"] if w == 8 else []), joined, *main(w, "eprime_a", "gemm"), *side(w)]
+    call = lambda w: [*commit(w, "prefetch_b"), *(["main waits for side"] if w == 8 else []), joined,  # noqa: E731
+                      *main(w, "eprime_a", "gemm"), *side(w)]
     assert log == [*call(7), *call(8), "main waits for side", *call(9), "main waits for side", "main waits for tree",
                    "main waits for stats"]
     assert not run._prefetch_open
     log.clear()
     run.whole_fork_stats = False                              # the prefetch alone: stats_a in its place, nothing waits on it
     forward()
-    assert log[:7] == ["stats waits for main", "7:prefetch_b on stats (4)", *main(7, "rows_a"), *tree(7),
+    assert log[:7] == ["stats waits for main", *main(7, "rows_a"), "7:prefetch_b on stats (4)", *tree(7),
                        *main(7, "stats_a", "eprime_a")]
     assert joined not in log and log[-1] == "main waits for stats"
     log.clear()

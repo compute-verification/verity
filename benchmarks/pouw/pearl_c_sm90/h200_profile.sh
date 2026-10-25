@@ -11,7 +11,8 @@
 #                                                      (default serial) its pearlc arms, interleaved (GRAPHS=1: --graphs),
 #                                                      into $OUT/timing[-graphs]
 #   STAMPS  1 (default 0)                              glm53_profile.py stamps (every in-domain shape at m 16 and 64, serial
-#                                                      and deferred-a), into $OUT/stamps.json
+#                                                      and deferred-a; STAMPS_SHAPES N:K ... and STAMPS_M M ... instead),
+#                                                      into $OUT/stamps.json
 #   HOST    1 (default 0)                              glm53_profile.py host (a call's host time and its cProfile, at m 16
 #                                                      and 64, SCHEDULES' arms; GRAPHS=1: --graphs too), into $OUT/host[-graphs].json
 #   LANES   SCHEDULE ... (default unset)               glm53_profile.py run under nsys with graphs' nodes traced, a schedule
@@ -42,10 +43,12 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 TIMING=${TIMING-2624:6144} TILES=${TILES-512:6144 3072:6144 6144:1536} PROFILE=${PROFILE:-1} GROUPED=${GROUPED:-0}
 SCHEDULES=${SCHEDULES:-serial} TIMING_M=${TIMING_M:-} GRAPHS=${GRAPHS:-} STAMPS=${STAMPS:-0} PASSES=${PASSES:-}
+STAMPS_SHAPES=${STAMPS_SHAPES:-} STAMPS_M=${STAMPS_M:-}
 HOST=${HOST:-0} LANES=${LANES:-} LANES_SHAPES=${LANES_SHAPES:-512:6144 4096:6144} GPROF=${GPROF:-0}
 GROUPED_PLACES=${GROUPED_PLACES:-base}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES HOST LANES LANES_SHAPES GPROF GROUPED_PLACES
+export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS STAMPS_SHAPES STAMPS_M PASSES HOST LANES
+export LANES_SHAPES GPROF GROUPED_PLACES
 : > "$O/rc.txt"
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$IN/ship.tar" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"
@@ -69,7 +72,9 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
     echo "$t rc $?" >> "$O/rc.txt"
   fi
   if [ "$STAMPS" = 1 ]; then
-    "$PY" "$D/glm53_profile.py" stamps --out "$O/stamps.json" > "$O/stamps.log" 2>&1
+    # shellcheck disable=SC2086
+    "$PY" "$D/glm53_profile.py" stamps --out "$O/stamps.json" ${STAMPS_SHAPES:+--shapes $STAMPS_SHAPES} \
+      ${STAMPS_M:+--m $STAMPS_M} > "$O/stamps.log" 2>&1
     echo "stamps rc $?" >> "$O/rc.txt"
   fi
   if [ "$HOST" = 1 ]; then
