@@ -212,10 +212,14 @@ No sampled form of them exists yet.
     bernoulli or work draw in either mode. a5 writes each session's draw as `subset` (`benchmarks/one_stage/a5.py:580`), so
     a plain session drawn as a5 draws is refused.
   - Hidden outputs are covered at one table (`SoundExecH`).
-- **Registered reads are not checked in plain mode.**
-  - Without `--zk`, `flock-verify verify --registered F` accepts exactly what `verify` does: `FlockVerifyAcceptsR false`
-    is `Verifies` (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean:66`).
-  - What fails closed is a shared-row public file: `ProvedScope.sharedRowsOk` (line 222) refuses one without `--zk`.
+- **Plain registered reads are checked by the verifier, but not stated by the plain theorem** (PR C, PLAINC, adds
+  `SoundExecHR`).
+  - The verifier runs the check in both modes. `buildStmt` (`verity/core/service/flock/FlockVerify.lean:136`) runs
+    `checkRegistered` on every hm96 row statement, `--zk` or not, and `checkDescription` where the leaves are plain.
+  - The plain theorem doesn't state it: `FlockVerifyAcceptsR false` is `Verifies`
+    (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean:66`), so `flock_verify_sound`'s plain part covers
+    only what `verify` without `--registered` checks.
+  - What fails closed is a shared-row public file: `ProvedScope.sharedRowsOk` (line 222) refuses only that, without `--zk`.
 - **The drawn units' committed rows are not opened outside the session in plain mode** (proofs, thread
   1792894842.280569).
   - `keyRowsH_computes` (`Security/Proofs/Flock/Soundness/Discharge/HiddenExec/KeyH.lean:468`) already binds each drawn
