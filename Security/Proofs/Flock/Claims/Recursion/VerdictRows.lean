@@ -32,7 +32,7 @@ open FlockDeploy (Coin FinalP DecR decR jAt RepCtx repCtx repLens cutLens rowsOf
   filesAt pointsOf setupWith)
 open FlockVBridge.Stages (TableFiles)
 open FlockVBridge.Compiled (RepData AlgebraHolds AccHolds)
-open FlockVBridge.Family (RunsFrom FramedAt runs_of_files combOf roundsOf)
+open FlockVBridge.Family (RunsFrom FramedAt runs_of_files combOf)
 open Flock.RecAlgebra (verifierRows decoded valOf NoEmpty ZcProofOf LcProofOf Opened consAt)
 open FlockSoundness.Refine (RoundsWF openAt shapeOf)
 open FlockSoundness.Discharge.Exec (repFrames)
@@ -82,9 +82,11 @@ def sh (i : ℕ) : Shape := shapeOf (D.files cls i).st (D.files cls i).sch (D.fi
 
 /-! ## A rep's values -/
 
+include D in
 /-- Round 0's rows, as the decision read them. -/
 def r₀ : List ByteArray := (rowsOf (ms.headD [])).getD []
 
+include D in
 /-- The later rounds' rows, as the decision read them. -/
 def rss : List (List ByteArray) := (ms.tail.dropLast.mapM rowsOf).getD []
 
@@ -126,10 +128,10 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
 stream's coins, the comb at them, the opened rows' consistency sums and the statement's extra claims. -/
 def rep (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2) : RepData where
   w := D.w (2 * i + r) (acc (2 * i + r))
-  comb := combOf (D.sh cls i) (D.files cls i) (roundsOf (D.files cls i) r)
-  cons := consOf (D.sh cls i) (D.files cls i).sch ((D.files cls i).proof r) (roundsOf (D.files cls i) r)
-    (D.files cls i).extras (combOf (D.sh cls i) (D.files cls i) (roundsOf (D.files cls i) r))
-  rounds := roundsOf (D.files cls i) r
+  comb := combOf (D.sh cls i) (D.files cls i) (FlockVBridge.Family.roundsOf (D.files cls i) r)
+  cons := consOf (D.sh cls i) (D.files cls i).sch ((D.files cls i).proof r)
+    (FlockVBridge.Family.roundsOf (D.files cls i) r) (D.files cls i).extras (combOf (D.sh cls i) (D.files cls i) (FlockVBridge.Family.roundsOf (D.files cls i) r))
+  rounds := FlockVBridge.Family.roundsOf (D.files cls i) r
   extras := (D.files cls i).extras
 
 /-! ## The rows -/
