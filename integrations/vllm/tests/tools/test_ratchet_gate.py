@@ -1,5 +1,5 @@
-"""`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base, each queue merge
-on its own, no ratchet growing (by entries, per ratchet, or by an entry's count), a new, moved or renamed ratchet, the changes
+"""`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
+merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's count), a new, moved or renamed ratchet, the changes
 it doesn't judge, the base's lint code run on the change's tree (a loosened, deleted or bypassed lint fails, naming what it
 still finds; a tightened one passes once its findings are fixed), the ruff lint rerun with the base's config and pin (a
 loosened config, lint or pin fails), the `noqa` count (no change adds more than it removes; a moved one is kept; only
@@ -167,6 +167,48 @@ def test_main_moving_on_keeps_the_branch_judged_against_its_merge_base(repo):
     repo.commit("main moves", {"integrations/vllm/verity_vllm/b.py": "B = 2\n", "other.txt": "x\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"], c["touched"]) == ("passed", 2, 1, [P01])
+
+
+def test_a_branch_with_two_merge_bases_is_judged_against_their_merge(repo):
+    """``pr`` merged ``main`` and a side branch that ``main`` landed since, so the two have two merge bases; against either,
+    what ``main`` brought by the other route (a noqa each, and an allowlist entry) would count as ``pr``'s."""
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit("side: a noqa", {"integrations/vllm/verity_vllm/c.py": "import os  # noqa: F401\n"})
+    repo.git("checkout", "-q", "main")
+    repo.commit("main: a noqa and its entry", {"integrations/vllm/verity_vllm/d.py": "import re  # noqa: F401\n",
+                                               P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
+                                                               _entry("verity_vllm/d.py", "D"))})
+    repo.git("checkout", "-q", "-b", "pr", "main~1")
+    repo.commit("pr", {A_PY: "A = 2\n"})
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main", "main")
+    repo.git("merge", "-q", "--no-ff", "-m", "merge side", "side")
+    repo.git("checkout", "-q", "main")
+    repo.queue(7, "side", "side")
+    assert len(repo.git("merge-base", "--all", "main", "pr").split()) == 2
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["touched"]) == ("untouched", 0, [])
+    repo.git("checkout", "-q", "pr")
+    repo.commit("pr's own noqa", {"integrations/vllm/verity_vllm/e.py": "import sys  # noqa: F401\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["verity_vllm/e.py:1: import sys  # noqa: F401"])
+
+
+def test_merge_bases_that_conflict_are_refused_with_how_to_leave_one(repo):
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit("side", {A_PY: "A = 'side'\n"})
+    repo.git("checkout", "-q", "main")
+    repo.commit("main", {A_PY: "A = 'main'\n"})
+    repo.git("checkout", "-q", "-b", "pr", "main~1")
+    repo.commit("pr", {"integrations/vllm/verity_vllm/c.py": "C = 1\n"})
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main", "main")
+    repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "merge side", "side")
+    repo.git("checkout", "-q", "main")
+    repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "Queue: #7 side", "side")
+    with pytest.raises(G.GitError, match="don't merge cleanly, so it has no one base to be judged against: merge .* into the branch"):
+        G.gate("main", "pr")
+    repo.git("checkout", "-q", "pr")
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main again", "main")
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "untouched"
 
 
 def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
