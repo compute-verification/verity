@@ -20818,9 +20818,9 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.HorizonLeak": {
-   "digest": "595e43a617eef87f384133a402a760a6b6bd9d8e93f005133d359f2173446324",
+   "digest": "94c69266c346900794fca3758bc2d449fb7fa7fc19c2dcaf75c6b301627c839e",
    "definitions": {
-    "NetTiming.Guarantees.HorizonLeakAccepted": "aef9a63c4e40661578a9af8363a33e60b21c40aa92ccb0bbb8811a6d6ac6fd1e"
+    "NetTiming.Guarantees.HorizonLeakAccepted": "a5c07c2f7a131884153c6ccd3997402c4e7012630e9ba975ee224fc272c45cb6"
    },
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
@@ -21087,7 +21087,7 @@
     "NetTiming.TapRecord.record": "a89a64449e10fb21db550c50134329e7153d12fff8381c7f12ea84af14d24b32",
     "NetTiming.tapCode": "e7fe36224fc6527ffca6264f8c5174f7242c48e3acd1586ce3c7b1cb5bcbbc0f"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
