@@ -668,6 +668,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             return summary, False
         result["coins"] = {"source": stream.coin_source, "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"]}
+        write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
+                   {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
+                    "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
+                   served=given["served"])
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
