@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Recursion.OpenedPlain
+import Proofs.Flock.Claims.Recursion.OpenedDecode
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
@@ -15,6 +15,8 @@ query at a time (`OpenedPlain.QueryOpens`), and the openings' and caps' shapes.
 * `DecAt.rowD_of_levels`: `RowD` where the table's scheme is `plain` (row G's `merkle`), its schedule is `fast100`'s
   (row G's `fast`), the caps have the schedule's shape, each level's openings have the level's `q` queries' shape
   (`LevelShaped`), and at the verifier rows each query of each level opens at the position the rows draw for it.
+* `DecAt.rowD_of_queries`: the same from row G's `merkle` and `fast` and row C's `decode`, which give the caps' and
+  openings' shapes (`OpenedDecode`): only each query's opening is left.
 -/
 
 namespace RecDeploy.Rows
@@ -24,7 +26,7 @@ open FlockVBridge.Family (CapsAt rows_conss decoded_cons)
 open Flock.RecAlgebra (verifierRows decoded Opened consAt Info Lin)
 open FlockSoundness.Refine (openAt capAt shapeOf)
 open FlockSoundness.Discharge.Recursion (HClass)
-open RecDeploy.OpenedPlain (QueryOpens LevelShaped opened_plain_of)
+open RecDeploy.OpenedPlain (QueryOpens LevelShaped opened_plain_of levelShaped_of_decode saltLen_plain)
 
 /-- **P's consistency sums at a context of the verifier rows** are the opened rows' at the context's `α`: the
 contexts' levels are the schedule's, in order (`rows_conss`), so the context whose level is `cs.start` is `cs`. -/
@@ -117,6 +119,26 @@ theorem rowD_of_levels
   · rw [decoded_cons]
     exact congrArg (fun f => Array.map f (Array.range (2 ^ ((D.files cls i).sch.levels[c.start]!).lanes)))
       (funext fun l => consOf_at hv h0 hpos hc l)
+
+/-- **Row D from row G, row C's decode, and each query's opening**: the caps' and openings' shapes are the decoded
+proof's at the plain scheme (`capsAt_of_decode`, `levelShaped_of_decode`), so what is left is that each query of each
+level opens at the position the verifier rows draw for it. -/
+theorem rowD_of_queries
+    (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
+    (hfast : Flock.fast100 (D.files cls i).st.m = some (D.files cls i).sch)
+    (hdec : decodeProof (shapeOf (D.files cls i).st (D.files cls i).sch (D.files cls i).extras.size)
+      ((D.files cls i).bytes r) = .ok ((D.files cls i).proof r))
+    (hq : ∀ v info kappa,
+      verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
+        .ok (v, info, kappa) →
+      ∀ ℓ < (D.files cls i).sch.levels.size, ∀ j < ((D.files cls i).sch.levels[ℓ]!).q,
+        QueryOpens (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ j
+          (info.lg.conss[ℓ]!).pos[j]!) :
+    D.RowD cls acc i r := by
+  have hd : (D.files cls i).st.merkle.digestLen = 64 := (congrArg MerkleScheme.digestLen hmerkle).trans rfl
+  have hs : (D.files cls i).st.merkle.saltBytes = 0 := (congrArg MerkleScheme.saltBytes hmerkle).trans rfl
+  exact D.rowD_of_levels cls acc i r hmerkle hfast (capsAt_of_decode hd hdec)
+    (fun ℓ hℓ => levelShaped_of_decode (saltLen_plain hs) hd hdec ℓ hℓ) hq
 
 end DecAt
 
