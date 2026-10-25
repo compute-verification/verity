@@ -50,8 +50,7 @@ def _module(name: str, path: Path):
     return m
 
 
-PERIOD = _module("network_period_difftest",
-                 ROOT / "verity/core/protocols/network/tests/test_network_period_protocol.py")
+PERIOD = _module("period_case", ROOT / "verity/core/protocols/network/tests/period_case.py")
 
 PROMPTS, STEPS, H = [[3], [7]], 2, 128
 FRAMES = STEPS * -(-4 * H // L.TOKEN_BYTES)
