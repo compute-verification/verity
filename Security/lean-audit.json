@@ -7678,6 +7678,9 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
+  "Hash.SecurityProofs.EmbeddingReadBinding": {
+   "owner": "@proofs"
+  },
   "Hash.SecurityProofs.RowBinding": {
    "owner": "@kernels",
    "signature": ["Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding"],
@@ -10694,6 +10697,10 @@
    },
    "Hash.SecurityProofs.TreeBinding": {
     "function": "Hash.Tree.accepts",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.EmbeddingReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    }
   },
