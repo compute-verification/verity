@@ -34835,14 +34835,16 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Flock.Bridge.Defs": {
-   "digest": "2066f60a310d7297fe1855b5683400f0cdf1eb83d9aba363e0a3ee1736777e86",
+   "digest": "9cf81fc10d7b7a7c33747bae336a4ab542750fb7cf18a16571b72bc51c6c7d7e",
    "definitions": {
-    "Flock.Bridge.designOf": "e5be7fd7a1765ff0cef10e68d0ff78e2a3617ab8eb687abb78d1106ef2e2ab33",
+    "Flock.Bridge.designOf": "3c57b479eaf84ec6d12b11713aa55162c490542384c22e7a16c2e3b9a6de5e21",
     "Flock.Bridge.gateSize": "9be2e1033eefebe9f515773ff64c32af3e73f4eb99e1536319af87c6d2638a58",
     "Flock.Bridge.gateSize._sparseCasesOn_1": "92215865fe4995c663dd0f6d73b52a176353e27c9c6fac8febee0660ea3dd959",
+    "Flock.Bridge.inputClassOf": "07330e716300904b4be0a50828c5b130ce50fbfd6dac2c7ef9ffcc1d7ae94649",
+    "Flock.Bridge.inputsOf": "29e6580acf37dfa840f2fc4ed7995f5399ed118f0ead07c5306e7ff69097f513",
     "Flock.Bridge.lower": "293c1c11dc81fdec12cf0e316515c30cac4a21388d3648b2c782038bfe4d035a",
     "Flock.Bridge.off": "00f96dc9a4cfaddf84708b194ec88ca6f950c01ba67065979e7ba1a5812d155a",
-    "Flock.Bridge.partOf": "bf8dff9f84fde0befaaa9933ac2fa7360467cd837b7c4194017f5d0e44edca36",
+    "Flock.Bridge.partOf": "6d10706b76fc4eb228f7bb3878b03c98a837c40ac5f4c539510006ee3cfbaa77",
     "Flock.Bridge.posOf": "816706274a0ad944c18d9916ab927994421e97ffb8444070f60a4131a61161e7",
     "Flock.Bridge.progOf": "c80b40dbed5cd6027d7faed357d4c0cbf52fbb84060a3e3403467916e57a0a0f",
     "Flock.Bridge.stmtOf": "7a06910c61be50f9e106d86904df0fd73849465cead185ba81aa8bf90b7fe1f7",
