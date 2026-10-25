@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Proofs.Flock.Soundness.Discharge.ZkLink.Link
 import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
 import Proofs.Flock.Soundness.Instance
 
@@ -28,7 +29,13 @@ A refused hidden-output table carries the reference setup's regions and `contra`
   (`ksClosedM1`, `rateM1`), whenever `2^23 < ek`.
 * `DrawSetupZHJ.tabAt_M1W`, `table_M1W`, `refused_M1W`, `tableZHJ_M1W`, `planZHJ_M1W`: every table of `planZHJ` is at
   `M1W` (`Stmt.setupHidden`'s `checkInRange`, `Zk.schedule`'s `schedule_m1`, the inner code's `innerN_pow`), and
-  `ksAvgStrictZ_planZHJ_le_m1`, `ksAvgStrictZ_planZHJ_le_closed` read the bounds at that plan.
+  `ksAvgStrictZ_planZHJ_le_m1`, `ksAvgStrictZ_planZHJ_le_closed` and `rateZ_planZHJ_le` read the bounds at that plan.
+* `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `δ_link` (`linkBoundZC`), is at most the largest
+  `Σ_{u ∈ S} |io u|` over draws `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
+  at most `k_d·r` at draws of `k_d` units with `|io u| ≤ r`.
+
+The file sits under `FailClosed/` because it reads `Stmt.InRangeWide` and `piopNumMaxWide` (`FailClosed/Numeric.lean`),
+which import the `ZkHidden` headlines.
 -/
 
 namespace FlockSoundness.Accounting
@@ -348,10 +355,57 @@ theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : 
         (div_nonpos_of_nonneg_of_nonpos (ksStrictZ_nonneg _ j k qF qS) h0))).trans zero_le
     · refine ENNReal.ofReal_le_ofReal ((div_le_div_of_nonneg_right hS h0.le).trans ?_)
       exact div_le_div_of_nonneg_left (ksClosedM1_nonneg k qF qS) (by linarith) (by linarith)
-  refine (avg_mono hc).trans ?_
-  rcases isEmpty_or_nonempty L.Ω with hΩ | hΩ
-  · simp [avg]
-  · exact (avg_const _).le
+  exact (avg_mono hc).trans (avg_const _).le
+
+/-! ## `Q_s`, the expected number of commit strings the drawn units read -/
+
+section Qs
+
+variable {K : Type} [Field K] [Fintype K] [DecidableEq K] (A : Arith F K) {C : Audit.Circuit} {n : ℕ}
+  (P : Audit.Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
+  {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
+  (vb : ValueBindingZ A P planZ tab decode Hc)
+
+/-- **`Q_s` from the partition**: `Q_s = Σ_c |Ω_c|/|Ω|`, `linkBoundZC`'s factor, is at most any bound `B` on the
+committed wires the drawn units read or write, `Σ_{u ∈ S} |io u|`, at every draw `S`. A draw reads commit string `c`
+only through a wire of a drawn unit's `io` that `c` holds (`ReadsZ`), so it reads at most that many strings, and
+`Σ_c |Ω_c|/|Ω|` averages that count over the draws. -/
+theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io u).card ≤ B) :
+    ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ B := by
+  classical
+  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card ≤ B := fun ω => by
+    refine le_trans (Finset.card_le_card (t := (L.draw ω).biUnion fun u => (P.io u).image vb.pos) ?_)
+      (Finset.card_biUnion_le.trans ((Finset.sum_le_sum fun u _ => Finset.card_image_le).trans (hB ω)))
+    intro c hc
+    obtain ⟨u, hu, g, hg, rfl⟩ := (Finset.mem_filter.1 hc).2
+    exact Finset.mem_biUnion.2 ⟨u, hu, Finset.mem_image.2 ⟨g, hg, rfl⟩⟩
+  have hsum : ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c) ≤ Fintype.card L.Ω * B := by
+    calc ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c)
+        = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsDrawZ A P planZ tab vb c ω).card :=
+          Finset.sum_congr rfl fun c _ => Fintype.card_of_subtype _ fun ω => by simp
+      _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card := by
+          simp only [Finset.card_filter]
+          exact Finset.sum_comm
+      _ ≤ ∑ _ω : L.Ω, B := Finset.sum_le_sum fun ω _ => hω ω
+      _ = Fintype.card L.Ω * B := by simp
+  have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
+  rw [← Finset.sum_div, div_le_iff₀ hΩ]
+  have := (Nat.cast_le (α := ℝ)).2 hsum
+  push_cast at this
+  linarith [mul_comm (B : ℝ) (Fintype.card L.Ω : ℝ)]
+
+/-- **`Q_s ≤ k_d·r`**: at draws of at most `k_d` units, each with at most `r` committed wires in its `io`. -/
+theorem qs_le_mul (L : Law n) (kd r : ℕ) (hd : ∀ ω, (L.draw ω).card ≤ kd) (hr : ∀ u, (P.io u).card ≤ r) :
+    ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ kd * r := by
+  have h := qs_le_io A P planZ tab vb L (kd * r) fun ω =>
+    (Finset.sum_le_sum fun u _ => hr u).trans (by
+      rw [Finset.sum_const, smul_eq_mul]
+      exact Nat.mul_le_mul_right r (hd ω))
+  push_cast at h
+  exact h
+
+end Qs
 
 end FlockSoundness.Discharge.ZkLink
 
@@ -432,6 +486,12 @@ theorem planZHJ_M1W :
   intro S R j
   simp only [planZHJ, List.get_ofFn]
   exact tableZHJ_M1W dj y₀ S _
+
+/-- **Every table of the hidden-output plan has level-0 rate at most `rateM1 k`**, the `ρ` the link and count theorems
+take (`hr`). -/
+theorem rateZ_planZHJ_le (k : ℕ) :
+    ∀ S (R : Reg) (j : Fin (planZHJ (Reg := Reg) dj y₀ S R).length), rateZ (planZHJ dj y₀ S R) j k ≤ rateM1 k :=
+  fun S R j => rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) k
 
 /-- **`ε_ks` at the hidden-output plan is at most `ksAvgStrictZm1`** (`ksAvgStrictZ_le_m1w` at `planZHJ_M1W`). -/
 theorem ksAvgStrictZ_planZHJ_le_m1 (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
