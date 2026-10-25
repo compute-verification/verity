@@ -22,7 +22,7 @@ from verity.ml.commitments.rowleaf import bit_row
 #: 16 H + 1
 SELECT = {(128256, 2048): (32792, 0, 61464), (128256, 4096): (65560, 0, 122904)}
 #: (V, H) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to
-READS = {(128256, 2048): 0, (128256, 4096): 0}
+READS = {(128256, 2048): 32322856, (128256, 4096): 45294886}
 
 
 def _table(rng: random.Random, V: int, H: int) -> tuple[CommitmentDomain, list[list[int]], list[bytes], RT.RowTable]:

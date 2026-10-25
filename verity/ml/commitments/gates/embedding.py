@@ -34,8 +34,9 @@ outside the proof. A Boolean Definition has no assertion, so the read returns it
                                    of h and one for ok
 
 **Cost** at V = 128,256 (D = 17): the row digest is nine compressions an 8,192-bit segment and s / 2 + 1 for the outer hash
-of s segments (39 at H = 2,048, 77 at H = 4,096), the hm96 leaf four, the read's leaf two and its 17 nodes three each.
-``READS`` in the tests pins the gates.
+of s segments (39 at H = 2,048, 77 at H = 4,096), the hm96 leaf four, the read's leaf two and its 17 nodes three each:
+5,392,976 ANDs of 32,322,856 gates at H = 2,048 and 7,574,672 of 45,294,886 at H = 4,096. ``READS`` in the tests pins the
+gates.
 """
 from __future__ import annotations
 
