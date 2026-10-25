@@ -18,7 +18,7 @@ profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of
 ``answer``. ``composed`` is `compose.composed`'s, ``horizon`` `compose.horizon`'s over the periods so far.
 
 ``--tools FILE``: JSON naming the built executables (``flock-circuit``, ``flock-verify``, ``flock-firewall``,
-``m0-pythonpath``). ``--tamper P,...``: those periods' loop records outputs that are not its model's (`serve --tamper`)
+``m0-pythonpath``, ``pous-run-protocol``, ``pous-setup``, ``remote-audit-protocol``). ``--tamper P,...``: those periods' loop records outputs that are not its model's (`serve --tamper`)
 and its prover skips its self-check, so a drawn unit's proof is of a false witness. Only the window's public files are
 kept in ``DIR`` (never a prover's file: its rows and salts).
 """
