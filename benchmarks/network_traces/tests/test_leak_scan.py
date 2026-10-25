@@ -296,5 +296,49 @@ def test_a_rows_tail_is_cut_and_a_leak_written_only_there_is_found(tmp_path):
     vdir = _streams(tmp_path / "file", {})
     (vdir / "openings.json").write_bytes(wit)
     assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads) == (["wit 0 @4"], {})
-    with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece"):
+    with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece.*find_whole"):
         LS.cut({"cin 0": bytes(12)}, 16)
+
+
+def test_a_short_row_is_found_whole_and_judged_by_the_rule(tmp_path):
+    """`find_whole` finds a row shorter than a piece (a 12-byte carry row, an 8-byte served row) whole, each distinct row
+    once: planted inside one field of a stream it is leaked; across two fields it is no find; with its bytes in the public
+    rows it is public; as hex in a file the format doesn't read it is leaked, in either case, but a nibble off that hex it
+    isn't found. The prover's control is to hold every row, the files searched are the piece scan's, and a row of 16
+    bytes or more, or under 6, is refused."""
+    row, srb = bytes(range(0xa0, 0xac)), struct.pack("<4H", 1, 0, 0xa5, 3)
+    rows = {"cout 0": row, "cin 1": row, "srb 0": srb}
+    (tmp_path / "v").mkdir()
+    vdir = _streams(tmp_path / "v", {112: (row, b"")})
+    got = LS.find_whole(None, rows, vdir, reads=_reads)
+    assert (got["rows"], got["verifier_found"], got["files"][REPS[0]]["found"]) == (2, ["cout 0"], {"cout 0": 1})
+    assert {k: got[k] for k in ("leaked", "structured", "placed")} == {
+        "leaked": ["cout 0"], "structured": {}, "placed": {"cout 0": [(REPS[0], 112, "field")]}}
+    assert LS.find_whole({"files": {REPS[1]: {}}}, rows, vdir, reads=_reads)["verifier_found"] == []
+
+    vdir = _streams(tmp_path / "v", {90: (row, b"")})
+    got = LS.find_whole(None, rows, vdir, reads=_reads)
+    assert (got["leaked"], got["structured"]) == ([], {"cout 0": "across"})
+
+    vdir = _streams(tmp_path / "v", {112: (row, b"")})
+    (vdir / "pub-4.bin").write_bytes(b"\1" * 8 + row)
+    assert LS.find_whole(None, rows, vdir, reads=_reads)["structured"] == {"cout 0": "public"}
+    (vdir / "pub-4.bin").unlink()
+
+    for hx, want in ((srb.hex(), ["srb 0"]), (srb.hex().upper(), ["srb 0"]), ("0" + srb.hex(), []), ("0" + srb.hex() + "0", [])):
+        (vdir / "openings.json").write_text(json.dumps([{"salt/o0": hx}]))
+        got = LS.find_whole(None, rows, vdir, reads=_reads)
+        assert (got["verifier_found"], got["leaked"]) == (["cout 0", *want], ["cout 0", *want]), hx
+    assert got["placed"] == {"cout 0": [(REPS[0], 112, "field")]}
+    (vdir / "openings.json").write_text(json.dumps([{"salt/o0": srb.hex()}]))
+    assert LS.find_whole(None, rows, vdir, reads=_reads)["placed"]["srb 0"] == [("openings.json", None, "file")]
+
+    (tmp_path / "inst-2.bin").write_bytes(bytes(5) + row + bytes(3) + srb)
+    assert LS.find_whole(None, rows, vdir, tmp_path / "inst-2.bin", reads=_reads)["control"] == {
+        "file": "inst-2.bin", "holds_all": True, "missing": []}
+    (tmp_path / "inst-2.bin").write_bytes(bytes(5) + row)
+    assert LS.find_whole(None, rows, vdir, tmp_path / "inst-2.bin", reads=_reads)["control"]["missing"] == ["srb 0"]
+    assert LS.find_whole(None, rows, vdir, tmp_path / "inst-2.bin", {"cin 1"}, reads=_reads)["control"]["holds_all"]
+    for n in (5, 16):
+        with pytest.raises(ValueError, match="aren't 6 to 15 bytes"):
+            LS.find_whole(None, {**rows, "x": bytes(n)}, vdir, reads=_reads)
