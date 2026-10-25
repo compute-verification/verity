@@ -19,6 +19,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from verity_vllm.errors import Refused
+
 Tensor = Any
 
 
@@ -124,12 +126,6 @@ class Arm:
     spec: PassSpec = field(default_factory=PassSpec)
 
 
-class Refused(ValueError):
-    def __init__(self, reasons: Sequence[str]) -> None:
-        self.reasons = tuple(reasons)
-        super().__init__("linear stack refused: " + "; ".join(self.reasons))
-
-
 class _WithWeight:
     """The layer vLLM's own ``apply`` sees under a source: the source's weight, and every other attribute the layer's."""
 
@@ -182,7 +178,7 @@ class Stack:
                              f"{self.executor.name if self.executor is not None else 'none'}")
         bad = self.refusals(arm.spec) if arm is not None else []
         if bad:
-            raise Refused(bad)
+            raise Refused(bad, "linear stack")
         self.active = arm
 
     @property
@@ -206,7 +202,7 @@ class Stack:
         spec = self.active.spec if spec is None else spec
         bad = self.refusals(spec)
         if bad:
-            raise Refused(bad)
+            raise Refused(bad, "linear stack")
         self._pass = self.executor.begin(spec)
         try:
             yield self._pass
@@ -241,5 +237,5 @@ class Stack:
         return self._pass.call(site, x, layer.weight if weight is None else weight, bias)
 
 
-__all__ = ["Arm", "Control", "ExecutorPass", "Forward", "LinearExecutor", "LinearSite", "PassSpec", "Refused", "Shard", "Stack",
+__all__ = ["Arm", "Control", "ExecutorPass", "Forward", "LinearExecutor", "LinearSite", "PassSpec", "Shard", "Stack",
            "Tensor", "WeightReader", "WeightSource"]
