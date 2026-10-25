@@ -97,6 +97,12 @@ A spec-level reference for network accounting's timing channel:
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
   (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+- the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
+  checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
+  lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
+  evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
+  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
+  (`free_width`), and the charge is ℓ_w;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
@@ -225,7 +231,7 @@ what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge
 `window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
-`Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:
+`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;

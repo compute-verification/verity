@@ -1,4 +1,4 @@
-"""The row tables of a serving-rows window (`commit.serving_rows.RowTable`), as serving commits them step by step and PoUW binds
+"""The row tables of a serving-rows window (`ml.windows.rows.RowTable`), as serving commits them step by step and PoUW binds
 ``pouw.roots`` to them.
 
 One row table per int8 quantize output: the token rows of one linear at one engine step, one ``hm96-sha512/row-seg/v1`` leaf each
@@ -33,7 +33,7 @@ import numpy as np
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.merkle import CommitmentDomain
 
-from . import serving_rows as CS
+from verity.ml.windows import rows as CS
 
 __all__ = ["COLUMNS", "StepRoots", "Table", "check_order", "find", "layer", "of_dir", "of_registration", "opening", "row_table",
            "step_roots", "table_key", "verify", "witness"]
