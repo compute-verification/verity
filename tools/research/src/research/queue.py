@@ -102,7 +102,8 @@ the queue's state.  A sync keeps the longest prefix of that chain which still ma
 order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
 merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
-PR whose head contains another open PR's head goes in after it and waits while that one waits.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
+change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
@@ -429,6 +430,16 @@ def label_target(pr: int, head: str) -> str:
     return f"pr:{pr}@{head}"
 
 
+def lean_running(state: dict, pr: int) -> str | None:
+    """The run ids of a running review-landing Lean check (`drive["lean"]`) whose checked prefix holds ``pr``, or None: an
+    ejection of ``pr`` waits to rebuild `next` until it ends, as a sync would take its commit off `next` and cancel it (24 Oct:
+    r20261024-165000-3c72 was cancelled mid-audit)."""
+    for rec in ((state.get("drive") or {}).get("lean") or {}).values():
+        if rec.get("state") is None and any(n == pr for n, _ in rec.get("members") or ()):
+            return " ".join(rec.get("ids") or ())
+    return None
+
+
 def _who(name: str) -> str:
     return name.strip().lstrip("@").lower()
 
@@ -733,6 +744,8 @@ class Queue:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
             e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
+        for e in out.values():
+            e.after = tuple(a for a in e.after if not self._carried(e.pr, out[a], state))
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
@@ -740,6 +753,21 @@ class Queue:
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
                     e.state, e.why, changed = "waiting", f"contains #{blocking[0]}, which isn't admitted", True
         return out
+
+    def _carried(self, p: PR, a: Entry, state: dict) -> bool:
+        """Whether ``p`` carries the change of ``a``, a PR whose head it contains and that isn't marked ready: the same owner
+        rebuilt it as ``p``, or ``a``'s owner withdrew its mark (`eject`, or a `ready = false` label).  Then ``p`` doesn't wait
+        for ``a`` and goes on without it below (24 Oct: lanes rebuilt #3401, #3570 and #3554 by hand to drop a superseded PR
+        that no one's tooling may close)."""
+        if a.state == "ready" or a.pr.owner is None or self.rules().hold_label in a.pr.labels:
+            return False
+        who = _who(a.pr.owner)
+        ejected = state["ejected"].get(str(a.pr.number)) or {}
+        return (_who(p.owner or "") == who
+                or (ejected.get("head") == a.pr.head and _who(ejected.get("by") or "") == who)
+                or (self.marked_by is not None and not self.ready(a.pr.number, a.pr.head)
+                    and not (self.before_cutoff and self.before_cutoff(a.pr.number, a.pr.head))    # then it's a `true`
+                    and _who(self.marked_by(a.pr.number, a.pr.head) or "") == who))
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
@@ -1791,13 +1819,16 @@ class Preflight:
                 try:
                     if labels.ready(p.number, p.head):
                         continue
+                    if _who(p.owner) in (_who(pr.owner or ""), _who(labels.marked_by(p.number, p.head) or "")):
+                        continue                    # this PR carries its change (`Queue._carried`)
                 except QueueError as e:
                     self.log(f"research queue: preflight: can't tell whether #{p.number}, which this head contains, is admitted ({e})")
                     continue
                 when = labels.before_cutoff(p.number, p.head)
                 why = f"isn't marked ready at {p.head[:8]}" + (f" (its mark, from {when}, is before `marked_after`)" if when else "")
-            out.append(f"it contains #{p.number}'s head {p.head[:8]}, which {why}, so drive holds this PR behind it: close "
-                       f"#{p.number} if this PR carries its change, or mark #{p.number} ready so it lands first")
+            out.append(f"it contains #{p.number}'s head {p.head[:8]}, which {why}, so drive holds this PR behind it: if this PR "
+                       f"carries its change, #{p.number}'s owner withdraws its mark (`research data label pr:{p.number}@{p.head[:12]} "
+                       f"ready false --by OWNER`), or a PR of the same owner carries it; else mark #{p.number} ready so it lands first")
         return out
 
     def _merged(self, pr: PR, base: str, onto: str, notes: list[str]) -> list[str]:
@@ -2463,7 +2494,10 @@ def main(argv: list[str]) -> int:
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
-        if on_drive():
+        if on_drive() and (busy := lean_running(q.load_state(), a.pr)):
+            print(f"research queue: #{a.pr}'s mark is withdrawn; the Lean check {busy} covers it, so drive rebuilds `{q.branch}` "
+                  f"the tick after that check ends, and lands nothing from #{a.pr} up meanwhile")
+        elif on_drive():
             q.sync()
         else:
             print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive "

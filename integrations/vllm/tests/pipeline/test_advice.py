@@ -16,7 +16,7 @@ from verity_vllm.config import UsageError
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 
-C = ADV.Compiler("test-compiler", "ab" * 64)
+C = ADV.registered_compiler("test-compiler", "ab" * 64)
 
 
 def _served(tmp_path, *, seed: int = 0, n: int = 12, gap: bool = True, **sched_kw):
@@ -168,7 +168,9 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     rep = json.loads((out / "private" / "report.json").read_text())
     assert rep["T"] == 50 and rep["release"]["tau_s"] == 0.2
     assert rep["registration"] == json.loads((out / "registration.json").read_text())
-    assert rep["registration"]["binding"]["compiler"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
+    capped = ADV.registered_compiler(ADV.COMPILER, "ab" * 64)
+    assert rep["registration"]["binding"]["compiler"] == {"name": capped.name, "digest": capped.digest}
+    assert rep["registration"]["compiler"]["inner"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
     private = out / "private"
     assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
 

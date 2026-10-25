@@ -54,14 +54,14 @@ def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
 
 
 @pytest.mark.parametrize("model,digest", [
-    ("smollm2-135m", "4fd836ffc4f1a9894cfc099add65e2f28ea260bf80714580b79489ef17d10754e68ddd9b9becfd444c97ba724f95e5d142dc464dae13dad67bef43850f2070b9"),
-    ("llama32-1b", "773b545605765fe927f70717bc20ea19076aeb3ad3e4f83bf398cdc8fd7421637be2f3e7b7c653292b2031192eb59bdff86965fd460aefcda517702befff323a"),
-    ("tinyllama-11b", "75eeda370d481672af5f189578e1b6711f3d05104d1e0fca99d27c9e9d0310be9a87ba03c65908b04ac4d313d0476dc09c32b8387d66084fb4cbdd777c3193ea"),
-    ("qwen25-05b", "452681af0e5f7cdd4003098f333d0c588d0128d98bccdef377d89fa8ef42524823045490ce7e6d3b7f435a6362c7603c7637eae57c1709299e27084826874b94"),
-    ("phi3-mini", "ecd84c104c7ae0368a596d0f47e83f9eda564ef88c5ca692c8226a24a7783eaf5c264f8f1e21fb638db052c99d24ab8ceb8f9c4e762dc0f668f6314822eaa394"),
-    ("qwen3-4b", "21acad0cea8011bce8e3a83844f57645a04d6fa9ef9c6c1ff30640e868c340368705a11e7e405c6fca870a583a9b1aba74367e316f234a017a7cb3cc6a799fb8"),
-    ("olmoe-1b-7b", "60982699f17e47e048ea3ac7d3dc6c28bec57a74f0c6002f4e4d89a4e776b047e010ba772125d21bf9afa39cefe9e8c4152d4952e87056169e458de826c517e7"),
-    ("qwen3-30b-a3b", "98a180a562abf1d603951ed135a1e26a084cc48cb53cdbfbb7b0e26ca2139244cfc036bdb8ab8af0e9a9a4786ef8372ce478a365253791ba35479a5b2bf0717c"),
+    ("smollm2-135m", "d469f1d4eefafff23e468803ca7894d762d80f8eb81cc2eb10e689629207497d2b4967993360d9c1bb535b3faa3c95f5aa7b18bf4ffd5752935e8a62d18b7ee4"),
+    ("llama32-1b", "5e34739ca3f59dda9febb8dc7c89ab8f4bf146945168079d83c420dc4dd49676034115612e78a3642471d3ebca1e1573e8618d795c31d7e6f118292ccb40e903"),
+    ("tinyllama-11b", "18372d884c9c7551bca643d830ab55c7c8e53568c7ee2528819ba997a657e1f7fc97b82068a3de2a3d373cc8a328fa9108115e440f311c17209800e695769d83"),
+    ("qwen25-05b", "bff68977892d274b710782a1b5db23e4c5485f716f1aa23b9872744d50cb43692f878fd0d20c83bec28f2b261ac833019cf0a1a80ae3f678cc54f92ffc6e73e9"),
+    ("phi3-mini", "3c7404516954d1a8cfb4dcc00c2a8a10d8ecce091c4e7c04ff5ae3f8659e57faa630797df41e5659bda9ad24225cdc2f8f1a6a08633aa3790a04532c169cda43"),
+    ("qwen3-4b", "424f31562fc5c47ffcf92f885185c46c1f81914a4d6ea2b7615f08c2ee8e94a9a81ede55594ee919fe90a1cc3e165838b144823baf13ea7bb692221a23a3761b"),
+    ("olmoe-1b-7b", "3f690ae479bb20888cc3a3ea61c2ac25693701c75a0c5fae2de177b167fca7959ad66e7900b1c6e264601ea6984fd8fe7de08c832268c91b43be8e6910ac3ca6"),
+    ("qwen3-30b-a3b", "d12a2b4c96ad1b35f6288561a4ae68f9262b645098a1b2f3d6594c29494c523a33bd7c1ce3f793b87b664399de816adb768019f1fc133301ecae71279e699289"),
     ("gemma2-2b", "b0688044e6a562d2cbb7a6fa6995deb9025d08d134b331236dc4c16ffedf8e38cb093a5e521052cb8c19d5d1641b0c8bb725eddb50e1a0f480149354bbab15c7"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
@@ -79,20 +79,20 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "52e6bb0b37e31ec3bdcc976027f412955be60cdd7bcd1ed4982aee7b4b716681a00323889897a394808aa040994f53a3e210dc603dba9a65751817e1df348f5c"
-    assert r.n_root_nodes == 86738
-    assert S.predict_workload(phi)["digest"] == "345798f4dc27339a239f17acd3232b758b4b242092d87e9c558ea9d02ec202f08b14212f8c68a7e6dbc5413e4f235a7085fcd15a66b021cd51d8e3755e7e2f06"
+    assert r.digest == "91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d8411888"
+    assert r.n_root_nodes == 84698
+    assert S.predict_workload(phi)["digest"] == "24835950b9fd8c930fcf2077b8a767921c9a5ddc6e12cfe1ed20c4a2030c658a60ec601035e171e4f9197de081ad75b6b06da9ea7be4742a00aa6d0d62ba242f"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "71d9310ecaef13138ee37e31fe4f5be475d232d952058fec72169232cae90136800b33b24c632e9dab2d0fbf6957288f88927c3c651bc7c2ba839514f9c484cc"),
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "3343270c8e008ad0106a174bad32c6a23c428c7d821e8a2aa251e8edbdcf0b9d77972761c98e5203ad50c0977dd11546ff10c20f566920a72b833ad61efbff90"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "3e1e44f5367000d4696ccb03551c70801dc794a69030e28eeeb156c9533ebf774b4dc40f11a9057f28a83340d96a10467814c6cbc7160f1178e670822a0f2764"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "a80fefc8ead7c8d09c2bf2b43ca6ed34296ec4db8d9891b71a850a90613cae6a77a4be0cde7b22a9a0f693c650684380712438a452e6eeb0287ddfdf037b4b6a"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "15bf71465c58172b07dbd848f434f886274de57e88d30fe8d41075b08cc45c8cfedc7a5164343af904af3cc7f47227cdc51725704a1f28e6e82c3bdef4425b8e"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "8c4abf0f43e41613ab749374f38aaade322cf7a2cc8e692c68de5b7c28840aa1c77933a18c89db9a55f741895621d0d7679e1e6d7201b485211ecec09511e6b8"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "0605dc64bd0076b31c8a1363c4d3443a07a09fc7dabcd2734bf521d544f96c3dc1a24db315b928ee8b42fd690230e85c2f07345156da73610a486300f72f366d"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "c2a420cc21022518f94f0e6cf7e06a6066049cd1a48d3bc6506324c51722d6ec01ae9b10bc7d658b518ab01ceb949160f4ce86eed72ae134748a0f40f3e5cd96"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "25068910fdb6ab3bde8890d77c58d85d05b2833098ef4b1701b6c84318683ea79722e26b31e41255f03e29ddfe806241fce1aa93e0a299ec2415ee029e90b4e6"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "5c9905db914095dd2e587b3c48dc004d6037a274b6d3f274381e765e44afa8bc9ab165e8f35ebcb417ffb9def35d3425ff752c94bc0c1a464d3f3951f81a4cf4"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "258cb9677a12f76c80ec70b607060d39092bd7501c7349607b8bb58ce274359e182b6f3b40bf7170bf175ea310eebead5f51b765706a975401cf72bed56185c4"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "b882f289c19f58594f4c15051c32f54554bac3ad5a3ceaf6dac6a052e7dd81fbd709cf072d761ecdc3b353c955359a2f845850e871d727dae630d721da1a3abd"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "5775d49eb16f725fc5ead7142a859c2502b9fd113ed8b8842277cd9353c93b3ccd02026c77f3a2625ff4456700f2e4f87654b6bd98095ed9c75c0704e0d87432"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "2a44e1dbe163187916505e089bd8370f67eee9ee1790880f91305c128e2a3275725585302d1935de3fa0f47e5fb15a5cd53fad803b80b18c258e9ea155842449"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -111,7 +111,7 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
-    assert S.predict_workload(phi)["digest"] == "4cd839563c959eee6f1abaf647bd7d771a842cb8940ed5a92443e85e2ca48cd7f5aecfa1f80d8084c276d3c32a59b1dbf36770a18cb8015ec6ebc8c62cb9c1da"
+    assert S.predict_workload(phi)["digest"] == "93df4dd412d503b870425a351b2d46c916f7ce83e194b92ea2acab147a5aa10389bae4320dc5f1bedc56c7dad10e040cd80791cb90b0d8dfb9eb497d3682973c"
 
 
 @pytest.mark.slow
@@ -206,8 +206,8 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "740d7f22434aa56824d598e4b66f8223c45546ca6e1428639951e5299b7f1968f209b61903452be424a6f407d6d2197658d39073b97bcdf7539c0a923c38ccda"),
-    pytest.param({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49",
+    ({**STOCH}, 8, "5e6a93b800645792671c4a55c6a3981d8f7dc9ae1a8c03ac754e1887a9dac57f78b4fbeb1f951f625feb7a1beee1ac9973c80b555919144be4250186728fae0e"),
+    pytest.param({**STOCH, "top_p": 1.0, "splits": 32}, 1, "a027f8b304f152187eef0e47466573131375e5dc5f75a8b5abb8ca49490b65fcf9e7fc1e040b78fb0cca04e367a4686ef0fad45153d7c2e6ecc1c282636103b0",
                  marks=pytest.mark.slow),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):

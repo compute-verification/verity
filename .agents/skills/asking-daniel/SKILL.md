@@ -25,8 +25,9 @@ spend included, is its owner's call, and his standing rulings stand until he rev
 
 Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't money, keys or access
 goes on its page already decided: Status *Decided by lane*, Choose set to your pick, and Decision "Provisionally accepted
-(Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and act on
-it; he reviews them as a batch in the database's "Provisional, to review" view and can reverse any. On a page that does
+(Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and
+`--provisional` (implied by a `--note` starting "Provisionally accepted"), so the card says your lane decided, not Daniel, and act
+on it; he reviews them as a batch in the database's "Provisional, to review" view and can reverse any. On a page that does
 wait on him, leave Choose empty: a Choose there reads as his pick.
 
 A decision that waits in a note or a thread waits forever: every ask gets a card, which mentions him (1 Oct).

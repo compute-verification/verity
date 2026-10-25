@@ -13,11 +13,14 @@
 //                frame leaf (rank, rank, "hm96-sha512/row-seg/v1", h); a pad above the count; a given table's leaves are
 //                another table's roots, so only its pads
 //   h1c_level    one thread a node of level d of every table (`merkle.tree_levels`); the top one is the table's root
+//   h1c_tail     (H1C_NMID) h1c_build of given tables, then of the given table over their roots: what reads no leaf
+//                (domains, pads, each level's Snap) in h1c_tail_pre's launch, every level of both in h1c_tail's one
 //   h1c_a_*      a served call's A table in one launch, its row-independent parts once a step (below); h1c_a_form(2)
 //                serves it from h1c_a_call2_k, the same table with each compression on its critical path paired, and
 //                h1c_a_form(3) from h1c_a_call3_k, paired with every message built in registers
 //
-// A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
+// A row is `body` bytes at data + i stride, then len - body bytes at tail + (i / tdiv) tail_stride (an A or B row's f32
+// scale; tdiv = n past K = 4096, where each of a K row's n chunk leaves ends in the row's one scale).
 // H1C_HB = 1: h1c_build's four kernels hash through Hb (below: the state in registers, the block in shared memory) rather
 // than Hs, the same bytes in the same order.  With it, H1C_LVF = L >= 0 builds every level from L up in one launch (a
 // block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them,
@@ -39,6 +42,8 @@
 // (frame, "node", the table's domain, uint(lv) and seven of uint(idx)'s length's eight bytes) are its (table, level)'s,
 // so h1c_levels' block takes each level's Snap once (a thread a level, before its first level) and h1c_level's block
 // its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
+// H1C_MKN = 1 (H1C_MK): hb_mk folds M_key y a nibble at a time, a row of a nibble table each, not a column a bit.
+// H1C_TAILW = 1 (H1C_NMID): h1c_tail's nodes hash from their messages built as words in registers (tail_node).
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -75,6 +80,12 @@
 #ifndef H1C_NMID
 #define H1C_NMID 0
 #endif
+#ifndef H1C_MKN
+#define H1C_MKN 0
+#endif
+#ifndef H1C_TAILW
+#define H1C_TAILW 0
+#endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
 #define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
@@ -84,6 +95,7 @@
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID && !H1C_NMID),
               "H1C_LVF, H1C_DOMSEG, H1C_MK, H1C_SEGMID and H1C_NMID are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
+static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time");
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 
 namespace sh {
@@ -131,6 +143,7 @@ struct H1Tab {
   const u64* xd;
   const uint8_t* rlive;
   int rbw;
+  int tdiv;  // rows a tail: row i's tail is tail i / tdiv (0 or 1: its own)
 };
 __device__ __forceinline__ bool row_dead(const H1Tab& T, long long i) { return T.xd && !T.rlive[i / T.rbw]; }
 
@@ -217,7 +230,7 @@ __device__ int dec(u64 v, uint8_t d[20]) {
 __device__ __forceinline__ u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
 
 __device__ __forceinline__ uint8_t row_byte(const H1Tab& T, long long i, int p) {
-  return p < T.body ? T.data[i * T.stride + p] : T.tail[i * T.tail_stride + (p - T.body)];
+  return p < T.body ? T.data[i * T.stride + p] : T.tail[(T.tdiv > 1 ? i / T.tdiv : i) * T.tail_stride + (p - T.body)];
 }
 
 // bytes [off, off + m) of row i
@@ -873,6 +886,48 @@ extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, in
 // so M_key y is the XOR of the columns of y's set bits.  The block stages MKW words' columns at a time in bf (every
 // thread of the block, at its barriers), and its threads read each column at one address: a broadcast, 1536 columns
 // from shared memory rather than 192 rows from L2.  y comes back in its order (24 rotations).
+#if H1C_MKN
+// H1C_MKN: the same XOR a nibble at a time.  Byte table p's rows v << 4 and v (v < 16) are its high and low nibbles'
+// tables, so M_key y is the XOR of one row of each of y's 384 nibble tables.  A stage is one y word's 16 tables (16 KB
+// of bf), and a row's 16-byte chunk k sits at slot k ^ (v >> 1 & 3): the lanes reading chunk k of rows v < 8 hit eight
+// different bank groups.  A row a nibble, where the columns cost a masked row a bit.
+static_assert(16 * 16 * 64 <= HT * HB, "a word's nibble tables fit bf");
+__device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restrict__ btab, uint8_t* bf, bool real) {
+  uint4* cs = reinterpret_cast<uint4*>(bf);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) mk[k] = 0;
+#pragma unroll 1
+  for (int wd = 0; wd < 24; ++wd) {
+    __syncthreads();
+    for (int q = threadIdx.x; q < 16 * 16 * 4; q += HT) {
+      const int t = q >> 6, r = (q >> 2) & 15, k = q & 3;  // table t = 2e + h (byte e from the top, h 1 its low nibble)
+      const u32 v = (t & 1) ? (u32)r : (u32)r << 4;
+      cs[(q & ~3) | (k ^ ((r >> 1) & 3))] =
+          __ldg(reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + (t >> 1)) * 256 + v) * 8) + k);
+    }
+    __syncthreads();
+    const u64 w = y[0];
+#pragma unroll
+    for (int k = 0; k < 23; ++k) y[k] = y[k + 1];
+    y[23] = w;
+    if (!real) continue;
+    const uint8_t* cb = reinterpret_cast<const uint8_t*>(cs);
+#pragma unroll
+    for (int t = 0; t < 16; ++t) {
+      const u32 v = (u32)(w >> (60 - 4 * t)) & 15u;
+      const u32 s4 = (v << 3) & 0x30u;
+      const uint8_t* row = cb + (t << 10) + (v << 6);
+#pragma unroll
+      for (int k = 0; k < 4; ++k) {
+        const uint4 q = *reinterpret_cast<const uint4*>(row + (((u32)k << 4) ^ s4));
+        mk[2 * k] ^= (u64)q.y << 32 | q.x;
+        mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
+      }
+    }
+  }
+  __syncthreads();
+}
+#else
 constexpr int MKW = 4;  // y words a stage: 8 MKW positions of 8 columns of 64 bytes
 static_assert(MKW * 8 * 8 * 64 <= HT * HB && 24 % MKW == 0, "a stage fits bf and the stages cover y");
 __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restrict__ btab, uint8_t* bf, bool real) {
@@ -914,6 +969,7 @@ __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restric
   }
   __syncthreads();
 }
+#endif
 
 // row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf.  sn (H1C_MID,
 // leaf_head's snapshots) null: every message from its first byte
@@ -1225,6 +1281,117 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_levels(const H1Tab* __restr
     __syncthreads();
   }
 }
+
+#if H1C_NMID
+// h1c_tail: two sets of given tables, mid's roots another's (rnd's) leaves.  h1c_tail_pre_k is what reads no leaf, a block
+// a table (mid's, then rnd's): its domain, its pads and each level's Snap into snaps (NMAXD Snaps a table); h1c_tail_k a
+// block a mid table, its levels from those Snaps, and the last block to finish rnd's levels, so the part that waits on
+// the leaves is one launch
+extern "C" __global__ void __launch_bounds__(LT) h1c_tail_pre_k(H1Tab* __restrict__ mid, int nmid, H1Tab* __restrict__ rnd,
+                                                               const int* __restrict__ step, u64* __restrict__ snaps) {
+  __shared__ __align__(16) uint8_t bf[LT * HB];
+  const int t = blockIdx.x;
+  H1Tab& T = t < nmid ? mid[t] : rnd[t - nmid];
+  uint8_t* b = bf + threadIdx.x * HB;
+  if (threadIdx.x == 0) hb_domain(T, (u64)(long long)*step, b);
+  __syncthreads();
+  const long long width = 1LL << T.depth;
+  for (long long i = T.count + threadIdx.x; i < width; i += LT) {
+    Hb s;
+    hb_init(s, b);
+    hb_frame(s, "pad", 3);
+    hb_be(s, 64, 8);
+    hb_words(s, T.dom, 8);
+    hb_uint(s, (u64)i);
+    u64 out[8];
+    hb_final(s, out);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) T.level[i * 8 + k] = out[k];
+  }
+  for (int q = threadIdx.x; q < T.depth; q += LT) node_snap(T, q, b, snaps + ((size_t)t * NMAXD + q) * NSNAP);
+}
+// H1C_TAILW = 1: a node whose Snap leaves one byte pending and whose idx is below 256 (its children at byte 3, as
+// h1c_a_call3_k's) hashes its two blocks from words built in registers, one inlined compression, not through Hb's
+// shared-memory block and hb_block's call; any other node through hb_node_snap
+__device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, long long idx, const u64* snap) {
+#if H1C_TAILW
+  if (idx < 256 && (snap[8] & 127) == 1) {
+    const long long width = 1LL << T.depth;
+    long long off = 0;
+    for (int e = 0; e < lv; ++e) off += width >> e;
+    const u64* in = T.level + 8 * (off + 2 * idx);
+    u64 c[16], h[8];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) c[i] = __ldcg(in + i);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) h[i] = snap[i];
+    const u64 bits = 8 * (snap[8] + 146);
+#pragma unroll 1
+    for (int q = 0; q < 2; ++q) {
+      u64 w[16];
+      if (q == 0) {
+        w[0] = (snap[9] & 0xFF) << 56 | 1ull << 48 | (u64)idx << 40;
+        w[1] = 64ull << 40 | c[0] >> 24;
+#pragma unroll
+        for (int i = 2; i < 9; ++i) w[i] = c[i - 2] << 40 | c[i - 1] >> 24;
+        w[9] = c[7] << 40;
+        w[10] = 64ull << 40 | c[8] >> 24;
+#pragma unroll
+        for (int i = 11; i < 16; ++i) w[i] = c[i - 3] << 40 | c[i - 2] >> 24;
+      } else {
+        w[0] = c[13] << 40 | c[14] >> 24;
+        w[1] = c[14] << 40 | c[15] >> 24;
+        w[2] = c[15] << 40 | 0x80ull << 32;
+#pragma unroll
+        for (int i = 3; i < 15; ++i) w[i] = 0;
+        w[15] = bits;
+      }
+      sh::sha512_compress(h, w);
+    }
+    u64* o = T.level + 8 * (off + (width >> lv) + idx);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) o[k] = h[k];
+    if (lv == T.depth - 1)
+#pragma unroll
+      for (int k = 0; k < 8; ++k) T.root[k] = h[k];
+    return;
+  }
+#endif
+  hb_node_snap(T, b, lv, idx, snap);
+}
+__device__ __forceinline__ void tail_levels(const H1Tab& T, const u64* snaps, uint8_t* b) {
+  for (int lv = 0; lv < T.depth; ++lv) {
+    const long long nodes = (1LL << T.depth) >> (lv + 1);
+    for (long long idx = threadIdx.x; idx < nodes; idx += LT) tail_node(T, b, lv, idx, snaps + lv * NSNAP);
+    __syncthreads();
+  }
+}
+extern "C" __global__ void __launch_bounds__(LT) h1c_tail_k(const H1Tab* __restrict__ mid, int nmid,
+                                                           const H1Tab* __restrict__ rnd, int nrnd,
+                                                           const u64* __restrict__ snaps, unsigned* __restrict__ done,
+                                                           u64* __restrict__ host_root, u64 seq) {
+  __shared__ __align__(16) uint8_t bf[LT * HB];
+  __shared__ bool last;
+  uint8_t* b = bf + threadIdx.x * HB;
+  tail_levels(mid[blockIdx.x], snaps + (size_t)blockIdx.x * NMAXD * NSNAP, b);
+  // cooperative groups' grid barrier, one way: every mid root is out before the last block reads rnd's leaves
+  if (threadIdx.x == 0) {
+    __threadfence();
+    last = atomicAdd(done, 1u) == (unsigned)nmid - 1;
+    __threadfence();
+  }
+  __syncthreads();
+  if (!last) return;
+  if (threadIdx.x == 0) *done = 0;
+  for (int r = 0; r < nrnd; ++r) tail_levels(rnd[r], snaps + (size_t)(nmid + r) * NMAXD * NSNAP, b);
+  if (host_root) {
+    for (int k = threadIdx.x; k < 8 * nrnd; k += LT) host_root[k] = rnd[k >> 3].root[k & 7];
+    __threadfence_system();
+    __syncthreads();
+    if (threadIdx.x == 0) *reinterpret_cast<volatile u64*>(host_root + 8 * nrnd) = seq;
+  }
+}
+#endif
 #endif
 
 extern "C" __global__ void __launch_bounds__(32) h1c_a_init_k(const H1Tab* __restrict__ tabs, u64* __restrict__ pre, int wpt) {
@@ -1993,6 +2160,57 @@ extern "C" int h1c_a_call(const H1Tab* tab, const H1Tab* tab_dev, u64* pre, cons
   } else {
     h1c_a_call_k<<<(unsigned)((tab->count + AW - 1) / AW), 32 * AW, 0, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
   }
+  return (int)cudaGetLastError();
+}
+
+// h1c_build(mid); h1c_build(rnd) as two calls: h1c_tail_pre, which reads no leaf, then h1c_tail, every level.  Both sets'
+// tables are given (no data), 1 to NMAXD levels deep, and rnd's leaves are written by mid's roots or before h1c_tail;
+// snaps holds (nmid + nrnd) NMAXD NSNAP words, done one u32, zero before the first h1c_tail and left zero by each;
+// host_root, if not null, 8 nrnd + 1 words of the caller's pinned host memory (cudaHostAlloc's, which a kernel writes
+// through its host pointer under unified addressing): rnd's roots, then seq once they are out, so a host that reads
+// seq there reads the roots with no copy and no wait on the stream.  h1c_tail_words: snaps' words a table.
+extern "C" int h1c_tail_words() {
+#if H1C_HB && H1C_NMID
+  return NMAXD * NSNAP;
+#else
+  return 0;
+#endif
+}
+extern "C" int h1c_tail_pre(const H1Tab* mid, H1Tab* mid_dev, int nmid, const H1Tab* rnd, H1Tab* rnd_dev, int nrnd,
+                            const int* step_dev, u64* snaps, cudaStream_t stream) {
+#if H1C_HB && H1C_NMID
+  if (nmid <= 0 || nrnd <= 0 || nmid + nrnd > 65535) return 99;
+  for (int t = 0; t < nmid + nrnd; ++t) {
+    const H1Tab& T = t < nmid ? mid[t] : rnd[t - nmid];
+    if (T.data || T.depth < 1 || T.depth > NMAXD || T.count > (1LL << T.depth) || (T.count << 1) <= (1LL << T.depth))
+      return 100 + t;
+  }
+  h1c_tail_pre_k<<<nmid + nrnd, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, step_dev, snaps);
+  return (int)cudaGetLastError();
+#else
+  return 98;
+#endif
+}
+extern "C" int h1c_tail(const H1Tab* mid_dev, int nmid, const H1Tab* rnd_dev, int nrnd, const u64* snaps, unsigned* done,
+                        u64* host_root, u64 seq, cudaStream_t stream) {
+#if H1C_HB && H1C_NMID
+  if (nmid <= 0 || nrnd <= 0) return 99;
+  h1c_tail_k<<<nmid, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, nrnd, snaps, done, host_root, seq);
+  return (int)cudaGetLastError();
+#else
+  return 98;
+#endif
+}
+
+// n bytes of device memory into pinned host memory (cudaHostAlloc's) by a kernel's stores, not a copy engine's DMA, so
+// the copy waits on no other stream's transfers
+extern "C" __global__ void h1c_put_k(const uint8_t* __restrict__ src, uint8_t* __restrict__ dst, int n) {
+  for (int i = threadIdx.x; i < n; i += blockDim.x) dst[i] = src[i];
+  __threadfence_system();
+}
+extern "C" int h1c_put(const void* src, void* dst, int n, cudaStream_t stream) {
+  if (n <= 0) return 0;
+  h1c_put_k<<<1, 256, 0, stream>>>(static_cast<const uint8_t*>(src), static_cast<uint8_t*>(dst), n);
   return (int)cudaGetLastError();
 }
 extern "C" int h1c_sizes(int* out) {
