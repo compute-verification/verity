@@ -8,7 +8,7 @@ head-check units and the I/O tie's units all ride it.
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR [--n 4] [--negatives] [--registered]
     python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-      --out DIR --shape gemm:1b:2048 [--shape attention:1b:69 ...] [--negatives] [--census]
+      --out DIR --shape gemm:1b:2048 [--shape attention:1b:69 ...] [--negatives] [--census] [--reads slots]
 
 * **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
   refuses typed and template statements until PRF-133), `UnitStager`'s rows and output rows, the prover's rows, the rows
@@ -43,7 +43,7 @@ template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`
 shape whose rows' in-circuit hashing alone passes C-Flock's block (`m1_families.block`) is reported refused, not lowered.
 
 Known limits: units flat or untyped staged (PRF-133); C-Flock's block at most 2^27 (split-K, #3467, past K = 5041);
-table-heavy units need lookup slots (#3416, #3478); tail lookup slots are the GPU prover's; prover worker threads may need
+table-heavy units need lookup slots (``--reads slots``; #3416, #3478); tail lookup slots are the GPU prover's; prover worker threads may need
 a bigger stack (PRF-141).
 """
 from __future__ import annotations
@@ -93,7 +93,8 @@ class Member:
     """One template's units, staged as one statement. ``values``: the prover's rows, ``{row: (n, words) u16}``.
     ``held``: rows the verifier derives itself, opened to its copy. ``expect``: output rows (``o<j>``) it requires.
     ``forge``: instances whose first output word has bit 0 flipped before commitment (a negative's prover, its self-check
-    skipped). ``stage_kw``: `UnitStager.stage`'s ``tables``, ``refs``, ``registered`` and ``salts``."""
+    skipped). ``stage_kw``: `UnitStager.stage`'s ``tables``, ``refs``, ``registered`` and ``salts``. ``reads``: `UnitStager`'s,
+    ``slots`` its reads of the pinned MUFU tables in lookup slots, the tables written beside the statement."""
 
     name: str
     defn: Any
@@ -104,6 +105,7 @@ class Member:
     expect: dict[str, np.ndarray] = field(default_factory=dict)
     forge: tuple[int, ...] = ()
     stage_kw: dict = field(default_factory=dict)
+    reads: str = "inline"
 
     @property
     def n(self) -> int:
@@ -176,14 +178,14 @@ def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], s
 def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: dict) -> dict:
     """Member ``m``'s statement, bound to the partition (``bound``) at global units ``base ..``: its circuit lowered
     once, its rows committed under salts from ``salt_key``. Returns a0's statement dict (``dir``, ``pin``, the header ...)."""
-    from verity_flock import class_statement as CS
+    from verity_flock import class_statement as CS, ir_lower as IL
 
     t0 = time.time()
     sd = out / f"stage-{m.name}"
-    key = json.dumps([m.defn.id, m.name, m.rows, m.out_rows, bound], sort_keys=True)
+    key = json.dumps([m.defn.id, m.name, m.rows, m.out_rows, bound, m.reads], sort_keys=True)
     st = _STAGERS.get(key) if _STAGERS is not None else None
     if st is None:
-        st = CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, circuit=sd / "circuit.txt", bind=bound)
+        st = CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, circuit=sd / "circuit.txt", bind=bound, reads=m.reads)
         if _STAGERS is not None:
             _STAGERS[key] = st
     else:
@@ -205,6 +207,8 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
     (d / "inst.bin").rename(d / f"inst-{m.n}.bin")
     (d / "pub.bin").rename(d / f"pub-{m.n}.bin")
     (d / "tables").mkdir(exist_ok=True)
+    if m.reads == "slots":
+        IL.write_tables(d / "tables")
     if not (d / "circuit.txt").exists():
         os.link(sd / "circuit.txt", d / "circuit.txt")
     s = {"name": m.name, "tag": m.name, "dir": d, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
@@ -754,9 +758,9 @@ def units_for(k_log: int, per_block: int) -> int:
     return 1 if b <= 3 else per_block * 2 ** (b - 1) + 1
 
 
-def served_member(shape: str, seed: int, n: int = 1) -> tuple[Member, dict]:
+def served_member(shape: str, seed: int, n: int = 1, reads: str = "inline") -> tuple[Member, dict]:
     """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows, its outputs hidden, values seeded
-    by ``seed``."""
+    by ``seed``, its table reads laid out by ``reads`` (`Member`)."""
     import a11_kinds as K
     from verity.ml.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
@@ -771,16 +775,16 @@ def served_member(shape: str, seed: int, n: int = 1) -> tuple[Member, dict]:
     if set(values) != {nm for nm, _t in params}:
         raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
     info = {"descriptor_id": did, "layout": tp.layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
-            "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n}
-    return Member(shape.replace(":", "-"), tp.fn, rows, out_rows, values), info
+            "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n, "reads": reads}
+    return Member(shape.replace(":", "-"), tp.fn, rows, out_rows, values, reads=reads), info
 
 
-def prove_served(shape: str, tools: Tools, out: Path, seed: int) -> tuple[Member, dict, dict]:
+def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str = "inline") -> tuple[Member, dict, dict]:
     """``shape``'s member through `prove_units`, one unit drawn by Lean: staged at one unit, and again at `units_for`'s when
     one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the leg."""
     import a11_kinds as K
 
-    m, info = served_member(shape, seed)
+    m, info = served_member(shape, seed, reads=reads)
     t = time.time()
     with K.no_cyclic_gc():
         try:
@@ -790,7 +794,7 @@ def prove_served(shape: str, tools: Tools, out: Path, seed: int) -> tuple[Member
             if n == 1:
                 raise
             log(f"{shape}: k_log {ex.k_log}, {ex.per_block} a block: staged again at {n} units")
-            m, info = served_member(shape, seed, n)
+            m, info = served_member(shape, seed, n, reads)
             leg = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
     ml = leg["members"][m.name]
     info.update(ands=ml["ands"], k_log=ml["k_log"], leg_s=round(time.time() - t, 1), stage_py_maxrss_gb=maxrss_gb(resource.RUSAGE_SELF))
@@ -798,11 +802,11 @@ def prove_served(shape: str, tools: Tools, out: Path, seed: int) -> tuple[Member
 
 
 def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
-         lower_refused: bool = False) -> dict:
+         lower_refused: bool = False, reads: str = "inline") -> dict:
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
-    `served_member`'s units, through `prove_units` and, with ``negs``, `negatives` at that draw. A shape whose rows alone
-    pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered, its blocker C-Flock's own
-    refusal), nor one whose estimate passes ``max_ands``."""
+    `served_member`'s units (its table reads by ``reads``), through `prove_units` and, with ``negs``, `negatives` at that
+    draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
+    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -825,7 +829,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
                 continue
             with reuse_lowerings():
                 try:
-                    m, info, honest = prove_served(shape, tools, out, seed)
+                    m, info, honest = prove_served(shape, tools, out, seed, reads)
                 except ValueError as ex:
                     if "needs a block of" not in str(ex) and not isinstance(ex, OutsideShape):
                         raise
@@ -880,13 +884,16 @@ def main(argv=None) -> int:
                    help="lower a shape the census finds past C-Flock's block, for the stager's own refusal")
     d.add_argument("--seed", type=int, default=20261025)
     d.add_argument("--mem-gb", type=int, default=64, help="the job's memory: a shape estimated past mem / 700 B an AND isn't lowered")
+    d.add_argument("--reads", choices=("inline", "slots"), default="inline",
+                   help="UnitStager's reads: a pinned MUFU table's reads inline (the served rows' own for a row template, "
+                        "chunk_rows.reads) or in lookup slots")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     if a.command == "defs":
         if not a.census and not (a.bin and a.lean):
             ap.error("defs: --bin and --lean, or --census")
         tools = None if a.census else Tools(a.bin, a.lean, a.firewall)
-        summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused)
+        summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused, a.reads)
         ok = all("error" not in r for r in summary.values()) if a.census else all(defs_ok(r) for r in summary.values())
         log("done: " + ("ok" if ok else "FAILED") + " " + json.dumps({k: ("blocker" if "blocker" in r else "error" if "error" in r
                                                                         else "sized" if a.census else defs_ok(r))

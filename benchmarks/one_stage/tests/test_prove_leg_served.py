@@ -72,3 +72,25 @@ def test_the_combines_partials_are_its_logits_rows_chunks():
 def test_an_unknown_family_is_refused_by_name():
     with pytest.raises(SystemExit, match="no served family 'softmax'"):
         L.served("softmax:1b")
+
+
+@pytest.mark.parametrize("reads", ["inline", "slots"])
+def test_a_served_members_reads_reach_its_stager(monkeypatch, tmp_path, reads):
+    """``--reads`` is the member's and its record's, and `stage` lays the unit's table reads out by it."""
+    from verity_flock import class_statement as CS
+
+    seen = {}
+
+    class Built(Exception):
+        pass
+
+    def stager(*_a, **kw):
+        seen.update(kw)
+        raise Built
+
+    monkeypatch.setattr(CS, "UnitStager", stager)
+    m, info = L.served_member("rope:1b:8", 0, reads=reads)
+    assert (m.reads, info["reads"]) == (reads, reads)
+    with pytest.raises(Built):
+        L.stage(m, 0, {"partition": "p", "program": "q"}, tmp_path, b"k" * 32, {})
+    assert seen["reads"] == reads
