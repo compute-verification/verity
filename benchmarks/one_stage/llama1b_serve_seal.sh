@@ -3,7 +3,9 @@
 # windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench row's Commit of record's
 # committer and acquire sources, built from its manifest ROW/manifest.json and taps HIDDEN_SO, NORM_TAP_SO: hm96-sha512 rows in
 # frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
-# idle), `verity-vllm advice` per closed window under a registered cap (--cap), then each window's request Programs and
+# idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
+# --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to) and
+# a registered cap (--cap), then each window's request Programs and
 # manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
 # endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB free (default 300,
@@ -16,7 +18,7 @@
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
 #     gpu-lease 1 --wait --mem-gb 64 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
-# READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
+# READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
 # The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
@@ -45,10 +47,17 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
   --why "G-A (network accounting): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
 cd "$TREE/integrations/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
+compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
+    | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
+}
 
 if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed window), then WINDOW's Programs and manifest.json
   K=${WINDOW:-5}
-  vv advice "$READVICE" --cap "$CAP" 2>&1 | tee "$OUT/advice.log"
+  CA=$(compiler_args "$READVICE") && [ -n "$CA" ] || { echo "no registered compiler for $READVICE (prove_path.py compiler)"; exit 16; }
+  echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
+  # shellcheck disable=SC2086
+  vv advice "$READVICE" --cap "$CAP" $CA 2>&1 | tee "$OUT/advice.log"
   "$PY" tools/advice_compile.py "$READVICE" --window "$K" > "$OUT/compile_w$K.log" 2>&1
   echo "w$K compile rc=$?" | tee "$OUT/steps.txt"
   cp "$READVICE/advice/w$K/registration.json" "$READVICE/windows/w$K/manifest.json" "$OUT/"
@@ -82,6 +91,8 @@ for _ in $(seq 1 600); do
 done
 grep "SERVE-OPENAI listening" "$OUT/serve.log" || { tail -40 "$OUT/serve.log"; echo "SERVER NOT LISTENING"; kill "$SRV"; exit 11; }
 cp "$D/serve.json" "$OUT/" 2>/dev/null
+CA=$(compiler_args "$D") && [ -n "$CA" ] || { echo "no registered compiler for $D (prove_path.py compiler)"; kill -TERM "$SRV"; wait "$SRV"; exit 16; }
+echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
 
 # Each window's advice committed once, at serve time, as its windows.jsonl line lands: `advice --window K` into advice/.w<K>,
 # moved to advice/w<K>, and advice/windows.json the union of every window's index (committed and refused).
@@ -89,7 +100,8 @@ closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in o
 advice_pass() {
   for k in $(closed); do
     [ -f "$D/advice/.w$k/windows.json" ] && continue
-    vv advice "$D" --window "$k" --cap "$CAP" --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
+    # shellcheck disable=SC2086
+    vv advice "$D" --window "$k" --cap "$CAP" $CA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
     [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace: next pass
     [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
     "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
