@@ -53,14 +53,16 @@ class Lane:
         self.events.append(event)
         self._ledger = None
 
-    def open(self, name: str, circuit: str = CIRCUIT) -> None:
+    def open(self, name: str, circuit: str = CIRCUIT, **fields: Any) -> None:
+        """Period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
         self._push(("period-open", None, {"period": name, "lane": rc.LANE, "by": rc.LANE, "cap": 4, "circuit": circuit,
-                                          "key_sha512": hashlib.sha512(self.pub).hexdigest()}))
+                                          "key_sha512": hashlib.sha512(self.pub).hexdigest(), **fields}))
         self.name, self.members = name, []
 
-    def epoch(self, w: bytes, k: int, h1: bool = False) -> str:
+    def epoch(self, w: bytes, k: int, h1: bool = False, pinned: str | None = None) -> str:
         """Epoch k over weights' root `w`: a salt-only session (H1's three-family layout, every coin released, when
-        `h1`), its salt coin opened after `salt.epoch_open_root(w, k)`."""
+        `h1`), its salt coin opened after `salt.epoch_open_root(w, k)`, its open naming commit `pinned` (a commit of
+        `rc.PINS[0]` pins, which every sealed prefix holds) when given."""
         rng, r, sid = self.rng, PS.epoch_open_root(w, k), rc.session_id(self.rng)
         leaf = self.leaves[-1] + 3 if self.leaves else 2
         if h1:
@@ -71,7 +73,8 @@ class Lane:
                            salt=r, sid=sid, leaf=leaf)
         c = s.ch.commitment
         asked = {"scheme": c.scheme, "epoch": c.epoch, "families": [list(f) for f in c.families]}
-        reserve, opened = rc._reserved(rng, sid, {**rc._open(rng, {"root": r.hex()}, s.pub), **asked})
+        o = {**rc._open(rng, {"root": r.hex()}, s.pub), **asked, **({"pinned": pinned} if pinned else {})}
+        reserve, opened = rc._reserved(rng, sid, o)
         self._push(reserve)
         self._push(opened)
         self._push(("end", sid, rc._end(s, **pc.gate_end(s))), skip=2)
@@ -207,6 +210,22 @@ def test_a_session_of_another_circuit_refuses_the_period():
     assert why[0] == "circuit" and "the one period p-a committed" in why[1]
 
 
+def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
+    """Clause 3a, H1's period pin floor: a period opened under MAIN[2] with a freshness floor of one first-parent commit
+    refuses a session pinned at MAIN[4], two behind it, with ``pin``; at a floor of two the same session is credited."""
+    for floor, refused in ((1, True), (2, False)):
+        lane = Lane(f"pin/{floor}")
+        base, w, _ = _base(lane.rng)
+        lane.open("p-a", **{Cr.PERIOD_PIN_FIELD: rc.MAIN[2], Cr.STALE_FIELD: floor})
+        sid = lane.epoch(w, 0, pinned=rc.MAIN[4])
+        lane.close()
+        got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(sid, base)]))
+        if refused:
+            assert got is None and why[0] == "pin" and "pass 0 of period p-a is pinned 2 first-parent" in why[1], why
+        else:
+            assert why is None and got["epochs"] == [[w.hex(), 0]]
+
+
 def test_a_refused_pass_refuses_the_period():
     """Clause 4: each pass passes `core_check.pass_epoch` under the live inputs: a context naming another manifest, or
     a salt that isn't its live coin's, refuses the period."""
@@ -220,6 +239,61 @@ def test_a_refused_pass_refuses_the_period():
     sid = man["session"]["session"]
     _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, p0b, lane.evidence(sid, man)]))
     assert why[0] == Cr.PASS_REFUSED and "the pass's salt is not its live coin's" in why[1]
+
+
+def test_a_context_not_a_string_refuses_the_period_as_a_refused_pass():
+    """Clause 4: a ``context`` that isn't a string is refused by name (``pass``), not raised from `pass_epoch`."""
+    lane, a, _, _ = _two_periods("context")
+    p0, p0b, p1 = a
+    for context in (None, 7, [p0b["context"]], {"context": p0b["context"]}):
+        got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, {**p0b, "context": context}, p1]))
+        assert got is None and why[0] == Cr.PASS_REFUSED and "pass 1 of period p-a" in why[1], context
+        assert "context is not a string" in why[1]
+
+
+def _retained(lane: Lane, sid: str, base: dict) -> bytes:
+    """Session `sid`'s pass retained in vllm #3985's form (`PearlCDeviceRun._write_retained`, `write_manifest`: the
+    head, then ``weights`` and ``matmuls``, at indent 1 with a newline), its ``session`` `session_head`'s, the gate's
+    open answer's {session, seq, root, commitment} alone, beside ``pass_index``."""
+    man = lane.manifest(sid, base, 0)
+    rng, s = lane.rng, man["session"]
+
+    def file(path: str, digest: bool = True) -> dict:
+        n = rng.randrange(1, 1 << 20)
+        return {"path": path, "bytes": n, **({"sha256": rng.randbytes(32).hex()} if digest else {})}
+
+    head = {"schema": man["schema"], "run": man["run"], "entry": "verity_vllm.LLM", "scheme": "pearl-c-sm120-v1-h3",
+            "scheme_args": {"forming": "v1", "device": "sm120", "hashing": "h3"}, "coins": man["coins"],
+            "salt_opening": man["salt_opening"], "salt": man["salt"],
+            "session": {k: s[k] for k in ("session", "seq", "root", "commitment")}, "pass_index": man["pass_index"],
+            "cubin_sha256": rng.randbytes(32).hex(), "kernel_source_sha256": rng.randbytes(32).hex(),
+            "schedule": "deferred", "records_root": rng.randbytes(64).hex(),
+            "commitment": {"root": rng.randbytes(64).hex(), "count": len(man["matmuls"])},
+            "hm96_salt_key": rng.randbytes(32).hex(), "leaves": file("leaves"), "tree_t": file("tree_t")}
+    weights = {w: {**v, "excluded_b": [], "rows": file(f"weights/{w}.rows.bf16", False),
+                   "tree": file(f"weights/{w}.tree")} for w, v in man["weights"].items()}
+    matmuls = [{**u, "k_kept": u["k"], "excluded_a": [], "root_a": rng.randbytes(64).hex(),
+                "rows": file(f"calls/{u['index']}.rows.bf16", False), "tree": file(f"calls/{u['index']}.tree")}
+               for u in man["matmuls"]]
+    return (json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n").encode()
+
+
+def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_period():
+    """A retained manifest exactly as vllm #3985 writes it passes `core_check.pass_epoch` under the live inputs (``live
+    coin``), and its one-epoch period credits it."""
+    lane = Lane("retained")
+    base, w, _ = _base(lane.rng)
+    lane.open("p-a")
+    sid = lane.epoch(w, 0)
+    lane.close()
+    raw = _retained(lane, sid, base)
+    ev = {"context": f"served-zk/r-retained/{hashlib.sha512(raw).hexdigest()}", "descriptor": DESCRIPTOR.hex(),
+          "manifest": raw.hex(), "session": lane.sessions[sid][0].files()}
+    key, ledger, pins, main = lane.args("p-a", [ev])[:4]
+    live = {"key": key, "ledger": ledger, "main": main, "pins": pins, "session": ev["session"]}
+    assert pc.CC.pass_epoch(None, raw, ev["context"], live=live, verify=rc.lms_verify) == ("live coin", None)
+    got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [ev]))
+    assert why is None and got == {"epochs": [[w.hex(), 0]], "passes": [json.loads(raw)]}
 
 
 def test_epochs_not_numbered_on_from_the_earlier_periods_refuse():

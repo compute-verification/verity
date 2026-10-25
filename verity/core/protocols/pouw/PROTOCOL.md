@@ -275,8 +275,9 @@ session (`window.SALT_FAMILIES`) the gate opens on its salt epoch's root `salt.e
 inside a Pearl-C period, and the period earns only when all of these hold: its close's sessions are exactly the presented
 passes' epochs, in its order (`credit.period`), so a complete session no pass presents refuses it; each session is a
 Pearl-C salt session (``salt-only``; H1's checks refuse such a session, so the two never share a period); each session is
-credited toward the period (``circuit``, `challenger.credited_session`); each pass passes `core_check.pass_epoch`
-(``pass``); each W's epochs are numbered on from the lane's earlier credited periods with no gap or repeat (``index``),
+credited toward the period (``circuit``, `challenger.credited_session`); each session is pinned within the period's
+freshness floor of its open pin (``pin``, H1's `credit.committed_pin` and `credit.committed_floor`); each pass's context
+is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epochs are numbered on from the lane's earlier credited periods with no gap or repeat (``index``),
 so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
 Its Lean port is open.
 
