@@ -37,8 +37,10 @@ computed in the decoder's order (callees first) and shared by every activation:
 
 A body's references are resolved through its nodes' outputs with the callees' `ret`: a batch whose members' returns
 make one run maps any piece by one affine map, whole members of any other batch become one segment of copies, and a
-pass-through goes back through the node's arguments. Per IU, its reads are those segments with the IU's own nodes and θ's
-taken out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
+pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
+one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
+are one copy of pieces of as many nodes (`Seg.split`). Per IU, its reads are those with the IU's own nodes and θ's taken
+out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
 Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
@@ -58,10 +60,11 @@ same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks,
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
-Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
-the output of a scan of no iterations), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says
-what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
+iterations with output leaves, read or not; or a body calling a Definition decoded after it, a Definition not as the
+decoder gives it, or a root with parameters, which the decoder never gives: `walkable`), `program` (a reference the
+layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says what and how
+many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -208,6 +211,13 @@ def Seg.count (s : Seg) : Nat := s.reps * s.len
 
 /-- `s` as a set of gates and leaves: copies all alike (`shift = 0`) as one. -/
 def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with reps := 1 } else s
+
+/-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
+pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
+read is kept, and its IU found, by its first piece. -/
+def Seg.split (s : Seg) : Array Seg :=
+  let s := s.alike
+  if s.reps == 1 then s.ps.map .one else #[s]
 
 def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
   ps.map fun q => match q.tgt with
@@ -742,7 +752,8 @@ def carriesRead (c : Ctx) (k : Nat) (used : Ivs) : Except String (Array Seg) := 
 /-- What node `k`'s gates read outside the node, resolved in the body: every argument of a primitive (or of a batch of one
 with members); for a composite callee, the positions its `used` names, all members at once (`memberRows`, else member by
 member) unless every member reads its whole argument; and for a scan, an iteration's carry read from the one before it,
-through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read. -/
+through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read, and one
+copy's pieces each a read (`Seg.split`). -/
 def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   let node ← c.node k
   let callee := c.P.defs[node.fn]!
@@ -758,7 +769,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   if callee.prim then
     if node.form == .batch && node.n == 0 then return #[]
     for i in [0:node.args.size] do out := out ++ (← resolve i (whole i))
-    return out.map Seg.alike
+    return out.flatMap Seg.split
   if node.members == 0 then return #[]
   let used := (c.memo[node.fn]!).used
   for i in [0:node.args.size] do
@@ -781,12 +792,12 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   if node.form == .scan && node.n ≥ 2 then out := out ++ (← carriesRead c k (used[0]?.getD #[]))
   let lo : Int := c.body.offsets[k]!
   let hi : Int := c.body.offsets[k + 1]!
-  -- a segment's gates are one node's
-  return (out.filter fun s => match s.ps[0]? with
+  -- a read's gates are one node's
+  return (out.flatMap Seg.split).filter fun s => match s.ps[0]? with
     | some q => match q.tgt with
       | .gate _ => !(lo ≤ q.base && q.base < hi)
       | _ => true
-    | none => false).map Seg.alike
+    | none => false
 
 /-- Definition `d`'s summary, its callees' in `memo`. -/
 def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do
@@ -976,12 +987,21 @@ depth `H`: each step goes down into an activation, up out of one, or to the scan
 where an earlier one was. -/
 def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
 
+/-- Every reference `Flock.Program.resolve` follows from an activation of the walk ends at a gate: the root has no
+parameters (the decoder's refusal), and no scan of no iterations has output leaves, which `resolve` refuses to read. A
+scan of no iterations carrying a value is refused here wherever it is, read or not; `analyze` would refuse it only where
+a gate's operand reaches it. -/
+def resolvable (P : Prog) : Bool :=
+  (P.defs[P.root]!).body.params.isEmpty && (List.range P.defs.size).all fun d =>
+    (P.defs[d]!).prim || (P.defs[d]!).body.nodes.all fun n => n.form != .scan || n.n != 0 || n.out.leaves == 0
+
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
 can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
 `2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
 summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
-(`bodiesLaidOut`). -/
-def walkable (P : Prog) : Bool := calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2
+(`bodiesLaidOut`), and every reference it resolves ends at a gate (`resolvable`). -/
+def walkable (P : Prog) : Bool :=
+  calleesFirst P && bodiesLaidOut P && (resolvable P && walkBound P ≤ Flock.Steps.FUEL / 2)
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/

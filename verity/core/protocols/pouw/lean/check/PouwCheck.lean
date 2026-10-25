@@ -10,6 +10,8 @@ import PouwCheck.Credit
 import PouwCheck.Chunks
 import PouwCheck.LeafOwn
 import PouwCheck.Verified
+import PouwCheck.LiveVerified
+import PouwCheck.CommittedFiles
 
 /-!
 # PoUW's window check as a core protocol

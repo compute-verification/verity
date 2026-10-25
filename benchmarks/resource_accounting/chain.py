@@ -442,10 +442,10 @@ class PearlC:
             x = torch.randn(m, self.W.k, device="cuda", generator=gen).to(torch.bfloat16)
             ref = x.float() @ W.float().T
             for hashing in (True, False):
-                commits, served = [], None
+                commits, served, at = [], None, run.epoch_calls()
                 self._set("pearl-c" if hashing else "pearl-c-nohash", "reference")
                 for omit in (((), (), ("hash_leaf",)) if hashing else ((),)):
-                    run.begin(schedule="serial")
+                    run.begin(schedule="serial", at=at)
                     run.poison()
                     run.omit = frozenset(omit)
                     y = run.gemm(0, x, W, None)
@@ -460,13 +460,15 @@ class PearlC:
         run.details["passes"].clear()
         return out
 
-    def reference(self, arm: str, x0, retain: str | None = None, omit: frozenset = frozenset()) -> tuple[dict, object]:
+    def reference(self, arm: str, x0, retain: str | None = None, omit: frozenset = frozenset(),
+                  at: int | None = None) -> tuple[dict, object]:
         """One chain as an eager pass from poisoned buffers, serial: the commitment every graphed or deferred pass of `arm`
-        must give (the deferred arm's is the serial one's)."""
+        must give (the deferred arm's is the serial one's), numbered from call index `at` when given (another pass's, to
+        repeat its commitment)."""
         import torch
         self._set("pearl-c-nohash" if arm == "pearl-c-nohash" else "pearl-c", "reference")
         run = self.run
-        run.begin(retain=retain, run=os.environ.get("RESEARCH_RUN_ID"), schedule="serial")
+        run.begin(retain=retain, run=os.environ.get("RESEARCH_RUN_ID"), schedule="serial", at=at)
         if not retain:
             run.poison()
         run.omit = omit
@@ -501,14 +503,15 @@ class PearlC:
         run.end()
         self.wholes[(arm, batch)] = (graph, calls, y)
 
-    def item(self, arm: str, x0, batch: int, chains: int, poison: bool = False) -> dict:
-        """One pass of `chains` chains of `arm`, timed from its begin to its end's commitment on the host."""
+    def item(self, arm: str, x0, batch: int, chains: int, poison: bool = False, at: int | None = None) -> dict:
+        """One pass of `chains` chains of `arm`, timed from its begin to its end's commitment on the host, numbered from call
+        index `at` when given (`reference`'s)."""
         import torch
         run, schedule = self.run, self._set(arm, self.mode(arm, batch))
         whole = self.wholes.get((arm, batch))
         torch.cuda.synchronize()
         t = time.perf_counter()
-        run.begin(schedule=schedule)
+        run.begin(schedule=schedule, at=at)
         if poison:
             run.poison()
         if whole is not None:
@@ -576,7 +579,7 @@ def run_point(p: S.Point, arms: tuple[str, ...], W: Weights, act: Act, pc: Pearl
                 refs[ref_arm] = pc.reference(ref_arm, x0)
             want, y_ref = refs[ref_arm]
             pc.prepare(arm, x0, p.batch)
-            got = pc.item(arm, x0, p.batch, 1, poison=True)
+            got = pc.item(arm, x0, p.batch, 1, poison=True, at=want.get("base"))
             same = (got["transcript_root"] == want["transcript_root"] and got["activation_roots"] == want["activation_roots"]
                     if arm != "pearl-c-nohash" else bool(torch.equal(got["y"], y_ref)))
             out["gates"].append({"check": "pass", "arm": arm, "mode": pc.mode(arm, p.batch), "equals_eager": same, "ok": same})
@@ -649,8 +652,8 @@ def retain_pass(pc: PearlC, p: S.Point, act: Act, retain: Path, point: dict) -> 
     point's eager pass of one chain commits, which its graphed first pass committed too (the point's ``pass`` gate)."""
     x0 = chain_input(p, act)
     want, _ = pc.reference("pearl-c", x0)
-    kept, _ = pc.reference("pearl-c", x0, retain=str(retain / "pass"))
-    control, _ = pc.reference("pearl-c", x0, retain=str(retain / "control"), omit=CONTROL_OMITS)
+    kept, _ = pc.reference("pearl-c", x0, retain=str(retain / "pass"), at=want["base"])
+    control, _ = pc.reference("pearl-c", x0, retain=str(retain / "control"), omit=CONTROL_OMITS, at=want["base"])
     same = all(kept[x] == want[x] for x in ("transcript_root", "activation_roots"))
     gated = any(g.get("arm") == "pearl-c" and g.get("ok") for g in point.get("gates", []))
     return {"point": p.key, "pass": kept.get("manifest"), "control": control.get("manifest"), "coins": pc.coins,

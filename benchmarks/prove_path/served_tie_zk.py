@@ -6,6 +6,8 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
     python benchmarks/prove_path/served_tie_zk.py build --class slice|9c10|served --g G [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py prove --serve-run DIR --window K [--g G] [--blocks all|executed] [--per N]
       --bin flock-circuit --lean flock-verify --out DIR [--dry]
+    python benchmarks/prove_path/served_tie_zk.py rescan --serve-run DIR --window K [--g G] [--blocks ...] [--per N]
+      --from PROVE_OUT --out DIR
 
 * **cost**: a step's and a unit's ANDs (`served_tie.step_size`, `size`) at the compile slice's class, at the sealed run
   9c10's (R 8, P 256, IW 16, L 512, T 2048) and at the served class (T 8192, R 256, L 131072), each beside the all-pairs
@@ -23,11 +25,13 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   is proved and its verdict is ``ACCEPT``. The positions chunks are bound natively, opened under the run root
   (``bindings``): the Commit's leaves are its position-leaf digests under its hiding rule, not row leaves, so their b‖c is
   not yet a proof row's.
-  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece: one of at least
-  ``DISTINCT`` byte values found anywhere, or one of fewer (positions, a few switch bits and zeros) found in every
-  repetition's proof stream. The streams hold small integers and zeros at fixed offsets of their own format, valued
-  afresh in each repetition, so a low-entropy piece found in only some repetitions, which prove one witness, is reported
-  as ``structured``.
+  The received-pieces scan (`leak_scan.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
+  row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`,
+  ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of C-Flock's proof format
+  (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
+  out before the scan (`public_pieces`).
+* **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`): the verifier's files searched afresh
+  for the pieces recomputed from the sealed run, under the current cutter and rule.
 """
 from __future__ import annotations
 
@@ -36,6 +40,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -44,6 +49,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
+import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR, served_tie as ST  # noqa: E402
 
@@ -54,7 +60,6 @@ CLASSES = {
 }
 GS = {"slice": (7, 1), "9c10": (256, 8, 1), "served": (256, 16, 1)}
 OPENED = ("o0", "pub")
-DISTINCT = 8
 NEGATIVES = ("start", "short", "id", "other")
 
 
@@ -333,16 +338,6 @@ def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, held
 
 
-def classify(received: dict, blobs: dict[str, bytes]) -> tuple[list[str], dict[str, int]]:
-    """`a8.received`'s found pieces as the ``leaked`` ones, which fail a statement, and the ``structured`` rest with their
-    distinct byte values (the module's docstring)."""
-    files = received["files"]
-    reps = [f for f in files if ".rep" in f and f.endswith(".bin")]
-    leaked = [k for k in received["verifier_found"] if len(set(blobs[k])) >= DISTINCT
-              or (len(reps) > 1 and all(k in files[f]["found"] for f in reps))]
-    return leaked, {k: len(set(blobs[k])) for k in received["verifier_found"] if k not in leaked}
-
-
 def population(meta: dict, n: int) -> int:
     """The fewest units, at least n, whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `stage`)."""
     b = 25 - meta["k_log"]
@@ -387,9 +382,7 @@ def prove(a) -> int:
     secret = os.urandom(32)
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=[], arms=["fw"], cold=1, serve_run=a.serve_run)
     ok = True
-    honest = d.units["window"]
-    per = a.per or len(honest)
-    groups = [(f"window-{i // per}", honest[i:i + per]) for i in range(0, len(honest), per)] + [("cases", d.units["cases"])]
+    honest, groups = d.units["window"], statements(d, a.per)
     summary["statements"] = {name: [(u.kind, u.j) for u in us] for name, us in groups}
     meta = None
     for k, (name, us) in enumerate(groups):
@@ -409,10 +402,10 @@ def prove(a) -> int:
         log(f"{name}: staged {m['n']} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, m {m['meta']['k_log'] + m['nbl']}, "
             f"{m['stage_s']} s")
         res = audit(M, N2, av, sg, m, units, a.window, d.run_root, out / name, a.port + 20 * k)
-        blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
+        blobs, held, public = LS.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
-        res["received"]["leaked"], res["received"]["structured"] = classify(res["received"], blobs)
+        res["received"].update(LS.scan(res["received"], blobs, out / name / "verifier"))
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": m["meta"]["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"]}
         want = ["accept" if u.kind in expect else "reject" for u in units]
@@ -431,6 +424,54 @@ def prove(a) -> int:
     summary["seconds"] = round(time.time() - t0, 1)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
+def statements(d: SimpleNamespace, per: int) -> list[tuple[str, list]]:
+    """The honest window's blocks in statements of at most `per` units (all in one when 0), then the cases'."""
+    honest = d.units["window"]
+    per = per or len(honest)
+    return [(f"window-{i // per}", honest[i:i + per]) for i in range(0, len(honest), per)] + [("cases", d.units["cases"])]
+
+
+def rescan(a) -> int:
+    """`prove`'s statements under `--from` scanned again (`leak_scan.rescan`): the verifier's files each one kept searched
+    afresh for its pieces, recomputed from the sealed run as `prove` cut them (its units, then the honest blocks it filled
+    the statement with, and their ``srv`` salts, less the pieces the circuit holds: the kept one, else the statement
+    lowered again and held to the run's pin). A found salt `prove` drew isn't recomputed, so its summary's find of it
+    stays and reads leaked."""
+    d = units_of(a)
+    N2 = __import__("n2_zk")
+    M = N2._one_stage()
+    src, out = Path(getattr(a, "from")), Path(a.out)
+    summary = json.loads((src / "summary.json").read_text())
+    honest, ok, res = d.units["window"], True, {}
+    for name, us in statements(d, a.per):
+        if name not in summary:
+            continue
+        if [[u.kind, u.j] for u in us] != [list(x) for x in summary["statements"][name]]:
+            raise SystemExit(f"{name}: these units aren't the run's {summary['statements'][name]}")
+        units, vdir = fill(us, honest, summary[name]["staged"]["n"]), src / name / "verifier"
+        rows, held = blobs_of(units, {"srv": [u.reg.registration.salts[0] for u in units]})
+        if (vdir / "circuit.txt").is_file():
+            circuit = (vdir / "circuit.txt").read_bytes()
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                sg = stager(M, ST.unit(**d.st), d.St, len(units), Path(tmp))
+                if sg.st.pin != summary[name]["staged"]["pin"]:
+                    raise SystemExit(f"{name}: the statement lowered again isn't the run's (pin {sg.st.pin[:16]}, the run's "
+                                     f"{summary[name]['staged']['pin'][:16]}): rescan it with the commit that proved it")
+                circuit = (Path(tmp) / "circuit.txt").read_bytes()
+        blobs = LS.public_pieces(M.a8, rows, held, circuit)[0]
+        got = summary[name]["received"]
+        res[name] = r = {"pieces": len(blobs), **LS.rescan(got, blobs, vdir, a8=M.a8, rows=rows)}
+        ok &= not r["leaked"]
+        log(f"{name}: {len(blobs)} pieces, found {sorted({*r['leaked'], *r['structured']}) or 'none'} (the run found "
+            f"{got['verifier_found'] or 'none'}), leaked {r['leaked'] or 'none'} (was {r['was'] or 'none'}), "
+            f"structured {r['structured'] or 'none'}")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "rescan.json").write_text(json.dumps({"from": str(src), "ok": ok, "statements": res}, indent=1, sort_keys=True))
+    log("rescan: " + ("clean" if ok else "LEAKED"))
     return 0 if ok else 1
 
 
@@ -456,8 +497,16 @@ def main(argv=None) -> int:
     p.add_argument("--port", type=int, default=7791)
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the window, its units and their references only")
+    r = sub.add_parser("rescan", help="a finished prove's statements scanned again from its summary and verifier files")
+    r.add_argument("--serve-run", type=Path, required=True)
+    r.add_argument("--window", type=int, required=True)
+    r.add_argument("--g", type=int, default=1, help="steps a unit")
+    r.add_argument("--blocks", choices=("all", "executed"), default="all")
+    r.add_argument("--per", type=int, default=0)
+    r.add_argument("--from", required=True, help="the prove's --out")
+    r.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return {"cost": cost, "build": build, "prove": prove}[a.command](a)
+    return {"cost": cost, "build": build, "prove": prove, "rescan": rescan}[a.command](a)
 
 
 if __name__ == "__main__":

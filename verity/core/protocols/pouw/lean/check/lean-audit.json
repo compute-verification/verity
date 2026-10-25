@@ -60,7 +60,8 @@
     "PouwCommit.Draws",
     "PouwWindow.Rounds",
     "PouwCheck.Inputs",
-    "SampledProofs.ChallengerRecord"
+    "SampledProofs.ChallengerRecord",
+    "SampledProofs.ChallengerSession"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"

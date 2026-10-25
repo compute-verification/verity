@@ -24,7 +24,8 @@ role's launch statics are held to (b) across the launch shapes the registration 
   Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused.
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
-  hit included).
+  hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
+  request's partial on the other rank, which the cross-rank transfer must hold request by request.
 """
 
 from __future__ import annotations
@@ -69,15 +70,17 @@ def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
 
 def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
     """GP-01's parameters by holder: its shared Input batches `SHARED`; each request's own groups (`OWN_GROUPS`) held by its index,
-    and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); any other request-local group (`splits`, an
-    unchecked `prefix`, `schedule`, `peers_*`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
+    and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); a tensor-parallel rank's `peers_<k>` held by its
+    index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
+    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank; any other request-local group (`splits`, an
+    unchecked `prefix`, `schedule`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
     labels: list[Any] = [SHARED] * len(wl.shared_by_request[0])
     for r, sh in zip(wl.requests, wl.shared_by_request):
         groups = r.component.groups
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
         mine = OWN_GROUPS + ("prefix",) * (r.index in checked)
-        labels += [own(r.index) if g in mine else BATCH for j, g in enumerate(groups) if j not in set(sh)]
+        labels += [own(r.index) if g in mine or g.startswith("peers_") else BATCH for j, g in enumerate(groups) if j not in set(sh)]
     return tuple(labels), Fields(tuple(own(r.index) for r in wl.requests))
 
 
@@ -203,15 +206,17 @@ def _check_hit(advice: Any, ingress: Mapping[str, Any], s: int, row: Any) -> Non
 
 def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, int]:
     """``advice`` and ``ingress`` with request ``r`` alone, and r's index there: its record and body, each of its rows in a step of
-    its own, its own release buckets in order. A hit on another request's KV (`_check_hit`) holds the KV of r's first C tokens, so
-    alone a stand-in computes it: a greedy request of those C tokens with one output, admitted just before r in r's first step.
-    Such a hit on a later row (a resume) has no solo form."""
+    its own, its own release buckets in order, and the state a Commit window carries it in with (`pipeline.window_advice`). A hit
+    on another request's KV (`_check_hit`) holds the KV of r's first C tokens, so alone a stand-in computes it: a greedy request of
+    those C tokens with one output, admitted just before r in r's first step. Such a hit on a later row (a resume, or any row of a
+    carried request) has no solo form."""
     I1 = sys.modules[type(advice).__module__]
     q = advice.requests[r]
+    carried = getattr(advice, "carried", ())
     rows = [(s, row) for s, step in enumerate(advice.steps) for row in step.rows if row.request == r]
     for j, (s, row) in enumerate(rows):
         if any(src.request != r for src in row.sources):
-            if j:
+            if j or r < len(carried):
                 raise BatchDependent(f"request {r}: step {s} resumes it on KV another request computed (v0 has no solo form for it)")
             _check_hit(advice, ingress, s, row)
     k = int(any(src.request != r for src in rows[0][1].sources))
@@ -223,6 +228,8 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, i
         requests, release = (I1.RequestAdvice(stand, C, 1, "length"), q), (0, *release)
         bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
         steps[0] = I1.StepAdvice((I1.Row(0, "prefill", 0, C), replace(rows[0][1], request=1, sources=(I1.Source(0, C),))))
+    if r < len(carried):
+        return I1.Advice(requests, tuple(steps), release, carried=(carried[r],)), bodies, k
     return I1.Advice(requests, tuple(steps), release), bodies, k
 
 
@@ -232,7 +239,7 @@ def _unit(u: Any) -> tuple:
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
                    plan: Callable[..., Any]) -> None:
-    """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, I1 v0's `Advice`, and ``ingress``) where a request's
+    """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, a Commit window's `Advice`, and ``ingress``) where a request's
     outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` is `steps.plan_steps`.
     Returns None when every request's Programs read only its own certified inputs and the registration."""
     units = compiled.requests
