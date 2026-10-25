@@ -80,7 +80,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity_vllm.protocol_options import pouw_h1_window as PHW
+        from verity_vllm.protocols.pouw.h1 import window as PHW
 
         self.client, self.commitment, opening, _, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root)
@@ -142,10 +142,10 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.core.protocols.pouw.audit import weights_root
-        from verity_vllm.linear import vllm_site
-        from verity_vllm.linear.api import Arm as StackArm
-        from verity_vllm.linear.api import PassSpec, Stack
-        from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+        from verity_vllm.protocols.linear import vllm_site
+        from verity_vllm.protocols.linear.api import Arm as StackArm
+        from verity_vllm.protocols.linear.api import PassSpec, Stack
+        from verity_vllm.protocols.pouw import pearl_c as PPD
 
         scheme = self.scheme
         sites = vllm_site.discover(target.model)
@@ -304,7 +304,7 @@ class PearlCWholeArm(PearlCArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.engine.engine_profile import get_model_runner
-        from verity_vllm.protocol_options.pouw_pearl_c_whole import WholeStep
+        from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
 
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, get_model_runner(target.engine.vllm), target.hooks)
