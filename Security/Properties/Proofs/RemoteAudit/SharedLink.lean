@@ -416,7 +416,7 @@ theorem drawLink_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Resu
           rwa [Nat.mul_div_cancel _ hg0] at this
         subst hcg hrd
         obtain ⟨-, -, -, -, -, -, -, hsh⟩ := drawIsSubset _ _ _ _ _ _ hcl
-        have hpl : ∀ u, s'.windows[u]!.plans = s.windows[u]!.plans := fun u => by
+        have hpl : ∀ u : Nat, s'.windows[u]!.plans = s.windows[u]!.plans := fun u => by
           rw [hs']; exact fold_plans s t d now u
         refine ⟨d, ?_, fun u hu => ?_⟩
         · rw [drawLengths_congr s s' hp (t.toNat / g) (fun u _ => hpl u), hdig, hc, hp]
