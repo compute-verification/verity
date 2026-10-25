@@ -9,6 +9,7 @@ import os
 from verity_vllm.check.match.declaration import eos_lag_rows
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.check.match.sampler_geometry import sampler_geometry_check, scheduled_live_counts
+from verity_vllm.records.declared_stop import DeclaredStop
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.served_tokens import ServedRequest, ServedTokens
 
@@ -125,11 +126,22 @@ def _driver_record(c: NamedCheck, tokens: dict | None, where: str) -> ServedToke
         return None
 
 
+def _declared_stop(c: NamedCheck, gp: dict) -> DeclaredStop | None:
+    """The Program's declared stop rule and LAG (`records.declared_stop`); a declaration it refuses FAILS G6 by name, and G6 then
+    holds the record to no EOS set and no LAG, so every early stop fails closed."""
+    try:
+        return DeclaredStop.of(gp, "the global Program")
+    except RecordError as e:
+        c.fail(f"the Program's declared stop rule and LAG are refused, so G6 holds the record to no EOS set and no LAG: {e}")
+        return None
+
+
 def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None) -> LagRule:
     """The declared stop rule and LAG G6 consumes, and their agreement with what the record attests."""
-    _sr = gp.get("stop_rule") or {}
-    eos_ids = (set(int(x) for x in _sr["eos_token_ids"]) if _sr.get("eos_token_ids")
-               else (set() if _sr.get("ignore_eos") else None))   # ignore_eos: declared EMPTY set -> every early stop fails, named
+    stop = _declared_stop(c, gp)
+    sr, lag_block = (None, None) if stop is None else (stop.stop_rule, stop.lag)
+    eos_ids = (set(int(x) for x in sr.eos_token_ids) if sr is not None and sr.eos_token_ids
+               else (set() if sr is not None and sr.ignore_eos else None))   # ignore_eos: declared EMPTY set -> every early stop fails, named
     # [R17-1 / DP-pad-02 (b); supersedes the ruling-21 reader] LAG -- the rows the scheduler computes after an EOS stop -- is the PROGRAM's
     # declared specialization parameter (GP-01 `lag.value` == the Workload_v1 `lag` static == stop_rule.lag/eos_lag_rows; from_gprog verified
     # the block against the descriptor).  G6 consumes THAT value and nothing else; the record's own attestation (RunHeader.profile
@@ -138,12 +150,9 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
     # declares no lag (pre-R17-1 Build) cannot have an EOS stop checked (FAIL by name per request); when no request stops early the lag is
     # not exercised and the record is labelled so (lag.exercised false), never silently accepted as a lag-N record.
     rec_lag, rec_lag_src = eos_lag_rows(facts)                       # what the RECORD attests (for the agreement check + the label)
-    _lag_block = gp.get("lag") if isinstance(gp.get("lag"), dict) else None
-    decl_lag = (_lag_block or {}).get("value")
-    if decl_lag is None:
-        decl_lag = _sr.get("lag", _sr.get("eos_lag_rows"))
-    decl_lag = int(decl_lag) if decl_lag is not None else None
-    decl_src = (_lag_block or {}).get("source") or _sr.get("eos_lag_source") or "stop_rule.eos_lag_rows"
+    decl_lag = None if stop is None else stop.declared_lag
+    decl_src = ((lag_block.source if lag_block is not None else None) or (sr.eos_lag_source if sr is not None else None)
+                or "stop_rule.eos_lag_rows")
     lag_declared = decl_lag is not None
     if lag_declared and decl_lag not in (0, 1):
         c.fail(f"the Program declares lag {decl_lag!r}, not in {{0, 1}}: not a supported scheduler specialization (R17-1)")
@@ -160,7 +169,7 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
     eos_lag = decl_lag if lag_declared else None
     eos_lag_src = (f"Program lag {decl_lag} ({decl_src}); record attests {rec_lag_src}" if lag_declared
                    else f"Program declares no lag (pre-R17-1 Build); record attests {rec_lag_src} (NOT used as the rule)")
-    c.info["stop_rule"] = {"eos_token_ids": sorted(eos_ids) if eos_ids else None, "source": _sr.get("source"),
+    c.info["stop_rule"] = {"eos_token_ids": sorted(eos_ids) if eos_ids else None, "source": sr.source if sr is not None else None,
                            "rule": "an early stop must end in a declared EOS id; else FAIL (F-pm-24)",
                            "eos_lag_rows": eos_lag, "eos_lag_source": eos_lag_src, "eos_lag_rows_declared": decl_lag,
                            "lag_rule": "R17-1: after an EOS stop exactly LAG (the Program's declared static) more row(s) run, each fed the preceding "
