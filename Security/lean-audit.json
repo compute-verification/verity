@@ -466,6 +466,10 @@
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
   },
+  "Accounting.Remote.Draw.Assumptions.HeldLikeliest": {
+   "owner": "@memory-accounting",
+   "digest": "8adbe0bb481e9725e660f3a14343fb966b4345ffd6894b55523344e8ced914de"
+  },
   "Accounting.Remote.Draw.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9"
@@ -1780,10 +1784,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.Remote.Draw.Assumptions.HeldLikeliest": {
-   "owner": "@memory-accounting",
-   "digest": "8adbe0bb481e9725e660f3a14343fb966b4345ffd6894b55523344e8ced914de"
   }
  },
  "meaning": [
