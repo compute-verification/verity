@@ -68,7 +68,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "libdevice-sampling": ("verity_vllm.program.kernels.libdevice_sampling", "libdevice sampler transcription check"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
-    "manifest-verify": ("verity_vllm.query.manifest.verify", "is manifest.json the manifest of record"),
+    "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
     "mla-capture": ("verity_vllm.program.registry.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
