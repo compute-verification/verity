@@ -1630,7 +1630,7 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   writer and the reader (`links: cut wire [lo, hi) from unit v to unit u: …`). A template-query statement with no META
   `links` is held to the same check, so any cut wire between its units refuses it. META `links` without the program and
   partition, under any other query, or on a statement with public outputs (`setupH`) is refused. The live verifier
-  (`flock-circuit serve`, `replay`, `statement`) makes the same comparison on the population's file against the
+  (`flock-circuit serve`, `replay`, `statement`) makes the comparison for every unit of the population's file against the
   verifier's own `--links F` (`verity/flock-links/v1`: `circuit_sha512`, the partition digest, META's link ports, and every
   `[reader, port, writer]` instance triple, derived from its program by `class_statement.links_file`); a circuit with
   `links` needs the file and one without refuses it. Not checked: a link across statements (refused), that the class
