@@ -602,6 +602,7 @@ def lineRecordFn (j : Json) : V Json := do
     return lineJ (Line.lineOfRecordOn onRecord (← summaryOf (← J.get j "record" "input")) samples seen per b chip
       node δ rates)
   let x ← J.get j "session" "input"
+  if (← perCoinOf x) != 1 then throw "a line's session draws each window its own openings coin (groups_per_coin 1)"
   let reg ← registrationOf (← J.get x "registration" "session")
   let (params, coins, appendCoins, notBeforeNs) ← sessionOf x
   match ← J.get (← J.get x "params" "session") "pace" "params" with

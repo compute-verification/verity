@@ -1352,6 +1352,8 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
             "refused": "the Lean verifier gave the session no record"}
         with pytest.raises(lv.LeanError, match="samples: the session's"):
             call({**bare, "session": case, "samples": inputs["samples"] + 1})
+        with pytest.raises(lv.LeanError, match="its own openings coin"):
+            call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}})
         why = verifier.line.record_run_json(late)["refused"]
         assert why.startswith("window 1 was seen released at") and call({**late, "session": case}) == {"refused": why}
         assert "refused" not in call({**late, "session": case, "clock": "challenger"})
