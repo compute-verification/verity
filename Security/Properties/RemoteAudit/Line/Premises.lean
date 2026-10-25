@@ -14,10 +14,10 @@ model's premises, at the trace of record (`ofRecord`), whose verdict is the Lean
   model's store (`RemoteAudit.Store.hold`, `auditor_line.py`'s *bound*): what is left is the model's naming of its
   store, that the trace is over that registration's blocks. It closes once the trace is indexed by its registered
   blocks (`Trace N`, `Trace.blocks` gone), a change to `Definitions.Accounting.Remote.Held` that retypes every remote
-  guarantee: `Definitions.Accounting.Remote.Held`, `Models.Accounting.Assumptions.RemoteHeld`,
-  `Models.Accounting.Assumptions.RemoteDraw`, `Models.Accounting.Assumptions.RemoteSketch`,
-  `Models.Accounting.Guarantees.RemoteHeld`, `Models.Accounting.Guarantees.RemoteDraw`,
-  `Models.Accounting.Guarantees.RemoteSketch`, `Proofs.Accounting.RemoteHeld` and its `Draw`, `Line`, `Meets`,
+  guarantee: `Definitions.Accounting.Remote.Held`, `Definitions.Accounting.Assumptions.RemoteHeld`,
+  `Definitions.Accounting.Assumptions.RemoteDraw`, `Definitions.Accounting.Assumptions.RemoteSketch`,
+  `Definitions.Accounting.Guarantees.RemoteHeld`, `Definitions.Accounting.Guarantees.RemoteDraw`,
+  `Definitions.Accounting.Guarantees.RemoteSketch`, `Proofs.Accounting.RemoteHeld` and its `Draw`, `Line`, `Meets`,
   `OverTime`, `Sketch` and `Window`, and `Properties.RemoteAudit.Line` with its `Premises` and `Record`; with it every
   lock record that reads `Trace` changes.
 
