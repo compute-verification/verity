@@ -28,8 +28,10 @@ which put a later-admitted shorter prompt's first row ahead of an earlier one's.
 `keep_scheduler_rows` replaces that sort with `scheduler_order`: requests verifying draft tokens first (none without
 speculative decoding), then every row in the scheduler's order. A step is then its running requests in running order (the
 decodes, then the prefill a chunk continues, if any: under FCFS it is the latest scheduled), then its new requests' first
-rows in admission order. FLASH_ATTN, the served attention backend, has no reorder threshold, so no kernel needs the decodes
-first; batch invariance keeps each row's values independent of its place.
+rows in admission order. vLLM sorts decodes first for the attention backends that split a batch into decodes and prefills
+(``split_decodes_and_prefills``, the ones with a ``reorder_batch_threshold``: FlashInfer, MLA, Mamba); FLASH_ATTN, the
+served backend, isn't one, so no kernel needs the decodes first, and `keep_scheduler_rows` refuses an engine with one.
+Batch invariance keeps each row's values independent of its place.
 """
 from __future__ import annotations
 
@@ -197,12 +199,22 @@ def scheduler_order(num_tokens_per_req: Mapping[str, int], draft_tokens: Mapping
 
 def keep_scheduler_rows(runner: Any, scheduler: Any) -> Hooks:
     """Lay each step of ``runner`` (Model Runner V2) out in ``scheduler``'s order (`scheduler_order`, the module docstring),
-    until the returned hooks are uninstalled. Refused for a runner whose module has no ``sort_batch_req_ids`` (V1's), and
-    for a scheduler policy other than FCFS, whose waiting queue is not the admission order."""
+    until the returned hooks are uninstalled. Refused for a runner whose module has no ``sort_batch_req_ids`` (V1's), for
+    one whose attention backends aren't built yet or one of which needs the decodes first (a ``reorder_batch_threshold``),
+    and for a scheduler policy other than FCFS, whose waiting queue is not the admission order."""
     module = sys.modules.get(type(runner).__module__)
     if not callable(getattr(module, "sort_batch_req_ids", None)):
         raise RuntimeError(f"--admit release-order keeps the scheduler's row order through Model Runner V2's sort_batch_req_ids, "
                            f"which {type(runner).__module__} has none of: serve with VLLM_USE_V2_MODEL_RUNNER=1 (engine.env)")
+    groups = getattr(runner, "attn_groups", None)
+    if groups is None:
+        raise RuntimeError("--admit release-order reads the runner's attention backends (attn_groups), which aren't built yet: "
+                           "keep the scheduler's rows once the engine is up")
+    split = sorted({type(b).__name__ for gs in groups for g in gs for b in getattr(g, "metadata_builders", ())
+                    if getattr(b, "reorder_batch_threshold", None) is not None})
+    if split:
+        raise RuntimeError(f"--admit release-order keeps the scheduler's row order, but attention backend {', '.join(split)} "
+                           f"splits each batch into decodes and prefills and needs the decodes first (reorder_batch_threshold)")
     policy = getattr(getattr(scheduler, "scheduler_config", None), "policy", None)
     if policy != "fcfs":
         raise RuntimeError(f"--admit release-order needs the FCFS scheduler, whose waiting queue is the admission order; "

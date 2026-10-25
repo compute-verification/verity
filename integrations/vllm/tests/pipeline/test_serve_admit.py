@@ -5,7 +5,7 @@ good. The gate's skip is driven by hand (an injected ``schedule``), so nothing h
 
 And a step's rows (`serve_admit.keep_scheduler_rows`, VLLM-98): Model Runner V2's own order puts a later-admitted shorter
 prompt's first row ahead of an earlier one's (endpoint 2's windows 220 and 237); with the scheduler's order kept, a step's
-new rows are in admission order, decodes first."""
+new rows are in admission order, decodes first. Kept only where no attention backend needs the decodes first."""
 from __future__ import annotations
 
 import json
@@ -147,6 +147,7 @@ def runner_module() -> types.ModuleType:
 
     class GPUModelRunner:
         decode_query_len = 1
+        attn_groups = [[SimpleNamespace(metadata_builders=[FlashAttentionMetadataBuilder()])]]
 
         def gather_batch_req_state(self, so: Any) -> list[str]:
             return mod.sort_batch_req_ids(so.num_scheduled_tokens, so.scheduled_spec_decode_tokens, self.decode_query_len)
@@ -154,6 +155,14 @@ def runner_module() -> types.ModuleType:
     GPUModelRunner.__module__ = RUNNER_MODULE
     mod.GPUModelRunner = GPUModelRunner
     return mod
+
+
+class FlashAttentionMetadataBuilder:
+    reorder_batch_threshold = None
+
+
+class FlashInferMetadataBuilder:
+    reorder_batch_threshold = 1
 
 
 @pytest.fixture
@@ -174,18 +183,20 @@ def fcfs_step(running: dict[str, int], new: dict[str, int], drafts: dict[str, li
 
 FCFS = SimpleNamespace(scheduler_config=SimpleNamespace(policy="fcfs"))
 DECODES = {f"running.{i}": 1 for i in range(5)}
-#: endpoint 2 (r20261024-222638-0a91), window 237: varied.00035 (128 tokens, admitted 110), then varied.00036 (81, admitted
-#: 111), both first scheduled in its step 0 beside the running decodes
-W237 = fcfs_step(DECODES, {"varied.00035": 128, "varied.00036": 81})
-#: window 220: varied.00008/9/10 (86, 230 and 239 tokens, admitted 83/84/85) first scheduled in one step; a prefix-cache
-#: hit leaves 00010 fewer rows to schedule than 00009
-W220 = fcfs_step({}, {"varied.00008": 86, "varied.00009": 230, "varied.00010": 207})
+#: endpoint 2 (r20261024-222638-0a91, prefix caching off), window 237: varied.00035 (128 prompt tokens), then varied.00036
+#: (81), released and admitted in that order, both first scheduled in the window's step 0
+W237 = fcfs_step({}, {"varied.00035": 128, "varied.00036": 81})
+#: window 220: varied.00008/9/10 (86, 239 and 230 prompt tokens), released and admitted in that order, all three in step 0
+W220 = fcfs_step({}, {"varied.00008": 86, "varied.00009": 239, "varied.00010": 230})
+#: window 237's two beside five running decodes
+W237_DECODING = fcfs_step(DECODES, W237.num_scheduled_tokens)
 
 
 def test_model_runner_v2_lays_co_admitted_prefills_out_by_length(v2):
     runner = v2.GPUModelRunner()
-    assert runner.gather_batch_req_state(W237) == [*DECODES, "varied.00036", "varied.00035"]
+    assert runner.gather_batch_req_state(W237) == ["varied.00036", "varied.00035"]
     assert runner.gather_batch_req_state(W220) == ["varied.00008", "varied.00010", "varied.00009"]
+    assert runner.gather_batch_req_state(W237_DECODING) == [*DECODES, "varied.00036", "varied.00035"]
 
 
 def test_release_order_keeps_the_schedulers_rows(v2):
@@ -193,14 +204,15 @@ def test_release_order_keeps_the_schedulers_rows(v2):
     rows = sa.keep_scheduler_rows(runner, FCFS)
     try:
         assert hooks.live("admit-rows") and v2.sort_batch_req_ids is sa.scheduler_order
-        assert runner.gather_batch_req_state(W237) == [*DECODES, "varied.00035", "varied.00036"]
+        assert runner.gather_batch_req_state(W237) == ["varied.00035", "varied.00036"]
         assert runner.gather_batch_req_state(W220) == ["varied.00008", "varied.00009", "varied.00010"]
+        assert runner.gather_batch_req_state(W237_DECODING) == [*DECODES, "varied.00035", "varied.00036"]
         # H1's batch order reads the runner module's sort, so its tables follow the same order
-        assert [r for r, _ in RQ.batch_order(runner, W237)] == [*DECODES, "varied.00035", "varied.00036"]
+        assert [r for r, _ in RQ.batch_order(runner, W237_DECODING)] == [*DECODES, "varied.00035", "varied.00036"]
     finally:
         rows.uninstall()
     assert v2.sort_batch_req_ids is vllms and not hooks.live("admit-rows")
-    assert runner.gather_batch_req_state(W237)[-2:] == ["varied.00036", "varied.00035"]
+    assert runner.gather_batch_req_state(W237) == ["varied.00036", "varied.00035"]
 
 
 def test_a_new_row_of_one_token_stays_behind_the_earlier_admitted_prefill(v2):
@@ -225,6 +237,15 @@ def test_keeping_the_schedulers_rows_is_refused_without_its_premises(v2):
     for sched in (SimpleNamespace(scheduler_config=SimpleNamespace(policy="priority")), SimpleNamespace()):
         with pytest.raises(RuntimeError, match="FCFS"):
             sa.keep_scheduler_rows(v2.GPUModelRunner(), sched)
+    unbuilt = v2.GPUModelRunner()
+    unbuilt.attn_groups = None
+    with pytest.raises(RuntimeError, match="attn_groups"):
+        sa.keep_scheduler_rows(unbuilt, FCFS)
+    splitting = v2.GPUModelRunner()
+    splitting.attn_groups = [[SimpleNamespace(metadata_builders=[FlashAttentionMetadataBuilder()])],
+                             [SimpleNamespace(metadata_builders=[FlashInferMetadataBuilder()])]]
+    with pytest.raises(RuntimeError, match="FlashInferMetadataBuilder .*decodes first"):
+        sa.keep_scheduler_rows(splitting, FCFS)
     assert not hooks.live("admit-rows")
 
 
@@ -234,7 +255,7 @@ def test_the_pinned_runner_orders_rows_as_its_mirror_and_takes_the_schedulers_or
     mr = pytest.importorskip("vllm.v1.worker.gpu.model_runner")
     for step in (W237, W220):
         assert mr.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1) == RQ.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1)
-    runner = type("GPUModelRunner", (), {"__module__": mr.__name__})()
+    runner = type("GPUModelRunner", (), {"__module__": mr.__name__, "attn_groups": []})()
     with sa.keep_scheduler_rows(runner, FCFS):
         assert mr.sort_batch_req_ids(W237.num_scheduled_tokens, {}, 1) == list(W237.num_scheduled_tokens)
 
