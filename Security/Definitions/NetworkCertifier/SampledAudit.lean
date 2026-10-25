@@ -128,18 +128,20 @@ def allSlotsFrom : List Rule → List (List (List RU)) → ℕ → Finset ℕ
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and:
-the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot drawn `all`; and some
-advice `(a, free)` holds values only at the faulty units' committed gates (`FaultyGate`) and makes `Accepted` by the
-circuit's Program, over the horizon, every observation sequence and operator the trace's transfer gates carry
-(`Carries`) with every status complete (`Covered`). -/
+the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot drawn `all`; and the
+advice `(traceVal C ref, free)`, its inputs the trace's committed values and `free` holding values exactly at the
+faulty units' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every observation
+sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
+are pinned to the trace, so the registered ones are what the registration commits. -/
 def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
     (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w ∧
     Disjoint (faulty H Cm s P w) (allSlots s.design P) ∧
-    ∃ adv : (ℕ → Bool) × (ℕ → Option Bool), (∀ g b, adv.2 g = some b → FaultyGate s.prog P (faulty H Cm s P w) g) ∧
+    ∃ free : ℕ → Option Bool, (∀ g b, free g = some b → FaultyGate s.prog P (faulty H Cm s P w) g) ∧
+      (∀ g, FaultyGate s.prog P (faulty H Cm s P w) g → free g ≠ none) ∧
       ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
         Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o →
-          Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o adv
+          Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o (traceVal s.prog (w.val H Cm s), free)
 
 section Claim
 
