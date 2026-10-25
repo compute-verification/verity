@@ -26,6 +26,10 @@ ends an absence of up to 2·L_max at every rebuild and ingress the ceilings allo
 L_max = f·k/r + c with f groups in flight. The recorded sessions run their passes back to back with two in flight (each
 group's coin leaves before the root of the group before it arrives), so f = 2 there, with c measured. f = 1 is a coin
 sent on a timer at r/k a second once the root before it is in, which no session has run: modeled, with the same c.
+
+One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s draws a coin. The script
+solves each point's plan at g = 1, 2, 4, 8 and holds each to the code's reading (`coin_check`: `audit.pooled` on a
+record naming g), refusing to go on unless the closed form agrees.
 """
 from __future__ import annotations
 
@@ -95,9 +99,10 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
             "held_lost_blocks": chip + (2 * l_max * (rebuilds + burst) + fill) / span}
 
 
-def record_of(windows: list[tuple[int, int]]) -> SimpleNamespace:
-    """What `audit.pooled` reads of a record: each window's receipts and draws."""
-    return SimpleNamespace(windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
+def record_of(windows: list[tuple[int, int]], per_coin: int = 1) -> SimpleNamespace:
+    """What `audit.pooled` reads of a record: each window's receipts and draws, and the windows an openings coin
+    draws over (`groups_per_coin`)."""
+    return SimpleNamespace(groups_per_coin=per_coin, windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
         delta=audit.DELTA, drawn={"receipt": d})) for u, d in windows])
 
 
@@ -258,19 +263,22 @@ def costs(p: dict, prices: dict, *, o: float, r: float) -> dict:
 
 
 def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, flight: int = 2,
-          price: str = "fit", shared: bool = False) -> dict | None:
+          price: str = "fit", shared: bool = False, per_coin: int = 1) -> dict | None:
     """The cheapest (r, k, d) whose held-over-time sampling term over Θ is at most ε, and, under `line_rule`, whose
     rebuild excess over L_max's floor c, 2·f·(X_r + I)·k / (r·N), is at most ε too. For each (k, d), r is the least that
     meets them: k/r ≤ ε·N/(2·f·(X_r + I)), and k/r·(β + min(1, β)·(f − 1)) + min(1, β)·c ≤ ε·Θ.
 
     A group is a window of `audit.pooled`'s, and a window it draws nothing from may be wrong throughout, so d ≥ 1.
     `shared` lets one openings coin draw over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
-    has run it, so it is modeled, with the same closed form."""
+    has run it, so it is modeled, with the same closed form. `per_coin` is the code's (`audit.Params.groups_per_coin`,
+    g): one openings coin over g groups, the pooled bound's window a draw of g groups, so d is s/g at s ≥ 1 draws a
+    coin."""
     tau = eps * p["blocks"] / (2 * flight * p["xi"]) if line_rule else math.inf
     t_s = p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
+    ds = [s / per_coin for s in range(1, 4096 * per_coin + 1)] if per_coin > 1 else list(range(1, 4097))
     best = None
     for k in range(1, 9):
-        for d in ([1 / m for m in range(512, 1, -1)] if shared else []) + list(range(1, 4097)):
+        for d in ([1 / m for m in range(512, 1, -1)] if shared else []) + ds:
             beta = LN / d
             room = eps * theta - min(1.0, beta) * p["c_s"]
             if room <= 0:
@@ -286,8 +294,36 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
         return None
     _, k, d, r, o = best
     return {"eps": eps, "theta_s": theta, "line_rule": line_rule, "flight": flight, "price": price, "shared": shared,
-            "k": k, "d": d, "r": r, "o": o, **line_at(p, o=o, d=d, k=k, r=r, theta=theta, flight=flight),
-            **costs(p, prices, o=o, r=r)}
+            "per_coin": per_coin, "k": k, "d": d, "r": r, "o": o,
+            **line_at(p, o=o, d=d, k=k, r=r, theta=theta, flight=flight), **costs(p, prices, o=o, r=r)}
+
+
+def coin_check(p: dict, s: dict) -> dict:
+    """A plan `s` drawn g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
+    term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
+    whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
+    (all of a coin's draws on its last group, as `Session.close` may share them: the code pools them over the coin's
+    groups). Refuses to go on unless they agree."""
+    g, k, r, N = s["per_coin"], s["k"], s["r"], p["blocks"]
+    drawn = round(s["d"] * g)
+    gap, L = k / r * 1e9, s["l_max_s"] * 1e9
+    n = math.ceil((s["theta_s"] * 1e9 + L) / gap / g) * g
+    seen = [{"released_ns": x * gap, "passes": k, "arrivals_ns": [x * gap + L]} for x in range(n + g)]
+    rec = record_of([(k * N, drawn if x % g == g - 1 else 0) for x in range(n + g)], g)
+    wrong = audit.pooled(rec)[0]
+    B = budget(drawn * (n + g) // g)
+    a = span_line(groups_of(seen), 0, n, wrong=wrong, blocks=N, per_ns=0.0, chip=0.0)
+    theta = a["span_ns"] / 1e9
+    held = closed(o=s["o"], d=s["d"], k=k, r=r, l_max=L / 1e9, theta=theta, B=B)[1]
+    agree(f"g = {g}, r = {r:.4g}, k = {k}, {drawn} a coin: held", held * N, a["wrong_absent_blocks"])
+    return {"groups": n, "coins": n // g, "draws_per_coin": drawn, "span_s": theta, "wrong": wrong,
+            "eps_held": a["wrong_absent_blocks"] / N}
+
+
+def tree_bytes(blocks: int) -> int:
+    """A pass's receipt tree from h0 up, which the prover keeps until its coin's openings: N/16 leaves of 64 B and the
+    levels over them, about twice the leaves."""
+    return 2 * math.ceil(blocks / 16) * 64
 
 
 def pct(x: float, digits: int = 3) -> str:
@@ -383,6 +419,44 @@ def main() -> None:
                      f"openings a {T:g}-s window", "L_max", "ε held (reading)", "ε held a window", "rebuilds held",
                      "pass serving a GPU (GPUs)", "proving GPUs, fit / floor", "deployed unit, fit / floor"], rows))
 
+    coin_plans, coin_fixed = [], []
+    md.append(f"\n## One openings coin over g groups (`groups_per_coin`): the cheapest plan at ε* = 1% held over time "
+              f"pooled over {H:g} s, the line rule, two in flight, each plan read by the code (`coin_check`)\n")
+    for name in ("32B x8", "8B x8"):
+        p, base = pts[name], None
+        for g in (1, 2, 4, 8):
+            s = solve(p, prices, 0.01, theta=H, line_rule=True, flight=2, per_coin=g)
+            s.update(point=name, check=coin_check(p, s), tree_bytes=g * s["k"] * tree_bytes(p["blocks"]))
+            base = base or s
+            s["line_change_bytes"] = s["credited_bytes"] - base["credited_bytes"]
+            coin_plans.append(s)
+        r, k, first = base["r"], base["k"], None
+        for g in (1, 2, 4, 8):
+            o = r / (k * g)
+            x = {"point": name, "per_coin": g, "r": r, "k": k, "d": 1 / g, "o": o, "theta_s": H,
+                 **line_at(p, o=o, d=1 / g, k=k, r=r, theta=H), **costs(p, prices, o=o, r=r)}
+            x["check"] = coin_check(p, x)
+            first = first or x
+            x["line_change_bytes"] = x["credited_bytes"] - first["credited_bytes"]
+            coin_fixed.append(x)
+
+    def coin_row(x: dict) -> list:
+        drawn = x["check"]["draws_per_coin"]
+        return [x["point"], x["per_coin"], f"{x['r']:.3g}", x["k"], drawn, f"{x['o']:.3g}", f"{x['o'] * T:,.0f}",
+                f"{x['r'] / x['k'] * (1 + 1 / x['per_coin']):.3g}", pct(x["eps_held"]), pct(x["rebuild_held"]),
+                f"{x['passes_gpus']:.2f}", f"{x['proving_gpus_fit']:.2f} / {x['proving_gpus_floor']:.2f}",
+                f"{x['passes_gpus'] + x['proving_gpus_fit']:.2f}",
+                f"{x['credited_bytes'] / 1e9:.1f} ({x['line_change_bytes'] / 1e9:+.2f}) GB"]
+
+    head = ["point", "g", "passes/s r", "k", "draws a coin", "openings/s o", f"openings a {T:g}-s window", "coins a s",
+            "ε held, pooled", "rebuilds held", "passes, GPUs", "proving GPUs, fit / floor", "total at fit",
+            "weights credited, held (vs g = 1)"]
+    md.append(table(head + ["receipt trees held to the coin"],
+                    [coin_row(x) + [f"{x['tree_bytes'] / 1e9:.2f} GB"] for x in coin_plans]))
+    md.append(f"\n## The same at g = 1's pass rate, one draw a coin: the openings g saves, and what the line gives "
+              f"for them\n")
+    md.append(table(head, [coin_row(x) for x in coin_fixed]))
+
     md.append(f"\n## Pass rate at each point's 1% openings rate (the line rule's, else ε only's), pooled over "
               f"{H:g} s\n")
     sweep = []
@@ -437,7 +511,8 @@ def main() -> None:
                      ["device floor (firewall)", f"{prices['floor']:.4f}", f"{prices['floor_deployed']:.4f}"]]))
 
     out = {"recorded": recorded, "uniform_checks": uniform, "prices": prices, "points": pts, "region": region,
-           "sweep": sweep, "serve": serve, "window_s": T, "horizon_s": H, "delta": audit.DELTA, "ln_inv_delta": LN}
+           "sweep": sweep, "serve": serve, "per_coin": {"plans": coin_plans, "at_g1_rate": coin_fixed},
+           "window_s": T, "horizon_s": H, "delta": audit.DELTA, "ln_inv_delta": LN}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "sampling-inputs.json").write_text(json.dumps(out, indent=1, default=str))
     (a.out / "sampling-inputs.md").write_text("\n".join(md) + "\n")

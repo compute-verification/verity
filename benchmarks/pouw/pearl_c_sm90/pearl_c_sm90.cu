@@ -25,28 +25,52 @@
 PL_INSTANCE(851)
 #include "acc.h"
 
-// the grouped calls' commitment and tile leaves (grouped.py), hash_decode.cuh's bodies unchanged: unit u's launch is the Args at
-// p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch (pd_commit's rows, pd_tiles' tiles).  The
-// Args are read through the read-only path, which ptxas reloads after PD_LOOP's called producer (pd_pserve_call); a plain
-// copy stays live across that call and spills (56 bytes of stack in pd_commit_g_851, r20261023-091751-b744)
-DEV Args pd_unit(const Args& g) {
-  const Args* __restrict__ s = reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * blockIdx.y);
+// the grouped calls' commitment, A's tree past pd_commit's mode 1, and tile leaves (grouped.py), hash_decode.cuh's bodies
+// unchanged: unit u's launch is the Args at p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch
+// (pd_commit's rows, pd_tree's one, pd_tiles' tiles or PD_GROUP's groups of them); pd_commit_g and pd_commit_gm take a
+// unit's filler rows' digest from its record (pd_commit_t's Z: they are zero rows).  The Args are read through the read-only
+// path, which ptxas reloads after PD_LOOP's called producer (pd_pserve_call); a plain copy stays live across that call and
+// spills (56 bytes of stack in pd_commit_g_851, r20261023-091751-b744)
+DEV Args pd_unit_at(const Args& g, uint32_t u) {
+  const Args* __restrict__ s = reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * u);
   Args a;
   for (int j = 0; j < 16; j++) a.p[j] = __ldg(s->p + j);
   for (int j = 0; j < 16; j++) a.i[j] = __ldg(s->i + j);
   return a;
 }
+DEV Args pd_unit(const Args& g) { return pd_unit_at(g, blockIdx.y); }
 #define PD_GROUPED(V)                                                                                                    \
   extern "C" __global__ void __launch_bounds__(192) pd_commit_g_##V(const Args g) {                                    \
     const Args a = pd_unit(g);                                                                                           \
-    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V>(a);                                                                     \
+    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V, true>(a, blockIdx.x);                                                   \
   }                                                                                                                      \
+  extern "C" __global__ void __launch_bounds__(128) pd_tree_g_##V(const Args g) { pd_tree_t<V>(pd_unit(g)); }          \
   extern "C" __global__ void __launch_bounds__(32) pd_tiles_g_##V(const Args g) {                                      \
     const Args a = pd_unit(g);                                                                                           \
     static_assert((V & PD_GROUP) == 0, "a CTA a tile");                                                                  \
     if ((int)blockIdx.x < (a.i[0] + 63) / 64 * (a.i[1] / 64)) pd_tiles_t<V>(a);                                          \
   }
 PD_GROUPED(851)
+// pd_tiles_g with PD_GROUP: CTA (x, u) unit u's CTA x of G tiles of a row block (pd_tiles_V's grid at G, cdiv(tiles a row,
+// G) a row block), their folds side by side on one warp: pd_tiles_g at PD_G, pd_tiles_gw at PD_GW, a quarter of the CTAs,
+// so a decode call's tile leaves hold fewer of the SMs the next call's pd_commit_gm takes whole
+constexpr int PD_GW = 16;
+#define PD_GROUPED_TILES(V, G, NAME)                                                                                     \
+  extern "C" __global__ void __launch_bounds__(32 * G) NAME##_##V(const Args g) {                                      \
+    const Args a = pd_unit(g);                                                                                           \
+    static_assert((V & PD_GROUP) != 0, "G tiles a CTA");                                                                 \
+    if ((int)blockIdx.x < (a.i[0] + 63) / 64 * ((a.i[1] / 64 + G - 1) / G)) pd_tiles_t<V, G>(a);                         \
+  }
+PD_GROUPED_TILES(979, PD_G, pd_tiles_g)
+PD_GROUPED_TILES(979, PD_GW, pd_tiles_gw)
+// pd_commit_g on a 1-D grid of the call's rows: CTA x is row map[x] & 0xFFFF of unit map[x] >> 16, the map (u32s) at p1, in
+// the order grouped.py gives (the units' rows apart on the SMs, their filler rows on the CTAs past the SMs)
+#define PD_GROUPED_ROWS(V)                                                                                               \
+  extern "C" __global__ void __launch_bounds__(192) pd_commit_gm_##V(const Args g) {                                   \
+    const uint32_t m = __ldg(reinterpret_cast<const uint32_t*>(g.p[1]) + blockIdx.x);                                    \
+    pd_commit_t<V, true>(pd_unit_at(g, m >> 16), (int)(m & 0xFFFFu));                                                    \
+  }
+PD_GROUPED_ROWS(851)
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
 DEV float bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }

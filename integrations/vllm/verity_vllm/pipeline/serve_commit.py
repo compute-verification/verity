@@ -16,10 +16,9 @@ With ``seal`` each closed window is also sealed as a deferred Commit's row dir (
 
 With ``served`` (the compile slice's statics, `served_statics`) each close also commits the step rows the window ran
 (`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
-id, its index in the order the engine admitted the run's requests. The record's public part (the registration's root,
-its count and row width, and each slice window's salted digest) goes into the window's ``windows.jsonl`` line, beside
-its run root, written at the close and so before any draw over it; the rows and both salts go to
-``served_rows/w<k>.json``, the prover's.
+id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
+binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
+close and so before any draw over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
 """
 from __future__ import annotations
 
@@ -37,7 +36,7 @@ from verity_vllm.commit.served_record import Record, base_id, served_rows, windo
 from verity_vllm.pipeline.serve_seal import seal_window, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
-SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K", "SEG")
+SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 
 #: The request fields that are sampling inputs, recorded as each request brought them.
 SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "ignore_eos", "stop",
@@ -79,16 +78,16 @@ def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> 
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
         raise ValueError(f"the served rows' size class needs {missing}")
     c = {k: int(size_class[k]) for k in SERVED_CLASS}
-    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"], SEG=c["SEG"])
+    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
 
 
 def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
-                  run_root: bytes, **salts: Any) -> tuple[SRW.Served, list]:
+                  run_root: bytes, salts: Sequence[bytes] | None = None) -> tuple[SRW.Served, list]:
     """A window's served rows (`served_record.served_rows`' form, by step) committed under its run root
     (`served_rows.register`, fresh salts unless ``salts`` gives them), and the slice windows they make."""
     S = SimpleNamespace(**statics)
     session = SRW.windows(S, by_step, ids, steps)
-    return SRW.register(S, session, run_root, **salts), session
+    return SRW.register(S, session, run_root, salts=salts), session
 
 
 @dataclass
@@ -100,6 +99,8 @@ class Ledger:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
+    release: Any = None                          # (the warden's run, its place in the release order), under --admit release-order
+    admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
     finished: bool = False
@@ -138,7 +139,7 @@ class CommitWindows:
         self.known[adm.engine_id] = adm.http_id
         self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
         self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
-                                             getattr(adm, "user", None))
+                                             getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1)
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
 
     def streamed(self, engine_id: str, token_ids: list[int], finish_reason: str | None, stop_reason: Any) -> None:
@@ -231,7 +232,7 @@ class CommitWindows:
         (d / f"w{rec['window']}.json").write_text(json.dumps({
             "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
             "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
-            "salts": [s.hex() for s in served.registration.salts], "digest_salts": [s.hex() for s in served.digest_salts]}))
+            "salts": [s.hex() for s in served.registration.salts]}))
         return {**served.record(), "statics": self.served}
 
     def _seal(self, rec: dict[str, Any], rc: Any) -> dict[str, Any]:
@@ -282,11 +283,12 @@ class CommitWindows:
                 led = self.ledgers.pop(eid)
                 rr = self.record.requests.get(eid)
                 rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "arrival": self.arrivals.get(eid),
-                       "runner_ids": rr.runner_ids if rr else [],
+                       "release": led.release, "admitted": led.admitted, "runner_ids": rr.runner_ids if rr else [],
                        "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
                        "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
                        "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led)}
-                self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"]})
+                self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
+                                     "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
 
     def summary(self) -> dict[str, Any]:
@@ -294,4 +296,6 @@ class CommitWindows:
         bad_win = [r["window"] for r in self.records if not r["passed"]]
         return {"windows": len(self.records), "windows_failed": bad_win, "steps": sum(r["steps"] for r in self.records),
                 "requests_checked": len(self.checked), "requests_failed": [c["http_id"] for c in bad_req][:20],
+                "cache_hits": sum(1 for c in self.checked if c.get("cache_hit")),
+                "cached_positions": sum(int(c.get("cache_hit") or 0) for c in self.checked),
                 "unchecked": sorted(self.ledgers), "passed": bool(self.checked) and not bad_req and not bad_win and not self.ledgers}

@@ -223,12 +223,12 @@ class Replay:
     case's 2W, then its append coins in the order drawn, each the audit's 32 bytes padded to the challenger's 64 under a
     zero salt. Past the case's append coins it refuses the case, as the Lean does."""
 
-    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes]) -> None:
+    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes], per_coin: int = 1) -> None:
         a = max(coins.APPENDS, len(appends))
         padded = [c + bytes(LIVE_COIN_BYTES - len(c)) for c in [*committed, *appends]]
         out = iter(x for c in padded + [bytes(LIVE_COIN_BYTES)] * (a - len(appends))
                    for x in (c, bytes(HM96.salt_bytes)))
-        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a), lambda n: next(out))
+        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a, per_coin), lambda n: next(out))
         self.commitment, self.appends = self.live.commitment, len(appends)
 
     def open(self, label: str, index: int, after: bytes) -> coins.LiveOpening:
@@ -237,8 +237,9 @@ class Replay:
         return self.live.open(label, index, after)
 
 
-def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes]) -> coins.Coins:
-    return coins.Coins(Replay(k, windows, committed, appends), reg.digest, k, windows)
+def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
+             per_coin: int = 1) -> coins.Coins:
+    return coins.Coins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows, per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -281,9 +282,11 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
 
 def summary(s: Session) -> dict:
     """`summaryJ`: what `Session.record` gives that the port computes, which is all of it but the coin commitment's
-    root, the block size and the registration's fields its digest binds, and of each window's profile its draws."""
+    root, the block size and the registration's fields its digest binds, and of each window's profile its draws; and
+    `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
-    return {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+    shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
+    return shared | {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
             "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
             "windows": [{"arrived_ns": list(w.arrived_ns), "deadline_ns": w.deadline_ns,
@@ -305,17 +308,21 @@ def pace_of(v: Any) -> audit.Pace | None:
     return None if v is None else audit.Pace(_positive(v, "k"), _positive(v, "window_ns"))
 
 
-def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
+def session_of(v: Any, shared: bool = False) -> tuple[dict, list[bytes], list[bytes], int]:
     """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
-    them), its 2W coins, its append coins and its `not_before_ns`."""
+    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent, and
+    refused above 1 unless `shared` (`sessionFn`'s, not the registry's)."""
     p = _get(v, "params")
     kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
     kw["deferred"] = _bool(p, "deferred")
     kw["pace"] = pace_of(_get(p, "pace"))
+    kw["groups_per_coin"] = _positive(p, "groups_per_coin") if "groups_per_coin" in p else 1
+    if kw["groups_per_coin"] != 1 and not shared:
+        raise D.Reject("the registry draws a window an openings coin: groups_per_coin is 1")
     Params(1, **kw)
     committed = hexes(v, "coins")
-    if len(committed) != 2 * kw["windows"] or any(len(c) != coins.COIN_BYTES for c in committed):
-        raise D.Reject("2W coins of 32 bytes")
+    if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
+        raise D.Reject("W + ⌈W/g⌉ coins of 32 bytes")
     appends = hexes(v, "append_coins")
     if any(len(c) != coins.COIN_BYTES for c in appends):
         raise D.Reject("append coins are 32 bytes")
@@ -330,12 +337,12 @@ def session(v: Any) -> dict:
     """`sessionFn`: a case's events through `audit.Session`, every event's result, the outcome and the record."""
     with decoding():
         reg = registration_of(_get(v, "registration"))
-        kw, committed, appends, not_before = session_of(v)
+        kw, committed, appends, not_before = session_of(v, shared=True)
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends), not_before_ns=not_before,
-                clock=clock)
+    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+                not_before_ns=not_before, clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
 
@@ -502,18 +509,18 @@ class Run:
     clock moves one tick an event unless a call needs more. Every receipt is drawn unless `samples` says fewer."""
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
-                 lifetime: int = audit.LIFETIME, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
+                 lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
                  not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
-                 pace: audit.Pace | None = None) -> None:
+                 pace: audit.Pace | None = None, groups_per_coin: int = 1) -> None:
         self.store = store(world)
         reg = self.store.registration
         self.params = Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=min_passes,
                              window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime,
-                             deferred=deferred, pace=pace)
+                             deferred=deferred, pace=pace, groups_per_coin=groups_per_coin)
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
-        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"))
+        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
                                    entropy=Entropy(b"receipt salts"))
@@ -599,14 +606,15 @@ class Run:
         return self.receive(**sent)
 
     def close(self, t: int, at: int | None = None) -> Any:
-        """Window t's draws, at the earliest its roots are final unless `at`."""
+        """Window t's draws, at the earliest its roots are final unless `at`; each window of its draw keeps its share."""
         if at is None:
             w = self.s.windows[t] if 0 <= t < len(self.s.windows) else None
             d = self.s.deadline(t) if w is not None else None
             at = self.clock.now + 1 if w is None or w.final or d is None else max(self.clock.now + 1, d + 1)
         out = self._call({"kind": "close", "t": t, "now": self.tick(at)}, lambda: self.s.close(t))
         if isinstance(out, tuple):
-            self.draws[t] = out
+            for u in self.params.draw_of(t):
+                self.draws[u] = self.s.windows[u].draws
         return out
 
     def openings(self, t: int) -> list[audit.Opening]:
@@ -618,26 +626,32 @@ class Run:
                           lambda: self.s.verify(t, opened))
 
     def finish(self, edit: Callable[[int, list[audit.Opening]], list[audit.Opening]] | None = None) -> None:
-        """Every window not yet drawn closed and verified in order, its openings through `edit`, until one fails."""
+        """Every draw not yet drawn closed at its last window and its windows verified in order, their openings
+        through `edit`, until one fails; a window its close accepted, its share none, isn't verified."""
         for t in range(len(self.s.windows)):
             if t in self.draws:
                 continue
-            out = self.close(t)
+            group = self.params.draw_of(t)
+            out = self.close(group[-1])
             if not isinstance(out, tuple):
                 return
-            v = self.verify(t, None if edit is None else edit(t, self.openings(t)))
-            if not (isinstance(v, audit.Verdict) and v.accepted):
-                return
+            for u in group:
+                if self.s.windows[u].verdict is not None:
+                    continue
+                v = self.verify(u, None if edit is None else edit(u, self.openings(u)))
+                if not (isinstance(v, audit.Verdict) and v.accepted):
+                    return
 
     def case(self) -> dict:
         p = self.params
         return {"append_coins": [c.hex() for c in self.append_coins],
-                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:2 * p.windows]],
+                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:p.coins]],
                 "events": self.events,
                 "not_before_ns": self.not_before_ns,
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
                            "min_passes": p.min_passes, "pace": None if p.pace is None else p.pace.to_json(),
-                           "samples": p.samples, "window_ns": p.window_ns, "windows": p.windows},
+                           "samples": p.samples, "window_ns": p.window_ns, "windows": p.windows}
+                | ({} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}),
                 "registration": registration_json(self.store.registration)}
 
 
@@ -1045,6 +1059,50 @@ def honest_paced_drawn_at_k(r: Run) -> None:
     r.verify(1)
 
 
+def honest_shared(r: Run) -> None:
+    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each draw closed at its
+    last window and its windows verified on their shares. A close at a window before its draw's last is refused, and
+    a window whose share is none, accepted at its close, is refused a verify."""
+    r.start()
+    for t in range(r.params.windows):
+        r.run()
+        if t == 1:
+            r.close(0)
+        r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+        r.boundary()
+    r.finish()
+    for u, w in enumerate(r.s.windows):
+        if w.draws == ():
+            r.verify(u, [])
+
+
+SKIPPED = Plan(((0, 3), (4, 2)), 6)
+"""The default world's store but block 3, which only a skipper's window 2 plans to read."""
+
+
+def skipper_shared(r: Run) -> None:
+    """Under one openings coin over four windows, the prover holds block 3 as zeros (`dropping`), which only window 2's
+    pass reads, so it skips that read and makes its receipt from what it holds; fetched again for the opening, the
+    receipt isn't the committed one (`receipt`) at window 2, past the windows before it, which verify."""
+    r.start()
+    for t in range(4):
+        r.run(None if t == 2 else SKIPPED)
+        r.boundary()
+    honest_blocks = r.store.blocks
+    r.finish(lambda t, opened: [dataclasses.replace(o, block=honest_blocks[3])
+                                if r.passes[t, o.pass_index].plan.block(o.position) == 3 else o for o in opened])
+
+
+def few_shared(r: Run) -> None:
+    """Window 0 of a draw over four sees no root: the draw's close at window 3 fails `few` at window 0."""
+    r.start()
+    r.boundary()
+    for _ in range(3):
+        r.run()
+        r.boundary()
+    r.finish()
+
+
 def malformed_root(r: Run) -> None:
     r.start()
     r.receive(0, 0, bytes(32), step=0)
@@ -1159,6 +1217,12 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
     "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
+    "honest-shared-4": (World(), dict(windows=8, groups_per_coin=4, samples=5), honest_shared, "accepted"),
+    "honest-shared-paced-uneven": (World(), dict(PACED, windows=5, groups_per_coin=2, samples=3), honest_shared,
+                                   "accepted"),
+    "skipper-shared-4": (World(), dict(windows=4, groups_per_coin=4, cheat=dropping(lambda j: j == 3)), skipper_shared,
+                         "receipt"),
+    "few-shared": (World(), dict(windows=4, groups_per_coin=4), few_shared, "few"),
     "late": (World(), dict(deadline_ns=5), late, "late"),
     "plan-repeated-block": (World(), {}, lambda r: plan(r, ((0, 3), (2, 2))), "plan"),
     "plan-adjacent-runs": (World(), {}, lambda r: plan(r, ((0, 2), (2, 2))), "plan"),

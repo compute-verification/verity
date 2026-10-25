@@ -32,11 +32,11 @@ torch's current stream, in the device's primary context:
   (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
-* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option's model runner hook does at
-  each engine step's end, since one pass's buffers hold a few prefill steps at most): the transcript is every call's A root
-  and one tile tree over every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a
-  retain directory, the pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's
-  rows and tree levels per weight, the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
+* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option does at each engine step's
+  end, `pouw_pass`, holding a step to what one pass takes): the transcript is every call's A root and one tile tree over
+  every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the
+  pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels per
+  weight (linked to the first retained pass's), the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
@@ -78,6 +78,7 @@ from verity.core.protocols.pouw.serving import (
     hash_format,
 )
 
+from .pouw_pass import pass_dir, room
 from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from .pouw_pearl_c_lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
     SIDE_GROUPS,
@@ -96,6 +97,7 @@ from .pouw_pearl_c_host import (
     _Keys,
     _KeyTable,
     _Lane,
+    _linked,
     _put,
     _stream,
     _TorchStream,
@@ -307,7 +309,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                              f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
-        self.nb, self.salt_key = kernel.run.NB, salt_key
+        self.nb, self.salt_key, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, salt_key, None, 0, {}
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a = whole_defer, whole_defer_a
         self._graphs: dict[tuple, _Graph] = {}
@@ -583,11 +585,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         m = x2.shape[0]
         m16 = -(-m // ROW_ALIGN) * ROW_ALIGN
         sh = self._shape(m16, wt.n, k)
-        index = len(cur.matmuls)
         tiles = self.kernel.run.cdiv(m16, self.kernel.run.TILE) * (wt.n // self.kernel.run.TILE)
-        if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > len(self.flag_buf)):
-            raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
-                               f"{len(self.flag_buf)} screened rows); end it and begin another")
+        cur = room(self, tiles, m, CALL_CAPACITY)
+        index = len(cur.matmuls)
         self.join_before(sh)
         sh.xa[:m].copy_(x2)
         self.eager_only = self.eager_only and not self.graphs
@@ -643,6 +643,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
         that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
+        retain = retain or pass_dir(self)
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
         self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
@@ -720,9 +721,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             wt = self.weights[w]
             size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
             weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                               "rows": _write(wd / f"{w}.rows.bf16", _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8)),
-                                              digest=False),
-                               "tree": _write(wd / f"{w}.tree", _bytes(wt.b["tree_b"][:size]))}
+                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False,
+                                               data=lambda wt=wt: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))),
+                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
         matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
                     "root_a": roots_a[self.nb * u.index:self.nb * (u.index + 1)].hex(), **f}
