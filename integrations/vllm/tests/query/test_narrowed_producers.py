@@ -115,13 +115,28 @@ def test_the_manifest_places_the_last_layers_prompt_identities_at_the_last_runti
     those identities carry `runtime_rows` [LP - 1, LP], a decode step's and the LM head's (vLLM gathers the sampled row first) none,
     and the narrowed rows the columns of the whole rows they are."""
     _d, man, _inst = build
-    placed = {(r["op_path"], r["output_member"]): tuple(r["runtime_rows"]) for r in man["identities"] if r.get("runtime_rows")}
+    module = {(canon, k): alias for alias, (canon, k) in man["op_path_aliases"].items()}
+    placed = {(module.get((r["op_path"], r["invocation"]), r["op_path"]), r["output_member"]): tuple(r["runtime_rows"])
+              for r in man["identities"] if r.get("runtime_rows")}
     assert {r["step"] for r in man["identities"] if r.get("runtime_rows")} == {0}
     assert set(placed.values()) == {(LP - 1, LP)}
-    assert {(LAST_QKV, "out"), ("lm.model.norm", "0"), ("lm.model.norm", "1")} <= set(placed)
+    assert {(LAST_QKV, "out"), ("lm.model.layers.1.rotary_emb", "query"), ("lm.model.norm", "0"), ("lm.model.norm", "1")} <= set(placed)
     assert all(op.startswith("lm.model.layers.1.") or op == "lm.model.norm" for op, _m in placed)
     assert {(r["op_path"], r["output_member"]): r.get("columns") for r in man["identities"] if r.get("narrowed_of")} == {
         (LAST_QKV, "out@64"): [64, 128]}
+
+
+def test_the_last_layers_shared_rope_is_the_shared_modules_last_invocation(build):
+    """vLLM registers one rope module for every layer (`get_rope`), under the first layer.  `dead_free` leaves the last layer's
+    rope its prompt queries' last row only, which changes how many Calls its body has but not the body: the manifest still
+    addresses it as the shared module's last invocation, never at a path the runtime tree has no module for."""
+    _d, man, _inst = build
+    assert man["op_path_aliases"] == {"lm.model.layers.1.rotary_emb": ["lm.model.layers.0.rotary_emb", 1]}
+    assert not [r for r in man["identities"] if r["op_path"].startswith("lm.model.layers.1.rotary_emb")]
+    assert {(r["step"], r["output_member"]): (r["element_range"], r.get("runtime_rows")) for r in man["identities"]
+            if r["op_path"] == "lm.model.layers.0.rotary_emb" and r["invocation"] == 1} == {
+        (0, "query"): ([0, 4 * 16], [LP - 1, LP]), (0, "key"): ([0, LP * 2 * 16], None),
+        (1, "query"): ([0, 4 * 16], None), (1, "key"): ([0, 2 * 16], None)}
 
 
 class _Qkv(torch.nn.Module):

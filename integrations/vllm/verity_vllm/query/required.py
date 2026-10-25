@@ -141,16 +141,17 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
     """module -> (canonical module, invocation) for module bodies that are one shared instance, and the faults.
 
     Two bodies are one instance when they read the SAME non-empty set of registered parameters and have the same body signature (the
-    multiset of (Definition, hint) of their Calls); the canonical body is the one a shared parameter is registered under (vLLM registers a
-    shared module under the first path that holds it); invocation = the body's order among the group.  Fail-closed: a group with no or
-    several canonical candidates, or unequal signatures, is not aliased and is reported."""
+    set of (Definition, hint) of their Calls, not their counts: `dead_free` drops one invocation's dead rows, as the last layer's
+    prompt queries before the last, never its body); the canonical body is the one a shared parameter is registered under (vLLM
+    registers a shared module under the first path that holds it); invocation = the body's order among the group.  Fail-closed: a
+    group with no or several canonical candidates, or unequal signatures, is not aliased and is reported."""
     reads: dict[str, set[str]] = defaultdict(set)
-    sig: dict[str, Counter] = defaultdict(Counter)
+    sig: dict[str, set] = defaultdict(set)
     first: dict[str, int] = {}
     for c in P.calls:
         m = corr.module_of(c.id)
         first.setdefault(m, c.id)
-        sig[m][(c.definition, corr.name(c.id).hint)] += 1
+        sig[m].add((c.definition, corr.name(c.id).hint))
         for v in param_reads(c):                          # record_fields keys are prescribed-input Values: only those reads can hit
             f = record_fields.get(v)
             if f is not None:
@@ -160,7 +161,7 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
         if fs and m:
             # keyed by (parameters read, body signature): a body with another signature reading the same parameter is a different
             # logical producer (a tied embedding read by the logits Gemm), never an invocation of this one
-            groups[(frozenset(fs), tuple(sorted(sig[m].items())))].append(m)
+            groups[(frozenset(fs), frozenset(sig[m]))].append(m)
     out: dict[str, tuple[str, int]] = {}
     faults: list[str] = []
     for (fs, _sig), mods in groups.items():
