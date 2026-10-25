@@ -2,8 +2,9 @@
 r20261024-141912-8eb1, which `replay_vectors.py --slice 212` builds from the run's scheduler trace and its seal. Its three
 requests' 14 decisions and 20 steps, at the served engine with the slice's sync ReplayStep_v1, whose schedule on this
 window is the served one (the encodings' `test_served_window.py`). `fixtures/compile_slice_w212.json` is the window at
-its own statics; `fixtures/compile_slice_w212_class.json` is the same window padded into the engine's public class
-(R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, the class a session proves every window at. The charge is from the
+its own statics; `fixtures/compile_slice_w212_class.json` is the same window padded into the engine's public sizes
+(R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4 under a sync scheduler, the sync class. The engine's own class is its
+AsyncScheduler's (AS = 1), where `benchmarks/network_traces/compile_slice_zk.py` proves w212. The charge is from the
 session's carry into w212 (`CARRY`: the chain over windows 0 … 211, each window's decisions as its own replay asks
 them, under the async-light book; `benchmarks/network_traces/compile_slice_zk.py` derives it from the run's records)."""
 from __future__ import annotations

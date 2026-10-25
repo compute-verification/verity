@@ -1,6 +1,7 @@
-"""compile_slice_zk's scan of what the verifier received leaves out exactly the witness pieces and carry rows with at
-most one nonzero byte, which a proof's encoding holds whatever the witness, and keeps the rest held as they were.
-Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
+"""compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
+received leaves out exactly the witness pieces and carry rows with at most one nonzero byte, which a proof's encoding
+holds whatever the witness, and keeps the rest held as they were. Nothing here lowers or proves
+(`compile_slice_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -8,6 +9,8 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -18,6 +21,18 @@ def _load():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_w212_is_proved_at_its_runs_engine_class(monkeypatch):
+    """8eb1's engine class is its trace header's, AsyncScheduler (AS = 1) included, and w212 is loaded at it. A fixture
+    at another scheduler, the sync class's (AS = 0), is refused, so every window of the run is proved at its one AS."""
+    Z = _load()
+    x = Z.load("w212")
+    assert Z.engine_class()["async_scheduling"] is True
+    assert x.fx["engine"] == Z.engine_class() and x.st["AS"] == 1 and x.sl.steps == 21
+    monkeypatch.setattr(Z, "W212", Z.FIXTURES / "compile_slice_w212_class.json")
+    with pytest.raises(SystemExit, match="isn't the run's engine class"):
+        Z.load("w212")
 
 
 def test_sparse_pieces_leaves_out_one_nonzero_byte():

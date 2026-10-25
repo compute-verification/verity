@@ -11,9 +11,10 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the
   replay's rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's run
   r20261024-141912-8eb1 padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
-  prefix caching (`fixtures/compile_slice_w212_class.json`, 857,866 ANDs a unit), with the seal's rows as the served
-  ones (`served_rows.step_rows`), which `prove` first checks is the run's (the window's decisions as its replay asks
-  them, `RP.decisions` on `replay_vectors.served_window`).
+  prefix caching, under the run's AsyncScheduler (AS = 1; `fixtures/compile_slice_w212_class_async.json`), with the
+  seal's rows as the served ones (`served_rows.step_rows`), which `prove` first checks is the run's (the window's
+  decisions as its replay asks them, `RP.decisions` on `replay_vectors.served_window`). The scheduler is the engine
+  class's, one AS for every window of the run: `prove` refuses a fixture whose engine isn't the trace header's.
 * **The charge** is from the session's carry (`charge_chain`) under the registered book (the arith fixture's
   async-light stream's). The demo's and the corpus's window is the session's first, so its carry-in is the book's
   priors under their public salt; w212's is the carry over windows 0 … 211 of the run, each window's decisions as its
@@ -33,7 +34,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   demo ``short``, request 1's admission hit claimed one block of its two, and ``unasked``, the waiting candidate's hit
   claimed 0; REDTEAM's phase 9 choices the slice can take (`compile_slice.phase9`: a prefix hit, and on the corpus a
   decision read again and an arrival left in the queue). On the corpus and w212, REDTEAM phase 10's six passes (advice
-  of a pass at every ask where the served window admitted: six on the corpus, twenty on w212), with the served rows in
+  of a pass at every ask where the served window admitted: six on the corpus, twenty-one on w212, one an async unit), with the served rows in
   ``srv`` (``sixpass``) and with its own (``sixpass-own``). The rest are honest, enough of them that the statement fits
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
@@ -82,7 +83,7 @@ from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
-W212 = FIXTURES / "compile_slice_w212_class.json"
+W212 = FIXTURES / "compile_slice_w212_class_async.json"
 TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
 WINDOW = 212
 #: counts fitted to w212, from which its decisions charge 25 bits in place of the session's 27
@@ -99,7 +100,7 @@ REFUSED = {
     "w212": {**_BASE, "cleared-read": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()}}
 #: the decision each slice's ``flip`` flips, and the passes of its ``sixpass``
 FLIP = {"demo": 2, "corpus": 5, "w212": 12}
-PASSES = {"corpus": 6, "w212": 20}
+PASSES = {"corpus": 6, "w212": 21}
 OPENED = ("o0", "pub")
 
 
@@ -133,6 +134,9 @@ def load(name: str) -> SimpleNamespace:
     sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"],
                   tuple(map(tuple, fx.get("tokens", ()))))
     if name == "w212":
+        if fx["engine"] != engine_class():
+            raise SystemExit(f"w212's fixture's engine {fx['engine']} isn't the run's engine class {engine_class()}: the "
+                             "scheduler is the class's, so every window of the run is proved at its one AS")
         return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=[SR.step_rows(S, s, fx["ids"]) for s in fx["served"]],
                                forged=FITTED, restart=FITTED, fx=fx)
     return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=[tuple(map(tuple, r)) for r in fx["rows"]],
@@ -155,6 +159,14 @@ def _encodings():
         for k in names:
             sys.modules.pop(k, None)
         sys.modules.update(saved)
+
+
+def engine_class() -> dict:
+    """The run's engine as its trace's header gives it (`RP.Engine.from_header`), its scheduler (``async_scheduling``,
+    AS) included: the public class at which every window of the run is proved."""
+    RP, _RV, _CV = _encodings()
+    e = RP.Engine.from_header(RP.records(TRACE_8EB1)[0]["config"])
+    return {k: v for k, v in dataclasses.asdict(e).items() if k != "policy"}
 
 
 def w212_decisions() -> list[list[int]]:
@@ -259,7 +271,7 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
             kw["carry"] = x.restart
         elif kind == "arrival":
             cert = list(x.sl.arrivals)
-            cert[1] = (cert[1][0], cert[1][1] + 1, cert[1][2])
+            cert[1] = (cert[1][0], cert[1][1] + 1, *cert[1][2:])
             kw["cert"] = cert
         elif kind == "table":
             kw.update(CS.made_up(x.S, x.sl, 2, 2) if demo else CS.made_up(x.S, x.sl, 1), served=None)
