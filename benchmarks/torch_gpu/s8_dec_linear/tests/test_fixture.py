@@ -1,6 +1,7 @@
 """The staging reference (`fixture.py`) against the P2 spec's deployment vector, and its placement of payload bytes."""
 from __future__ import annotations
 
+import itertools
 import json
 import sys
 from pathlib import Path
@@ -8,7 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import fixture as F  # noqa: E402
+import fixture as F
 
 
 def deployment_vector() -> dict:
@@ -53,10 +54,10 @@ def test_staged_bytes_sit_at_their_w_offset(vec, shift, length):
 
 def test_blocks_of():
     assert F.blocks_of(0, 0) == range(0)
-    assert F.blocks_of(0, 1) == range(0, 1)
-    assert F.blocks_of(F.PAYLOAD - 1, 2) == range(0, 2)
+    assert F.blocks_of(0, 1) == range(1)
+    assert F.blocks_of(F.PAYLOAD - 1, 2) == range(2)
     assert F.blocks_of(F.PAYLOAD, F.PAYLOAD) == range(1, 2)
-    assert F.blocks_of(5, 3 * F.PAYLOAD) == range(0, 4)
+    assert F.blocks_of(5, 3 * F.PAYLOAD) == range(4)
 
 
 def test_refusals(vec):
@@ -72,6 +73,6 @@ def test_the_h200_layer_packs_back_to_back():
     t = F.packed(F.layer_tensors(16384, 64, 65536))
     assert [(n, k) for _, n, k, _, _ in t] == [(16512, 16384), (16384, 16384), (65536, 16384), (16384, 65536)]
     assert sum(length for *_, length in t) == 2_686_451_712
-    for (_, _, _, b0, l0), (_, _, _, b1, _) in zip(t, t[1:]):
+    for (_, _, _, b0, l0), (_, _, _, b1, _) in itertools.pairwise(t):
         assert b0 + l0 == b1
         assert F.blocks_of(b0, l0).stop - 1 <= F.blocks_of(b1, 1).start

@@ -11,6 +11,7 @@ import json
 import re
 import sys
 from collections import Counter
+from pathlib import Path
 
 KERNELS = ("p2st_keyed_kernel", "p2st_plain_kernel")
 MIX = ("IMAD.WIDE.U32", "IMAD.WIDE", "IMAD.HI.U32", "IMAD.X", "IMAD.MOV", "IMAD", "IADD3", "LOP3", "SHF", "PRMT", "SHFL", "LDS", "STS",
@@ -22,9 +23,9 @@ def short(mangled: str) -> str:
 
 
 def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
-    problems = [line for line in ptxas.splitlines() if re.search(r"warning|error", line, re.I)]
+    problems = [line for line in ptxas.splitlines() if re.search(r"warning|error", line, re.IGNORECASE)]
     funcs: dict[str, dict] = {}
-    for m in re.finditer(rf"Compiling entry function '(\w+)' for '{arch}'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
+    for m in re.finditer(rf"Compiling entry function '(\w+)' for '{arch}'(.*?)(?=Compiling entry function|\Z)", ptxas, re.DOTALL):
         body = m.group(2)
         frame = re.search(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads", body)
         smem = re.search(r"(\d+) bytes smem", body)
@@ -62,8 +63,8 @@ def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
 
 def main(argv: list[str]) -> int:
     arch, ptxas, sass, out = argv[1:5]
-    funcs, problems = gate(arch, open(ptxas).read(), open(sass).read())
-    json.dump({"arch": arch, "kernels": funcs, "problems": problems}, open(out, "w"), indent=1)
+    funcs, problems = gate(arch, Path(ptxas).read_text(), Path(sass).read_text())
+    Path(out).write_text(json.dumps({"arch": arch, "kernels": funcs, "problems": problems}, indent=1))
     if problems:
         print("REFUSED: " + "; ".join(problems), file=sys.stderr)
         return 1

@@ -12,9 +12,8 @@ import ctypes
 from pathlib import Path
 from typing import Any
 
-import torch
-
 import fixture as F
+import torch
 
 LIB = "libp2stage.so"
 
