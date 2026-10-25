@@ -84,7 +84,8 @@ theorem fv3_cancel {t : String} {ps qs qs' : List ByteArray}
   rw [fv3_bs, fv3_bs, List.flatMap_append, List.flatMap_append] at e
   exact List.append_cancel_left (List.append_cancel_left e)
 
-/-- Two frames with one tag and one leading parts, ending in two parts whose first ones have one size, end alike. -/
+/-- Two frames with one tag and the same leading parts, each ending in two parts whose first ones have one size, end in
+the same two parts. -/
 theorem pair_eq {t : String} {ps : List ByteArray} {l r l' r' : ByteArray} (hl : l.size = l'.size)
     (h : fv3Message t (ps ++ [l, r]) = fv3Message t (ps ++ [l', r'])) : l = l' ∧ r = r' := by
   have e := fv3_cancel h
