@@ -12,9 +12,11 @@ It prints ``{"listening": URL}`` once it listens, then serves until it is stoppe
   W8A8 MLP over the step before, as `loop.TorchLoop.run` serves a request) for min(``max_tokens``, ``--steps``) steps,
   one chunk a step. A step's output is the MLP's H bf16 words, 2H bytes (256 at H = 128, little-endian): the chunk's
   ``text`` is their hex, and its one token id the step's (`step_id`). The first chunk carries ``prompt_token_ids``, the
-  last ``finish_reason`` "length". A request asks for its token ids (``return_token_ids``), greedily (temperature 0,
-  top_p 1), with no stop strings, as the certifier's shim forwards a varied request (`certifier_serve.varied_body`);
-  any other is answered 400.
+  last ``finish_reason`` "length". A request is greedy (temperature 0, top_p 1) and either varied, asking for its
+  token ids (``return_token_ids``) with no stop strings, as the certifier's shim forwards a varied request
+  (`certifier_serve.varied_body`), or fixed, exactly its ``max_tokens`` (``min_tokens`` the same, ``ignore_eos``, at
+  most ``--steps``), as a fixed plan's (`certifier_serve.request_body`), whose shim frames each chunk's text, 512 hex
+  characters at H = 128, as 8 canonical events of 64 bytes (`active.TOKEN_BYTES`); any other is answered 400.
 
 `test_certifier_serve.py`'s ``_Varied`` is the same endpoint with varied responses and EOS.
 """
@@ -55,13 +57,22 @@ def step_id(output: bytes) -> int:
     return int.from_bytes(hashlib.sha512(output).digest()[:4], "big") & ((1 << ID_BITS) - 1)
 
 
-def refusal(body: dict) -> str | None:
-    if body.get("return_token_ids") is not True:
+def refusal(body: dict, steps: int | None = None) -> str | None:
+    """Why the endpoint answers 400 (None: it serves the body): a varied body (module docstring), or a fixed one
+    (`certifier_serve.request_body`: exactly ``max_tokens`` tokens, ``min_tokens`` the same and ``ignore_eos``, at
+    most the endpoint's ``steps``)."""
+    fixed = body.get("ignore_eos") is True and "min_tokens" in body
+    if fixed:
+        if body["min_tokens"] != body.get("max_tokens") or (steps is not None and body["min_tokens"] > steps):
+            return f"min_tokens = max_tokens, at most the loop's {steps} steps"
+    elif body.get("return_token_ids") is not True:
         return "return_token_ids must be true"
-    if {"ignore_eos", "min_tokens"} & set(body):
-        return "no ignore_eos or min_tokens"
-    if body.get("temperature") != 0 or body.get("top_p") != 1 or body.get("stop") != [] or type(body.get("seed")) is not int:
-        return "greedy (temperature 0, top_p 1), stop [], an int seed"
+    elif {"ignore_eos", "min_tokens"} & set(body):
+        return "ignore_eos and min_tokens together, or neither"
+    elif body.get("stop") != [] or type(body.get("seed")) is not int:
+        return "stop [] and an int seed"
+    if body.get("temperature") != 0 or body.get("top_p") != 1:
+        return "greedy (temperature 0, top_p 1)"
     prompt = body.get("prompt")
     if not (isinstance(prompt, list) and prompt and all(type(t) is int for t in prompt)):
         return "the prompt is a list of token ids"
@@ -90,7 +101,7 @@ class Endpoint:
             doc = ({"data": [{"id": self.name}]} if head.startswith(b"GET /v1/models ")
                    else {"tokens": [ord(c) % L.VOCAB for c in body["prompt"]], "model": body["model"]})
             return await self.json(writer, 200, doc)
-        if (why := refusal(body)) is not None:
+        if (why := refusal(body, self.steps)) is not None:
             return await self.json(writer, 400, {"error": why})
         outputs = step_outputs(self.model, body["prompt"][-1], min(body["max_tokens"], self.steps))
         choices = [{"index": 0, "text": o.hex(), "token_ids": [step_id(o)], "finish_reason": None} for o in outputs]
