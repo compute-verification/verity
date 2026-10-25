@@ -35,6 +35,11 @@ queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is ma
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
+**A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more
+`noqa` comments than it removes. The gate counts them with no allowlist, and refuses a change that adds more, naming each
+new line. Lines are matched by their stripped text, so a `noqa` that moves with its code counts as kept. Fix the finding
+instead, or delete a stale `noqa` elsewhere in the same change: deleting one is a retirement.
+
 To retire an entry, fix what it allows and delete it: its rule's stale-entry check then keeps it gone. Each lint's
 `test_no_new*` tests are the ones the gate runs, under drive's Python, so `test_ratchet.py` holds every lint to having one
 that takes no fixture, to a `NAME` that is a string literal, and to importing only the standard library and this directory.
