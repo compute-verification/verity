@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
 from verity_vllm.commit import row_tables as RTB, serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
@@ -55,7 +55,7 @@ def commit(out: Path) -> tuple[CS.Window, dict[int, bytes]]:
     live = {step: RTB.step_roots(TR.CTX, step, s.outputs(step), TR.ROW_KEY).root for step, _ in w.steps}
     c = CS.commit(w, [g[0] for g in got], row_salt_key=TR.ROW_KEY, step_roots=live)
     prov = {"of": {**OF, "step_roots": {str(k): v.hex() for k, v in live.items()}}, "committer": {"module": "a5_row_tables.py"}}
-    CS.write(c, out, prov, CS.index_doc(w.members, [g[1] for g in got], w.run), kind="stand-in")
+    CS.write(c, out, prov, CS.index_doc(w.members, [g[1] for g in got], w.run), kind="stand-in", registrar=R)
     return w, live
 
 
