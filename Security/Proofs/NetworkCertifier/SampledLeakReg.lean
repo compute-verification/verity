@@ -172,6 +172,18 @@ def RegColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col
     p.1 ≠ p'.1 ∧ p.2 = p'.2
 
 omit [DecidableEq Col] [Zero Col] in
+/-- A kept opening of an accepted run passes, and its check's calls are the extraction's own. -/
+theorem passes_of_mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {Ω : Type}
+    (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {st : Stmt}
+    (hst : D.parse x = some st) (hacc : (run H P D.V x ω r₀).out = .acc) {q : List Msg × Opening Bool}
+    (hq : q ∈ found H D decode x st (run H P D.V x ω) c (outerList H D x (run H P D.V x ω) c)) :
+    D.commit.Opens H q.1 q.2 = true ∧
+      ∀ t ∈ ((D.commit.opens q.1 q.2).eval H).2, t ∈ ownLog H (run H P D.V x ω) ((E D decode).ext x r₀ c) := by
+  rw [found_eq] at hq
+  obtain ⟨h1, h2⟩ := Passes.found H D decode x (run H P D.V x ω) st c _ q hq
+  exact ⟨h1, fun t ht => ownLog_E H D decode P x ω r₀ c hst hacc t (h2 t ht)⟩
+
+omit [DecidableEq Col] [Zero Col] in
 /-- **A disagreement with the registration is a collision**: at an accepted run, an extracted trace that opens a
 registered position to a value other than the registration's makes, with the registration's opening there, calls that
 collide among the extraction's own and the registration's checks. -/
@@ -185,15 +197,14 @@ theorem regColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.co
   rw [E_eval H D decode P x s.1 s.2.1 s.2.2 hst hacc, Option.some.injEq] at hw
   subst hw
   obtain ⟨q, hq, hqr, hqp, hqv⟩ := mem_assemble_of_val hwb
-  rw [found_eq] at hq
-  obtain ⟨hqo, hql⟩ := Passes.found H D decode x (run H P D.V x s.1) st s.2.2 _ q hq
+  obtain ⟨hqo, hql⟩ := passes_of_mem_found H D decode P x s.1 s.2.1 s.2.2 hst hacc hq
   obtain ⟨o', ho', ho'p, ho'v⟩ := regVal_mem (hreg.2 g hg)
   have hqo' : D.commit.Opens H st.roots q.2 = true := by rw [← hqr]; exact hqo
   have hql' : ∀ t ∈ ((D.commit.opens st.roots q.2).eval H).2,
       t ∈ ownLog H (run H P D.V x s.1) ((E D decode).ext x s.2.1 s.2.2) := by
     intro t ht
     rw [← hqr] at ht
-    exact ownLog_E H D decode P x s.1 s.2.1 s.2.2 hst hacc t (hql t ht)
+    exact hql t ht
   have hrl : ((D.parse x).map fun st => regLog H D.commit st.roots (ops st)).getD [] =
       regLog H D.commit st.roots (ops st) := by
     rw [hst]
