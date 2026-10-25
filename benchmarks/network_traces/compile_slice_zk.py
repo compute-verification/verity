@@ -53,10 +53,12 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   `compile_slice.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
   ``cert``, ``srv``, ``cin``, ``cout`` or ``wit``. A unit passes when its verdict is `compile_slice.ACCEPT` and its
   bindings hold. What the verifier received is scanned for every piece of each unit's witness row, its ``srv`` rows and
-  every row's salt (`a8.received`), less the pieces the public circuit holds, and for each unit's carry rows whole (12
-  bytes, under the scan's piece; the session's first carry-in, the public priors, excepted), every find read under the
-  rule every zero-knowledge driver's scan follows (`leak_scan.scan`): a ``leaked`` piece or carry row fails the run,
-  whatever its bytes. The prover's instance file, which holds those rows, is the control.
+  every row's salt, each row cut whole (`leak_scan.public_pieces`, `a8.received`), less the pieces the public circuit
+  holds, and, found whole (`found`), for each row shorter than the scan's 16-byte piece: each unit's carry rows (12
+  bytes; the session's first carry-in, the public priors, excepted) and ``srv`` rows of a few steps (10 bytes at the
+  demo's G = 2). Every find is read under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`): a
+  ``leaked`` piece or row fails the run, whatever its bytes. The prover's instance file, which holds those rows, is the
+  control.
 * **Cost** (``--points``): sessions whose verifier draws the first k units, behind the firewall (`a8.cost`).
 """
 from __future__ import annotations
@@ -489,18 +491,21 @@ def blobs_of(units: list[SimpleNamespace], salts: dict, chain_: SimpleNamespace,
     return blobs, held
 
 
-def carry_rows_received(a8, vdir: Path, control: Path, units: list[SimpleNamespace], chain_: SimpleNamespace) -> dict:
-    """Each unit's ``cin`` (but the public priors') and ``cout`` rows whole, raw or as hex, in what the verifier received
-    and in the control: 12 bytes each, under `a8.received`'s 16-byte piece. Their finds are read as the pieces' are
-    (`leak_scan.scan`): a row is ``leaked`` unless each find straddles fields or its bytes are the statement's, whatever
-    its bytes (a restart from zero counts is a row of twelve zero bytes)."""
-    rows: dict[str, bytes] = {}
+def carry_rows(units: list[SimpleNamespace], chain_: SimpleNamespace) -> dict[str, bytes]:
+    """Each unit's ``cout`` and (but the public priors') ``cin`` row, as the instance file holds it: 12 bytes."""
+    return {f"{r} {i}": _u16(u.words[r]) for i, u in enumerate(units)
+            for r in ("cout",) + (() if _public_cin(u, chain_) else ("cin",))}
+
+
+def found(a8, vdir: Path, control: Path, rows: dict[str, bytes]) -> dict:
+    """`rows`, each shorter than `a8.received`'s 16-byte piece (which `leak_scan.cut` refuses to cut), found whole, raw or
+    as hex, in what the verifier received and in the control. Their finds are read as the pieces' are (`leak_scan.scan`):
+    a row is ``leaked`` unless each find straddles fields or its bytes are the statement's, whatever its bytes (a restart
+    from zero counts is a ``cin`` row of twelve zero bytes)."""
     table: dict[bytes, str] = {}
-    for i, u in enumerate(units):
-        for r in ("cout",) + (() if _public_cin(u, chain_) else ("cin",)):
-            rows[f"{r} {i}"] = x = _u16(u.words[r])
-            for nd in (x, x.hex().encode(), x.hex().upper().encode()):
-                table.setdefault(nd, f"{r} {i}")
+    for k, x in rows.items():
+        for nd in (x, x.hex().encode(), x.hex().upper().encode()):
+            table.setdefault(nd, k)
     named = set(table.values())
     files = {f.name: {"bytes": f.stat().st_size, "found": a8.find(f.read_bytes(), table)} for f in sorted(vdir.iterdir())}
     got = {"files": files, "verifier_found": sorted({k for x in files.values() for k in x["found"]})}
@@ -601,16 +606,18 @@ def prove(a) -> int:
 
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
     res = audit(M, av, sg, m, units, binds, out / "slice", a.port)
-    blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"], ch, srv),
+    witness, held = blobs_of(units, m["salts"], ch, srv)
+    whole = {k: x for k, x in witness.items() if len(x) < M.a8.PIECE}
+    blobs, held, public = LS.public_pieces(M.a8, {k: x for k, x in witness.items() if k not in whole}, held - set(whole),
                                            (m["dir"] / "circuit.txt").read_bytes())
     vdir, inst = out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin"
     res["received"] = {**M.a8.received(vdir, inst, blobs, held), "public_pieces": public,
-                       "carry_rows": carry_rows_received(M.a8, vdir, inst, units, ch)}
+                       "whole_rows": found(M.a8, vdir, inst, {**carry_rows(units, ch), **whole})}
     res["received"].update(LS.scan(res["received"], blobs, vdir))
     summary["audit"] = res
     want = ["accept" if u.kind == "honest" else "reject" for u in units]
     got = [r["verdict"] for r in res.get("units", [])]
-    rec, cr = res["received"], res["received"]["carry_rows"]
+    rec, cr = res["received"], res["received"]["whole_rows"]
     ok = (res["accepted"] and all(res["verdicts"].values()) and got == want and same
           and [r["srv_bound"] for r in res.get("units", [])] == srv_want
           and [r["chain_bound"] for r in res.get("units", [])] == chain_want
@@ -618,9 +625,10 @@ def prove(a) -> int:
     log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['chain_why'] or True, r['verdict']) for r in res.get('units', [])[:len(a.kinds)]]}, "
         f"per unit {res['per_unit']}, verifier received {rec['verifier_bytes']} bytes, witness pieces leaked "
         f"there: {rec['leaked'] or 'none'} (of {len(blobs)}; found {len(rec['verifier_found'])}, structured "
-        f"{rec['structured'] or 'none'}), control {rec['control']['blobs_found']}; carry rows leaked there: "
-        f"{cr['leaked'] or 'none'} (of {cr['distinct_rows']}; found {len(cr['verifier_found'])}, structured "
-        f"{cr['structured'] or 'none'}), control holds them: {cr['control_holds_all']}; "
+        f"{rec['structured'] or 'none'}), control {rec['control']['blobs_found']}; rows scanned whole (the carry "
+        f"rows and {len(whole)} shorter than a piece) leaked there: {cr['leaked'] or 'none'} (of "
+        f"{cr['distinct_rows']}; found {len(cr['verifier_found'])}, structured {cr['structured'] or 'none'}), control "
+        f"holds them: {cr['control_holds_all']}; "
         f"{'as expected' if ok else 'UNEXPECTED'}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.points:
