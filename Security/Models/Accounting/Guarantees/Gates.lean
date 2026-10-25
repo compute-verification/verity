@@ -196,7 +196,7 @@ def RhoPairs : Prop :=
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
 distinct words `words` on more than `ε` of the fresh draws, its inputs and budgeted gates but gathers there in
 their declared intervals (its window is then `ProvenWindow`'s, never a hypothesis): under
-`EncodeChainHardness F k B E ε`,
+`EncodeChainHardness F k B E ε`, inside its floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`),
 
   `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · (Σ_w R_in,w) · E`,
 
@@ -205,19 +205,21 @@ bits), and `R_in,w` window `w`'s run-input bytes: `q ≤ c · reads / E + 8 · �
 def EncodeBudget : Prop :=
   ∀ (F : Field) (k B E εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
     (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
-    EncodeChainHardness F k B E εnum εden →
+    EncodeChainHardness F k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
     Property caps A W → Restricted B W → CodecInputs F W (draws F k) m x → words.Nodup →
     (∀ i ∈ words, i < F.p) → ComputesWords F k W x m words out εnum εden →
     ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤
       caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) * (F.n - 1 : ℕ) +
         (8 * (∑ v ∈ Finset.range A.windows, caps.runBytes v) * E : ℕ)
 
-/-- **The encode cost, bounded.** Under `EncodeChainHardness F k B E ε`, with `n ≥ 2`, `q` distinct words cost at
+/-- **The encode cost, bounded.** Under `EncodeChainHardness F k B E ε`, inside its floor (`ε ≥ 2^−64`, `k ≥ 1`,
+`p ≥ 2^66`, `p ≡ 3 mod 4`), with `n ≥ 2`, `q` distinct words cost at
 least `q · E` budgeted units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input
 computes them on more than `ε` of the draws. -/
 def EncodeCost : Prop :=
   ∀ (F : Field) (k B E εnum εden q : ℕ),
-    EncodeChainHardness F k B E εnum εden → 2 ≤ F.n → ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
+    EncodeChainHardness F k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 → 2 ≤ F.n →
+      ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
 
 /-! ## Primitives' output intervals
 

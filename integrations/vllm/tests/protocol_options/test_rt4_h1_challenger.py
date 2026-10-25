@@ -776,6 +776,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     assert "coins from a challenger the verifier doesn't hold" in auditor.trusted(local)
 
 
+@pytest.mark.slow
 def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
     """RT4-INT-21: pouw-serve's ``--challenger`` and ``--session`` are the pouw settings ncp-v2's salt comes from, one
     never without the other; ncp-v2 accepts the setting and ncp-v1 doesn't."""

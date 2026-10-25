@@ -30,6 +30,7 @@ from pathlib import Path
 from verity_flock import circuit as FC
 from verity_flock import rec_live as RL
 from verity_flock import rec_vstar as V
+from verity_flock.record_text import session_text
 
 SEED = 20261004
 STREAM = "circuit/rep0"
@@ -88,7 +89,7 @@ def forge(what: str, inner: Path, level: int = 0, record: str = "session") -> di
             sess["unit_draw"] = None
         else:
             sess["unit_draw"]["units"] = sess["unit_draw"]["units"][:-1]
-        f.write_text(json.dumps(sess))
+        f.write_text(session_text(sess))
         return {"forged": what, "record": record}
     if what == "query" and record != "session":
         raise ValueError("query: the prover's record numbers its rounds after z_partial apart from public.json's")
