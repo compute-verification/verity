@@ -20,7 +20,8 @@ id (`release`), which `deployment.json` names (`run_id`).
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
   host clock (`origin_unix`).
-- The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys), not the deployed H = 20.
+- The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
+  is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as CERT-VARLEN's: Poisson arrivals at `--rate` a second, prompts of
 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
