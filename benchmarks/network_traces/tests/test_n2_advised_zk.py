@@ -132,6 +132,20 @@ def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_else_its_log_
     assert refs[0] is None and None not in refs[1:]
 
 
+def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_without_one(tmp_path):
+    """A run's ``clocks.jsonl`` that is there but isn't a regular file (a dangling symlink, a directory) is read as the
+    certifier's clock certificates, and gives no sync or fails to read; it is never taken for a run that predates
+    them, whose unsigned proxy log beside it could hold phase 11's δ = 0."""
+    with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
+        json.dump({"syncs": [[0, str(s.rho)] for s in AT.SYNCS]}, fh)
+    (tmp_path / "clocks.jsonl").symlink_to(tmp_path / "gone" / "clocks.jsonl")
+    assert n2.served_clocks(tmp_path, AT.LINK) == {"clock_certificates": ()}
+    (tmp_path / "clocks.jsonl").unlink()
+    (tmp_path / "clocks.jsonl").mkdir()
+    with pytest.raises(OSError):
+        n2.served_clocks(tmp_path, AT.LINK)
+
+
 def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_and_releases_by_id():
     """`joined` (the --e2e link's advice from its Commit windows'): the second window's rows and hit sources name its
     requests after the first's, and each kept output is released where the certified frames of its request say."""

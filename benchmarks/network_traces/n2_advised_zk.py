@@ -161,7 +161,7 @@ def served_clocks(run: Path, link: str) -> dict:
     """A served run's clock source, as `LinkWindows` takes it. It is the certifier's clock certificates
     (``clocks.jsonl``, `certifier_serve.read_clocks`), the verifier of record's, when the run has them. Otherwise it is
     `CertifierClocks`, the certifier's unsigned log, a stand-in."""
-    if (run / "clocks.jsonl").is_file():
+    if os.path.lexists(run / "clocks.jsonl"):
         return {"clock_certificates": tuple(cs.read_clocks(run / "clocks.jsonl"))}
     return {"clocks": CertifierClocks.of(run, link)}
 
