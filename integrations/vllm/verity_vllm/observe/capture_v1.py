@@ -1051,7 +1051,7 @@ class Boundary:
 
 @dataclass(frozen=True, slots=True)
 class LeafLayout:
-    """How one weight tensor is packed into leaves (capture format v2).
+    """How one weight tensor is packed into leaves (capture format v2, W3c 2026-09-07).
 
     ``whole``: one leaf over the tensor's bytes, id ``w=<param>[/s=..]`` (the v1 layout).
     ``rows``: one leaf per block of ``rows_per_leaf`` leading-dimension rows, ids
