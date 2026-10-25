@@ -98,7 +98,9 @@ def AmpereBF16TcDot16(acc: int, *ab: int) -> int:
 
 @primitive("HopperBF16WgmmaDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32,
            conformance="exact-model-tested; H100 HGMMA.64x128x16.F32.BF16 campaign (tc-hopper-2026-09-07): 307,281,920 output words, "
-                       "0 mismatches, 0 nondeterministic tiles")
+                       "0 mismatches, 0 nondeterministic tiles; sm_120 mma.sync.m16n8k16 (`gemm.GEMM_SM120_BF16`): RTX PRO 6000 run "
+                       "r20261025-221152-862d, SASS HMMA.16816.F32.BF16, 25,833,472 swept elements, the specials family and the H100 "
+                       "capture's 44,046 special records, 0 mismatches")
 def HopperBF16WgmmaDot16(acc: int, *ab: int) -> int:
     """One accumulator-coordinate transition of `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16`: one group of
     sixteen products plus the accumulator, 26-bit truncating adder, exponent floor -133; total on every encoding."""
