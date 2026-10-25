@@ -1,4 +1,4 @@
-import Properties.Pouw.LiveSalt
+import Proofs.Properties.Pouw.LiveSalt.Ledger
 
 /-!
 # The Pearl-C period credits distinct work within each epoch (`CreditDistinct` of `PouwCheck.pearlCPeriodCredit`)
@@ -16,10 +16,7 @@ namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
 open PouwCheck.Period (sameEpoch namedEpoch callsOf freshCalls distinctCalls)
-
-private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
-    (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x <;> simp [bind, Except.bind]
+open Properties.Pouw.LiveSalt.Ledger (bind_ok)
 
 /-- Clause 6 reads a pass's epoch as `PassesDistinct` does. -/
 theorem namedEpoch_eq (m : Json) : namedEpoch m = epochOf m := rfl
