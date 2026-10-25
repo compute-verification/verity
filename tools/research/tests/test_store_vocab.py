@@ -40,7 +40,7 @@ def fs_remote(env):
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
                "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
-               "pipeline", "kernel_outcome", "kernel_reason")
+               "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models")
@@ -210,6 +210,26 @@ def test_abandoned_is_written_only_with_the_note_that_says_why(env, capsys):
     assert "refused" not in capsys.readouterr().err
     (lab,) = st.labels(RUN_REAL)
     assert (lab.key, lab.value, lab.by, lab.ref) == ("abandoned", "W=31 field, not the protocol's", "flock-backend", note)
+
+
+def test_a_memory_line_of_record_is_the_leans_and_names_the_auditor_run_that_wrote_it(env, capsys):
+    """`memory-line-of-record` on a gate run's verifier run says its line of record is the auditor_line.json of the run its ref
+    names, computed by the Lean (that file's `line_by`): any other value is refused, and so is a ref that isn't a run id."""
+    st = LocalStore()
+    why = ("label key 'memory-line-of-record' needs --ref naming the auditor_line.py run whose auditor_line.json is the line (its run "
+           "id, r<YYYYMMDD>-<HHMMSS>-<hex>)")
+    assert vocab.check("memory-line-of-record", "lean") is None
+    for old in ("python", "credited-pinned-bound"):
+        assert vocab.check("memory-line-of-record", old) == f"memory-line-of-record={old!r} is not one of lean"
+    assert vocab.check_ref("memory-line-of-record", RUN_FINE) is None and vocab.check_ref("memory-line-of-record", None) == why
+    for ref in ([], ["--ref", "art:" + "0" * 64], ["--ref", "note:memory-accounting/20261024T0832Z-report-line-lean-record"]):
+        assert main(["label", RUN_REAL, "memory-line-of-record", "lean", "--by", "memory-accounting", *ref]) == 2
+        assert capsys.readouterr().err.startswith(f"research data label: refused: {why}")
+    assert main(["label", RUN_REAL, "memory-line-of-record", "python", "--by", "memory-accounting", "--ref", RUN_FINE]) == 2
+    assert "is not one of lean" in capsys.readouterr().err and st.labels(RUN_REAL) == []
+    assert main(["label", RUN_REAL, "memory-line-of-record", "lean", "--by", "memory-accounting", "--ref", RUN_FINE]) == 0
+    (lab,) = st.labels(RUN_REAL)
+    assert (lab.key, lab.value, lab.ref) == ("memory-line-of-record", "lean", RUN_FINE)
 
 
 def test_label_writes_the_canonical_key_and_form(env, capsys):

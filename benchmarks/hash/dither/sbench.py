@@ -130,6 +130,10 @@ Arms:
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
     ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
+    ARM-mmq      a dither-a-so arm whose GEMMs take the configs tuned at its own SMQ (MM_CFGS at $DITHER_SO_UNITS_SMQ's
+                 Q/D, however its suffixes or SBENCH_ARM_ENV set it), refused at an SMQ MM_CFGS has none for.  J10-R
+                 at 47/64: dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq47o64-mmq with DITHER_SO_UNITS=j10r and HB_KC_FLAGS
+                 ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -177,9 +181,9 @@ timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps 
 the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
 --bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
-gated (`dbw.py`: an idle session, each rep an off block of every arm's ops and an on block inside a session's passes, and
-a tampered session beside each dither arm; summary.json's "bw", per_arm's TPOT the off blocks' alone).  Not with
---serial, whose arms are never up together.
+gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle session, each rep an off block of
+every arm's ops and an on block inside a session's passes, and a tampered session beside each dither arm; summary.json's
+"bw", per_arm's TPOT the off blocks' alone).  Not with --serial, whose arms are never up together.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate] [--bw-passes GIB]
     python sbench.py --out OUT --prefill --serial --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
@@ -354,12 +358,36 @@ def mm_cfg() -> None:
     os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
 
 
+# ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
+# dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
+# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step)
+MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
+                    "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
+MMQ = {"on": False}
+
+
+def mm_smq() -> None:
+    MMQ["on"] = True
+
+
+def smq_mm_cfg() -> None:
+    """An ARM-mmq arm's $DITHER_MM_CFG, MM_CFGS' at its SMQ, once its suffixes and SBENCH_ARM_ENV have set that."""
+    if not MMQ["on"]:
+        return
+    q, _, rest = os.environ.get("DITHER_SO_UNITS_SMQ", "").partition("/")
+    smq = f"{q}/{rest.partition('/')[0] or 8}" if q and q != "0" else "every SM"
+    if smq not in MM_CFGS:
+        raise ValueError(f"an ARM-mmq arm has no MM_CFGS entry at its SMQ ({smq}): tune one with dmmsweep.py --block Q/D "
+                         f"at that SMQ and add its best.json's dither_mm_cfg to sbench.MM_CFGS")
+    os.environ["DITHER_MM_CFG"] = MM_CFGS[smq]
+
+
 SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
             "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
-            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg, "-mmq": mm_smq}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
@@ -395,6 +423,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     if s:
         suffix_env(s)()
         return build(arm[:-len(s)], scratch, gpu_mem)
+    smq_mm_cfg()
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
     if arm == "stock-cutlass":
@@ -896,7 +925,8 @@ def main() -> int:
                          "Dither's window does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
-                         "(`dbw.py`: an idle session, each rep an off block and an on block, a tampered session)")
+                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
+                         "an off block and an on block, a tampered session)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
@@ -948,8 +978,8 @@ def main() -> int:
     bw_tokens: dict = {}
 
     def block(r: int, phase: str | None = None, side: int | None = None, only: list[str] | None = None) -> dict:
-        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (off, on or
-        tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
+        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (cal, off, on
+        or tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
         these, lo = only or arms, time.monotonic_ns()
         for op in a.ops.split(","):
             for j in range(len(these)):
@@ -1083,10 +1113,12 @@ def main() -> int:
                                 prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
                                 verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
                                 side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+                dither = [x for x in arms if x.startswith("dither")] or arms
                 try:
-                    doc["ready"] = side.expect("ready")
-                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"}}),
-                          flush=True)
+                    doc["ready"], cal = dbw.registered(side, lambda: block(i * a.reps, "cal", i, only=dither))
+                    doc["calibrated_beside"] = {"arms": dither, "blocks": cal}
+                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"},
+                                      "calibrated_beside": f"{len(cal)} blocks of {','.join(dither)}"}), flush=True)
                     side.start(0, dbw.paced(a.bw_idle_s, 1.0))
                     doc["sessions"][0] = side.end(0)
                     stretch_s, longest = dbw.window_s(doc["sessions"][0]), 0.0
@@ -1103,7 +1135,7 @@ def main() -> int:
                         stretch_s = dbw.beside_s(doc["sessions"][1 + r], on["lo"], on["hi"]) or stretch_s
                         print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
                                           "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
-                    k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
+                    k = 1 + a.reps
                     est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
                               and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
                               and "spans_ns" in x)

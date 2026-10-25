@@ -8,6 +8,7 @@
              "Control.loop'": "partial def, calling `loop` as `loop` calls it"},
  "layers": {"Control.Assumptions": {"imports": [], "why": "the named assumption imports nothing of the package"},
             "Control.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
+ "trees": {"definitions": ["Control.Assumptions", "Control.Defs"], "proofs": ["Control.Thms"]},
  "claims": {"modules": ["Control.Defs"],
             "witnesses": {"Control.Small": {"fails": "Control.Small_fails", "meets": ["Control.Small_meets"]}}},
  "guarantees": {"Control.main_thm": {"owner": "@lean"}, "Control.Small_fails": {"owner": "@lean"},

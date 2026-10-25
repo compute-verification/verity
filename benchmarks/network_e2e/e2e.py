@@ -7,10 +7,11 @@ the chain's stages (`chain`): the advice's bits per link-window, the prove path'
 still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
-                                         --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE]]
-                                         [--prove-path DIR] [--no-negatives]
+                                         --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
+                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR ...
+                                         [--prove-path-registered FILE]] [--no-negatives]
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
-                                         [certifier_serve.py rehearse's options]
+                                         [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
 `run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
@@ -22,9 +23,10 @@ then runs this. The README says what the report establishes and what it doesn't.
   late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
   reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
   prover's node, though not on the auditor host. NEG's drop, when the rehearsal ran it, is a negative (refused by N2's
-  counts, and on the advice profile by the rehearsal's own check), and its token a row pending the check that alone
-  refuses it (``PENDING``). An honest run is required: the tampered head is its
-  window 0's egress head one count off (`n2_zk.one_count`).
+  counts, and on the advice profile by the rehearsal's own check), and its token is refused only by the I/O tie
+  (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative it
+  must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending it.
+  An honest run is required: the tampered head is its window 0's egress head one count off (`n2_zk.one_count`).
 * **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
   decided by N2's verifier of record on the host, with the Lean audit (`n2_zk.link_windows`), then `network_verdict`.
   Honest, tampered and extra are `n2_zk.prove`'s own rounds, so their verdicts are on the roots it proves under; any other
@@ -44,11 +46,18 @@ then runs this. The README says what the report establishes and what it doesn't.
 * **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
   verdict until N2-ADVICE, so nothing is proved and the rehearsal's own check (certified, the certified I/O, audit,
   salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
-* **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, ``--prove-path``, and NEG's
-  registry on the runs; each that ran must pass for the report to be OK, and ``stubbed`` lists what is still a stand-in.
+* **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, or ``--endpoint-run``, the
+  endpoint's records, whose own advice for the honest run's Commit windows `verity-vllm advice` writes
+  (`endpoint_advice`, `chain.served_advice`), ``--prove-path`` (beside the endpoint's records, ``prove_path.py audit
+  --serve-run``'s audits of its Commit windows, `chain.served_commit`), NEG's registry on the runs, and on the advice profile
+  the I/O tie on each run (`chain.tie`, its sampled ids the endpoint's records' or ``--ids``'); each that ran must pass
+  for the report to be OK, the tie on the advice profile whether it ran or not (`chain.tie_gate`), and every
+  ``--serve-run`` arm's advice held by content to the report's advice of its window whether its prove path binds or not
+  (`chain.held_to`); ``stubbed`` lists what is still a stand-in.
 
-Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused and every chain stage that
-ran passed (`report["ok"]`).
+Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused, every chain stage that
+ran passed, every ``--serve-run`` arm's advice is the report's and, on the advice profile, the I/O tie accepted the
+honest run (`report["ok"]`).
 """
 from __future__ import annotations
 
@@ -56,6 +65,7 @@ import argparse
 import json
 import os
 import resource
+import shlex
 import shutil
 import socket
 import subprocess
@@ -65,6 +75,7 @@ import tempfile
 import time
 import urllib.parse
 from fractions import Fraction
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -81,8 +92,10 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 FORMAT = "verity-network-e2e/report/v3"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
-# NEG's live tampers that only a check that hasn't landed refuses
+# NEG's live tampers that only a check that hasn't landed refuses: a negative of the I/O tie on the advice profile, where
+# the tie is required (`chain.tie_gate`), and pending it on the others, where it doesn't run
 PENDING = {"token": "IO-TIE"}
+TIE_STAGE = "the I/O tie (IO-TIE's reference in the clear, on stand-ins)"
 #: each negative's own violation in the rehearsal's own check (`_check`'s codes), the verdict on the advice profile,
 #: where N2 gives none: late's held session faults its window (the audit's status, as NEG names it), extra's response
 #: runs past its max_tokens, and drop's cut response stops short of it without EOS (the certified I/O's finish rule)
@@ -90,6 +103,7 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
             "drop": "io:short of max_tokens without EOS"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
+ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]  # vllm's #3619
 GATE_HOST = "vy-challenger-1"
 
 CLAIM = {
@@ -145,12 +159,17 @@ CLAIM_ADVICE = {
         "audit of both records and the salt audit accepted (the rehearsal's own check); and late and extra, and drop "
         "where it ran, each refused by that check for its own violation (late: its window's coverage fault; extra: a "
         "response longer than its max_tokens; drop: one short of it without EOS). Where an advice was given, it is these "
-        "runs' (every advice request a certified one) and rebuilt from their certified I/O. The advice's sections say "
-        "what was checked of the advice, and the prove path's what it proved."),
+        "runs' (every advice request a certified one) and rebuilt from their certified I/O. The I/O tie (IO-TIE's "
+        "reference in the clear, on NEG's stand-ins), required here, accepted the honest run, its certified ids the "
+        "endpoint's sampled ids for every one of its certified requests, and refused token, whose certified ids aren't, "
+        "by its content part at exactly the link-windows token changed. The advice's sections say what was checked of "
+        "the advice, and the prove path's what it proved."),
     "not_covered": [
         "N2's counts: no link-window's head is held to a profile or to the advice (N2-ADVICE), and nothing is proved by "
         "n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
-        "The tie (IO-TIE): no proof holds the certified tokens to the committed values; the advice's rebuild from the "
+        "The tie (IO-TIE): no proof holds the certified tokens to the committed values. The tie is IO-TIE's "
+        "reference in the clear on stand-ins: the certified frames under fake salts in place of the warden's cells, and "
+        "the endpoint's sampled ids from its records in place of the Commit's port. The advice's rebuild from the "
         "certified I/O here runs in the clear, on the rehearsal's published witness.",
         CLAIM["not_covered"][2],
     ],
@@ -259,14 +278,21 @@ def where(runs: dict[str, dict], peer: str | None = None) -> dict:
             (", the endpoint's own (loopback), so the prover's node, not an auditor host" if local else "")}
 
 
+def _ssh_to(peer: str, peers: Path) -> list[str]:
+    """ssh's arguments to node NAME (``peer``, NAME:PORT), from the nodes' own ssh to each other (``peers``)."""
+    name = peer.rsplit(":", 1)[0]
+    to = next((line.split()[1:] for line in peers.read_text().splitlines() if line.split()[:1] == [name]), None)
+    if not to:
+        raise SystemExit(f"--endpoint-peer {peer}: no {name} in {peers}")
+    return to
+
+
 def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subprocess.Popen]:
     """An ssh forward from a free port on this host's 127.0.0.1 to NAME's 127.0.0.1:PORT (``peer``), through the
     nodes' own ssh to each other (``peers``, as `benchmarks/remote_session/run.sh` opens it), and the upstream URL it
     gives here, once it connects."""
     name, port = peer.rsplit(":", 1)
-    to = next((line.split()[1:] for line in peers.read_text().splitlines() if line.split()[:1] == [name]), None)
-    if not to:
-        raise SystemExit(f"--endpoint-peer {peer}: no {name} in {peers}")
+    to = _ssh_to(peer, peers)
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         here = s.getsockname()[1]
@@ -287,6 +313,55 @@ def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subproce
         raise SystemExit(f"--endpoint-peer {peer}: the forward never listened ({log_to})")
     log(f"endpoint: {name}'s 127.0.0.1:{port} forwarded to 127.0.0.1:{here}")
     return f"http://127.0.0.1:{here}", p
+
+
+def endpoint_records(src: str, peer: str | None, dest: Path, peers: Path = PEERS) -> Path:
+    """The endpoint's records (`chain.ENDPOINT`) copied into ``dest``: from ``src`` on ``peer``'s node through the
+    nodes' own ssh, or from a local ``src``."""
+    dest.mkdir(parents=True, exist_ok=True)
+    if peer is None:
+        if Path(src).resolve() != dest.resolve():
+            for f in chain.ENDPOINT:
+                shutil.copyfile(Path(src) / f, dest / f)
+        return dest
+    p = subprocess.run(["ssh", "-T", "-o", "BatchMode=yes", *_ssh_to(peer, peers),
+                        f"cd {shlex.quote(src)} && tar cf - {' '.join(chain.ENDPOINT)}"], capture_output=True, check=False)
+    if p.returncode:
+        raise OSError(f"ssh to {peer.rsplit(':', 1)[0]} exited {p.returncode}: {p.stderr.decode()[-400:]}")
+    with tarfile.open(fileobj=BytesIO(p.stdout)) as tar:
+        tar.extractall(dest, filter="data")
+    return dest
+
+
+def endpoint_advice(ep: Path | None, why: str | None, honest: Path, plan: dict) -> tuple[dict | None, dict]:
+    """The endpoint's own advice for the honest run: `verity-vllm advice` (`ADVICE`, one advice a closed Commit
+    window) over its records ``ep`` into ``ep/advice`` at the
+    certifier's bucket, unless an index is there, then `chain.served_advice` on the honest run's certified I/O. Without
+    the records or the advice (``why``, or the command's own failure) the advice is not these runs'."""
+    T, dep = chain.window_buckets(honest), _read(honest / "deployment.json")
+    io_ = (_read(honest / "io.json") or {}).get("requests")
+    eos = (plan.get("varied") or {}).get("eos_token_ids")
+
+    def none(why: str) -> tuple[None, dict]:
+        return None, {"T": T, "served": None, "config": None, "bound": False, "bound_why": why, "public_fields": None,
+                      "rebuilt": None, "why": None, "v0_total": 0, "commit_windows": [], "windows": []}
+
+    if ep is None:
+        return none(f"no endpoint records: {why}")
+    if io_ is None or dep is None or not eos:
+        return none("the honest run has no certified I/O, deployment or EOS ids (only a varied run's check writes them)")
+    adv = ep / "advice"
+    if not (adv / "windows.json").exists():
+        p = subprocess.run([*ADVICE, str(ep), "--out", str(adv), "--tau", repr(dep["window_s"] / T)],
+                           capture_output=True, text=True, check=False)
+        (ep / "advice.log").write_text(p.stdout + p.stderr)
+        log(f"endpoint advice: verity-vllm advice exited {p.returncode} ({ep / 'advice.log'})")
+        if not (adv / "windows.json").exists():
+            return none(f"verity-vllm advice made no index (exit {p.returncode}: {(p.stdout + p.stderr)[-300:].strip()})")
+    try:
+        return chain.served_advice(ep, adv, dep, io_, T, eos)
+    except (OSError, KeyError, ValueError) as err:
+        return none(f"the endpoint's advice: {err!r}")
 
 
 def rehearse(args, rest: list[str], out: Path) -> Path:
@@ -437,10 +512,15 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     the negatives' refusals, the chain's stages (``stages``: `chain`'s advice, bits, prove path and NEG's negatives, each
     when it ran) and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``. On the advice profile
     N2 gives no verdict (``n2`` has no windows), so the rehearsal's own check is the verdict, and late and extra its
-    negatives. Drop, where it ran, is a negative on every profile."""
+    negatives; the I/O tie (``stages``' ``tie``) is required there (`chain.tie_gate`), and token is its negative, refused
+    by the tie's own row whatever the tie gave the honest run. Drop, where it ran, is a negative on every profile."""
     advised = meta.get("profile") == chain.ADVICE
-    expected = (NEGATIVES[:2] if advised else NEGATIVES) + tuple(s for s in ("drop",) if s in n2)
-    pending = {s: w for s, w in PENDING.items() if s in n2}
+    s = stages or {}
+    t = s.get("tie") or {}
+    ties = t.get("runs") or {}
+    expected = (NEGATIVES[:2] if advised else NEGATIVES) + tuple(s for s in ("drop",) if s in n2) \
+        + tuple(s for s in PENDING if s in n2 and advised)
+    pending = {s: w for s, w in PENDING.items() if s in n2 and not advised}
     summary = proofs.get("summary") or {}
     members = summary.get("members") or {}
     names = [HONEST] + [s for s in NEGATIVES if s in n2] + sorted(set(n2) - {HONEST, *NEGATIVES})
@@ -462,7 +542,7 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
                 "run": name, "window": w, "n2": _n2_row(x), "failed_parts": x.get("parts"), "proof": proved or None,
                 "head_checks": None if not proved else "pass" if all(v == "accept" for v in proved.values())
                 else "malformed" if None in proved.values() or "malformed" in proved.values() else "refuse"})
-    negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name], name)
+    negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name], name, ties.get(name))
                  for name in expected if name in out_runs}
     honest, honest_rows = out_runs[HONEST], [r for r in rows if r["run"] == HONEST]
     proved_ok = not proofs.get("ran") or (
@@ -471,8 +551,9 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     n2_ok = advised or (bool(honest["network"]["accepted"]) and bool(honest_rows)
                         and all(r["n2"] == "accept" for r in honest_rows))
     check_ok = (honest["check"] or {}).get("verdict") == "accepted" if advised or honest["check"] is not None else True
-    s = stages or {}
     b, p, ng = s.get("bits"), s.get("prove_path"), s.get("negatives")
+    # on the advice profile the I/O tie is the only check of the served content, so it is required there
+    tie_failed = chain.tie_gate(s.get("tie")) if advised else []
     # the derived bits and the residual's own check (`public_fields`) are under the serving config the job was given,
     # not one the endpoint registered, so they stay out of the OK; the advice's binding and its rebuild from the
     # certified I/O don't rest on that config's being the endpoint's
@@ -483,7 +564,10 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
         + ([] if b is None or b.get("bound") is True else ["the advice isn't these runs'"]) \
         + ([] if b is None or b.get("rebuilt") is True else ["the advice wasn't rebuilt from the certified I/O"]) \
         + ([] if p is None or not p.get("bound") or p["ok"] else ["the prove path failed"]) \
+        + ([] if p is None or p.get("tied") is not False else
+           [f"the prove path's audited advice isn't the report's: {p['tied_why']}"]) \
         + ([] if ng is None or not ng.get("ran") or ng["ok"] else ["NEG's registry failed"]) \
+        + tie_failed \
         + [f"no {s} run" for s in expected if s not in negatives] \
         + [f"{s} not refused" for s, n in negatives.items() if not n["refused"]]
     ok = not why_not
@@ -493,12 +577,15 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
            "the advice, these runs' and rebuilt from their certified I/O": b is not None and advice_ok,
            "the prove path, of these runs": bool(p and p.get("bound")),
            "NEG's registry": bool(ng and ng.get("ran"))}
+    # the tie is never "not run": where it didn't run, `tie_failed` says why the report isn't OK
+    on = [k for k, v in ran.items() if v] + [TIE_STAGE] * bool(advised and t.get("ran"))
     waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
                       "n2": out_runs[name]["network"]["accepted"],
-                      "ran": isinstance(out_runs[name]["shim_requests"], int) and out_runs[name]["shim_requests"] != 0}
+                      "ran": isinstance(out_runs[name]["shim_requests"], int) and out_runs[name]["shim_requests"] != 0,
+                      "why": t.get("why")}
                for name, w in pending.items()}
     return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "why_not": why_not,
-            "ran": [k for k, v in ran.items() if v], "not_run": [k for k, v in ran.items() if not v],
+            "ran": on, "not_run": [k for k, v in ran.items() if not v],
             "runs": out_runs,
             "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
@@ -525,13 +612,21 @@ def alone(summary: dict, d: Path | None) -> dict | None:
     return out or None
 
 
-def negative(run: dict, rows: list[dict], name: str | None = None) -> dict:
+def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | None = None) -> dict:
     """Whether negative ``name`` was refused, and by what: N2's network verdict and its link-windows' verdicts of
     record, the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean).
     Refused only when every one of them that ran refuses it. Where N2 gives no verdict (the advice profile), the check
-    refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A run whose
-    shim received no request, or that has no ``server.json`` to say, didn't run."""
+    refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A pending
+    negative (`PENDING`) is refused by the I/O tie alone (``tie``, its row of `chain.tie`) when its verdict is the one it
+    owes; on another negative the tie's owed refusal is listed beside the rest. A run whose shim received no request, or
+    that has no ``server.json`` to say, didn't run."""
     by, check = [], run.get("check")
+    if name in PENDING:
+        ran = isinstance(run.get("shim_requests"), int) and run["shim_requests"] != 0
+        refused = bool(tie and tie["ok"]) and ran
+        return {"refused": refused, "ran": ran, "by": [_tie_by(tie)] if refused else [], "own_code": None,
+                "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": [],
+                "proved_refused_windows": [], "failed_parts": {}, "proved": False, "proofs_held": None, "tie": tie}
     n2 = [r["window"] for r in rows if r["n2"] == "refuse"]
     decided = run["network"]["accepted"] is not None
     own = None if decided else OWN_CODE.get(name)
@@ -545,6 +640,8 @@ def negative(run: dict, rows: list[dict], name: str | None = None) -> dict:
     held = all(p["held"] for p in (run["proofs"] or {}).values())
     if proved and held:
         by.append(f"the proved head checks (link-windows {proved})")
+    if tie and tie["ok"]:
+        by.append(_tie_by(tie))
     ran = isinstance(run.get("shim_requests"), int) and run["shim_requests"] != 0
     refused = ((run["network"]["accepted"] is False and bool(n2) if decided else by_own)
                and (check is None or check_refused) and (not run["proofs"] or (held and bool(proved))) and ran)
@@ -552,7 +649,16 @@ def negative(run: dict, rows: list[dict], name: str | None = None) -> dict:
             "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": n2,
             "proved_refused_windows": proved,
             "failed_parts": {r["window"]: r["failed_parts"] for r in rows if r["n2"] == "refuse"},
-            "proved": bool(run["proofs"]), "proofs_held": held if run["proofs"] else None}
+            "proved": bool(run["proofs"]), "proofs_held": held if run["proofs"] else None, "tie": tie}
+
+
+def _tie_by(tie: dict) -> str:
+    """The I/O tie as what refused a negative: its codes, the link-windows they refused, and token's changed ids'."""
+    at = f" at link-windows {tie['windows']}" if tie["windows"] else ""
+    lost = f", {tie['unplaced']} committed outputs no certified cell carries" if tie.get("unplaced") else ""
+    changed = (f", the link-windows its changed ids fall in" if tie.get("changed") == tie["windows"] and tie["windows"]
+               else "")
+    return f"the I/O tie ({', '.join(tie['codes'])}{at}{changed}{lost})"
 
 
 def _cell(x) -> str:
@@ -609,6 +715,17 @@ def markdown(r: dict) -> str:
         other = (f"; the rehearsal's own check refused it for {', '.join(n['check_codes'] or ()) or 'no code'}, not "
                  f"its own violation {n['own_code']}" if not n["refused"] and n.get("own_code") and n.get("check_codes")
                  is not None and r["runs"][name]["check"]["verdict"] == "refused" else "")
+        t = n.get("tie")
+        if name in PENDING and t is None:
+            other += (f"; the I/O tie, which alone refuses it, didn't run "
+                      f"({((r.get('chain') or {}).get('tie') or {}).get('why') or 'no tie stage'})")
+        elif name in PENDING and t["verdict"] not in ("accepted", "refused"):
+            other += f"; the I/O tie, which alone refuses it, gave it no verdict ({t['why']})"
+        elif t and not t["ok"] and name in PENDING:
+            other += (f"; the I/O tie {t['verdict']}" + (f" ({', '.join(t['codes'])} at link-windows {t['windows']})"
+                                                          if t["codes"] else "")
+                      + (f", its changed ids in link-windows {t['changed']}" if t.get("changed") is not None else
+                         ", its shim logged no changed id"))
         lines.append(f"- **{name}**: " + (
             f"{'refused' if n['refused'] else 'NOT refused'} by {'; '.join(n['by']) or 'nothing'}"
             f"{'' if n['proved'] else ' (not proved)'}{other}" if n.get("ran", True)
@@ -618,7 +735,8 @@ def markdown(r: dict) -> str:
         n2 = n["n2"]
         lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): " + (
             f"the rehearsal's check {_cell(n['check'])}, N2 {'—' if n2 is None else 'accept' if n2 else 'refuse'}"
-            if n["ran"] else "not run: its shim received no request, so its tamper never ran"))
+            if n["ran"] else "not run: its shim received no request, so its tamper never ran")
+            + (f"; the I/O tie not run ({n['why']})" if n.get("why") else ""))
     scanned = [(name, e, m) for name, x in r["runs"].items() for e, m in (x.get("proofs") or {}).items()]
     if scanned:
         lines += ["", "## Proving sessions", "",
@@ -665,10 +783,18 @@ def markdown(r: dict) -> str:
 
 def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dict:
     """The chain's stages (`chain`): the advice and its bits per link-window when ``--advice`` gives it (T, the
-    certified I/O and the windows from the honest run), the prove path when ``--prove-path`` does, and NEG's negatives
-    on the runs unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict)."""
+    certified I/O and the windows from the honest run), or the endpoint's own when ``--endpoint-run`` names its records
+    (`endpoint_advice`), the prove path when ``--prove-path`` does, and NEG's negatives on the runs unless
+    ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), with the I/O tie's verdict when ``--ids``
+    gives each request's sampled ids. On the advice profile, the I/O tie on each run (`chain.tie`), its sampled ids
+    ``--ids``' or the endpoint's records', which the report requires there (`chain.tie_gate`)."""
     honest, out, adv = runs[HONEST]["dir"], {}, None
-    if args.advice:
+    if getattr(args, "endpoint_run", None):
+        out["advice"], out["bits"] = endpoint_advice(getattr(args, "endpoint_dir", None),
+                                                     getattr(args, "endpoint_why", None), honest, plan)
+        log(f"endpoint advice: bound {out['bits']['bound']}, rebuilt {out['bits']['rebuilt']}"
+            + (f" ({out['bits']['bound_why']})" if out["bits"]["bound_why"] else ""))
+    elif args.advice:
         adv, out["advice"] = chain.advice(Path(args.advice))
         config = _read(Path(args.serving_config)) if args.serving_config else None
         if args.serving_config and not isinstance(config, dict):
@@ -676,15 +802,27 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
         out["bits"] = chain.bits(adv, chain.window_buckets(honest), plan.get("windows") or 0,
                                  config and config.get("config", config), (_read(honest / "io.json") or {}).get("requests"))
     if args.prove_path:
-        src = Path(args.prove_path)
-        out["prove_path"] = chain.prove_path(_unpack(src, work) if src.is_file() else src, out.get("advice"),
-                                             (out.get("bits") or {}).get("bound")) | {"dir": str(src)}
-        log(f"prove path: adopted from {src}, ok {out['prove_path']['ok']}")
+        srcs = [Path(s) for s in args.prove_path]
+        given = getattr(args, "prove_path_registered", None)
+        registered = _read(Path(given)) if given else None
+        if given and not isinstance(registered, dict):
+            raise SystemExit(f"--prove-path-registered {given}: not a JSON object")
+        b = out.get("bits") or {}
+        out["prove_path"] = chain.prove_path([_unpack(s, work) if s.is_file() else s for s in srcs], out.get("advice"),
+                                             b.get("bound"), b, getattr(args, "endpoint_dir", None), registered) \
+            | {"dir": ", ".join(map(str, srcs))}
+        log(f"prove path: adopted from {', '.join(map(str, srcs))}, ok {out['prove_path']['ok']}, bound "
+            f"{out['prove_path']['bound']}")
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
         out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
                                                  "until N2-ADVICE"}
+        out["tie"] = chain.tie({s: r["dir"] for s, r in runs.items()}, getattr(args, "endpoint_dir", None),
+                               Path(args.ids) if args.ids else None, getattr(args, "endpoint_why", None))
+        log(f"I/O tie: {', '.join(f'{s} {x['verdict']} (ok {x['ok']})' for s, x in out['tie']['runs'].items())}"
+            if out["tie"]["ran"] else f"I/O tie: didn't run, which the advice profile requires ({out['tie']['why']})")
     elif not args.no_negatives:
-        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock)
+        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock,
+                                           ids=Path(args.ids) if args.ids else None)
         log(f"negatives (NEG's registry): ok {out['negatives']['ok']}")
     return out
 
@@ -711,6 +849,13 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         sources = [Path(s) for s in args.sources] if args.sources else [rehearse(args, rest, out / "rehearsal")]
         if tunnel is not None:
             tunnel.kill()
+        if getattr(args, "endpoint_run", None):
+            try:
+                args.endpoint_dir = endpoint_records(args.endpoint_run, getattr(args, "endpoint_peer", None),
+                                                     out / "endpoint")
+                log(f"endpoint records: {args.endpoint_run} copied to {args.endpoint_dir}")
+            except (OSError, SystemExit) as err:
+                args.endpoint_dir, args.endpoint_why = None, f"{args.endpoint_run} not copied: {err}"
         runs = collect(sources, work)
         plan = _read(runs[HONEST]["dir"] / "plan.json") or {}
         profile = (plan.get("occupancy") or {}).get("kind")
@@ -786,14 +931,30 @@ def main(argv=None) -> int:
                                                      "stand-in's (chain.advice); its bits per link-window")
     ap.add_argument("--serving-config", metavar="FILE", help="the serving config the derived bits take (derived.Config's "
                                                              "fields, or a step trace's config)")
-    ap.add_argument("--prove-path", metavar="DIR", help="adopt prove_path.py audit's output (its run.sh's $OUT, or a "
-                                                        "tarball of it)")
+    ap.add_argument("--endpoint-run", metavar="DIR", help="the endpoint's records (a verity-vllm serve-openai run's "
+                                                          "out/serve; on --endpoint-peer's node, copied after the "
+                                                          "rehearsal): its own advice for the honest run's Commit "
+                                                          "windows, by verity-vllm advice (endpoint_advice)")
+    ap.add_argument("--prove-path", metavar="DIR", action="append",
+                    help="adopt prove_path.py audit's output (its run.sh's $OUT, or a tarball of it); again for another "
+                         "(each --serve-run audit one of the served run's Commit windows)")
+    ap.add_argument("--prove-path-registered", metavar="FILE",
+                    help="who registered each --serve-run audit's window advice, by window: {K: {by, registration, "
+                         "first_draw, ref}}, registration the verity-vllm advice directory it was registered in when "
+                         "not the report's own, first_draw ISO 8601 UTC; when is read off the registration")
+    ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
+                                                  "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "
+                                                  "negatives it reads, and on the advice profile on every run in place "
+                                                  "of --endpoint-run's records")
     ap.add_argument("--no-negatives", action="store_true", help="skip NEG's registry (negatives.suite)")
     args, rest = ap.parse_known_args(argv)
     if rest and args.sources:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")
     if not args.out:
         ap.error("--out, or $OUT")
+    if args.endpoint_run and (args.advice or args.serving_config):
+        ap.error("--endpoint-run takes the endpoint's own advice and reads its config off its records: no --advice or "
+                 "--serving-config beside it")
     if not (args.no_prove or args.proofs) and not (args.bin and args.lean):
         ap.error("proving needs --bin and --lean (run.sh builds them), --proofs DIR, or --no-prove")
     r = run(args, rest)

@@ -48,16 +48,20 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
-- At 8eb1's engine class, w212 is `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`
-  (`--slice 212 --served SEAL --R 8 --W 1 --A 9 --Q 4 --D 32 --P 54 --K 4`): its 3 arrivals in 4 slots, its 14
-  decisions in 32, and 34 idle steps after its 20, whose served rows are zero. The slice takes it as it is: it
-  accepts the window with the seal's rows (0x3F), and each negative fails the flags it fails at w212's own
-  statics (the same tests, over both fixtures).
+- At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
+  --A 9 --Q 4 --D 32 --P 54 --K 4`), w212 is
+  `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
+  each with its cap, its 14 decisions in 32, and 33 idle steps after its 21 units. The ZK proof of record proves it
+  ([compile-slice.md](compile-slice.md)).
+- At the sync class, the same sizes under a sync scheduler (`--AS 0`), w212 is
+  `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`: 34 idle steps after its 20, whose
+  served rows are zero. The slice takes it as it is: it accepts the window with the seal's rows (0x3F), and each
+  negative fails the flags it fails at w212's own statics (the same tests, over both fixtures).
 - **The slice of record** (#3886) charges by `ChargeLink_v1{32}` over the committed decisions, its carry committed
-  once a window (`charge_chain`), with no coder and no commit patch. At the class it is 857,866 ANDs, with nnz_AB 32.8
-  million, built in 20 s at 2.8 GB. Of them, `ChargeLink_v1{32}` is 97,159, and 5,509 are its copies of the words it
-  carries from decision to decision (#3887). Without the copies it was 852,357 ANDs, with nnz_AB 65.3 million, built
-  in 25 s at 3.7 GB. Its circuit is its reference on the window and every negative
+  once a window (`charge_chain`), with no coder and no commit patch. At the sync class it is 857,866 ANDs, with
+  nnz_AB 32.8 million, built in 20 s at 2.8 GB. Of them, `ChargeLink_v1{32}` is 97,159, and 5,509 are its copies of
+  the words it carries from decision to decision (#3887). Without the copies it was 852,357 ANDs, with nnz_AB 65.3
+  million, built in 25 s at 3.7 GB. Its circuit is its reference on the window and every negative
   ([compile-slice.md](compile-slice.md)).
 - `CompileSlice_v1` with its coder (before #3886) couldn't build its circuit at the class. The builder's wires are GF(2)
   forms over committed bits, and the coding carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and
@@ -165,7 +169,7 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
   requests swapped, 0x2F. The circuit is its reference on all of them: at w1's own statics 314,936 ANDs, and at the
   class 1,021,302, built in 19.5 s at 3.0 GB (7.3 GB with the six evaluations, 77 s; run r20261024-220244-255c).
   Without the map (the reference fixed and the seal's rows put at their request's slot, run r20261024-205551-716a)
-  the class unit was 898,182 ANDs, 40,316 more than sync w212 at the same class (857,866, run
+  the class unit was 898,182 ANDs, 40,316 more than w212 at the sync class (857,866, run
   r20261024-205722-af0a). The map adds 123,120: its products P·R²·32 = 110,592 at the class's 33-bit rows (P 54,
   R 8), its one-to-one checks 54·2·8·7 = 6,048, and 6,480 in the zero check over its 20,736 mismatch bits, against
   the 14,256 bits the slot-for-slot comparison reads.

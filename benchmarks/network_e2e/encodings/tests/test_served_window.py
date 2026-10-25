@@ -1,7 +1,8 @@
-"""vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): the replay is the served scheduler on
-every step, every window opens on a drained engine, ReplayStep_v1 is the scheduler on windows 212 and 1 under the served
-async engine, `replay_vectors --slice` builds the compile slice's w212 fixtures and its async w1 fixtures from the run's
-own records, and the certifier's charge chain is `code_v1`'s charge on every window."""
+"""vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): it serves without prefix caching,
+the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
+scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
+fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own
+records, and the certifier's charge chain is `code_v1`'s charge of the decisions alone on every window."""
 from __future__ import annotations
 
 import dataclasses
@@ -55,6 +56,15 @@ def test_the_replay_is_the_served_scheduler(recs):
         RP.decisions(_sync(tr))
 
 
+def test_the_run_serves_without_prefix_caching(recs):
+    """8eb1's trace header says it serves without prefix caching, so every window's hits are 0, and the charge chain,
+    which charges the decisions alone, leaves no hit uncharged (REDTEAM phase 18). Its order isn't 0: the run wasn't
+    served in release order, and the order's charge is the I/O tie's."""
+    header = recs[0]
+    assert header["kind"] == "header" and header["config"]["enable_prefix_caching"] is False
+    assert RP.load_step_trace(recs).engine.enable_prefix_caching is False
+
+
 @pytest.mark.slow
 def test_every_window_opens_drained(recs):
     """All 339 windows open on an empty engine, so each replays from it, and the cut windows are the whole run. Under sync
@@ -78,7 +88,8 @@ def test_every_window_opens_drained(recs):
 def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
     decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
-    book) over the 339 windows' decisions is `code_v1`'s charge on every window, 5,500 bits: its context ``run`` counts
+    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Window(arrived=…)`, every other count
+    0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
     which resets ``run``), each forced admission would change 330 windows' charges."""
     from verity.core.protocols.certifier import charge_chain as CC
@@ -120,12 +131,12 @@ def test_replay_step_is_w212s_scheduler(recs):
 
 
 def test_the_slice_fixture_is_w212s(recs, tmp_path):
-    """`replay_vectors --slice 212` writes the certifier's `compile_slice_w212.json` from the run's records: requests 308
-    to 310 of the session, their 14 decisions (each a 0 until the request is admitted), the 20 steps' rows, and the seal's
-    served rows for the window with the runner's ids."""
+    """`replay_vectors --slice 212 --AS 0` writes the certifier's sync-class `compile_slice_w212.json` from the run's
+    records: requests 308 to 310 of the session, their 14 decisions (each a 0 until the request is admitted), the 20
+    steps' rows, and the seal's served rows for the window with the runner's ids."""
     out = tmp_path / "w212.json"
     RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "212", "--served",
-             str(RUN / "seal-w212.jsonl"), "--R", "2", "--W", "1", "--A", "2", "--out", str(out)])
+             str(RUN / "seal-w212.jsonl"), "--R", "2", "--W", "1", "--A", "2", "--AS", "0", "--out", str(out)])
     assert json.loads(out.read_text()) == json.loads(SLICE.read_text())
     fx = json.loads(SLICE.read_text())
     assert [a[0] for a in fx["arrivals"]] == [308, 309, 310] and fx["IW"] == 9
@@ -137,11 +148,13 @@ def test_the_slice_fixture_is_w212s(recs, tmp_path):
 
 
 def test_the_class_fixture_is_w212_padded(tmp_path):
-    """At the engine's public class (8, 1, 9; Q 4, D 32, P 54, K 4) `--slice 212` writes `compile_slice_w212_class.json`:
-    w212's own arrivals, decisions, step count and rows at the class's statics, which the slice pads."""
+    """At the engine's public sizes (8, 1, 9; Q 4, D 32, P 54, K 4) under the sync class's scheduler,
+    `--slice 212 --AS 0` writes `compile_slice_w212_class.json`: w212's own arrivals, decisions, step count and rows at
+    the class's statics, which the slice pads."""
     out = tmp_path / "w212_class.json"
     RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "212", "--served", str(RUN / "seal-w212.jsonl"),
-             "--R", "8", "--W", "1", "--A", "9", "--Q", "4", "--D", "32", "--P", "54", "--K", "4", "--out", str(out)])
+             "--R", "8", "--W", "1", "--A", "9", "--Q", "4", "--D", "32", "--P", "54", "--K", "4", "--AS", "0",
+             "--out", str(out)])
     got, own = json.loads(out.read_text()), json.loads(SLICE.read_text())
     assert got == json.loads(CLASS.read_text())
     assert {k: got[k] for k in ("R", "W", "A", "Q", "D", "P", "K")} == {"R": 8, "W": 1, "A": 9, "Q": 4, "D": 32, "P": 54,
@@ -150,9 +163,25 @@ def test_the_class_fixture_is_w212_padded(tmp_path):
         {k: own[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW")}
 
 
+def test_the_async_class_fixture_is_w212s(tmp_path):
+    """At 8eb1's engine class `--slice 212` writes `compile_slice_w212_class_async.json` with no `--AS`: the scheduler
+    is the class's, the trace's AsyncScheduler (AS = 1). So the engine keeps `async_scheduling`, each arrival carries
+    its cap, the window runs 21 units (the last schedule, on the drained engine, dropped) with the seal at the units
+    that ran rows, and its 14 decisions are the sync class's."""
+    out = tmp_path / "w212_class_async.json"
+    RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "212", "--served", str(RUN / "seal-w212.jsonl"),
+             "--R", "8", "--W", "1", "--A", "9", "--Q", "4", "--D", "32", "--P", "54", "--K", "4", "--out", str(out)])
+    got, sync = json.loads(out.read_text()), json.loads(CLASS.read_text())
+    assert got == json.loads(CLASS.with_name("compile_slice_w212_class_async.json").read_text())
+    assert got["engine"]["async_scheduling"] is True and got["source"].endswith("K 4, AS 1)")
+    assert got["arrivals"] == [a + [1] for a in sync["arrivals"]] and got["decisions"] == sync["decisions"]
+    assert got["steps"] == len(got["rows"]) == len(got["served"]) == 21
+    assert [len(s) for s in got["served"]] == [len(r) for r in got["rows"]]
+
+
 def test_a_class_smaller_than_the_window_is_refused(recs):
     sub, base = RV.served_window(recs, 212)
-    with pytest.raises(ValueError, match="smaller than the window: D = 13 < 14, P = 19 < 20"):
+    with pytest.raises(ValueError, match="smaller than the window: D = 13 < 14, P = 19 < 21"):
         RV.slice_inputs(RP.load_step_trace(sub), R=2, W=1, A=2, base=base, D=13, P=19)
 
 
@@ -163,7 +192,7 @@ def test_w1_is_async_only(recs):
     sub, base = RV.served_window(recs, 1)
     tr = RP.load_step_trace(sub)
     with pytest.raises(ValueError, match="diverges from the trace at step 2"):
-        RV.slice_inputs(tr, R=8, W=1, A=9, base=base)
+        RV.slice_inputs(tr, R=8, W=1, A=9, base=base, AS=0)
     st, vs = RV.vectors(tr, R=8, W=1, A=9)
     assert st["AS"] == 1 and len(vs) == 39 and all(RV.fits(st, *v) for v in vs)
     assert RV.check(st, vs, circuit=True) == {"checked": 39, "reference_mismatches": 0, "reference_first": [],

@@ -114,6 +114,12 @@ def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
                                      "the built ♭, the cheater priced at every known fold, counted ones included"))
 
 
+def test_the_honest_clock_says_which_form_is_proved() -> None:
+    clock = get("honest-clock")
+    assert (clock.kind, clock.standing, clock.label) == ("assumption", "standard", "Honest clock")
+    assert "Accounting.SecurityProofs.Actual.honestClock" in clock.name and "the Pearl-C form is not proved" in clock.name
+
+
 def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
     """RT4-LOGIC-25: no served path verifies with --registered; -27: the window's law also needs the audit coins."""
     live = get("accounting-ts-accepted-live")

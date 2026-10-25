@@ -369,7 +369,6 @@ def test_the_tf32_line_reads_the_probe_and_the_tf32_cases() -> None:
         assert not X.tf32_go(doc), k
 
 
-@pytest.mark.slow
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     """`main --quick` with the GPU's phases stood in for (small-statics cases, one word flipped in the broadcast's layer input)
     and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case verdicts, the sealed record, the

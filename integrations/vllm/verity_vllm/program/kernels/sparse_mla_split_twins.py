@@ -1,6 +1,7 @@
 """Numpy twins of `registry.sparse_mla_split`'s Definitions, vectorised over rows: `MufuLg2Ftz_v1` (`mufu_lg2_words`, with
-`undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`) and
-`SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1 is `SparseMlaHead_v1`).  The blocks are `derived_rows.attn_block` over
+`undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`),
+`SparseMlaSplitPart_v1` (`part_rows`, one split's partial and lse) and `SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1
+is `SparseMlaHead_v1`).  The blocks are `derived_rows.attn_block` over
 q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s steps, which `SparseMlaBlock_v1` restates), the step
 `tc_dot16_hopper` and the inverse `fa3_inv_sum`; the captures' fast path, checked word for word against the Definitions in
 `tests/program/test_sparse_mla_split.py`.  A row whose dot reads a non-finite operand is flagged and never claimed exact
@@ -94,34 +95,60 @@ def combine_rows(lse, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
     return DR.f2fp_bf16(acc)
 
 
-def head_split_rows(q_nope, q_rope, kv, *, T: int, NS: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
-                    dot16=DR.tc_dot16_hopper, inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
-    """`SparseMlaHeadSplit_v1{T, NS, DR, DV, BN, DOT, INV, SCALE}`: q_nope (R, DV), q_rope (R, DR), kv (R, T, DV + DR) or (T, DV + DR)
-    bf16 words -> (out (R, DV) bf16 words, nonfinite (R,)).  NS = 1 is `SparseMlaHead_v1`."""
-    W.check_split_statics(T, NS)
+def _operands(what: str, q_nope, q_rope, kv, T: int, DR_: int, DV: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The blocks' operands of a head over T keys: q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0], each (R, ..)."""
     q_nope, q_rope, kv = (np.asarray(a, dtype=np.uint16) for a in (q_nope, q_rope, kv))
     R, KW = q_nope.shape[0], DR_ + DV
     if kv.ndim == 2:
         kv = np.broadcast_to(kv, (R,) + kv.shape)
     if kv.shape[1:] != (T, KW):
-        raise ValueError(f"head_split_rows: kv {kv.shape[1:]}, T={T} rows of {KW}")
-    q = np.concatenate([q_rope, q_nope], axis=1)
-    kb = np.concatenate([kv[:, :, DV:], kv[:, :, :DV]], axis=2)
-    vb = np.concatenate([kv[:, :, :DV], np.zeros((R, T, DR_), dtype=np.uint16)], axis=2)
-    sbits = M.scale_log2_bits(scale)
+        raise ValueError(f"{what}: kv {kv.shape[1:]}, T={T} rows of {KW}")
+    return (np.concatenate([q_rope, q_nope], axis=1), np.concatenate([kv[:, :, DV:], kv[:, :, :DV]], axis=2),
+            np.concatenate([kv[:, :, :DV], np.zeros((R, T, DR_), dtype=np.uint16)], axis=2))
+
+
+def _split(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, DV: int, sbits: int, dot16) -> tuple[tuple, np.ndarray]:
+    """One split: blocks [b0, b1) last to first (its first visited one FIRST, the keys' last block zero-padded) -> its end's
+    (m, l, o[:, :DV]) and the rows whose dot read a non-finite operand."""
+    R, KW = q.shape
     nf = np.zeros(R, dtype=bool)
+    m = l = o = None
+    for b in range(b1 - 1, b0 - 1, -1):
+        lo, hi = b * BN, min(T, (b + 1) * BN)
+        kblk, vblk = (np.zeros((R, BN, KW), dtype=np.uint16) for _ in range(2))
+        kblk[:, :hi - lo], vblk[:, :hi - lo] = kb[:, lo:hi], vb[:, lo:hi]
+        first = b == b1 - 1
+        m, l, o, f = DR.attn_block(q, kblk, vblk, m, l, o, D=KW, NVIS=hi - lo, FIRST=first, dot16=dot16, check=first,
+                                   scale_bits=sbits)
+        nf |= f
+    return (m, l, o[:, :DV]), nf
+
+
+def part_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
+              dot16=DR.tc_dot16_hopper, inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`SparseMlaSplitPart_v1{T, DR, DV, BN, DOT, INV, SCALE}`: q_nope (R, DV), q_rope (R, DR), kv (R, T, DV + DR) or (T, DV + DR)
+    bf16 words -> (o_partial (R, DV) f32 words, lse (R,) f32 words, nonfinite (R,)): one split over all its T keys."""
+    if T < 1:
+        raise ValueError(f"part_rows: T={T} keys")
+    q, kb, vb = _operands("part_rows", q_nope, q_rope, kv, T, DR_, DV)
+    (m, l, o), nf = _split(q, kb, vb, 0, -(-T // BN), T=T, BN=BN, DV=DV, sbits=M.scale_log2_bits(scale), dot16=dot16)
+    part, lse = split_end_rows(m, l, o, scale=scale, inv=inv)
+    return part, lse, nf
+
+
+def head_split_rows(q_nope, q_rope, kv, *, T: int, NS: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
+                    dot16=DR.tc_dot16_hopper, inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
+    """`SparseMlaHeadSplit_v1{T, NS, DR, DV, BN, DOT, INV, SCALE}`: q_nope (R, DV), q_rope (R, DR), kv (R, T, DV + DR) or (T, DV + DR)
+    bf16 words -> (out (R, DV) bf16 words, nonfinite (R,)).  NS = 1 is `SparseMlaHead_v1`."""
+    W.check_split_statics(T, NS)
+    q, kb, vb = _operands("head_split_rows", q_nope, q_rope, kv, T, DR_, DV)
+    sbits = M.scale_log2_bits(scale)
+    nf = np.zeros(q.shape[0], dtype=bool)
     ends = []
     for b0, b1 in W.split_blocks(T, NS, BN):
-        m = l = o = None
-        for b in range(b1 - 1, b0 - 1, -1):
-            lo, hi = b * BN, min(T, (b + 1) * BN)
-            kblk, vblk = (np.zeros((R, BN, KW), dtype=np.uint16) for _ in range(2))
-            kblk[:, :hi - lo], vblk[:, :hi - lo] = kb[:, lo:hi], vb[:, lo:hi]
-            first = b == b1 - 1
-            m, l, o, f = DR.attn_block(q, kblk, vblk, m, l, o, D=KW, NVIS=hi - lo, FIRST=first, dot16=dot16, check=first,
-                                       scale_bits=sbits)
-            nf |= f
-        ends.append((m, l, o[:, :DV]))
+        e, f = _split(q, kb, vb, b0, b1, T=T, BN=BN, DV=DV, sbits=sbits, dot16=dot16)
+        ends.append(e)
+        nf |= f
     if NS == 1:
         m, l, o = ends[0]
         tot = DR.add_ftz(DR.add_ftz(l[:, 0], l[:, 2]), DR.add_ftz(l[:, 1], l[:, 3]))
