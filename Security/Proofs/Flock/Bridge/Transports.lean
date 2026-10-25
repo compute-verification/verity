@@ -123,10 +123,11 @@ theorem find?_portsOf_sep (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q :
     ∃ q', (portsOf c nl roots).find? (fun p => decide (bs p.root = roots.getD q [])) = some (portAt c nl roots q') ∧
       roots.getD q' [] = roots.getD q [] ∧ domOf c q' = domOf c q := by
   have hqs : q < (portsOf c nl roots).size := by simp [portsOf_eq, hq]
-  have hp : (fun p : Flock.Registered.Port => decide (bs p.root = roots.getD q [])) (portsOf c nl roots)[q] = true := by
+  have hp : decide (bs (portsOf c nl roots)[q].root = roots.getD q []) = true := by
     simp [portsOf_eq, portAt, Claims.Sampling.bs_bytes]
   obtain ⟨x, hx⟩ := Option.isSome_iff_exists.mp
-    (Array.find?_isSome.mpr ⟨_, Array.getElem_mem hqs, hp⟩)
+    ((Array.find?_isSome (p := fun p : Flock.Registered.Port => decide (bs p.root = roots.getD q []))).mpr
+      ⟨_, Array.getElem_mem hqs, hp⟩)
   obtain ⟨hpx, j, hj, hxj, hbefore⟩ := (Array.find?_eq_some_iff_getElem).mp hx
   have hjq : j ≤ q := by
     by_contra hlt
@@ -147,7 +148,9 @@ theorem opensLeaf_portAt (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q q'
     (hroot : roots.getD q' [] = roots.getD q []) (hdom : domOf c q' = domOf c q) :
     Flock.Registered.opensLeaf (portAt c nl roots q') = Flock.Registered.opensLeaf (portAt c nl roots q) := by
   funext a b d
-  simp only [Flock.Registered.opensLeaf, portAt, hroot, hdom]
+  unfold Flock.Registered.opensLeaf portAt
+  dsimp only
+  rw [hroot, hdom]
 
 /-- **Under `RowsV2` a port is an unsegmented row/v2 row.** -/
 theorem rowsV2_port {c : Flock.Circuit} (h : RowsV2 c) (q : Fin c.ports.size) :
