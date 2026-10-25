@@ -20,8 +20,9 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`), once every check
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
 rows, the typed statements, public input ports, several tables without `--zk` (unless `--plain-tables`: a statement with
-public outputs at up to 64 tables, at a subset draw, with the verifier's own `--program` the one META's `program_sha512`
-names, `ProvedScope.checkP` and `drawLawP`, which `flock_verify_sound`'s `SoundExecJ` covers) and more than 2^16 with it (`ProvedScope.zkTableCap`), shared-row public files (except under
+public outputs, or hidden outputs and `hm96-sha512/v1` leaves, at up to 64 tables, at a subset draw, with the verifier's
+own `--program` the one META's `program_sha512` names, `ProvedScope.checkP` and `drawLawP`, which `flock_verify_sound`'s
+`SoundExecJ` and `SoundExecHJ` cover) and more than 2^16 with it (`ProvedScope.zkTableCap`), shared-row public files (except under
 `--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
 outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
 a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
