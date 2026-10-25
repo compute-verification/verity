@@ -15,8 +15,8 @@ and exits 0 iff every compiled Program equals its trace.  `compile_steps` refusi
 compiled.json and exits 2; `--partial` refuses request by request instead, and compiles the rest.
 
 `--window K` reads a `verity-vllm serve-openai --seal` run instead: window K's advice (`advice/w<K>/private/advice.bin`, its
-registration's ℓ), each request's certified body from `requests.jsonl` (by `user`: the sampling fields its ingress record says
-it brought, and its prompt ids), and the model, target,
+registration's ℓ), the certified body of each of window K's requests from `requests.jsonl` (the records whose ``windows`` hold
+K, by `user`: the sampling fields its ingress record says it brought, and its prompt ids), and the model, target,
 execution and default seed from `serve.json`.  The Build dirs go into `--out` itself (default the window's row dir,
 `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's Program digest and
 Build dir, and the registration the advice is bound to.
@@ -36,8 +36,9 @@ MANIFEST = "verity-vllm/served-window-programs/v1"
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
-    """A serve-openai window's (advice file, run meta, each request's certified body by user, registration): the body is the
-    sampling fields the request brought (its ingress record) with its prompt ids."""
+    """A serve-openai window's (advice file, run meta, the certified body of each of its requests by user, registration): the
+    body is the sampling fields the request brought (its ingress record) with its prompt ids. Only the window's own records
+    count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
     reg = json.loads((adv / "registration.json").read_text())
     serve = json.loads((run / "serve.json").read_text())
@@ -45,7 +46,12 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     for line in (run / "requests.jsonl").read_text().splitlines():
         if line.strip():
             d = json.loads(line)
-            bodies[d.get("user") or d["http_id"]] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
+            if int(window) not in (d.get("windows") or ()):
+                continue
+            user = d.get("user") or d["http_id"]
+            if user in bodies:
+                raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
+            bodies[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"], "execution": serve.get("execution"),
             "default_seed": serve.get("default_seed")}
     return adv / "private" / "advice.bin", meta, bodies, reg
