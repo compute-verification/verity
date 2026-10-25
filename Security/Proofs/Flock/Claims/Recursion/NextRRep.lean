@@ -103,7 +103,7 @@ theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨_, _⟩ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨_, _⟩ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨_, _, _⟩ _ _ => ?_
-  refine Replay.Ret.run_bind (ligeritoP_initialCap ..) fun _ _ h => ?_
+  refine Replay.Ret.run_bind (ligeritoP_initialCap resp hs _ _ _ cm0 _ _ salt nonce _) fun _ _ h => ?_
   rw [StateT.run_pure]
   exact Ret.pure ⟨rfl, h⟩
 
