@@ -1,6 +1,6 @@
 """The desc fuzzer's run (`NciCheck.DescFuzzMain`): the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_fuzz_programs.py` writes the 1,856 Programs `NciCheck/DescFuzzMain.lean`
+`verity/core/protocols/network/nci/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `NciCheck/DescFuzzMain.lean`
 decides the statements behind `DescAgrees` on (`runs` in that package's `lean-audit.json`), which the Lean audit runs and
 caches on the Lean package's files alone, against the data's SHA-256 in the record. So the first test is what says the
 data is still what the generator writes. The second, that it holds the shape #4066 fixed: one gate reading, through one
@@ -14,6 +14,7 @@ import bisect
 import hashlib
 import importlib.util
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -23,6 +24,7 @@ LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(name, LEAN / "scripts" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # `dataclass` looks its module up there
     spec.loader.exec_module(module)
     return module
 
@@ -60,21 +62,27 @@ def _shared_reads(text: str) -> list[tuple[str, str, int]]:
 
 
 def test_the_shared_family_reads_several_nodes_through_one(tmp_path):
-    """`desc_difftest_vectors.shared()`'s six declarations come right after `hand`, each read so; of the 600 `shared`
-    seeds, every one decodes and most are read so, through a batch at the root or a call of one, by a primitive, a
-    batch mapped over the members or a call, and some gate reads four root nodes through the one."""
+    """`desc_difftest_vectors.shared()`'s six declarations come right after `hand`, each read so and with its two
+    instances; of the 200 `shared` seeds, every one decodes, comes with IU assignments of its own, and most are read so,
+    through a batch at the root or a call of one, by a primitive or a call, some gate reading four root nodes through
+    the one."""
     data = fuzz.write(tmp_path)["desc_fuzz/programs.jsonl"]
     lines = [json.loads(x) for x in data.read_text().splitlines()]
     families = Counter(x["family"] for x in lines)
-    assert families["shared-vector"] == 6 and families["shared"] == 600 and families["shared-mutant"] > 0
-    vectors = lines[families["hand"]:families["hand"] + 6]
-    assert [x["family"] for x in vectors] == ["shared-vector"] * 6
-    assert [x["program"] for x in vectors] == fuzz.shared_vectors()
-    assert all(_shared_reads(x["program"]) for x in vectors)
-    seeds = [x["program"] for x in lines if x["family"] == "shared"]
-    assert len(set(seeds)) == 600
-    found = [_shared_reads(text) for text in seeds]
-    assert sum(map(bool, found)) >= 300
+    assert families["shared-seed"] == 6 and families["shared"] == 200 and families["shared-mutant"] > 0
+    given: dict[str, list[dict]] = {}
+    for inst in fuzz.desc.shared():
+        given.setdefault(inst["program"], []).append({k: v for k, v in inst.items() if k != "program"})
+    first = lines[families["hand"]:families["hand"] + 6]
+    assert [x["family"] for x in first] == ["shared-seed"] * 6
+    assert {x["program"]: x["instances"] for x in first} == given
+    assert all(_shared_reads(x["program"]) for x in first)
+    shared = [x for x in lines if x["family"] == "shared"]
+    assert len({x["program"] for x in shared}) == 200
+    assert all(1 <= len(x["instances"]) <= fuzz.ASSIGNMENTS for x in shared)
+    assert any(len(x["instances"]) == fuzz.ASSIGNMENTS for x in shared)
+    found = [_shared_reads(x["program"]) for x in shared]
+    assert sum(map(bool, found)) >= 150
     assert {(named, reader) for f in found for named, reader, _ in f} == \
-        {(n, r) for n in ("batch", "call") for r in ("primitive", "batch", "call")}
+        {(n, r) for n in ("batch", "call") for r in ("primitive", "call")}
     assert max(most for f in found for *_, most in f) >= 4

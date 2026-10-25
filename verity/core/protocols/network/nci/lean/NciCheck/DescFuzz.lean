@@ -24,8 +24,9 @@ statements in `Security/Properties/Proofs/Nci/` (`Novel.descAgrees_of_open`). Ea
   segment's first piece (clause a), and those gates are exactly the gates outside node `k` that its gates read (clause b).
   `circuitOf` runs only where `s1prim`'s walk resolved every operand under the step cap, so it never runs `Steps.FUEL`
   steps.
-* `agree`, `DescAgrees` itself, on four instances of the Program (`instanceOf`): wherever `Desc.evaluate` gives a
-  verdict, `NciCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `NciDesc.Expands`).
+* `agree`, `DescAgrees` itself, on instances of the Program (`instanceOf`) and on any its line gives (`θ`, owners, `Γ`
+  and `α` chosen with the Program, as the shared family chooses its IUs): wherever `Desc.evaluate` gives a verdict,
+  `NciCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `NciDesc.Expands`).
 
 Each `∀` over members, leaves or references enumerates all of them up to `Caps.enum`, else endpoints (every bound in
 `UpOk`, `DownOk` and `OpOk` is monotone in the member and the leaf, or periodic in a leaf block shorter than the
@@ -320,16 +321,21 @@ def expand (P : Prog) (j : Json) : Json := Id.run do
   Json.mkObj [("program", j.getObjValD "program"), ("theta", Json.arr theta'), ("owner", Json.arr owner'),
     ("gamma", j.getObjValD "gamma"), ("alpha", j.getObjValD "alpha")]
 
-/-- `DescAgrees` on `n` instances of the Program: the verdicts `Desc.evaluate` gives, and the first instance where the
-unrolled check on its expansion differs. -/
-def agrees (P : Prog) (text : String) (n : Nat) : Nat × Option Json := Id.run do
+/-- `DescAgrees` on `n` instances of the Program, then on each of `given` (`theta`, `owner`, `gamma` and `alpha`, numbered
+from `n`): the verdicts `Desc.evaluate` gives, and the first instance where the unrolled check on its expansion
+differs. -/
+def agrees (P : Prog) (text : String) (n : Nat) (given : Array Json := #[]) : Nat × Option Json := Id.run do
   let body := (P.defs[P.root]!).body
   let inp := body.nodes.map (Desc.isInputNode P)
   let reg := body.nodes.map fun nd => isRegisteredId (P.defs[nd.fn]!).key
   let held := (Array.range body.nodes.size).map fun k => decide (body.offsets[k + 1]! > body.offsets[k]!)
   let mut verdicts := 0
-  for v in [0:n] do
-    let j := instanceOf text (P.defs[P.root]!).gates inp reg held (hash text) v
+  for v in [0:n + given.size] do
+    let j := if v < n then instanceOf text (P.defs[P.root]!).gates inp reg held (hash text) v
+      else
+        let g := given[v - n]!
+        Json.mkObj [("program", Json.str text), ("theta", g.getObjValD "theta"), ("owner", g.getObjValD "owner"),
+          ("gamma", g.getObjValD "gamma"), ("alpha", g.getObjValD "alpha")]
     match Desc.evaluate j with
     | .error _ => pure ()
     | .ok out =>
@@ -353,10 +359,10 @@ the digest left empty. Interpreted, the hash is most of a decode's time, and `ag
 def decodeUnhashed (bytes : ByteArray) : Except String Prog :=
   decodeWith (M := Except String) (fun _ => pure ByteArray.empty) bytes
 
-/-- The six preconditions, then each statement's conclusion, on one descriptor's text, `agree` on `instances` of it:
-`pre` (`ok`, or the first precondition that fails, with `why`), then under `ok` each statement's `fail` (`null` where
-it holds) or `skipped`. -/
-def check (caps : Caps) (text : String) (instances : Nat) : Json :=
+/-- The six preconditions, then each statement's conclusion, on one descriptor's text, `agree` on `instances` of it and
+on `given`: `pre` (`ok`, or the first precondition that fails, with `why`), then under `ok` each statement's `fail`
+(`null` where it holds) or `skipped`. -/
+def check (caps : Caps) (text : String) (instances : Nat) (given : Array Json := #[]) : Json :=
   match decodeUnhashed text.toUTF8 with
   | .error e => Json.mkObj [("pre", Json.str "decode"), ("why", Json.str (e.take 200).toString)]
   | .ok P =>
@@ -383,8 +389,8 @@ def check (caps : Caps) (text : String) (instances : Nat) : Json :=
             | none => Json.mkObj [("fail", Json.null)]
             | some j => if (j.getObjVal? "skipped").isOk then j else Json.mkObj [("fail", j)]
       let agj := if !bounded then skipped "past the caps" else
-        let (n, d) := agrees P text instances
-        Json.mkObj [("verdicts", toJson n), ("fail", opt d)]
+        let (n, d) := agrees P text instances given
+        Json.mkObj [("verdicts", toJson n), ("given", toJson given.size), ("fail", opt d)]
       Json.mkObj [("pre", Json.str "ok"), ("s1prim", s1j), ("s2", s2j), ("s3", s3j), ("agree", agj)]
 
 def STATEMENTS : List String := ["s1prim", "s2", "s3", "agree"]
@@ -397,7 +403,8 @@ def failing (r : Json) : List String :=
 def decided (r : Json) (s : String) : Bool := ((r.getObjValD s).getObjVal? "fail").isOk
 
 /-- `lake env lean --run NciCheck/DescFuzzMain.lean PROGRAMS N`: `PROGRAMS` has `N` lines, `{"id", "family",
-"program", "agree"}` each (`agree`: how many instances `agrees` checks, each two decodes of the Program), and the run
+"program", "agree"}` each, and `"instances"` on some (`agree`: how many instances of its own `agrees` checks, beside
+`instances`, each `{"theta", "owner", "gamma", "alpha"}`; every instance costs two decodes of the Program), and the run
 fails unless no statement fails on any of them and each statement is decided on some. -/
 def main (args : List String) : IO UInt32 := do
   let [progs, n] := args | IO.eprintln "usage: NciCheck/DescFuzzMain.lean PROGRAMS N"; return 2
@@ -409,7 +416,7 @@ def main (args : List String) : IO UInt32 := do
     match Json.parse l with
     | .error e => (Json.null, Json.mkObj [("pre", Json.str "line"), ("why", Json.str e)])
     | .ok j => (j, check {} ((j.getObjValD "program").getStr?.toOption.getD "")
-        (((j.getObjValD "agree").getNat?).toOption.getD 4))
+        (((j.getObjValD "agree").getNat?).toOption.getD 4) ((j.getObjValD "instances").getArr?.toOption.getD #[]))
   let mut fails : Array (Json × Json × List String) := #[]
   -- the line, `check`'s result and the statements that fail
   let mut ok := 0
