@@ -62,7 +62,7 @@
 //   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
-//              kh_units_multi's receipts under J10-R's call-scale noise (measured only; at the end of this file), with
+//              kh_units_multi's receipts under J10-R's call-scale noise (#3574's form; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
@@ -2595,9 +2595,10 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
-// J10-R (CA's RT-ALGO r3 at 3dc80591df; measured only, never served or credited until CA adopts J10 and the verifier
-// takes the form): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call scale, row i's blocks
-// at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and columns 32 cj .. of it.
+// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, #3574, whose credit derives a unit's call and
+// blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
+// scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
+// columns 32 cj .. of it.
 // cseed: the call's seed as 8 big-endian words (16 read as h1s_noise reads a unit's). Each unit keeps its own fold keys
 // (seeds' sigma_R). ws: kh_j10_ws_bytes(rows, N, K) bytes; kh_one's other arguments.
 extern "C" unsigned long long kh_j10_ws_bytes(unsigned rows, unsigned N, unsigned K) {
