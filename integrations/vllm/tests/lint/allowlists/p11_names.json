@@ -255,6 +255,7 @@
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "doc-board-id", "symbol": "admission", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 6},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "doc-round", "symbol": "admission", "detail": "R1N", "count": 2},
+    {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "doc-round", "symbol": "predicted_pool_bytes", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 2},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 4},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-round", "symbol": "gap_accounting", "detail": "R1N"},
