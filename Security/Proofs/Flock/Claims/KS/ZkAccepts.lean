@@ -57,7 +57,7 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
 transcript is the last message's record and proof files. -/
 theorem liveAcceptsZK_of_run {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
-    ∃ s f, insOf true x = some s ∧ Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw ∧
+    ∃ (s : Ins) (f : Final), insOf true x = some s ∧ Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw ∧
       (Exec.recordDraw f.record = s.read.draw → ∀ (R : Reg) (S : Finset (Fin n)),
         ZkExec.LiveAcceptsZK s.read.I (R, S, (⟨f.record, f.proofs⟩ : Exec.Transcript))) := by
   obtain ⟨s, -, -, -, -, -, f, -, hins, hrel, hacc⟩ := zkAccepts_of_run h
