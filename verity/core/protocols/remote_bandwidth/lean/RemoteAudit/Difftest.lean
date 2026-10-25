@@ -3,6 +3,7 @@ import RemoteAudit.Line
 import RemoteAudit.Registry
 import RemoteAudit.Schedule
 import RemoteAudit.Store
+import RemoteAudit.Wire
 
 /-!
 # The difftest's Lean half
@@ -81,6 +82,8 @@ def openingOf (j : Json) : V Opening := do
       tile := ← hex j "tile"
       digest := ← hex j "digest" }
 
+/-- An event as JSON gives it. A `verify`'s openings are either decoded (`openings`) or the window's frames as the wire
+carried them (`frames`, lowercase hex, read as the verifier's process reads them: `Wire.openingsOf`). -/
 def eventOf (j : Json) : V Session.Event := do
   match ← J.str j "kind" "event" with
   | "start" => pure (.start (← nat j "now"))
@@ -102,7 +105,9 @@ def eventOf (j : Json) : V Session.Event := do
       | v => some <$> J.asInt v "step"
     pure (.receive (← int j "t") (← int j "i") (← hex j "root") runs change step (← nat j "now"))
   | "close" => pure (.close (← int j "t") (← nat j "now"))
-  | "verify" => pure (.verify (← int j "t") (← (← J.arr j "openings" "event").mapM openingOf))
+  | "verify" =>
+    if J.has j "frames" then pure (.verify (← int j "t") (Wire.openingsOf (← hexes j "frames")))
+    else pure (.verify (← int j "t") (← (← J.arr j "openings" "event").mapM openingOf))
   | k => throw s!"no event kind {k}"
 
 def resultJ : Session.Result → Json

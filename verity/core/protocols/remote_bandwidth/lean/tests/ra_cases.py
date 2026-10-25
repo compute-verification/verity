@@ -26,7 +26,7 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
@@ -183,7 +183,8 @@ def opening_of(v: Any) -> audit.Opening:
 
 
 def event_of(v: Any) -> tuple:
-    """`eventOf`: an event as a tuple, its kind first."""
+    """`eventOf`: an event as a tuple, its kind first. A `verify` carries its openings, or the frames they came in
+    (`frames`), read as the live verifiers read them (`wire.openings_of`)."""
     kind = _str(v, "kind")
     if kind in ("start", "boundary"):
         return kind, nat(v, "now")
@@ -204,6 +205,8 @@ def event_of(v: Any) -> tuple:
     if kind == "close":
         return kind, int_(v, "t"), nat(v, "now")
     if kind == "verify":
+        if "frames" in v:
+            return kind, int_(v, "t"), wire.openings_of(hexes(v, "frames"))
         return kind, int_(v, "t"), [opening_of(o) for o in _list(v, "openings")]
     raise D.Reject(f"no event kind {kind}")
 

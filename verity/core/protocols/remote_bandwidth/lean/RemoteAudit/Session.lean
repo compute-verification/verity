@@ -19,7 +19,8 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
   released block), `lifetime` (an appended block that joined a window L or more before);
 * `close(t)`: the window's draws, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
-* `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws).
+* `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws); rejected `malformed` on a window with
+  no draws, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
@@ -274,6 +275,7 @@ def verify (s : State) (t : Int) (openings : Array Opening) : Result × State :=
   let w := s.windows[t]!
   let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
+  if drawn.isEmpty then return s.fail t .malformed
   match checkWindow s.reg s.digest s.appends (s.record t) drawn openings with
   | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   | .reject f at? => return s.fail t f at?
@@ -296,6 +298,7 @@ def verifyBy (s : State) (t : Int) (check : Array (Nat × Nat) → Verdict) : Re
   let w := s.windows[t]!
   let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
+  if drawn.isEmpty then return s.fail t .malformed
   match check drawn with
   | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   | .reject f at? => return s.fail t f at?
