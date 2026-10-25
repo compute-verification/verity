@@ -58,6 +58,13 @@ evicted.
 
 **Cost** (`size`): a step makes 3R + 1 calls (R takes, R running-loop events, a lookup, R frees) and at AS = 1 R late
 caches more, each CacheStep_v2's eviction, free and end and a window of KL, KC, 1 or no units (`cache_step_v2.size`).
+The demonstration units are 83,092 ANDs (`demo`, at G = 5 and G = 1) and 91,785 (`demo_async`). On corpus-smallkv's
+first seven steps (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12) the unit is 7,984,682 ANDs, against
+CompileSlice_v1's about 7.6M, and is its reference on the honest run and a stamp or a return off (run
+r20261025-022833-f907). At the crush traces' class (CN 159 = NB − 1, R 16, CU 256) a call's eviction is 41,476 ANDs,
+a unit of its window 99,172 and its free 10,694, so a step's calls are about 300M ANDs, 85% of them the R takes'
+KL = 160-unit windows: there `benchmarks/network_e2e/encodings/compile_slice_pool.py` holds the calls to the replay's
+`_KV`.
 """
 from __future__ import annotations
 
