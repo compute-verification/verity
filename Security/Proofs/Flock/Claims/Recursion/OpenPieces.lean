@@ -29,7 +29,7 @@ namespace RecDeploy
 open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
-open FlockSoundness.Refine (openAt capAt)
+open FlockSoundness.Refine (openAt)
 open FlockVBridge.Family (bytesAt outCol plain)
 open RecDeploy.OpenedPlain (QueryOpens queryOpens_of_outs dirsRow_testBit)
 
@@ -94,8 +94,8 @@ def OpenTie (sd : OpenSide) (q : OpenPiece) (LANES H pos : ℕ) (v : ℕ → Boo
   (∀ h < (sd.sch.levels[q.level]!).d - (sd.sch.levels[q.level]!).cap,
       (_root_.Flock.Readable.openIdx v LANES H).testBit h = pos.testBit h) ∧
     bytesAt v (outCol LANES H) 64 =
-      (capAt sd.cap sd.lig q.level).getD (pos >>> ((sd.sch.levels[q.level]!).d - (sd.sch.levels[q.level]!).cap))
-        ByteArray.empty
+      (FlockSoundness.Refine.capAt sd.cap sd.lig q.level).getD
+        (pos >>> ((sd.sch.levels[q.level]!).d - (sd.sch.levels[q.level]!).cap)) ByteArray.empty
 
 /-- **The `dirs` tie at the registered row gives the position's bits**: where the bits a copy reads are those of the
 verifier's `dirsRow pos H` words (16 a word), they are `pos`'s low `H` bits (`dirsRow_testBit`, `H ≤ 32`). -/
