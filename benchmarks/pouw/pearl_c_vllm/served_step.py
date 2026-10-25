@@ -75,7 +75,7 @@ def _timed(fn, key: str):
 
 def _patch_pearl() -> None:
     """`PEARL_PHASES` on the class that defines each, before any run exists."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     for name, key in PEARL_PHASES:
         owner = next((c for c in PPD.PearlCDeviceRun.__mro__ if name in c.__dict__), None)
         if owner is not None:
@@ -131,8 +131,8 @@ def _live(arm):
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, _LiveSession
-    from verity_vllm.protocol_options import pouw_h1_window as PHW
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     env = PearlCArm()
     if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols) or (env.gate_command, env.peer) == (None, None):
         return arm, None
@@ -172,7 +172,7 @@ def coins_of(option, reserved) -> dict:
     session closed (``details.challenger``, once the engine has closed), and the session head a retained pass's manifest
     names (``manifest_head``, `pouw_pearl_c_manifest.session_head`); `reserved` the gate's reserve answer `_live` took."""
     from verity.core.protocols.pouw import salt as PS
-    from verity_vllm.protocol_options.pouw_pearl_c_manifest import session_head
+    from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
     c = option.commitment()
     k, w = c.get("pass_index"), c.get("weights_root")
     after = w if k is None or w is None else PS.epoch_open_root(bytes.fromhex(w), k).hex()
