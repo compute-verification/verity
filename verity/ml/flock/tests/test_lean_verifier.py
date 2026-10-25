@@ -53,12 +53,13 @@ def test_no_escape_hatches():
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
 AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.|"
-                           r"Definitions\.Flock\.Guarantees\.Audit$)")
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+                           r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
 
 
 def test_audit_layer_is_abstract():
-    """The audit theorems import only the interaction model, Mathlib, each other and their lifted statements
+    """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
+    the lock's layers hold to itself and Mathlib) and their lifted statements
     (`Definitions.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),

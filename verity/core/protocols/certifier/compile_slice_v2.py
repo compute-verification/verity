@@ -490,10 +490,11 @@ def _unpool(S, bits) -> dict:
 
 
 def _call(C, Y, pool: dict, slot, r, flags, *, K=None, wh=None, ev=None, new=None, tau=None, held=None, ret=None,
-          units=(), window: int = 0, target=None) -> tuple:
+          units=(), window: int = 0, target=None, derive: bool = False) -> tuple:
     """One CacheStep_v2 call on `pool` (`cache_step_v2._body`'s parts, its window `window` units): (ok, the next pool).
     With `target` the window starts at the slot's walk level and caches up to unit `target` (nins = target − level,
-    within the window); else it is `units`' first `window` from ROOT with nins 0."""
+    within the window); else it is `units`' first `window` from ROOT with nins 0. With `derive` the free's returns are
+    its own, not `ret`, and follow: (ok, the next pool, the returns in HW bits)."""
     Z = C2.widths(Y)
     H = [ZERO] * Z.HW
     K, wh, ev, new, held, ret = (x if x is not None else z for x, z in ((K, [ZERO] * Z.LW), (wh, H), (ev, H), (new, H),
@@ -514,14 +515,18 @@ def _call(C, Y, pool: dict, slot, r, flags, *, K=None, wh=None, ev=None, new=Non
     for unit in us:
         carry, _nxt = C2._build_unit(C, Y, carry, unit, sb, r, flags[:2], K, wh, nins)
     fin = CST._unpack(C2._carry_layout(Y), carry)
-    mask3, stamp3, spfx3, hf3, clock3, okf = C2._build_free(C, Y, fin["level"], fin["mask"], stamp2, spfx, fin["pfx"],
-                                                            hf2, pool["clock"], sb, flags, held, ret)
+    mask3, stamp3, spfx3, hf3, clock3, okf, *back = C2._build_free(
+        C, Y, fin["level"], fin["mask"], stamp2, spfx, fin["pfx"], hf2, pool["clock"], sb, flags, held, ret,
+        derive=derive)
+    if derive:
+        ret, r_over = _fits(C, back[0], Z.HW)
+        okf = [C.AND(okf[0], r_over.inv())]
     ok = C2._build_end(C, Y, [ok0[0], fin["ok"][0], okf[0]], fin["ev"], ev, wh, nins, flags, new, held, ret)[0]
     cut = C2._cut
     nxt = {"parent": cut(fin["parent"], Z.EW), "tok": cut(fin["tok"], Z.UW), "owner": cut(fin["owner"], Y.RW),
            "level": cut(fin["level"], Z.HW), "live": fin["live"], "mask": cut(mask3, Y.R), "stamp": cut(stamp3, Y.SW),
            "spfx": cut(spfx3, Z.EW), "hf": hf3, "clock": clock3, "fl": pool["fl"]}
-    return C.AND(ok, over.inv()), nxt
+    return (C.AND(ok, over.inv()), nxt) + ((ret,) if derive else ())
 
 
 def _fits(C, v, w: int) -> tuple[list, object]:
@@ -634,8 +639,15 @@ def _build_pool_step(C, S, prow, tp: dict, hit, ev, ret, tau, cert) -> tuple:
     bad += [C.AND(or_reduce(C, [popped[p], upd[p]["leave"]]).inv(), or_reduce(C, ret[p])) for p in range(R)]
     bad += [C.AND(slots[p]["valid"][0].inv(), or_reduce(C, tau[p])) for p in range(R)]
 
-    # the next running slots: a slot leaving the list holds nothing, the kept move to the front
-    ND, root = N * S.CD, const_bits(N, Z.EW)
+    nxt = _next_row(C, S, pool, upd, bad)
+    return or_reduce(C, bad).inv(), nxt
+
+
+def _next_row(C, S, pool: dict, upd, bad: list) -> list:
+    """The pool row after the step's calls: a slot leaving the running list holds nothing (else `bad`), the kept move
+    to the front with their walk entries and at AS = 1 their ``fl`` (the row sampled), an invalid entry's fields 0."""
+    Z, N, R = shape(S).Z, S.CN, S.R
+    ND, root, RCW = N * S.CD, const_bits(N, Z.EW), shape(S).ZR.RC + 1
     cols = [[pool["mask"][k][p] for k in range(ND)] + [a ^ b for a, b in zip(pool["spfx"][p], root)] for p in range(R)]
     keep = [x["keep"] for x in upd]
     bad += [C.AND(keep[p].inv(), or_reduce(C, cols[p])) for p in range(R)]
@@ -645,7 +657,7 @@ def _build_pool_step(C, S, prow, tp: dict, hit, ev, ret, tau, cert) -> tuple:
     nxt += pool["live"] + [moved[q][k] for k in range(ND) for q in range(R)] + _flat(pool["stamp"])
     nxt += [a ^ b for q in range(R) for a, b in zip(moved[q][ND:ND + Z.EW], root)] + list(pool["hf"]) + list(pool["clock"])
     nxt += [moved[q][ND + Z.EW] for q in range(R)] if S.AS else []
-    return or_reduce(C, bad).inv(), nxt
+    return nxt
 
 
 def _build(C, S, *ins):

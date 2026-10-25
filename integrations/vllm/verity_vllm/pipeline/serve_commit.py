@@ -8,7 +8,8 @@ root. The record is the served path's and COMMIT-ARB's one record, `commit.serve
 the step's rows, and at each close `served_record.Record.absorb` reads the window back from the committed bytes into one
 `RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
-ended. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
+ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
+those are the committed ids' prefix. Its ingress record, the sampling parameters it brought, is written beside it, with the body's ``user`` (null when it
 sent none). Each committed step gets a line of ``step_trace.jsonl`` at its window's close: its root, when its engine step ended,
 its rows and the committer's trace. ``marks`` hears each window's open and close (the scheduler step trace's window records,
 `engine.step_trace.StepTrace.window`).
@@ -104,7 +105,6 @@ class Ledger:
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
     finished: bool = False
-    aborted: bool = False
 
 
 class CommitWindows:
@@ -154,7 +154,8 @@ class CommitWindows:
     def aborted(self, engine_id: str) -> None:
         led = self.ledgers.get(engine_id)
         if led is not None:
-            led.aborted = led.finished = True
+            led.finished = True
+            led.finish = {"reason": "abort", "stop_reason": None, "k": len(led.streamed)}
 
     def idle(self) -> None:
         """The engine has nothing to run: close the open window once it holds ``idle_close_steps`` steps."""
@@ -257,8 +258,6 @@ class CommitWindows:
                                                   "min_tokens": params.get("min_tokens") or 0, "eos_ids": self.eos_ids}
         got = self.record.check(led.engine_id, led.prompt_ids, led.streamed, seed=led.ingress.get("seed"), finish=finish,
                                 decode=self.decode)
-        if led.aborted:
-            got = {**got, "passed": False, "problems": ["aborted before its finish", *got.get("problems", [])]}
         if led.ingress.get("seed") is None:
             got = {**got, "passed": False, "problems": ["no seed carried into the engine", *got.get("problems", [])]}
         return got

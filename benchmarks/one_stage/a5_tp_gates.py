@@ -83,11 +83,13 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, produced  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity_vllm.commit import serving_rows as CS  # noqa: E402
+from verity.ml.windows import rows as CS  # noqa: E402
+from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.program.registry.b1_tp2 import AllReduce2  # noqa: E402
+from verity_vllm.commit import index as IX  # noqa: E402
 
 #: the stand-in's TP run root, which every rank's window and every partial's domain bind
 ROOT = hashlib.sha512(b"verity/a5/tp2-gates-stand-in/v1").hexdigest()
@@ -268,7 +270,7 @@ def commit(out: Path, mine: CS.Window, parts: dict, r: int, altered: bool = Fals
         entries.append([[m.base + i, m.base + i + 1, f"synthetic/{q}", 0, 0, COLLECTIVES[k], m.key, i, i] for i in range(m.n)])
     c = CS.commit(mine, data, salts_of=salts_of)
     CS.write(c, out, {"of": provenance(parts, r), "committer": {"module": "a5_tp_gates.py"}},
-             CS.index_doc(mine.members, entries, mine.run), kind="stand-in", registered=registered)
+             IX.index_doc(mine.members, entries, mine.run), kind="stand-in", registered=registered, registrar=R)
     return c
 
 
