@@ -6,15 +6,16 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3 coordinate on the three
-    FP8 steps at K = 64, the NVFP4 and MXFP4 coordinates at K = 128, the s8 accumulator and scaled coordinate at K = 64, and
-    the scaled s8 linear at K = 64, N = 3."""
+    """The Boolean BF16 coordinate and dot on both steps at K = 64, the coordinate on sm_120's at K = 128 (attention's QK^T at
+    head dim 128), the GEMM at K = 32, N = 3, the E4M3 coordinate on the three FP8 steps at K = 64, the NVFP4 and MXFP4
+    coordinates at K = 128, the s8 accumulator and scaled coordinate at K = 64, and the scaled s8 linear at K = 64, N = 3."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 
     return [
         bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE),
         bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
+        bind(BG.GemmCoordinate, K=128, **BG.GEMM_SM120_BF16),
         bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE),
         bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
         bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE),

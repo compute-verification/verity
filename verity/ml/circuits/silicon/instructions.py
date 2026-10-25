@@ -115,6 +115,13 @@ _RTX5090_BF16 = (
     "verity run r20260922-182911-1f10 (lane fp4-5090; RTX 5090 cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a, "
     "SASS HMMA.16816.F32.BF16): 204,800/204,800 elements agree with HOPPER_BF16_M16N8K16, 48,569 disagree with the Ampere/Ada pipeline"
 )
+_PRO6000_BF16 = (
+    "verity run r20261025-221152-862d (lane kernels-kp2attn; RTX PRO 6000 Blackwell Server Edition cc 12.0, driver 580.173.02, nvcc "
+    "13.0.88, -arch=sm_120a, SASS 1x HMMA.16816.F32.BF16; run record art:8d1ce92bb898002e409b7f24400415437e62125f4c6340c5203b5921a77cec7e): "
+    "the canonical sweep, 25,833,472 asserted elements, 0 mismatches against HOPPER_BF16_M16N8K16 and against HOPPER_BF16_WGMMA_K16's total "
+    "step, 3,151,011 against AMPERE_BF16_M16N8K16; the specials family's 6,144 words and the H100 capture's 44,046 records "
+    "(tc-hopper-2026-09-07, NaN payloads, infinities and positions included) replayed on the device, 0 mismatches against the total step"
+)
 _RTX5090_NVF4 = (
     "verity run r20260922-182011-88f8 (lane fp4-5090; RTX 5090, our harness benchmarks/tc_probe_fp4, OMMA.SF UE4M3.4X, one MMA per tile): "
     "autoproof probe3 vectors replayed 1601/1601; 1,736,704 swept elements with +0 accumulators (263,781 hot-clip firings, full UE4M3 "
@@ -386,7 +393,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _i(
             # lane fp4-5090, run r20260922-182911-1f10 (RTX 5090, cc 12.0, driver 570.153.02, -arch=sm_120a, SASS HMMA.16816):
             # 204,800/204,800 elements agree with the Hopper BF16 pipeline (one group of 16, 26 bits, floor -133); the Ampere/Ada
-            # pipeline fails 48,569 of them.  The consumer Blackwell keeps Hopper's BF16 datapath for legacy mma.sync.
+            # pipeline fails 48,569 of them.  The consumer Blackwell keeps Hopper's BF16 datapath for legacy mma.sync, and on the RTX
+            # PRO 6000 its non-finite words are Hopper's total step's too, so `ops.gemm.GEMM_SM120_BF16` binds HopperBF16WgmmaDot16_v1.
             id="sm120.mma.m16n8k16.bf16",
             sm="sm_120",
             ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
@@ -395,7 +403,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
             dossier="art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2",
-            evidence=(_RTX5090_BF16, _PIN_BF16),
+            evidence=(_RTX5090_BF16, _PIN_BF16, _PRO6000_BF16),
         ),
         _i(
             # Measured on the RTX PRO 6000, the conformance device of target FP8_SM120_MMA, whose anchor trust uses for this id;

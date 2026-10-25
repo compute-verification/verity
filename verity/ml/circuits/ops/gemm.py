@@ -6,7 +6,9 @@
 
 `DOT` is a static naming the step: `GEMM_AMPERE` binds `AmpereBF16TcDot16_v2`, `GEMM_HOPPER` binds
 `HopperBF16WgmmaDot16_v1`.  A proof unit for the FLOP proof is one `GemmCoordinate_v2{K, DOT}` call: K/16
-transitions of `DOT` followed by one `F2fpBf16`.
+transitions of `DOT` followed by one `F2fpBf16`.  `bf16_gemm` gives another card's binding from its k16 step: the
+registered step whose function it computes, so `GEMM_SM120_BF16` (sm_120's `mma.sync.m16n8k16` BF16, the registry's
+`sm120.mma.m16n8k16.bf16`) is `GEMM_HOPPER`, and a circuit over it names no architecture.
 
 The same coordinate over the sm_120 low-precision steps, each K/k `DOT` steps in ascending k from a zero accumulator and
 one `F2fpBf16`:
@@ -45,16 +47,18 @@ from collections.abc import Callable
 
 from verity.ml.circuits.census import FAMILY_COUNTS, serves_none
 from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma, exact_k_limit
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, Model
 from verity.ml.circuits.types import Array, Value
 
 from . import fp32 as F
 from . import prims as P
 from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
-__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
-           "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
-           "GemmCoordinateNvf4", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate", "s8_gemm"]
+__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_BF16", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4",
+           "GEMM_SM120_S8", "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3",
+           "GemmCoordinateMxf4", "GemmCoordinateNvf4", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate", "bf16_gemm", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -206,6 +210,29 @@ def s8_gemm(model: IntegerMma) -> dict:
 
 #: sm_90's (the H200's `wgmma` m64nNk32 and `mma.sync` m16n8k32, PINNED as `silicon.instructions` sm90.*.s8)
 GEMM_SM90_S8: dict = s8_gemm(HOPPER_SM90_S8_K32)
+
+#: the fields `GroupSum.step` reads: operand format, the groups of products in k order, adder width and exponent floor
+_BF16_STEP_FIELDS = ("dtype", "groups", "width", "zero_exponent")
+
+
+def bf16_gemm(model: Model) -> dict:
+    """The BF16 binding of a card whose k16 tensor-core step is ``model``: the registered step whose silicon model ``model``
+    computes the function of (`_BF16_STEP_FIELDS`), whatever the card. `GEMM_HOPPER`'s step for one group of 16 through a
+    26-bit adder (sm_90, sm_100 and sm_120 `mma.sync`, sm_90 `wgmma`), `GEMM_AMPERE`'s for two groups of 8 through 25 bits
+    (sm_80, sm_89). The fields fix the step on finite words; on NaN and infinite words both steps are `silicon.total`'s,
+    which the card's own capture must show (its `silicon.instructions` evidence). Refused (ValueError) for any other step,
+    which has no registered Definition here."""
+    got = tuple(getattr(model, f, None) for f in _BF16_STEP_FIELDS)
+    for ref, binding in ((HOPPER_BF16_WGMMA_K16, GEMM_HOPPER), (AMPERE_BF16_M16N8K16, GEMM_AMPERE)):
+        if got == tuple(getattr(ref, f) for f in _BF16_STEP_FIELDS):
+            return dict(binding)
+    raise ValueError(f"{model.name} ({model.arch}) computes {got} {_BF16_STEP_FIELDS}, neither {HOPPER_BF16_WGMMA_K16.name}'s "
+                     f"nor {AMPERE_BF16_M16N8K16.name}'s: no registered BF16 step is its step")
+
+
+#: sm_120's (the RTX PRO 6000's and RTX 5090's `mma.sync.m16n8k16` BF16, PINNED as `silicon.instructions`
+#: sm120.mma.m16n8k16.bf16): `GEMM_HOPPER`
+GEMM_SM120_BF16: dict = bf16_gemm(INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].model)
 
 
 def _register_kernels() -> None:

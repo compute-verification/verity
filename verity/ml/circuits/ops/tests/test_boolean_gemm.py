@@ -376,3 +376,26 @@ def test_the_sm90_binding_on_bits_is_hoppers_step() -> None:
         for i in range(0, 512, 32):
             c = HOPPER_SM90_S8_K32.step(c, x[r, i:i + 32].tolist(), w[r, i:i + 32].tolist())
         assert int(got[r]) == c
+
+
+def test_the_sm120_bf16_binding_on_bits_is_hoppers_step() -> None:
+    """`BG.GEMM_SM120_BF16` binds the Boolean step whose word step is `G.GEMM_SM120_BF16`'s (Hopper's, as Ada's is Ampere's), that
+    step on bits gives every word of the RTX PRO 6000's specials and adder-width cancellation tiles, and the coordinate on bits at
+    K = 128 (QK^T at head dim 128) is the word coordinate on sampled and special rows."""
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+    from verity.ml.circuits.silicon.models import ADA_BF16_M16N8K16
+
+    assert BG.GEMM_SM120_BF16 == BG.GEMM_HOPPER == BG.bf16_gemm(INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].model)
+    assert TR.word_of(bind(BG.GEMM_SM120_BF16["DOT"])).id == G.GEMM_SM120_BF16["DOT"].id
+    assert BG.bf16_gemm(ADA_BF16_M16N8K16) == BG.GEMM_AMPERE
+    for name in ("tiles_specials", "tiles_adder_width_cancellation"):
+        z = np.load(FIXTURES / "tc-sm120-bf16-2026-10-25" / f"{name}.npz")
+        a = np.repeat(z["A"], z["Bt"].shape[1], axis=1).reshape(-1, 16)
+        b = np.tile(z["Bt"], (1, z["A"].shape[1], 1)).reshape(-1, 16)
+        got = BS.evaluate_words(bind(BG.GEMM_SM120_BF16["DOT"]), z["C"].reshape(-1), a, b).astype(np.uint32)
+        assert np.array_equal(got, z["D"].reshape(-1)), name
+    coord = bind(BG.GemmCoordinate, K=128, **BG.GEMM_SM120_BF16)
+    assert TR.word_of(coord).id == bind(G.GemmCoordinate, K=128, **G.GEMM_SM120_BF16).id
+    params, _ = E.batch.signature_of(TR.word_of(coord))
+    _agree(coord, K.sample_tc(np.random.default_rng(128), 512, params))

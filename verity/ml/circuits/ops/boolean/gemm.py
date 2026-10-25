@@ -35,7 +35,8 @@ and `GemmCoordinateE4m3_v2` is K/32 of them, then the cast; the FP4 steps are `f
 them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save reduction modulo 2^33, the clamp at D), the
 int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`;
 `ScaledMmS8_v2` is that coordinate batched over W's N rows and their scales; `GEMM_SM90_S8` binds them on the H200 with the
-same step (`s8_gemm`, `G.s8_gemm`'s check on bits). Each names its word
+same step (`s8_gemm`, `G.s8_gemm`'s check on bits), and `GEMM_SM120_BF16` the BF16 composites on sm_120 with Hopper's step
+(`bf16_gemm`, `G.bf16_gemm`'s choice on bits). Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
 hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`). Each step is bound to its
 word step's silicon model (`census.silicon_step`), so the census counts its gates as `tc:<precision>`, and `GemmAccumulatorS8_v2`
@@ -53,16 +54,18 @@ from .. import gemm as G
 from .. import prims as P
 from . import elementwise as EW
 from verity.ml.circuits.silicon import fp, fp4
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, step_s8_bits
 from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 from verity.ml.circuits.boolean.trace import definition, word_of
 
 __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64",
            "BlackwellS8ImmaDot32", "DotBf16", "F2fpBf16",
-           "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4",
-           "GEMM_SM120_S8", "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8",
+           "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_BF16", "GEMM_SM120_E4M3",
+           "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8",
            "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "HopperBF16WgmmaDot16",
-           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "ScaledMmS8", "ScaledMmS8Coordinate", "s8_gemm"]
+           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "ScaledMmS8", "ScaledMmS8Coordinate", "bf16_gemm",
+           "s8_gemm"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -262,3 +265,14 @@ def s8_gemm(model) -> dict:
 
 #: sm_90's on bits (`G.GEMM_SM90_S8`)
 GEMM_SM90_S8: dict = s8_gemm(HOPPER_SM90_S8_K32)
+
+
+def bf16_gemm(model) -> dict:
+    """`G.bf16_gemm` on bits: the Boolean step of the word step `G.bf16_gemm` chooses for a card whose k16 step is ``model``,
+    refused as it refuses."""
+    word = G.bf16_gemm(model)["DOT"]
+    return next(dict(b) for b in (GEMM_HOPPER, GEMM_AMPERE) if b["DOT"].word is word)
+
+
+#: sm_120's on bits (`G.GEMM_SM120_BF16`): `GEMM_HOPPER`
+GEMM_SM120_BF16: dict = bf16_gemm(INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].model)

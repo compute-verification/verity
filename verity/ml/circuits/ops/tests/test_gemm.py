@@ -375,3 +375,110 @@ def test_the_sm90_steps_agree_up_to_the_largest_k_and_part_at_2_17() -> None:
     assert (s32_value(_chain(HOPPER_SM90_S8_K32, row, row)), s32_value(_chain(wrap, row, row))) == ((1 << 31) - 1, -(1 << 31))
     with pytest.raises(ValueError, match="at or past 131072"):
         bind(G.GemmAccumulatorS8, K=1 << 17, **G.GEMM_SM90_S8)
+
+
+# ---- the BF16 binding of each card ----------------------------------------------------------------------------------------
+
+def test_bf16_gemm_binds_the_registered_step_for_every_card_that_computes_it_and_refuses_any_other() -> None:
+    """Each registered BF16 instruction binds the step whose function its model computes: Hopper's one group of 16 on sm_90,
+    sm_100 and sm_120, Ampere's two groups of 8 on sm_80 and sm_89. sm_120's binding is `GEMM_HOPPER`, so a GEMM bound on sm_120
+    is Hopper's, id for id. A step with another adder width, floor, grouping or format is refused."""
+    from dataclasses import replace
+
+    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+    from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+
+    want = {"sm80": G.GEMM_AMPERE, "sm89": G.GEMM_AMPERE, "sm90": G.GEMM_HOPPER, "sm100": G.GEMM_HOPPER, "sm120": G.GEMM_HOPPER}
+    bf16 = {i: ins for i, ins in INSTRUCTIONS.items() if ins.a_dtype == "bf16" and ins.model is not None}
+    assert {"sm80.mma.m16n8k16.bf16", "sm89.mma.m16n8k16.bf16", "sm90.mma.m16n8k16.bf16", "sm90.wgmma.m64n8k16.bf16",
+            "sm100.mma.m16n8k16.bf16", "sm120.mma.m16n8k16.bf16"} <= set(bf16)
+    for i, ins in bf16.items():
+        assert G.bf16_gemm(ins.model) == want[i.split(".")[0]], i
+    assert INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].status == "pinned"
+    assert G.GEMM_SM120_BF16 == G.GEMM_HOPPER == {"DOT": P.HopperBF16WgmmaDot16}
+    for defn, rest in ((G.DotBf16, {}), (G.GemmCoordinate, {}), (G.Gemm, {"N": 2})):
+        assert bind(defn, K=128, **rest, **G.GEMM_SM120_BF16).id == bind(defn, K=128, **rest, **G.GEMM_HOPPER).id
+    for model in (replace(HOPPER_BF16_M16N8K16, width=25), replace(HOPPER_BF16_M16N8K16, zero_exponent=-132),
+                  replace(HOPPER_BF16_M16N8K16, groups=(8, 8)), HOPPER_E4M3_K32):
+        with pytest.raises(ValueError, match="no registered BF16 step is its step"):
+            G.bf16_gemm(model)
+
+
+def _attention_rows(rng, n: int, K: int, pad: int):
+    """``n`` pairs of BF16 rows of length ``K`` whose last ``pad`` entries are zero codes (a KV length K - pad, zero-padded to a
+    multiple of 16): normal magnitudes, and rows with NaN, both infinities, inf x 0, -0 everywhere, subnormals, an exact
+    cancellation, and sums past FP32's range with and without sign changes."""
+    import numpy as np
+
+    live = K - pad
+    def bf16(v):
+        return (np.asarray(v, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    x, w = bf16(rng.standard_normal((n, K))), bf16(rng.standard_normal((n, K)))
+    x[0, rng.integers(live)] = 0x7FC1
+    x[1, rng.integers(live)], w[1] = 0x7F80, 0x3F80
+    x[2, :2], w[2, :2] = (0x7F80, 0xFF80), 0x3F80
+    x[3, 0], w[3, 0] = 0xFF80, 0x0000
+    x[4], w[4] = 0x8000, 0x3F80
+    x[5] = rng.integers(1, 0x80, K).astype(np.uint16) | (rng.integers(0, 2, K).astype(np.uint16) << 15)
+    w[5] = bf16(rng.uniform(2.0 ** 100, 2.0 ** 120, K))
+    half = live // 2
+    x[6, half:2 * half], w[6, half:2 * half] = x[6, :half] ^ 0x8000, w[6, :half]
+    x[6, 2 * half:live] = 0
+    x[7], w[7] = 0x7F7F, 0x7F7F
+    x[8], w[8] = 0x7F7F | (np.arange(K, dtype=np.uint16) % 2 << 15), 0x7F7F
+    x[:, live:], w[:, live:] = 0, 0
+    return x, w
+
+
+@pytest.mark.parametrize("K,pad", [(16, 15), (64, 0), (128, 0), (1040, 15), (4096, 0)])
+def test_the_sm120_coordinate_is_the_registered_models_total_chain_at_attention_shapes(K, pad) -> None:
+    """At QK^T's K (head dims 64 and 128) and PV's (a KV length of 1, 1025 and 4096, zero-padded to a multiple of 16),
+    `GemmCoordinate_v2` and `DotBf16_v2` bound with `GEMM_SM120_BF16` are the registry's sm_120 model folded over K in
+    ascending k from +0 by `total.tc_dot_total`, then `cvt.rn.bf16.f32`, on random rows and on NaN, infinities, -0,
+    subnormals, cancellation and overflow; the numpy twin gives the reference's words."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+
+    model = INSTRUCTIONS["sm120.mma.m16n8k16.bf16"].model
+    x, w = _attention_rows(np.random.default_rng(K), 12, K, pad)
+    want_acc = []
+    for r in range(len(x)):
+        acc = 0
+        for s in range(0, K, 16):
+            acc = tc_dot_total(model, acc, x[r, s:s + 16].tolist(), w[r, s:s + 16].tolist())
+        want_acc.append(acc)
+    want = [f32_to_bf16_hw_word(a) for a in want_acc]
+    assert want[0] == want[3] == 0x7FFF and want[1] == want[7] == 0x7F80 and want[4] == 0
+    assert want[2] == (0x7FFF if K - pad > 1 else 0x7F80)
+    coord, dot = bind(G.GemmCoordinate, K=K, **G.GEMM_SM120_BF16), bind(G.DotBf16, K=K, **G.GEMM_SM120_BF16)
+    for kernel in ("reference", "auto"):
+        assert E.evaluate_batch(coord, x, w, kernel=kernel).astype(np.uint32).tolist() == want, kernel
+        assert E.evaluate_batch(dot, x, w, kernel=kernel).astype(np.uint32).tolist() == want_acc, kernel
+
+
+def test_the_sm120_step_replays_the_rtx_pro_6000_capture() -> None:
+    """The RTX PRO 6000's specials, signed-zero and adder-width cancellation tiles (`fixtures/tc-sm120-bf16-2026-10-25`), one
+    `mma.sync.m16n8k16` each: every word is `GEMM_SM120_BF16`'s step on its operands, through the step's kernel and, every
+    seventh word, the primitive itself. Ampere's step misses 384 of the cancellation family's words."""
+    import numpy as np
+
+    from verity.ml.kernels.tc import group_sum_total_batch
+
+    root = Path(__file__).parent / "fixtures" / "tc-sm120-bf16-2026-10-25"
+    step = G.GEMM_SM120_BF16["DOT"]
+    for name, words in (("tiles_specials", 6144), ("tiles_signed_zero", 32768), ("tiles_adder_width_cancellation", 4096)):
+        z = np.load(root / f"{name}.npz")
+        A, Bt, C, D = z["A"], z["Bt"], z["C"], z["D"]
+        a = np.repeat(A, Bt.shape[1], axis=1).reshape(-1, 16)
+        b = np.tile(Bt, (1, A.shape[1], 1)).reshape(-1, 16)
+        acc, want = C.reshape(-1), D.reshape(-1)
+        assert acc.size == words
+        got, _ = group_sum_total_batch(HOPPER_BF16_WGMMA_K16, acc, a, b)
+        assert np.array_equal(got, want), name
+        for i in range(0, words, 7):
+            assert step.evaluate(int(acc[i]), *a[i].tolist(), *b[i].tolist()) == int(want[i]), (name, i)
+        if name == "tiles_adder_width_cancellation":
+            ampere, _ = group_sum_total_batch(AMPERE_BF16_M16N8K16, acc, a, b)
+            assert int((ampere != want).sum()) == 384
