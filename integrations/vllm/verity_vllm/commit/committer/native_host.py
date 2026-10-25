@@ -56,6 +56,7 @@ from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
@@ -609,7 +610,7 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
     # [R17 stoch F-dA-15] a module SHARED by every layer (Llama's one `rotary_emb`, registered under layer 0) is acquired once per
     # INVOCATION -- `layers` times per step -- not once per module: count it per layer, else the bound is `(layers - 1) x width` per token
     # short (76,800 B/token on Llama-3.2-1B = the 1-3 % by which the R16 records' prefill steps exceeded this bound).
-    n_rope = sum(1 for _n, _m in modules if "RotaryEmbedding" in _mro_names(_m))
+    n_rope = sum(1 for _n, _m in modules if LC.ROTARY in _mro_names(_m))
     rope_mult = max(1, -(-layers // n_rope)) if n_rope else 1
     for name, m in modules:
         names = _mro_names(m)
@@ -619,32 +620,31 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         except StopIteration:
             isz = 2
         w = 0
-        if "LogitsProcessor" in names:
+        if LC.LOGITS in names:
             per_seq += vocab * 4
-        elif "Sampler" in names:
+        elif LC.SAMPLER in names:
             per_seq += 8
-        elif "VocabParallelEmbedding" in names:
+        elif LC.EMBEDDING in names:
             w = int(getattr(m, "embedding_dim", hidden) or hidden) * isz + 4          # + the input ids (ACQUIRE_INPUT_CLASSES)
-        elif names & {"LinearBase", "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear"}:
+        elif names & LC.LINEAR:
             out = getattr(m, "output_size_per_partition", None) or getattr(m, "output_size", None)
             if not out and hasattr(m, "weight") and isinstance(m.weight, torch.Tensor):
                 out = int(m.weight.shape[0])
             w = int(out or hidden) * isz
-        elif names & {"RMSNorm", "GemmaRMSNorm", "LayerNorm"}:
+        elif names & LC.NORMS:
             hs = int(m.weight.numel()) if hasattr(m, "weight") and isinstance(m.weight, torch.Tensor) else hidden
             w = 2 * hs * isz                                                            # fused add+norm returns (out, residual)
-        elif names & {"SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp"}:
+        elif names & LC.GATED_ACTS:
             w = inter * 2
-        elif "RotaryEmbedding" in names:
+        elif LC.ROTARY in names:
             w = (heads + kv_heads) * head_dim * 2 * rope_mult                           # returns (q, k); once per layer when shared
-        elif "Attention" in names:
+        elif LC.ATTENTION in names:
             w = heads * head_dim * 2
         else:
             w = hidden * 2
         per_token += w
         per_step += chunk
-        cls = next((c for c in ("LogitsProcessor", "Sampler", "VocabParallelEmbedding", "RMSNorm", "RotaryEmbedding", "Attention", "SiluAndMul",
-                                "LinearBase") if c in names), "other")
+        cls = next((c for c in (LC.LOGITS, LC.SAMPLER, LC.EMBEDDING, LC.RMS_NORM, LC.ROTARY, LC.ATTENTION, LC.SILU_AND_MUL, LC.LINEAR_BASE) if c in names), "other")
         widths[cls] = widths.get(cls, 0) + w
     moe_pt = moe_bytes_per_token(model, moe_layers)
     if moe_pt:
@@ -2421,25 +2421,25 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
 
     # module (class-name) -> census root families whose NATURALLY-MATERIALIZED outputs the hook on that module binds
     FAMILY_OF_MODULE = {
-        "Linear": ("Gemm_v1",), "RMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), "GemmaRMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
-        "SiluAndMul": ("SiluMul_v1", "SiluMul_v2"), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
-        "VocabParallelEmbedding": ("Embedding_v1",), "LogitsProcessor": ("Gemm_v1",), "Sampler": ("TokenSelect_v1",),
+        LC.LINEAR_GROUP: ("Gemm_v1",), LC.RMS_NORM: ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), LC.GEMMA_RMS_NORM: ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
+        LC.SILU_AND_MUL: ("SiluMul_v1", "SiluMul_v2"), LC.GELU_AND_MUL: ("GeluMul_v1",), LC.ROTARY: ("RoPE_v1",), LC.ATTENTION: ("Attention_v3",),
+        LC.EMBEDDING: ("Embedding_v1",), LC.LOGITS: ("Gemm_v1",), LC.SAMPLER: ("TokenSelect_v1",),
     }
 
     def _module_class(self, name: str) -> str:
         base = name.split("/")[0]
         if base == "runner.sampler":
-            return "Sampler"
+            return LC.SAMPLER
         for n, m in self._modules:
             if n == base:
                 names = _mro_names(m)
                 for k in self.FAMILY_OF_MODULE:
-                    if k in names or (k == "Linear" and names & {"LinearBase", "ColumnParallelLinear", "RowParallelLinear"}):
+                    if k in names or (k == LC.LINEAR_GROUP and names & {LC.LINEAR_BASE, LC.COLUMN_LINEAR, LC.ROW_LINEAR}):
                         return k
                 return type(m).__name__
         leaf = base.rsplit(".", 1)[-1]
         if not self._modules and "norm" in leaf.lower():      # offline core (tests): infer from the module path
-            return "RMSNorm"
+            return LC.RMS_NORM
         return leaf
 
     def coverage_declaration(self, run: RunCommitment) -> dict:
