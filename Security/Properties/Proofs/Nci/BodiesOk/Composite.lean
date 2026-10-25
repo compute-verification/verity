@@ -381,10 +381,12 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   rename_i hcnt
   replace h := st_bind h; obtain ⟨st, s7, h1, h⟩ := h
   obtain ⟨rfl, rfl⟩ := st_get h1
-  split at h
+  generalize hwalk : EStateM.run _ _ = r at h
+  rcases r with ⟨_ | m, w⟩ | ⟨e, w⟩
+  all_goals dsimp only at h
+  rotate_left
   · replace h := st_bind h; obtain ⟨a, s8, h1, -⟩ := h
     exact absurd h1 (by intro h; injection h)
-  swap
   · replace h := st_bind h; obtain ⟨a, s8, h1, -⟩ := h
     exact absurd h1 (by intro h; injection h)
   replace h := st_bind h; obtain ⟨u, s8, h1, h⟩ := h
