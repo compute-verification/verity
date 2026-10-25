@@ -252,7 +252,13 @@ installs it first, so a machine without elan works), must pass clean and fail on
   acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
   P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
   returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
-  own `Nonempty` among them. A guarantee under `frozen` (with why it doesn't fit yet) is
+  own `Nonempty` among them. A statement that fits written in another order fits as written: outside a probability
+  statement, its binders are also read reordered, its acceptances and premises with every binder they mention first and
+  the rest after, so a hypothesis on a binder no acceptance reads is the conclusion's (`∀ x w, Q x w → accepts x → P w`
+  is `∀ x, accepts x → ∀ w, Q x w → P w`), when it mentions a binder its conclusion reads and no kept binder mentions its
+  proof; an input with a `Prop` field never moves. A hypothesis equating one field of two inputs its acceptance reads
+  (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
+  (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
