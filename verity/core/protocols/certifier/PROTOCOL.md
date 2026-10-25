@@ -668,7 +668,13 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   - **Cost.** `IoTieRequestIds{512, 2, 2, 16, 8}` is 431,496 ANDs and the sidecar's `{512, 1, 1, 2, 2}` 69,132.
     No gate of it hashes: the read rows are registered reads, whose rows the statement's registered-read slots hash,
     as the bucket row's. Opened in the unit (each row's digest, its hm96 leaf and `FrameV3Read{DS}`), they were 95%
-    of it: 8,832,144 and 1,170,444. A bucket reads the steps that compute its own fields, so a step whose tokens'
+    of it: 8,832,144 and 1,170,444. At the ingress shape B = 4,096, R = 1, P = 512, S = 6
+    (r20261025-002531-cb26), `IoTieRequestIds{4096, 1, 1, 512, 6}` is 2,701,439 ANDs and `{4096, 16, 1, 512, 6}`
+    20,300,946. Of them, IoTieRequest's scan is 166,816 and 2,669,055, and the sort's `IoTieRoute{CB + 33, D2}`
+    1,978,368 (D2 = 12) and 10,174,464 (D2 = 14). With the port opened in the unit they were 20,569,541 and
+    38,169,048: `IoTiePort{512, 6, 10}` adds 17,868,101 ANDs and a join, as it does to `IoTieBucket{256, 16, 512, 6,
+    10}` (20,009,029, against 2,140,927). Building them takes 15.1 GB and 84.7 GB (204 s and 1,241 s), nearly all of
+    it `IoTieRoute`'s flat trace. A bucket reads the steps that compute its own fields, so a step whose tokens'
     fields are in k buckets is read k times, and each bucket's sort is over its NK + E members.
     A cheaper split has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival
     order, and hold every computation and cache hit to it in the Commit's units; the tie would then read the
