@@ -48,10 +48,10 @@ independent openings coins, checks both runs' openings, and outputs a collision 
 carries different accepted rows at one root. The held row being the likeliest (`HeldLikeliest`), receipt `p`'s chance
 of moving is at most the square root of the chance that the two runs show it with different rows, so window `t`'s
 share of the term is at most `√(|L_t|·s_t·(q_t²/2^513 + split_t))`, `q_t` the finder's SHA-512 calls and `split_t` the
-chance that the two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and the bound is
-`ledger.binding`'s `Σ_t √(U_t·s'_t)·q_t/2^256.5`. The prover of `F.play com` holds the commitment to every coin, and a
-root it computes from it reads window `t`'s coin: there `split_t` is not bounded, and that step of `ledger.binding`'s
-charge is on paper.
+chance that the two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and the bound has
+`ledger.binding`'s form, `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, which the code reads at the record's `U_t` and `s'_t`. The
+prover of `F.play com` holds the commitment to every coin, and a root it computes from it reads window `t`'s coin:
+there `split_t` is not bounded, and `ledger.binding`, which takes it as 0, charges a bound no theorem gives.
 -/
 
 namespace Accounting.Guarantees.Remote
