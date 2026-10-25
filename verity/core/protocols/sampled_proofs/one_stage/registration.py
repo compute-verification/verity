@@ -1,4 +1,4 @@
-"""The registration record (README "The registration record"): what serving is committed to, fixed before the verifier draws.
+"""The registration record (README "The registration record"): what a window is committed to, fixed before the verifier draws.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -28,10 +28,10 @@
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
   to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
   the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
-* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what serving
-  committed (`served`) or a fresh commitment to values captured from serving (`stand-in`, whose link to the served root
-  is provenance, not proof).
-* **Served domains** (`served_domain`, `verity.ml.commitments.served`'s): each port's frame domain binds the program, the
+* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what the integration
+  committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
+  root is provenance, not proof).
+* **Window domains** (`window_domain`, `verity.ml.commitments.window`'s): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
@@ -75,7 +75,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.ml.commitments.served import SERVED_DOMAIN, served_domain
+from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
@@ -481,6 +481,6 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "held_roots",
-           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "served_domain",
-           "unwindowed"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest", "held_roots",
+           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "unwindowed",
+           "window_domain"]
