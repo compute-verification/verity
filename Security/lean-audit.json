@@ -782,6 +782,10 @@
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
+  "Claims.Flock.ListWithin": {
+   "owner": "@proofs",
+   "digest": "3a7f082e2c4b81ae0fc5a8c6aa76db542e596e0367016205f82198b482939425"
+  },
   "Claims.Flock.R": {
    "owner": "@proofs",
    "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
@@ -797,6 +801,10 @@
   "Claims.JsonSpec": {
    "owner": "@proofs",
    "digest": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
+  },
+  "Claims.Sampling.KS": {
+   "owner": "@proofs",
+   "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2"
   },
   "Claims.StrictBirthday": {
    "owner": "@proofs",
@@ -1310,6 +1318,10 @@
    "owner": "@network-accounting",
    "digest": "fd7a18966dce0b0e94501f13840cbe1a5cd700e5872d74b49775862e57fdcd3f"
   },
+  "NetTiming.Guarantees.SampledAuditAccepted": {
+   "owner": "@proofs",
+   "digest": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
+  },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
@@ -1804,10 +1816,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Claims.Sampling.KS": {
-   "owner": "@proofs",
-   "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2"
   }
  },
  "meaning": [
@@ -8353,11 +8361,11 @@
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
-  "NetTiming.SecurityProofs.SampledAuditAccepted": {
-   "owner": "@proofs",
-   "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
+  "NetTiming.SecurityProofs.SampledLeakAccepted": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted"],
    "assumptions": [],
-   "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048"
+   "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d"
   },
   "NetTiming.SecurityProofs.WardenViewEqClientView": {
    "owner": "@network-accounting",
@@ -10279,6 +10287,12 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
+  },
+  "NetTiming.SecurityProofs.SampledAuditAccepted": {
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
+   "assumptions": [],
+   "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048"
   }
  },
  "shape": {
@@ -11266,7 +11280,6 @@
    "Nci.Cover.SecurityProofs.KeyedActivationReads": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named ColumnsIncompressible (Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, concluding the named ActivationReads (Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoveringBoundAdditive": "frozen (no-function): CoveringBoundTwoCosts's additive form: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ConditionalParameterHardAt (Security/Models/Nci/Assumptions/CoverAdditive.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
    "NetTiming.SecurityProofs.WardenViewEqClientView": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
    "NetTiming.SecurityProofs.EncardWardenViewsLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device, a cap on the schedules' cells and the set the data lies in; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
    "NetTiming.SecurityProofs.EncardWardenDecodableLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-nebius-host (TrustedNebiusHost) for the device, a cap on the schedules' cells, BitsCount about an abstract charge and the content premise about the data; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
@@ -11324,7 +11337,9 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Models/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness (at its floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none)."
+   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness (at its floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_free's statement, which charges every value of the free inputs (freeInputs, at AsFree), since RAcc's advice is not pinned to the registration.",
+   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14972,7 +14987,8 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
-    "NetTiming.SecurityProofs.SampledAuditAccepted",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -15552,7 +15568,8 @@
     "Claims.Sampling.universal_meets",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
-    "NetTiming.SecurityProofs.SampledAuditAccepted"
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
   "Definitions.Core.Advice": {
@@ -17103,7 +17120,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
-    "NetTiming.SecurityProofs.SampledAuditAccepted"
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
@@ -17118,18 +17136,20 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
-   "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
+   "digest": "3e714f9391fa9dfc51619b38590282c0e7e13766ed86776d397aaa6cbc6fbea8",
    "definitions": {
-    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
+    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0",
+    "NetTiming.Guarantees.SampledAuditAcceptedStated": "9009d1c7c22120166c4aa4c882e7e18b18de3dc9633d6988c52ae4436b74a55b"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAccepted"]
+   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "a0be196f7b87bf66a51f84cfa94a592d4f6c8a879e5215db79f1279812d2675a",
+   "digest": "cbbc23a5cbd08ab3e0a390eb6382d7810d6bce7be5e52c22b59e835d04139f01",
    "definitions": {
-    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8"
+    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8",
+    "NetTiming.Guarantees.SampledLeakAccepted": "8471bf082d2331bc73650da6c21734bf27df2bf205c0509f71c513948f7a8251"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Ingress": {
    "digest": "3c3f9fa4cf192807b611a03f6164a25f5407f9f252110a4c4f827b0107065ffc",
@@ -17205,7 +17225,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
-    "NetTiming.SecurityProofs.SampledAuditAccepted"
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
@@ -17233,17 +17254,24 @@
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
     "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledAuditAccepted"]
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledLeakAccepted"
+   ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "93be79885ff21ba07783d8034afb5e1d117c9db222c7c84546623ceb5f77ef6e",
+   "digest": "6fd1f65427b59f970cc05a195ca3b950225555a60c38f0b0de4b1ef3369efc18",
    "definitions": {
     "NetTiming.AccSeqsSampled": "05b16b5446955562b136a894719673fc47a049985da8f9880d9e4fb4ede3b771",
     "NetTiming.AcceptedFaulty": "df874e0f19724289c18f7080a173db8d45c039c2575c51212f5aa91a88496323",
+    "NetTiming.AsFree": "ed4f2c5d797b9a7068d69d56c5e8faf7bbfa6a3d7ec1b91f1e17e61fcb0f50b6",
+    "NetTiming.RLeak": "e181b18c4c7ea12dfbeee274e2654d5553f00082461343c6b20130de9430a9ff",
     "NetTiming.faultyBits": "8cbcfcedec4b99e4491bff7587994f46bb7b20e10acb4a4bf584da5d0f299f7f",
-    "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276"
+    "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276",
+    "NetTiming.freeInputs": "71960d7978491121a9408649c5d34ecffa4ac9f8b5067941406386c61c0779a0"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
