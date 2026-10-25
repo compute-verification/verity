@@ -1,7 +1,7 @@
 import Definitions.Pouw.Basic.Prob
-import Models.Accounting.Assumptions.RemoteHeld
-import Models.Accounting.Assumptions.RemoteOutside
-import Models.Accounting.Assumptions.RemoteDraw
+import Definitions.Accounting.Assumptions.RemoteHeld
+import Definitions.Accounting.Assumptions.RemoteOutside
+import Definitions.Accounting.Assumptions.RemoteDraw
 import Properties.RemoteAudit.Line.Record
 import Properties.RemoteAudit.Line.Premises
 
