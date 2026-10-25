@@ -20807,9 +20807,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "b84efcd4873ffd09b4997383b6cb2c69c7698bcc1b117c2cf3e8acf420c8ca92",
+   "digest": "085dfdce4106e35b5fb92be5660a2f30fe4ef6812d5d9873bf2c3841e5f91fed",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "89fb3afd31bddfd41ad481842bdd8b667b4378f95f662a76086d64a296c97579"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "acefdc896931fe1a3facf88da315df465b6c4113b788e67c6ae90123010aebd1"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -20880,10 +20880,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Period": {
-   "digest": "90f3141c1c057a8b01cc94e78ef971ff118ae007892f1097616c247ab9323f48",
+   "digest": "d1aa7cb0fcb087bfd57b7f28613bca116b96d51d473d1cfbb3b802df0049ec45",
    "definitions": {
     "NetTiming.SameRegistration": "bad84087de868525ff0dd57bf0577eb11ea9a58b2a9ff421255df8c030ac6b3c",
-    "NetTiming.WindowGood": "97a35706188876e37f83342f3038321ead1ee40018a61ceba0746a0626d17c1c"
+    "NetTiming.WindowGood": "029cb86efe5a052130398a39360f2934a811c592f63eae24e339c04459ef6dac"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -21050,6 +21050,17 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
+  },
+  "Definitions.NetworkCertifier.TapRows": {
+   "digest": "a985c4aedaa389e00ad4324f88bf6dbff823799ec65ac26b4f5ecbd5c0d5cc1d",
+   "definitions": {
+    "NetTiming.Btap": "7400b8f4e5a1baa2cb0cabdbc411a28b72aeea870594b5a1b7e72022862d4252",
+    "NetTiming.RLeakTap": "9e15ffeb7a21d4a525ba290cae7624de19665e2b58eabafc1cc82f1e67c426f1",
+    "NetTiming.TapOpens": "f52e47f14856886b6b20628dbb35196a48a4a0251fb37a8a57943e221576cdbc",
+    "NetTiming.tapLog": "30f489572c14b138976b71ae3ea3edb0fbcce6abf73a6f251593790fcd02d233",
+    "NetTiming.tapVal": "820beef45fb779042d495c23e9f9c0fc0d2cd98f2ef0a17beaed6f9e7c550aa8"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
