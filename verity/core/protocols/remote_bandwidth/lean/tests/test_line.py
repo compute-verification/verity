@@ -275,8 +275,12 @@ def records(draw) -> dict:
     v = {"record": record, "samples": samples, "seen": seen, "per": per, "block_bytes": b,
          "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
          "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
-    fault = {3: "seen", 4: "drawn", 5: "malformed"}.get(draw(st.integers(0, 5)))
-    if fault == "seen":
+    if (clock := draw(st.sampled_from([None, "record", "challenger"]))) is not None:
+        v["clock"] = clock
+    fault = {3: "seen", 4: "drawn", 5: "malformed", 6: "times"}.get(draw(st.integers(0, 6)))
+    if fault == "times" and seen:
+        draw(st.sampled_from(seen))[draw(st.sampled_from(["released_ns", "last_ns"]))] += 1
+    elif fault == "seen":
         v["seen"] = draw(st.sampled_from([seen[:-1], [*seen, seen[-1]]])) if seen else [
             {k: 0 for k in line.SEEN}]
     elif fault == "drawn" and ws:
@@ -303,7 +307,7 @@ def records(draw) -> dict:
             x = draw(st.sampled_from(seen))
             x[draw(st.sampled_from(line.SEEN))] = bad
         elif at == "input":
-            v[draw(st.sampled_from(["samples", "seen", "record"]))] = bad
+            v[draw(st.sampled_from(["samples", "seen", "record", "clock"]))] = bad
         if draw(st.booleans()):
             target = draw(st.sampled_from([v, record, *ws[:1], *seen[:1]]))
             target.pop(draw(st.sampled_from(sorted(target))))
@@ -362,3 +366,20 @@ def test_each_refusal_of_a_record_is_the_leans_word_for_word(server, change, why
     change(r)
     assert line.record_run_json(r) == {"refused": why}
     assert D.replay(record_port(), r, server) == refused(why)
+
+
+def test_times_seen_are_held_to_the_records_on_its_clock_and_not_on_the_challengers(server) -> None:
+    """On the record's clock (`clock` record, the default) a window seen released or last at other times than the
+    record's is refused, the Lean's word for word; on the challenger's the times are its release log's, which the
+    record doesn't hold, and the line is read."""
+    r = recorded(session())
+    w = r["record"]["windows"][2]
+    r["seen"][2]["last_ns"] += 1
+    why = (f"window 2 was seen released at {w['released_ns']} and last at {w['arrived_ns'][-1] + 1}, not at the "
+           f"record's {w['released_ns']} and {w['arrived_ns'][-1]}")
+    for x in (r, {**r, "clock": "record"}):
+        assert line.record_run_json(x) == {"refused": why}
+        assert D.replay(record_port(), x, server) == refused(why)
+    x = {**r, "clock": "challenger"}
+    got = line.record_run_json(x)
+    assert "refused" not in got and D.replay(record_port(), x, server) == ("output", D.canonical(got))

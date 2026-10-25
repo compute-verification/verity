@@ -573,12 +573,15 @@ def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) 
     return [line.Seen(g.released_ns, g.last_ns, g.least, g.weights, g.hbm, g.host) for g in gs]
 
 
-def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
+def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates, clock: str = "record",
+                    transcript: dict | None = None) -> dict:
     """An accepted paced session's line's inputs in the line's record form (`line.record_inputs_json`, the Lean
     verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
     passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
-    each window beside it (`record_seen`, on the clock its `windows_seen` read), against its HBM and `host_bytes`, at
-    `rates` (`recorded_rates`). Refused unless the record is of `registration`."""
+    each window beside it (`record_seen`, on the clock its `windows_seen` read: `clock` record, the verifier's, which
+    the record's times must be, or challenger), against its HBM and `host_bytes`, at `rates` (`recorded_rates`); with
+    `transcript`, the session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself.
+    Refused unless the record is of `registration`."""
     mem, record = session["ledger"]["memory"], lean_record(session)
     if record["registration"] != registration["digest"]:
         raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
@@ -587,7 +590,7 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
         record, samples=session["samples"],
         seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
         per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
-        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates)
+        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates, clock=clock, session=transcript)
 
 
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
