@@ -1,5 +1,5 @@
 import Definitions.Flock.Sparse
-import Proofs.Flock.Soundness.Model.Session
+import Definitions.Flock.Session
 
 /-!
 # The holographic table: two reps with hidden units, then the registered opening

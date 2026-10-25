@@ -164,9 +164,9 @@ def _forged(ordinal: int, ids: list[int], finish: str) -> list[bytes]:
 
 def test_a_stop_where_the_commit_sampled_no_eos_is_refused():
     """The Commit's request ended at its cap; a last record claiming a stop is the one violation, at ordinal 1."""
-    sampled = {1: [7, 8, 9]}
-    assert A.compact_finish_violations(sampled, EOS, _cells(1, [7, 8, 9])) == []
-    assert A.compact_finish_violations(sampled, EOS, _forged(1, [7, 8, 9], "stop")) == \
+    sampled, cap = {1: [7, 8, 9]}, {1: 3}
+    assert A.compact_finish_violations(sampled, EOS, _cells(1, [7, 8, 9]), max_tokens=cap) == []
+    assert A.compact_finish_violations(sampled, EOS, _forged(1, [7, 8, 9], "stop"), max_tokens=cap) == \
         [(1, "finish stop on output 2 where the Commit's is length")]
 
 
@@ -176,7 +176,7 @@ def test_compact_cells_held_to_the_commits_sampled_ids():
     sampled = {1: [7, 8, 0], 2: [5, 6]}
 
     def violations(cells):
-        return A.compact_finish_violations(sampled, EOS, cells)
+        return A.compact_finish_violations(sampled, EOS, cells, max_tokens={1: 4, 2: 2})
 
     honest = _cells(1, [7, 8, 0]) + _cells(2, [5, 6])
     assert honest == _forged(1, [7, 8, 0], "stop") + _forged(2, [5, 6], "length") and violations(honest) == []

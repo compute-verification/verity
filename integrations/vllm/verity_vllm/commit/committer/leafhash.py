@@ -1,4 +1,4 @@
-"""[R16 sys SYS-05] Device-side weight registration -- the SAME weights root as the host path, computed where the parameters live.
+"""Device-side weight registration -- the SAME weights root as the host path, computed where the parameters live.
 
 `native_host.register_weights` hashes every parameter/buffer as CHUNK-byte position-identified leaves (`scheme.pos_leaf`) folded per
 tensor (`scheme.fold`), and folds the per-tensor roots into the weights root.  With the GPU tree the chunk is 256 bytes: a 2.5 GB model
