@@ -1,7 +1,8 @@
-"""verity_vllm.program.predict.window_circuit (V3b): a served window's request Programs, as `compile_steps` compiles them, are
-one Circuit of the catalog's units, every input row wired from its writer's row, a registered read of the weights or the
-prompt's ingress at its step, and nothing free. Pinned on a two-request TINY window, one request's prompt chunked across two
-steps, at a grain small enough to slice TINY's GEMMs and cut its ports.
+"""verity_vllm.program.predict.window_circuit (V3b): a served window is its class's one Circuit of the catalog's units, a class
+Program a request, every input row wired from its writer's row, a registered read of the weights or the slot's ingress, and
+nothing free. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small enough
+to slice TINY's GEMMs and cut its ports; the class's circuit is the same for two windows that differ in everything but their
+request count.
 """
 from __future__ import annotations
 
@@ -12,25 +13,34 @@ import pytest
 from tests.program.predict import test_steps as S
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
-from verity_vllm.program.predict.window_circuit import Grain, window_circuit
+from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, window_circuit
 
 from verity.ml.windows import interface as IF
 
 GRAIN = Grain(gemm_words=512, rows=8, select=64)
+CLASS = WindowClass(2, 4, 2)
 #: q0's prompt of 4 at step 0, q1's prompt of 3 chunked 2 then 1 across steps 0 and 1; each keeps two outputs
 WINDOW = ([(4, 2, {**S.GREEDY, "max_tokens": 2}), (3, 2, {**S.GREEDY, "max_tokens": 2})],
           [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 1)], [(1, 3, 1)]])
+#: another window of the class: q0's prompt of 3 at step 0 keeps two outputs, q1's prompt of 2 arrives at step 1 and keeps one
+OTHER = ([(3, 2, {**S.GREEDY, "max_tokens": 2}), (2, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 0, 3)], [(0, 3, 1), (1, 0, 2)]])
 EMB, COMBINE = "EmbeddingRead_v1{V=256,H=64}", "TokenSelectCombine_v2{V=256,C=64}"
+FIRST, FEED = "TokenFeed_v1{NP=4,FIRST=true}", "TokenFeed_v1{NP=4,FIRST=false}"
 
 
 def _label(fn) -> str:
-    return fn.id.split("{")[0] + "{" + ",".join(f"{k}={v}" for k, v in fn.bindings.items() if type(v) is int) + "}"
+    return fn.id.split("{")[0] + "{" + ",".join(f"{k}={json.dumps(v)}" for k, v in fn.bindings.items() if type(v) in (int, bool)) + "}"
+
+
+def _circuit(window, grain: Grain = GRAIN, cls: WindowClass = CLASS):
+    reg = S._registered()
+    return S.compile_steps(reg, *S._session(*window)).circuit(reg, cls, grain)
 
 
 @pytest.fixture(scope="module")
 def window():
     """The window's Circuit and its templates' ids by label."""
-    circuit = S.compile_steps(S._registered(), *S._session(*WINDOW)).circuit(GRAIN)
+    circuit = _circuit(WINDOW)
     return circuit, {_label(fn): tid for fn, _ in circuit.templates for tid in [IF.descriptor_id(fn)]}
 
 
@@ -41,50 +51,70 @@ def _source(circuit, tid: str, port: str, unit: int, row: int = 0) -> tuple[str,
     return w.writer, int(w.writers(unit, 1, row)[0]), w.out
 
 
-def test_the_window_is_one_circuit_of_units_by_template_and_wire_patterns(window):
-    """Every request Program's node is its units: TINY's GEMMs sliced 8 columns a unit (64 by 512 words), its attention
-    and RoPE a unit a head, its token select four chunks and a combine; a port read from several writers is cut, its
-    groups gathered by `AllGather_v1` units, and the wiring is a pattern per run, not a wire per unit."""
+def test_two_windows_of_a_class_are_one_circuit(window):
+    """The privacy property: WINDOW and OTHER differ in their requests' arrival steps, prompt lengths (4 and 3 against 3 and 2)
+    and output lengths, and their circuits' descriptions (units, wires, cuts, registered reads, ingress), templates and external
+    ports are byte for byte the same; a window of one request is another circuit, its Program count being the one public fact
+    a window adds."""
+    circuit, _ = window
+    other = _circuit(OTHER)
+    assert IF.circuit_bytes(circuit.description()) == IF.circuit_bytes(other.description())
+    assert (circuit.ids, circuit.external) == (other.ids, other.external)
+    one = _circuit(([(4, 2, {**S.GREEDY, "max_tokens": 2})], [[(0, 0, 4)], [(0, 4, 1)]]))
+    assert IF.circuit_bytes(one.description()) != IF.circuit_bytes(circuit.description())
+    assert IF.circuit_bytes(one.description()) == IF.circuit_bytes(class_circuit(S._registered(), CLASS, 1, GRAIN).description())
+
+
+def test_the_circuit_is_a_class_program_a_request_in_units_by_template_and_wire_patterns(window):
+    """Each request is the class Program, its 5 positions each the whole stack, the LM head and the token select: TINY's GEMMs
+    sliced 8 columns a unit, its attention and RoPE a unit a head (position p's heads over p + 1 keys), its token select four
+    chunks and a combine, and positions 0..3's tokens `TokenFeed_v1` units; a port read from several writers is cut, its groups
+    gathered by `AllGather_v1` units, and the wiring is a pattern per run, not a wire per unit."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
     assert {label[IF.descriptor_id(fn)]: n for fn, n in circuit.templates} == {
-        EMB: 9, "RMSNormTriton_v5{N=64}": 9, "Gemm_v2{K=64,N=8}": 896, "RoPEHead_v1{D=16}": 88,
-        "AttentionHead_v18{T=1,D=16,BN=128,MASKED_FROM=0}": 8, "AttentionHead_v18{T=2,D=16,BN=128,MASKED_FROM=0}": 8,
-        "AttentionHead_v18{T=3,D=16,BN=128,MASKED_FROM=0}": 12, "AttentionHead_v18{T=4,D=16,BN=128,MASKED_FROM=0}": 16,
-        "AttentionHead_v18{T=5,D=16,BN=128,MASKED_FROM=0}": 8, "RMSNormFusedCuda_v2{N=64}": 26, "SiluMul_v2{I=128}": 13,
-        "Gemm_v2{K=128,N=4}": 208, "TokenSelectChunk_v2{C=64}": 16, COMBINE: 4, "Gemm_v2{K=64,N=1}": 4,
-        "AllGather_v1{WORLD=2,N=8}": 36, "AllGather_v1{WORLD=2,N=16}": 8, "AllGather_v1{WORLD=3,N=16}": 12,
-        "AllGather_v1{WORLD=4,N=16}": 29, "AllGather_v1{WORLD=5,N=16}": 8, "AllGather_v1{WORLD=8,N=8}": 68,
-        "AllGather_v1{WORLD=4,N=1}": 4, "AllGather_v1{WORLD=4,N=8}": 26, "AllGather_v1{WORLD=8,N=4}": 26}
+        EMB: 10, FIRST: 2, FEED: 6, "RMSNormTriton_v5{N=64}": 10, "Gemm_v2{K=64,N=8}": 1440, "RoPEHead_v1{D=16}": 120,
+        **{f"AttentionHead_v18{{T={t},D=16,BN=128,MASKED_FROM=0}}": 16 for t in range(1, 6)}, "RMSNormFusedCuda_v2{N=64}": 40,
+        "SiluMul_v2{I=128}": 20, "Gemm_v2{K=128,N=4}": 320, "TokenSelectChunk_v2{C=64}": 40, COMBINE: 10, "Gemm_v2{K=64,N=1}": 10,
+        "AllGather_v1{WORLD=2,N=8}": 40, "AllGather_v1{WORLD=2,N=16}": 16, "AllGather_v1{WORLD=3,N=16}": 16,
+        "AllGather_v1{WORLD=4,N=16}": 36, "AllGather_v1{WORLD=5,N=16}": 16, "AllGather_v1{WORLD=8,N=8}": 120,
+        "AllGather_v1{WORLD=4,N=1}": 10, "AllGather_v1{WORLD=4,N=8}": 40, "AllGather_v1{WORLD=8,N=4}": 40}
     assert {label[t]: c for t, c in circuit.cuts.items()} == {
         "RMSNormFusedCuda_v2{N=64}": {"x": 2}, "RoPEHead_v1{D=16}": {"x": 2}, "SiluMul_v2{I=128}": {"gu": 4},
         COMBINE: {"idx": 4}, **{g: {"parts": int(g.split("WORLD=")[1].split(",")[0])} for g in ids if g.startswith("AllGather")}}
     family = {tid: name.split("{")[0] for name, tid in ids.items()}
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
-        ("AllGather_v1", "parts", "AllGather_v1", "o0"): 30, ("AllGather_v1", "parts", "AttentionHead_v18", "o0"): 9,
-        ("AllGather_v1", "parts", "Gemm_v2", "o0"): 28, ("AllGather_v1", "parts", "RoPEHead_v1", "o0"): 30,
+        ("AllGather_v1", "parts", "AllGather_v1", "o0"): 32, ("AllGather_v1", "parts", "AttentionHead_v18", "o0"): 10,
+        ("AllGather_v1", "parts", "Gemm_v2", "o0"): 5, ("AllGather_v1", "parts", "RoPEHead_v1", "o0"): 32,
         ("AllGather_v1", "parts", "TokenSelectChunk_v2", "o0"): 1, ("AttentionHead_v18", "k", "AllGather_v1", "o0"): 4,
-        ("AttentionHead_v18", "k", "RoPEHead_v1", "o0"): 1, ("AttentionHead_v18", "q", "RoPEHead_v1", "o0"): 7,
-        ("AttentionHead_v18", "v", "AllGather_v1", "o0"): 5, ("EmbeddingRead_v1", "tok", "TokenSelectCombine_v2", "o0"): 2,
-        ("Gemm_v2", "x", "AllGather_v1", "o0"): 8, ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 15,
-        ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 4, ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1,
-        ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 4, ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 6,
-        ("RMSNormFusedCuda_v2", "x", "AllGather_v1", "o0"): 16, ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1,
-        ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 12, ("SiluMul_v2", "gu", "AllGather_v1", "o0"): 1,
-        ("TokenSelectChunk_v2", "x", "AllGather_v1", "o0"): 1, ("TokenSelectCombine_v2", "best", "AllGather_v1", "o0"): 1,
-        ("TokenSelectCombine_v2", "idx", "TokenSelectChunk_v2", "o1"): 1, ("TokenSelectCombine_v2", "x0", "Gemm_v2", "o0"): 1}
-    assert circuit.external == (f"{ids[EMB]}/tok", f"{ids[COMBINE]}/o0")
+        ("AttentionHead_v18", "k", "RoPEHead_v1", "o0"): 1, ("AttentionHead_v18", "q", "RoPEHead_v1", "o0"): 5,
+        ("AttentionHead_v18", "v", "AllGather_v1", "o0"): 5, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 4,
+        ("EmbeddingRead_v1", "tok", "TokenSelectCombine_v2", "o0"): 2, ("Gemm_v2", "x", "AllGather_v1", "o0"): 20,
+        ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 31, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 10,
+        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 10,
+        ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 10, ("RMSNormFusedCuda_v2", "x", "AllGather_v1", "o0"): 40,
+        ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 1,
+        ("SiluMul_v2", "gu", "AllGather_v1", "o0"): 1, ("TokenFeed_v1", "sel", "TokenSelectCombine_v2", "o0"): 1,
+        ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 4, ("TokenSelectChunk_v2", "x", "AllGather_v1", "o0"): 1,
+        ("TokenSelectCombine_v2", "best", "AllGather_v1", "o0"): 1, ("TokenSelectCombine_v2", "idx", "TokenSelectChunk_v2", "o1"): 1,
+        ("TokenSelectCombine_v2", "x0", "Gemm_v2", "o0"): 1}
+    assert circuit.external == (f"{ids[FIRST]}/slot", f"{ids[COMBINE]}/o0")
 
 
-def test_the_circuit_starts_at_the_prompts_token_ids_as_ingress_at_their_steps(window):
-    """A prompt position's ``tok`` is ingress at the step whose row first reaches it (q1's third token at step 1, where its
-    second chunk runs); a decoded position's is wired from its request's previous token select."""
+def test_a_positions_token_is_its_feed_below_the_prompt_cap_and_the_previous_select_past_it(window):
+    """Each Program's slot is the system's ingress at its anchor, read by its first position's feed; each later feed reads its
+    predecessor's slot and the previous position's select, and position p's embedding reads its feed's token for p < 4 and
+    position p - 1's select at p = 4. Program 1's units follow Program 0's in every template."""
     circuit, ids = window
-    assert [g.doc() for g in circuit.ingress] == [{"reader": ids[EMB], "port": "tok", "at": 0, "units": 4, "step": 0},
-                                                 {"reader": ids[EMB], "port": "tok", "at": 5, "units": 2, "step": 0},
-                                                 {"reader": ids[EMB], "port": "tok", "at": 7, "units": 1, "step": 1}]
-    assert _source(circuit, ids[EMB], "tok", 4) == (ids[COMBINE], 0, "o0")
-    assert _source(circuit, ids[EMB], "tok", 8) == (ids[COMBINE], 2, "o0")
+    first, feed, emb, comb = ids[FIRST], ids[FEED], ids[EMB], ids[COMBINE]
+    assert [g.doc() for g in circuit.ingress] == [{"reader": first, "port": "slot", "at": 0, "units": 2, "step": WC.ANCHOR}]
+    assert [_source(circuit, feed, "slot", u) for u in (0, 1, 2, 3)] == [(first, 0, "o1"), (feed, 0, "o1"), (feed, 1, "o1"),
+                                                                          (first, 1, "o1")]
+    assert [_source(circuit, feed, "sel", u) for u in (0, 2, 3, 5)] == [(comb, 0, "o0"), (comb, 2, "o0"), (comb, 5, "o0"),
+                                                                         (comb, 7, "o0")]
+    assert [_source(circuit, emb, "tok", u) for u in range(10)] == [
+        (first, 0, "o0"), (feed, 0, "o0"), (feed, 1, "o0"), (feed, 2, "o0"), (comb, 3, "o0"),
+        (first, 1, "o0"), (feed, 3, "o0"), (feed, 4, "o0"), (feed, 5, "o0"), (comb, 8, "o0")]
 
 
 def test_the_weights_and_the_embedding_are_registered_reads(window):
@@ -96,61 +126,78 @@ def test_the_weights_and_the_embedding_are_registered_reads(window):
     reg = circuit.registered
     assert reg.params == {"weights": 91472}
     assert Counter((r.reader, r.port) for r in reg.reads) == {
-        (ids["Gemm_v2{K=64,N=8}"], "w"): 26, (ids["Gemm_v2{K=128,N=4}"], "w"): 5, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
-        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 8, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 16}
+        (ids["Gemm_v2{K=64,N=8}"], "w"): 60, (ids["Gemm_v2{K=128,N=4}"], "w"): 1, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
+        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 20, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 40}
     assert [t.doc() for t in reg.tables] == [{"name": "embedding@0", "param": "weights", "offset": 0, "words": 64, "rows": 256}]
     assert sorted(r.doc().items() for r in reg.roots) == sorted(
-        {"reader": ids[EMB], "port": p, "table": "embedding@0", "of": p, "at": 0, "units": 9}.items() for p in ("domain", "root"))
+        {"reader": ids[EMB], "port": p, "table": "embedding@0", "of": p, "at": 0, "units": 10}.items() for p in ("domain", "root"))
     assert [o.doc() for o in reg.openings] == [{"reader": ids[EMB], "table": "embedding@0", "key": "tok",
-                                                "ports": ["row", "salt", "path"], "verdict": "o1", "at": 0, "units": 9}]
-    assert [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["Gemm_v2{K=64,N=1}"]] == [(0, (4,), 0, (0,))]
+                                                "ports": ["row", "salt", "path"], "verdict": "o1", "at": 0, "units": 10}]
+    assert [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["Gemm_v2{K=64,N=1}"]] == [(0, (10,), 0, (0,))]
     rope = [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["RoPEHead_v1{D=16}"]]
-    assert rope[:3] == [(0, (4, 4), 90432, (16, 0)), (16, (4, 2), 90432, (16, 0)), (24, (4,), 90480, (0,))]
+    assert rope[:3] == [(0, (4,), 90432, (0,)), (4, (2,), 90432, (0,)), (6, (4,), 90432, (0,))]
 
 
 def test_a_head_attends_over_every_key_position_through_one_gather(window):
-    """q0's decode (position 4, T 5) at layer 0: heads 0 and 1 share KV group 0, whose keys are one `AllGather_v1{5, 16}`
-    row over the RoPE'd keys of positions 0..4 (the prompt's at RoPE units 16, 18, 20, 22, the decode's at 40)."""
+    """Position 4 (T 5) at layer 0: heads 0 and 1 share KV group 0, whose keys are one `AllGather_v1{5, 16}` row over the
+    RoPE'd keys of positions 0..4 (RoPE units 12p + 4, a position's 12 heads), Program 1's over its own (60 units on)."""
     circuit, ids = window
     att, rope = ids["AttentionHead_v18{T=5,D=16,BN=128,MASKED_FROM=0}"], ids["RoPEHead_v1{D=16}"]
     gather = _source(circuit, att, "k", 0)
     assert gather == _source(circuit, att, "k", 1) == (ids["AllGather_v1{WORLD=5,N=16}"], 0, "o0")
-    assert [_source(circuit, gather[0], "parts", 0, r) for r in range(5)] == [(rope, u, "o0") for u in (16, 18, 20, 22, 40)]
-    assert _source(circuit, att, "q", 0) == (rope, 36, "o0")
+    assert [_source(circuit, gather[0], "parts", 0, r) for r in range(5)] == [(rope, 12 * p + 4, "o0") for p in range(5)]
+    assert _source(circuit, att, "q", 0) == (rope, 48, "o0")
+    other = _source(circuit, att, "k", 8)
+    assert [_source(circuit, other[0], "parts", other[1], r) for r in range(5)] == [(rope, 60 + 12 * p + 4, "o0") for p in range(5)]
 
 
 def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window):
     """`interface.input_count` over the circuit's description (JSON, no Program lowered) finds no free input row, so a
-    proof of the window's units leaves nothing but the declared advice to the prover."""
+    proof of the window's units leaves nothing but the declared advice to the prover; the ingress is the two slots, 5 i32s
+    each."""
     circuit, _ = window
     doc = json.loads(json.dumps(circuit.description()))
-    assert IF.input_count(doc) == {"units": 1542, "inputs": 10935136, "wired": 1759360, "registered": 9175552, "ingress": 224,
-                                   "free": 0}
+    assert IF.input_count(doc) == {"units": 2442, "inputs": 17372576, "wired": 2785376, "registered": 14586880,
+                                   "ingress": 2 * 5 * 32, "free": 0}
 
 
-def test_what_the_lowering_doesnt_take_is_refused_by_name(monkeypatch):
-    """A stochastic request (its Program reads a seed, and its token select isn't lowered yet), a gather past the grain's
-    rows (q0's third position attends over 3 keys) and a head past `KEYS` keys are refused."""
+def test_what_the_class_doesnt_take_is_refused_by_name(monkeypatch):
+    """A window past its class (three requests in two slots, a prompt past the cap, more outputs than the cap), a stochastic
+    request (its Program would read a seed), a gather past the grain's rows (position 0's token select reads a chunk of 64
+    logits from 8 LM-head slices) and a head past
+    `KEYS` keys are refused, and so is a Program count the class has no slots for."""
     reg = S._registered()
-    stoch = S.compile_steps(reg, *S._session([(5, 2, {**S.STOCH, "max_tokens": 2})], [[(0, 0, 5)], [(0, 5, 1)]]))
-    with pytest.raises(Unexpressible, match=r"inputs are \['prompt', 'seed', 'weights'\]"):
-        window_circuit(stoch, GRAIN)
-    greedy = S.compile_steps(reg, *S._session(*WINDOW))
-    with pytest.raises(Unexpressible, match=r"a gather of 3 rows of \[16\] words: rows of one width, at most 2"):
-        window_circuit(greedy, Grain(gemm_words=512, rows=2, select=64))
+
+    def refused(window, cls=CLASS, grain=GRAIN):
+        return lambda: window_circuit(reg, S.compile_steps(reg, *S._session(*window)), cls, grain)
+
+    g2 = {**S.GREEDY, "max_tokens": 2}
+    three = ([(2, 2, g2)] * 3, [[(0, 0, 2), (1, 0, 2), (2, 0, 2)], [(0, 2, 1), (1, 2, 1), (2, 2, 1)]])
+    long = ([(5, 2, g2)], [[(0, 0, 5)], [(0, 5, 1)]])
+    many = ([(2, 3, {**S.GREEDY, "max_tokens": 3})], [[(0, 0, 2)], [(0, 2, 1)], [(0, 3, 1)]])
+    stoch = ([(4, 2, {**S.STOCH, "max_tokens": 2})], [[(0, 0, 4)], [(0, 4, 1)]])
+    for window, match in ((three, "3 requests in a window of a class of 2 slots"), (long, "5 prompt ids and 2 outputs, past"),
+                          (many, "2 prompt ids and 3 outputs, past its class's 4 and 2"), (stoch, "a stochastic request")):
+        with pytest.raises(Unexpressible, match=match):
+            refused(window)()
+    with pytest.raises(Unexpressible, match=r"a gather of 8 rows of \[8\] words: rows of one width, at most 2"):
+        refused(WINDOW, grain=Grain(gemm_words=512, rows=2, select=64))()
     monkeypatch.setattr(WC, "KEYS", 4)
     with pytest.raises(Unexpressible, match="a head of 5 keys, past the 4"):
-        window_circuit(greedy, GRAIN)
+        refused(WINDOW)()
+    for n in (0, 3):
+        with pytest.raises(Unexpressible, match=f"{n} Programs in a window of a class of 2 slots"):
+            class_circuit(reg, CLASS, n, GRAIN)
 
 
 def test_a_token_select_is_its_function_at_the_grains_chunk():
-    """At 128 logits a chunk, each of the window's four token selects is two `TokenSelectChunk_v2{C=128}` units, each
-    reading 16 LM-head slices through one gather, and a `TokenSelectCombine_v2{V=256, C=128}`: the Program's own body
-    (chunks of 64) at another C."""
-    circuit = S.compile_steps(S._registered(), *S._session(*WINDOW)).circuit(Grain(gemm_words=512, rows=16, select=128))
+    """At 128 logits a chunk, each of the circuit's ten token selects is two `TokenSelectChunk_v2{C=128}` units, each reading
+    16 LM-head slices through one gather, and a `TokenSelectCombine_v2{V=256, C=128}`: the Program's own body (chunks of 64)
+    at another C."""
+    circuit = _circuit(WINDOW, Grain(gemm_words=512, rows=16, select=128))
     n = {_label(fn): k for fn, k in circuit.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
-    assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (8, 4)
+    assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (20, 10)
     assert not [t for t in n if t.startswith(("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}"))]
-    assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(8)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
+    assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(20)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
     assert IF.input_count(circuit.description())["free"] == 0

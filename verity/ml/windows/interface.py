@@ -488,7 +488,7 @@ class Registered:
 @dataclass(frozen=True)
 class Ingress:
     """Template ``reader``'s units ``[at, at + units)`` read their ``port`` whole as the system's ingress at step ``step``
-    (a request's token ids, at the step its row first reaches them)."""
+    (a request's slot, its prompt's ids and length, at its Program's anchor)."""
     reader: str
     port: str
     at: int

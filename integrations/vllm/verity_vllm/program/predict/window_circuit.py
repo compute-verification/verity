@@ -1,13 +1,23 @@
-"""I2's served window as one Circuit (VLLM-103's V3b, `verity.ml.windows.interface`): every request Program `compile_steps`
-compiled for the window, flattened into proof units of the catalog's Definitions, every unit's output a committed row and
-every input row wired, registered or ingress.
+"""I2's served window as one Circuit (VLLM-103's V3b, `verity.ml.windows.interface`): the window *class's* circuit, every
+unit's output a committed row and every input row wired, registered or ingress.
 
-`window_circuit(compiled, grain)` walks each request Program's nodes in order and lowers each to units at ``grain``:
+A window class (`WindowClass`, N1's scan class: note:network-accounting/20261025T0830Z-report-net68-scan-router) caps a
+window at ``slots`` requests of at most ``prompt`` prompt ids and ``outputs`` outputs each. Its circuit is one class Program
+a request (`class_circuit`): the Build's greedy request Program at one prompt row and P - 1 decode steps, P = prompt +
+outputs - 1 positions, every position computing the whole stack, the LM head and the token select, position p attending to
+keys 0..p. So the circuit is a function of the class and the window's Program count alone, the one public fact a window adds:
+arrival steps, prompt lengths, output lengths and key counts are values, never structure. Position p's token is
+`io_shell.TokenFeed_v1{prompt, FIRST}`'s while p is below the class's prompt cap (the prompt's id below its length, else the
+previous position's select; the slot it carries starts as the system's ingress), and past it the previous position's select.
+A request decodes to the class's outputs, its selects past its finish masked by what reads them (external until N1's
+Programs' tie, IO-TIE's, is in the circuit). `window_circuit(registered, compiled, cls, grain)` refuses a window the class
+doesn't take and emits the class's circuit at its Program count.
+
+`class_circuit` walks the class Program's nodes in order and lowers each to units at ``grain``:
 
 - `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v1{V, H}` (`commitments.gates.embedding`): its ``root`` and
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
-  ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. A prompt position's ``tok`` is the system's
-  ingress at the step whose row first reaches it (`Ingress`); a decode position's is the previous position's token select.
+  ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, n = ``grain.gemm_words`` // K output columns a slice, each reading
   its weight rows from the weights record (`Read`) and its ``x`` whole.
 - `RoPE_v1{NHEADS, D}` and `Attention_v18{T, NH, KVH, D}` are their heads (`RoPEHead_v1{D}`, `AttentionHead_v18{T}`).
@@ -24,10 +34,12 @@ divides every use's row count, holds at most ``grain.rows`` rows, and makes the 
 ``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part). Every wire and read is stated per node as
 a pattern and `interface.coalesce`d, so the circuit's description grows with the Programs' nodes, not their units.
 
-Refused by name (`Unexpressible`): a request Program reading more than its prompt and the weights (a stochastic request's
-seed, a prefix-cache hit's prefix, a TP rank's peers), a family this lowering doesn't know, a request a Commit window carries
-in or out, byte ingress, a weight whose leaves aren't whole u16 words, and a row form the cut rule can't state. The circuit is completeness only: that it computes what serving ran is held by the units' proofs
-on their committed rows, never by this lowering.
+Refused by name (`Unexpressible`): a window past its class (more requests than slots, a prompt past the cap, more outputs
+than the cap), a request whose Program would read more than its prompt and the weights (a stochastic request's seed, a
+prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries in or out, byte ingress, a family this
+lowering doesn't know, a weight whose leaves aren't whole u16 words, and a row form the cut rule can't state. The circuit is
+completeness only: that it computes what serving ran is held by the units' proofs on their committed rows, never by this
+lowering.
 """
 from __future__ import annotations
 
@@ -41,14 +53,41 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
 from verity.ml.commitments.gates import embedding as E
+from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1_tp2 import AllGather
 from verity.ml.windows import interface as IF
 
 from .build import Unexpressible
+from .steps import RequestUnit, request_program
 
 NAME = "verity-vllm/window"
 WEIGHTS = "weights"
 PROMPT = "prompt"
+GREEDY = {"kind": "greedy"}
+#: the step a class Program's slot is the system's ingress at: its anchor, the window's start (N1's start cadence)
+ANCHOR = 0
+
+
+@dataclass(frozen=True)
+class WindowClass:
+    """A window class's public caps: at most ``slots`` request Programs a window, each of at most ``prompt`` prompt ids and
+    ``outputs`` outputs (N1's scan `Class`: its NR slots, its prompt ids and its KO)."""
+    slots: int
+    prompt: int
+    outputs: int
+
+    def __post_init__(self) -> None:
+        if not all(type(v) is int and v >= 1 for v in (self.slots, self.prompt, self.outputs)):
+            raise ValueError(f"a window class's slots, prompt and outputs are positive integers, not {self}")
+
+    @property
+    def positions(self) -> int:
+        """A class Program's positions: the longest prompt's, then every output but the last."""
+        return self.prompt + self.outputs - 1
+
+
+#: 2a's class, w63's (note:network-accounting/20261025T0830Z-report-net68-scan-router): 4 slots, 2,048 prompt ids, 64 outputs
+CLASS_2A = WindowClass(4, 2048, 64)
 
 
 #: the most keys an attention head reads through one `AllGather_v1{T, D}`, until v19's per-key-block cut is wired
@@ -175,23 +214,23 @@ def _cut(key: tuple[str, str], uses: dict[int, int], most: int) -> int:
     return min(ok, key=lambda d: (sum(n * d for m, n in uses.items() if m > d), -d))
 
 
-class _Request:
-    """One request Program's nodes lowered into ``b``'s units: each node's output as the rows that hold it."""
+class _Program:
+    """One class Program's nodes lowered into ``b``'s units, its slot the system's ingress at `ANCHOR`: each node's output as
+    the rows that hold it."""
 
-    def __init__(self, b: _Builder, unit: Any, program: Any, steps: dict[int, int]) -> None:
-        self.b, self.unit, self.fn, self.steps = b, unit, program.fn, steps
+    def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str) -> None:
+        self.b, self.fn, self.cls, self.name = b, fn, cls, name
         params = [name for name, _ in self.fn.signature()[0]]
         if set(params) != {PROMPT, WEIGHTS}:
-            raise Unexpressible(f"request {unit.request}: its Program's inputs are {params}; the window's lowering takes a "
-                                "prompt and the weights record (no prefix-cache hit, carried state or peers)")
+            raise Unexpressible(f"{name}: its inputs are {params}; the window's lowering takes a prompt and the weights record "
+                                "(no seed, prefix-cache hit, carried state or peers)")
         self.params = params
         self.fields: list[tuple[int, int, int]] = []
         leaf = word = 0
-        for name, ty in dict(self.fn.signature()[0])[WEIGHTS].fields:
+        for field_name, ty in dict(self.fn.signature()[0])[WEIGHTS].fields:
             ws = ty.width_set()
             if len(ws) != 1 or next(iter(ws)) % 16:
-                raise Unexpressible(f"request {unit.request}: weight {name}'s leaves are {sorted(ws)} bits, not one width of whole "
-                                    "u16 words")
+                raise Unexpressible(f"{name}: weight {field_name}'s leaves are {sorted(ws)} bits, not one width of whole u16 words")
             self.fields.append((leaf, word, next(iter(ws)) // 16))
             leaf, word = leaf + ty.leaves, word + ty.leaves * next(iter(ws)) // 16
         self.fields.append((leaf, word, 0))
@@ -199,6 +238,8 @@ class _Request:
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
         self.words: dict[int, int] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
+        self.position = 0
+        self.slot: tuple[Row, Row] | None = None
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -211,7 +252,7 @@ class _Request:
                 k = bisect.bisect_right([f[0] for f in self.fields], lo) - 1
                 leaf, word, w = self.fields[k]
                 if hi > self.fields[k + 1][0]:
-                    raise Unexpressible(f"request {self.unit.request}: a weight read of leaves [{lo}, {hi}) spans two weights")
+                    raise Unexpressible(f"{self.name}: a weight read of leaves [{lo}, {hi}) spans two weights")
                 out.append(("p", WEIGHTS, word + (lo - leaf) * w, word + (hi - leaf) * w))
             else:
                 out.append(("p", self.params[idx], lo, hi))
@@ -222,12 +263,12 @@ class _Request:
         out: list[Row] = []
         for space, j, lo, hi in self.segments(refs):
             if space != "n":
-                raise Unexpressible(f"request {self.unit.request}: a unit reads parameter {j} where a wire is due")
+                raise Unexpressible(f"{self.name}: a unit reads parameter {j} where a wire is due")
             for a, b, r in self.outs[j]:
                 if b <= lo or a >= hi:
                     continue
                 if a < lo or b > hi:
-                    raise Unexpressible(f"request {self.unit.request}: node {j}'s words [{lo}, {hi}) cut its row {r} at [{a}, {b})")
+                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row {r} at [{a}, {b})")
                 out.append(r)
         return tuple(out)
 
@@ -235,22 +276,22 @@ class _Request:
         """The first word of the one run of the weights record ``refs`` read, ``words`` long."""
         segs = self.segments(refs)
         if len(segs) != 1 or segs[0][:2] != ("p", WEIGHTS) or segs[0][3] - segs[0][2] != words:
-            raise Unexpressible(f"request {self.unit.request}: a weight read of {segs}, not one run of {words} weight words")
+            raise Unexpressible(f"{self.name}: a weight read of {segs}, not one run of {words} weight words")
         return segs[0][2]
 
     def lower(self) -> None:
         for j, node in enumerate(self.fn.body.nodes):
             if node.form != "call":
-                raise Unexpressible(f"request {self.unit.request}: node {j} is a {node.form}, not a call")
+                raise Unexpressible(f"{self.name}: node {j} is a {node.form}, not a call")
             ret = node.fn.signature()[1]
             ws = ret.width_set()
             if not ws <= {16, 32} or len(ws) != 1:
-                raise Unexpressible(f"request {self.unit.request}: node {j} ({node.fn.id}) returns leaves of {sorted(ws)} bits")
+                raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) returns leaves of {sorted(ws)} bits")
             self.words[j] = next(iter(ws)) // 16
             family = node.fn.name
             lower = getattr(self, f"_{family}", None) if family in FAMILIES else None
             if lower is None:
-                raise Unexpressible(f"request {self.unit.request}: node {j} is {node.fn.id}, a family the window's lowering "
+                raise Unexpressible(f"{self.name}: node {j} is {node.fn.id}, a family the window's lowering "
                                     f"doesn't take ({sorted(FAMILIES)})")
             lower(j, node)
 
@@ -258,17 +299,32 @@ class _Request:
         V, H = node.fn.bindings["V"], node.fn.bindings["H"]
         tok, table = node.args
         tid, u = self.b.unit(E.read(V, H))
-        segs = self.segments(tok.refs)
-        if segs[0][:2] == ("p", PROMPT):
-            pos = segs[0][2]
-            self.b.ingress.append(IF.Ingress(tid, "tok", u, 1, self.steps[pos]))
-        else:
-            self.b.feed(tid, "tok", u, 1, self.rows(tok.refs))
+        self.b.feed(tid, "tok", u, 1, self._token(tok))
         lo = self.weight(table.refs, V * H)
         t = self.b.tables.setdefault((lo, H, V), IF.Table(f"embedding@{lo}", WEIGHTS, lo, H, V))
         self.b.roots += [IF.TableRead(tid, "root", t.name, "root", u, 1), IF.TableRead(tid, "domain", t.name, "domain", u, 1)]
         self.b.openings.append(IF.Opening(tid, t.name, "tok", ("row", "salt", "path"), "o1", u, 1))
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
+
+    def _token(self, tok: Any) -> tuple[Row, ...]:
+        """The next position's token: its `TokenFeed_v1`'s below the class's prompt cap (the first's slot the system's ingress,
+        every other's its predecessor's, ``sel`` the previous position's select), past it the previous position's select."""
+        p, NP = self.position, self.cls.prompt
+        self.position += 1
+        segs = self.segments(tok.refs)
+        if (segs[0][:2] == ("p", PROMPT)) != (p == 0):
+            raise Unexpressible(f"{self.name}: position {p}'s token reads {segs[0][:2]}; a class Program reads its one prompt row "
+                                "at position 0 and every other position's token from its predecessor's select")
+        if p >= NP:
+            return self.rows(tok.refs)
+        tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=p == 0))
+        if p == 0:
+            self.b.ingress.append(IF.Ingress(tid, "slot", u, 1, ANCHOR))
+        else:
+            self.b.feed(tid, "slot", u, 1, (self.slot,))
+            self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
+        self.slot = Row(tid, u, "o1", 2 * (NP + 1))
+        return (Row(tid, u, "o0", 2),)
 
     def _one(self, j: int, node: Any) -> None:
         """A node that is one unit of its own Definition: each parameter a weight read or its writers' rows."""
@@ -382,32 +438,24 @@ def _runs(xs: Sequence[Any], key: Any, at: Any, n: Any, make: Any) -> list[Any]:
     return out
 
 
-def _steps(compiled: Any) -> dict[int, dict[int, int]]:
-    """Per request, each position's step: the step whose row first reaches it."""
-    out: dict[int, dict[int, int]] = {}
-    for s, rows in enumerate(compiled.steps):
-        for r in rows:
-            for p in range(r.start, r.start + r.n):
-                out.setdefault(r.request, {}).setdefault(p, s)
-    return out
+def class_program(registered: Any, cls: WindowClass) -> Any:
+    """The class's request Program (a `build.BuildResult`): the Build's greedy request at one prompt row and
+    ``cls.positions`` - 1 decode steps, in the registered compiler's form."""
+    return request_program(registered, RequestUnit(-1, "", 1, cls.positions - 1, GREEDY, None, 0))
 
 
-def window_circuit(compiled: Any, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
-    """``compiled``'s window (`steps.Compiled`) as one Circuit (module docstring), its requests in order."""
-    b, steps = _Builder(grain), _steps(compiled)
-    units = [u for u in compiled.requests if u is not None]
-    if not units:
-        raise Unexpressible("a window with no request compiles to no circuit")
-    weights = set()
-    for u in units:
-        if u.carried_in or u.carried_out or u.C or u.parse is not None:
-            raise Unexpressible(f"request {u.request}: carried across windows, a prefix-cache hit or byte ingress, which the "
-                                "window's lowering doesn't take yet")
-        r = _Request(b, u, compiled.programs[u.digest], steps.get(u.request, {}))
+def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
+    """``cls``'s circuit at ``programs`` Programs (module docstring): the class Program lowered once a Program, each Program's
+    units after its predecessor's in every template."""
+    if not 1 <= programs <= cls.slots:
+        raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
+    b, fn, weights = _Builder(grain), class_program(registered, cls).program.fn, 0
+    for k in range(programs):
+        r = _Program(b, fn, cls, f"class Program {k}")
         r.lower()
-        weights.add(r.weights)
-    if len(weights) != 1:
-        raise Unexpressible(f"the window's requests read weight records of {sorted(weights)} words")
+        if r.position != cls.positions:
+            raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
+        weights = r.weights
     b.settle()
     roots = _runs(b.roots, lambda x: (x.reader, x.port, x.table, x.of), lambda x: x.at, lambda x: x.units,
                   lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n))
@@ -415,13 +463,34 @@ def window_circuit(compiled: Any, grain: Grain = Grain(), name: str = NAME) -> I
                      lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n))
     ingress = _runs(b.ingress, lambda x: (x.reader, x.port, x.step), lambda x: x.at, lambda x: x.units,
                     lambda x, n: IF.Ingress(x.reader, x.port, x.at, n, x.step))
-    reg = IF.Registered({WEIGHTS: weights.pop()}, tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
+    reg = IF.Registered({WEIGHTS: weights}, tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
-    emb = {g.reader for g in b.ingress}
+    slots = {g.reader for g in b.ingress}
     sel = {f.tid for f in b.feeds if f.port == "x0"}
     return IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                      external=tuple(sorted({f"{t}/tok" for t in emb} | {f"{t}/o0" for t in sel})),
+                      external=tuple(sorted({f"{t}/slot" for t in slots} | {f"{t}/o0" for t in sel})),
                       wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg, ingress=tuple(ingress))
 
 
-__all__ = ["FAMILIES", "Grain", "NAME", "Row", "window_circuit"]
+def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
+    """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit at its Program count, one a request,
+    refused where the class doesn't take the window: nothing else of the window reaches the circuit."""
+    units = [u for u in compiled.requests if u is not None]
+    if not units:
+        raise Unexpressible("a window with no request compiles to no circuit")
+    if len(units) > cls.slots:
+        raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
+    for u in units:
+        if u.carried_in or u.carried_out or u.C or u.parse is not None:
+            raise Unexpressible(f"request {u.request}: carried across windows, a prefix-cache hit or byte ingress, which the "
+                                "window's lowering doesn't take yet")
+        if u.policy != GREEDY:
+            raise Unexpressible(f"request {u.request}: a {u.policy.get('kind')} request, and the class Program is greedy (a "
+                                "Program that reads a seed isn't lowered yet)")
+        if u.LP > cls.prompt or u.T + 1 > cls.outputs:
+            raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
+                                f"{cls.outputs}")
+    return class_circuit(registered, cls, len(units), grain, name)
+
+
+__all__ = ["CLASS_2A", "FAMILIES", "Grain", "NAME", "Row", "WindowClass", "class_circuit", "class_program", "window_circuit"]

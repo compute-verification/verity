@@ -43,7 +43,7 @@ Two kinds of committed run:
     prove_path.py circuit --serve-run DIR --window K --row-dir DIR --partition F --advice FILE --out FILE [--hf-config F] \\
         [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
-        [--hf-config F] [--target F] [--cap-bits L]
+        [--class SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -73,9 +73,10 @@ Two kinds of committed run:
   compile check runs: the circuit record the advice compiles to and the length it charges. ``records_audit.py`` audits a window
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
-* **window-circuit**: the same advice through I2 as the whole window's one Circuit (`window_circuit_of_advice`, V3): its
-  record (or ``--description``, its description) and its input count, which ``records_audit.py count`` recounts from the
-  record alone. A5 audits it once the committer writes each unit's rows as the record's members (V3c).
+* **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
+  class ``--class``, 2a's by default): its record (or ``--description``, its description) and its input count, which
+  ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each unit's rows as the
+  record's members (V3c).
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -1121,18 +1122,21 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
 
 
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
-    """A served window's advice through I2 as one Circuit (V3: `steps.Compiled.circuit`, every request Program flattened into
-    units, every input row wired, registered or ingress), written to ``--out`` as its circuit record from its description
-    alone (`interface.descriptor_record`, members stated at ``--cap`` units), or with ``--description`` as the description
-    `interface.input_count` reads, no program built. -> the advice's length in bits and the record's input count."""
+    """A served window's advice through I2 as its window class's one Circuit (V3: `steps.Compiled.circuit` at ``--class``, a
+    class Program a request flattened into units, every input row wired, registered or ingress), written to ``--out`` as its
+    circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap`` units), or with
+    ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's length in bits and
+    the record's input count."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.predict.window_circuit import WindowClass
 
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     compile_advice(compiler, data)
+    registered, cls = compiler.inner.registered, WindowClass(*(int(x) for x in a.window_class.split(",")))
     t0 = time.time()
     try:
-        circuit = compile_steps(compiler.inner.registered, data, compiler.inner.ingress).circuit()
+        circuit = compile_steps(registered, data, compiler.inner.ingress).circuit(registered, cls)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
@@ -1256,6 +1260,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement), the record's stated cap")
     p.add_argument("--description", action="store_true", help="write the circuit's description (templates, wires and "
                    "declarations), not its record: no program is built")
+    p.add_argument("--class", dest="window_class", default="4,2048,64", help="the window class SLOTS,PROMPT,OUTPUTS "
+                   "(`window_circuit.WindowClass`; 2a's by default)")
     for name in ("compiler", "serve-standin", "circuit", "window-circuit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)

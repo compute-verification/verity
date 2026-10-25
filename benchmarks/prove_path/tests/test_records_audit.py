@@ -285,7 +285,8 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     s, circuit = _served(tmp_path, monkeypatch), _registered_circuit()
     stub, refuse = ST.compile_steps, []
 
-    def lower():
+    def lower(registered, cls):
+        assert (cls.slots, cls.prompt, cls.outputs) == (4, 2048, 64)
         if refuse:
             raise Unexpressible("a family the window's lowering doesn't take")
         return circuit
