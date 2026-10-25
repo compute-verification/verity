@@ -7,7 +7,7 @@ import Models.NetworkCertifier.Guarantees.AdviceString
 `Guarantees.AdviceString`'s two wire bounds with the advice string each window's decisions, hits and order entries
 (`WindowCharge.Streams`) and its charge (`WindowCharge.bits`, `ChargeCount_v2{N, H, O}`'s count: the whole window as
 `code_v1` codes it, every count inside the coder). `BitsCount` is not a premise: the charge meets it under any
-registered book (`EncardChargedLeWhole`, `Definitions/NetworkCertifier/Guarantees/WindowCharge`). The premises left
+registered book (`EncardChargedLeWhole`, `Definitions/NetworkCertifier/Guarantees/WindowChargeKraft`). The premises left
 are the wire's (W2, J) and the compiler's (precommitted, deterministic).
 
 The scope and the one hypothesis left are `EncardChargedLeWhole`'s: every advice v1 window, with n_resumes and n_lag
