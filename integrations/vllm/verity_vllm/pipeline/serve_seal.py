@@ -5,8 +5,10 @@ the declared Commit of record's (`pipeline.commit.make_committer`'s ``native_col
 trees, 64-byte roots) with its acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench
 row's required manifest (``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap
 (``--norm-tap-so``) and the hook sets of the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``)
-and a part the manifest names that did not attach is refused (`parts_missing`). Then `served_record.SamplerInputsSource` is
-attached and the arena sized; under ``--seal`` it registers the weights.
+and a part the manifest names that did not attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
+stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
+served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
+the weights.
 
 With ``seal`` (`seal_window`, which `serve_commit.CommitWindows` calls at each close), each closed window is sealed as a
 deferred Commit's row dir, ``windows/w<k>/``, the way a declared Commit with ``--replay-deferred`` seals its run
@@ -15,7 +17,8 @@ the manifest), and beside it the record that bundle is opened against (`deferred
 naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/binding_map_p0.json``. The binding map names
 each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
 ``norm_scale``, ``fa2.m1/*``), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
-shared module's layer-N path through. The window's requests are named by the body's ``user`` (the id the advice names them
+shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
+step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
 the window closed.
 """
@@ -128,10 +131,14 @@ def committer(opts: Any, llm: Any) -> Any:
                              f"{opts.required_manifest}; pass the bench row's taps (--hidden-so, --norm-tap-so) as its Commit does")
         com.required_manifest, com.required_manifest_path = manifest, str(Path(opts.required_manifest).resolve())
         hidden_m1 = bool(opts.hidden_so) and att.hidden_required is not False
-    from verity_vllm.commit.served_record import SamplerInputsSource
+    from verity_vllm.commit.served_record import SamplerInputsSource, StepInputPort
 
-    com.attach_source(SamplerInputsSource(com))
     tokens = int(opts.max_num_batched_tokens)
+    try:
+        com.attach_source(StepInputPort(com, tokens))
+    except ValueError as e:
+        raise UsageError(str(e)) from None
+    com.attach_source(SamplerInputsSource(com))
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len},
                                              hidden_m1=hidden_m1)
@@ -219,13 +226,16 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
                       "steps": rec.get("steps"), "committer": com.name, "passed": rec.get("passed"),
                       "binding": {"map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "program_digest": pd},
                       "commit_pass": None, "commit_fail_reason": None, "sampled_replay": sr, "boundary_linkage": bl}}
+    port = port_of(com)
+    layout = port_layout(com, port) if port is not None else None
     args = {k: None for k in RB.ARGS} | {"label": label, "retain": getattr(com, "retain", None)}
     ctx = {"pair": 0, "arm": "instrumented", "committer": com.name, "run_root": rc.run_root.hex(), "code": code, "args": args,
            "requests": reqs, "sampling": dict(sampling), "tokens": {k: list(v) for k, v in tokens.items()}, "stop_of_record": None,
            "ids_full": None, "retention": getattr(com, "retain", None), "required_manifest_sha256": None, "declaration": None,
            "required_classes": [], "min_openings": 0, "vc_result": None, "engine_of_record": dict(engine_of_record or {}), "slim": None,
            "served_window": {"schema": SERVED_WINDOW, "window": rec.get("window"), "run_id": rec.get("run_id"), "commit_scheme": scheme,
-                             "programs": "none sealed: the registered compiler's Programs for the window's advice", **of_record},
+                             "programs": "none sealed: the registered compiler's Programs for the window's advice",
+                             "served_rows": rec.get("served_rows"), "step_input_port": port, **of_record},
            RB.HASHED: hashed}
     verdict: dict[str, Any] = {"schema": SERVED_WINDOW, "run_id": rec.get("run_id"), "window": rec.get("window"), "commit_pass": None,
                                "commit_scheme": scheme, "run_root": rc.run_root.hex()}
@@ -236,7 +246,32 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     b = (verdict.get("replay_deferred") or {}).get("bundles") or [{}]
     return {"row_dir": str(d), "bundle": b[0].get("path"), "manifest_sha256": b[0].get("manifest_sha256"), "bytes": b[0].get("bytes"),
             "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "requests": [q["request_id"] for q in reqs],
-            "seal_s": round(time.perf_counter() - t0, 3)}
+            "port_layout": layout, "seal_s": round(time.perf_counter() - t0, 3)}
+
+
+def port_of(com: Any) -> dict[str, Any] | None:
+    """The committer's step-input port (`served_record.StepInputPort.describe`), None without one."""
+    from verity_vllm.commit.served_record import StepInputPort
+
+    src = next((s for s in getattr(com, "sources", None) or () if isinstance(s, StepInputPort)), None)
+    return src.describe() if src is not None else None
+
+
+def port_layout(com: Any, port: Mapping[str, Any]) -> dict[str, Any]:
+    """Where each committed step's stream puts the port: the steps whose first two tensors are its ids and positions at
+    byte offsets 0 and T·IB with T·IB and T·PB bytes, and the first that isn't (its first two tensors' names, offsets and sizes)."""
+    want = [(n, b[0], b[1] - b[0]) for n, b in zip(port["names"], (port["ids_bytes"], port["positions_bytes"]))]
+    ok, bad = 0, None
+    for step in sorted(com._layouts):
+        head = []
+        for m in list(com._layouts[step])[:2]:
+            so = getattr(m, "stream_off", None)
+            head.append((m.name, int(so) if so is not None and int(so) >= 0 else int(m.first_leaf) * int(com.chunk), int(m.nbytes)))
+        if head == want:
+            ok += 1
+        elif bad is None:
+            bad = {"step": int(step), "head": head}
+    return {"steps": len(com._layouts), "at_head": ok, "first_other": bad}
 
 
 class _Null:

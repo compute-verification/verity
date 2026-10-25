@@ -128,6 +128,68 @@ class SamplerInputsSource:
                                for i in range(n)]
 
 
+#: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
+PORT_NAMES = ("step.input/ids", "step.input/positions")
+
+
+class StepInputPort:
+    """The committer source that starts every step's stream with the step-input port the certifier's served-rows tie and
+    IO-TIE's ``IoTieRequest`` read (`verity.core.protocols.certifier.served_tie`): the step's input ids, then its positions,
+    each ``T`` little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
+    (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves of
+    the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them from
+    its call (``input_ids``, ``positions``) before any module of it commits."""
+
+    short_name = "step_input_port"
+    own_names = frozenset(PORT_NAMES)
+    IB = PB = 8
+
+    def __init__(self, committer: Any, T: int) -> None:
+        chunk = int(getattr(committer, "chunk", 4096) or 4096)
+        if T < 1 or (T * self.IB) % chunk:
+            raise ValueError(f"step-input port: T = {T} i64s is not a whole number of {chunk}-byte chunks; "
+                             f"pass --max-num-batched-tokens a multiple of {chunk // self.IB}")
+        self.com, self.T, self._h = committer, int(T), None
+
+    def describe(self) -> dict[str, Any]:
+        """The port as a sealed window's context states it: names, T, the element bytes and each tensor's byte range."""
+        T, IB, PB = self.T, self.IB, self.PB
+        return {"names": list(PORT_NAMES), "T": T, "IB": IB, "PB": PB, "ids_bytes": [0, T * IB], "positions_bytes": [T * IB, T * (IB + PB)]}
+
+    def install(self) -> None:
+        self._h = self.com.model.register_forward_pre_hook(self._pre, with_kwargs=True)
+
+    def uninstall(self) -> None:
+        if self._h is not None:
+            self._h.remove()
+            self._h = None
+
+    def on_step_begin(self) -> None:
+        pass
+
+    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:  # noqa: ARG002
+        return {"per_step_bytes": self.T * (self.IB + self.PB), "tensors_per_step": len(PORT_NAMES)}
+
+    def _pre(self, _m: Any, args: tuple, kwargs: dict) -> None:
+        import torch
+
+        com, job = self.com, getattr(self.com, "_cur", None)
+        if job is None:
+            return None
+        ids = kwargs.get("input_ids", args[0] if args else None)
+        pos = kwargs.get("positions", args[1] if len(args) > 1 else None)
+        n = int((getattr(com, "_plan_shape", None) or (0, 0))[0])
+        if ids is None or pos is None or ids.dim() != 1 or pos.dim() != 1 or not 0 < n <= min(self.T, int(ids.shape[0]), int(pos.shape[0])):
+            com.errors.append(f"step-input port: step {job.step} has N = {n} tokens for T = {self.T}, "
+                              f"ids {None if ids is None else tuple(ids.shape)}, positions {None if pos is None else tuple(pos.shape)}")
+            return None
+        for name, t in zip(PORT_NAMES, (ids, pos)):
+            out = torch.zeros(self.T, dtype=torch.int64, device=t.device)
+            out[:n] = t[:n].long()
+            com._acquire(name, out, job)
+        return None
+
+
 def served_rows(committer: Any) -> dict[int, list[tuple]]:
     """The rows its `SamplerInputsSource` kept, by step; empty without one."""
     src = next((s for s in getattr(committer, "sources", ()) if isinstance(s, SamplerInputsSource)), None)
