@@ -53,7 +53,6 @@ def test_pinned_counts_and_digests(target) -> None:
     _pinned(target)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("target", TREES, ids=lambda t: t.id)
 def test_pinned_counts_and_digests_of_the_trees(target) -> None:
     _pinned(target)
@@ -92,13 +91,11 @@ def test_the_gather_agrees_with_gather_bf16_v1(V: int) -> None:
     _agree_gather(V, V, 400)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("V", [1024, 1100, 2048, 3000])
 def test_the_tree_of_calls_agrees_with_gather_bf16_v1(V: int) -> None:
     _agree_gather(V, V, 400)
 
 
-@pytest.mark.slow
 def test_the_served_gather_is_pinned_and_agrees_with_gather_bf16x49152_v1() -> None:
     g = bind(BGA.gather_bf16(SERVED_VOCAB))
     assert BL.is_boolean(g)
@@ -116,7 +113,6 @@ def test_the_embedding_agrees_with_embedding_v1(V: int, H: int) -> None:
     _agree(e, tok, rng.integers(0, 1 << 16, (len(tok), V, H), dtype=np.uint64).astype(np.uint16))
 
 
-@pytest.mark.slow
 def test_the_embedding_over_a_tree_agrees_with_embedding_v1() -> None:
     e = bind(BGA.Embedding, V=1100, H=3)
     rng = np.random.default_rng(11)
@@ -139,7 +135,6 @@ def test_the_embedding_cuts_into_one_word_per_coordinate() -> None:
     _cut(bind(BGA.Embedding, V=64, H=16), 16)
 
 
-@pytest.mark.slow
 def test_a_tree_of_calls_cuts_into_one_word() -> None:
     """The chunk gathers' words are read only by the gather above them, which returns 16 bits: one output unit, nothing committed
     inside (`circuit-check` holds `Embedding_v2{V=1100,H=2}` over two such trees to the same)."""

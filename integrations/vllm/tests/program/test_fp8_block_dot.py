@@ -263,6 +263,7 @@ def test_the_fold_binds_the_targets_step(scale) -> None:
 # ---------------------------------------------------------------- the activation quant at G = 64
 
 
+@pytest.mark.slow
 def test_a_64_group_is_the_128_group_over_it_padded_with_zeros() -> None:
     """`_C.per_token_group_fp8_quant` runs one kernel at every group size; G = 128's Definition is exact-model-tested.  Zeros change no
     group's max (it starts at eps > 0), so each 64-wide group's e4m3 words and scale are the G = 128 form's over that group and 64 zeros."""

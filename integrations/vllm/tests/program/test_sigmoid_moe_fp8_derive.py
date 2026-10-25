@@ -170,6 +170,7 @@ class _ActQuant(nn.Module):
         return q, s
 
 
+@pytest.mark.slow
 def test_silu_and_mul_per_block_quant_derives_one_row_form_per_row_equal_to_the_twin(on_target):
     on_target(H200)
     gu = _bf16(np.random.default_rng(4), NV, 2 * I)
@@ -307,6 +308,7 @@ def _np(t: torch.Tensor) -> np.ndarray:
     return t.view(torch.uint8).numpy() if t.dtype == F8 else t.numpy().view(np.uint32)
 
 
+@pytest.mark.slow
 def test_a_tuned_hopper_launch_binds_its_tile_and_the_hopper_step(on_target):
     on_target(H200)
     xq, sx = _activations()
@@ -405,6 +407,7 @@ class _ExpertsDefault(nn.Module):
         return self.experts(logits, xq, sx)
 
 
+@pytest.mark.slow
 def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_program_equal_to_the_twins(on_target):
     """The refusal of the GLM-5.3 rank-0 derive at layer 3's `mlp.experts` (`_C.per_token_group_fp8_quant(use_ue8m0=True)` had no
     registered Definition) cleared: the step's whole chain derives, its input quant `Fp8GroupQuantUe8m0_v1` per token row, and the
@@ -440,6 +443,7 @@ def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_pro
     assert got == want
 
 
+@pytest.mark.slow
 def test_the_routed_experts_chain_derives_in_one_program_equal_to_the_twins(on_target):
     on_target(H200)
     x = _logits(E)

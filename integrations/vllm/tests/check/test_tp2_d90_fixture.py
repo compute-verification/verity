@@ -818,6 +818,7 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
         assert (out / f"rank{r}" / "capture" / "log.jsonl.gz").exists() and (out / f"rank{r}" / "program.json").exists() and (out / f"rank{r}" / "instances.jsonl").exists()
 
 
+@pytest.mark.slow
 def test_fold_match_entry_point_fails_by_name(tmp_path, monkeypatch):
     # partner rank missing: rank 1 never logged -> the cross-rank leg names it, the row is not a PASS on rank 0's fold alone (rev R2)
     rc, res, _ = _e2e(tmp_path, monkeypatch, drop_rank1_log=True)

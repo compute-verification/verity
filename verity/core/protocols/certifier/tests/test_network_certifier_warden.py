@@ -1,7 +1,8 @@
 """The active warden (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its clients
 in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases honest
 traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses, passes both directions'
-bytes unchanged, and puts the same number of same-size cells in the same buckets however the server times its bytes."""
+bytes unchanged (the server's copy of a request adding only its place in the release order), and puts the same number
+of same-size cells in the same buckets however the server times its bytes."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import pytest
 
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
+from verity.core.protocols.certifier.release import release_of, with_release
 from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cell, cells, read_cell, read_reason,
                                                     reason_frame)
@@ -149,11 +151,12 @@ def settled(warden: Warden, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: WardenParams = PARAMS):
+                params: WardenParams = PARAMS, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late."""
+    due and the warden read it, then tick, for `windows` windows; `late[t]` puts tick t that many seconds late.
+    `hooks` are the warden's `publish` and `release`."""
     clock = VirtualClock(-TAU / 2)
-    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep)
+    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(warden.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
@@ -205,7 +208,7 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
     answers = [[(0, resp), (0, EOF)] for resp in resps]
     warden, clients, server = run(answers, {1: [cells(reqs[0], B)], 2: [cells(reqs[1], B)],
                                             3: [cells(reqs[2], B), cells(reqs[3], B)]}, windows=2)
-    log = {e["ordinal"]: e for e in warden.log}
+    log = {e["ordinal"] - 1: e for e in warden.log}
     assert [server.conns[k].received for k in range(4)] == reqs
     for k, client in enumerate(clients):
         e = log[k]
@@ -221,7 +224,7 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
     verdict = audit(PARAMS, *records(warden))
     assert verdict["accepted"], verdict["windows"]
     assert [(c["ordinal"], c["admitted"], c["ingress_end"], c["ended"]) for c in verdict["connections"]] == \
-        [(k, log[k]["admitted"], log[k]["ingress_end"], log[k]["ended"]) for k in range(4)]
+        [(k + 1, log[k]["admitted"], log[k]["ingress_end"], log[k]["ended"]) for k in range(4)]
     assert [c["egress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in resps]
     assert [c["ingress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in reqs]
     assert verdict["cells"]["egress"] == sum(len(c.cells()) for c in clients)
@@ -240,6 +243,22 @@ def test_the_records_are_the_wire():
     assert b"".join(rows) == b"".join(b"".join(by_bucket[t]) for t in sorted(by_bucket))
 
 
+def test_the_rows_released_before_each_publish_are_its_records_grid():
+    """`release` gets each grid's row as it ticks, before the window's `publish`: a publisher in another process
+    rebuilds every record, bucket for bucket, from the rows alone."""
+    events = []
+    run([[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]], {0: [cells(request(5), B), cells(request(70), B)]},
+        windows=2, release=lambda link, row: events.append((link, row)), publish=lambda r, grid: events.append(r))
+    pending, published = {}, []
+    for e in events:
+        if isinstance(e, tuple):
+            pending.setdefault(e[0], []).append(e[1])
+        else:
+            assert e.grid == tuple(pending.pop(e.link)), (e.link, e.window)
+            published.append((e.link, e.window))
+    assert published == [(link, w) for w in range(2) for link in ("requests", "responses", "fails")] and not pending
+
+
 # --- fail closed -----------------------------------------------------------------------------------------------------
 
 
@@ -254,10 +273,10 @@ def test_a_late_byte_fails_its_connection_closed_at_its_cell():
     shim = client.shim()
     assert (bytes(shim.data), shim.outcome) == (b"a" * (2 * P), "fail")
     assert [(t, k) for t, k, _ in client.cells()] == expected_egress(1, 3, FAIL)
-    assert reasons(warden) == [(e["ended"], 0, "late")]
+    assert reasons(warden) == [(e["ended"], 1, "late")]
     verdict = audit(PARAMS, *records(warden))
     assert not verdict["accepted"]
-    assert verdict["windows"][0]["problems"] == ["connection 0 failed closed (late) at egress cell 2"]
+    assert verdict["windows"][0]["problems"] == ["connection 1 failed closed (late) at egress cell 2"]
     assert verdict["connections"][0]["failed"] == "late"
 
 
@@ -280,7 +299,7 @@ def test_a_server_failure_shows_only_at_an_egress_slot():
     silent_warden, (silent,), _ = run([[]], {0: [cells(request(5), B)]})
     assert client.writes == silent.writes and client.shim().outcome == "fail"
     assert records(warden)[1] == records(silent_warden)[1]
-    assert (reasons(warden), reasons(silent_warden)) == ([(D, 0, "upstream")], [(D, 0, "late")])
+    assert (reasons(warden), reasons(silent_warden)) == ([(D, 1, "upstream")], [(D, 1, "late")])
 
 
 def test_a_server_slow_to_accept_its_connection_moves_nothing():
@@ -323,12 +342,12 @@ def test_a_client_cell_of_another_kind_or_ingress_past_its_bounds_fails_closed()
     long = cells(b"a" * (PARAMS.ingress_cells * P + 1), B)
     slow = (cell(DATA, 0, b"a" * P, B), False)  # never ends, nor closes
     warden, clients, server = run([[(0, b"x"), (0, EOF)]] * 3, {0: [bad, long], 1: [slow]}, params=params)
-    assert sorted((e["ordinal"], e["failed"]) for e in warden.log) == [(0, "malformed"), (1, "ingress"),
-                                                                        (2, "ingress")]
+    assert sorted((e["ordinal"], e["failed"]) for e in warden.log) == [(1, "malformed"), (2, "ingress"),
+                                                                        (3, "ingress")]
     assert all(c.shim().outcome == "fail" for c in clients)
-    assert sorted((o, why) for _, o, why in reasons(warden)) == [(0, "malformed"), (1, "ingress"), (2, "ingress")]
+    assert sorted((o, why) for _, o, why in reasons(warden)) == [(1, "malformed"), (2, "ingress"), (3, "ingress")]
     assert all(b"x" not in bytes(c.shim().data) for c in clients)
-    slow_log = next(e for e in warden.log if e["ordinal"] == 2)
+    slow_log = next(e for e in warden.log if e["ordinal"] == 3)
     assert slow_log["ended"] - slow_log["admitted"] + 1 == PARAMS.ingress_buckets
 
 
@@ -415,6 +434,53 @@ def test_read_cell_refuses_what_the_warden_would_not_make():
     for bad in (cell(FAIL, 5, b"", B), encode_frame(FAIL, 5, bytes([len(REASONS)]), B), end):
         with pytest.raises(ValueError):
             read_reason(bad, B)
+
+
+# --- the release order -----------------------------------------------------------------------------------------------
+
+
+def http(body: bytes, extra: bytes = b"") -> bytes:
+    return b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n%scontent-length: %d\r\n\r\n%s" % (extra, len(body), body)
+
+
+def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends():
+    """Two requests admitted in one bucket, the first two buckets long and the second one, so their `END`s are
+    released in the other order: each reaches the server once, whole, at its `END`'s release, with
+    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the warden's
+    run id; a client's own release header is dropped there, while the cells, the records and the audit hold the
+    client's bytes as sent, which the audit accepts."""
+    reqs = [http(b'{"prompt":"%s"}' % (b"a" * 140)), http(b"{}", b"X-Verity-Release: 0\r\n")]
+    assert [-(-len(r) // P) for r in reqs] == [2 * R, R]
+    run_id = bytes(range(100, 132))
+    warden, clients, server = run([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]],
+                                  {1: [cells(reqs[0], B), cells(reqs[1], B)]},
+                                  run_nonce=lambda n: run_id[:n])
+    ingress, _, _ = records(warden)
+    ends = [read_cell(f, B)[1] for r in ingress for row in r.grid for f in row
+            if f is not None and read_cell(f, B)[0] == END]
+    assert ends == [2, 1] and warden.run_id == run_id and warden.requests_released == 2
+    log = {e["ordinal"]: e for e in warden.log}
+    assert log[1]["admitted"] == log[2]["admitted"] == 1 and log[2]["ingress_end"] < log[1]["ingress_end"]
+    for k, req in enumerate(reqs):
+        assert server.conns[k].received == with_release(req, ends.index(k + 1), run_id) == \
+            with_release(req, log[k + 1]["release"], run_id)
+    assert release_of(server.conns[1].received) == (0, run_id) and b"X-Verity" not in server.conns[1].received
+    verdict = audit(PARAMS, *records(warden))
+    assert verdict["accepted"], verdict["windows"]
+    assert [c["ingress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in reqs]
+    assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1"]
+
+
+def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server_gets_nothing():
+    """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
+    next request's N is 0. Each warden draws its own run id."""
+    slow = (cell(DATA, 0, b"a" * P, B), False)
+    warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
+    log = {e["ordinal"]: e for e in warden.log}
+    assert (log[1]["failed"], log[1]["release"], log[2]["failed"], log[2]["release"]) == ("late", None, None, 0)
+    assert server.conns[0].received == b"" and release_of(server.conns[1].received) == (0, warden.run_id)
+    other, _, _ = run([[(0, b"r"), (0, EOF)]], {0: [cells(http(b"{}"), B)]})
+    assert len(warden.run_id) == len(other.run_id) == 32 and warden.run_id != other.run_id
 
 
 def test_the_parameters_digest_binds_every_parameter():

@@ -21,6 +21,7 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
+from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
@@ -192,6 +193,9 @@ def auditor(tmp_path, monkeypatch):
 
 
 PERIOD = "p1"
+#: the fixed length `_serve`'s one request serves (its max_tokens 1, the public-cap done source), as the period's
+#: open commits it (`credit.committed_length`)
+LENGTH = {"max_tokens": [1], "stop": Wd.STOP_FIXED}
 #: the served window's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 units
 LAYOUT = SV.declared_layout([(64, K)], {0: "q"}, ROWS, 1)
 
@@ -210,8 +214,9 @@ def _circuit() -> str:
 
 #: the prover's own weights key, which salted its b/<K> before the auditor's registration (VLLM-71)
 WKEY = bytes(range(32, 64))
-#: each K's circuit file's SHA-512 as a period-open commits them (``circuit_files``)
-FILES = {f"k{K}": hashlib.sha512(b"the k64 template's circuit file").hexdigest()}
+#: each K's circuit file's SHA-512 as a period-open commits them (``circuit_files``), and the live template's
+FILES = {f"k{K}": hashlib.sha512(b"the k64 template's circuit file").hexdigest(),
+         CR.LIVE: hashlib.sha512(b"the live template's circuit file").hexdigest()}
 
 
 def _rows(edit=None):
@@ -258,14 +263,14 @@ def _served(**kw) -> SV.Served:
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
     """`auditor` with its session reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
-    None) the draw K ``draw_k``, opened with ``--model`` `CH.MODEL` (unless ``model`` is False) on ``registry``
-    (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
+    None) the draw K ``draw_k`` and the fixed length `LENGTH`, opened with ``--model`` `CH.MODEL` (unless ``model`` is
+    False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
     ``host.ledger.period_close`` once the session has ended."""
     def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
-        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, circuit_files=files,
-                           model=CH.MODEL if model else None)
+        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, rows=ROWS, circuit_files=files,
+                           model=CH.MODEL if model else None, length=LENGTH)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
         monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -284,12 +289,13 @@ def _commit(tap, x, ids):
     tap.take(f"{CT.site('q')}/1", s_a, 0)
 
 
-def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None):
+def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None, pad=0, graphs=()):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
     the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
     else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
-    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's)."""
+    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's). With `pad` the call runs `pad` rows past
+    the m scheduled, as a CUDA graph of the engine's capture sizes `graphs` pads it, its padded input ids 0."""
     layer = Linear(n, 1, arm)
     if served is not None:
         served.tap = CT.CommitTap("embed")
@@ -300,7 +306,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
     ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"rows": ROWS, "steps": 1, "retain_steps": retain,
-                                                                         "runner": runner, **coins,
+                                                                         "runner": runner, **coins, "graphs": graphs,
                                                                          **({"served": served} if served else {})}})
     comp = PO.install(Model(layer), ctx)
     try:
@@ -308,9 +314,9 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
                               sampling_params=SimpleNamespace(max_tokens=1))
         runner.execute_model(SimpleNamespace(scheduled_new_reqs=[req], num_scheduled_tokens={"r": m},
                                              total_num_scheduled_tokens=m))
-        x = (torch.randn(m, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
+        x = (torch.randn(m + pad, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
         if served is not None:
-            _commit(served.tap, x, list(range(m)) if ids is None else ids)
+            _commit(served.tap, x, (list(range(m)) if ids is None else ids) + [0] * pad)
         y = layer.quant_method.apply(layer, x)
         run = pouw.h1_run(ENTRY)
         run.close()
@@ -558,10 +564,20 @@ def _record(run):
     return {"commitment": run.commits, "calls": run.manifest()}
 
 
-def _credit(host, rec, statements=(), k=None, descriptor=None, run=None):
+def _credit(host, rec, statements=(), k=None, descriptor=None, run=None, live=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
                              _descriptor() if descriptor is None else descriptor, statements, k, run=run,
-                             pins=[host.ledger.pins_path], main=CH.MAIN)
+                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live)
+
+
+def _live(d, rec):
+    """The window's live evidence (`credit.LIVE_STATEMENTS`): the live Program's descriptor at T = `ROWS`, the window's
+    rounds and `SV.PREFIX`, and each round's statement, its files stand-ins in `d` (the verifier of record is
+    `_verifier`, which proves round s's unit s)."""
+    steps = len(rec["commitment"]["rounds"])
+    return {"descriptor": SV.descriptor(L.program(ROWS, steps, SV.PREFIX)).hex(),
+            "statements": [{**{x: v for x, v in _statement(d / f"live{s}", s, 1).items() if x != "call"}, "round": s}
+                           for s in range(steps)]}
 
 
 def _statement(d, call, n):
@@ -578,10 +594,16 @@ def _statement(d, call, n):
 def _verifier(units, reject=(), seen=None, opened=lambda port: True):
     """A stand-in for the verifier of record (`proofs.verify`): session i proves ``units[i]``, accepted unless in
     `reject`, its verdict naming the program it was handed and its registered finding the ports of the `--registered`
-    file credit built that `opened` keeps, each at the root credit read from the window's entries."""
+    file credit built that `opened` keeps, each at the root credit read from the window's entries. A statement on the
+    live template's circuit file proves its round's unit, the round its ``m@<s>`` port names, and opens every port."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     def run(proof, *, circuit_sha512, program, partition, registered):
+        if circuit_sha512 == FILES[CR.LIVE]:
+            s = int(registered["ports"]["m"]["value"].rsplit("@", 1)[1])
+            found = {port: {"value": e["value"], "root": e["root"]} for port, e in registered["ports"].items()}
+            return [PF.Finding(str(x), True, "", hashlib.sha512(program).hexdigest(), found, (s,))
+                    for x in proof.sessions], None
         if seen is not None:
             seen.append({"circuit_sha512": circuit_sha512, "registered": registered, "partition": partition})
         found = {port: {"value": e["value"], "root": e["root"]} for port, e in registered["ports"].items()
@@ -889,7 +911,7 @@ def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
     rec = _record(run)
     drawn = _credit(auditor, rec)["drawn"]
     st, seen = [_statement(tmp_path / "c0", 0, len(drawn))], []
-    assert _credit(auditor, rec, st, run=_verifier(drawn, seen=seen))["credit"] == [0]
+    assert _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=_live(tmp_path, rec))["credit"] == [0]
     ports = seen[0]["registered"]["ports"]
     b = {p: e for p, e in ports.items() if p.startswith(f"b_k{K}_")}
     assert sorted(b) == sorted(f"b_k{K}_{j}" for j in range(32))
@@ -908,8 +930,9 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     """PRF-132: core's `credit.window` verifies each drawn call's statement itself (`proofs.verify`, here a stand-in that
     reports what it was handed) on the circuit file the period's open committed for its K, against the ``--registered``
     file credit builds from the window's entries (the call tables' domains bound to the window's open root, the
-    weights' to none), and credits the gate-passed call only when every drawn unit's session is accepted: none, a
-    rejected one, or another circuit's descriptor refuses the whole window. The closed period's credit
+    weights' to none), and credits the gate-passed call only when every drawn unit's session is accepted and each
+    round's live@<s> proves its step's served rows: none, a rejected one, another circuit's descriptor, or no live
+    evidence refuses the whole window. The closed period's credit
     (`period_credit`) is that window's, its period opened with ``--model`` (VLLM-72: the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -921,10 +944,15 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     out = _credit(auditor, rec)
     assert out["window"][0] == "missing" and out["credit"] is None, out
     drawn = out["drawn"]
-    st, seen = [_statement(tmp_path / "c0", 0, len(drawn))], []
-    out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen))
+    st, seen, live = [_statement(tmp_path / "c0", 0, len(drawn))], [], _live(tmp_path, rec)
+    assert _credit(auditor, rec, st, run=_verifier(drawn))["window"] == ("live", CR.LIVE_STATEMENTS_FORM)
+    out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=live)
     assert out["manifest"] is None and out["window"] is None, out
-    assert out["calls"] == out["credit"] == [0] and out["eps"] == str(CR.established(LAYOUT, [0], k))
+    served = [row[CR.SERVED_ROWS] for row in rec["calls"]]
+    eps = CR.established(LAYOUT, [0], served, k)
+    assert out["calls"] == out["credit"] == [0] and out["eps"] == (None if eps is None else str(eps))
+    assert 0 < served[0] < LAYOUT["m"]
+    assert CR.credited_work(LAYOUT, [0], served) == served[0] * LAYOUT["linears"][0][1] * LAYOUT["linears"][0][2]
     (got,) = seen
     assert got["circuit_sha512"] == FILES[f"k{K}"]
     root, digest = auditor.window["root"], _circuit()
@@ -938,9 +966,10 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor())
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live)
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
-    assert why is None and got == {"windows": [[0]], "k": k, "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
+    assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
+                                   "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
     unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
     assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")

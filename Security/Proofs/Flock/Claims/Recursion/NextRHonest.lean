@@ -65,13 +65,18 @@ def honestMsgs (caps : Array (Array ByteArray)) (reps : List (List (List ByteArr
   (joinR ((capRows caps).map rowMsg) :: reps.flatten.map fun rs => joinR (rs.map rowMsg)) ++ [last]
 
 /-- **An honest rep's proof**: the lengths a proof decoded at the rep's shape has (`DecodeZL.ProofSizes`, which
-`ProofShaped` gives), at a schedule of at least two levels, and every nonce `0`. -/
+`ProofShaped` gives), at a schedule of at least two levels, every nonce `0`, and the fields the transcript never absorbs
+as V\* takes them (`absorbedFrom`): the pinned `params`, the cap as `initialCap`, and `finalC` the value of `round1c`
+at the Lagrange weights of the rep's `z`. -/
 structure HonestRep (c : RepCtx) (p : Flock.Proof) : Prop where
   sizes : ∃ e, c.n = 2 + e ∧
     FlockSoundness.Discharge.DecodeZL.ProofSizes (FlockSoundness.Refine.shapeOf c.st c.sch e) p
   levels : 2 ≤ c.sch.levels.size
   nonces : (∀ n ∈ p.ligerito.queryNonces, n = 0) ∧ (∀ n ∈ p.ligerito.claimNonces, n = 0) ∧
     ∀ n ∈ p.ligerito.consistencyNonces, n = 0
+  params : p.params = pcsParams c.st.merkle c.sch
+  initialCap : p.ligerito.initialCap = p.cap
+  finalC : p.zerocheck.finalC = dot (lagrange nodesL den6Inv c.z) p.zerocheck.round1c
 
 /-- **A rep's schedule is its frames'**: `RecVStar.repRounds` at the frames' `m`, `k_log` and claim count, at the
 frames' `fast100` schedule, of a setup that folds at its own `k_log`. -/
@@ -92,7 +97,7 @@ def RepFits : Prop :=
 /-- **Rows fix a fitting proof's absorbed fields and its `T`**, at a setup that folds at its own `k_log`. -/
 def FitUnique : Prop :=
   ∀ (c : RepCtx) (rows : List (List ByteArray)) (p p' : Flock.Proof) (T T' : F128), c.st.fold.kLog = c.st.kLog →
-    FitsRep c rows p T → FitsRep c rows p' T' → ∀ q, absorbedFrom p' q = absorbedFrom p q ∧ T' = T
+    FitsRep c rows p T → FitsRep c rows p' T' → ∀ q, absorbedFrom c p' q = absorbedFrom c p q ∧ T' = T
 
 /-- **One honest rep reads back**: from the honest rows, with the honest proof as the last message's, `readRep` reads
 the honest proof and its round messages. -/
@@ -113,17 +118,18 @@ def ReadsBack : Prop :=
     setupOf false x = some (s, spec, sts) → cs.head? = some c₁ →
     caps.size = sts.size → (∀ i < caps.size, caps[i]!.size = RecDeploy.level0Nodes sts[i]!) →
     ps.size = 2 * sts.size →
-    (∀ k < ps.size, SchedOf (repCtx spec sts c₁ (capRows caps) k) ∧
-      HonestRep (repCtx spec sts c₁ (capRows caps) k) ps[k]! ∧ ps[k]!.cap = caps[k / 2]!) →
+    (∀ k < ps.size, SchedOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ∧
+      HonestRep (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! ∧ ps[k]!.cap = caps[k / 2]!) →
     RowsFit (capRows caps) →
-    (∀ k < ps.size, ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k), RowsFit rs) →
+    (∀ k < ps.size, ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k), RowsFit rs) →
     rd last = some fl → fl.ps = ps →
     decR rd x (honestMsgs caps ((List.range ps.size).map fun k =>
-        repRows (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)) last) cs =
+        repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)) last) cs =
       some ⟨s, spec, sts,
         ((caps.toList.map Array.toList).map (·.foldl (· ++ ·) ByteArray.empty),
           sts.toList.map fun _ => ByteArray.empty),
-        c₁, ((List.range ps.size).map fun k => framesOf (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)).flatten.zip
+        c₁, ((List.range ps.size).map fun k =>
+          framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten.zip
           cs.tail.dropLast, ⟨fl.stmt, fl.j, ps⟩⟩
 
 /-! ## Rows fix the fit -/
@@ -300,9 +306,15 @@ theorem fitUnique : FitUnique := by
 
 /-! ## From one rep to the session -/
 
-theorem absorbedFrom_self (p : Flock.Proof) : absorbedFrom p p = p := by
+/-- **An honest proof is its own read-back**: its unabsorbed fields are already what V\* takes for them. -/
+theorem absorbedFrom_self {c : RepCtx} {p : Flock.Proof} (hp : HonestRep c p) : absorbedFrom c p p = p := by
+  have h1 := hp.params
+  have h2 := hp.initialCap
+  have h3 := hp.finalC
   rcases p with ⟨cap, params, ⟨a, b, r, fa, fb, fc⟩, lc, rs, ⟨ic, ip, rc, rp, ⟨yr, rows, sib, salts⟩, ms, qn, ood, cbn,
     cn⟩⟩
+  dsimp only at h1 h2 h3
+  subst h1 h2 h3
   rfl
 
 /-- **One rep reads back where the honest proof fits**, as fits are unique (`fitUnique`). -/
@@ -312,7 +324,7 @@ theorem repReadsBack_of (hE : RepFits) : RepReadsBack := by
   have hx : ∃ pT : Flock.Proof × F128, FitsRep c (repRows c p T) pT.1 pT.2 := ⟨(p, T), hf⟩
   obtain ⟨h1, h2⟩ := fitUnique c _ p _ T _ hs.2.1 hf (Classical.choose_spec hx) p
   unfold readRep
-  rw [dite_eq_left hx, h1, absorbedFrom_self, h2]
+  rw [dite_eq_left hx, h1, absorbedFrom_self hp, h2]
 
 theorem rowsOf_rows {rs : List ByteArray} (h : RowsFit rs) : rowsOf (joinR (rs.map rowMsg)) = some rs := by
   rw [rowsOf_joinR (by rw [List.length_map]; exact h.1) (by
@@ -373,8 +385,8 @@ theorem linkR_capRows {sts : Array Stmt} {caps : Array (Array ByteArray)} (hs : 
 
 /-- **Rep `k` reads its table's level-0 cap among the honest round 0's rows.** -/
 theorem cap0_capRows {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {caps : Array (Array ByteArray)}
-    (hs : caps.size = sts.size) (hc : ∀ i < caps.size, caps[i]!.size = RecDeploy.level0Nodes sts[i]!) {k : ℕ}
-    (hk : k / 2 < caps.size) : (repCtx spec sts c₁ (capRows caps) k).cap0 = caps[k / 2]!.toList := by
+    {cs : List Coin} (hs : caps.size = sts.size) (hc : ∀ i < caps.size, caps[i]!.size = RecDeploy.level0Nodes sts[i]!)
+    {k : ℕ} (hk : k / 2 < caps.size) : (repCtx spec sts c₁ (capRows caps) cs k).cap0 = caps[k / 2]!.toList := by
   show (cutLens (level0Lens sts) (capRows caps)).getD (k / 2) [] = _
   rw [cutLens_capRows hs hc]
   simp only [List.getD_eq_getElem?_getD, List.getElem?_map, Array.getElem?_toList, Array.getElem?_eq_getElem hk,
@@ -389,16 +401,17 @@ theorem range_map_getElem! {α : Type} [Inhabited α] (a : Array α) :
 /-- **The session reads back where each rep does.** -/
 theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
   intro rd x last cs s spec sts c₁ caps ps Ts fl hx hc1 hs hcs hps hrep h0 hrows hrd hfl
-  set reps := (List.range ps.size).map fun k => repRows (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)
+  set reps := (List.range ps.size).map fun k =>
+    repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)
     with hreps
   have hk2 : ∀ k < ps.size, k / 2 < caps.size := fun k hk => by omega
-  have hone : ∀ k < ps.size, readRep (repCtx spec sts c₁ (capRows caps) k)
-      (repRows (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)) ps[k]! =
-      some (ps[k]!, framesOf (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)) := fun k hk => by
+  have hone : ∀ k < ps.size, readRep (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k)
+      (repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)) ps[k]! =
+      some (ps[k]!, framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)) := fun k hk => by
     obtain ⟨h1, h2, h3⟩ := hrep k hk
     refine hR _ _ _ h1 h2 ?_
     rw [cap0_capRows hs hcs (hk2 k hk), h3]
-  have hlen : ∀ k < ps.size, (repRows (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)).length =
+  have hlen : ∀ k < ps.size, (repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).length =
       (RecDeploy.repSchedAt spec sts[k / 2]!).length := fun k hk => by
     obtain ⟨T, hT, -⟩ := readRep_fits (hone k hk)
     exact hT.sched.symm
@@ -406,9 +419,9 @@ theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
     rw [hreps, List.map_map, repLens, ← hps]
     exact List.map_congr_left fun k hk => hlen k (List.mem_range.1 hk)
   have hm : ((List.range ps.size).mapM fun k =>
-      readRep (repCtx spec sts c₁ (capRows caps) k) (reps.getD k []) fl.ps[k]!) =
+      readRep (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) (reps.getD k []) fl.ps[k]!) =
       some ((List.range ps.size).map fun k =>
-        (ps[k]!, framesOf (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k))) := by
+        (ps[k]!, framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k))) := by
     refine mapM_eq_some fun k hk => ?_
     have hk' := List.mem_range.1 hk
     rw [hreps, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hk', Option.map_some,
@@ -416,9 +429,9 @@ theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
     exact hone k hk'
   have hif : fl.ps.size = 2 * sts.size ∧ (repLens spec sts).sum = reps.flatten.length :=
     ⟨by rw [hfl, hps], by rw [← hlens, List.length_flatten]⟩
-  have hpf : readPs spec sts c₁ (capRows caps) reps.flatten fl =
+  have hpf : readPs spec sts c₁ (capRows caps) reps.flatten cs.tail.dropLast fl =
       some (ps, ((List.range ps.size).map fun k =>
-        framesOf (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)).flatten) := by
+        framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten) := by
     unfold readPs
     rw [ite_eq_left hif, ← hlens, cutLens_flatten_eq, ← hps, hm]
     simp only [Option.map_some, List.map_map, Function.comp_def, range_map_getElem!]

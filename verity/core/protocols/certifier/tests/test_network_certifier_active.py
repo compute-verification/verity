@@ -33,7 +33,7 @@ from verity.core.protocols.certifier.active import (
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import GridParams, Reason, Certifier, row_count
+from verity.core.protocols.certifier.grid import GridParams, Reason, Certifier, occupancy, row_count
 from verity.core.protocols.certifier.schedule import (
     ClockSync,
     LogicalFrame,
@@ -93,6 +93,56 @@ def test_an_id_event_is_one_template_its_ordinal_and_token_id_at_fixed_places():
                   e.replace(b"verity", b"Verity"), active.event(b"a token"), b"x"):
         assert active.id_event_data(other) is None
     assert active.id_event_data(e.replace(b"         7", b"4294967296"[:10])) is None
+
+
+@pytest.mark.parametrize("frame_bytes", [8, 16, 256])
+def test_a_compact_record_is_eight_bytes_its_finish_in_the_token_fields_flags(frame_bytes):
+    """A compact record is the ordinal and the token field, u32be each: the id while more follow, the id with
+    `COMPACT_LAST` at max_tokens, and the id with `COMPACT_LAST` and `COMPACT_STOP` at a stop token, so a stop carries
+    the EOS id the model sampled. Its cell is the record zero-filled to B, the compact template's (nothing before or
+    after the record but zeros), never padding, and `compact_record_data` gives back exactly what `compact_record`
+    wrote and nothing else: so under the K-draw tie only the token field's 32 bits of an unchecked cell are the
+    server's. A field with `COMPACT_STOP` and not `COMPACT_LAST` is no record's; all ones is a stop on id 2^30 − 1."""
+    p, s, prefix, suffix = active.compact_placement(frame_bytes)
+    assert (p, s, prefix, suffix) == (0, active.COMPACT_RECORD.size, b"", b"") and active.COMPACT_RECORD.size == 8
+    assert (active.COMPACT_LAST, active.COMPACT_STOP) == (1 << 31, 1 << 30)
+    cases = [((1, 0, None), b"\0\0\0\x01\0\0\0\0"),
+             ((7, 128006, None), (7).to_bytes(4, "big") + (128006).to_bytes(4, "big")),
+             ((7, 128006, "length"), (7).to_bytes(4, "big") + (128006 | 1 << 31).to_bytes(4, "big")),
+             ((2**32 - 1, 128009, "stop"), b"\xff" * 4 + (128009 | 3 << 30).to_bytes(4, "big")),
+             ((3, 2**30 - 1, "length"), b"\0\0\0\x03\xbf\xff\xff\xff"),
+             ((3, 2**30 - 1, "stop"), b"\0\0\0\x03" + b"\xff" * 4), ((3, 0, "stop"), b"\0\0\0\x03\xc0\0\0\0")]
+    for (request, token_id, finish), raw in cases:
+        record = active.compact_record(request, token_id, finish)
+        cell = active.compact_cell(record, frame_bytes)
+        assert record == raw and len(cell) == frame_bytes and cell[s:] == bytes(frame_bytes - s) != cell
+        assert active.compact_record_data(cell) == active.compact_record_data(record) == (request, token_id, finish)
+        assert active.compact_unit(5, record) == b"\0\0\0\x05" + record
+    for bad in ((0, 1, None), (1, 2**30, None), (1, 2**31, None), (1, 2**30, "stop"), (1, -1, None), (True, 1, None),
+                (1, None, "stop"), (1, None, None), (1, 7, "eos")):
+        with pytest.raises(ValueError):
+            active.compact_record(*bad)
+    record = active.compact_record(7, 42)
+    for other in (bytes(8), (0).to_bytes(4, "big") + record[4:], record[:4] + b"\x7f\xff\xff\xff",
+                  record[:4] + b"\x40\0\0\x2a", record[:7], active.compact_cell(record, frame_bytes) + b"\x01"):
+        assert active.compact_record_data(other) is None
+    with pytest.raises(ValueError):
+        active.compact_cell(record, 7)
+
+
+def test_compact_units_cut_a_connection_by_its_bytes_alone():
+    """A compact server connection is its HTTP head through `\\r\\n\\r\\n`, then 12-byte (position, record) units:
+    fed in one read, a byte a read or at random cuts, it gives the same units, and keeps a partial one uncut."""
+    records = [active.compact_record(3, t) for t in (5, 6)] + [active.compact_record(3, 128009, "stop")]
+    data = HEAD + b"".join(active.compact_unit(p, r) for p, r in zip((4, 9, 10), records)) + b"\0\0"
+    rng = random.Random(1)
+    for cuts in ([len(data)], [1] * len(data), [rng.randrange(1, 20) for _ in range(len(data))]):
+        units, at, got = active.CompactUnits(), 0, []
+        for n in cuts:
+            got += units.feed(data[at : at + n])
+            at += n
+        assert got == list(zip((4, 9, 10), records)) and units.head and bytes(units.buffer) == b"\0\0"
+    assert active.CompactUnits().feed(active.compact_unit(0, records[0])) == []
 
 
 @pytest.mark.parametrize("frame_bytes", [512, 256])
@@ -350,28 +400,77 @@ def test_the_bucketer_enqueues_at_the_next_boundary():
 
 
 def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
-    """The certifier's own frame (the salt's) is enqueued at the first tick of each window `first` gives one for, ahead
-    of that bucket's arrivals and behind the queue carried from the window before: FIFO, at most r_in per bucket. `own`
-    names its slot in the row that releases it, by its place in the queue: a link frame of the same bytes is never
-    taken for it, and one a fault drops is never released."""
+    """The certifier's own frame (the salt's) is enqueued at the first tick of each window `first` gives one for, at
+    the head of the queue: ahead of that bucket's arrivals and of the queue carried from the window before, so it
+    leaves in slot 0 of that bucket, and the rest is FIFO, at most r_in per bucket. `own` names its slot in the row
+    that releases it, by its place: a link frame of the same bytes is never taken for it, and one a fault drops (a
+    fault before the window's first tick, or one an arrival at that tick causes) is never released."""
     P = GridParams(buckets=3, allocation=1, frame_bytes=1)
     b = Bucketer(Certifier("requests", P), first=lambda w: None if w == 2 else bytes([100 + w]))
     for frame, bucket in ((b"a", 0), (b"b", 2), (b"c", 2), (bytes([101]), 3)):
         b.arrive(frame, bucket)
     out = [(b.tick()[0], dict(b.own)) for _ in range(9)]
-    assert [row for row, _ in out] == [(b"d",), (b"a",), (b"b",), (b"c",), (b"e",), (b"e",), (None,), (None,), (None,)]
-    assert [own for _, own in out] == [{0: 0}, {}, {}, {}, {0: 1}, {}, {}, {}, {}]
+    assert [row for row, _ in out] == [(b"d",), (b"a",), (b"b",), (b"e",), (b"c",), (b"e",), (None,), (None,), (None,)]
+    assert [own for _, own in out] == [{0: 0}, {}, {}, {0: 1}, {}, {}, {}, {}, {}]
 
     g = Bucketer(Certifier("requests", P), first=lambda w: bytes([100 + w]) if w else None)
-    for frame, bucket in ((b"x", 2), (b"y", 2), (b"z", 2), (bytes([101]), 7)):
+    for frame, bucket in ((b"x", 2), (b"y", 2), (b"z", 2), (b"??", 6), (bytes([102]), 10)):
         g.arrive(frame, bucket)
     out = []
-    for t in range(9):
-        if t == 4:  # window 1's own frame is still queued behind z
+    for t in range(12):
+        if t == 3:  # before window 1's first tick, with y and z carried
             g.certifier.fault(Reason.MONITOR_UNAVAILABLE)
         out.append((g.tick()[0], dict(g.own)))
-    assert [row for row, _ in out] == [(None,), (None,), (b"x",), (b"y",), (None,), (None,), (b"f",), (b"e",), (None,)]
-    assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
+    assert [row for row, _ in out] == [(None,)] * 2 + [(b"x",)] + [(None,)] * 6 + [(b"g",), (b"f",), (None,)]
+    assert [own for _, own in out] == [{}] * 9 + [{0: 3}, {}, {}]
+    assert g.certifier.window == 4
+
+
+class _SaltBehind(Certifier):
+    """The ingress certifier under the rule before: its own frame queued behind any carried queue (FIFO)."""
+
+    def enqueue(self, frame: bytes, *, first: bool = False) -> None:
+        super().enqueue(frame)
+
+
+def test_a_carried_queue_that_fills_a_windows_first_bucket_leaves_the_derived_request_ends_exact():
+    """Request ends derived from the signed counts (request k ends at the first bucket where the counts, less one own
+    frame at each window's bucket 0, add up to its and the earlier requests' frames) are where the proxy anchors each
+    request: the bucket that releases its last frame. At r_in = 2, a request of 3 frames and one of 1 arrive in window
+    0's last bucket, which releases two of them, so two are carried and fill window 1's first bucket. The salt frame
+    at the head of that bucket's queue leaves there, and every derived end is exact. Queued behind the carried frames
+    (the rule before), it leaves a bucket later: the counts, and so every head, are the same, but the 1-frame
+    request's last frame leaves in bucket 4 while the counts derive bucket 5, a bucket late."""
+    P = GridParams(buckets=4, allocation=2, frame_bytes=B)
+    requests = [(b"a" * 100, 0), (b"b" * 1100, 3), (b"c" * 100, 3)]
+    sizes = [active.request_frame_count(len(r), B) for r, _ in requests]
+    assert sizes == [1, 3, 1]
+
+    def run(certifier: Certifier) -> tuple[list[int], list[int], list[int]]:
+        b = Bucketer(certifier, first=lambda w: active.salt_frame(w, active.PLACEHOLDER, B))
+        for request, bucket in requests:
+            for frame in itertools.batched(active.request_frames(request, B), B):
+                b.arrive(bytes(frame), bucket)
+        cut, anchors, records = active.Requests(), {}, []
+        for t in range(2 * P.buckets):
+            row, record = b.tick()
+            for frame in row[: row_count(row)]:
+                kind, _, payload = active.decode_frame(frame)
+                if kind == DATA and (end := cut.feed(payload))[2]:
+                    anchors[end[0]] = t
+            records += [record] if record is not None else []
+        counts = [row_count(row) for r in records for row in r.grid]
+        own = [int(t % P.buckets == 0) for t in range(len(counts))]
+        released = list(itertools.accumulate(n - o for n, o in zip(counts, own)))
+        derived = [next(t for t, m in enumerate(released) if m >= total) for total in itertools.accumulate(sizes)]
+        return counts, [anchors[k + 1] for k in range(len(requests))], derived
+
+    counts, anchors, derived = run(Certifier("requests", P))
+    assert counts == [2, 0, 0, 2, 2, 1, 0, 0]
+    assert anchors == derived == [0, 4, 5]
+    behind_counts, behind_anchors, behind_derived = run(_SaltBehind("requests", P))
+    assert behind_counts == counts and behind_derived == derived
+    assert behind_anchors == [0, 4, 4]
 
 
 def test_the_bucketers_admission_admits_whole_requests_while_the_window_ends_idle():
@@ -576,15 +675,16 @@ def seal_frames(sealer: active.Sealer, data: bytes, start: int) -> bytes:
 
 async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt=None, server=None, probe=None,
                  sessions=SESSIONS, start: int = 0, pair: active.Pair | None = None,
-                 sealer: active.Sealer | None = None, **salting):
+                 sealer: active.Sealer | None = None, egress: GridParams = EGRESS, write=event, **salting):
     """One run of the Program through a proxy on real sockets, its clock injected: the peer sends each request in the
     middle of its send bucket, and the server writes frame p in the middle of bucket `write_buckets[p]`. The syncs are
     the honest prover's, or an online `prover`'s on `executor`. With `salt`, the proxy's salt source (and `salting`,
     its `salt_bits` and `pouw_window`), each PoUW window's salt is delivered before the run goes on. `probe(proxy, t)`
     runs once tick t is done, and the run waits on it if it is a coroutine. With `start`, the proxy is back from maintenance at that window, and only what comes from
     there on is sent and written. With `pair`, the link is a sealed pair link, and the peer stands in for the pair's
-    other certifier: `sealer` seals the k-th frame it sends as slot k of its grid (`seal_frames`). Returns the proxy
-    and the wire's bytes as the peer read them."""
+    other certifier: `sealer` seals the k-th frame it sends as slot k of its grid (`seal_frames`). The proxy's egress
+    grid is `egress`, and the server writes frame p as `write(session, k, n, p)`. Returns the proxy and the wire's
+    bytes as the peer read them."""
     _, _, syncs, rows = (FRAMES, READY, SYNCS, ROWS) if sessions is SESSIONS else program(sessions)
     first = start * EGRESS.buckets
     advice = {"syncs": syncs} if prover is None else {"syncs": [], "prover": prover, "windows": WINDOWS,
@@ -592,7 +692,7 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
     clock = VirtualClock(-TAU / 2)
     server = server or Server()
     srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
-    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, advice.pop("syncs"), origin=0.0,
+    proxy = Proxy(srv.sockets[0].getsockname()[:2], egress, INGRESS, SYNC_SET, advice.pop("syncs"), origin=0.0,
                   ingress_link="requests", clock=clock, sleep=clock.sleep, salt=salt, start=start,
                   position=sum(anchor < first for _, anchor, *_ in rows), pair=pair, **advice, **salting)
     k = salting.get("pouw_window", 1)
@@ -633,7 +733,7 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         for p, (_, _, name, k, _, n) in enumerate(rows):
             if write_buckets[p] == t:
-                server.writers[name].write(event(name, k, n, p))
+                server.writers[name].write(write(name, k, n, p))
                 written += 1
         await proxy.until(lambda p, n=written: len(p.frames) >= n)
     await running
@@ -647,24 +747,24 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
     return proxy, bytes(wire)
 
 
-def audit(proxy, frames, syncs):
+def audit(proxy, frames, syncs, egress=EGRESS):
     """The audit of the proxy's records, raw then committed: every egress and ingress link-window's verdict."""
     out = []
     for committed in (False, True):
-        records = [commit(r, EGRESS if r.link == "responses" else INGRESS) if committed else r for r in proxy.records]
+        records = [commit(r, egress if r.link == "responses" else INGRESS) if committed else r for r in proxy.records]
         a = Audit()
-        a.check_link("responses", records, frames, syncs, SYNC_SET, EGRESS)
+        a.check_link("responses", records, frames, syncs, SYNC_SET, egress)
         a.check_ingress_link("requests", records, WINDOWS)
         out.append([(v.link, v.window, v.violation) for v in a.verdicts])
     return out
 
 
-def expected_wire(frames, syncs) -> bytes:
+def expected_wire(frames, syncs, egress=EGRESS) -> bytes:
     out = bytearray()
-    for grid in expected_grids(frames, syncs, EGRESS):
+    for grid in expected_grids(frames, syncs, egress):
         for row in grid:
             n = row_count(row)
-            out += b"".join(row[:n]) + bytes((EGRESS.allocation - n) * B)
+            out += b"".join(row[:n]) + bytes((egress.allocation - n) * egress.frame_bytes)
     return bytes(out)
 
 
@@ -698,6 +798,91 @@ def test_a_proxy_with_ordinals_names_each_request_to_its_server_and_changes_noth
     proxy, wire = asyncio.run(replay(honest(), server=server, ordinals=True))
     assert server.ordinals == {name: stream for name, stream, _, _ in SESSIONS}
     assert proxy.records == honest_run[0].records and wire == honest_run[1]
+
+
+ORDINAL_OF = {name: stream for name, stream, _, _ in SESSIONS}
+
+
+def compact_of(session: str, index: int, n: int) -> bytes:
+    """Output `index` of `session`'s n as a compact record: session c's response ends at a stop token, the others at
+    max_tokens."""
+    stream, finish = ORDINAL_OF[session], None if index < n - 1 else "stop" if session == "c" else "length"
+    return active.compact_record(stream, 1000 * stream + index, finish)
+
+
+def compact_write(session: str, index: int, n: int, position: int) -> bytes:
+    return (HEAD if index == 0 else b"") + active.compact_unit(position, compact_of(session, index, n))
+
+
+@pytest.mark.parametrize("cell", [8, 16])
+def test_compact_records_over_sockets_are_b_byte_cells_and_the_run_is_accepted(cell, honest_run):
+    """Under `compact` the server writes each output as a (position, record) unit after its HTTP head, and the proxy
+    frames each record as its cell of B = 8 or 16 bytes: every link-window is accepted raw and committed against the
+    Program's cells, the records and hand times are `run_shaper`'s and the event-framed run's, the ingress records are
+    unchanged, and the wire is B/512 of the event-framed run's, the same frames a bucket."""
+    egress = dataclasses.replace(EGRESS, frame_bytes=cell)
+    frames = [LogicalFrame(active.compact_cell(compact_of(name, k, n), cell), anchor, k)
+              for _, anchor, name, k, _, n in ROWS]
+    proxy, wire = asyncio.run(replay(honest(), egress=egress, write=compact_write, ordinals=True, compact=True))
+    raw, committed = audit(proxy, frames, SYNCS, egress)
+    assert raw == committed == [("responses", w, None) for w in range(WINDOWS)] + \
+        [("requests", w, None) for w in range(WINDOWS)]
+    out = [r for r in proxy.records if r.link == "responses"]
+    assert out == run_shaper(frames, READY, SYNCS, Certifier("responses", egress))
+    honest_proxy, honest_wire = honest_run
+    assert [occupancy(r.grid) for r in out] == [occupancy(r.grid) for r in honest_proxy.records if r.link == "responses"]
+    assert [r for r in proxy.records if r.link == "requests"] == \
+        [r for r in honest_proxy.records if r.link == "requests"]
+    assert proxy.shaper.hands == honest_proxy.shaper.hands and proxy.frames == honest_proxy.frames
+    assert wire == expected_wire(frames, SYNCS, egress) and len(wire) * B == len(honest_wire) * cell
+    cells = [active.compact_record_data(f) for r in out for row in r.grid for f in row[:row_count(row)]]
+    assert cells == [(ORDINAL_OF[name], 1000 * ORDINAL_OF[name] + k,
+                      None if k < n - 1 else "stop" if name == "c" else "length")
+                     for _, _, name, k, _, n in ROWS[:len(cells)]]
+    assert {c[2] for c in cells} == {None, "length", "stop"}
+
+
+def test_a_compact_record_of_another_request_or_unframed_bytes_is_malformed():
+    """The proxy takes a compact record only on its own request's connection, as one (`compact_record_data`): one
+    naming another request, one that isn't a record, or one before the stream's request is released faults the
+    window `malformed`, and so do bytes left uncut at the stream's end. It refuses `compact` without `ordinals` or
+    with frames shorter than a record."""
+    egress = dataclasses.replace(EGRESS, frame_bytes=8)
+    with pytest.raises(ValueError):
+        Proxy(("127.0.0.1", 1), egress, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", compact=True)
+    with pytest.raises(ValueError):
+        Proxy(("127.0.0.1", 1), dataclasses.replace(EGRESS, frame_bytes=7), INGRESS, SYNC_SET, SYNCS, origin=0.0,
+              ingress_link="requests", ordinals=True, compact=True)
+
+    def compact_proxy(upstream=("127.0.0.1", 1)) -> Proxy:
+        return Proxy(upstream, egress, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", ordinals=True,
+                     compact=True)
+
+    for record, anchor in ((active.compact_record(2, 5), 0), (active.compact_record(1, 5)[:4] + b"\x7f\xff\xff\xff", 0),
+                           (active.compact_record(1, 5), None)):
+        proxy = compact_proxy()
+        proxy._egress_record(1, active._Stream(anchor=anchor), 0, record, 1)
+        assert proxy.shaper.certifier._fault == Reason.MALFORMED and not proxy.frames
+    proxy = compact_proxy()
+    proxy._egress_record(1, active._Stream(anchor=0), 0, active.compact_record(1, 5, "length"), 1)
+    assert proxy.shaper.certifier._fault is None and proxy.frames == [(0, 1, 0, 0, 1)]
+
+    async def ends_short(tail: bytes) -> Proxy:
+        async def handle(reader, writer) -> None:
+            await reader.readexactly(active.HEADER.size)
+            writer.write(HEAD + active.compact_unit(0, active.compact_record(1, 5)) + tail)
+            await writer.drain()
+            writer.close()
+
+        server = await asyncio.start_server(handle, "127.0.0.1", 0)
+        proxy = compact_proxy(server.sockets[0].getsockname()[:2])
+        await proxy._upstream(1, active._Stream(anchor=0))
+        server.close()
+        return proxy
+
+    for tail, fault in ((b"", None), (b"\0" * 5, Reason.MALFORMED)):
+        proxy = asyncio.run(ends_short(tail))
+        assert len(proxy.frames) == 1 and proxy.shaper.certifier._fault == fault
 
 
 def test_a_sender_that_signals_by_its_write_times_leaves_the_wire_identical(honest_run):
