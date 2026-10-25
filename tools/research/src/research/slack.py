@@ -345,6 +345,10 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        lineage = h.get("lineage", [])
+        if not isinstance(lineage, list) or not all(isinstance(a, str) and AGENT_ID_RE.fullmatch(a) for a in lineage):
+            raise SlackError(f"registry {path}: @{name}'s lineage: the agent ids that held it before (bc-<8 hex> or its full "
+                             "form), so a handover's predecessor stays known without a second id in `holder`")
         old = h.get("retired_usergroups", [])
         current = {o.get("usergroup") for o in reg["handles"]}
         if not isinstance(old, list) or any(not isinstance(g, str) or not GROUP_ID_RE.match(g) or g in current
