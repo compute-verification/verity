@@ -92,11 +92,12 @@ it with the event that released it, and once the session ends what the challenge
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
 session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
-openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close)
-and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the
-prover's hello says its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the
-challenger's close of such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
-under the Lean, whose session holds only the append coins released, `disagreement`.
+openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close,
+at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
+`coins.APPENDS` by default, or none, and no append family, when the prover's hello says its sessions append nothing
+(a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of such a session that ran to
+its end is complete. An append past them refuses the session: `coin` on the books, and under the Lean, whose session
+holds only the append coins released, `disagreement`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
@@ -1695,7 +1696,8 @@ def main() -> int:
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
                     help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
                          "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all; a session "
-                         "drawn G > 1 a coin has no line of record (`line.SHARED`)")
+                         "drawn G > 1 a coin has no line of record (`line.SHARED`), and none is at one window in "
+                         "flight (a `--paced` F = 1), which no property covers")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
@@ -1749,6 +1751,9 @@ def main() -> int:
         ap.error("--out is required")
     if a.appends is not None and a.appends < 0:
         ap.error("--appends is a count, 0 or more")
+    if a.groups_per_coin > 1 and any(pace_of(x, 1.0).get("in_flight") == 1 for x in a.paced or ()):
+        ap.error("--groups-per-coin above 1 takes no --paced session at one window in flight (F = 1): the Lean "
+                 "verifier refuses one, as no property covers it; drop :1 or --groups-per-coin")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."

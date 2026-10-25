@@ -1337,6 +1337,18 @@ def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_
     assert bad["disagreement"] is None
 
 
+def test_a_session_drawn_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts(
+        tmp_path, monkeypatch, capsys):
+    """`--groups-per-coin 2` with a `--paced` session at F = 1: no property covers one window in flight at g > 1, so
+    the Lean verifier's `session` request refuses it, and the driver refuses the pair before it listens."""
+    monkeypatch.setattr(sys, "argv", ["verifier.py", "--out", str(tmp_path / "out"), "--groups-per-coin", "2",
+                                      "--paced", "2:8:12:2", "2:8:12:2:1"])
+    with pytest.raises(SystemExit) as e:
+        verifier.main()
+    assert e.value.code == 2 and "one window in flight" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
 def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):
     """An accepted session's record is held to the Lean's whole, each pass's arrival, head and stale bound among what
     the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""
