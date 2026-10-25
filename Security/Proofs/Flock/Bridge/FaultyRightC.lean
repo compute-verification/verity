@@ -224,8 +224,8 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
     exact absurd ⟨w⟩ hN
 
 /-- **`FaultyRightTargetC`**, at any `canon` (`Bridge.Canon`): `faultyRightC`. -/
-theorem faultyRightTargetC : FaultyRightTargetC :=
-  fun P pos bit val com cs canon H Cm roots Xr u hright htr kd desc q =>
-    faultyRightC P pos bit val com cs canon H Cm roots Xr u hright htr kd desc q
+theorem faultyRightTargetC : FaultyRightTargetC := by
+  intro C n P Pos Val Opn Com pos bit val com cs canon H Cm roots Xr u hright htr kd desc q
+  exact faultyRightC P pos bit val com cs canon H Cm roots Xr u hright htr kd desc q
 
 end Flock.Bridge
