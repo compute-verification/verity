@@ -116,6 +116,9 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
     own spelling (`Binder.spellings`), and how if not by label or slot (`observation`); without one a name is its identity (`split_name`).
+    A request whose Values of an identity start at row r0 of the runtime tensor (`Binder.runtime_row`: the last layer's prompt step,
+    whose earlier rows nothing reads) is bound from that row: `element_offset` moves r0 rows into its share, the range ends at the
+    share's end, and a share that is not token rows or has no row r0 is `refused`.
     A leaf index counts each meta's own leaves, its `chunk` (256 B under vllm-v1, rows-sha512's 4 KiB rows); a differing `chunk` is refused."""
     entries: list[dict[str, Any]] = []
     for step in sorted(layouts):
@@ -138,12 +141,14 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             rr = (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
             refused = None
+            per_token = None                                         # elements per token row, when each request's share is its token rows
             if rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
                 rows = int(m.shape[0])
                 per_row = numel // max(rows, 1)
                 tokens = max(hi for _r, _lo, hi in rr)
                 if rows == tokens:                                                    # per-token member: the request's token rows
                     splits = [(rid, 0, (hi - lo) * per_row, lo * per_row) for rid, lo, hi in rr]
+                    per_token = per_row
                 elif rows == len(rr):                                                 # per-request member (logits, sampled ids): the request's row
                     splits = [(rid, 0, per_row, i * per_row) for i, (rid, _lo, _hi) in enumerate(rr)]
                 else:                                                                 # shared by every request of the step (whole member each)
@@ -167,9 +172,17 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
             if not splits:
                 splits = [(request_id, 0, numel, 0)]
+                per_token = numel // max(int(m.shape[0]), 1) if m.shape else None
             spelt = binder.spellings(step, (op, member, k)) if binder is not None and how == "port" else {}
             for rid, lo, hi, goff in splits:
                 op_r, member_r, k_r = spelt.get(rid, (op, member, k))
+                why = refused
+                r0 = binder.runtime_row(step, (op_r, member_r, k_r), rid) if binder is not None else 0
+                if r0 and per_token is not None and r0 * per_token < hi - lo:
+                    hi, goff = hi - r0 * per_token, goff + r0 * per_token
+                elif r0:
+                    why = (f"{m.name}: {rid}'s values start at row {r0} of it, " + (f"past the {(hi - lo) // per_token} rows of its share"
+                           if per_token else "which is not split by token rows") + ": bound to no row")
                 entries.append({
                     "identity": identity_dict(identity(program_digest, rid, step, k_r, op_r, member_r, lo, hi, rank)),
                     "kind": "leaf", "step_root": step_root, "layout": layout_version, "chunk": int(m.chunk),
@@ -177,7 +190,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
                     **({"observation": how} if how not in ("label", "slot") else {}),
-                    **({"refused": refused} if refused else {}),
+                    **({"refused": why} if why else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",

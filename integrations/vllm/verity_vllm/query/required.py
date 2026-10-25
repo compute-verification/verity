@@ -43,8 +43,10 @@ collective SITE at (enclosing module, k) and a norm's collective under the norm 
 path `runner.sampler`; the token ids under the consuming module as `in`; the attention hidden stream under `fa2.m1/L<k>`; the weights
 as `<field>/weight`.  Kernel geometry (the FA hidden stream, the MoE block planes) and the identity constants (`SCHEMA`,
 `IDENTITY_KEY`, the row order, the digest) are the manifest format's (`verity_vllm.query.manifest.format`).  A row carries its Call's
-`spec`, `port` and `position` (Program order) for the binding, and a narrowed one the member it narrows (`narrowed_of`), outside the
-digest.
+`spec`, `port` and `position` (Program order) for the binding, a narrowed one the member it narrows (`narrowed_of`) and the columns of
+its rows it is (`columns`, the committing tap's slice), and one whose Values are rows r0.. of their fx node's output with r0 > 0 those
+rows (`runtime_rows`: the last layer's prompt step, whose rows before the last `dead_free` removed, since nothing reads them; the binding
+map points the identity at them), all outside the digest.
 """
 
 from __future__ import annotations
@@ -580,18 +582,32 @@ def unreturned_rows(pop: Population, aliases: Mapping[str, tuple[str, int]], ide
     return out
 
 
+def runtime_rows(at: Sequence[int | None]) -> list[int] | None:
+    """`[r0, r0 + n)`: the rows of the runtime tensor a group's n Values are, when their Calls' rows (`Correspondence.rows`) are r0,
+    r0 + 1, ... in Program order and r0 > 0 (the last layer's prompt rows after `dead_free` kept only the last); None when they start at
+    row 0, are not consecutive or one is not placed."""
+    if not at or at[0] is None or at[0] <= 0 or any(r != at[0] + i for i, r in enumerate(at)):
+        return None
+    return [at[0], at[0] + len(at)]
+
+
 def group_rows(groups: Mapping[tuple[int, str, str], Mapping[str, Any]], aliases: Mapping[str, tuple[str, int]], impl, add,
                unmodelled: Counter) -> None:
     """One identity row per (step, module, member) group of Call-produced required Values (`request_manifest`'s; `add`: its row adder):
     `rows` x `width` elements under the module, or under its shared instance's canonical module at its invocation.  A group of width 0
-    is unmodelled."""
+    is unmodelled.  A group whose Values are rows r0 > 0 on of their fx node's output carries `runtime_rows` (`runtime_rows`), and a
+    narrowed group the `columns` of the whole rows its Values are, when every Call of it records the same ones."""
     for (step, mod, member), g in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])):
         if g["width"] <= 0:
             unmodelled[f"{g['family']} under {impl(mod)} ({member}: width 0)"] += 1
             continue
+        rr = runtime_rows(g.get("at") or ())
+        cols = g.get("columns") or set()
         extras = {"rows": g["rows"], "width": g["width"], "dtype": g["dtype"], "spec": g["family"], "port": g["port"], "position": g["position"],
                   "fx_nodes": len(g["nodes"]), "boundary": {"crossing_rows": g["crossing"], "returned_rows": g["returned"]},
-                  **({"narrowed_of": g["narrowed_of"]} if g["narrowed_of"] else {})}
+                  **({"narrowed_of": g["narrowed_of"]} if g["narrowed_of"] else {}),
+                  **({"runtime_rows": rr} if rr else {}),
+                  **({"columns": list(next(iter(cols)))} if len(cols) == 1 and None not in cols else {})}
         if mod in aliases:
             canon, k = aliases[mod]
             add(g["manifest_family"], step, k, impl(canon), member, 0, g["rows"] * g["width"], program_op_path=impl(mod), **extras)
@@ -682,12 +698,16 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                 g = groups[(step, mod, member)] = {"rows": 0, "width": cm.width, "dtype": cm.dtype, "family": c.family, "spec": c.definition,
                                                    "manifest_family": cm.family, "nodes": set(), "port": cm.port,
                                                    "position": [cid, [p.name for p in c.port_table].index(cm.port)], "crossing": 0, "returned": 0,
-                                                   "narrowed_of": member_name(c, c.port(cm.port), n) if v in pop.narrowed else None}
+                                                   "narrowed_of": member_name(c, c.port(cm.port), n) if v in pop.narrowed else None,
+                                                   "at": [], "columns": set()}
             elif g["family"] != c.family or g["width"] != cm.width:
                 unmodelled[f"{c.family} under {impl(mod)} ({member}: two producers {g['family']} {g['width']} / {c.family} {cm.width})"] += 1
                 continue
             g["rows"] += 1
             g["nodes"].add(n.node)
+            g["at"].append(None if carried else corr.rows.get(cid))
+            if g["narrowed_of"]:
+                g["columns"].add(corr.columns.get(cid))
             if v in B.values:
                 g["crossing"] += 1
             if carried or v in policy.protocol_required:
