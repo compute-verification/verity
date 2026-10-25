@@ -57,6 +57,7 @@ from typing import Any
 import torch
 
 from verity.ml.commitments.merkle import merkle_depth
+from verity_vllm import settings
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
@@ -135,7 +136,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
         from verity_vllm.commit.committer import native_jit
 
         _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
-                                               parent=build_dir or os.environ.get("NATIVE_COLLECT_BUILD") or None,
+                                               parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
                                                cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
         missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, "native_collect.cpp"))
         if missing:
@@ -204,9 +205,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         # P0 (R13) windowed staging: VERITY_WINDOW_MB=<W> (0 = off; unset = `window_mb_default`) lays the packed step stream over a ring of
         # VERITY_WINDOW_SLOTS device windows and absorbs each window as soon as the serving thread has filled it (see native_collect.cpp
         # "WINDOWED staging ring")
-        win_mb = os.environ.get("VERITY_WINDOW_MB", "").strip() or window_mb_default(self.native_worker and self.gather, self.retain)
+        win_mb = settings.VERITY_WINDOW_MB
+        if win_mb is None:
+            win_mb = window_mb_default(self.native_worker and self.gather, self.retain)
         self.win_bytes = int(float(win_mb) * (1 << 20)) // 256 * 256
-        self.win_slots_req = int(os.environ.get("VERITY_WINDOW_SLOTS", WINDOW_SLOTS))
+        slots = settings.VERITY_WINDOW_SLOTS
+        self.win_slots_req = WINDOW_SLOTS if slots is None else slots
         # rows-sha512: rows_cap_blocks=<n> (0 = off) hashes a window in launches of at most n blocks while at least rows_cap_free ring
         # slots are free (the serving thread is not waiting for one), leaving the other SMs to serving
         self.rows_cap_blocks = int(rows_cap_blocks)
@@ -262,10 +266,11 @@ class NativeCollectCommitter(NativeHostCommitter):
         #   * retain=host + VERITY_RETAIN_EXCLUDE=<family,...> keeps every chunk EXCEPT the chunk-aligned interior of the excluded
         #     families (`_HostRanges`): those leaves open by replay against the original root (R17-5), all others from host (C2's
         #     module outputs stay on host).
-        self.bounded = (os.environ.get("VERITY_STAGING_BOUNDED", "").strip() or ("1" if self.windowed else "0")) in ("1", "true", "yes")
+        bounded = settings.VERITY_STAGING_BOUNDED
+        self.bounded = self.windowed if bounded is None else bounded
         self.learn_only = False                                  # set by the harness around the warm-up instrumented run
-        self.learn_budget_bytes = int(float(os.environ.get("VERITY_LEARN_HOST_BUDGET_MB", "4096")) * (1 << 20))
-        self.retain_exclude: set[str] = retain_exclude_families(os.environ.get("VERITY_RETAIN_EXCLUDE", ""))
+        self.learn_budget_bytes = int(settings.VERITY_LEARN_HOST_BUDGET_MB * (1 << 20))
+        self.retain_exclude: set[str] = retain_exclude_families(settings.VERITY_RETAIN_EXCLUDE)
         self.retain_chunks: set[tuple[int, int]] = set()          # bounded retain=sample by CHUNK: (step, leaf index) -- a replay keeps only these
         if self.bounded and not self.windowed:
             raise ValueError("bounded staging (VERITY_STAGING_BOUNDED=1) is implemented on the windowed path only (--window-mb > 0)")
@@ -279,7 +284,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         # the model step runs on a HIGH-priority CUDA stream (VERITY_HI_PRIO, default on; 0 keeps the caller's) so the worker's SHA kernels
         # (side stream, default priority) yield SM slots to the serving kernels and the gather; fenced both ways with wait_stream at the
         # step boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
-        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "1") == "1"
+        self.hi_prio = bool(native_hooks) and settings.VERITY_HI_PRIO
         self._hi = torch.cuda.Stream(priority=-1) if self.hi_prio else None
         # the serving thread's step end as one native call (`end_step_full`; no step event on the windowed path, whose worker waits on the
         # windows' own), and on the windowed path a snapshot of the step's row order that the worker expands into `step_rows` unless a
@@ -302,7 +307,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             # thread blocks per staged descriptor in the gather kernel (R10 default 4; 32 = R10's labelled-extra Llama geometry, the R11 default).
             # Size-adaptive, it is only a cap, 1024: a 256 MB prefill window holds a handful of descriptors, and at 32 blocks each the copy
             # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step, r20261017-205629-7b49 vs r20261017-205439-5d0c)
-            self._nc.blocks_per_desc = int(os.environ.get("NATIVE_GATHER_BLOCKS", "1024" if self.auto_blocks else "32" if self.native_hooks else "4"))
+            blocks = settings.NATIVE_GATHER_BLOCKS
+            self._nc.blocks_per_desc = blocks if blocks is not None else 1024 if self.auto_blocks else 32 if self.native_hooks else 4
             # R11 candidate B: size-adaptive blocks per window (cap = blocks_per_desc; ceil(max staged bytes / auto_bytes_per_block) otherwise)
             self._nc.auto_blocks = self.auto_blocks
             self._nc.auto_bytes_per_block = int(os.environ.get("NATIVE_GATHER_AUTO_BYTES", "32768"))
@@ -313,8 +319,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._plan_key = 0
         self._py_committed = 0
         self._prof_s = 0.0
-        self.consumer_delay_s = float(os.environ.get("VERITY_CONSUMER_DELAY_MS", "0")) / 1e3
-        self.fault = os.environ.get("VERITY_FAULT", "")
+        self.consumer_delay_s = settings.VERITY_CONSUMER_DELAY_MS / 1e3
+        self.fault = settings.raw("VERITY_FAULT") or ""
         if self.fault.startswith("skip_copy:"):
             self._nc.fault_skip_copy_at = int(self.fault.split(":", 1)[1])
         if self.fault or self.consumer_delay_s:
@@ -914,9 +920,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         # hands a slot back; only after `win_wait_timeout_s` (default 600 s) does the acquisition FAIL -- named ("windowed staging: waited N s for a
         # free window slot ... the worker is not releasing windows"), recorded as a collector error, so X-03 turns the run into COMMIT FAIL
         # (never a warning).  VERITY_WIN_WAIT_TIMEOUT_S shortens it for the forced-stall negative (test_commit_fail_closed::test_e2e_windowed_stall_forces_commit_fail).
-        wto = os.environ.get("VERITY_WIN_WAIT_TIMEOUT_S")
-        if wto:
-            self._nc.win_wait_timeout_s = float(wto)
+        if (wto := settings.VERITY_WIN_WAIT_TIMEOUT_S) is not None:
+            self._nc.win_wait_timeout_s = wto
         # [R16 sys, F-stoch-03 M-0646] fail-FAST after the fail-closed name: the timeout above throws from the serving thread, but that throw
         # needs the GIL back and a Python frame that records the failure; on cp-dev1 (09:18Z) the process instead sat 13+ min at 0 % GPU with
         # every thread in futex_wait.  So the C++ collector arms a GIL-free watchdog thread when it declares itself dead: unless the Python side
@@ -924,8 +929,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         # join -> ack_dead: a run that fails closed normally is never touched) it stays quiet; VERITY_COLLECT_DEAD_GRACE_S (default 120 s)
         # without either and it writes <out>/COLLECTOR_DEAD_HUNG.json (path from VERITY_COLLECT_WATCHDOG_MARKER, set by commit_delta) and
         # _exit(3)s -- rc 3 is the "commit_delta refused/failed closed" code row_pod already reports as COMMIT FAIL.  Never a silent hang.
-        grace = float(os.environ.get("VERITY_COLLECT_DEAD_GRACE_S", "120") or 120)
-        marker = os.environ.get("VERITY_COLLECT_WATCHDOG_MARKER", "")
+        grace = settings.VERITY_COLLECT_DEAD_GRACE_S
+        marker = settings.VERITY_COLLECT_WATCHDOG_MARKER
         if hasattr(self._nc, "set_watchdog"):
             self._nc.set_watchdog(marker, grace)
         info = {"windowed": True, "window_bytes": W, "slots": K, "ring_bytes": K * W, "scratch_bytes": W, "largest_tensor_bound": largest,

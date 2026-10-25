@@ -50,6 +50,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
+from verity_vllm import settings
 from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
@@ -89,7 +90,7 @@ class SkipRefused(RuntimeError):
 
 def skip_classes_of_env() -> frozenset[str]:
     """VERITY_SKIP: a comma list of module classes whose module-output acquisition a per-row MARGINAL-cost ablation drops (NOT a commitment)."""
-    return frozenset(filter(None, os.environ.get("VERITY_SKIP", "").split(",")))
+    return frozenset(settings.VERITY_SKIP)
 
 
 def _dtype_name(t: Any) -> str:
@@ -169,8 +170,8 @@ class _DeviceArena:
     # P0 (R13) backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
     # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
     # step larger than every block), with VERITY_ARENA_GROW=1 (R12), or `wait=False`: the worker, the only releaser, must not wait on itself.
-    GROW = os.environ.get("VERITY_ARENA_GROW", "0").strip() in ("1", "true", "yes")
-    WAIT_TIMEOUT_S = float(os.environ.get("VERITY_ARENA_WAIT_S", "600"))
+    GROW = bool(settings.VERITY_ARENA_GROW)
+    WAIT_TIMEOUT_S = settings.VERITY_ARENA_WAIT_S
 
     def _best_free(self, min_bytes: int) -> int:
         best = -1
@@ -722,7 +723,7 @@ def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool
     return names, bad
 
 
-_MEMTRACE = bool(os.environ.get("VERITY_MEMTRACE"))
+_MEMTRACE = settings.VERITY_MEMTRACE
 
 
 def memtrace(where: str, step: int | None = None) -> None:
@@ -782,7 +783,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self.sources: list[Any] = []
         self._worker: threading.Thread | None = None
         # optional CPU pinning experiment (env VERITY_PIN=1): serving thread -> one core, worker + hash threads -> other cores
-        self.pin = os.environ.get("VERITY_PIN") == "1" and hasattr(os, "sched_setaffinity")
+        self.pin = settings.VERITY_PIN and hasattr(os, "sched_setaffinity")
         self._cores = sorted(os.sched_getaffinity(0)) if self.pin else []
         self._pool_exec = ThreadPoolExecutor(max_workers=self.hash_threads, thread_name_prefix="cmt-hash",
                                              initializer=(lambda: self._pin_thread(2)) if self.pin else None)
@@ -825,16 +826,16 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             self.name = f"{self.name}+{step_rows.NAME}"
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
-        self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
-        self.retain = os.environ.get("VERITY_RETAIN", "device" if retain_values else "none").strip().lower()
+        self.retain_pinned = settings.VERITY_RETAIN_PINNED
+        self.retain = r if (r := settings.VERITY_RETAIN) is not None else "device" if retain_values else "none"
         if self.retain not in RETAIN_MODES:
             raise ValueError(f"VERITY_RETAIN={self.retain!r}: expected one of {RETAIN_MODES}")
         self.retain_windows: set[tuple[int, int]] = set()   # retain=sample (windowed only): (step, window k) pairs whose raw bytes are kept
         if self.retain != "device":
             self.name = f"{self.name}+retain_{self.retain}"
-        self.footprint = _Footprint(os.environ["VERITY_FOOTPRINT"]) if os.environ.get("VERITY_FOOTPRINT") else None
+        self.footprint = _Footprint(fp) if (fp := settings.VERITY_FOOTPRINT) else None
         self.released_bytes = 0                     # device bytes freed by release_staging() (reported by commit_delta)
-        self.inline_d2h = os.environ.get("VERITY_INLINE_D2H") == "1"
+        self.inline_d2h = settings.VERITY_INLINE_D2H
         if self.inline_d2h and self._rt is not None:
             self.name = f"{self.name}_inl"
         self.regen_row4 = bool(regen_row4)
@@ -1096,7 +1097,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
         # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
         # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
-        mode = os.environ.get("VERITY_WEIGHTS_HASH", "host")
+        mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         LH = None
@@ -1318,8 +1319,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             # verity.ml.circuits / verity_vllm / vllm-poc as loaded in this process) is written beside the attempt when the driver names the
             # dir ($VERITY_SOURCE_IDENTITY_DIR, set by commit_delta from --out): <dir>/source_identity.gpu_ext_load.json.  The start-of-run
             # record has hidden_gpu loaded:false; this one is the evidence that what LOADED at the import site was this tree's.
-            _sid_dir = os.environ.get("VERITY_SOURCE_IDENTITY_DIR")
-            _sid_out = os.path.join(_sid_dir, "source_identity.gpu_ext_load.json") if _sid_dir else None
+            _sid_out = os.path.join(d, "source_identity.gpu_ext_load.json") if (d := settings.VERITY_SOURCE_IDENTITY_DIR) else None
             _sid_doc = _sid.precheck("commit.gpu_ext_load", _tree, out=_sid_out)
             _sid_doc.setdefault("loaded_modules", {})["hidden_gpu"] = {"file": getattr(HG, "__file__", None), "repo": getattr(HG, "REPO", None)}
             if _sid_out:
@@ -1817,7 +1817,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
     #   nocopy  : hooks + metadata + arena bookkeeping, no D2D snapshot launch      noworker: worker discards the step (no D2H, no hashing)
     #   nohash  : worker does the D2H but skips hashing / roots
-    ABL = frozenset(filter(None, os.environ.get("VERITY_ABL", "").split(",")))
+    ABL = frozenset(settings.VERITY_ABL)
 
     def _commit_step(self, job: _StepJob) -> None:
         if self.gpu_tree and job.arena is not None:
