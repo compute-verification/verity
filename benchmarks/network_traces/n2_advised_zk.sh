@@ -37,7 +37,10 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 E2E=${N2_E2E:-}
 if [ -f "$E2E" ]; then
   mkdir -p "$W/e2e" && tar xzf "$E2E" -C "$W/e2e" || exit 7
-  E2E=$(dirname "$(find "$W/e2e" -name report.json -print -quit)")
+  # the run's root holds rehearsal/honest; the advice's windows carry report.json files of their own
+  E2E=$(find "$W/e2e" -path '*/rehearsal/honest/plan.json' -print -quit)
+  [ -n "$E2E" ] || { log "n2adv: $N2_E2E holds no rehearsal/honest/plan.json"; exit 7; }
+  E2E=${E2E%/rehearsal/honest/plan.json}
 fi
 log "n2adv: proving, ${E2E:+e2e $E2E windows ${N2_WINDOWS:-all}${N2_CLOCK_STAND_IN:+ clock stand-in}, }seed" \
   "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
