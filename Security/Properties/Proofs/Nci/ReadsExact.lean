@@ -11036,6 +11036,33 @@ theorem downW_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : 
     rw [← hg] at hp hret
     exact locW_prim c.P hmono hk hp hret hx
 
+/-- **A callee's segment as member `m`'s** (`fromCallee`'s `shiftGates`): naming the callee's gates with their widths,
+shifted to the member's first gate it names the caller's with theirs, in a laid-out body. -/
+theorem gateW_shift (P : Prog) {d k m : Nat} {o : Int}
+    (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
+      (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
+        (P.defs[((P.defs[d]!).body.nodes[k']!).fn]!).gates)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hp : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false)
+    (hm : m < ((P.defs[d]!).body.nodes[k]!).members)
+    (ho : o = (((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Nat) : Int))
+    {s : Seg} (hW : GateW P ((P.defs[d]!).body.nodes[k]!).fn s)
+    (hin : ∀ w p, (Tgt.gate w, p) ∈ segPos s → 0 ≤ p ∧ p < ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Int)) :
+    GateW P d { ps := Desc.shiftGates o s.ps, len := s.len, reps := s.reps, shift := s.shift } := by
+  intro w p hx
+  rw [segPos_shift] at hx
+  obtain ⟨⟨t, v⟩, hxs, he⟩ := List.mem_map.1 hx
+  cases t with
+  | ref b i => cases he
+  | gate w0 =>
+    simp only [shiftPos, Prod.mk.injEq, Tgt.gate.injEq] at he
+    obtain ⟨rfl, rfl⟩ := he
+    have hl := hW w0 v hxs
+    obtain ⟨h0, h1⟩ := hin w0 v hxs
+    obtain ⟨n, rfl⟩ := Int.eq_ofNat_of_zero_le h0
+    rw [Int.toNat_natCast] at hl
+    rw [ho, ← Int.natCast_add, Int.toNat_natCast, Nat.add_comm n]
+    exact locW_child P hoff hk hp hm (by omega) hl
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
