@@ -18,8 +18,6 @@ the scale every quantized element divides by, a row's mean) is computed once (`Q
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from collections.abc import Callable, Sequence
 
 from verity.ml.circuits.evaluation import bits as BS

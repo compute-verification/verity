@@ -15,8 +15,6 @@ bit ANDed with the OR of the byte's 8 bits.  No table or lookup gate.
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from types import SimpleNamespace
 
 from verity.ml.circuits import boolean as BL

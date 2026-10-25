@@ -110,4 +110,5 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            # the superseded-quarantine migration and its test, which run on a synthetic tree of the layout they migrated
            "integrations/vllm/tools/migrate/superseded_quarantine.py",
            "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
-include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]

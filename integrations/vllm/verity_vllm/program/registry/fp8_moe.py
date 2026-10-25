@@ -82,8 +82,6 @@ function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _cus
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple

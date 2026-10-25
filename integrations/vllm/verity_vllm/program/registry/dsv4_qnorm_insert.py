@@ -46,8 +46,6 @@ by 448 and `__nv_log2f`), nor DSV4-IDX's MXFP4 path; `IndexerQFp8Kernel` is the 
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
 from verity.ml.circuits.ops.mufu import RsqrtApprox

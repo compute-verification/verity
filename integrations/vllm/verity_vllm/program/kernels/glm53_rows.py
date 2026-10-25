@@ -9,8 +9,6 @@ capture that holds a twin to the served kernel where the twin's Definition is no
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 from typing import Any, Callable, Sequence
 
