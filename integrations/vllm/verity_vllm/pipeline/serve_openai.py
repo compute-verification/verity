@@ -136,7 +136,7 @@ class Options:
     norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
     served_rows_class: str | None = option("--served-rows-class", default=None,
                                            help="the compile slice's size class the served rows are committed under, as JSON "
-                                                "{R, W, A, IW, Q, D, P, K, SEG} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
+                                                "{R, W, A, IW, Q, D, P, K} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
                                                 "P --window-steps, IW 16, the rest 1: only R, P and IW shape the rows)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "

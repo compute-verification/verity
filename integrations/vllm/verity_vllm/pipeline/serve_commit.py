@@ -37,7 +37,7 @@ from verity_vllm.commit.served_record import Record, base_id, served_rows, windo
 from verity_vllm.pipeline.serve_seal import seal_window, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
-SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K", "SEG")
+SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 
 #: The request fields that are sampling inputs, recorded as each request brought them.
 SAMPLING_FIELDS = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "ignore_eos", "stop",
@@ -79,7 +79,7 @@ def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> 
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
         raise ValueError(f"the served rows' size class needs {missing}")
     c = {k: int(size_class[k]) for k in SERVED_CLASS}
-    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"], SEG=c["SEG"])
+    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
 
 
 def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
