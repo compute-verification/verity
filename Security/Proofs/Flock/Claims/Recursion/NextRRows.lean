@@ -18,6 +18,8 @@ rep's round's (`repRows`). They do, at every statement that sets up, so the hone
 * **Rows** (`honestRows_rows`, `repRows_fit`, `capRows_fit`): each row is a cap node of at most 64 bytes (`digestLen` of
   a scheme in `MerkleScheme.all`) or a round's value row; a round has at most its rep's recursive caps' nodes and one
   value row, and round 0 at most 64 tables' level-0 caps.
+
+The bounds' hypotheses hold together at the concrete honest rep `honest₀` (`rowsFit₀`).
 -/
 
 namespace FlockDeploy
@@ -359,6 +361,14 @@ theorem repCtx_bounds {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
     | ok e => have := he e hex; dsimp only; omega
 
 end Rows
+
+/-- **`repRows_fit`'s and `capRows_fit`'s hypotheses hold together** at the honest rep `c₀`, `p₀` (`honest₀`): its rows
+fit a message, and so does a round 0 of its cap. -/
+theorem rowsFit₀ (T : F128) : (∀ rs ∈ repRows c₀ p₀ T, RowsFit rs) ∧ RowsFit (capRows #[p₀.cap]) :=
+  ⟨Rows.repRows_fit T honest₀.1 honest₀.2.1 (by decide +kernel) (by decide +kernel) (by decide +kernel),
+    Rows.capRows_fit (by simp) fun a ha => by
+      obtain rfl : a = p₀.cap := by simpa using ha
+      exact Rows.rep_cap_le honest₀.1 honest₀.2.1 (by decide +kernel)⟩
 
 open FlockComplete Rows in
 /-- **The honest run decides at its own proofs, with no row premise**: `sessionRun_decides`, whose rows fit a message
