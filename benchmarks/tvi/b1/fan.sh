@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# B1's fan-out block (block.py) on one leased GPU, at FMT (fp8t or nvfp4), on CKPT (default: mb.sh's full-arm seed-1 step 150).
+# B1's fan-out block (block.py, or SCRIPT=cheap.py for the cheap-input block) on one leased GPU, at FMT (fp8t or nvfp4), on
+# CKPT (default: mb.sh's full-arm seed-1 step 150).
 #   research run --on NODE --project verity --source CHECKOUT --cwd source --send gsm8k_test.jsonl --send constriction.tgz \
 #     --env FMT=fp8t -- env CHECK_SLOTS=... python3 tools/verity/check/slot.py --by training -- gpu-lease 1 --wait -- \
 #     bash benchmarks/tvi/b1/fan.sh
