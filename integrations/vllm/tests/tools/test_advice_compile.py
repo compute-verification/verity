@@ -1,5 +1,5 @@
 """`tools/advice_compile.py --window K`'s inputs: the certified bodies are window K's own requests', so a user the run served
-again in a later window keeps the prompt it had in K."""
+again in a later window keeps the prompt it had in K; and K's carry is the close of the last window before it that ran steps."""
 from __future__ import annotations
 
 import importlib.util
@@ -8,6 +8,9 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from tests.pipeline.test_window_advice import W1, W2
+from verity_vllm.pipeline import window_advice as WA
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_compile.py"
 _spec = importlib.util.spec_from_file_location("advice_compile", SCRIPT)
@@ -43,3 +46,31 @@ def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):
     run = _run(tmp_path, [_q("u", [3], [1], 8), _q("u", [3], [2], 8)])
     with pytest.raises(ValueError, match="user 'u' has two requests in window 3"):
         AC.served_inputs(run, 3)
+
+
+def _windows(tmp_path: Path, windows: list[int], empty: list[int], advice: dict[int, WA.Advice]) -> Path:
+    (tmp_path / "windows.jsonl").write_text("".join(json.dumps({"window": k, "empty": k in empty}) + "\n" for k in windows))
+    for k, a in advice.items():
+        (tmp_path / "advice" / f"w{k}" / "private").mkdir(parents=True)
+        (tmp_path / "advice" / f"w{k}" / "private" / "advice.bin").write_bytes(WA.encode(a))
+    return tmp_path
+
+
+def test_a_window_carries_in_what_the_last_window_that_ran_steps_left(tmp_path):
+    run = _windows(tmp_path, [0, 1, 2], [1], {0: W1})
+    assert AC.carry_of(run, 0, WA.encode(W1)) == {"in": [], "out": ["a"], "follows": None}
+    assert AC.carry_of(run, 2, WA.encode(W2)) == {"in": ["a"], "out": [], "follows": 0}
+
+
+def test_a_carry_the_last_window_didnt_leave_is_refused(tmp_path):
+    run = _windows(tmp_path, [0, 1], [], {0: W2})
+    with pytest.raises(ValueError, match=r"window 1 doesn't open where window 0 closed: carried request 0 \('a'\) .* not as the last"):
+        AC.carry_of(run, 1, WA.encode(W2))
+
+
+def test_a_carry_with_no_advice_before_it_is_refused(tmp_path):
+    run = _windows(tmp_path, [0, 1], [], {})
+    with pytest.raises(ValueError, match="window 1 carries 1 requests in, 'a' first, and window 0, the one before it, has no advice"):
+        AC.carry_of(run, 1, WA.encode(W2))
+    with pytest.raises(ValueError, match="no window ran before it"):
+        AC.carry_of(run, 0, WA.encode(W2))
