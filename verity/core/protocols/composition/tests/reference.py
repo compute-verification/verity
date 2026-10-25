@@ -1,7 +1,12 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), mirrors of the stub components, and the network certifier's answers
-recorded by its own suite (`Recorded`).
+`Core.Protocol.case` and `answer` decode a case), mirrors of the stub components, and each ported component's own Python:
+PoUW's `core_check.case` (`verity/pouw/v1`), the network certificate check's difftest's `reference`
+(`verity/network-certificate/v4`, the certifier's `Audit`, `verity/core/protocols/network/tests/test_network_check_protocol.py`),
+and for sampled proofs' one-stage audit
+(`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
+(`verity/core/service/sampled_proofs/tests/test_difftest.py`). Each component's own difftest holds its Lean to that
+Python; this one holds the composition of them.
 
 The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
 `cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
@@ -28,15 +33,45 @@ in the balance. The port follows top's rule (Oct 7, binding), `verdict`, which c
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, Callable
 
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
+from verity.core.protocols.pouw import core_check
+
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
+
+CORE = Path(__file__).resolve().parents[3]
+
+
+def module(name: str, path: Path) -> ModuleType:
+    """Another suite's test module, loaded from its file under `name`, with its directory on the path for the siblings it
+    imports."""
+    if name in sys.modules:
+        return sys.modules[name]
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[name] = m
+    spec.loader.exec_module(m)
+    return m
+
+
+#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
+#: draw audits.
+ONE_STAGE = module("one_stage_difftest", CORE / "service/sampled_proofs/tests/test_difftest.py")
+#: PoUW's check difftest's cases: honest windows and one mutation each.
+POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
+#: The network certificate check's difftest: `reference` is the certifier's `Audit` behind the protocol's decoders, and
+#: `cases` draws certified spatial units, honest or with one change.
+NETWORK = module("network_check_difftest", CORE / "protocols/network/tests/test_network_check_protocol.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -87,6 +122,19 @@ class Stub:
     def answer(self, case: Any) -> dict:
         return P.answer(self.id, case, params=lambda j: P.nat(j, "k"), commitment=self._root, evidence=self._evidence,
                         check=self._check)
+
+
+@dataclass(frozen=True)
+class Ported:
+    """A component whose port has replaced its stub: its id and its Python's answer to a `serve` case."""
+
+    id: str
+    answer: Callable[[Any], dict]
+
+
+NETWORK_CHECK = Ported("verity/network-certificate/v4", NETWORK.reference)
+POUW = Ported("verity/pouw/v1", core_check.case)
+SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -190,41 +238,11 @@ class Product:
         return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
-@dataclass(frozen=True)
-class Recorded:
-    """A port this suite doesn't run, answered as its own suite's mirror answered a few of its cases: `cases`, each
-    `{"case", "answer"}`, which that suite holds to its mirror and to Lean. The composition's breaks reach such a component
-    with no other case than one whose commitment `bad-hex` made bytes that aren't JSON, which the port refuses before it
-    reads anything else."""
-
-    id: str
-    cases: tuple
-
-    @classmethod
-    def load(cls, id: str, path: Path) -> Recorded:
-        return cls(id, tuple(json.loads(path.read_text())["cases"]))
-
-    def answer(self, case: Any) -> dict:
-        key = canonical(case)
-        for e in self.cases:
-            if canonical(e["case"]) == key:
-                return e["answer"]
-        try:
-            P.canonical_json(P.unhex(case["commitment"]))
-        except Reject:
-            return P.outcome(self.id, REJECT, "commitment: not canonical JSON")
-        raise KeyError(f"{self.id}: no recorded answer for this case")
-
-
 def stub_ids(*names: str) -> tuple[Stub, ...]:
     return tuple(Stub(f"verity/stub/{n}/v0") for n in names)
 
 
-#: The network certifier's period check (`NetworkCheck.Period`), as `network/tests/test_network_period_protocol.py`'s
-#: mirror answered the cases it wrote here.
-CERTIFIER = Recorded.load("verity/certifier/v0", Path(__file__).parent / "fixtures" / "certifier.json")
-
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components: the certifier's recorded answers, and the
-#: stubs that stand in for the others.
-REMOTE = Product("verity/remote/v0", stub_ids("pouw", "sampled-proofs"))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, *stub_ids("pous", "pouw", "sampled-proofs")))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their ported components and the stubs that stand in for the
+#: rest, in the order of their ids.
+REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (NETWORK_CHECK, POUW, SAMPLED_PROOFS, *stub_ids("bandwidth", "pous")))

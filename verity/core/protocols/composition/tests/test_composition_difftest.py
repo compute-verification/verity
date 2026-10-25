@@ -1,10 +1,10 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
-core interface, mirrors of the stub components and the network certifier's recorded answers). Hypothesis draws each
-component's case to accept, reject, be undecided or fail to decode (the certifier's from `fixtures/certifier.json`), then
-often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other
-params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a field missing or not hex,
-not an object), and every field of the outcome but its reason must agree exactly."""
+core interface, mirrors of the stub components and the ported components' own Python). Hypothesis draws each component's
+case to accept, reject, be undecided or fail to decode (a ported component's from its own difftest's generator: PoUW's
+`pouw_check_cases`, sampled proofs' `changed_audits`), then often breaks the composition's own inputs (a component dropped, unknown, repeated or
+out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case
+itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly."""
 
 from __future__ import annotations
 
@@ -30,9 +30,9 @@ JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max
 
 
 @st.composite
-def stub_case(draw, cid: str) -> dict:
+def stub_case(draw, cid: str, kind: str | None = None) -> dict:
     """A stub's case that accepts, rejects, is undecided, or fails to decode (its params, root or evidence)."""
-    kind = draw(st.sampled_from([R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken"]))
+    kind = kind or draw(st.sampled_from([R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken"]))
     k = draw(st.integers(0, 3))
     if kind == R.REJECT:
         drawn = draw(st.integers(1, 4))
@@ -44,8 +44,7 @@ def stub_case(draw, cid: str) -> dict:
     else:
         drawn = draw(st.integers(k, k + 2))
         passed = draw(st.integers(drawn, drawn + 1))
-    root = draw(st.binary(min_size=32, max_size=32))
-    case = {"id": cid, "params": {"k": k}, "root": root, "digest": root,
+    case = {"id": cid, "params": {"k": k}, "root": draw(st.binary(min_size=32, max_size=32)),
             "evidence": canonical({"drawn": drawn, "passed": passed}).encode()}
     if kind == "broken":
         how = draw(st.sampled_from(["params", "root", "evidence"]))
@@ -57,41 +56,64 @@ def stub_case(draw, cid: str) -> dict:
             case["evidence"] = draw(st.sampled_from([b'{"passed":2,"drawn":2}', b'{"drawn": 2,"passed":2}',
                                                      canonical({"drawn": -1, "passed": 0}).encode(), b'{"drawn":2}'])
                                     | st.binary(max_size=12))
-    return case
+    return {**case, "digest": case["root"]}
 
 
-def _kind(answer: dict) -> str:
-    """`broken` for an answer whose case didn't decode (no commitment, or the evidence refused), else its verdict."""
-    if answer["commitment"] is None or (answer["reason"] or "").startswith("evidence: "):
-        return "broken"
-    return answer["verdict"]
+#: PoUW's mutations of its window that leave the case's framing whole (`case-*` break the line `serve` reads, which a
+#: composition's evidence can't carry).
+POUW_REFUSALS = [n for n in R.POUW_CASES.NAMES if not n.startswith("case-") and n != "answer-undecided"]
+
+OS = R.ONE_STAGE
+#: Sampled proofs' audits by the verdict they aim at: an honest audit, one change to the verifiers' verdicts (undecided
+#: or a rejection), and one or two changes anywhere.
+ONE_STAGE_CASES = {R.ACCEPT: OS.changed_audits(most=0), R.UNDECIDED: OS.changed_audits([OS.VERDICTS_OF], most=1, least=1),
+                   R.REJECT: OS.changed_audits(most=2, least=1)}
+
+NC = R.NETWORK
+#: The network check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
+NETWORK_CASES = {R.ACCEPT: ("honest", "shuffled", "extra"), R.UNDECIDED: ("missing", "refused", "deadline")}
+NETWORK_CASES[R.REJECT] = tuple(m for m in NC.MUTATIONS if m != "case" and not any(m in v for v in NETWORK_CASES.values()))
 
 
 @st.composite
-def recorded_case(draw, C: R.Recorded) -> dict:
-    """One of the recorded component's cases, accepting, rejecting, undecided or failing to decode as often as a stub's.
-    Its root is its commitment's bytes, and its digest the one its answer names (64 zero bytes when the commitment didn't
-    decode: the component rejects, and no binding is computed)."""
-    kind = draw(st.sampled_from([R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken"]))
-    e = draw(st.sampled_from([e for e in C.cases if _kind(e["answer"]) == kind]))
-    digest = e["answer"]["commitment"]
-    return {"id": C.id, "params": e["case"]["params"], "root": bytes.fromhex(e["case"]["commitment"]),
-            "digest": bytes(64) if digest is None else bytes.fromhex(digest),
-            "evidence": bytes.fromhex(e["case"]["evidence"])}
+def ported_case(draw, C: R.Ported, kind: str) -> dict:
+    """A ported component's case aimed at `kind`, drawn from its own difftest's generator, with its digest as its Python
+    reads it (the case's own commitment when it doesn't decode, which a rejection never binds)."""
+    if C is R.POUW:
+        name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
+        case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
+    elif C is R.NETWORK_CHECK:
+        case = draw(NC.cases(NETWORK_CASES[kind]))
+    else:
+        case = OS._case(draw(ONE_STAGE_CASES[kind]))
+    root = bytes.fromhex(case["commitment"])
+    digest = C.answer(case)["commitment"]
+    return {"id": C.id, "params": case["params"], "root": root, "evidence": bytes.fromhex(case["evidence"]),
+            "digest": bytes.fromhex(digest) if digest else root}
 
 
-#: The binding breaks come thrice: with `commitment-size` they are the breaks that leave every component's case standing,
+@st.composite
+def component_case(draw, C, kind: str | None) -> dict:
+    """`C`'s case aimed at `kind`, or at any verdict when `kind` is None."""
+    if isinstance(C, R.Stub):
+        return draw(stub_case(C.id, kind))
+    return draw(ported_case(C, kind or draw(st.sampled_from([R.ACCEPT, R.REJECT, R.UNDECIDED]))))
+
+
+#: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
-MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
+MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
-                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 3
+                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 5
 
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
-    """One case of `product`: its components' cases, then at most one break of the composition's own inputs."""
-    cases = [draw(recorded_case(C) if isinstance(C, R.Recorded) else stub_case(C.id)) for C in product.components]
+    """One case of `product`: its components' cases (every one aimed at acceptance a third of the time, each at any verdict
+    otherwise), then at most one break of the composition's own inputs."""
+    every = draw(st.sampled_from([R.ACCEPT, None, None]))
+    cases = [draw(component_case(C, every)) for C in product.components]
     named = [{"id": c["id"], "params": c["params"]} for c in cases]
     entries = [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "id": c["id"], "params": c["params"]}
                for c in cases]
@@ -189,10 +211,12 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) 
         assert seen[kind] > examples // 50, (kind, dict(seen))
 
 
+@pytest.mark.slow
 def test_remote_agrees(remote_server):
     _agree(REMOTE, remote_server, SEEN["remote"], 1000)
 
 
+@pytest.mark.slow
 def test_onsite_agrees(onsite_server):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
 
@@ -209,6 +233,7 @@ class Trial(R.Product):
         return super().check(ps, c, ev)
 
 
+@pytest.mark.slow
 def test_a_reference_without_reject_dominance_is_caught(onsite_server):
     """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
