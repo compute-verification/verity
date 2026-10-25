@@ -91,9 +91,10 @@ def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
     """A mirror that doesn't read the row registrations accepts a rows-form period whose rows a key other than the
     deployment key signed, and Lean rejects it."""
     monkeypatch.setattr(PC, "_rows_check", lambda p, w, d, doc: None)
-    with pytest.raises(D.Mismatch) as x:
-        D.run(dataclasses.replace(PORT, inputs=cases(("rows-reg-key",))), examples=20, server=server)
-    assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+    for n in range(2):
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, build("rows-reg-key", n, small=True), server)
+        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
 
 
 #: The rows form's refusals the period must make, each with what Lean's reason and the mirror's say.
