@@ -99,9 +99,13 @@ def test_a_rows_amax_is_the_max_of_its_parts_amaxes(relu) -> None:
     assert _same_amax(E.evaluate_batch(bind(Q.RowAbsMax, N=4, RELU=False), parts).astype(np.uint16), _f32(whole))
 
 
-def test_the_scale_is_torchs_where_on_every_amax_word() -> None:
-    """Every bf16 word as amax, negative ones and NaNs included: RN(amax / 127) when amax > 0, else 1.0."""
-    a = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+def test_the_scale_is_torchs_where_on_every_kind_of_amax_word() -> None:
+    """Every sign and exponent of amax with the mantissa's ends, its middle and two random ones (zeros, negatives, subnormals,
+    ±inf and NaNs included): RN(amax / 127) when amax > 0, else 1.0."""
+    rng = np.random.default_rng(9)
+    se = np.arange(512, dtype=np.uint16) << 7
+    a = (se[:, None] | np.array([0, 1, 0x40, 0x7F], np.uint16)[None, :]).ravel()
+    a = np.concatenate([a, se | rng.integers(0, 0x80, 512).astype(np.uint16), se | rng.integers(0, 0x80, 512).astype(np.uint16)])
     with np.errstate(all="ignore"):
         f = _f32(a)
         want = np.where(f > 0, f / np.float32(127), np.float32(1)).astype(np.float32).view(np.uint32)

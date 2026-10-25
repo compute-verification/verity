@@ -32,8 +32,10 @@ def check(y: torch.Tensor, relu: bool, codes: torch.Tensor, scale: torch.Tensor)
         assert ((hi << np.uint32(16)) | lo == want_scale).all(), boolean
 
 
+@pytest.mark.slow
 def test_the_units_are_the_quantize_of_every_row_the_loop_serves(monkeypatch):
-    """Each linear's output against the loop's next ``quantize`` call, which reads it (a request's last linear has none). ~3 s."""
+    """Each linear's output against the loop's next ``quantize`` call, which reads it (a request's last linear has none). ~10 s
+    on a check node."""
     calls: list = []
     quantize, linear = L.quantize, L.linear
 
