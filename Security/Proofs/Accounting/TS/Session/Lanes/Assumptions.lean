@@ -3,9 +3,12 @@ import Proofs.Accounting.TS.Session.Lanes.Holds
 /-!
 # The named premise a leaf's 33 linked sessions take
 
-`Accounting.Guarantees.TS.LeafLanesSound` takes one premise beyond `CheckedSessionSound`'s, the reading of a session's
+`Accounting.TS.Lanes.leafLanes_soundAt` takes one premise beyond `CheckedSessionSound`'s, the reading of a session's
 rows as the words its Definition reads, through a decode per statement (`decL` for a lane's ports, `decC` for the
-combine's):
+combine's). `Accounting.Guarantees.TS.LeafLanesSound` takes what stays of it once each Definition's `ok = 1` is proved
+to mean `LaneOk` or `CombineOk`, that the lanes' and the combine's circuits compute their pieces' compositions on bits
+(`Accounting.TS.Lanes.LaneLowers`, `CombineLowers`, which give it by `leafChecks_of_computes`, `laneComputes_of_lowers`
+and `combineComputes_of_lowers`):
 
 * `LeafChecks` (the 33 circuits; owner @compute-accounting): each lane's and the combine's circuit computes its
   Definition at its port rows, so on every wire assignment its evaluation agrees with at every unit, the decoded `ok`
@@ -36,7 +39,9 @@ open Pouw.RelativeSecurity (Paths)
 /-- `accounting-ts-leaf-checks` (a fact of `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`'s circuits at their tile's
 `K`, backed by circuit-check and `h1zy`'s tests, not proved; owner @compute-accounting). **Each of a leaf's 33 circuits
 computes its Definition at its port rows**: at lane `l`'s session `sess (some l)`, whose circuit is
-`PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K` (any positive `K`), on every wire assignment `vals` the key
+`PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K`, at a `K` that tile binds at (`32 ∣ K` and `K < 2^17`,
+`GemmAccumulatorS8`'s bind; from `2^17` a step of its s8 accumulator can clamp, so `z` need not be the exact dot, and
+the verifier refuses such a tile, `PouwWindow.Lanes.Tile.check`), on every wire assignment `vals` the key
 program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`' port rows
 (`portRead`) is `1`, then `decL`'s view of them meets `LaneOk` at `dq` and `part`: its partials row is the honest one at
 its rows, its public inputs and its index, and each of its 32 cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]`.
@@ -61,7 +66,7 @@ def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
     (sess : Option (Fin 32) → RowsSession)
     (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) : Prop :=
-  (∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
+  (32 ∣ K → K < 2 ^ 17 → ∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
       (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
       (decL (sess (some l)) (portRead (sess (some l)) vals)).ok = true →
       LaneOk dq part (decL (sess (some l)) (portRead (sess (some l)) vals))) ∧

@@ -14,13 +14,14 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   or `{"refused": [code, why]}`.
 * `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries` and
   `calls`, the window's call count, as `credit._a_link` takes them), `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
-* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs` and `k`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
+* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs`, `k` and `rows`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each window's evidence
   `window`'s): `{"credited": …}`; or
   `{"refused": [code, why]}`.
 * `weights` (`window`, `layout`, `entries`, `requests`, `session`, `program`, `prefix`, as `credit._weights` takes them,
   `Credit.Internal.weights`): `{"weights": hex}`, or `{"refused": [code, why]}`.
-* `registered-file` (`descriptor` in hex, `call`, `roots` `{value: [root, ...]}` and `window`, the window's open root):
+* `registered-file` (`descriptor` in hex, `call`, `roots` `{value: [root, ...]}`, `window`, the window's open root,
+  `steps`, its rounds, and `salt`, its Program salt):
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the descriptor's `layoutOf` and
   `shapeOf` (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
 -/
@@ -51,7 +52,7 @@ def windowOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
     (Credit.window (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
       (← f "calls") (← f "served") (← f "commit") (← f "rounds") (← f "draw") (← f "descriptor") (← f "entries")
-      (← f "proofs") (← f "k"))
+      (← f "proofs") (← f "k") (← f "rows"))
 
 def periodOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
@@ -75,6 +76,8 @@ def registeredFileOf (j : Json) : Except String Json := do
   let call ← f "call"
   let roots ← f "roots"
   let window ← f "window"
+  let steps ← f "steps"
+  let salt ← f "salt"
   let bytes : Option ByteArray := match descriptor with
     | Json.str s => if Credit.isHexBytes s then PouwCheck.hex? (Json.str s) else none
     | _ => none
@@ -84,7 +87,7 @@ def registeredFileOf (j : Json) : Except String Json := do
     let shape := Credit.shapeOf d
     let program := Flock.hexOf (Flock.Sha512.hash d)
     let file ← Credit.registeredFile program layout shape ((PouwCheck.nat? call).getD 0) roots
-      ((PouwCheck.str? window).getD "")
+      ((PouwCheck.str? window).getD "") ((PouwCheck.nat? steps).getD 1) ((PouwCheck.str? salt).getD "")
     pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)])
   PouwCheck.Difftest.refusal id got
 

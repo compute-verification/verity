@@ -347,3 +347,32 @@ def test_the_coordinate_replays_the_rtx4090_gemm_captures() -> None:
         x, w = np.stack([r[0] for r in rows]), np.stack([r[1] for r in rows])
         got = BS.evaluate_words(bind(BG.GemmCoordinate, K=k, **BG.GEMM_AMPERE), x, w)
         assert got.tolist() == [r[2] for r in rows]
+
+
+def test_the_sm90_binding_on_bits_is_hoppers_step() -> None:
+    """`BG.GEMM_SM90_S8` binds the Boolean step whose word step is `G.GEMM_SM90_S8`'s, and that step on bits is
+    `HOPPER_SM90_S8_K32.step` on uniform accumulators and on accumulators within 2^16 of either s32 edge (clamps included);
+    the accumulator on bits at K = 512, the least K H1 serves on sm_90, is that step chained."""
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32
+
+    assert BG.GEMM_SM90_S8 == BG.GEMM_SM120_S8 == BG.s8_gemm(HOPPER_SM90_S8_K32)
+    assert TR.word_of(bind(BG.GEMM_SM90_S8["DOT"])).id == G.GEMM_SM90_S8["DOT"].id
+    rng = np.random.default_rng(24)
+    n = 4000
+    acc = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
+    edge = rng.integers(0, 1 << 16, n // 2, dtype=np.uint64).astype(np.uint32)
+    acc[: n // 4] = 0x7FFFFFFF - edge[: n // 4]
+    acc[n // 4: n // 2] = 0x80000000 + edge[n // 4:]
+    a, b = _s8_operands(rng, n, 32)
+    got = BS.evaluate_words(bind(BG.GEMM_SM90_S8["DOT"]), acc, a, b).astype(np.uint32)
+    want = [HOPPER_SM90_S8_K32.step(int(c), x.tolist(), y.tolist()) for c, x, y in zip(acc, a, b)]
+    assert got.tolist() == want
+    assert sum(w in (0x7FFFFFFF, 0x80000000) for w in want) > 200
+    x, w = _s8_operands(rng, 200, 512)
+    got = BS.evaluate_words(bind(BG.GemmAccumulatorS8, K=512, **BG.GEMM_SM90_S8), x, w).astype(np.uint32)
+    for r in range(len(x)):
+        c = 0
+        for i in range(0, 512, 32):
+            c = HOPPER_SM90_S8_K32.step(c, x[r, i:i + 32].tolist(), w[r, i:i + 32].tolist())
+        assert int(got[r]) == c

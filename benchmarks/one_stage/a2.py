@@ -32,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -164,7 +165,7 @@ def main() -> int:
                  for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer,
                 partition=part)
     neg["domains-of-another-run (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, P.population_program(template, n - 1), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
     v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)

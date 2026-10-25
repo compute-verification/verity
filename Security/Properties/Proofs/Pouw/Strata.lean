@@ -5,7 +5,7 @@ import Std.Data.String.ToNat
 # Proofs: a served window's work strata tile its units, and what `law`, `epsAt` and `established` answer
 
 On Lean core. `law_ok`, `epsAt_ok` and the `workK` bounds are what `Proofs.Pouw.Credit`'s bound reads of `law` and
-`epsAt`; `credited_eq` and `total_eq` read `established`'s two sums as sums over `callWork`.
+`epsAt`; `credited_eq` and `total_eq` read `established`'s two sums as sums over `servedWork` and `callWork`.
 
 `strataTile`: `strata_ok` peels `strata`'s checks and loops (`forIn_fold`) down to its last loop, a fold of `add` over
 the calls' `(K, units)` items (`stepOf`, `itemOf`), and reads `callWork` as the same items; `Inv` is what that fold keeps
@@ -16,7 +16,7 @@ templates are distinct and name their K, and each unit so far is held, only by s
 namespace Properties.Pouw.Strata
 
 open Lean (Json toJson)
-open PouwCheck.Credit (callWork)
+open PouwCheck.Credit (callWork servedWork)
 
 theorem nat_toJson (K : Nat) : PouwCheck.nat? (toJson K) = some K := by
   simp [PouwCheck.nat?, PouwWindow.natOf?, PouwWindow.intOf?, toJson, Lean.JsonNumber.fromNat]
@@ -185,7 +185,7 @@ theorem credited_nat (got : List Nat) : ∀ (l : List (Nat × Nat)),
   rw [hmap]
   by_cases hg : l.length ∈ got <;> simp [hg, List.getD_eq_getElem?_getD]
 
-/-- `established`'s credited work (an `Int`) is `callWork`'s over the credited calls. -/
+/-- `established`'s credited work (an `Int`) is `servedWork`'s over the credited calls. -/
 theorem credited_eq (got : List Nat) (l : List (Nat × Nat)) :
     ((List.range l.length).zip l).foldl
         (fun a (x : Nat × Nat × Nat) => if got.contains x.1 = true then a + (x.2.1 : Int) * x.2.2 else a) 0 =
@@ -200,13 +200,13 @@ theorem credited_eq (got : List Nat) (l : List (Nat × Nat)) :
   · simp only [hx]
     rfl
 
-/-- What `established` answers is `epsAt`'s at `callWork`'s credited and total work. -/
-theorem established_ok {layout : Json} {got : List Nat} {K : Nat} {e : Rat}
-    (h : PouwCheck.Credit.established layout got K = some e) :
+/-- What `established` answers is `epsAt`'s at `servedWork`'s credited work and `callWork`'s total. -/
+theorem established_ok {layout : Json} {got served : List Nat} {K : Nat} {e : Rat}
+    (h : PouwCheck.Credit.established layout got served K = some e) :
     PouwWindow.epsAt K PouwCheck.Credit.DELTA
-      ((((List.range (callWork layout).length).map fun i =>
-        if i ∈ got then ((callWork layout).getD i (0, 0)).1 * ((callWork layout).getD i (0, 0)).2 else 0).sum : Nat) :
-        Int)
+      ((((List.range (servedWork layout served).length).map fun i =>
+        if i ∈ got then ((servedWork layout served).getD i (0, 0)).1 *
+          ((servedWork layout served).getD i (0, 0)).2 else 0).sum : Nat) : Int)
       ((((callWork layout).map fun p => p.1 * p.2).sum : Nat) : Int) 1 = .ok e := by
   unfold PouwCheck.Credit.established at h
   dsimp only at h

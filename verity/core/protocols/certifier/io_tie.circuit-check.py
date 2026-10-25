@@ -6,18 +6,19 @@ from typing import Any
 
 
 def _network_io_tie_roots() -> list[Any]:
-    """The I/O tie's prototype (`verity.core.protocols.certifier.io_tie`) at the tests' size class: one draw of a
-    256-byte frame in a depth-7 frames tree with F = 32 outputs a request and C = 2 port rows (DT = 3), which reaches
-    the frame read, the id event, the port row's hiding read and its column at their smallest; and the frame read and
-    the id event at the served B = 4,096."""
+    """The I/O tie's prototype (`verity.core.protocols.certifier.io_tie`) at the tests' size class: a bucket row of
+    R = 8 256-byte slots (four lanes of r = 2) and a port of S = 4 opened rows of P = 4 ids from a session of 2^3 steps
+    (E = 16 entries routed over M = 16 positions), which reaches the cell's parse, the Beneš routing, the match against
+    the map, the port's row reads and the bucket's unit at their smallest; and the cell's parse at B = 4,096."""
     from verity.ml.circuits.defs import bind
-    from verity.core.protocols.certifier.io_tie import IoTieColumn, IoTieDraw, IoTieEvent, NetworkFrameRead, NetworkFrameSwap
+    from verity.core.protocols.certifier.io_tie import IoTieBucket, IoTieCell, IoTieContent, IoTieMatch, IoTiePort, IoTieRoute
 
     return [
-        bind(NetworkFrameSwap),
-        bind(IoTieColumn),
-        bind(IoTieEvent, B=256),
-        bind(IoTieEvent, B=4096),
-        bind(NetworkFrameRead, B=256, D=2),
-        bind(IoTieDraw, B=256, D=7, FOUT=32, C=2),
+        bind(IoTieCell, B=256),
+        bind(IoTieCell, B=4096),
+        bind(IoTieRoute, W=36, D=4),
+        bind(IoTieMatch, N=8, D=4, E=16),
+        bind(IoTieContent, B=256, R=8, P=4, S=4),
+        bind(IoTiePort, P=4, S=4, DS=3),
+        bind(IoTieBucket, B=256, R=8, P=4, S=4, DS=3),
     ]

@@ -26,11 +26,18 @@ completing.
   of a paced session, with its groups' shape; `Covers` is the paced verifier's refusal of a pass that leaves out a
   registered block.
 * `SketchBound δ`: except with probability `δ`, a correct receipt of a registered block was computed while the block
-  was in node memory or on a chip during its pass: the receipt's sketch binds the whole block (`RateAuditSketch`,
-  `timing.sketch_failure`).
+  was in node memory or on a chip during its pass: the receipt's sketch binds the whole block. It is derived from a
+  model of the receipts' sketch (`Accounting.Remote.Sketch`) at every parameter
+  (`Accounting.Guarantees.Remote.SketchBoundSession`) and at the deployed receipts, at `timing.sketch_failure`'s `δ`
+  (`Accounting.Guarantees.Remote.SketchBoundDeployed`), under the model's own premises
+  (`Accounting.Remote.Sketch.Assumptions`) and the named random-oracle premise on SHA-512's keys
+  (`Accounting.Assumptions.SketchHashRandom`).
 * `LiveCoins W δ`: except with probability `δ`, the credited passes' wrong receipts are at most `W`: each window's
   openings, from a live coin released after its roots, are uniform over its receipts, and pooled over the session they
-  bound the wrong ones (`audit.pooled`; `Accounting.Guarantees.HorizonSampling` for windows of one size).
+  bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
+  every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
+  premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
+  advantage.
 -/
 
 namespace Accounting.Remote.Held.Assumptions

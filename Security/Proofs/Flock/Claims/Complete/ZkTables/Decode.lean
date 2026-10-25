@@ -95,7 +95,7 @@ theorem decodeZk_ofFieldsJ (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
     fld_plain hcfgs (getObjVal?_mkObj (by simp) (by simp)) (.bool true)
   have hmode : Record.str j "link_mode" = .ok "exchange" := str_same hs (gR (by simp [recordList]))
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h rootB points) (by simp [recordList]))
-  unfold Record.decodeWith
+  unfold Record.decodeWith Record.decodeJWith
   simp only [hp, hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
     beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h rootB points → (linkObj spec h rootB points).getObjVal? k = .ok v :=

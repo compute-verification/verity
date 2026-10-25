@@ -2,15 +2,18 @@
 in-domain linears (`glm53.in_domain`, one TP8 rank, the routed experts sharded or expert-parallel) and decode's and
 prefill's M (`glm53.DECODE_M`, `glm53.PREFILL_M`).  An expert's shape is timed as one dense call, not the grouped launch.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S] [--graphs]
+  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S ...] [--graphs]
   python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --whole --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...]
 
 Arms, each one linear's call on a BF16 x of M rows:
 
 - ``pearlc``: `pouw_pearl_c_device.PearlCDeviceRun.gemm` (``pearl-c-h100-v1-h3`` on this directory's kernels, under
-  ``--schedule``, default serial, hashing on) inside an open pass, each sample closed only after any side lane's work; the
-  pass's end (its tile tree) is timed apart, once per sample, as ``pass_end``;
-- ``pearlc-nohash``: the same with hashing off (A's tree, E_A's lines, the leaves and the records skipped);
+  ``--schedule``'s first, default serial, hashing on) inside an open pass, each sample closed only after any side lane's
+  work; the pass's end (its tile tree) is timed apart, once per sample, as ``pass_end``;
+- ``pearlc-S``: the same under each further schedule S of ``--schedule``, each sample's pass begun under it (with
+  ``--graphs``, a schedule with a side lane replays each lane's steps as a graph, `pouw_pearl_c_graphs`);
+- ``pearlc-eager``: with ``--graphs``, ``pearlc`` with its calls launched eagerly, as without;
+- ``pearlc-nohash``: ``pearlc`` with hashing off (A's tree, E_A's lines, the leaves and the records skipped);
 - ``deepgemm``: vLLM's per-token-group FP8 quant (ue8m0 scales) and DeepGEMM ``fp8_gemm_nt`` on the weight's 128 x 128
   blocks, its scales ue8m0: what the pinned vLLM serves from 32 tokens (FlashInfer below 32 is not timed here);
 - ``cutlass``: the same quant (FP32 scales) and vLLM's CUTLASS block-scaled ``cutlass_scaled_mm``;
@@ -19,7 +22,9 @@ Arms, each one linear's call on a BF16 x of M rows:
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
 events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
-median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`).  Writes ``timing.json`` in DIR, one row a point.
+median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
+hashing pearlc arm's passes must commit what ``pearlc``'s commit (`COMMITMENT`) and serve y's bytes, and so must one pass of
+each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row a point; exits non-zero when any arm differs.
 
 ``--whole`` times decode's forward instead, at each M up to `GRAPH_ROWS` (default decode's): every shape's weight called once
 on its own x of M rows, in the run's slot order (`forward_of`), under the arms of `WHOLE`: the calls one at a time, each its
@@ -37,6 +42,7 @@ import argparse
 import json
 import statistics
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -131,16 +137,20 @@ def stock_arms(W) -> tuple[dict, dict]:
     return arms, errors
 
 
-def timed(f, before=None, after=None, join=None) -> float:
+def timed(f, before=None, after=None, join=None, host=None) -> float:
     """One sample: `INNER` calls of f between events on the current stream, ms a call; `before` and `after` untimed.  `join`
-    makes the current stream wait for any other lane the calls left work on, before the closing event."""
+    makes the current stream wait for any other lane the calls left work on, before the closing event.  `host` gets the
+    host's ms a call issuing them (the calls' Python and launches, until the last returns)."""
     import torch
     if before:
         before()
     s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     s.record()
+    t = time.perf_counter()
     for _ in range(INNER):
         f()
+    if host is not None:
+        host.append((time.perf_counter() - t) * 1e3 / INNER)
     if join:
         join()
     e.record()
@@ -241,6 +251,12 @@ def capture_stock(forward):
         return forward, False, f"{type(e).__name__}: {e}"[:400]
 
 
+def same_bits(a, b) -> bool:
+    """Whether two BF16 tensors hold the same bits (-0 and NaN payloads included)."""
+    import torch
+    return a.shape == b.shape and torch.equal(a.contiguous().view(torch.int16), b.contiguous().view(torch.int16))
+
+
 def commitment(out: dict) -> dict:
     return {k: out.get(k) for k in COMMITMENT}
 
@@ -323,8 +339,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--reps", type=int, default=15)
     p.add_argument("--shapes", nargs="*", help="N:K (default every in-domain linear)")
     p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's; --whole: decode's)")
-    p.add_argument("--schedule", default="serial", help="pearlc's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
-    p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (serial only)")
+    p.add_argument("--schedule", nargs="+", default=["serial"],
+                   help="pearlc's schedule, then each further arm's (verity.core.protocols.pouw.serving.SCHEDULES)")
+    p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (a side lane's schedule: one a lane)")
     p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)
     import torch
@@ -334,13 +351,14 @@ def main(argv: list[str] | None = None) -> int:
     table = glm53.in_domain(a.scheme)
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(table)
     ms = a.m or ([*glm53.DECODE_M] if a.whole else [*glm53.DECODE_M, *glm53.PREFILL_M])
-    if a.whole and (a.schedule != "serial" or max(ms) > GRAPH_ROWS or len(set(shapes)) != len(shapes)):
+    if a.whole and (a.schedule != ["serial"] or max(ms) > GRAPH_ROWS or len(set(shapes)) != len(shapes)):
         p.error(f"--whole: the serial schedule, M up to {GRAPH_ROWS} and distinct shapes (a deferred call joins at once after "
                 f"its own shape's)")
     out.mkdir(parents=True, exist_ok=True)
-    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule, a.graphs or a.whole)
-    side = run.side.stream if run.side is not None and run.side.stream is not None else None
-    join = (lambda: torch.cuda.current_stream().wait_stream(side)) if side is not None else None
+    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule[0], a.graphs or a.whole)
+
+    def join():
+        run.join_sides(torch.cuda.current_stream())
     head = {"scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs or a.whole, "whole": a.whole, "epoch": EPOCH,
             "device": torch.cuda.get_device_name(dev), "cubin_sha256": kernel.cubin_sha256,
             "kernel_source_sha256": kernel.source_sha256, "torch": torch.__version__, "reps": a.reps, "inner": INNER,
@@ -369,6 +387,9 @@ def main(argv: list[str] | None = None) -> int:
                   f"{'equal' if r['poisoned_equal'] else 'DIFFER'}", flush=True)
             (out / "whole.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")
         return 0 if all(r["commitments_equal"] and r["poisoned_equal"] for r in rows) else 1
+    pearls = {("pearlc" if i == 0 else f"pearlc-{sc}"): (sc, a.graphs) for i, sc in enumerate(a.schedule)}
+    if a.graphs:
+        pearls["pearlc-eager"] = (a.schedule[0], False)
     for w, W in weights.items():
         n, k = W.shape
         arms, errors = stock_arms(W)
@@ -376,54 +397,83 @@ def main(argv: list[str] | None = None) -> int:
         gam = {r: float(glm53.gamma(glm53.scheme(f, a.scheme), n, k)) for r, f in glm53.FADD_READINGS.items()}
         for m in ms:
             x = torch.randn(m, k, device=dev, generator=gen).to(torch.bfloat16)
+            ys = {}
 
-            def pearlc(hashing: bool, x=x, w=w, W=W):
-                """The arm's call, and before it a fresh pass under `hashing` (the open pass ended under its own)."""
+            def pearlc(nm: str, hashing: bool, schedule: str, graphs: bool, x=x, w=w, W=W):
+                """The arm's call, and before it a fresh pass under `hashing`, `schedule` and `graphs` (the open pass
+                ended)."""
                 def f():
-                    run.gemm(w, x, W, None)
+                    ys[nm] = run.gemm(w, x, W, None)
 
                 def before():
-                    run.end_pass()
-                    run.hashing = hashing
+                    run.end_pass(schedule=schedule)
+                    run.hashing, run.graphs = hashing, graphs
                 return f, before, run.end_pass
 
-            calls = {"pearlc": pearlc(True), "pearlc-nohash": pearlc(False),
+            calls = {**{nm: pearlc(nm, True, sc, g) for nm, (sc, g) in pearls.items()},
+                     "pearlc-nohash": pearlc("pearlc-nohash", False, a.schedule[0], a.graphs),
                      **{nm: ((lambda f=f, x=x: f(x)), None, None) for nm, f in arms.items()}}
             names = list(calls)
             for f, before, after in calls.values():       # warm-up: buffers, graphs of torch's allocator, autotuning
                 timed(f, before, after)
-            samples = {nm: [] for nm in names}
-            pass_end = []
+            samples, host = {nm: [] for nm in names}, {nm: [] for nm in names}
+            pass_end, ends = {nm: [] for nm in pearls}, {nm: [] for nm in pearls}
+            y_equal = {nm: True for nm in pearls}
             for rep in range(a.reps):
                 order = names[rep % len(names):] + names[:rep % len(names)]
                 for nm in order:
                     f, before, after = calls[nm]
-                    if nm == "pearlc":
+                    if nm in pearls:
                         before()
-                        samples[nm].append(timed(f, join=join))
+                        samples[nm].append(timed(f, join=join, host=host[nm]))
                         s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
                         s.record()
-                        run.end_pass()
+                        ended = run.end_pass()
                         e.record()
                         e.synchronize()
-                        pass_end.append(s.elapsed_time(e))
+                        pass_end[nm].append(s.elapsed_time(e))
+                        ends[nm].append(commitment(ended))
+                        if "pearlc" in ys:
+                            y_equal[nm] = y_equal[nm] and same_bits(ys[nm], ys["pearlc"])
                     else:
-                        samples[nm].append(timed(f, before, after))
-            run.hashing = True
+                        samples[nm].append(timed(f, before, after, host=host[nm]))
+            want, y_want = ends["pearlc"][0], ys["pearlc"].clone()
+            agree = {}
+            for nm, (sc, g) in pearls.items():
+                run.end_pass(schedule=sc)
+                run.hashing, run.graphs = True, g
+                run.poison()
+                for _ in range(INNER):
+                    calls[nm][0]()
+                poisoned = commitment(run.end_pass())
+                agree[nm] = {"commitment": all(c == want for c in ends[nm]), "y": y_equal[nm],
+                             "poisoned": poisoned == want, "poisoned_y": same_bits(ys[nm], y_want)}
+            run.end_pass(schedule=a.schedule[0])
+            run.hashing, run.graphs = True, a.graphs
             med = {nm: statistics.median(v) for nm, v in samples.items()}
             stock = {nm: med[nm] for nm in arms}
             best = min(stock, key=stock.get) if stock else None
+            ok = all(all(v.values()) for v in agree.values())
             row = {"name": lin["name"] if lin else None, "n": n, "k": k, "m": m, "ms": med, "runs": samples,
-                   "pass_end_ms": statistics.median(pass_end), "stock_errors": errors, "fastest_stock": best,
+                   "host_ms": {nm: statistics.median(v) for nm, v in host.items()},
+                   "pass_end_ms": statistics.median(pass_end["pearlc"]),
+                   "pass_end_ms_by_arm": {nm: statistics.median(v) for nm, v in pass_end.items()},
+                   "schedules": {nm: sc for nm, (sc, _) in pearls.items()},
+                   "graphed": {nm: g for nm, (_, g) in pearls.items()}, "stock_errors": errors, "fastest_stock": best,
                    "slowdown": med["pearlc"] / stock[best] if best else None,
+                   "slowdowns": {nm: med[nm] / stock[best] for nm in pearls} if best else None,
                    "slowdown_nohash": med["pearlc-nohash"] / stock[best] if best else None, "gamma": gam,
-                   "tflops": {nm: 2 * m * n * k / v / 1e9 for nm, v in med.items()}}
+                   "tflops": {nm: 2 * m * n * k / v / 1e9 for nm, v in med.items()},
+                   "commitment": want, "agree": agree, **({} if ok else {"commitments": ends})}
             rows.append(row)
-            print(f"n {n} k {k} m {m}: pearlc {med['pearlc']:.4f} ms, nohash {med['pearlc-nohash']:.4f} ms, "
+            print(f"n {n} k {k} m {m}: " + ", ".join(f"{nm} {med[nm]:.4f} ms" for nm in [*pearls, "pearlc-nohash"]) + ", "
                   + ", ".join(f"{nm} {v:.4f} ms" for nm, v in stock.items())
-                  + (f"; slowdown {row['slowdown']:.3f}x over {best}" if best else f"; no stock arm ({errors})"), flush=True)
+                  + (f"; slowdown {row['slowdown']:.3f}x over {best}" + "".join(
+                      f", {nm} {v:.3f}x" for nm, v in row["slowdowns"].items() if nm != "pearlc") if best
+                     else f"; no stock arm ({errors})")
+                  + f"; {'agree' if ok else 'DIFFER ' + json.dumps(agree)}", flush=True)
             (out / "timing.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")
-    return 0 if all(r["fastest_stock"] for r in rows) else 1
+    return 0 if all(r["fastest_stock"] and all(all(v.values()) for v in r["agree"].values()) for r in rows) else 1
 
 
 if __name__ == "__main__":
