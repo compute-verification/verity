@@ -24,7 +24,8 @@ An integration may label each run of units it records with one opaque JSON value
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
 bit concatenation of its leaves, then one output row ``o<j>`` per return field, zero-padded to whole u16 words: C-Flock's
-`UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone.
+`UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone. A Boolean-profile
+port's leaves (one bit each) are read as their `boolean.word_type` words.
 
 That the circuit computes what the integration ran is completeness, never proved: the verifier accepts a window exactly
 when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`Window.mismatches` is
@@ -46,7 +47,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits import boolean as B, partition_object as PO
 from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -151,6 +152,10 @@ def _fields(ret: Any) -> tuple[Any, ...]:
 
 
 def _width(name: str, ty: Any) -> int:
+    """A port's element width: its leaves', or for a Boolean-profile port (every leaf one bit) its `boolean.word_type`
+    words', the same bits in the same order."""
+    if ty.width_set() == {1}:
+        ty = B.word_type(ty)
     widths = ty.width_set()
     if len(widths) != 1 or not widths <= set(PACKED) or sum(ty.leaf_widths()) % 16:
         raise ValueError(f"{name}: its leaves are {sorted(widths)} bits, {sum(ty.leaf_widths())} in all; a row is whole u16 "
