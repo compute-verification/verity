@@ -154,3 +154,10 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
 - At corpus-smallkv's first seven steps (7,562,498 ANDs a unit, m = 29), the honest unit and twelve negatives (run
   r20261024-175616-105c). The made-up table was refused by ``cache`` alone, and the six passes with their own served
   row by the native ``srv`` check.
+- The corpus runs' scans, rerun under the rule (`leak_scan.rescan`; the rows rebuilt at each run's commit, the salts
+  not kept), leak nothing (art:a6f573a413d3c88f336d6b0c994107a41976c7b5007d0f026cc5bebdd0e0a451). That covers 105c,
+  the wired slice's first run r20261024-145236-cf49 and the rerun r20261024-205837-adc8, which their own scans had
+  failed. Each find is in the proof streams and straddles fields:
+  - `05` and fifteen zeros over a Ligerito nonce list's length 5 and its first nonce;
+  - fifteen zeros and `80` over a zero vector length, the ring switch's nonce and `initial_cap`'s length 128;
+  - in 105c's rep1, fifteen zeros and `c0` over a zero element and the next element's first byte.
