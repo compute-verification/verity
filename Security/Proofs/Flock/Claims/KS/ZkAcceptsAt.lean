@@ -38,7 +38,7 @@ decided at the statement's inputs `s`, whose draw is some `d`, and `verify --zk`
 proof files `f` at the session it sets up at `d`, with no premise on the record's own draw. -/
 theorem acceptsAt_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
-    ∃ s d f, insOf true x = some s ∧ s.read.draw = some d ∧
+    ∃ (s : Ins) (d : Json) (f : Final), insOf true x = some s ∧ s.read.draw = some d ∧
       Composed.AcceptsAt s.read.I d (⟨f.record, f.proofs⟩ : Exec.Transcript) := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hact, -⟩ := acc_decide h
   have hacc : ((next true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
@@ -53,7 +53,7 @@ theorem acceptsAt_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
 `LiveAcceptsZK` holds at the statement's inputs at every outcome whose transcript is that record and its proof files. -/
 theorem liveAcceptsZK_of_runAt {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
-    ∃ s d f, insOf true x = some s ∧ s.read.draw = some d ∧
+    ∃ (s : Ins) (d : Json) (f : Final), insOf true x = some s ∧ s.read.draw = some d ∧
       Composed.AcceptsAt s.read.I d (⟨f.record, f.proofs⟩ : Exec.Transcript) ∧
       (Exec.recordDraw f.record = some d → ∀ (R : Reg) (S : Finset (Fin n)),
         ZkExec.LiveAcceptsZK s.read.I (R, S, (⟨f.record, f.proofs⟩ : Exec.Transcript))) := by
