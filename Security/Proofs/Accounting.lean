@@ -42,6 +42,7 @@ import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Stacking
 import Proofs.Accounting.DeclaredCircuit.Witness
+import Proofs.Accounting.DeclaredCircuit.WitnessPrefill
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages
