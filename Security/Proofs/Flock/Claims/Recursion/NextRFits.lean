@@ -1,6 +1,8 @@
 import Proofs.Flock.Claims.Recursion.NextRHonest
 import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.C3.Compose.HoloStreamSizes
 
 /-!
 # The honest rows fit: `RepFits`
@@ -24,6 +26,7 @@ schedule's rounds agree round by round, on which rounds absorb element values an
 
 `RepReadsBack`'s hypotheses hold together (`honest₀`): at `m = 22`, `k_log = 6`, two claims, a proof with every length
 its shape fixes and zero nonces (`sizedProof`), so one honest rep reads back on a run that exists (`readRep₀`).
+`ReadsBack`'s `SchedOf` holds at every rep whose table has a `fast100` schedule and extra claims (`schedOf_repCtx`).
 -/
 
 namespace FlockDeploy
@@ -547,5 +550,52 @@ theorem honest₀ : SchedOf c₀ ∧ HonestRep c₀ p₀ ∧ p₀.cap.toList = c
 /-- **An honest rep reads back** at `c₀`, at every `T`: `repReadsBack`'s conclusion on a run that exists. -/
 theorem readRep₀ (T : F128) : readRep c₀ (repRows c₀ p₀ T) p₀ = some (p₀, framesOf c₀ p₀ T) :=
   repReadsBack c₀ p₀ T honest₀.1 honest₀.2.1 honest₀.2.2
+
+/-- **`ReadsBack`'s `SchedOf` at a set-up rep**: rep `k`'s schedule is its frames' wherever its table has a `fast100`
+schedule and extra claims at the first coin's link points. -/
+theorem schedOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {k : ℕ}
+    {extras : Array Flock.Claim} (hk : k / 2 < sts.size) (hf : (fast100 sts[k / 2].m).isSome)
+    (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok extras) : SchedOf (repCtx spec sts c₁ r₀ k) := by
+  have hk' : k / 2 < (tabsOf sts).size := by
+    unfold tabsOf
+    rw [Array.size_map]
+    exact hk
+  have ht : (tabsOf sts)[k / 2]! = Setup.ofCircuit sts[k / 2] := by
+    rw [getElem!_pos (tabsOf sts) (k / 2) hk']
+    exact Array.getElem_map ..
+  obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 hf
+  obtain ⟨-, h35, -⟩ := RecDeploy.fast100_sizes hsch
+  have key : ∀ m < 36, (fast100 m).isSome → (RecVStar.repRounds m 6 1).isSome := by decide +kernel
+  obtain ⟨out, hout⟩ := Option.isSome_iff_exists.1 (key _ (by omega) hf)
+  obtain ⟨T, -, hall⟩ := FlockC3.Compose.repRounds_tail hout
+  have h2 := hall sts[k / 2].c.kLog (2 + spec.points * sts[k / 2].regions.size)
+  have hst : (repCtx spec sts c₁ r₀ k).st = Setup.ofCircuit sts[k / 2] := ht
+  have hsch' : (repCtx spec sts c₁ r₀ k).sch = sch := by
+    show (fast100 (tabsOf sts)[k / 2]!.m).getD default = sch
+    rw [ht]
+    show (fast100 sts[k / 2].m).getD default = sch
+    rw [hsch, Option.getD_some]
+  have hn : (repCtx spec sts c₁ r₀ k).n = 2 + spec.points * sts[k / 2].regions.size := by
+    show 2 + (match (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) with
+      | .ok e => e.size
+      | .error _ => 0) = _
+    rw [ht]
+    show 2 + (match sts[k / 2].extraClaims (pointsOf spec c₁) with
+      | .ok e => e.size
+      | .error _ => 0) = _
+    have hpts : (pointsOf spec c₁).size = spec.points := by
+      unfold pointsOf
+      rw [Array.size_map, Array.size_range]
+    have hsz : extras.size = spec.points * sts[k / 2].regions.size := by
+      rw [extraClaims_size he, hpts, Nat.mul_comm]
+    rw [he]
+    exact congrArg (2 + ·) hsz
+  have hsc : (repCtx spec sts c₁ r₀ k).sched = RecDeploy.repSchedAt spec sts[k / 2] := by
+    show RecDeploy.repSchedAt spec sts[k / 2]! = _
+    rw [getElem!_pos sts (k / 2) hk]
+  unfold SchedOf
+  rw [hst, hsch', hn, hsc]
+  refine ⟨hsch, rfl, _, h2, ?_⟩
+  simp only [RecDeploy.repSchedAt, h2, Option.map_some, Option.getD_some]
 
 end FlockDeploy
