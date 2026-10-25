@@ -99,7 +99,7 @@ element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm
   `I2IP`): a program pays their expansion into these;
 - only `W1Device.s8Sm120` and `W1Device.s8H100` have S8 fragments. The other settings (`sm120`, `sm120Loop`,
   `fp4Sm120`, `h100`) keep the fragments their records were stated over, so a program on them has no integer tensor
-  core, which both cards have;
+  core, which both cards have, until their readers are restated on S8 settings;
 - program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
   data (every operand is an address).
 
@@ -247,17 +247,21 @@ def W1Device.sm120At (pr : W1Prices) : W1Device := ⟨pr, sm120E4m3, hopperBf16K
 /-- The H100 at prices `pr`: `hopperE4m3K32` and `hopperBf16K16`; no E2M1 fragment. -/
 def W1Device.h100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopperBf16K16, sm120Nvf4, h100Frags⟩
 
-/-- `devH100`'s setting (`Prices.h100`). -/
+/-- `devH100`'s setting (`Prices.h100`). It omits the card's integer tensor core (`W1Device.s8H100` has it), pending
+the restatement of its readers on an S8 setting. -/
 def W1Device.h100 (sha fetch : ℚ) : W1Device := W1Device.h100At (W1Prices.h100 sha fetch)
 
 /-- `devSm120v1 Prices.sm120` and `devSm120v2 Prices.sm120`'s setting: both run the same E4M3 step (`G` is the
-program's choice, not the machine's). -/
+program's choice, not the machine's). It omits the card's integer tensor core (`W1Device.s8Sm120` has it), pending
+the restatement of its readers on an S8 setting. -/
 def W1Device.sm120 (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120 sha fetch)
 
-/-- `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop`'s setting. -/
+/-- `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop`'s setting. It omits the card's integer tensor
+core (`W1Device.s8Sm120` has it), pending the restatement of its readers on an S8 setting. -/
 def W1Device.sm120Loop (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120Loop sha fetch)
 
-/-- `devFp4Sm120`'s setting, in FP4 units. -/
+/-- `devFp4Sm120`'s setting, in FP4 units. It omits the card's integer tensor core (`W1Device.s8Sm120` has it),
+pending the restatement of its readers on an S8 setting. -/
 def W1Device.fp4Sm120 (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.fp4Sm120 sha fetch)
 
 /-- **The RTX PRO 6000 (sm_120) with INT8** at prices `pr`: `sm120At pr`'s steps, and `sm120S8Frags`, its three
@@ -269,8 +273,9 @@ def W1Device.s8Sm120 (sha fetch : ℚ) : W1Device := W1Device.s8Sm120At (W1Price
 
 /-- The H100's fragments with INT8: `h100Frags` and S8 m64nNk32 with `.satfinite` (`IGMMA.64xNx32.S8.S8.SAT`) for
 `N = 64, 80, …, 256`, PTX's dense integer `wgmma` shapes at `N ≥ 64`, as `h100Frags`. Each output is
-`GEMM_SM90_S8`'s dot (`verity.ml.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once, the function
-`verity.ml.circuits.silicon.instructions` pins as `sm90.wgmma.m64n8k32.s8` on an H200 (run `r20261019-043020-f267`). -/
+`GEMM_SM90_S8`'s dot (`verity.ml.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
+`verity.ml.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200 (run `r20261019-043020-f267`). The
+wider N here follow PTX's `wgmma` semantics, the same dot at each output, and no run has measured them. -/
 def h100S8Frags : List Frag := h100Frags ++ (List.range 13).map fun i => ⟨.s8, 64, 64 + 16 * i⟩
 
 /-- **The H100 or the H200 (sm_90) with INT8** at prices `pr`: `h100At pr`'s steps, and `h100S8Frags`. -/
