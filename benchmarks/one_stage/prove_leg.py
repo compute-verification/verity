@@ -43,8 +43,8 @@ template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`
 shape whose rows' in-circuit hashing alone passes C-Flock's block (`m1_families.block`) is reported refused, not lowered.
 
 Known limits: units flat or untyped staged (PRF-133); C-Flock's block at most 2^27 (split-K, #3467, past K = 5041);
-table-heavy units need lookup slots (``--reads slots``; #3416, #3478); tail lookup slots are the GPU prover's; prover worker threads may need
-a bigger stack (PRF-141).
+table-heavy units need lookup slots (``--reads slots``; #3416, #3478); tail lookup slots are the GPU prover's; prover
+worker threads may need a bigger stack (PRF-141).
 """
 from __future__ import annotations
 
