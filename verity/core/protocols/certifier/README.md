@@ -43,12 +43,12 @@ A spec-level reference for network accounting's timing channel:
   place (`window_map`, from the advice's outputs, release buckets and advice v1's order permutation, each request on its
   ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier computes it in the clear from
   the opened advice, the named gap, until the map is read in the proof under the advice's hiding root), with the id the
-  Commit sampled for it (the port: one hiding row of ids a step, opened under the Commit's root). The cells are the
+  Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's root). The cells are the
   warden's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before its first cell and after its `END`,
   one id event a `DATA` cell. The warden commits each bucket's cells as one hiding row. It has the reference and the
-  unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row read as the warden's registered row, the port's
-  rows by `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
-  `IoTieRoute`, `IoTieMatch`);
+  unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row and the port's rows read as registered rows,
+  the warden's and the Commit's (`port_reads`), then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš
+  routing of the port's entries `IoTieRoute`, `IoTieMatch`);
 - the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the warden's own ingress (`serve`): one unit a
   registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
   (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a cell of CERT-VARLEN's id

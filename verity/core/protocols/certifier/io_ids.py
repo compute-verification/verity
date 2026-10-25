@@ -7,8 +7,8 @@ values were tied to nothing). Like IoTieRequest it is one unit a bucket row of t
 **The Commit side** (the fake upstream's layout, what PROVE-PATH's Commit exposes): one `hm96-sha512/row/v2` row a
 step under a fresh salt, the step's input ids u32be in the forward's token order (its batch rows in order, row r's n_r
 tokens at offset Σ_{r' < r} n_{r'}), zero past to P, in a dense `frame-v3-sha512` tree of the session's steps whose
-root and domain the Commit registers before the draw. A bucket opens its S rows at the map's steps (`io_tie.IoTiePort`,
-the egress port's read).
+root and domain the Commit registers before the draw. A bucket reads its S rows at the map's steps as registered
+reads (`port_reads`, the egress port's `io_tie.port_reads` over `INPUT_IDS`), so no gate of the unit hashes them.
 
 **The map** (`bucket_map`, the verifier's, public in the named gap; at the target under the advice's hiding root).
 The bucket's prompt fields in scan order are its lanes': lane by lane, connection q's positions from the lane's
@@ -20,12 +20,13 @@ appearance, the sink 2^CB − 1 past the bucket's fields. The opened steps are e
 class of the bucket, and `ekeys[e]` is opened entry e's class, or the sink. The verifier refuses an advice whose class
 has no computation in any step.
 
-**What 1 means** (`reference`): IoTieRequest's output on the row and the lanes, every opened row opens at its step
-under the Commit's root, and the bucket's fields (`scan`) and the opened entries hold one value a class, each class
-with a field. So every computation of a prompt position of the bucket, and every KV read in its place, is the id the
-user sent there.
+**What 1 means** (`reference`): every read row opens at its step under the Commit's root (the verifier's registered
+reads, outside the unit, as the bucket row's under the warden's; here `reads_open`), and the unit is 1
+(`unit_reference`): IoTieRequest's output on the row and the lanes, and the bucket's fields (`scan`) and the read
+entries hold one value a class, each class with a field. So every computation of a prompt position of the bucket, and
+every KV read in its place, is the id the user sent there.
 
-**The unit** (`IoTieRequestIds{B, L, R, P, S, DS}`) is IoTieRequest's scan, lane by lane, plus:
+**The unit** (`IoTieRequestIds{B, L, R, P, S}`) is IoTieRequest's scan, lane by lane, plus:
 - each request cell's slots (`IoTieIdsSlots{B}`): slot k is a field when the frame's count of fields is above k, its
   value the u32 its 10 characters spell, its ordinal nf + k, nf the bucket's fields before the cell;
 - the classes routed to the fields (`io_tie.IoTieRoute` over M1 = 2^D1 ≥ NK slot positions, NK = N·K): record f is
@@ -35,14 +36,15 @@ user sent there.
   (ekeys[e], 1, its id), the rest the sink; `IoTieIdsChain` checks the classes non-decreasing, the values equal within
   a class but the sink, and each class's first member a slot. A Beneš network is a permutation under any switches, so
   every member is in the sorted order and the switches only sort.
-Public: IoTieRequest's lanes, the Commit's root and domain id, the steps, `keys` and `ekeys`. Witness: the row (the
-registered read), the opened rows, their salts and paths, and both routings' switches.
+Public: IoTieRequest's lanes, the Commit's root and domain id (its registration), the steps (the port's read
+positions), `keys` and `ekeys`. Witness: the row and the read rows (each with its salt and path, the registered
+reads'), and both routings' switches.
 """
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Mapping, NamedTuple, Sequence
+from typing import Any, Mapping, NamedTuple, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import ZERO, add, and_reduce, const_bits
@@ -55,14 +57,16 @@ from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier.active import HEADER, ID_DIGITS, ID_FIELD_BYTES
 
-BIT, BYTE, DIGEST, SALT = HC.BIT, HC.BYTE, HC.DIGEST, HC.SALT
+BIT, BYTE = HC.BIT, HC.BYTE
 #: a slot's record out of `IoTieIdsSlots`: field, ordinal, value
 SLOT = 1 + 32 + 32
+#: the registered value the ingress port reads, the Commit's input ids
+INPUT_IDS = "c00.input/ids"
 
 
 @dataclass(frozen=True)
 class Shape:
-    """An ingress bucket row (`io_request.Shape`'s B, L, R) and its Commit port: S opened rows of P input ids
+    """An ingress bucket row (`io_request.Shape`'s B, L, R) and its Commit port: S read rows of P input ids
     (E = S·P entries) from a tree of depth DS. Each of the N = L·R cells has K slots, NK in all; classes are CB-bit,
     below NK, the sink 2^CB − 1; the classes are routed over M1 = 2^D1 ≥ NK positions and the members sorted over
     M2 = 2^D2 ≥ NK + E."""
@@ -271,18 +275,41 @@ def entry(shape: Shape, port: Sequence[bytes], e: int) -> int:
     return int.from_bytes(port[s][4 * r:4 * r + 4], "big")
 
 
-def reference(shape: Shape, inst: Instance) -> int:
-    """`IoTieRequestIds`' output (the module docstring, "What 1 means")."""
+def _check_sizes(shape: Shape, inst: Instance) -> None:
     sh, mp = shape, inst.map
     if len(inst.port) != sh.S or len(inst.port_salts) != sh.S or len(inst.paths) != sh.S or len(mp.steps) != sh.S or \
             any(len(x) != 4 * sh.P for x in inst.port) or any(len(p) != sh.DS for p in inst.paths) or \
             any(not 0 <= s < 1 << sh.DS for s in mp.steps):
         raise ValueError(f"an instance has S = {sh.S} steps, rows of {4 * sh.P} bytes and paths of DS = {sh.DS}")
-    if not all(opens(SCHEMA, inst.port_root, inst.port_domain, HC.hiding_value(x, s), st, list(p)) == 1
-               for x, s, st, p in zip(inst.port, inst.port_salts, mp.steps, inst.paths)):
-        return 0
-    got = scan(sh, inst.request)
-    return int(got is not None and matches(sh, got[0], mp, inst.port))
+
+
+def reads_open(shape: Shape, inst: Instance) -> bool:
+    """Every read row opens at its step under the Commit's root: the bucket's `port_reads`, in the clear."""
+    _check_sizes(shape, inst)
+    return all(opens(SCHEMA, inst.port_root, inst.port_domain, HC.hiding_value(x, s), st, list(p)) == 1
+               for x, s, st, p in zip(inst.port, inst.port_salts, inst.map.steps, inst.paths))
+
+
+def unit_reference(shape: Shape, inst: Instance) -> int:
+    """`IoTieRequestIds`' output: IoTieRequest's on the row and the lanes, and the fields and the read entries held
+    one value a class."""
+    _check_sizes(shape, inst)
+    got = scan(shape, inst.request)
+    return int(got is not None and matches(shape, got[0], inst.map, inst.port))
+
+
+def reference(shape: Shape, inst: Instance) -> int:
+    """The bucket's ids tie (the module docstring, "What 1 means"): its registered reads and its unit."""
+    return int(reads_open(shape, inst) and unit_reference(shape, inst) == 1)
+
+
+def port_reads(insts: Sequence[Instance], count: int, P: int, reads_from: int = 0) -> dict[str, dict[str, Any]]:
+    """The verifier's own `--registered` ports of the buckets' units over the Commit's `count` rows of P input ids
+    (`io_tie.port_reads`): unit `reads_from + u` reads bucket u's map's steps."""
+    if len({(i.port_root, i.port_domain) for i in insts}) != 1:
+        raise ValueError("the buckets read one Commit's root and domain")
+    return IT.port_reads([i.map.steps for i in insts], insts[0].port_root, insts[0].port_domain, count, P, INPUT_IDS,
+                         reads_from)
 
 
 def instance(shape: Shape, request: Q.Instance, mp: Map, rows: Sequence[bytes], salts: Sequence[bytes],
@@ -430,21 +457,24 @@ IoTieIdsChain = _part(
     "sink is a slot (kind 0)")
 
 
+def _unit_shape(S) -> Shape:
+    """The unit's shape: the Commit's depth DS is its reads' (`port_reads`), not the unit's."""
+    return Shape(S.B, S.L, S.R, S.P, S.S, 1)
+
+
 def _sig_ids(S):
-    sh = Shape(S.B, S.L, S.R, S.P, S.S, S.DS)
+    sh = _unit_shape(S)
     request, _ = Q._sig_request(sh.request)
-    return ((*request, ("port_root", DIGEST), ("port_domain", DIGEST), ("steps", Array(S.S, Array(S.DS, BIT))),
-             ("keys", Array(sh.NK, Array(sh.CB, BIT))), ("ekeys", Array(sh.E, Array(sh.CB, BIT))),
-             ("port", Array(S.S, Array(4 * S.P, BYTE))), ("port_salts", Array(S.S, SALT)),
-             ("paths", Array(S.S, Array(S.DS, DIGEST))), ("route", Array(sh.route, BIT)),
+    return ((*request, ("keys", Array(sh.NK, Array(sh.CB, BIT))), ("ekeys", Array(sh.E, Array(sh.CB, BIT))),
+             (IT.PORT, Array(S.S, Array(4 * S.P, BYTE))), ("route", Array(sh.route, BIT)),
              ("sort", Array(sh.sort, BIT))), BIT)
 
 
-def _body_ids(B, S, row, lanes_, port_root, port_domain, steps, keys, ekeys, port, port_salts, paths, route, sort):
-    sh = Shape(S.B, S.L, S.R, S.P, S.S, S.DS)
+def _body_ids(B, S, row, lanes_, keys, ekeys, port, route, sort):
+    sh = _unit_shape(S)
     CB = sh.CB
     K, cr, lr, pr = HC._Consts(B), HC._refs(row), HC._refs(lanes_), HC._refs(port)
-    oks = [B.call(bind(IT.IoTiePort, P=S.P, S=S.S, DS=S.DS), port_root, port_domain, port, port_salts, steps, paths)]
+    oks = []
     nf, slots = HC._coll(Array(32, BIT), K.bits(0, 32)), []
     for k in range(S.L):
         ln = lr[Q.LANE * k:Q.LANE * (k + 1)]
@@ -482,14 +512,14 @@ def _body_ids(B, S, row, lanes_, port_root, port_domain, steps, keys, ekeys, por
 
 
 IoTieRequestIds = CompositeDefinition(
-    "IoTieRequestIds", 1, ("B", "L", "R", "P", "S", "DS"), _sig_ids, _body_ids,
+    "IoTieRequestIds", 1, ("B", "L", "R", "P", "S"), _sig_ids, _body_ids,
     conformance="exact-model-tested",
     doc="1 iff IoTieRequest's checks hold on the bucket row and its lanes (each lane's scan from its carry-in on its "
-        "ordinal to its carry-out), each of the S Commit rows of P input ids opens at its step under the Commit's root "
-        "(`IoTiePort`), and the bucket's prompt fields (`IoTieIdsSlots`), each given its class by the routed records "
-        "(`IoTieRoute`, `IoTieIdsKeys`), and the opened entries, sorted by class by the switches (`IoTieRoute`), hold "
-        "one value a class, each class starting with a field (`IoTieIdsChain`): the ingress-ids tie of one bucket row "
-        "of the warden's registered root (the row the proof system's registered read), every cell opened")
+        "ordinal to its carry-out), and the bucket's prompt fields (`IoTieIdsSlots`), each given its class by the "
+        "routed records (`IoTieRoute`, `IoTieIdsKeys`), and the entries of the S Commit rows of P input ids, sorted by "
+        "class by the switches (`IoTieRoute`), hold one value a class, each class starting with a field "
+        "(`IoTieIdsChain`): the ingress-ids tie of one bucket row of the warden's registered root, every cell opened, "
+        "the row and the Commit's rows at the bucket's steps each the proof system's registered read")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -501,15 +531,14 @@ def slots_arguments(cells: Sequence[bytes], frames: Sequence[Sequence[int]], nfs
 
 def arguments(shape: Shape, inst: Instance, route: Sequence[int], sort: Sequence[int]) -> list[list[int]]:
     """`IoTieRequestIds`' arguments in its signature's order, each its leaves' bits: IoTieRequest's (the row and the
-    lanes), then the Commit's root and domain id, the map, the opened rows, salts and paths, and both routings."""
-    sh, d, mp = shape, HC._digest_bits, inst.map
-    return [*Q.arguments(sh.request, inst.request), d(inst.port_root), d(inst.port_domain),
-            [b for s in mp.steps for b in HC._int_bits(s, sh.DS)], [b for k in mp.keys for b in HC._int_bits(k, sh.CB)],
+    lanes), then the map's classes, the read rows (as the registered reads give them) and both routings."""
+    sh, mp = shape, inst.map
+    return [*Q.arguments(sh.request, inst.request), [b for k in mp.keys for b in HC._int_bits(k, sh.CB)],
             [b for k in mp.ekeys for b in HC._int_bits(k, sh.CB)], [b for r in inst.port for b in HC._bytes_bits(r)],
-            [b for s in inst.port_salts for b in d(s)], [b for p in inst.paths for x in p for b in d(x)], list(route),
-            list(sort)]
+            list(route), list(sort)]
 
 
-__all__ = ["Instance", "IoTieIdsChain", "IoTieIdsKeys", "IoTieIdsSlots", "IoTieRequestIds", "Map", "Row", "SLOT",
-           "Shape", "arguments", "bucket_map", "commit", "commit_rows", "entry", "fields_of", "instance", "matches",
-           "reference", "root", "route_switches", "scan", "slots_arguments", "sort_switches"]
+__all__ = ["INPUT_IDS", "Instance", "IoTieIdsChain", "IoTieIdsKeys", "IoTieIdsSlots", "IoTieRequestIds", "Map", "Row",
+           "SLOT", "Shape", "arguments", "bucket_map", "commit", "commit_rows", "entry", "fields_of", "instance",
+           "matches", "port_reads", "reads_open", "reference", "root", "route_switches", "scan", "slots_arguments",
+           "sort_switches", "unit_reference"]
