@@ -311,12 +311,12 @@ theorem acceptsUpTo_period (wt : (Fin 144 → Bool) → Fin 144 → ℝ) (a b : 
   | n + 1, j + 1, x =>
     ⟨fun v _ => by simp [stages, SplitStages.joint, SplitStages.sameAt], acceptsUpTo_period wt a b n j x.2⟩
 
-theorem ite_words_le (c : Prop) [Decidable c] (j : Fin 144) :
+theorem ite_words_le (c : Prop) {_ : Decidable c} (j : Fin 144) :
     (if c then (tileWords Honest.scheme circuit 144 j : ℝ) else 0) ≤ tileWords Honest.scheme circuit 144 j := by
   split_ifs
   exacts [le_rfl, Nat.cast_nonneg _]
 
-theorem ite_zero_le (c : Prop) [Decidable c] (j : Fin 144) :
+theorem ite_zero_le (c : Prop) {_ : Decidable c} (j : Fin 144) :
     (if c then 0 else (tileWords Honest.scheme circuit 144 j : ℝ)) ≤ tileWords Honest.scheme circuit 144 j := by
   split_ifs
   exacts [Nat.cast_nonneg _, le_rfl]

@@ -113,9 +113,12 @@ What it doesn't give: any link from the H1 window to the values integrity's wind
 loop's activations rests on the loop's own assertion (`H1Loop.run`). Its credit is the H1 window's committed tiles' words;
 tying them to integrity's values is the joint statement's.
 
-It is stated, not proved. Its proof is `CircuitWorkPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
+The proofs are in `Proofs.Pouw.Period`: `CircuitWorkPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
 `K_d > 0`, and `JointSound` from `ServiceSound` and `DrawIsCoin` by monotonicity; H1's instance is `CheckedCreditPeriod`
 at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiveCoin` and `StagedPins`.
+`Proofs.Pouw.Period.Accept` runs the deployed check to an accept at H1's parameters (`N_p = 144`, `K_d = 24` on every
+accepted window), and `Proofs.Pouw.Period.Honest` is a live-salt period of those windows meeting every premise of
+`H1CheckedCreditPeriod`.
 -/
 
 namespace Properties.Pouw.Period
