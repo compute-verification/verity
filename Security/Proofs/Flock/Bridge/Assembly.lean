@@ -46,7 +46,8 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
         Xr).map Fin.valEmbedding := by
     intro v hv
     have hlt : v < n := by
-      have h := (Finset.mem_filter.1 (by unfold Claims.Sampling.faulty at hv; exact hv)).1
+      unfold Claims.Sampling.faulty at hv
+      have h := (Finset.mem_filter.1 hv).1
       rw [Finset.mem_range, hPR P] at h
       exact h
     refine Finset.mem_map.2 ⟨⟨v, hlt⟩, ?_, rfl⟩
