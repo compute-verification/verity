@@ -17144,10 +17144,10 @@
    "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "cbbc23a5cbd08ab3e0a390eb6382d7810d6bce7be5e52c22b59e835d04139f01",
+   "digest": "cb51d195b6adab206af8be23ee0ba1393cf09f2851575c9b07431d90942d815b",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8",
-    "NetTiming.Guarantees.SampledLeakAccepted": "8471bf082d2331bc73650da6c21734bf27df2bf205c0509f71c513948f7a8251"
+    "NetTiming.Guarantees.SampledLeakAccepted": "8911f9f675c1b614dc7db9eac6150ea5dab81ba16a38a3ab4c21d4210ac1b661"
    },
    "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
@@ -17230,7 +17230,7 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "d3b8e34f025162ea127d0995bf37c4b2c19da077ed4b172b559f06cfcd6d6be0",
+   "digest": "235466d761c0af106575b0852956725b84eb46368126192924cb411ec1ff570c",
    "definitions": {
     "NetTiming.Carries": "e7ac004752a175d793960824660f46b99d8fe3911fef93379ad2e7665d073f86",
     "NetTiming.Covered": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
@@ -17242,7 +17242,7 @@
     "NetTiming.Layout.egress": "a0e95168b97f01529a65a69348753486689a46062a932d1f2dbbd90c62369a03",
     "NetTiming.Layout.ingress": "1447b138bfb81ed0a928b0541b290f051e19d9e543e1eb3a2789041608cb6a45",
     "NetTiming.Layout.inputOf": "7a78045a4090690a8548b0d4877ead2d00470b9b2a523ac287fbc6476c5c6cba",
-    "NetTiming.RAcc": "dd21d57fde097858338ecf54180d051a21c7c62bc63f41cf45f021306b1450df",
+    "NetTiming.RAcc": "0767687d3a2dbdd094fa979fe0b8a99d4794ea5793a7936b0bc7d2601876f274",
     "NetTiming.ScopeAcc": "821308a64d5196398ada88bfa7ad6b76b9ce025d2b6e50a102be1b7ee8f3d285",
     "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
     "NetTiming.allSlotsFrom": "f33b54b2f78e58e5b6c598b33e8e12f59e362b1e4a555dfe36ab7f2e9af3782b",
@@ -17261,12 +17261,12 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "6fd1f65427b59f970cc05a195ca3b950225555a60c38f0b0de4b1ef3369efc18",
+   "digest": "f900441264867b1625651c851bc864e03c5332dca2cb37bad5aa032d99af64e4",
    "definitions": {
     "NetTiming.AccSeqsSampled": "05b16b5446955562b136a894719673fc47a049985da8f9880d9e4fb4ede3b771",
     "NetTiming.AcceptedFaulty": "df874e0f19724289c18f7080a173db8d45c039c2575c51212f5aa91a88496323",
-    "NetTiming.AsFree": "ed4f2c5d797b9a7068d69d56c5e8faf7bbfa6a3d7ec1b91f1e17e61fcb0f50b6",
-    "NetTiming.RLeak": "e181b18c4c7ea12dfbeee274e2654d5553f00082461343c6b20130de9430a9ff",
+    "NetTiming.AsReg": "8bf6242fd353d0c6f35c25d44db15e2edc65fc9ce3e354a8af0d27b4b3958335",
+    "NetTiming.RLeak": "a3f234a139ee3d1774cbf9afecf61d5065b74234bd718aa187d64b836698bea5",
     "NetTiming.faultyBits": "8cbcfcedec4b99e4491bff7587994f46bb7b20e10acb4a4bf584da5d0f299f7f",
     "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276",
     "NetTiming.freeInputs": "71960d7978491121a9408649c5d34ecffa4ac9f8b5067941406386c61c0779a0"
