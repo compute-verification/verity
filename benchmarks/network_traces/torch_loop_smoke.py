@@ -9,7 +9,13 @@ rest of the arguments in this process, timing each key's making or loading (`loa
 `certified.jsonl` and `clocks.jsonl` and the client's kept `client/certificates.jsonl` and `client/clocks.jsonl`, holds
 the kept ones to the deployment's key and session again (`check_certificates`), and holds one kept certificate with a
 bit of its signature flipped, which must be refused. `DIR/smoke.json` has the CPUs, the timings, the counts, the
-verdicts and the rehearsal's exit, which is this script's.
+verdicts and the rehearsal's exit, which is this script's. On a network-pool slot, from a clone (r20261025-191204-3c34):
+
+    research run --on vy-nebius-cpu-1 --project verity --source . --cwd clone --mem-gb 16 -- \\
+      env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by network-accounting -- \\
+      bash -c 'export PATH=$HOME/.elan/bin:$PATH; uv sync -q --all-packages --extra torch-cpu && \\
+        .venv/bin/python benchmarks/network_traces/torch_loop_smoke.py --out $RESEARCH_RUN_DIR/out/h20 -- \\
+        --traffic varied --compact 256 --requests 2 --tokens 2 --prompt-range 1:1 --seed 1 --height 20'
 """
 from __future__ import annotations
 
