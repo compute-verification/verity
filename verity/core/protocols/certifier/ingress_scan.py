@@ -7,7 +7,7 @@ state and the row; none is witness. Nothing here is in a Spec.
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
 are the warden's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes, `PAD` of
 none, each on the connection's ordinal q. A connection's ingress is one warden-form id request
-(`active.id_request(..., lead=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
+(`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **The start cadence.** Programs start at the boundaries, the buckets t ≡ 0 mod EVERY of the scan (EVERY a parameter:
@@ -33,7 +33,7 @@ field k at c·K + k, so prompt position p is at `position(p)`. Each field is lea
    is free when no block continues it and it isn't held, and the i-th new block takes the i-th free slot (the lowest
    free slot), its `admitted` `now` and its anchor A(`now`);
 3. a block's cells in order: its data cells (`DATA` or `END`), none once its slot is `done`, then its `PAD`s (kind,
-   length and payload zero); each data cell is the next frame of its slot's request (`io_request._reading` at lead 0,
+   length and payload zero); each data cell is the next frame of its slot's request (`io_request._reading`,
    a first frame from `left` = 0, whose head's fields go into the slot), `END` exactly when it holds the request's last
    byte, its length the request's bytes in it, its slot's `cells` below C, and its ids, each below 2^IDB, written at
    the slot's cell `cells` (a new slot's ids from the slot's last request are overwritten as its request comes in,
@@ -105,11 +105,11 @@ class Class:
         if self.IDB > 32 or self.C >= 1 << 16 or self.EVERY >= 1 << 31 or self.WITHIN >= 1 << 31:
             raise ValueError(f"IDB <= 32, C < 2^16 and EVERY, WITHIN < 2^31, not IDB={self.IDB}, C={self.C}, "
                              f"EVERY={self.EVERY}, WITHIN={self.WITHIN}")
-        Q.layout(self.B, 0)
+        Q.layout(self.B)
 
     @cached_property
     def lay(self) -> Q.Layout:
-        return Q.layout(self.B, 0)
+        return Q.layout(self.B)
 
     @property
     def S(self) -> int:
@@ -257,7 +257,7 @@ def decode(cls: Class, bits: Sequence[int]) -> State:
 
 def _head_values(lay: Q.Layout, payload: bytes) -> dict[str, int]:
     """A first frame's max_tokens, temperature, top_p and seed (`io_request.FIELDS`' first four spans)."""
-    (o0, w0, _), (o1, w1, _), (o2, w2, _), (o3, w3, _) = lay.spans[2:6]
+    (o0, w0, _), (o1, w1, _), (o2, w2, _), (o3, w3, _) = lay.spans[1:5]
     ratio = lambda f: int(f[:1] + f[2:])  # noqa: E731
     return {"max_tokens": int(payload[o0:o0 + w0]), "temperature": ratio(payload[o1:o1 + w1]),
             "top_p": ratio(payload[o2:o2 + w2]), "seed": int(payload[o3:o3 + w3])}
@@ -441,7 +441,7 @@ def _cell(C, cls: Class, cell: Sequence, left: Sequence, q: Sequence):
         here = Q._gt_const(C, count, k)
         dok.append(C.AND(here, or_reduce(C, value[cls.IDB:])).inv())
         ids.append([C.AND(here, b) for b in value[:cls.IDB]])
-    (o0, w0, _), (o1, w1, _), (o2, w2, _), (o3, w3, _) = lay.spans[2:6]
+    (o0, w0, _), (o1, w1, _), (o2, w2, _), (o3, w3, _) = lay.spans[1:5]
     low = lambda o, w: [cell[H + o + i][:4] for i in range(w)]  # noqa: E731
     ratio = lambda o: [cell[H + o][:4]] + [cell[H + o + i][:4] for i in range(2, 8)]  # noqa: E731
     head = {"max_tokens": II._decimal(C, low(o0, w0))[:32], "temperature": II._decimal(C, ratio(o1)),

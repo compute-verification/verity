@@ -35,7 +35,7 @@ PROMPTS = ([1000, 1007, 1014], [2000 + 3 * k for k in range(60)], [131071 - k fo
 
 def _request(i: int, prompt: list[int]) -> bytes:
     return id_request(model="unsloth/Llama-3.2-1B", user=f"user-{i}", prompt=prompt, max_tokens=5 + i, seed=11 * i,
-                      temperature=0.7, top_p=0.95, frame_bytes=B, lead=0)
+                      temperature=0.7, top_p=0.95, frame_bytes=B, offset=0)
 
 
 @pytest.fixture(scope="module")

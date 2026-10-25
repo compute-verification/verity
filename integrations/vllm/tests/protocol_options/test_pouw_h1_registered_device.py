@@ -13,6 +13,7 @@ import shutil
 import numpy as np
 import pytest
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity_vllm.protocol_options import pouw_h1_registered as NR
@@ -68,6 +69,39 @@ def test_the_cpu_twin_is_cores_commit_with_given_salts_and_unaligned_rows():
         assert D.host_commit(words, KEY, 0, given, ref.domain.domain_id) == (ref.bcs, ref.levels)
 
 
+#: (context, first position, salts): a window's open root as `Served` has it, short and empty contexts, positions past 2^32
+#: and up to the last u64
+PUBLIC = [("ab" * 64, 0, 5), ("cd" * 64, 86011, 40), ("w", (1 << 40) + 3, 3), ("", 0, 1), ("ef" * 64, (1 << 64) - 2, 2)]
+
+
+def _head(context: str) -> bytes:
+    ctx = context.encode()
+    return CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
+
+
+def _public(context: str, first: int, n: int) -> bytes:
+    return b"".join(CC.public_row_salt(context, u) for u in range(first, first + n))
+
+
+@needs_cxx
+@pytest.mark.parametrize("context,first,n", PUBLIC)
+def test_public_salts_are_cores_on_the_cpu_twin_and_the_numpy_path(context, first, n, monkeypatch):
+    """`public_salts` of `core_check.public_row_salt`'s head: core's salts, by the kernels' function on the CPU and by
+    `hashlib`."""
+    want = _public(context, first, n)
+    assert D.host_public_salts(_head(context), first, n) == want
+    monkeypatch.setattr(NR, "MODE", "numpy")
+    assert NR.public_salts(_head(context), first, n) == want
+
+
+def test_public_salts_refuse_what_they_cant_derive():
+    for head, first, n in ((bytes(321), 0, 1), (b"h", 0, 0), (b"h", -1, 1), (b"h", (1 << 64) - 1, 2)):
+        with pytest.raises(ValueError):
+            D.pub(head, first, n)
+    with pytest.raises(ValueError, match="u64"):
+        NR.public_salts(b"h", (1 << 64) - 1, 2)
+
+
 def test_the_layout_refuses_what_a_value_cant_be():
     for n, rb, key, did in ((0, 2, KEY, bytes(64)), (D.MAX_ROWS + 1, 2, KEY, bytes(64)), (1, 0, KEY, bytes(64)),
                             (1, 2, KEY, bytes(63)), (1, 2, KEY[:31], bytes(64))):
@@ -117,6 +151,14 @@ def test_the_device_takes_given_salts_chunks_and_wide_trees(monkeypatch):
         assert D.device_commit(words, KEY, (1 << 42) + n, ys, did) == want
 
 
+@pytest.mark.parametrize("context,first,n", [*PUBLIC, ("ab" * 64, 1 << 33, 70000)])
+def test_public_salts_on_the_device_are_cores(context, first, n, monkeypatch):
+    _gpu()
+    monkeypatch.setattr(NR, "MODE", "gpu")
+    assert NR.public_salts(_head(context), first, n) == D.device_public_salts(_head(context), first, n) == _public(
+        context, first, n)
+
+
 def test_auto_takes_the_gpu_where_it_runs(monkeypatch):
     _gpu()
     monkeypatch.setattr(NR, "MODE", "auto")
@@ -125,7 +167,7 @@ def test_auto_takes_the_gpu_where_it_runs(monkeypatch):
 
 def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
     """A small H1 window (`test_pouw_h1_served._window`) and the period's weights registered on the GPU and with NumPy: every
-    entry, the served digest and each call's manifest row are the same."""
+    entry, the served digest, each call's manifest row and each public table's salts are the same."""
     torch = _gpu()
     from tests.protocol_options import test_pouw_h1_served as T
 
@@ -134,7 +176,9 @@ def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
         torch.manual_seed(0)
         weights = T._period(T._weights())
         run, _ws, _got = T._window(T.W1, weights=weights, served=1)
-        return weights.entries(), run.served.entries(), run.served.digest(), [run.tables[c.index] for c in run.calls]
+        pubs = {v: r.salts for v, r in run.served.registered.items() if "pub@" in v}
+        return (weights.entries(), run.served.entries(), run.served.digest(), [run.tables[c.index] for c in run.calls],
+                pubs)
 
     got, want = window("gpu"), window("numpy")
-    assert got == want and len(got[1]) == 2 * len(T.SHAPES) * T.STEPS + (T.STEPS + 1) * len(T.KS)
+    assert got == want and got[4] and len(got[1]) == 2 * len(T.SHAPES) * T.STEPS + (T.STEPS + 1) * len(T.KS)

@@ -1,7 +1,7 @@
 """Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session drawn by a law no soundness claim draws by (a bernoulli
-draw, a work draw with or without a closure, a subset draw without `--zk`) at setup, whatever flags it holds, and passes a
-stratified draw, and under `--zk` a subset draw, on to the session's checks. The statement's form is checked last, once every
-check has passed, and a session without a draw is refused after that. The sessions are the registered-reads set's honest
+draw, a work draw with or without a closure, a subset draw without `--zk` at public outputs) at setup, whatever flags it
+holds, and passes a stratified draw, and under `--zk` a subset draw, on to the session's checks. The statement's form is
+checked last, once every check has passed, and a session without a draw is refused after that. The sessions are the registered-reads set's honest
 session (`FIXTURE`, vectors.json's set 16) with its record's draw replaced: its statement is the corpus's one whose program
 and partition a work draw's law derives from, so a work draw sets up there, where any other statement refuses it at setup
 before its law is read. A draw that passes the law check sets up and meets the session's checks, which the edited record

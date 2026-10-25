@@ -5,10 +5,13 @@ advice's, an arrival not the certified one, served rows not the run's, advice th
 carry-out not the charge's carry') and on each of REDTEAM's phase 9 choices the slice still has (a prefix hit, the heads
 left in place) and the prefix cache's (a made-up table, made-up tokens). The circuit is its reference on the
 demonstration slice (`compile_slice.demo`), whose candidates take real prefix hits (the corpus class, about 7.6M ANDs,
-is past what a test evaluates), and the cost `size` reports. The registered book is the arith fixture's async-light
-stream's (fit on that run, never on the slice's)."""
+is past what a test evaluates), where a served batch in another order than the slots is refused (AS = 0); on the
+asynchronous demonstration slice (`compile_slice.demo_async`, AS = 1) its ``map`` takes that batch by request, and
+only that map; and the cost `size` reports. The registered book is the arith fixture's async-light stream's (fit on
+that run, never on the slice's)."""
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +48,13 @@ def slice_():
 def synth():
     """The demonstration slice (`compile_slice.demo`)."""
     st, sl = CS.demo()
+    return SimpleNamespace(st=st, S=SimpleNamespace(**st), sl=sl)
+
+
+@pytest.fixture(scope="module")
+def asynth():
+    """The asynchronous demonstration slice (`compile_slice.demo_async`)."""
+    st, sl = CS.demo_async()
     return SimpleNamespace(st=st, S=SimpleNamespace(**st), sl=sl)
 
 
@@ -155,21 +165,122 @@ def test_the_circuit_is_its_reference(synth):
     cases["tokens"] = CS.case(x.S, x.sl, BOOK, served=served, tokens=toks)
     cases["hit"] = CS.case(x.S, x.sl, BOOK, served=served, **CS.phase9(x.S, x.sl)["hit"])
     cases["restart"] = CS.case(x.S, x.sl, BOOK, served=served, carry=AE.Carry(((0, 0),) * AE.RUNS, 0))
+    cases["reordered"] = CS.case(x.S, x.sl, BOOK, served=served[:2] + [_reversed(served[2])] + served[3:])
     got = CS.evaluate(x.st, list(cases.values()))
     assert got == [c.verdict for c in cases.values()]
     flags = {k: _refused(c) for k, c in cases.items()}
     assert flags == {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
                      "served": {"rows"}, "cleared": {"load"}, "carry": {"code"}, "short": {"cache", "rows"},
                      "unasked": {"cache"}, "table": {"cache"}, "tokens": {"rows"}, "hit": {"cache", "rows"},
-                     "restart": set()}
+                     "restart": set(), "reordered": {"rows"}}
     assert cases["restart"].length < honest.length
     assert cases["table"].hits[0] == (1, 2, 0) and cases["table"].steps[0] == ((0, 0, 0, 4, 5),)
     assert cases["tokens"].hits[2] == (0, 0, 1) and cases["tokens"].steps[2][1] == (1, 1, 0, 0, 11)
 
 
-def test_size(synth, slice_):
+def _reversed(rows):
+    """One step's rows in the reverse batch order, each at its new batch position."""
+    return tuple((b, *r[1:]) for b, r in enumerate(reversed(rows)))
+
+
+def _asynth_cases(x):
+    """The async demonstration slice's honest unit and the cases its ``map`` meets: the served batch in the reverse
+    order of the slots at units 0 and 2 (``batch``); unit 0's two served rows with their requests swapped (``swap``);
+    the batch with the identity map at unit 0 (``identity``) and with both of its rows read from slot 0 (``twice``);
+    unit 1's last served row dropped (``dropped``); and unit 4's empty slot 1 mapped to the empty batch position 1
+    (``empty``)."""
+    S, sl = x.S, x.sl
+    honest = CS.case(S, sl, BOOK)
+    batch = [_reversed(s) if u in (0, 2) else s for u, s in enumerate(honest.steps)]
+    a, b = honest.steps[0]
+    swap = [((0, b[1], *a[2:]), (1, a[1], *b[2:]))] + batch[1:]
+    return {"honest": honest, "batch": CS.case(S, sl, BOOK, served=batch), "swap": CS.case(S, sl, BOOK, served=swap),
+            "identity": CS.case(S, sl, BOOK, served=batch, maps={0: [[1, 0], [0, 1]]}),
+            "twice": CS.case(S, sl, BOOK, served=batch, maps={0: [[1, 0], [1, 0]]}),
+            "dropped": CS.case(S, sl, BOOK, served=batch[:1] + [batch[1][:-1]] + batch[2:]),
+            "empty": CS.case(S, sl, BOOK, maps={4: [[1, 0], [0, 1]]})}
+
+
+def test_the_map_takes_the_served_rows_by_request(asynth):
+    """At AS = 1 (`compile_slice.demo_async`) ``rows`` holds the served rows to the scan's by request: a batch in another
+    order than the slots is accepted through its map, and refused through any other; requests swapped between two
+    rows of one batch, a slot read twice, a row dropped and an empty slot mapped are refused. The map is unique: at a
+    unit of two rows and one of one, served in slot order, the identity on the slots with rows is the only one of the
+    16 maps accepted."""
+    x = asynth
+    cases = _asynth_cases(x)
+    honest = cases["honest"]
+    assert honest.steps[:5] == (((0, 0, 0, 0, 9), (1, 1, 0, 0, 6)), ((0, 0, 1, 9, 1), (1, 1, 1, 6, 1)),
+                                ((0, 0, 1, 10, 1), (1, 1, 1, 7, 1)), ((0, 0, 1, 11, 1), (1, 2, 0, 0, 5)),
+                                ((0, 2, 1, 5, 1),)) and honest.asks == x.sl.decisions
+    assert {k: _refused(c) for k, c in cases.items()} == {
+        "honest": set(), "batch": set(), "swap": {"rows"}, "identity": {"rows"}, "twice": {"rows"},
+        "dropped": {"rows"}, "empty": {"rows"}}
+    for u in (0, 4):
+        ok = [m for m in itertools.product((0, 1), repeat=4)
+              if CS.case(x.S, x.sl, BOOK, maps={u: [m[:2], m[2:]]}).verdict == CS.ACCEPT]
+        assert ok == [(1, 0, 0, 1) if u == 0 else (1, 0, 0, 0)]
+
+
+def test_the_circuit_is_its_reference_on_the_map(asynth):
+    """The async unit's verdict word is the reference's on every case of the map's test."""
+    cases = _asynth_cases(asynth)
+    assert CS.evaluate(asynth.st, list(cases.values())) == [c.verdict for c in cases.values()]
+
+
+def _later_row_off(c: CS.Case) -> list:
+    """`c`'s steps with the last step that has rows served one token longer in its first row: a row of the window's last
+    ``srv`` block at any G."""
+    steps = list(c.steps)
+    u = max(k for k, s in enumerate(steps) if s)
+    first = steps[u][0]
+    return steps[:u] + [((*first[:4], first[4] + 1),) + steps[u][1:]] + steps[u + 1:]
+
+
+@pytest.mark.parametrize("which, G", [("synth", 2), ("asynth", 2)])
+def test_the_served_rows_in_blocks(request, which, G):
+    """At G < P the unit is CompileSliceBlocks_v1{…, G}: ``srv`` is P / G rows, each the block `served_rows.block_bits`
+    registers, and step u is checked against row u // G. The circuit is its reference on the honest run, a row of the
+    last block served otherwise and (AS = 1) the batch in another order than the slots, and its ANDs are the G = P
+    unit's."""
+    from verity.core.protocols.certifier import served_rows as SR
+
+    x = request.getfixturevalue(which)
+    st = CS.with_block(x.st, G)
+    S = SimpleNamespace(**st)
+    names = CS.srv_names(S)
+    assert CS.unit(**st).id.startswith("CompileSliceBlocks_v1{") and CS.unit(**st).id.endswith(f",G={G}}}")
+    assert CS.row_names(S) == ("pub", "adv", "cert", *names, "cin", "cout", "wit") and len(names) == x.S.P // G
+    honest = CS.case(S, x.sl, BOOK)
+    assert honest.verdict == CS.ACCEPT and honest.steps == CS.case(x.S, x.sl, BOOK).steps
+    assert [honest.rows[r] for r in names] == [SR.block_bits(x.S, list(honest.steps), G, j) for j in range(len(names))]
+    cases = {"honest": honest, "later": CS.case(S, x.sl, BOOK, served=_later_row_off(honest))}
+    if x.S.AS:
+        cases["batch"] = CS.case(S, x.sl, BOOK, served=[_reversed(s) if u in (0, 2) else s
+                                                        for u, s in enumerate(honest.steps)])
+    assert {k: _refused(c) for k, c in cases.items()} == {"honest": set(), "later": {"rows"}, **(
+        {"batch": set()} if x.S.AS else {})}
+    assert CS.evaluate(st, list(cases.values())) == [c.verdict for c in cases.values()]
+    assert CS.size(**st)["ands"] == CS.size(**x.st)["ands"]
+
+
+def test_g_is_out_of_the_id_at_p(synth):
+    """G is P unless given and is kept out of the statics at P, so the unit there is CompileSlice_v1 as pinned; the
+    blocked Definition refuses G = P, and a G that doesn't divide P is refused."""
+    st, P = synth.st, synth.S.P
+    assert CS.with_block(st, P) == CS.with_block(st, None) == st and "G" not in st
+    assert CS.unit(**st).id.startswith("CompileSlice_v1{") and ",G=" not in CS.unit(**st).id
+    assert CS.srv_names(synth.S) == ("srv",) and CS.row_names(synth.S) == CS.ROWS
+    with pytest.raises(ValueError, match="CompileSlice_v1"):
+        CS.unit(**st, G=P)
+    with pytest.raises(ValueError, match="dividing P"):
+        CS.with_block(st, 3)
+
+
+def test_size(synth, asynth, slice_):
     s = CS.size(**synth.st)
     assert s == {"ands": 59341, "pub_bits": 256, "adv_bits": 16, "cert_bits": 256, "srv_bits": 144, "cin_bits": 96,
                  "cout_bits": 96, "wit_bits": 1568}
+    assert CS.size(**asynth.st)["ands"] == 32236
     assert CS.row_bits(slice_.S) == {"pub": 256, "adv": 16, "cert": 20512, "srv": 432, "cin": 96, "cout": 96,
                                      "wit": 56928}
