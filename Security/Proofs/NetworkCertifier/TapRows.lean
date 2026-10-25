@@ -5,25 +5,26 @@ import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Finder
 
 /-!
-# The leak bound at the tap's rows
+# The leak bound at the network certifier's rows
 
-The tap registers its records at the transfer gates (`TapOpens`). On the sampling relation (`R δ`), every unit outside
-the faulty set is correct on the trace's committed values, so the trace opens every transfer gate there (each is
-committed: an output or an input). Where the trace opens a transfer gate it agrees with the tap, unless the two openings
-collide (below). Fill in the tap's value at every gate the trace leaves unopened (`fill`): a correct unit stays correct
-(`correct_mono`, it reads only opened values), and the filled trace carries the tap's records at every transfer gate
-(`carries_fill`), the faulty units' included, since the trace's own value there, where it has one, is the tap's. So
-`accepted_of` gives `Accepted` with the faulty units' committed gates held at the filled values, the advice the count
-charges (`2^β` over `faultySets`), and since a held gate's input value is never read, the inputs move back to the trace's
-own values (`valOver_congr_held`): the tap's records are among the sequences `AccSeqsSampled` counts at the trace's
-values (`rLeakTap_of_r`).
+The network certifier registers its records at the transfer gates (`TapOpens`). On the sampling relation (`R δ`), every
+unit outside the faulty set is correct on the trace's committed values, so the trace opens every transfer gate there
+(each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network certifier,
+unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves unopened
+(`fill`): a correct unit stays correct (`correct_mono`, it reads only opened values), and the filled trace carries the
+network certifier's records at every transfer gate (`carries_fill`), the faulty units' included, since the trace's own
+value there, where it has one, is the network certifier's. So `accepted_of` gives `Accepted` with the faulty units'
+committed gates held at the filled values, the advice the count charges (`2^β` over `faultySets`), and since a held
+gate's input value is never read, the inputs move back to the trace's own values (`valOver_congr_held`): the network
+certifier's records are among the sequences `AccSeqsSampled` counts at the trace's values (`rLeakTap_of_r`).
 
-An extracted trace that disagrees with the tap opens a transfer gate to a value the tap's opening there doesn't. The
-extractor checked that opening with its own calls (`Passes.found`, `ownLog_E`), so under `Commitment.Binds` its calls and
-those that check the tap's opening collide, and `B_tap` finds the collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`).
-`sampledLeak_tap` is the bound: `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`.
+An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
+opening there doesn't. The extractor checked that opening with its own calls (`Passes.found`, `ownLog_E`), so under
+`Commitment.Binds` its calls and those that check the network certifier's opening collide, and `B_tap` finds the
+collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`). `sampledLeak_tap` is the bound:
+`Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`.
 
-The registered-input and collision steps follow the registration's (proofs' P1b), at the tap's openings.
+The registered-input and collision steps follow the registration's (proofs' P1b), at the network certifier's openings.
 -/
 
 namespace NetTiming.TapProof
@@ -122,7 +123,7 @@ theorem correct_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b
   · obtain ⟨b, hb1, hb2⟩ := h2 hbd
     exact ⟨b, hext g b hb1, runIn_mono hext u g b hb2⟩
 
-/-! ### The trace filled in with the tap's values -/
+/-! ### The trace filled in with the network certifier's values -/
 
 /-- The committed values `ref`, with `tv`'s value at every gate `ref` leaves unopened. -/
 def fill (ref : ℕ → Option Bool) (tv : ℕ → Bool) (g : ℕ) : Option Bool := some ((ref g).getD (tv g))
@@ -152,8 +153,9 @@ theorem rowOf_congr {S : ℕ} {val val' : ℕ → Bool} {p : Fin S → ℕ × Li
   simp only [rowOf]
   rw [h (p σ).1 (by simp [slotGates]), List.map_congr_left fun g hg => h g (by simp [slotGates, hg])]
 
-/-- **The filled trace carries the tap's records**: where the trace opens a transfer gate the tap opens, at the tap's
-value, the trace filled in with the tap's values carries every record the tap registers. -/
+/-- **The filled trace carries the network certifier's records**: where the trace opens a transfer gate the network
+certifier opens, at the network certifier's value, the trace filled in with the network certifier's values carries every
+record the network certifier registers. -/
 theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : Commitment Bool} {lay : Layout L S} {k : ℕ}
     {op : ℕ → List (Obs L K S) → List Bool} {s : Stmt} {ops : List (Opening Bool)} {o : List (Obs L K S)}
     {ref : ℕ → Option Bool} (hfit : lay.Fits s.prog k) (htap : TapOpens H Cm lay k op s ops o)
@@ -218,14 +220,15 @@ theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → 
         cases x <;> first | rfl | rw [h g hx hf]
     · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
 
-/-! ### The sampling relation gives the leak relation at the tap's rows -/
+/-! ### The sampling relation gives the leak relation at the network certifier's rows -/
 
 section Deploy
 
 variable {Coin Col T : Type}
 
-/-- **At the tap's rows**: on the audit's scope at `δ ≥ 0`, the sampling relation at a trace that agrees with the tap
-wherever both open a gate gives the leak relation at the tap's rows, at any inputs `As` that suffice (`AdviceIn`). -/
+/-- **At the network certifier's rows**: on the audit's scope at `δ ≥ 0`, the sampling relation at a trace that agrees
+with the network certifier wherever both open a gate gives the leak relation at the network certifier's rows, at any
+inputs `As` that suffice (`AdviceIn`). -/
 theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ)
     {δ : ℝ} (hδ : 0 ≤ δ) {As : Stmt → (ℕ → Bool) → Set (ℕ → Bool)} {Dj : ℕ} (tops : Stmt → List (Opening Bool))
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) {x : Msg}
@@ -270,7 +273,7 @@ theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (l
   exact ⟨hl, hD, _, hF, hin s P hP _ _ hF op o
     ⟨_, Set.mem_singleton _, _, fun g b h => faultyGate_of_heldAdv h, hacc'⟩⟩
 
-/-! ### A disagreement with the tap is a collision -/
+/-! ### A disagreement with the network certifier is a collision -/
 
 theorem mem_assemble_of_val {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {found : List (List Msg × Opening Bool)}
     {g : ℕ} {b : Bool} (h : (assemble s found).val H Cm s g = some b) :
@@ -301,8 +304,8 @@ theorem tapLog_valid (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg)
 
 variable [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- The tap's collision: the extraction's own calls and the checks of the tap's openings hold two different inputs with
-one output. -/
+/-- A collision against the network certifier's openings: the extraction's own calls and the checks of the network
+certifier's openings hold two different inputs with one output. -/
 def TapColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (tops : Stmt → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) : Prop :=
@@ -322,9 +325,9 @@ theorem passes_of_mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : 
   exact ⟨h1, fun t ht => ownLog_E H D decode P x ω r₀ c hst hacc t (h2 t ht)⟩
 
 omit [DecidableEq Col] [Zero Col] in
-/-- **A disagreement with the tap is a collision**: at an accepted run, an extracted trace that opens a gate the tap
-opens to a value other than the tap's makes, with the tap's opening there, calls that collide among the extraction's own
-and the checks of the tap's openings. -/
+/-- **A disagreement with the network certifier is a collision**: at an accepted run, an extracted trace that opens a
+gate the network certifier opens to a value other than the network certifier's makes, with the network certifier's
+opening there, calls that collide among the extraction's own and the checks of the network certifier's openings. -/
 theorem tapColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H)
     (decode : List (ℕ × Col) → List T) (tops : Stmt → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) {st : Stmt} (hst : D.parse x = some st)
@@ -353,7 +356,8 @@ theorem tapColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.co
     (fun t ht => List.mem_append_right _ (List.mem_flatMap.2 ⟨o', ho', ht⟩))
 
 omit [DecidableEq Col] [Zero Col] in
-/-- **The reduction's probability step**: the tap's collisions have probability at most `B_tap`'s. -/
+/-- **The reduction's probability step**: the collisions against the network certifier's openings have probability at
+most `B_tap`'s. -/
 theorem Pr_tapColl_le_Btap (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (tops : Stmt → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x => TapColl H D decode tops P x s) ≤
@@ -368,10 +372,10 @@ theorem Pr_tapColl_le_Btap (H : Msg → Msg) (D : Deploy Coin Col T) (decode : L
     | none => rw [hx] at hp; exact absurd hp (by simp)
     | some st => rw [hx] at hp; exact tapLog_valid H D.commit st.roots (tops st) p hp
 
-/-- **The leak bound at the tap's rows**, at any deployment `D` of the sampled verifier where `KS` holds and the trace's
-commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace within Flock's
-radius, inputs `As` that suffice (`AdviceIn`), and the tap's openings `tops s` at each statement. On the statements in
-the audit's scope: `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
+/-- **The leak bound at the network certifier's rows**, at any deployment `D` of the sampled verifier where `KS` holds
+and the trace's commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace
+within Flock's radius, inputs `As` that suffice (`AdviceIn`), and the network certifier's openings `tops s` at each
+statement. On the statements in the audit's scope: `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
 theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ)
     (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
