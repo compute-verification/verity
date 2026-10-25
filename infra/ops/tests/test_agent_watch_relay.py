@@ -255,13 +255,11 @@ def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_i
     assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 2, "the silent posts; run ends ring-run"
     permalink = relay.slack.permalink(relay.REG, relay.ALERTS, "17600003.0")
     assert relay.ring_runs == [
-        ["--run", "r20261019-040000-ab12", "--rc", "0", "--text", f"sweep-a done after 1 h 06 min on vy-nebius-1: {permalink}",
-         "--agent", w, "--to", "@proofs"],
         ["--run", "r20261019-040000-cd34", "--rc", "1", "--text", "lean build failed after 12 min on vy-nebius-2: "
          + relay.slack.permalink(relay.REG, relay.ALERTS, "17600004.0"), "--agent", co],
         ["--run", "r20261019-040000-ef56", "--rc", "0", "--text", "slot --by proofs -- done after 30 s on vy-nebius-2: "
          + relay.slack.permalink(relay.REG, relay.ALERTS, "17600005.0"), "--to", "@proofs"]], \
-        "a worker's and a lane's run name the handle; a coordinator's own is found by its route"
+        "a lane's run names the handle; a coordinator's own is found by its route; a worker's rc 0 run (ab12) rings no one"
 
 
 def test_a_former_coordinators_run_refused_by_ring_run_is_rung_again_with_the_watchs_handle(relay):
@@ -430,7 +428,11 @@ def test_a_listed_workers_run_end_says_the_watch_resumes_it(relay):
     relay.log_text["text"] = json.dumps(rec) + "\n"
     relay.once()
     assert relay.posts[0].endswith("; the watch starts a run on it with the result if it is still idle in 10 min.")
-    assert relay.ring_runs[0][-2:] == ["--to", "@proofs"]
+    assert relay.ring_runs == [], "rc 0: posted unrung (INF-216)"
+    rec.update(run="r2", rc=1, state="failed")
+    relay.log_text["text"] += json.dumps(rec) + "\n"
+    relay.once()
+    assert relay.ring_runs[0][-2:] == ["--to", "@proofs"], "a worker's failed run still rings its lane"
 
 
 def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):

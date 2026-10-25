@@ -30,6 +30,7 @@ from verity_vllm.program.kernels import sparse_mla_split_twins as TW
 from verity_vllm.program.registry import boolean_sparse_mla_split as BX
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry import sparse_mla_split as W
+from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D
@@ -201,6 +202,18 @@ def test_the_parts_read_the_twin_s_partials_and_lse_whose_combine_is_the_served_
             assert not nf.any()
             assert [g["rows"][x][i].tolist() for x in ("in0", "in1", "in2")] == [qn.tolist(), qr.tolist(), kv.reshape(-1).tolist()]
             assert (g["outs"]["o0"][i].tolist(), g["outs"]["o1"][i].tolist()) == (o[0].view("<u2").tolist(), lse.view("<u2").tolist())
+
+
+def test_a_row_s_statics_as_the_record_spells_them_read_as_a_binding_s():
+    """A TP window's rows carry their statics as the record spells them (`query.manifest.format.spec_statics`: every value a
+    string, SCALE ``{"f64":"<hex>"}``), and read as the binding's."""
+    s = Served(n=2)
+    want = read(s, members(s))
+    s.rows = [(rid, pi, r, {**d, "statics": MF.spec_statics(r["spec"])}) for rid, pi, r, d in s.rows]
+    assert s.rows[0][3]["statics"]["SCALE"] == '{"f64":"0x1.0000000000000p-4"}'
+    got = read(s, members(s))
+    assert [{x: {q: a.tolist() for q, a in g[x].items()} for x in ("rows", "outs")} for g, _e in got] == \
+        [{x: {q: a.tolist() for q, a in g[x].items()} for x in ("rows", "outs")} for g, _e in want]
 
 
 def test_a_row_whose_served_words_are_not_its_splits_combine_is_refused():

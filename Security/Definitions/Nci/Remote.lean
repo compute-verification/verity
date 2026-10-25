@@ -15,7 +15,8 @@ tiers T1 and T2, with no wipes and no sampling; "The dampener ρ, remote protoco
   its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
 * the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't drawn is accepted, so the faulty blocks
   an identity runs before its first detection (`escaped`) skip declared work too, at most `θ C` outside an event of
-  probability at most `J ((1 − q)/q) B/(θ C)`.
+  probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
+  (`noDetectionBefore`) being detected with probability at least `q`.
 
 PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that isn't wrong may still credit up to `ε_W`
 of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
@@ -46,6 +47,11 @@ block `b` run by identity `ident b` at time `τ b`, those with no detected fault
 identity at or before `τ b`. When every faulty block is detected (every proof block proved, tiers T1–T4), none is. -/
 noncomputable def escaped {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) : Finset β :=
   open scoped Classical in bad.filter fun b => ∀ b' ∈ bad, b' ∈ detected → ident b' = ident b → τ b < τ b'
+
+/-- **No earlier detection**: no faulty block (`bad`) of block `b`'s identity other than `b` is detected at or before
+`τ b`. A faulty block with no earlier detection that is not detected itself is escaped (`escaped`). -/
+def noDetectionBefore {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) (b : β) : Prop :=
+  ∀ b' ∈ bad, b' ∈ detected → b' ≠ b → ident b' = ident b → τ b < τ b'
 
 /-- **The hardware multiple a developer needs**, `max(1, MFU₀/η)`: the hardware-time it spends, `C + U` FLOP at peak,
 over the hardware-time an unconstrained developer at model-FLOP utilization `MFU₀` needs for the same `M` counted

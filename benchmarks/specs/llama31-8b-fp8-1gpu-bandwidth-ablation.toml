@@ -1,0 +1,44 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-fp8-1gpu-bandwidth-ablation"
+# Where PoUS's bandwidth audit's time over bandwidth-plain goes: llama31-8b-fp8-1gpu-bandwidth's two arms beside the
+# audit without its KV receipts, at one codec round where it runs three, and the audit and plain with their fillers
+# paused (`verity_bench.vllm.bandwidth_ablation`), each token-controlled by bandwidth-plain. bandwidth-plain is the
+# first arm and so the baseline: every ratio is to it. The same preset, KV pin, warm-up rule and receipts setting as
+# llama31-8b-fp8-1gpu-bandwidth, at 6 reps so drift cancels in the means.
+arms = ["bandwidth-plain", "bandwidth-audit", "bandwidth-audit-no-kv-receipts", "bandwidth-audit-k1",
+        "bandwidth-audit-no-filler", "bandwidth-plain-no-filler"]
+arm_modules = ["benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT",
+               "verity_bench.vllm.bandwidth_ablation:AUDIT_NO_KV_RECEIPTS", "verity_bench.vllm.bandwidth_ablation:AUDIT_K1",
+               "verity_bench.vllm.bandwidth_ablation:AUDIT_NO_FILLER", "verity_bench.vllm.bandwidth_ablation:PLAIN_NO_FILLER"]
+sweep = "quick"
+reps = 6
+warmups = 2
+max_warmups = 8
+eager = false
+setup = "benchmarks/harness/setup/vllm_encoded.sh"
+
+[env]
+FLASHINFER_CUDA_ARCH_LIST = "12.0f"
+VERITY_VLLM_BENCH_KV_RECEIPTS = "on"
+
+[preset]
+id = "llama31-8b-fp8-1gpu-bandwidth-ablation"
+model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
+model_digest = "98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.40
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 16384
+block_kv_cache_memory_bytes = 60129542144
+
+[admission]
+max_minutes = 120
