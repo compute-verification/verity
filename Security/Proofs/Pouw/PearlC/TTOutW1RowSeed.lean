@@ -79,8 +79,8 @@ theorem instr_frame (dv : W1.W1Device) (i : W1.Instr) (M : W1.Mem) {x : W1.Addr}
   | cvt f d _ _ _ =>
     simp only [W1.Instr.exec]
     by_cases hf : f = .s8
-    · rw [if_pos hf]
-    · rw [if_neg hf]
+    · rw [ite_eq_left hf]
+    · rw [ite_eq_right hf]
       exact upd d _ h
   | mma f d _ _ _ _ _ =>
     simp only [W1.Instr.exec]
