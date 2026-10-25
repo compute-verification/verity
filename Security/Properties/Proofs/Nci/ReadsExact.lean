@@ -81,7 +81,11 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   for every member (`fromCallee_shared`, a slice's pieces having its segments' targets, `psSlice_tgt`); any other
   stride position by position (`down_batch_pts`, `batchPts_agree`). In a Definition's body, wherever its references
   (`Resolve.BodyOk`), its callees' summaries (`RetOk`), the decoder's facts its private `composite` sets (`Decoded`,
-  `ScanOut`) and `OpenSteps` do (`specs_decoded`).
+  `ScanOut`) and `OpenSteps` do (`specs_decoded`);
+* so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
+  `memoOf_retOk`), a reached composite's callees reached, decoded before it and not the root, wherever besides those
+  the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`, open), and a
+  composite's return is the sequence of its parts and a primitive's none (`RetParts`, open).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -6740,6 +6744,313 @@ theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
   · intro k node hn hp
     exact (hDec node.fn (hfn k node hn)).2.1 hp
 
+
+/-! ## The summaries `memoOf` makes
+
+`Desc.summarize` lays the segments `down` gives its return's pieces end to end (`forIn_trace2`), so a summary holds
+`RetOk` wherever those segments name their `len` positions, at or past 0 and none a node's (`DownShape`), keep the gates
+they read (`specs_decoded`) and the return is the sequence of its parts (`RetParts`) (`summarize_retOk`); and so every
+summary `memoOf` makes of a reached Definition other than the root does, callees first (`memoOf_retOk`). -/
+
+/-- A loop appending what `F` gives each element: the outputs, element by element, after the start. -/
+theorem forIn_trace {β : Type} (F : β → Except String (Array Seg)) :
+    ∀ (l : List β) (acc out : Array Seg), forIn l acc (fun q (r : Array Seg) => do
+        let v ← F q
+        pure (ForInStep.yield (r ++ v))) = .ok out →
+      ∃ outs : List (Array Seg), List.Forall₂ (fun q v => F q = .ok v) l outs ∧ out = outs.foldl (· ++ ·) acc
+  | [], acc, out, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    exact ⟨[], .nil, h.symm⟩
+  | x :: l, acc, out, h => by
+    rw [List.forIn_cons] at h
+    obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    obtain ⟨outs, h1, h2⟩ := forIn_trace F l (acc ++ v) out h
+    exact ⟨v :: outs, .cons hv h1, h2⟩
+
+theorem forall2_append {α β : Type} {R : α → β → Prop} : ∀ {l1 : List α} {m1 : List β} {l2 : List α}
+    {m2 : List β}, List.Forall₂ R l1 m1 → List.Forall₂ R l2 m2 → List.Forall₂ R (l1 ++ l2) (m1 ++ m2)
+  | _, _, _, _, .nil, h2 => h2
+  | _, _, _, _, .cons h hrest, h2 => .cons h (forall2_append hrest h2)
+
+/-- Two such loops nested, over a sequence's segments and each one's pieces. -/
+theorem forIn_trace2 (F : Piece → Except String (Array Seg)) :
+    ∀ (l : List Seg) (acc out : Array Seg), forIn l acc (fun (s : Seg) (r : Array Seg) => do
+        let r' ← forIn s.ps r (fun q (r : Array Seg) => do
+          let v ← F q
+          pure (ForInStep.yield (r ++ v)))
+        pure (ForInStep.yield r')) = .ok out →
+      ∃ outs : List (Array Seg), List.Forall₂ (fun q v => F q = .ok v) (l.flatMap fun s => s.ps.toList) outs ∧
+        out = outs.foldl (· ++ ·) acc
+  | [], acc, out, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    exact ⟨[], .nil, h.symm⟩
+  | s :: l, acc, out, h => by
+    rw [List.forIn_cons] at h
+    obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+    obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    rw [← Array.forIn_toList] at hr'
+    obtain ⟨o1, h1, e1⟩ := forIn_trace F _ acc r' hr'
+    obtain ⟨o2, h2, e2⟩ := forIn_trace2 F l r' out h
+    refine ⟨o1 ++ o2, ?_, ?_⟩
+    · rw [List.flatMap_cons]; exact forall2_append h1 h2
+    · rw [e2, e1, List.foldl_append]
+
+theorem segsPos_foldl : ∀ (outs : List (Array Seg)) (acc : Array Seg),
+    segsPos (outs.foldl (· ++ ·) acc) = segsPos acc ++ outs.flatMap segsPos
+  | [], acc => by simp
+  | v :: outs, acc => by
+    rw [List.foldl_cons, segsPos_foldl outs, segsPos_append, List.flatMap_cons, List.append_assoc]
+
+theorem mem_foldl : ∀ (outs : List (Array Seg)) (acc : Array Seg) (g : Seg),
+    g ∈ (outs.foldl (· ++ ·) acc).toList → g ∈ acc.toList ∨ ∃ v ∈ outs, g ∈ v.toList
+  | [], acc, g, h => .inl h
+  | v :: outs, acc, g, h => by
+    rw [List.foldl_cons] at h
+    rcases mem_foldl outs _ g h with h | ⟨w, hw, hg⟩
+    · rw [Array.toList_append, List.mem_append] at h
+      rcases h with h | h
+      · exact .inl h
+      · exact .inr ⟨v, List.mem_cons_self, h⟩
+    · exact .inr ⟨w, List.mem_cons_of_mem _ hw, hg⟩
+
+theorem agree_trace {P : Prog} {sc : Flock.Program.Scope} {F : Piece → Except String (Array Seg)}
+    {T : Piece → List (Except String Nat)} : ∀ {qs : List Piece} {outs : List (Array Seg)},
+    List.Forall₂ (fun q v => F q = .ok v) qs outs → (∀ q ∈ qs, ∀ v, F q = .ok v → Agree P sc (segsPos v) (T q)) →
+    Agree P sc (outs.flatMap segsPos) (qs.flatMap T)
+  | _, _, .nil, _ => List.Forall₂.nil
+  | _, _, .cons (a := q) (b := v) hv hrest, hF => by
+    rw [List.flatMap_cons, List.flatMap_cons]
+    exact agree_append (hF q List.mem_cons_self v hv)
+      (agree_trace hrest fun q' hq' => hF q' (List.mem_cons_of_mem _ hq'))
+
+theorem forall2_mem {α β : Type} {R : α → β → Prop} : ∀ {l : List α} {m : List β}, List.Forall₂ R l m →
+    ∀ b ∈ m, ∃ a ∈ l, R a b
+  | _, _, .nil, _, hb => absurd hb (by simp)
+  | _, _, .cons (a := a) (b := b') h hrest, b, hb => by
+    rcases List.mem_cons.1 hb with rfl | hb
+    · exact ⟨a, List.mem_cons_self, h⟩
+    · obtain ⟨a', ha', h'⟩ := forall2_mem hrest b hb
+      exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
+
+/-- A segment of Definition `d`'s body as `down` gives it: naming its `len` positions, each at or past 0 and naming a
+gate or a leaf of one of `d`'s parameters in range. -/
+def ShapeOk (P : Prog) (d : Nat) (s : Seg) : Prop :=
+  SegOk s ∧ ∀ x ∈ segPos s, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
+    ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
+      x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)
+
+/-- **Open: the shape of `down`'s segments**, at every fuel: of a piece whose positions are at or past 0 and name its
+nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`. -/
+def DownShape (c : Desc.Ctx) : Prop :=
+  ∀ fuel q segs, (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
+    (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
+    Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
+
+/-- **Open: the decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body
+(the default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. -/
+def RetParts (P : Prog) : Prop :=
+  ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).body.ret.count = 0) ∧
+    ((P.defs[d]!).prim = false → (P.defs[d]!).body.ret = Seq.ofParts (P.defs[d]!).body.ret.parts ∧
+      ∀ q ∈ (P.defs[d]!).body.ret.parts.toList, PartNonneg q)
+
+theorem ofSeq_reps (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, g.reps = 1 := by
+  intro g hg
+  unfold Desc.ofSeq at hg
+  rw [of_segs, Array.toList_filter, List.mem_filter, Array.toList_map, List.mem_map] at hg
+  obtain ⟨⟨q, -, rfl⟩, -⟩ := hg
+  rfl
+
+theorem segsPos_pieces (segs : List Seg) (h : ∀ g ∈ segs, g.reps = 1) :
+    segs.flatMap segPos = (segs.flatMap fun s => s.ps.toList).flatMap pos := by
+  rw [List.flatMap_assoc]
+  apply flatMap_congr
+  intro g hg
+  rw [segPos_one_rep (h g hg)]
+  rfl
+
+theorem psPos_default : psPos (default : PS) = [] := rfl
+
+theorem psOk_default : PSOk (default : PS) :=
+  ⟨fun i hi => absurd hi (Nat.not_lt_zero _), rfl, fun i hi => absurd hi (Nat.not_lt_zero _), rfl⟩
+
+/-- **What `Desc.summarize` gives Definition `d` holds `RetOk`**, wherever `down`'s segments are `ShapeOk`
+(`DownShape`) and keep the gates they read (`DownSpec`) in its body, and the decoder's facts on its return hold. -/
+theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (hdP : d < P.defs.size) (hRP : RetParts P) (hB : Resolve.BodyOk P d)
+    (hS : (P.defs[d]!).prim = false → DownShape (ctxOf P memo d))
+    (hD : (P.defs[d]!).prim = false → ∀ sc : Flock.Program.Scope, sc.d = d →
+      DownSpec (ctxOf P memo d) sc Flock.Steps.FUEL)
+    (h : Desc.summarize P memo d = .ok s) (m : Array Desc.Summary) (hm : m[d]! = s) : RetOk P m d := by
+  have h3 := summarize_reps P memo d s h
+  unfold RetOk
+  rw [hm]
+  unfold Desc.summarize at h
+  extract_lets defn body c ret0 acc0 at h
+  split at h
+  · rename_i hp
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have h0 : (P.defs[d]!).body.ret.count = 0 := (hRP d hdP).1 hp
+    refine ⟨psOk_default, fun x hx => absurd hx (by rw [psPos_default]; simp), fun g hg => (by cases hg),
+      fun sc _ => ?_⟩
+    rw [psPos_default, h0]
+    exact List.Forall₂.nil
+  · rename_i hp
+    have hp' : (P.defs[d]!).prim = false := by simpa using hp
+    obtain ⟨ret, hret, h⟩ := Walk.except_bind_ok h
+    obtain ⟨acc, -, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rw [← Array.forIn_toList] at hret
+    obtain ⟨outs, hF, hout⟩ := forIn_trace2 _ _ ret0 ret hret
+    obtain ⟨hpe, hnn⟩ := (hRP d hdP).2 hp'
+    have hpe' : body.ret = Seq.ofParts body.ret.parts := hpe
+    have hnn' : ∀ q ∈ body.ret.parts.toList, PartNonneg q := hnn
+    have hpos : psPos (Desc.ofSeq body.ret) = (List.range body.ret.count).map fun t => refPos (body.ret.get t) := by
+      rw [(ofSeq_pos body.ret hnn').2.1]
+      conv => rhs; rw [hpe']
+      rw [partsPos_get]
+    have hqs : ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList).flatMap pos =
+        psPos (Desc.ofSeq body.ret) := by
+      rw [← segsPos_pieces _ (ofSeq_reps body.ret)]; rfl
+    have hx : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q,
+        ∃ t < body.ret.count, x = refPos (body.ret.get t) := by
+      intro q hq x hx
+      have : x ∈ psPos (Desc.ofSeq body.ret) := by
+        rw [← hqs]; exact List.mem_flatMap.2 ⟨q, hq, hx⟩
+      rw [hpos, List.mem_map] at this
+      obtain ⟨t, ht, e⟩ := this
+      exact ⟨t, List.mem_range.1 ht, e.symm⟩
+    have hrefOk : ∀ t < body.ret.count, Resolve.RefOk P d body.nodes.size (body.ret.get t) := hB.2
+    have hq1 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q, 0 ≤ x.2 := by
+      intro q hq x hxq
+      obtain ⟨t, -, rfl⟩ := hx q hq x hxq
+      simp [refPos]
+    have hq2 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q,
+        Fits (ctxOf P memo d) x := by
+      intro q hq x hxq k hk
+      obtain ⟨t, ht, rfl⟩ := hx q hq x hxq
+      simp only [refPos, Tgt.ref.injEq] at hk
+      have := (hrefOk t ht).2 hk.1
+      rw [← hk.2]
+      show ((body.ret.get t).j : Int) < _
+      exact_mod_cast this.2
+    have hq3 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q,
+        ∀ i, x.1 = .ref true i → i < (ctxOf P memo d).body.params.size ∧
+          x.2 < (((ctxOf P memo d).body.params[i]!).2.leaves : Int) := by
+      intro q hq x hxq i hi
+      obtain ⟨t, ht, rfl⟩ := hx q hq x hxq
+      simp only [refPos, Tgt.ref.injEq] at hi
+      have := (hrefOk t ht).1 hi.1
+      rw [← hi.2]
+      exact ⟨this.1, by show ((body.ret.get t).j : Int) < _; exact_mod_cast this.2⟩
+    have hshape : ∀ g ∈ ret.toList, ShapeOk P d g := by
+      intro g hg
+      rw [hout] at hg
+      rcases mem_foldl outs ret0 g hg with hg | ⟨v, hv, hg⟩
+      · exact absurd hg (by simp [ret0])
+      · obtain ⟨q, hq, hqv⟩ := forall2_mem hF v hv
+        exact hS hp' Flock.Steps.FUEL q v (hq1 q hq) (hq2 q hq) (hq3 q hq) hqv g hg
+    obtain ⟨hok, hpsPos, -⟩ := of_ok ret fun g hg => (hshape g hg).1
+    refine ⟨hok, fun x hx => ?_, fun g hg => (h3 g hg).2, fun sc hsc => ?_⟩
+    · rw [hpsPos] at hx
+      obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx
+      exact (hshape g hg).2 x hxg
+    · show Agree P sc (psPos (PS.of ret)) ((List.range body.ret.count).map fun j =>
+        Flock.Program.resolve P sc (body.ret.get j))
+      rw [hpsPos, hout, segsPos_foldl, show segsPos ret0 = [] from rfl, List.nil_append]
+      have ha := agree_trace (P := P) (sc := sc) (T := fun q => (pos q).map (den P sc)) hF
+        (fun q hq v hv => hD hp' sc hsc q v (hq1 q hq) (hq2 q hq) hv)
+      have e1 : (((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList).flatMap fun q =>
+          (pos q).map (den P sc)) = (psPos (Desc.ofSeq body.ret)).map (den P sc) := by
+        rw [← hqs, List.map_flatMap]
+      have e2 : ((List.range body.ret.count).map fun j => Flock.Program.resolve P sc (body.ret.get j)) =
+          (psPos (Desc.ofSeq body.ret)).map (den P sc) := by
+        rw [hpos, List.map_map]
+        apply List.map_congr_left
+        intro j _
+        exact (den_refPos P sc _).symm
+      rw [e2, ← e1]
+      exact ha
+
+/-- A loop over `[s, s + n)` that always continues, keeping an invariant of the index reached. -/
+theorem forIn_range_idx {σ : Type} (I : Nat → σ → Prop) (f : Nat → σ → Except String (ForInStep σ)) (N : Nat)
+    (hF : ∀ t r y, t < N → I t r → f t r = .ok y → ∃ v, y = .yield v ∧ I (t + 1) v) :
+    ∀ (n s : Nat) (acc out : σ), s + n ≤ N → I s acc → forIn (List.range' s n) acc f = .ok out → I (s + n) out
+  | 0, s, acc, out, _, hI, h => by
+    simp only [List.range'_zero, List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h; simpa using hI
+  | n + 1, s, acc, out, hN, hI, h => by
+    rw [List.range'_succ, List.forIn_cons] at h
+    obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
+    obtain ⟨v, rfl, hv⟩ := hF s acc y (by omega) hI hy
+    have := forIn_range_idx I f N hF n (s + 1) v out (by omega) hv h
+    rwa [Nat.add_assoc, Nat.add_comm 1 n] at this
+
+theorem retOk_push {P : Prog} {r : Array Desc.Summary} {f : Nat} (hf : f < r.size) (v : Desc.Summary)
+    (h : RetOk P r f) : RetOk P (r.push v) f := by
+  unfold RetOk at h ⊢
+  rwa [getElem!_pos (r.push v) f (by simp; omega), Array.getElem_push_lt hf, ← getElem!_pos r f hf]
+
+/-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever a reached
+composite's callees are reached, decoded before it and not the root, and the reached Definitions' references
+(`Resolve.BodyOk`), the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) and, given their callees' summaries,
+`down`'s open steps (`OpenSteps`) and its segments' shape (`DownShape`) hold. -/
+theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
+    (hRP : RetParts P) (hDec : Decoded P)
+    (hcl : ∀ d : Nat, (Desc.reached P)[d]! = true → (P.defs[d]!).prim = false →
+      ∀ k < (P.defs[d]!).body.nodes.size, (Desc.reached P)[((P.defs[d]!).body.nodes[k]!).fn]! = true)
+    (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
+    (hnr : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
+    (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
+    (hSO : ∀ m d, ScanOut (ctxOf P m d))
+    (hO : ∀ m d, (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) →
+      ∀ sc : Flock.Program.Scope, sc.d = d → OpenSteps (ctxOf P m d) sc)
+    (hS : ∀ m d, (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) → DownShape (ctxOf P m d)) :
+    ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P memo f := by
+  unfold memoOf at h
+  extract_lets seen memo0 at h
+  have h' := ok_bind_pure h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h'
+  have := forIn_range_idx (fun t (r : Array Desc.Summary) => r.size = t ∧
+      ∀ f < t, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P r f) _ P.defs.size ?_ P.defs.size 0 memo0 memo
+    (by simp) ⟨rfl, fun f hf => absurd hf (Nat.not_lt_zero _)⟩ (by simpa using h')
+  · exact fun f hf => (this.2 f (by simpa using hf))
+  intro t r y htP ⟨hsz, hI⟩ hy
+  obtain ⟨v, rfl, hv⟩ : ∃ v, y = .yield (r.push v) ∧
+      ((seen[t]! = true ∧ ¬t = P.root) → Desc.summarize P r t = .ok v) := by
+    split at hy
+    · rcases hs : Desc.summarize P r t with e | v
+      · rw [hs] at hy; cases hy
+      · rw [hs] at hy
+        change Except.ok (ForInStep.yield (r.push v)) = Except.ok y at hy
+        injection hy with hy
+        exact ⟨v, hy.symm, fun _ => rfl⟩
+    · rename_i hc
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      exact ⟨default, hy.symm, fun h => absurd h hc⟩
+  refine ⟨_, rfl, by simp [hsz], fun f hf hrf hfr => ?_⟩
+  rcases Nat.lt_succ_iff_lt_or_eq.1 hf with hf | rfl
+  · exact retOk_push (by omega) v (hI f hf hrf hfr)
+  · replace hv := hv ⟨hrf, hfr⟩
+    have hR : (P.defs[f]!).prim = false → ∀ k node, (ctxOf P r f).node k = .ok node → RetOk P r node.fn := by
+      intro hp k node hn
+      have hk := node_lt hn
+      have hg := node_get hn
+      change k < (P.defs[f]!).body.nodes.size at hk
+      change (P.defs[f]!).body.nodes[k]! = node at hg
+      rw [← hg]
+      exact hI _ (hcf f htP k hk) (hcl f hrf hp k hk) (hnr f htP k hk)
+    refine summarize_retOk P r f v htP hRP (hB f htP hrf) (fun hp => hS r f (hR hp))
+      (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) sc hsc
+        (hO r f (hR hp) sc hsc) Flock.Steps.FUEL).1) hv (r.push v) ?_
+    subst hsz
+    rw [getElem!_pos (r.push v) r.size (by simp), Array.getElem_push_eq]
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
 theorem argSpans_batch (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hf : node.form = .batch)
