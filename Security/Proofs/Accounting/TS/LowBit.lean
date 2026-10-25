@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.TS.LowBit
+import Models.Accounting.Guarantees.TS.LowBit
 import Mathlib.Data.FinEnum
 import Mathlib.Data.Fintype.Card
 

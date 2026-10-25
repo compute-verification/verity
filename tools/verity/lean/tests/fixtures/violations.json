@@ -252,6 +252,13 @@
   "policy": {"guarantees": {"Control.statement_deep": {"owner": "@lean"}, "Control.statement_def": {"owner": "@lean"}}},
   "fails": "assumptions: Control.Hyp2 is a premise of Control.statement_deep, Control.statement_def, an assumption the lock doesn't list"
  },
+ "premise_in_conclusion_statement": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Accepted (r : Nat) : Prop := double r = r + r\n\ndef Exec (k : Nat) : Prop := ∀ r, Accepted r → Hyp2 r → k = k\n\ntheorem conclusion_statement : ∀ k : Nat, k = k → Exec k := fun _ _ _ _ _ => rfl\n\ntheorem conclusion_statement_conjunct : ∀ k : Nat, True ∧ Exec k := fun _ => ⟨trivial, fun _ _ _ => rfl⟩\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.conclusion_statement": {"owner": "@lean"}, "Control.conclusion_statement_conjunct": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.conclusion_statement, Control.conclusion_statement_conjunct, an assumption the lock doesn't list",
+  "not": ["assumptions: Control.Accepted"]
+ },
  "premise_in_match": {
   "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
               "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def MStmt (n : Nat) : Prop := match n with\n  | 0 => True\n  | k + 1 => Hyp2 k → True\n\ntheorem match_branch : ∀ n : Nat, match n with\n  | 0 => True\n  | k + 1 => Hyp2 k → True := by intro n; cases n <;> simp\n\ntheorem match_def : ∀ n, MStmt n := by intro n; cases n <;> simp [MStmt]\n\ntheorem match_destructure : ∀ p : Nat × Nat, (let (a, _) := p; Hyp2 a → True) := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
@@ -286,5 +293,14 @@
   "policy": {"guarantees": {"Control.match_own": {"owner": "@lean"}}},
   "fails": "assumptions: Control.Wrap is a premise of Control.match_own, an assumption the lock doesn't list",
   "not": ["assumptions: Control.match_own.match_"]
+ },
+ "premise_module_in_statement": {
+  "write": {"Control/Prem.lean": "/-! A premises module (`shape.premises`) outside an assumptions module. -/\n\nnamespace Control\n\ndef Fits (n : Nat) : Prop := n < 2 ^ 448\n\nabbrev Within (n : Nat) : Prop := Fits n\n\nend Control\n",
+            "Control/PremThms.lean": "import Control.Defs\nimport Control.Prem\n\nnamespace Control\n\ndef Accepted (n : Nat) : Prop := double n = n + n\n\ndef Held : Prop := ∀ n, Fits n → Accepted n → double n = n + n\n\ntheorem statement_premise : Held := fun _ _ h => h\n\ntheorem conclusion_premise : ∀ k : Nat, True ∧ (Within k → True) := fun _ => ⟨trivial, fun _ => trivial⟩\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.PremThms"]},
+  "policy": {"guarantees": {"Control.conclusion_premise": {"owner": "@lean"}, "Control.statement_premise": {"owner": "@lean"}},
+             "shape": {"premises": ["Control.Assumptions", "Control.Prem"], "statements": ["Control.Defs"]}},
+  "fails": "assumptions: Control.Fits is a premise of Control.conclusion_premise, Control.statement_premise, an assumption the lock doesn't list",
+  "not": ["assumptions: Control.Accepted", "assumptions: Control.Within"]
  }
 }

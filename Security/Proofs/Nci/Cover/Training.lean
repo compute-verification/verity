@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees.CoverTraining
+import Models.Nci.Guarantees.CoverTraining
 import Proofs.Nci.Pull
 import Proofs.Nci.Cover.Area
 import Proofs.Nci.Cover.Bits

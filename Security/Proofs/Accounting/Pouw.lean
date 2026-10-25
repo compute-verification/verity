@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.Pouw
+import Models.Accounting.Guarantees.Pouw
 import Proofs.Accounting.Device
 import Proofs.Pouw.Game
 

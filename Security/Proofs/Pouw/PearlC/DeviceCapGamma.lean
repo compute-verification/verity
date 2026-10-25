@@ -1,6 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.Guarantees.PearlC
+import Models.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!

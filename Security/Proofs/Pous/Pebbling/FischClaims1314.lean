@@ -1,6 +1,6 @@
 import Proofs.Pous.Pebbling.B2Stacking
 import Definitions.Pous
-import Definitions.Pous.Assumptions
+import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers

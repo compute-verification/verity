@@ -1,5 +1,5 @@
 import Proofs.Accounting.HeadlineDc.Branches
-import Definitions.Accounting.Guarantees.HeadlineDc
+import Models.Accounting.Guarantees.HeadlineDc
 
 /-!
 # The H200's headline at the data sheet

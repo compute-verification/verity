@@ -1,4 +1,4 @@
-import Definitions.Nci.Guarantees.Fmt2
+import Models.Nci.Guarantees.Fmt2
 import Proofs.Nci.Fmt
 
 /-!

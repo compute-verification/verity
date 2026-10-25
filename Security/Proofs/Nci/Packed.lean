@@ -1,5 +1,5 @@
-import Definitions.Nci.Guarantees.Packed
-import Definitions.Nci.Guarantees.Training
+import Models.Nci.Guarantees.Packed
+import Models.Nci.Guarantees.Training
 import Proofs.Nci.Contained
 
 /-!

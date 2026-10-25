@@ -28,7 +28,8 @@ import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
-#: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it
+#: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
+#: re-rendered in the canonical text the verifier requires)
 FIXTURE = "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
@@ -77,7 +78,7 @@ def fx(tmp_path_factory) -> Path:
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     PF.executable()

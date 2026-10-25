@@ -45,7 +45,20 @@ __global__ void k_top(Table t, uint32_t l0, uint64_t* levels) {
   }
 }
 
+__global__ void k_public_salts(Pub p, uint64_t* out) {
+  const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < p.n) public_salt(p, p.first + i, out + 24 * (size_t)i);
+}
+
 static unsigned blocks(uint64_t n, unsigned per) { return (unsigned)((n + per - 1) / per); }
+
+// The ``p->n`` public salts from position ``p->first`` (``p`` host memory, read before this returns) into ``out`` (n x 24
+// words, a device pointer), each its 192 bytes.
+extern "C" int rr_public_salts(void* stream, const Pub* p, uint64_t* out) {
+  if (p->n == 0 || p->len > 8 * PUB_WORDS) return -1;
+  k_public_salts<<<blocks(p->n, 128), 128, 0, (cudaStream_t)stream>>>(*p, out);
+  return (int)cudaGetLastError();
+}
 
 // The midstates after the two prefix blocks (``prefixes``, 32 words) into ``ms`` (16 words), both device pointers.
 extern "C" int rr_midstates(void* stream, const uint64_t* prefixes, uint64_t* ms) {

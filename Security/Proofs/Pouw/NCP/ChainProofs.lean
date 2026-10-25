@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.NCP.Chain
+import Models.Pouw.Assumptions.NCP.Chain
 import Proofs.Pouw.NCP.RelationWitness
 
 /-!

@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.PerRun
+import Models.Accounting.Guarantees.PerRun
 import Proofs.Accounting.PerRunJoint
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Pouw.Sampling

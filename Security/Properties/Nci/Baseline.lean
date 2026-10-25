@@ -6,7 +6,7 @@ import NciCheck.Baseline
 `NciCheck.Baseline.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean`) is the NCI check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
 run's own record and the program function's parameters. `Nci.Assumptions.BaselineRegistered`
-(`Definitions/Nci/Assumptions/Baseline.lean`, [BASELINE-REGISTERED]) states what θ must hold: registered public data,
+(`Models/Nci/Assumptions/Baseline.lean`, [BASELINE-REGISTERED]) states what θ must hold: registered public data,
 registered at the start of the deployment, which the log's first record registers.
 
 * `BaselineProvenance`: on every instance and trusted input it accepts, the trusted input's log is in R6's chain from a
@@ -23,7 +23,7 @@ the auditor knows which log is the deployment's, and how the reference circuit `
 binding premise equal roots already give equal rows.
 
 Proved as `NciCheck.Properties.SecurityProofs.BaselineProvenance : NciCheck.Properties.BaselineProvenance` in
-`Proofs.Properties.Nci.Baseline`.
+`Properties.Proofs.Nci.Baseline`.
 -/
 
 namespace NciCheck.Properties

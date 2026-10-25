@@ -1,4 +1,4 @@
-import Definitions.Pouw.Guarantees.PearlC
+import Models.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceFp4Gamma
 import Proofs.Pouw.PearlC.Fp4IssueGamma
@@ -9,6 +9,7 @@ import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutFp4W1
+import Proofs.Pouw.PearlC.TTOutW1Item1
 
 /-!
 # Proofs of Pearl-C's guarantees

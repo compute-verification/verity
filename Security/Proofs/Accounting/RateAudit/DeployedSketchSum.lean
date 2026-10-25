@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditDeployed
+import Models.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.RateAudit.DeployedSketch
 

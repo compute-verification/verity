@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.Actual.Dampener
+import Models.Accounting.Guarantees.Actual.Dampener
 import Proofs.Accounting.Actual.Threaded
 
 /-!

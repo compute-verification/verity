@@ -1,4 +1,4 @@
-import Definitions.Pouw.Guarantees.Window
+import Models.Pouw.Guarantees.Window
 import Proofs.Flock.Soundness.Audit.Extraction
 import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 

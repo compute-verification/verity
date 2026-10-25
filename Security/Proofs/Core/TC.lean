@@ -1,4 +1,4 @@
-import Definitions.Core.Guarantees.TC
+import Models.Core.Guarantees.TC
 import Proofs.Core.TC.Gadgets
 import Proofs.Core.TC.Proofs
 import Proofs.Core.TC.Ampere

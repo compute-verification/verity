@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.Sheet
+import Models.Accounting.Guarantees.Sheet
 
 /-!
 # The data-sheet axioms' bridges

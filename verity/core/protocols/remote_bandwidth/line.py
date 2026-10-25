@@ -1,6 +1,6 @@
 """The memory line a paced session shows held over time, the line of record a gate run publishes: the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
+`Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
 rationals.  It is computed here and in its Lean, `lean/RemoteAudit/Line.lean`, held to this by the difftest
 (`lean/tests/test_line.py`, every refusal compared word for word): `benchmarks/remote_session/verifier.py`'s
 `paced_line` (its diagnostic, on the verifier's clock) and `auditor_line.py` (the line of record, on the challenger's
@@ -438,6 +438,12 @@ def receipts(window: Mapping) -> int:
     return sum(window["lengths"])
 
 
+SHARED = ("a record drawn more than one window a coin (groups_per_coin) has no line: the line reads each window's own "
+          "draw")
+"""Why a record drawn more than one window a coin (`audit.Params.groups_per_coin`) has no line: the line reads each
+window's own draw, min(s, U_t) of its receipts, and such a window holds its share of its draw's."""
+
+
 def of_summary(record: Mapping, samples: int, seen: Sequence[Seen]) -> tuple[list[Group], list[tuple[int, int]]]:
     """The groups and windows the line reads of an accepted session's record (the Lean verifier's, as its `outcome`
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
@@ -455,21 +461,55 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen]) -> tuple[lis
              for w, x in zip(ws, seen)], [(receipts(w), w["drawn"]) for w in ws])
 
 
+CLOCKS = ("record", "challenger", "replay")
+"""Whose clock a line's times seen are on (`RemoteAudit.Line.lineOfRecordOn`): the record's own, which holds them
+(`times_off`), the challenger's release log's, or a replay's at another round trip (`gate_whatif`), which it
+doesn't."""
+
+
+def last_ns(window: Mapping) -> int:
+    """A window's last root's arrival in the record: its last pass's, or its coin's release with none."""
+    return window["arrived_ns"][-1] if window["arrived_ns"] else window["released_ns"]
+
+
+def times_off(record: Mapping, seen: Sequence[Seen]) -> str | None:
+    """Why the times `seen` aren't the record's own, or None: the first window whose coin's release or last root's
+    arrival seen isn't the record's (`released_ns`, `last_ns`)."""
+    for t, (w, x) in enumerate(zip(record["windows"], seen)):
+        if (x.released_ns, x.last_ns) != (w["released_ns"], last_ns(w)):
+            return (f"window {t} was seen released at {x.released_ns} and last at {x.last_ns}, not at the record's "
+                    f"{w['released_ns']} and {last_ns(w)}")
+    return None
+
+
 def line_of_record(record: Mapping, *, samples: int, seen: Sequence[Seen], per: int, block_bytes: int,
-                   chip_bytes: int, node_bytes: int, delta: object, rates: Rates) -> Line:
+                   chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`) and its registered
-    blocks (the record's `blocks`, the registration the session ran on)."""
+    blocks (the record's `blocks`, the registration the session ran on). Refused for a record drawn more than one
+    window a coin (`groups_per_coin`, `SHARED`). On the record's `clock` the times seen are held to the record's,
+    refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record doesn't
+    hold them."""
+    if record.get("groups_per_coin", 1) != 1:
+        raise Refused(SHARED)
     groups, windows = of_summary(record, samples, seen)
+    if clock == "record" and (why := times_off(record, seen)) is not None:
+        raise Refused(why)
     return line(groups, per=per, blocks=record["blocks"], block_bytes=block_bytes, chip_bytes=chip_bytes,
                 node_bytes=node_bytes, windows=windows, delta=delta, rates=rates)
 
 
 def record_inputs_json(record: Mapping, *, samples: int, seen: Sequence[Seen], per: int, block_bytes: int,
-                       chip_bytes: int, node_bytes: int, delta: object, rates: Rates) -> dict:
-    """`line_of_record`'s inputs in the JSON form, the record as the Lean wrote it."""
+                       chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record",
+                       session: Mapping | None = None) -> dict:
+    """`line_of_record`'s inputs in the JSON form, the record as the Lean wrote it; with `session`, the session's
+    transcript, from which the Lean verifier's `line_record` makes the record itself (`Session.run`) and refuses a
+    `record` that isn't the one it makes (line.py reads `record`)."""
+    if clock not in CLOCKS:
+        raise ValueError(f"clock: one of {', '.join(CLOCKS)}, not {clock!r}")
     return {"record": record, "samples": samples, "seen": [{k: getattr(x, k) for k in SEEN} for x in seen],
             "per": per, "block_bytes": block_bytes, "chip_bytes": chip_bytes, "node_bytes": node_bytes,
-            "delta": text(pooled.number(delta)), "rates": rates.to_json()}
+            "delta": text(pooled.number(delta)), "rates": rates.to_json(), "clock": clock,
+            **({} if session is None else {"session": session})}
 
 
 def _nats(j: Mapping, k: str) -> list[int]:
@@ -508,6 +548,8 @@ def _record(j: object) -> Mapping:
         _nat(pace, "k")
         _nat(pace, "window_ns")
     _hex(_field(j, "appends"), "appends")
+    if "groups_per_coin" in j:
+        _nat(j, "groups_per_coin")
     return j
 
 
@@ -516,6 +558,9 @@ def of_record_json(j: Mapping) -> dict:
     seen, r = _field(j, "seen"), _field(j, "rates")
     if not isinstance(seen, list):
         raise Malformed("seen: not a list")
+    clock = j.get("clock", "record")
+    if clock not in CLOCKS:
+        raise Malformed(f"clock: record, challenger or replay, not {clock}")
     try:
         delta = pooled.of_json({"windows": [], "delta": _field(j, "delta")})[1]
     except pooled.Malformed as e:
@@ -525,7 +570,7 @@ def of_record_json(j: Mapping) -> dict:
             "block_bytes": _nat(j, "block_bytes"), "chip_bytes": _nat(j, "chip_bytes"),
             "node_bytes": _nat(j, "node_bytes"), "delta": delta,
             "rates": Rates(*(_rational(r, k) for k in RATES[:1]), _nat(r, "encode_squarings"),
-                           *(_rational(r, k) for k in RATES[1:]))}
+                           *(_rational(r, k) for k in RATES[1:])), "clock": clock}
 
 
 def record_run_json(j: Mapping) -> dict:

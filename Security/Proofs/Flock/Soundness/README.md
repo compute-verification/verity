@@ -152,7 +152,8 @@ link term per audit.
   the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
   `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
-  `δ_reg = qR²/2^513` (`Reads.prob_off_le`).
+  `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, drawn units' reads are
+  checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
 
 ### 1.4 Status
 
@@ -162,7 +163,7 @@ link term per audit.
 | A live coin hits a fixed nonzero polynomial's zero with probability at most degree/|F| (Schwartz–Zippel) | (framework) | `Game/Poly.lean` | proved |
 | Two reps on independent coins, any interleaving: the error squares | 1a | `Game/Interleave.lean`, `value_interleave_le` | proved |
 | The bound as a function of the parameters, and its value for every `m` | 1a | `Accounting/*` | proved |
-| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*` | written (definitions) |
+| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*`, `Definitions/Flock/` | written (definitions) |
 | Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
 | One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
@@ -285,18 +286,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     (`setupH_spec_typed`), `parseTyped`'s template and flat-class paths (`parseTyped_spec`), the template's parse
     (`parse_facts_tmpl`: its nets the root and placed layouts' circuits first, its block `blockOf t`, the rows' own wires,
     no leaf map or cut) and check (`check_facts_typed`).
-  - **A template unit's parts** (`Types/Parts.lean`). `deriveChecked` also checks the unit's parts as its template
-    statement reads them (`partsChecked`), and these are the row facts a template's block rows rest on:
-    - each part's region is past the unit's own rows, and the parts are apart (`part_region`, `parts_apart`);
-    - its rows are its callee's shifted, except the constant and bound inputs, which are Δ's (`part_rows`);
-    - Δ is exactly the unit's and the parts' constants and the parts' bound inputs, one entry per row (`delta_nodup`,
-      `delta_entry`, `delta_const`);
-    - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
-      (`own_reads`);
-    - the unit's constant row is `[const]·[const]` (`unit_const_row`), and its order lists only own and part columns
-      (`order_cols`);
-    - the unit's reads cover a part's rows exactly as its callee's reads, shifted (`part_reads`), and a covered callee row
-      is a product row `a · []`, its read's low minterms callee rows (`callee_prod`). Both are about part rows only.
+  - **A template unit's parts** (`Types/Parts.lean`): `deriveChecked` also checks the unit's parts as its template
+    statement reads them (`partsChecked`), giving the row facts a template's block rows rest on (`part_region`,
+    `part_rows`, `delta_entry`, `part_reads`, `callee_prod` and the rest: the list is
+    note:proofs/20261025T0738Z-report-flock-readme-parts).
   - **A template's block rows, placed** (`ExecTemplatePlace.lean`, T3). Given two facts structures,
     `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
     `TemplateLayout.placement` gives a table class's `placed g`.

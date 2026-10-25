@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.ComposePeriod
+import Models.Accounting.Guarantees.ComposePeriod
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Accounting.ComposePeriod.Covers
