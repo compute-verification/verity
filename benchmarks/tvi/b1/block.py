@@ -306,7 +306,28 @@ def main():
             hs = layer(A, Q1[i], i, hs, css, fq_ref)
             if i in bnds:
                 hb1[i] = torch.cat(hs)
+        # the same boundaries of theta and theta' in plain fp32 (what counted.py's F reads), for comparison
+        hp = {}
+        for tag, P, emb in (("theta", P0, emb0), ("theta1", P1, emb1)):
+            hs = [emb[s] for s in seqs]
+            for i in range(max(bnds) + 1):
+                hs = layer(A, P[i], i, hs, css, lambda i, n, xs: xs)
+                if i in bnds:
+                    hp[(tag, i)] = torch.cat(hs)
     print(f"references at {time.time() - t0:.0f}s", flush=True)
+    urows = torch.cat(masks)
+    fcmp = {}
+    for b in bnds:
+        for tag, X0, X1 in (("deployed", hb0[b], hb1[b]), ("plain_fp32", hp[("theta", b)], hp[("theta1", b)])):
+            r_ = X0.abs().max()
+            real = code_many([(X0, encode(X1, FMT, r_), r_)], FMT)[0] / X0.shape[0]
+            X0u, X1u = X0[urows], X1[urows]
+            est = counted.fresh(X0u, X1u, X0u.abs().max(), svd=counted.top_svd(X1u - X0u, max(counted.RANKS)), fmts=(FMT,))
+            fcmp[f"{b}:{tag}"] = {"real_ctx_per_token": real, "est_ctx_per_token": est[FMT]["ctx"] / X0u.shape[0],
+                                  "est_min_per_token": est[FMT]["min"] / X0u.shape[0], "est_min_by": est[FMT]["min_by"]}
+            print(f"boundary {b} {tag}: F real ctx {real:.0f}, analyzer ctx {fcmp[f'{b}:{tag}']['est_ctx_per_token']:.0f}, "
+                  f"analyzer min {fcmp[f'{b}:{tag}']['est_min_per_token']:.0f} ({est[FMT]['min_by']})", flush=True)
+    del hp
 
     # l_w: the held layers' weights at FMT given theta's (one stream per layer), norms and biases at bf16; decoded for real
     lw, dec_layers = {}, {}
@@ -334,7 +355,7 @@ def main():
 
     a_dec = 8 * len(gzip.compress(b"".join(open(f, "rb").read() for f in (__file__, quant.__file__)), 9))
     res = {"ckpt": ckpt, "meta": meta, "fmt": FMT, "k": K, "a_dec_bits": a_dec, "n_rollouts": len(seqs), "lens": lens,
-           "nll_token_bits": nll_bits, "layer_weight_bits": lw, "boundaries": {},
+           "nll_token_bits": nll_bits, "layer_weight_bits": lw, "boundaries": {}, "F_compare": fcmp,
            "code_sha256": hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:16]}
     macs_lin = sum(P0[held[0]][k].numel() for k in LIN)
 
@@ -345,14 +366,18 @@ def main():
             # the entering residual over every rollout, for the rate that sets Q
             bits_all, _, _ = code_many([(hb0[b], encode(hb1[b], bfmt, rb), rb)], bfmt)
             R[f"F_{bfmt}_all_per_token"] = bits_all / sum(lens)
-            for lb in lbs:
+            # Q fills k twice: at the substituted rate (tokens and the entering residual), then at the exact block's rate
+            # (repairs included), measured on the first
+            for lb, fill in [(lb, f) for lb in lbs for f in ("substituted", "exact")]:
+                if fill == "substituted":
+                    rate = math.log2(A.vocab) + bits_all / sum(lens)
                 hl = [b + 1 + j for j in range(lb)]
                 wbits = sum(lw[i]["bits"] for i in hl)
                 scale_bits = 32 * (4 * (b + 1 + lb) + 1)
                 room = K - wbits - a_dec - scale_bits
                 m, used = 0, 0.0
-                while m < len(seqs) and used + lens[m] * (math.log2(A.vocab) + bits_all / sum(lens)) <= room:
-                    used += lens[m] * (math.log2(A.vocab) + bits_all / sum(lens))
+                while m < len(seqs) and used + lens[m] * rate <= room:
+                    used += lens[m] * rate
                     m += 1
                 m = max(m, 1)
                 T = sum(lens[:m])
@@ -412,8 +437,10 @@ def main():
                             "products_per_entering_coord_linear": lin1 * lb / (T * A.d),
                             "products_per_entering_coord_with_attn": (lin1 + attn1) * lb / (T * A.d)})
                 blk["decode_flops_over_c"] = blk["decode_flops"] / 1.34e17
+                blk["fill"] = fill
+                rate = (blk["l_tok"] + blk["l_bnd"] + l_fix) / T
                 R["blocks"].append(blk)
-                print(f"l={b} L_b={lb} {bfmt}: Q={T} ({m} rollouts) l_w={blk['l_w']:.4g} l_tok={tok_bits:.4g} "
+                print(f"l={b} L_b={lb} {bfmt} fill {fill}: Q={T} ({m} rollouts) l_w={blk['l_w']:.4g} l_tok={tok_bits:.4g} "
                       f"l_bnd={bb:.4g} (F {bb / T:.0f}) l_fix={l_fix:.4g} n_I={blk['n_I']:.4g} "
                       f"bound {blk['beta_x_bound_substituted']:.4f} / exact {blk['beta_x_bound_exact']:.4f}; mismatches "
                       f"{mism} ({blk['mismatch_naive_frac']:.4f}), after repair {after} at {time.time() - t0:.0f}s",
