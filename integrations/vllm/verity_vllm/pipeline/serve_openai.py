@@ -14,9 +14,10 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) parses requests as
-vLLM does but streams the scan's id form, for a warden in front of the server: no HTTP head, one ``io_tie.id_event`` of
-``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a whole response is vLLM's.
+each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a warden's
+id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the scan's id
+form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
@@ -118,8 +119,9 @@ class Options:
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None, help="the checkpoint store (default $HF_HOME)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
-                           help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: vLLM's "
-                                "requests, each stream the scan's id form for the warden, raw (serve_protocol.IdsProtocol)")
+                           help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
+                                "warden's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "(serve_protocol.IdsProtocol)")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
                              help="--protocol ids: each id event's bytes, the warden's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
@@ -355,7 +357,7 @@ class Server:
             method, path, _ = lines[0].split(" ", 2)
             headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
             body = await reader.readexactly(int(headers.get("content-length") or 0))
-            await self.route(method, path.split("?", 1)[0], body, writer, headers)
+            await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body)
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -376,7 +378,7 @@ class Server:
         await writer.drain()
 
     async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
-                    headers: Mapping[str, str] | None = None) -> None:
+                    headers: Mapping[str, str] | None = None, request: bytes = b"") -> None:
         release = None
         try:
             if path == "/health":
@@ -389,7 +391,7 @@ class Server:
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
                 release = self._release(headers)
-                return await self.completions(self._body(body), writer, release)
+                return await self.completions(self._body(body), writer, release, self.proto.of(request))
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -435,30 +437,35 @@ class Server:
         strs = self.tokenizer.convert_ids_to_tokens(ids) if b.get("return_token_strs") else None
         return {"count": len(ids), "max_model_len": self.max_model_len, "tokens": ids, "token_strs": strs}
 
-    def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None) -> tuple[Completion, Admission]:
-        """Parse a completion request into the engine's admission (ids, sampling parameters)."""
-        req = self.proto.parse(b)
+    def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None,
+              proto: Any = None) -> tuple[Completion, Admission]:
+        """Parse a completion request into the engine's admission (ids, sampling parameters), under ``proto`` (by default
+        the server's)."""
+        proto = proto or self.proto
+        req = proto.parse(b)
         self._check_model(req.model)
         prompt_ids = self.encode(req.prompt, req.add_special_tokens) if isinstance(req.prompt, str) else [int(t) for t in req.prompt]
         try:
-            max_tokens = self.proto.max_tokens(req, self.max_model_len, len(prompt_ids), self.defaults)
+            max_tokens = proto.max_tokens(req, self.max_model_len, len(prompt_ids), self.defaults)
         except ValueError as e:
             raise RequestError(str(e)) from e
         try:
-            params = self.proto.seeded(self.proto.sampling_params(req, max_tokens, self.defaults))
+            params = proto.seeded(proto.sampling_params(req, max_tokens, self.defaults))
         except ValueError as e:                              # SamplingParams' own validation
             raise RequestError(str(e)) from e
         top_p = param_of(params, "top_p")
         if top_p is not None and float(top_p) < 1:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params),
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
                               user_of(req.raw), release)
 
-    async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None) -> None:
+    async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
+                          proto: Any = None) -> None:
+        proto = proto or self.proto
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
-        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release)
+        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto)
         created, model = int(self.clock()), self.served_name
         self.submit(adm)
         self.served += 1
@@ -473,12 +480,12 @@ class Server:
                 finished = True
                 if last.error:
                     raise RequestError(last.error, 500, "InternalServerError")
-                payload = self.proto.response(request_id=adm.http_id, created=created, model=model, text="".join(text),
-                                              finish_reason=last.finish_reason, stop_reason=last.stop_reason,
-                                              prompt_token_ids=adm.prompt_ids if req.return_token_ids else None,
-                                              token_ids=ids if req.return_token_ids else None, usage=usage_of(n_prompt, len(ids)))
+                payload = proto.response(request_id=adm.http_id, created=created, model=model, text="".join(text),
+                                         finish_reason=last.finish_reason, stop_reason=last.stop_reason,
+                                         prompt_token_ids=adm.prompt_ids if req.return_token_ids else None,
+                                         token_ids=ids if req.return_token_ids else None, usage=usage_of(n_prompt, len(ids)))
                 return await self._json(writer, 200, payload.encode())
-            http = self.proto.http
+            http = proto.http
             frame = http_chunk if http else bytes
             if http:
                 writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
@@ -494,15 +501,15 @@ class Server:
                     continue                                     # vLLM: no empty chunk before the first token
                 n_out += len(d.token_ids)
                 usage = usage_of(n_prompt, n_out) if req.continuous_usage else None
-                data = self.proto.events(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
-                                         stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
-                                         token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
+                data = proto.events(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
+                                    stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
+                                    token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
                 first = False
                 writer.write(frame(data))
                 await writer.drain()
             if req.include_usage and n_out:
-                writer.write(frame(sse(self.proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
-                                                              usage=usage_of(n_prompt, n_out)))))
+                writer.write(frame(sse(proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
+                                                         usage=usage_of(n_prompt, n_out)))))
             writer.write(frame(SSE_DONE) + (b"0\r\n\r\n" if http else b""))
             await writer.drain()
         finally:
