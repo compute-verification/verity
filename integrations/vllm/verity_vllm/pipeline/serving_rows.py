@@ -121,7 +121,7 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import serving_rows as CS
+from verity_vllm.commit import index as IX, row_tables as RTB, serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
@@ -331,7 +331,7 @@ def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
-    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``RowTable.key``; each table's token rows by request,
+    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
     then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
     ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
     table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
@@ -352,7 +352,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             specs[k][4].append((str(rid), int(d["row"]), int(r["i"])))
             segs.setdefault(t, []).append((lo, lo + n, k, len(specs[k][4]) - 1))
             lo += n
-    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *CS.table_key(specs[k][1])))
+    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *RTB.table_key(specs[k][1])))
     ranks = [sorted(range(len(s[4])), key=lambda j, rs=s[4]: rs[j][:2]) for s in specs]
     new_k = {k: i for i, k in enumerate(order)}
     new_rank = [{j: i for i, j in enumerate(r)} for r in ranks]
@@ -362,8 +362,10 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             out.append(m)
         elif m.base == next(x.base for x in ms if x.template == m.template):
             out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
-    return out, tuple(CS.RowTable(specs[k][0], specs[k][1], specs[k][2], specs[k][3], tuple(specs[k][4][j] for j in ranks[k]))
-                      for k in order)
+    made = tuple(RTB.row_table(specs[k][0], specs[k][1], specs[k][2], specs[k][3], [specs[k][4][j] for j in ranks[k]])
+                 for k in order)
+    RTB.check_order(made)
+    return out, made
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
@@ -749,7 +751,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)
     t_read = time.perf_counter()
-    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), step_roots=rt.get("step_roots"),
+    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
@@ -758,7 +760,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
-    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
+    res = CS.write(c, out_dir, prov, IX.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
                    registrar=R)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")

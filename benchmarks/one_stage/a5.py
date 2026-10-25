@@ -125,13 +125,13 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
   (`service.ROOTS`, ``over``). Each chunk's public file is a shared-row file, its header's ``shared_rows`` held to the
   verifier's own layout, and before the draw the tables are held to the chunks' public ``x`` strings, the registered root
-  and the step roots serving recorded before each step's coin (`row_tables.check_row_tables`). Lean's verifier of record
+  and the step roots serving recorded before each step's coin (`tables.check_row_tables`). Lean's verifier of record
   covers a shared-row public file only where it holds its own registered reads (``--registered``, `Flock.ProvedScope.
   sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
-  (`row_tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
+  (`tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
   registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
   root. The audit record's ``registered_reads`` carries each drawn chunk's table and root from that file beside the
-  ``registered`` finding Lean's verdict reports opening its rows against (`row_tables.reported_reads`), and a5 accepts only
+  ``registered`` finding Lean's verdict reports opening its rows against (`tables.reported_reads`), and a5 accepts only
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
@@ -171,7 +171,7 @@ from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
-from verity_vllm.commit import flock_inputs as FI, row_tables as RTB, serving_rows as CS  # noqa: E402
+from verity_vllm.commit import flock_inputs as FI, serving_rows as CS, tables as TB  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
@@ -445,7 +445,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
-    ``step_roots``, what serving recorded before each step's coin, `row_tables.check_row_tables`), one Lean draw by its law
+    ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean draw by its law
     (on a stream, `streamed`: TP rank ``rank``'s draw of record by its `service.Stream`, on the challenger's coins
     ``a.coins`` or the verifier's own, `coins_draw`), a `--zk` session per member with drawn units on ports from ``port``,
     Lean's verdicts, the audit record (on a stream, its outcome: on the coins' evidence, `coins_outcome`, or on the
@@ -541,7 +541,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()
     if mine.row_tables:
-        bad = RTB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
+        bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     if any(m.wired for m in mine.members):
         bad = WI.check(mine.members, publics)
@@ -562,7 +562,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
     # a member reading an outside registered value, against the root its owner signed
-    reads = {**(RTB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
+    reads = {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
@@ -661,7 +661,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                            "outcome": summary["coins"]["outcome"]}
     result["draw_counts"] = counts
     if row_verdicts:
-        result["registered_reads"] = RTB.reported_reads(reads, row_verdicts)
+        result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
@@ -696,7 +696,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         key = next(iter(row_verdicts))
         other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
         neg["verdict-reports-another-registered-root"] = {
-            "refused": not RTB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
+            "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
