@@ -4,8 +4,9 @@ as one verdict per case, and whether it is the same in every one.
     compare.py LABEL=RESULTS.json ... [--out TABLE.json]
 
 A case's verdict is its compliance, failure (or error) and its IUs: the whole list for run.py's rows (one IU per Call),
-the IU count with the worst IU's (computed, novel) for nci_glm.py's.  Prints one line per case: each label's verdict,
-`same` when all agree, else `DIFFERS`; exit 1 if any case differs.
+the IU count with the worst IU's (computed, novel) for nci_glm.py's.  A row with neither a compliance nor a failure (a
+point killed before its check returned) carries no verdict and counts as absent.  Prints one line per case: each label's
+verdict, `same` when all agree, else `DIFFERS`; exit 1 if any case differs.
 """
 from __future__ import annotations
 
@@ -20,7 +21,10 @@ def verdicts(path: Path) -> dict[str, dict]:
     out = {}
     for r in doc["rows"]:
         if "case" in r:
-            out[r["case"]] = {"complies": r.get("complies"), "failure": r.get("failure") or r.get("error"),
+            failure = r.get("failure") or r.get("error")
+            if r.get("complies") is None and failure is None:
+                continue
+            out[r["case"]] = {"complies": r.get("complies"), "failure": failure,
                               "ius": r.get("ius"), "worst_iu": r.get("worst_iu"), "novel": r.get("novel")}
         else:
             v = r.get("verdict") or {}
