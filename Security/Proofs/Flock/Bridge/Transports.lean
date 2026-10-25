@@ -181,6 +181,51 @@ theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → O
     rw [getElem!_pos _ _ (by rw [leavesOf_size]; exact hu)]
     simp [leavesOf, regLeafOf]
 
+/-! ## The deployed check refuses other salts -/
+
+/-- **hm96's extractor outputs a SHA-512 collision** whenever two different salts have one leaf, under any rows. -/
+theorem hm96Pair_spec_salt (r y r' y' : List UInt8) (hy : y ≠ y') (h : H512 (hm96Input r y) = H512 (hm96Input r' y')) :
+    Collides (hm96Pair r y r' y') := by
+  by_cases hr : r = r'
+  · subst hr
+    unfold Collides hm96Pair
+    split_ifs with ho hy'
+    · exact absurd hy' hy
+    · have hcs : K512.leafPrefix ++ commitString r y = K512.leafPrefix ++ commitString r y' := ho
+      exact ⟨fun e => hy (List.append_cancel_left e),
+        enc512.dig_inj (commitString_split (List.append_cancel_left hcs)).2⟩
+    · exact ⟨ho, h⟩
+  · exact hm96Pair_spec r y r' y' hr h
+
+/-- **An opening the deployed check passes carries a full path**: `64 · log2ceil nl` bytes after its salt. -/
+theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+    (nl : ℕ) (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true) :
+    (pathOf (Flock.log2ceil nl) o).length = 64 * Flock.log2ceil nl := by
+  unfold commitDep at h
+  rw [SamplingDeploy.opens_pathCommit] at h
+  obtain ⟨ri, reg, -, hf, ho⟩ := h
+  have hm := Array.mem_of_find?_eq_some hf
+  rw [portsOf_eq, Array.mem_map] at hm
+  obtain ⟨q, -, rfl⟩ := hm
+  unfold Flock.Registered.opensLeaf at ho
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at ho
+  have h2 := ho.1.2
+  rw [size_bytes] at h2
+  exact h2
+
+/-- **The deployed check refuses a salt of another length**: once the path has a level (`2 ≤ nl` units), the leaf of
+a game opening `(r, y)` whose salt isn't `saltLen` bytes is the leaf of an opening the deployed check passes only by a
+SHA-512 collision. -/
+theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
+    (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true)
+    (hd : 1 ≤ Flock.log2ceil nl) {r y : Msg} (hy : y.length ≠ saltLen)
+    (hl : H512 (hm96Input r y) =
+      H512 (hm96Input (SamplingDeploy.row (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o))) :
+    Collides (hm96Pair r y (SamplingDeploy.row (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o)) := by
+  refine hm96Pair_spec_salt _ _ _ _ (fun e => hy ?_) hl
+  rw [e]
+  exact saltOf_length (pathOf_length_of_opens C rows c nl roots o h) hd
+
 /-! ## Wires and positions -/
 
 theorem sum_filter_map {α : Type} (l : List α) (p : α → Bool) (f : α → ℕ) :
@@ -335,9 +380,14 @@ theorem vbOf_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
     H512 (hm96Input (HiddenExec.encPortH c.ports[q.val]! v) y) =
       H512 (K512.leafPrefix ++ (pub.digest u.val q.val c.ports.size).data.toList) := by
   have he' := he.trans (vbOf_cs_row h R)
-  have hp : p = Sum.inl (u, q) := (vbOf_com_fst p v y).symm.trans (congrArg Prod.fst he')
-  subst hp
-  exact congrArg Prod.snd ((vbOf_com_inl u q v y).symm.trans he')
+  rcases p with ⟨u', q'⟩ | g'
+  · rw [vbOf_com_inl] at he'
+    simp only [Prod.mk.injEq, Sum.inl.injEq] at he'
+    obtain ⟨⟨rfl, rfl⟩, hl⟩ := he'
+    exact hl
+  · have h1 := congrArg Prod.fst he'
+    rw [vbOf_com_fst] at h1
+    exact absurd h1 (by simp)
 
 /-- **The deployed layout's rows** at a C-Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
 circuit file. -/
@@ -390,13 +440,13 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **`TransportsLive` at shaped openings of row/v2 rows.** `TransportsLive`'s setting, commitment, roots and hash,
-when the registration's port roots are distinct: at every unit `u` and committed wire `g` of `u` held by a registered
-row `r` of a `sha512/row/v2` port, every opening `(p, v, y)` of `g`'s registered commit string at the prover's
-registration whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes opens `g`'s claims
-position under `Cd` to `v`'s bit there, at SHA-512. The shaped openings are the ones the deployed check passes
-(`SamplingDeploy.row_ne_misshaped`, `SamplingDeploy.leaf_misshaped`). -/
-def TransportsLiveS : Prop :=
+/-- **`TransportsLiveC` at row/v2 ports and `saltLen`-byte salts, under distinct port roots.** `TransportsLiveC`'s
+setting, commitment, roots and hash, when the registration's port roots are distinct: at every unit `u` and committed
+wire `g` of `u` whose row `r` sits at a `sha512/row/v2` port, every opening `o` of `g`'s registered commit string at the
+prover's registration whose value is canonical at `g` (`canonRow`) and whose salt has `saltLen` bytes opens `g`'s claims
+position under `Cd` to `o`'s bit there, at SHA-512. The deployed check passes no other openings but by a SHA-512
+collision (`SamplingDeploy.row_ne_misshaped`, `SamplingDeploy.leaf_misshaped`, `leaf_salt`). -/
+def TransportsLiveCS : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
@@ -408,17 +458,11 @@ def TransportsLiveS : Prop :=
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
-    (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
-    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (qF qS : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -428,27 +472,27 @@ def TransportsLiveS : Prop :=
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
           fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
-    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     (∀ q q' : ℕ, q' < q → q < D.unroll.ports.size → roots.getD q' [] ≠ roots.getD q []) →
-    ∀ u, ∀ g ∈ P.io u, ∀ r : RowAt, rows g = some r →
-      D.unroll.ports[r.port]!.segs.isSome = false → D.unroll.ports[r.port]!.v2 = true →
-      ∀ (p : PosH D.unroll hU n) (v : ValH D.unroll) (y : List UInt8), RowShaped v → v.1.val = r.width →
-        y.length = saltLen → vb.com (p, v, y) = vb.cs (reg σ) (vb.pos g) →
-        ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨posOf Cc g, vb.bit (vb.val (p, v, y)) g, d⟩ = true
+    ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) → Bridge.canonRow rows g (vb.val o) →
+      (∀ r : RowAt, rows g = some r →
+        D.unroll.ports[r.port]!.segs.isSome = false ∧ D.unroll.ports[r.port]!.v2 = true) →
+      (show PosH D.unroll hU n × ValH D.unroll × List UInt8 from o).2.2.length = saltLen →
+      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
-/-- **`TransportsLiveS` holds** (`transports_shaped`). -/
-theorem transportsLiveS : TransportsLiveS := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd _ hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src _ hTags hCust k Rw M _ _ _
-    ρ _ _ t' _ K₀ _ τ qF qS L P vb σ Cc rows roots Cd hroots u g _ r hr hseg hv2 p v y hv hvw hy he
+/-- **`TransportsLiveCS` holds** (`transports_shaped`). -/
+theorem transportsLiveCS : TransportsLiveCS := by
+  intro n Reg I ht D hD hU pub hpub hpt hscope kd _ hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust τ
+    P vb σ Cc rows roots Cd hroots u g _ o he hcan hv2 hy
+  obtain ⟨r, hr, hv, hvw⟩ := hcan
+  obtain ⟨p, v, y⟩ := o
   exact transports_shaped (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parse_flat hD) (hscope := hscope)
-    (hU := hU) (hpub := hpub) (hpt := hpt) _ hroots hr ⟨hseg, hv2⟩ p v y hv hvw hy he
+    (hU := hU) (hpub := hpub) (hpt := hpt) _ hroots hr (hv2 r hr) p v y hv hvw hy he
 
 end Live
 
