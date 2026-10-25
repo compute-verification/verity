@@ -11,8 +11,10 @@
 #   glm      nci_glm.py measure --case registered --case rank --case slice (sent: glm53-b1-pins.json,
 #            glm53-b1-rank<r>.descriptor.json.gz)
 #   node     nci_glm.py's node case (the eight ranks joined) at A alone (node_a.py; sent as for glm)
-#   regnode  nci_glm.py measure --case registered-node --node-points full: A, then the check of record (sent:
+#   regnode  nci_glm.py measure --case registered-node --node-points full: the check of record (sent:
 #            glm53-b1-node.descriptor.json.gz, .trusted.json, .provenance.json, .registration.json)
+#   step     the step node of r20261024-003544-5439: its m4_desc.py instance, then nci-check --policy (sent: m4_desc.py,
+#            step-node.descriptor.json.gz, step-node.json), every TREE in turn
 #   shared   shared.py on #4066's difftest data (sent: instances, expanded, python .jsonl.gz), every TREE at once
 #   fuzz     the falsification search (fuzz/gen): the hand family, the difftest vectors of the fix tree (its 12
 #            shared ones among them), random, copies, big and chain, each TREE's nci-desc-fuzz in turn on the same
@@ -76,6 +78,12 @@ case $MODE in
     args=()
     for t in $TREES; do args+=(--exe "$t" "$d/nci-check-$t"); done
     "$PY" "$I/shared.py" "$d" "${args[@]}" --out "$O/shared.json" | tee "$O/shared.txt" || rc=1 ;;
+  step)
+    python3 "$IN/m4_desc.py" "$IN/step-node.descriptor.json.gz" "$IN/step-node.json" "$d/step.json" | tee "$O/step-instance.json" || exit 1
+    for t in $TREES; do
+      "$d/nci-check-$t" --policy "$d/step.json" > "$O/step-$t.json" || rc=1
+      echo "$t: $(cat "$O/step-$t.json")"
+    done ;;
   fuzz)
     G=$d/fix/$F/gen
     git worktree add -q "$d/fix" $MAIN && git -C "$d/fix" apply "$H/$I/fix-4066.patch" && cp -r "$I/fuzz" "$d/fix/$F" || exit 1
