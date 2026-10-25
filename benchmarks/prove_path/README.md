@@ -79,34 +79,39 @@ One property covers both configurations. 2a, the served window under `--zk`, is 
 CPU TP stand-in, has soundness as its only guarantee (Daniel, 24 Oct, #4016). Each layer is proved once over the layer
 below and instantiated per configuration. **No theorem on main yet takes an accepted audit, under `--zk` or plain, to
 `Accepted` or to the leak bound.** What's proved stops at each session's verdict, plus, under `--zk`, sampling's KS given
-the run's hypotheses. So 2b demonstrates per-session plain soundness, not an audit guarantee.
+the run's hypotheses; #4044 adds the leak step, given the property. So 2b demonstrates per-session plain soundness, not
+an audit guarantee.
 
 **The property.** The sampled step units are the sampled class of `NetTiming.Guarantees.SampledAuditAccepted` (#3608,
 PRF-144). It is stated once, at any sampling record `D`:
 `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAccepted H D L K S lay k`, with `D.flock = deployZk rel` under `--zk` and
-Flock's plain record otherwise. On the statements in scope
-(`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's radius and every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind,
-with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are the chances of finding a SHA-512
-collision in the run, not an assumption. `RAcc δ` holds when:
+Flock's plain record otherwise. On the statements in scope (`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's
+radius and every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext].
+Pr[B] and Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
 - no faulty unit is in a class drawn `all`: the transfer-gate units and N2's head checks (`allSlots`);
 - some advice (a, free), with `free` holding values only at the faulty units' committed gates (`FaultyGate`), makes NetTiming's
   `Accepted` hold over every observation sequence the trace's transfer gates carry (`Carries`), with every status complete
   (`Covered`). With no unit faulty, `free` is empty and `Accepted` is exact.
 
-**The leak bound that follows.** `EncardAccSeqsSampledLe` counts the accepted sequences: at most 2^c · #faultySets(δ) ·
-2^β · D^n. So, except with probability δ + ε_ks + ε_bind, an accepted audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
-- c, the advice;
+**The leak bound that follows.** `NetTiming.Guarantees.SampledLeakAccepted` (#4044) composes the property with the count
+`EncardAccSeqsSampledLe`, over any deployment. Given `SampledAuditAccepted` and `Claims.Sampling.KS` at the deployment,
+except with probability δ + ε_ks + ε_bind, an accepted audit's carried sequences, cut at the horizon, number at most
+2^c · #faultySets(δ) · 2^β · D^n. So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
+- c, the circuit's inputs other than the ingress (`otherInputs`). `RAcc` lets the advice take any value there, so the
+  bound charges every one of them;
 - λ_δ, which units are faulty;
 - β_δ, the faulty units' committed bits;
 - n·log2 D, the timing (J's D classes over n steps).
 
-At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. The count is over sequences, so the step to the audit
-also needs the run's inputs, besides the ingress, to lie in the count's `As` (|As| ≤ 2^c), and `RAcc` doesn't bound that.
+At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. A smaller c, the advice's declared bits, needs
+`SampledAuditAccepted` to pin the registered input gates to the registration. That is option A, a claim for Daniel that
+proofs is filing; TODO(proofs): link its Asks page. Until A is proved, the page states the larger c.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`):
-- c is `advice.bits`, the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as
-  `bits`. Over several windows, `BitsCount` charges their sum.
+- c, as the statement stands, is the circuit's non-ingress input bits, which the run doesn't print yet.
+  TODO(network-accounting): 2a's count. Under option A, c is `advice.bits`, the registration's `window.advice.bits`: the
+  I1 advice's length, which `prove_path.py advice` prints as `bits`. Over several windows, `BitsCount` charges their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -130,7 +135,7 @@ last word on every Lean name and status in both tables.
 | Sampling KS | `Claims.Sampling.sampling_assembled`, `SamplingDeploy.sampling_deployed_sha512` | proved at `deployZk` (the deployed record `SamplingDeploy.deploy` fixes it), with the run's facts as hypotheses: `DrawFixed`, `SessionRuns`, `SessionsIn`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`, `RevealsLe` | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/DeployedSha512.lean` |
 | Accepted audit ⇒ `Accepted` (shared) | `NetTiming.Guarantees.SampledAuditAccepted` | stated only (PRF-144); the lock holds its text through `SampledAuditAcceptedStated`. FINTAU: the proof's PR by 06:00Z 27 Oct | `Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean` |
 | Leak count (shared) | `NetTiming.SecurityProofs.EncardAccSeqsSampledLe`, by `NetTiming.encard_accSeqsSampled_le` | proved. No named assumption: its premises (\|As\| ≤ 2^c, the layout fits) are inside the statement, and it doesn't read the property | `Security/Proofs/NetworkCertifier.lean`, `Security/Proofs/NetworkCertifier/SampledCharge.lean` |
-| Accepted audit ⇒ leak bound (shared) | TODO(LEAK-LEAN): its name | prose only on main. Stated, proof in progress (LEAK-LEAN): over any deployment, with `SampledAuditAccepted` and the run's inputs in `As` as hypotheses | — |
+| Accepted audit ⇒ leak bound (shared) | `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted` | prose only on main. Proved on #4044 (LEAK-LEAN), over any deployment, with `SampledAuditAccepted` its one open hypothesis; c is every non-ingress input until option A | `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`, `Security/Proofs/NetworkCertifier/SampledCharge.lean` |
 
 **The plain chain (2b).** The shared links above hold as they are. Plain's own links:
 
@@ -143,8 +148,8 @@ last word on every Lean name and status in both tables.
 | Sampling KS | none on main; no plain sampling record exists | not proved; in progress. FINTAU (#4037, branch `cursor/proofs-plainsamp-944c`) is generalizing `sampling_assembled` over any Flock deployment with KS, with `--zk` and plain as instances. Until DECOMPB's untrimmed KS lands, the plain instance is at the trimmed record, whose sampling KS covers fewer decoders | — |
 | Registered reads | `FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR` | checked by the verifier (`buildStmt` runs `checkRegistered` in both modes), but not stated by the plain theorem: `FlockVerifyAcceptsR false` is `Verifies`. PR C (PLAINC) adds `SoundExecHR`. `sharedRowsOk` refuses a shared-row public file without `--zk` | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`, `verity/core/service/flock/FlockVerify.lean`, `verity/core/service/flock/Flock/ProvedScope.lean` |
 
-So 2a's open links are the property and the leak step. 2b's are those two, plus Flock KS and sampling KS at sampling's
-record.
+So once #4044 lands, 2a's one open link is the property (PRF-144). 2b's are the property, plus Flock KS and sampling KS
+at sampling's record.
 
 **The named assumptions.** The session links read the first three, in both chains. Sampling's KS and the property read
 none: their bounds carry the collision events.
