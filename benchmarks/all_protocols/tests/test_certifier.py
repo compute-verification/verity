@@ -164,7 +164,7 @@ def test_a_period_on_the_virtual_certifier(tmp_path, monkeypatch):
     assert a["reason"] == "window 0: service: decided by clear, not by a proof"
     detail = json.loads((out / "certifier.detail.json").read_text())
     assert [w["decided_by"] for w in detail["windows"]] == ["clear", "clear"]
-    assert detail["loop"] == {"requests": 2, "steps": 1, "bytes": 2 * 256}
+    assert detail["loop"] == {"requests": 2, "steps": 1, "bytes": 2 * 256} and detail["prover"] is None
     assert sorted(f.name for f in (out / "link").iterdir()) == sorted(L.PUBLIC_LINK)
     assert json.loads((out / "certifier.month.json").read_text())["period_verdict"] == "undecided"
     assert json.loads((out / "certifier.case.json").read_text())["params"]["windows"] == 2

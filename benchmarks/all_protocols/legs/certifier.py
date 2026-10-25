@@ -27,7 +27,8 @@ interface: ``leg(period_dir, node, out) -> answer``).
   δ in `DELTAS`. It is conditional on the theorem's two per-window inputs, neither discharged.
 
 Kept in ``out``: ``certifier.case.json`` (the port's case, for onsite), ``certifier.month.json``,
-``certifier.detail.json`` (each link-window's decision, what the units reduce to here), the link's public files under
+``certifier.detail.json`` (each link-window's decision, the prover's exit and leak scan when proved, what the units
+reduce to here), the link's public files under
 ``link/`` and, when proved, what the verifier received under ``verifier/``. The link's wire records and the prover's
 files stay in scratch beside the period's window.
 """
@@ -204,9 +205,12 @@ def decided_in_the_clear(run: Path) -> list[tuple[dict, dict]]:
     return out
 
 
-def decided_by_proofs(run: Path, scratch: Path, tools: Mapping[str, str], out: Path) -> list[tuple[dict, dict]]:
+def decided_by_proofs(run: Path, scratch: Path, tools: Mapping[str, str],
+                      out: Path) -> tuple[list[tuple[dict, dict]], dict[str, Any]]:
     """Each link-window's registration record and outcome body, its unit proved ``--zk`` behind the firewall and decided
-    by the verifier of record (`n2_zk.py prove`, the honest round); what the verifier received is kept in ``out``."""
+    by the verifier of record (`n2_zk.py prove`, the honest round), and the prover's exit and its scan of what the
+    verifier received (`leak_scan`: the pieces leaked, and whether its control found every piece in the prover's own
+    files). The scan isn't the verifier's, so it decides nothing here; what the verifier received is kept in ``out``."""
     work = scratch / "n2"
     shutil.rmtree(work, ignore_errors=True)
     path = [tools.get("m0-pythonpath"), str(ROOT / "tools/verity/circuit_check/src"), os.environ.get("PYTHONPATH")]
@@ -219,8 +223,14 @@ def decided_by_proofs(run: Path, scratch: Path, tools: Mapping[str, str], out: P
     vdir = work / "honest" / "verifier"
     if vdir.is_dir():
         shutil.copytree(vdir, out / "verifier", dirs_exist_ok=True)
+    prover: dict[str, Any] = {"exit": p.returncode, "scan": None}
     if (work / "summary.json").exists():
         shutil.copy(work / "summary.json", out / "n2_zk.summary.json")
+        member = json.loads((work / "summary.json").read_text())["members"].get("honest") or {}
+        received = member.get("received") or {}
+        prover["scan"] = {"ok": member.get("ok"), "leaked": received.get("leaked"),
+                          "control_holds_all": (received.get("control") or {}).get("holds_all"),
+                          "control_missing": (received.get("control") or {}).get("missing")}
     windows = json.loads((run / "plan.json").read_text())["windows"]
     got = []
     for w in range(windows):
@@ -229,7 +239,7 @@ def decided_by_proofs(run: Path, scratch: Path, tools: Mapping[str, str], out: P
             raise RuntimeError(f"n2_zk.py prove exited {p.returncode} with no outcome for link-window {w} "
                                f"(its log: {out / 'n2_zk.log'})")
         got.append(tuple(json.loads(f.read_text()) for f in files))
-    return got
+    return got, prover
 
 
 def _refusal(verdict: str, reason: str, commitment: str) -> dict[str, Any]:
@@ -395,7 +405,7 @@ def leg(period_dir: Path, node: str, out: Path, check: Callable[[dict], dict] | 
         if (run / f).exists():
             shutil.copy(run / f, out / "link" / f)
     prove = os.environ.get("ALLP_CERTIFIER_PROVE", "1") != "0"
-    windows = decided_by_proofs(run, scratch, p["tools"], out) if prove else decided_in_the_clear(run)
+    windows, prover = decided_by_proofs(run, scratch, p["tools"], out) if prove else (decided_in_the_clear(run), None)
     answers = [window_answer(reg, body) for reg, body in windows]
     case = case_of(run, period_dir, windows, answers)
     (out / "certifier.case.json").write_text(json.dumps(case, sort_keys=True))
@@ -414,7 +424,7 @@ def leg(period_dir: Path, node: str, out: Path, check: Callable[[dict], dict] | 
     (out / "certifier.detail.json").write_text(json.dumps({
         "certifier": f"gate run {run}" if os.environ.get("ALLP_CERTIFIER_RUN") else
         "n2_zk.virtual on the prover's node (a rehearsal; the auditor-trusted device is vy-challenger-1's gate)",
-        "decided": "proofs" if prove else "in the clear", "node": node,
+        "decided": "proofs" if prove else "in the clear", "node": node, "prover": prover,
         "loop": {"requests": len(outputs), "steps": len(outputs[0]), "bytes": sum(len(s) for r in outputs for s in r)},
         "windows": [{"window": w, "registration": R.digest(reg), "verdict": a["verdict"], "reason": a["reason"],
                      "decided_by": ((body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}).get("decided_by")}
