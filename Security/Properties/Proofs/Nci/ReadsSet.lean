@@ -2321,4 +2321,199 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
       have := members_scan hf
       exact hs ⟨hf, by omega⟩
 
+/-! ## `summarize`'s parameter reads -/
+
+/-- One piece of `summarize`'s parameter reads: a piece naming parameter `i`'s leaves joins `i`'s. -/
+def pushRef (q : Piece) (acc : Array (Array Piece)) : Array (Array Piece) :=
+  match q.tgt with
+  | .ref true i => acc.modify i (·.push q)
+  | _ => acc
+
+theorem forIn_pure_fold {α σ : Type} (g : α → σ → σ) (f : α → σ → Except String (ForInStep σ))
+    (hf : ∀ x s, f x s = .ok (.yield (g x s))) :
+    ∀ (l : List α) (s out : σ), forIn l s f = .ok out → out = l.foldl (fun s x => g x s) s
+  | [], s, out, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    exact h.symm
+  | x :: l, s, out, h => by
+    rw [List.forIn_cons, hf] at h
+    exact forIn_pure_fold g f hf l _ out h
+
+theorem pushRef_get (q : Piece) (acc : Array (Array Piece)) (i : Nat) :
+    (pushRef q acc).size = acc.size ∧ ∀ q', q' ∈ ((pushRef q acc)[i]!).toList ↔
+      q' ∈ (acc[i]!).toList ∨ (i < acc.size ∧ q' = q ∧ q.tgt = .ref true i) := by
+  unfold pushRef
+  split
+  · rename_i i0 hq
+    refine ⟨Array.size_modify .., fun q' => ?_⟩
+    by_cases hi : i < acc.size
+    · rw [getElem!_pos _ i (by simpa using hi), getElem!_pos _ i hi, Array.getElem_modify]
+      by_cases e : i0 = i
+      · subst e; simp [hi, hq]
+      · have : ¬ Tgt.ref true i0 = Tgt.ref true i := fun h => e (by injection h)
+        simp [e, hq, this]
+    · rw [getElem!_neg _ i (by simpa using hi), getElem!_neg _ i hi]
+      simp [hi]
+  · rename_i hq
+    refine ⟨rfl, fun q' => ?_⟩
+    have : ¬ q.tgt = .ref true i := fun h => hq i h
+    simp [this]
+
+theorem pushRef_fold : ∀ (l : List Piece) (acc : Array (Array Piece)),
+    (l.foldl (fun a q => pushRef q a) acc).size = acc.size ∧ ∀ i q,
+      q ∈ ((l.foldl (fun a q => pushRef q a) acc)[i]!).toList ↔
+        q ∈ (acc[i]!).toList ∨ (i < acc.size ∧ q ∈ l ∧ q.tgt = .ref true i)
+  | [], acc => ⟨rfl, fun i q => by simp⟩
+  | x :: l, acc => by
+    obtain ⟨h1, h2⟩ := pushRef_fold l (pushRef x acc)
+    have hs := (pushRef_get x acc 0).1
+    rw [List.foldl_cons]
+    refine ⟨by rw [h1, hs], fun i q => ?_⟩
+    rw [h2, (pushRef_get x acc i).2, hs]
+    simp only [List.mem_cons]
+    constructor
+    · rintro ((h | ⟨g1, rfl, g3⟩) | ⟨g1, g2, g3⟩)
+      · exact .inl h
+      · exact .inr ⟨g1, .inl rfl, g3⟩
+      · exact .inr ⟨g1, .inr g2, g3⟩
+    · rintro (h | ⟨g1, rfl | g2, g3⟩)
+      · exact .inl (.inl h)
+      · exact .inl (.inr ⟨g1, rfl, g3⟩)
+      · exact .inr ⟨g1, g2, g3⟩
+
+/-- One segment of `summarize`'s: a segment of more than one copy is passed over. -/
+def segRefs (acc : Array (Array Piece)) (s : Seg) : Array (Array Piece) :=
+  if s.reps > 1 then acc else s.ps.toList.foldl (fun a q => pushRef q a) acc
+
+theorem segRefs_fold : ∀ (l : List Seg) (acc : Array (Array Piece)),
+    (l.foldl segRefs acc).size = acc.size ∧ ∀ i q,
+      q ∈ ((l.foldl segRefs acc)[i]!).toList ↔
+        q ∈ (acc[i]!).toList ∨ (i < acc.size ∧ ∃ s ∈ l, s.reps ≤ 1 ∧ q ∈ s.ps.toList ∧ q.tgt = .ref true i)
+  | [], acc => ⟨rfl, fun i q => by simp⟩
+  | x :: l, acc => by
+    obtain ⟨h1, h2⟩ := segRefs_fold l (segRefs acc x)
+    have hx : (segRefs acc x).size = acc.size ∧ ∀ i q, q ∈ ((segRefs acc x)[i]!).toList ↔
+        q ∈ (acc[i]!).toList ∨ (i < acc.size ∧ x.reps ≤ 1 ∧ q ∈ x.ps.toList ∧ q.tgt = .ref true i) := by
+      unfold segRefs
+      split
+      · rename_i hr
+        exact ⟨rfl, fun i q => ⟨.inl, fun h => h.elim id fun h' => absurd h'.2.1 (by omega)⟩⟩
+      · rename_i hr
+        obtain ⟨g1, g2⟩ := pushRef_fold x.ps.toList acc
+        refine ⟨g1, fun i q => ?_⟩
+        rw [g2]
+        constructor
+        · rintro (h | ⟨h1, h2, h3⟩)
+          · exact .inl h
+          · exact .inr ⟨h1, by omega, h2, h3⟩
+        · rintro (h | ⟨h1, -, h2, h3⟩)
+          · exact .inl h
+          · exact .inr ⟨h1, h2, h3⟩
+    rw [List.foldl_cons]
+    refine ⟨by rw [h1, hx.1], fun i q => ?_⟩
+    rw [h2, hx.2, hx.1]
+    constructor
+    · rintro ((h | ⟨g1, g2, g3, g4⟩) | ⟨g1, s, hs, g2, g3, g4⟩)
+      · exact .inl h
+      · exact .inr ⟨g1, x, List.mem_cons_self, g2, g3, g4⟩
+      · exact .inr ⟨g1, s, List.mem_cons_of_mem _ hs, g2, g3, g4⟩
+    · rintro (h | ⟨g1, s, hs, g2, g3, g4⟩)
+      · exact .inl (.inl h)
+      · rcases List.mem_cons.1 hs with rfl | hs
+        · exact .inl (.inr ⟨g1, g2, g3, g4⟩)
+        · exact .inr ⟨g1, s, hs, g2, g3, g4⟩
+
+theorem forIn_pure_eq {α σ : Type} (g : α → σ → σ) (f : α → σ → Except String (ForInStep σ))
+    (hf : ∀ x s, f x s = .ok (.yield (g x s))) :
+    ∀ (l : List α) (s : σ), forIn l s f = .ok (l.foldl (fun s x => g x s) s)
+  | [], s => rfl
+  | x :: l, s => by
+    rw [List.forIn_cons, hf]
+    exact forIn_pure_eq g f hf l _
+
+/-- **`summarize`'s parameter reads**: per parameter, the pieces naming its leaves of the body's node reads of one
+copy. -/
+theorem summarize_acc (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) :
+    ∃ acc : Array (Array Piece), s.used = acc.map (fun qs => Desc.Ivs.norm (Desc.ivsOf qs)) ∧
+      acc.size = (P.defs[d]!).body.params.size ∧ ∀ i q, q ∈ (acc[i]!).toList ↔
+        (i < (P.defs[d]!).body.params.size ∧ ∃ k < (P.defs[d]!).body.nodes.size, ∃ rs,
+          Desc.nodeReads (ctxOf P memo d) k = .ok rs ∧
+          ∃ g ∈ rs.toList, g.reps ≤ 1 ∧ q ∈ g.ps.toList ∧ q.tgt = .ref true i) := by
+  unfold Desc.summarize at h
+  extract_lets defn body c ret0 acc0 at h
+  rw [if_neg (by simp [defn, hp])] at h
+  obtain ⟨ret, -, h⟩ := Walk.except_bind_ok h
+  obtain ⟨acc, hacc, h⟩ := Walk.except_bind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  refine ⟨acc, rfl, ?_⟩
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hacc
+  have := forIn_range_idx (fun t (a : Array (Array Piece)) => a.size = body.params.size ∧ ∀ i q,
+      q ∈ (a[i]!).toList ↔ (i < body.params.size ∧ ∃ k < t, ∃ rs, Desc.nodeReads c k = .ok rs ∧
+        ∃ g ∈ rs.toList, g.reps ≤ 1 ∧ q ∈ g.ps.toList ∧ q.tgt = .ref true i)) _ body.nodes.size ?_
+    body.nodes.size 0 acc0 acc (by simp) ⟨by simp [acc0], fun i q => ?_⟩ (by simpa using hacc)
+  · rw [Nat.zero_add] at this
+    exact this
+  · intro t r y ht ⟨hsz, hI⟩ hy
+    obtain ⟨rs, hrs, hy⟩ := Walk.except_bind_ok hy
+    obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
+    simp only [Except.ok.injEq] at hy
+    refine ⟨r', hy.symm, ?_⟩
+    rw [← Array.forIn_toList] at hr'
+    have e := forIn_pure_fold (fun x a => segRefs a x) _ (fun x a => ?_) _ _ _ hr'
+    · obtain ⟨g1, g2⟩ := segRefs_fold rs.toList r
+      rw [e]
+      refine ⟨by rw [g1, hsz], fun i q => ?_⟩
+      rw [g2, hI, hsz]
+      constructor
+      · rintro (⟨h1, k, hk, rs', h2, h3⟩ | ⟨h1, h2⟩)
+        · exact ⟨h1, k, by omega, rs', h2, h3⟩
+        · exact ⟨h1, t, by omega, rs, hrs, h2⟩
+      · rintro ⟨h1, k, hk, rs', h2, h3⟩
+        rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
+        · exact .inl ⟨h1, k, hk, rs', h2, h3⟩
+        · rw [hrs] at h2
+          obtain rfl := Except.ok.inj h2
+          exact .inr ⟨h1, h3⟩
+    · unfold segRefs
+      split
+      · rfl
+      · rw [← Array.forIn_toList, forIn_pure_eq (fun q a => pushRef q a) _ (fun q a => ?_)]
+        · rfl
+        · unfold pushRef
+          rcases q.tgt with ⟨_ | _, i⟩ | w <;> rfl
+  · simp only [Nat.not_lt_zero, false_and, exists_false, and_false, iff_false]
+    intro hq
+    by_cases hi : i < acc0.size
+    · rw [getElem!_pos acc0 i hi] at hq
+      simp [acc0] at hq
+    · rw [getElem!_neg acc0 i hi] at hq
+      change q ∈ (#[] : Array Piece).toList at hq
+      simp at hq
+
+/-- **`summarize`'s `used`, leaf by leaf**: parameter `i`'s leaf `j` is in it exactly when a piece of a node's read of
+one copy names it. -/
+theorem summarize_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) (i j : Nat) :
+    Width.inIvs ((s.used[i]?.getD #[]).toList) j ↔
+      (i < (P.defs[d]!).body.params.size ∧ ∃ k < (P.defs[d]!).body.nodes.size, ∃ rs,
+        Desc.nodeReads (ctxOf P memo d) k = .ok rs ∧ ∃ g ∈ rs.toList, g.reps ≤ 1 ∧
+          ∃ q ∈ g.ps.toList, q.tgt = .ref true i ∧ ∃ x ∈ q.pis.toList, Width.inPI x j) := by
+  obtain ⟨acc, hu, hsz, hmem⟩ := summarize_acc P memo d s h hp
+  rw [hu]
+  by_cases hi : i < acc.size
+  · rw [Array.getElem?_map, Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, norm_mem,
+      Width.ivsOf_spec, ← getElem!_pos acc i hi]
+    simp only [Array.toList_flatMap, List.mem_flatMap]
+    constructor
+    · rintro ⟨x, ⟨q, hq, hx⟩, hj⟩
+      obtain ⟨h1, k, hk, rs, hrs, g, hg, h2, h3, h4⟩ := (hmem i q).1 hq
+      exact ⟨h1, k, hk, rs, hrs, g, hg, h2, q, h3, h4, x, hx, hj⟩
+    · rintro ⟨h1, k, hk, rs, hrs, g, hg, h2, q, h3, h4, x, hx, hj⟩
+      exact ⟨x, ⟨q, (hmem i q).2 ⟨h1, k, hk, rs, hrs, g, hg, h2, h3, h4⟩, hx⟩, hj⟩
+  · rw [Array.getElem?_map, Array.getElem?_eq_none (by omega), Option.map_none, Option.getD_none]
+    simp only [Width.inIvs, List.not_mem_nil, false_and, exists_false, false_iff, not_and]
+    intro h1; omega
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
