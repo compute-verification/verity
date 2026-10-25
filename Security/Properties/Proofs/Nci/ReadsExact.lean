@@ -10910,6 +10910,78 @@ theorem locW_child (P : Prog) {d k m j w : Nat}
         (P.defs[d]!).body.offsets[k]! - m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates = j by omega]
     exact h
 
+/-- A segment of Definition `d`'s body naming its gates with their widths (`LocW`). -/
+def GateW (P : Prog) (d : Nat) (s : Seg) : Prop := ∀ w p, (Tgt.gate w, p) ∈ segPos s → LocW P d p.toNat w
+
+/-- `down` keeps a gate's piece as it is, with its widths. -/
+theorem downW_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q.tgt = .gate w)
+    (hq : ∀ w' p, (Tgt.gate w', p) ∈ pos q → LocW c.P c.d p.toNat w') {segs : Array Seg}
+    (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  rw [down_gate c fuel q ht] at h
+  injection h with h
+  subst h
+  intro s hs
+  have e : s = Seg.one q := by simpa using hs
+  subst e
+  intro w' p hx
+  rw [segPos_one] at hx
+  exact hq w' p hx
+
+/-- `down` keeps a parameter's piece as it is, naming no gate. -/
+theorem downW_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : q.tgt = .ref true i)
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  rw [down_param c fuel q ht] at h
+  injection h with h
+  subst h
+  intro s hs
+  have e : s = Seg.one q := by simpa using hs
+  subst e
+  intro w' p hx
+  rw [segPos_one] at hx
+  have := mem_pos_tgt hx
+  rw [ht] at this
+  cases this
+
+/-- A primitive node's piece names the node's gate, of the primitive's width, in a laid-out body. -/
+theorem downW_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim) {w : Nat}
+    (hret : (c.P.defs[node.fn]!).ret = .value w) (hp : (c.P.defs[node.fn]!).prim = true)
+    (hg1 : (c.P.defs[node.fn]!).gates = 1)
+    (hoff : ∀ k' < c.body.nodes.size, c.body.offsets[k' + 1]! =
+      c.body.offsets[k']! + (c.body.nodes[k']!).members * (c.P.defs[(c.body.nodes[k']!).fn]!).gates)
+    {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  have hk := node_lt hn
+  have hg := node_get hn
+  rw [down_prim c fuel q ht hff hn hform hret] at h
+  injection h with h
+  subst h
+  split
+  · intro s hs
+    simp at hs
+  · intro s hs
+    have e : s = Seg.one { tgt := .gate w, base := (c.body.offsets[k]! : Int), stride := 0, len := q.count } := by
+      simpa using hs
+    subst e
+    intro w' p hx
+    rw [segPos_one] at hx
+    unfold pos at hx
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq, Tgt.gate.injEq] at hx
+    obtain ⟨r, -, t, -, rfl, rfl⟩ := hx
+    simp only [Int.mul_zero, Int.add_zero, Int.toNat_natCast]
+    have hmono : ∀ k' < (c.P.defs[c.d]!).body.nodes.size,
+        (c.P.defs[c.d]!).body.offsets[k']! ≤ (c.P.defs[c.d]!).body.offsets[k' + 1]! := fun k' hk' => by
+      have := hoff k' hk'
+      exact this ▸ Nat.le_add_right _ _
+    have hm1 : node.members = 1 := by
+      unfold Flock.Program.Node.members
+      rw [hform]
+      rfl
+    have hx : c.body.offsets[k]! ≤ c.body.offsets[k]! ∧ c.body.offsets[k]! < c.body.offsets[k + 1]! := by
+      rw [hoff k hk, hg, hm1, hg1]
+      omega
+    rw [← hg] at hp hret
+    exact locW_prim c.P hmono hk hp hret hx
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
