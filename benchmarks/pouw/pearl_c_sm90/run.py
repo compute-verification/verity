@@ -32,7 +32,8 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
                                  PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
                                  PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_WORDS_FORM=0 for A'F_B's
                                  windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly,
-                                 PEARLC_GRID_BALANCE=0 for persistent GEMMs on every SM they may take)
+                                 PEARLC_GRID_BALANCE=0 for persistent GEMMs on every SM they may take,
+                                 PEARLC_ONE_COMMIT=0 for pd_commit and pd_tree in the shape's pd variant)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -72,6 +73,11 @@ WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: as on 131), leaving the rest of the SMs to the side lanes; a tile's bytes don't depend on its CTA.  PEARLC_GRID_BALANCE=0
 #: takes every SM it may
 GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
+#: pd_commit and pd_tree launch a shape's variant without PD_GROUP, which only pd_tiles reads (the same code and bytes), so
+#: every call's A commitment runs one function, its code warm (at decode's 16 rows gate_up's pd_commit_979 took ~95 us
+#: against the other k = 4096 calls' pd_commit_851 at ~81, r20261025-014522-4f0a; pearl_c_sm120's run.py made this cut,
+#: r20261024-104625-7b57).  PEARLC_ONE_COMMIT=0 launches the shape's variant
+ONE_COMMIT = os.environ.get("PEARLC_ONE_COMMIT", "1") != "0"
 #: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
 #: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
 #: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
@@ -677,11 +683,16 @@ class Pipeline:
                  i=(mr, n))
         d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
 
+    @property
+    def pd_a(self) -> int:
+        """The pd variant A's commitment launches (pd_commit, pd_tree): `pd`, without PD_GROUP under ONE_COMMIT."""
+        return self.pd & ~PD_GROUP if ONE_COMMIT else self.pd
+
     def pd_commit(self, mode: int = 0) -> None:
         """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
         i < m_real's under its own line key, the rest under line_a), its counter left zero.  Mode 1 (`rows_a`) stops after A's
         level 0 and the rows' lines, and `pd_tree` does the rest."""
-        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0), self.k // 256
+        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd_a | (PD_STAMP if self.stamps else 0), self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
                     kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], self.stamps),
@@ -690,7 +701,7 @@ class Pipeline:
     def pd_tree(self) -> None:
         """`split_a`'s `tree_seed_a`: pd_tree, one CTA, A's levels above level 0, seed_A, line_a, and with `fillers` the
         padding rows' E_A lines under it (rows m_real..m - 1, where there are any)."""
-        d, b, kk, v = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0)
+        d, b, kk, v = self.dev, self.b, self.keys, self.pd_a | (PD_STAMP if self.stamps else 0)
         ea = b["ea_codes"] if self.m_real < self.m and self.fillers else 0
         d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
                  p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], ea, self.stamps),

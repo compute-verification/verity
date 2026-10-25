@@ -401,6 +401,8 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats")
     run.whole_prefetch_b = True
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats", "prefetch_b")
+    run.whole_shape_joins = True
+    assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats", "prefetch_b", "shape_joins")
     run.hashing = False
     assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
     run.cur, run.graphs = PPD._Pass(None), False
@@ -547,7 +549,7 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
 
 
 class Lane:
-    """A stand-in of torch's CUDA stream: its handle, and each wait it is told to make, in `log`."""
+    """A stand-in of torch's CUDA stream: its handle, and each wait it is told to make and event it records, in `log`."""
 
     def __init__(self, log, name="side", device=None):
         self.log, self.name, self.cuda_stream = log, name, {"main": 1, "side": 2, "tree": 3, "stats": 4}[name]
@@ -555,8 +557,13 @@ class Lane:
     def wait_stream(self, other):
         self.log.append(f"{self.name} waits for {other.name}")
 
+    def record_event(self):
+        event = f"{self.name} event {sum(' event ' in x and 'waits' not in x for x in self.log)}"
+        self.log.append(event)
+        return event
+
     def wait_event(self, event):
-        self.log.append(f"{self.name} waits for {event.at}'s mark")
+        self.log.append(f"{self.name} waits for {event}" if isinstance(event, str) else f"{self.name} waits for {event.at}'s mark")
 
 
 class Mark:
@@ -621,7 +628,7 @@ def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a
                    "main waits for side",                     # 9's call is of 8's shape: joined before it writes
                    "9:a_tree on main (1)", "9:forming on main (1)", "9:gemm on main (1)", "side waits for main", *side(9),
                    "main waits for side"]                     # the forward's last call joins its own
-    assert [c.w for c in calls] == [7, 8, 9] and run._deferred is None and run.kernel.dev.stream is None
+    assert [c.w for c in calls] == [7, 8, 9] and run._pending is None and run.kernel.dev.stream is None
     log.clear()
     run.whole_defer = False
     forward()
@@ -697,6 +704,44 @@ def test_a_deferred_a_capture_runs_each_calls_a_tree_beside_its_forming_and_gemm
     run.whole_defer_a = False                                 # the same graphs, the tree on the capturing stream
     forward(False)
     assert "tree waits for main" not in log and log[:4] == main(7, "rows_a", "tree_seed_a", "forming", "gemm")
+
+
+def test_a_shape_joining_capture_joins_a_calls_side_steps_only_before_the_next_call_of_its_shape(monkeypatch):
+    """Under ``whole_shape_joins`` no call joins the call before's side steps: the side stream records an event after each
+    call's, and a call waits at its shape's last one before it writes the shape's buffers (`join_before`), dropping the
+    events before it (the one side stream ran them first); at the last pending call's it waits for the side stream itself,
+    and the forward's last call joins the side and tree streams.  Every step keeps its stream and order."""
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.whole_defer_a, run.whole_shape_joins, run.device, run._graphs = True, True, True, "cuda", {}
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
+    current = _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    x, y = SimpleNamespace(m16=32, k=8, n=16), SimpleNamespace(m16=32, k=8, n=32)
+    shapes = {7: x, 8: y, 9: x, 10: y, 11: y}
+    run.order = {w: i for i, w in enumerate(shapes)}
+    names = ("rows_a", "tree_seed_a", "forming", "gemm", "hash_leaf", "scatter")
+
+    def step(w, name):
+        return lambda: log.append(f"{w}:{name} on {current[0].name} ({run.kernel.dev.stream})")
+    pipe = SimpleNamespace(b={}, size={"tree_a": 64}, tiles_group=False)
+    for w, sh in shapes.items():
+        run._graphs[run._graph_key(w, sh, 32)[0]] = PG._Graph(torch.zeros(1), torch.zeros(1), "graph",
+                                                               [step(w, n) for n in names], (2, 4), 1)
+    run.whole_capture_begin(run.whole_key(False))
+    for i, (w, sh) in enumerate(shapes.items()):
+        run.join_before(sh)
+        run._graph_call(w, sh, pipe, 1, 4, 32, i, None)
+    assert [c.w for c in run.whole_capture_end()] == list(shapes)
+    call = lambda w, e: [f"{w}:rows_a on main (1)", "tree waits for main", f"{w}:tree_seed_a on tree (3)",  # noqa: E731
+                         f"{w}:forming on main (1)", f"{w}:gemm on main (1)", "side waits for main", f"{w}:hash_leaf on side (2)",
+                         "side waits for tree", f"{w}:scatter on side (2)", f"side event {e}"]
+    assert log == [*call(7, 0), *call(8, 1),
+                   "main waits for side event 0", *call(9, 2),   # 7's shape: at 7's event, 8's side steps still running
+                   "main waits for side event 1", *call(10, 3),  # 8's shape: at 8's event, 9's side steps still running
+                   "main waits for side", *call(11, 4),          # 10's shape, the last pending call: the side stream itself
+                   "main waits for side", "main waits for tree"]
+    assert run._pending is None and not run._tree_open and run.kernel.dev.stream is None
 
 
 def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitment_and_joins_them_in_their_place(
@@ -886,6 +931,12 @@ def test_prefetching_b_needs_a_deferred_whole_capture_on_a_kernel_with_the_prefe
         k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
         with pytest.raises(ValueError, match="whole_prefetch_b"):
             PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=defer, whole_prefetch_b=True)
+
+
+def test_joining_side_steps_by_shape_needs_a_deferred_whole_capture():
+    k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
+    with pytest.raises(ValueError, match="whole_shape_joins"):
+        PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=False, whole_shape_joins=True)
 
 
 def test_an_end_aside_needs_lagged_ends():

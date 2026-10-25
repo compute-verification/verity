@@ -1271,8 +1271,8 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
-                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True, "whole_prefetch_b": True,
-                                 "whole_eager": "deferred-a"} and whole.schedule == "serial"
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True, "whole_shape_joins": True,
+                                 "whole_prefetch_b": True, "whole_eager": "deferred-a"} and whole.schedule == "serial"
     monkeypatch.setenv("PEARLC_WHOLE_PREFETCH_B", "0")
     assert "whole_prefetch_b" not in type(whole)().run_options
     monkeypatch.setenv("PEARLC_WHOLE_EAGER", "deferred")
@@ -1311,7 +1311,8 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
     assert built["compilation_config"]["cudagraph_mode"] == "FULL_DECODE_ONLY"
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
-                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True, "whole_shape_joins": True}
+    assert whole.schedule == "serial"
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():

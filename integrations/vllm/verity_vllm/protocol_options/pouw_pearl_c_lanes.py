@@ -88,12 +88,13 @@ def splits_at(kernel: Any, m16: int, n: int, k: int) -> bool:
 
 def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: bool, whole_fork_stats: bool,
                   whole_tree_sm: bool, lag_ends: bool = False, aside_ends: bool = False,
-                  whole_prefetch_b: bool = False) -> None:
+                  whole_prefetch_b: bool = False, whole_shape_joins: bool = False) -> None:
     """Refuse a whole capture's options, and a pass end's, where `kernel` or the others can't run them.  `whole_defer_a`
     (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A tree within a whole
     capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
     A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A tree with one persistent CTA
-    fewer, leaving the tree's CTA its SM; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
+    fewer, leaving the tree's CTA its SM; `whole_shape_joins` (with `whole_defer`) joins a call's side steps only before
+    the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
     `whole_prefetch_b` (with `whole_defer`) prefetches each call's B̃ into L2 beside its A commitment (`run.Pipeline.prefetch_b`,
     which writes nothing)."""
     if whole_defer_a and not (whole_defer and splits(kernel)):
@@ -101,6 +102,8 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
                          f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
     if whole_fork_stats and not whole_defer:
         raise ValueError(f"{entry}: whole_fork_stats forks A's scales within a deferred whole capture (whole_defer)")
+    if whole_shape_joins and not whole_defer:
+        raise ValueError(f"{entry}: whole_shape_joins joins the side steps of a deferred whole capture (whole_defer)")
     if whole_tree_sm and not (whole_defer_a and hasattr(kernel.run.Pipeline, "beside")):
         raise ValueError(f"{entry}: whole_tree_sm leaves a deferred A tree (whole_defer_a) its SM, on a kernel whose "
                          f"pipeline's GEMMs take `Pipeline.beside`")

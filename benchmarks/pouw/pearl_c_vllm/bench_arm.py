@@ -254,8 +254,9 @@ class PearlCWholeArm(PearlCArm):
     capture sizes, without torch.compile, each captured with every call's graph steps inside it, each call's tile hashing
     beside the next call, its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline
     splits A's commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39,
-    r20261024-130722-5c44), the GEMM leaving the tree's CTA its SM (`whole_tree_sm`), and its A scales beside its A
-    commitment (`whole_fork_stats`), so a decode step launches one
+    r20261024-130722-5c44), the GEMM leaving the tree's CTA its SM (`whole_tree_sm`), its A scales beside its A
+    commitment (`whole_fork_stats`), and its side steps joined only before the next call of its shape
+    (`whole_shape_joins`), so a decode step launches one
     graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each call of at most
     `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one pass per engine
     step as `PearlCArm`'s, each pass's commitment read back at the next pass's end (`lag_ends`), so the host prepares the
@@ -268,7 +269,8 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
     keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
-    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
+    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_WHOLE_SHAPE_JOINS=0`` joins each call's
+    side steps at the next call, ``PEARLC_LAG_ENDS=0`` reads each pass's
     commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
     default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).  On pearl_c_sm120 (`RTX_ONLY`)
     the stats stream also prefetches each call's B̃ into L2 (`whole_prefetch_b`, run.py's ``prefetch_b`` in its
@@ -282,7 +284,8 @@ class PearlCWholeArm(PearlCArm):
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True,
-                   "whole_tree_sm": True, "aside_ends": True, "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+                   "whole_tree_sm": True, "aside_ends": True, "whole_shape_joins": True,
+                   "whole_prefetch_b": True, "whole_eager": "deferred-a"}
     #: the options measured on pearl_c_sm120 alone (B̃'s prefetch is its pipeline's), which another kernel's arm leaves out
     RTX_ONLY = ("whole_prefetch_b", "whole_eager")
 
@@ -292,7 +295,8 @@ class PearlCWholeArm(PearlCArm):
             self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
-                            ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
+                            ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_shape_joins", "PEARLC_WHOLE_SHAPE_JOINS"),
+                            ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
         if "whole_defer_a" not in self.run_options:
