@@ -21,15 +21,24 @@ At a root node calling a primitive, `RootSet` holds outright (`rootSet_prim`): i
 (`operands_ok`, a mapped argument's by the member its index falls in, `tile`), and each operand is one of those
 references, resolving before the node.
 
-At a composite node, what its gates read outside it is what its members' parameter leaves that the callee's `used`
-names resolve to (`compReads`), each member's activation located as its caller's is (`located_child`). One argument's node read reads, outside the
-node, what the members' reads of its parameter leaves resolve to, when its positions are those leaves' `upIdx`
-(`readSet`, through `branch_iff`). Its read succeeding (`nodeReads_comp_ok`, `ArgReadOk`), an argument's read names
-exactly its members' reads of the parameter (`argSet`, `ArgB`) wherever its members' leaves tile it, and the node's
-positions what its gates read outside it wherever its carries' read names the later iterations' (`compSet_of`). All
-members at once, `Desc.memberRows` reads per used run the rows `rowsAt` names (`memberRows_rows`), whose indices are
+At a composite node, what its gates read outside it is what its members' parameter leaves that the callee's `used` names
+resolve to (`compReads`), each member's activation located as its caller's is (`located_child`). One argument's node
+read reads, outside the node, what the members' reads of its parameter leaves resolve to, when its positions are those
+leaves' `upIdx` (`readSet`, through `branch_iff`). Its read succeeding (`nodeReads_comp_ok`, `ArgReadOk`), an argument's
+read names exactly its members' reads of the parameter (`argSet`, `ArgB`) wherever its members' leaves tile it, and the
+node's positions what its gates read outside it wherever its carries' read names the later iterations' (`compSet_of`).
+All members at once, `Desc.memberRows` reads per used run the rows `rowsAt` names (`memberRows_rows`), whose indices are
 the members' leaves there (`rowsAt_idx`), each through `throughPS` keeping its references' gates (`throughPS_agree`):
 the same set (`rowsSet`, `argSet_of`).
+
+A scan's carries, `Desc.carriesRead` reads outside the node exactly what its iterations past the first read at the
+carry leaves `used` names (`carrySet`, `CarryRead`). A run the step returns in place is the initial carry's in every
+iteration (`back_init`). Any other leaf, followed back through the step's return (`chain_step`), is the initial carry's
+leaf the chain reaches within the iterations before it leaves (every such leaf kept, the sort only permuting:
+`insertLoop_has`, `qsort_toList_perm`), or what the step returns where the chain leaves, in iteration `m - 1 - e`
+(`back_exit`, `ret_den`): a gate of the node, which the read drops (`ret_gate_in`), an `xs` row per iteration
+(`throughPS_agree`, else `CalleeSpec` iteration by iteration), or a shared parameter, one read for every iteration
+(`up_idx`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -1618,5 +1627,609 @@ theorem argSet_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (h
         Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a :=
   argSet c sc hd hD hn hA hR hm0 hok hlv hu hL0 hlo htile hsucc
     (fun hpm _ hps hok' a => rowsSet c sc hd hD hn hA hR hpm hu hL0 hlo hsucc hps hok' a) a
+
+/-! ## A scan's carries, read as its later iterations read their carry -/
+
+/-- A loop inserting `g t` for each `t` of `l` keeps what it started with and inserts each. -/
+theorem insertLoop_has {α : Type} (g : α → Nat) :
+    ∀ (l : List α) (s0 s : Std.HashSet Nat),
+      forIn (m := Except String) l s0 (fun t s => pure (ForInStep.yield (s.insert (g t)))) = .ok s →
+      (∀ x ∈ s0, x ∈ s) ∧ ∀ t ∈ l, g t ∈ s
+  | [], s0, s, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h; exact ⟨fun x hx => hx, fun t ht => by simp at ht⟩
+  | t :: l, s0, s, h => by
+    rw [List.forIn_cons] at h
+    obtain ⟨h1, h2⟩ := insertLoop_has g l _ s h
+    refine ⟨fun x hx => h1 x (Std.HashSet.mem_insert.2 (.inr hx)), fun t' ht' => ?_⟩
+    rcases List.mem_cons.1 ht' with rfl | ht'
+    · exact h1 _ (Std.HashSet.mem_insert.2 (.inl (beq_self_eq_true _)))
+    · exact h2 t' ht'
+
+/-- **Back to the initial carry**: iteration `m ≥ 1`'s carry leaf `f 0`, the step's summary naming each return
+position `f s` carry leaf `f (s + 1)` for `s < m`, is the first iteration's carry leaf `f m`. -/
+theorem back_init (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
+    {m a : Nat} (hm : 1 ≤ m)
+    (hs : ∀ s < m, (psPos (c.memo[node.fn]!).ret)[f s]? = some (.ref true 0, (f (s + 1) : Int)))
+    (hv : Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, f 0⟩ = .ok a) :
+    Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, f m⟩ = .ok a := by
+  have h1 := carry_back c sc hd hn hform (by omega : m ≠ 0) hv
+  have := carry_init c sc hd hn hform hRet f (m := m - 1) (fun s hs' => hs s (by omega)) h1
+  rwa [show m - 1 + 1 = m by omega] at this
+
+/-- **Back to where the carry leaves**: iteration `m`'s carry leaf `f 0`, the step's summary naming each return
+position `f s` carry leaf `f (s + 1)` for `s < e < m`, is iteration `m - 1 - e`'s return position `f e`. -/
+theorem back_exit (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
+    {e m a : Nat} (he : e < m)
+    (hs : ∀ s < e, (psPos (c.memo[node.fn]!).ret)[f s]? = some (.ref true 0, (f (s + 1) : Int)))
+    (hv : Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, f 0⟩ = .ok a) :
+    Flock.Program.resolve c.P (c.P.child sc k (m - 1 - e)) ((c.P.defs[node.fn]!).body.ret.get (f e)) = .ok a := by
+  have h1 := carry_back c sc hd hn hform (by omega : m ≠ 0) hv
+  exact carry_chain c sc hd hn hform hRet f (m := m - 1) e (by omega) hs h1
+
+/-- A step's return position, read in an iteration, names in that iteration's activation what it resolves to. -/
+theorem ret_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hRet : RetOk c.P c.memo node.fn) {it h a : Nat} {x : Tgt × Int}
+    (hx : (psPos (c.memo[node.fn]!).ret)[h]? = some x)
+    (hv : Flock.Program.resolve c.P (c.P.child sc k it) ((c.P.defs[node.fn]!).body.ret.get h) = .ok a) :
+    den c.P (c.P.child sc k it) x = .ok a := by
+  obtain ⟨-, -, -, hag, -⟩ := hRet
+  have hd' : (c.P.child sc k it).d = node.fn := by rw [child_eq c sc hd hn it]; rfl
+  have hA := hag _ hd'
+  have hlt : h < (c.P.defs[node.fn]!).body.ret.count := by
+    have := (List.getElem?_eq_some_iff.1 hx).1
+    rw [hA.length_eq] at this; simpa using this
+  exact agree_get hA hx (by rw [List.getElem?_map, List.getElem?_range hlt]; rfl) a hv
+
+/-- The chain's step: each position before its last (any, around a cycle) returns the carry leaf the next one is. -/
+theorem chain_step {P : Prog} {memo : Array Desc.Summary} {f : Nat} (hR : RetOk P memo f) {j : Nat}
+    {ch : Desc.Chain} (hok : ChainOk (memo[f]!).ret j ch) {s : Nat} (hs : ch.exit = none ∨ s + 1 < ch.hist.size) :
+    (psPos (memo[f]!).ret)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := by
+  rcases hs with hx | hs
+  · obtain ⟨q, hq, ht, hb⟩ := chainAt_cyc hok hx s
+    exact carryPos_of_retAt hR hq ht hb
+  · obtain ⟨q, hq, ht, hb⟩ := hok.2.2.1 s hs
+    rw [chainAt_lt ch (by omega : s < ch.hist.size), chainAt_lt ch hs]
+    exact carryPos_of_retAt hR hq ht hb
+
+/-- A gate a step's return names, read in an iteration, is one of the scan node's. -/
+theorem ret_gate_in (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat}
+    {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hlaid : (c.P.defs[sc.d]!).body.offsets[k + 1]! =
+      (c.P.defs[sc.d]!).body.offsets[k]! + node.members * (c.P.defs[node.fn]!).gates)
+    {it : Nat} (hit : it < node.members) {w : Nat} {p : Int} (hp : p.toNat < (c.P.defs[node.fn]!).gates) {a : Nat}
+    (h : den c.P (c.P.child sc k it) (.gate w, p) = .ok a) : InNodeAt c.P sc k a := by
+  rw [child_eq c sc hd hn it] at h
+  simp only [den] at h
+  split at h
+  · cases h
+  · injection h with h
+    subst h
+    have hle := Nat.mul_le_mul_right (c.P.defs[node.fn]!).gates hit
+    rw [Nat.succ_mul] at hle
+    unfold InNodeAt
+    change _ ≤ sc.off + (c.P.defs[sc.d]!).body.offsets[k]! + it * (c.P.defs[node.fn]!).gates + p.toNat ∧
+      sc.off + (c.P.defs[sc.d]!).body.offsets[k]! + it * (c.P.defs[node.fn]!).gates + p.toNat < _
+    rw [hlaid]
+    omega
+
+/-- Gate `a` is what an iteration of scan node `k` past the first reads at a leaf of its carry `u` names. -/
+def CarryRead (P : Prog) (sc : Flock.Program.Scope) (k : Nat) (node : Flock.Program.Node) (u : Desc.Ivs)
+    (a : Nat) : Prop :=
+  ∃ m, 1 ≤ m ∧ m < node.members ∧ ∃ j, Width.inIvs u.toList j ∧
+    Flock.Program.resolve P (P.child sc k m) ⟨true, 0, j⟩ = .ok a
+
+/-- Every gate outside node `k` that a position of `out` names is a carry read (`CarryRead`). -/
+def CarrySnd (P : Prog) (sc : Flock.Program.Scope) (k : Nat) (node : Flock.Program.Node) (u : Desc.Ivs)
+    (out : Array Seg) : Prop :=
+  ∀ x ∈ segsPos out, ∀ v, den P sc x = .ok v → ¬ InNodeAt P sc k v → CarryRead P sc k node u v
+
+/-- Every gate outside node `k` that iterations `1 .. T` read at carry leaf `j` a position of `out` names. -/
+def CarryCov (P : Prog) (sc : Flock.Program.Scope) (k T j : Nat) (out : Array Seg) : Prop :=
+  ∀ m, 1 ≤ m → m ≤ T → ∀ v, Flock.Program.resolve P (P.child sc k m) ⟨true, 0, j⟩ = .ok v → ¬ InNodeAt P sc k v →
+    ∃ x ∈ segsPos out, den P sc x = .ok v
+
+/-- `out'` holds every position of `out`. -/
+def SegsLe (out out' : Array Seg) : Prop := ∀ x ∈ segsPos out, x ∈ segsPos out'
+
+theorem segsLe_app (out e : Array Seg) : SegsLe out (out ++ e) := by
+  intro x hx; rw [segsPos_append]; exact List.mem_append_left _ hx
+
+theorem segsLe_trans (o1 o2 o3 : Array Seg) (h1 : SegsLe o1 o2) (h2 : SegsLe o2 o3) : SegsLe o1 o3 :=
+  fun x hx => h2 x (h1 x hx)
+
+theorem carryCov_mono {P : Prog} {sc : Flock.Program.Scope} {k T j : Nat} {o1 o2 : Array Seg}
+    (h : CarryCov P sc k T j o1) (hl : SegsLe o1 o2) : CarryCov P sc k T j o2 := by
+  intro m h1 h2 v hv hout
+  obtain ⟨x, hx, hxv⟩ := h m h1 h2 v hv hout
+  exact ⟨x, hl x hx, hxv⟩
+
+theorem carrySnd_app {P : Prog} {sc : Flock.Program.Scope} {k : Nat} {node : Flock.Program.Node} {u : Desc.Ivs}
+    {out e : Array Seg} (h : CarrySnd P sc k node u out)
+    (he : ∀ x ∈ segsPos e, ∀ v, den P sc x = .ok v → ¬ InNodeAt P sc k v → CarryRead P sc k node u v) :
+    CarrySnd P sc k node u (out ++ e) := by
+  intro x hx
+  rw [segsPos_append] at hx
+  rcases List.mem_append.1 hx with hx | hx
+  · exact h x hx
+  · exact he x hx
+
+/-- **What `Desc.carriesRead` reads of a scan's carries, outside the node, is exactly what its iterations past the
+first read at the leaves of their carry `used` names** (`CarryRead`). -/
+theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
+    (hD : DownSpec c sc Flock.Steps.FUEL) (hC : CalleeSpec c sc Flock.Steps.FUEL) (hT : ThroughSpec c sc Flock.Steps.FUEL)
+    {k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn2 : 2 ≤ node.n)
+    (hRet : RetOk c.P c.memo node.fn)
+    (hlaid : (c.P.defs[sc.d]!).body.offsets[k + 1]! =
+      (c.P.defs[sc.d]!).body.offsets[k]! + node.members * (c.P.defs[node.fn]!).gates)
+    (hgw : ∀ w p, (Tgt.gate w, p) ∈ psPos (c.memo[node.fn]!).ret → p.toNat < (c.P.defs[node.fn]!).gates)
+    (hpa : (c.P.defs[node.fn]!).body.params.size ≤ node.args.size)
+    (hA : ∀ i < node.args.size, ArgOk c k i)
+    (hR : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
+    (hlo : ∀ i, 1 ≤ i → i < (c.P.defs[node.fn]!).body.params.size → ∀ m < node.members,
+      ∀ j < ((c.P.defs[node.fn]!).body.params[i]!).2.leaves, upIdx node i m j < (node.args[i]!).seq.count)
+    (hu0 : ∀ j, Width.inIvs (((c.memo[node.fn]!).used[0]?.getD #[]).toList) j →
+      j < (c.P.defs[node.fn]!).body.ret.count)
+    (hsucc : ∀ m j, 1 ≤ m → m < node.members → Width.inIvs (((c.memo[node.fn]!).used[0]?.getD #[]).toList) j →
+      ∃ a, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, j⟩ = .ok a)
+    {segs : Array Seg} (h : Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs) (a : Nat) :
+    ((∃ x ∈ segsPos segs, den c.P sc x = .ok a) ∧ ¬ InNodeAt c.P sc k a) ↔
+      (CarryRead c.P sc k node ((c.memo[node.fn]!).used[0]?.getD #[]) a ∧ ¬ InNodeAt c.P sc k a) := by
+  set u := (c.memo[node.fn]!).used[0]?.getD #[] with hudef
+  unfold Desc.carriesRead at h
+  obtain ⟨node', hn', h⟩ := Walk.except_bind_ok h
+  rw [hn] at hn'
+  cases hn'
+  extract_lets fuel r T init out0 seen0 at h
+  have hnode := node_get hn
+  have hmem : node.members = node.n := members_scan hform
+  have hT1 : 1 ≤ T := by show 1 ≤ node.n - 1; omega
+  have hTm : T + 1 = node.members := by show node.n - 1 + 1 = node.members; omega
+  have hR5 := hRet
+  obtain ⟨hps, hpos, -, hag, hpp⟩ := hR5
+  have hlenR : (psPos r).length = (c.P.defs[node.fn]!).body.ret.count := by
+    have := (hag (.top node.fn 0 none) rfl).length_eq
+    simpa using this
+  let G : Nat → Prop := fun l => 0 < (c.P.defs[node.fn]!).body.params.size ∧
+    l < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves
+  have hcarry : ∀ h j' : Nat, (psPos r)[h]? = some (.ref true 0, (j' : Int)) → G j' := by
+    intro h j' hx
+    have := (hpos _ (List.mem_of_getElem? hx)).2.2 0 rfl
+    exact ⟨this.1, by have h2 : ((j' : Nat) : Int) < _ := this.2; exact_mod_cast h2⟩
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  have hfin := forIn_cover _ (fun _ => False) (CarrySnd c.P sc k node u) SegsLe
+    (fun (x : Nat × Nat) out => ∀ j, x.1 ≤ j → j < x.2 → CarryCov c.P sc k T j out)
+    (fun o x hx => hx) segsLe_trans (fun x o1 o2 h hl j h1 h2 => carryCov_mono (h j h1 h2) hl) _ out0 segs ?_
+    (fun x hx => by simp [out0, segsPos] at hx) h' id
+  · obtain ⟨hS, -, hCov⟩ := hfin
+    constructor
+    · rintro ⟨⟨x, hx, hxa⟩, hout⟩
+      exact ⟨hS x hx a hxa hout, hout⟩
+    · rintro ⟨⟨m, hm1, hm, j, ⟨p, hp, hj1, hj2⟩, hr⟩, hout⟩
+      exact ⟨hCov p hp j hj1 hj2 m hm1 (by omega) a hr hout, hout⟩
+  intro x hx o y hI hy
+  obtain ⟨aa, bb⟩ := x
+  dsimp (config := { zeta := false }) only at hy
+  obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+  simp only [pure, Except.pure, Except.ok.injEq] at hy
+  subst hy
+  rw [← Array.forIn_toList] at hv
+  have hab : aa < bb → bb ≤ (psPos r).length := fun hlt => by
+    rw [hlenR]; have := hu0 (bb - 1) ⟨(aa, bb), hx, by dsimp only; omega, by dsimp only; omega⟩; omega
+  have hju : ∀ j, aa ≤ j → j < bb → Width.inIvs u.toList j := fun j h1 h2 => ⟨(aa, bb), hx, h1, h2⟩
+  obtain ⟨hcov, -⟩ := carryRuns_cover r hps hpp aa bb hab
+  have hrun : ∀ x ∈ (Desc.carryRuns r aa bb).toList, ∀ j, x.1 ≤ j → j < x.2.1 → Width.inIvs u.toList j := by
+    intro x hx' j h1 h2
+    have : j ∈ (Desc.carryRuns r aa bb).toList.flatMap (fun x => List.range' x.1 (x.2.1 - x.1)) :=
+      List.mem_flatMap.2 ⟨x, hx', List.mem_range'_1.2 ⟨h1, by omega⟩⟩
+    rw [hcov, List.mem_range'_1] at this
+    exact hju j this.1 (by omega)
+  have hfin2 := forIn_cover _ (fun _ => False) (CarrySnd c.P sc k node u) SegsLe
+    (fun (x : Nat × Nat × Bool) out => ∀ j, x.1 ≤ j → j < x.2.1 → CarryCov c.P sc k T j out)
+    (fun o x hx => hx) segsLe_trans (fun x o1 o2 h hl j h1 h2 => carryCov_mono (h j h1 h2) hl) _ o v ?_ hI hv id
+  · obtain ⟨hS, hle, hCov⟩ := hfin2
+    refine .inl ⟨v, rfl, hS, hle, fun j h1 h2 => ?_⟩
+    have : j ∈ List.range' aa (bb - aa) := List.mem_range'_1.2 ⟨h1, by omega⟩
+    rw [← hcov] at this
+    obtain ⟨x, hx', hjx⟩ := List.mem_flatMap.1 this
+    rw [List.mem_range'_1] at hjx
+    exact hCov x hx' j hjx.1 (by omega)
+  intro x hx' o' y hI' hy
+  obtain ⟨lo, hi, idb⟩ := x
+  dsimp (config := { zeta := false }) only at hy
+  have hrun' : ∀ j, lo ≤ j → j < hi → Width.inIvs u.toList j := fun j h1 h2 => hrun _ hx' j h1 h2
+  split at hy
+  · rename_i hxid
+    obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    have hids := carryRuns_id r hps hpp aa bb _ hx' hxid
+    have hag0 := init_agree c sc hn hT (by omega) (fun j h1 h2 => hcarry j j (hids j h1 h2)) hv'
+    dsimp only at hag0 hids
+    have hback : ∀ m j w, 1 ≤ m → lo ≤ j → j < hi →
+        Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, j⟩ = .ok w →
+        Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, j⟩ = .ok w :=
+      fun m j w hm h1 h2 hw => back_init c sc hd hn hform hRet (fun _ => j) hm (fun _ _ => hids j h1 h2) hw
+    refine .inl ⟨_, rfl, carrySnd_app hI' ?_, segsLe_app _ _, fun j h1 h2 m hm1 hmT w hw hout => ?_⟩
+    · intro x' hx'' w hw hout
+      obtain ⟨val, hval, hxv⟩ := agree_src hag0 hx''
+      obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hval
+      rw [List.mem_range'_1] at hj
+      obtain ⟨w', hw'⟩ := hsucc 1 j le_rfl (by omega) (hrun' j hj.1 (by omega))
+      have := hxv w' (hback 1 j w' le_rfl hj.1 (by omega) hw')
+      rw [hw] at this
+      obtain rfl := Except.ok.inj this
+      exact ⟨1, le_rfl, by omega, j, hrun' j hj.1 (by omega), hw'⟩
+    · obtain ⟨x', hx'', hxv⟩ := agree_tgt hag0 (List.mem_map.2 ⟨j, List.mem_range'_1.2 ⟨h1, by
+        change j < hi at h2; omega⟩, rfl⟩) (hback m j w hm1 h1 h2 hw)
+      exact ⟨x', by rw [segsPos_append]; exact List.mem_append_right _ hx'', hxv⟩
+  have hy := walkAtMost_bind _ _ _ hy
+  obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+  simp only [pure, Except.pure, Except.ok.injEq] at hy
+  subst hy
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hv
+  have hfin3 := forIn_cover _ (fun _ => False) (CarrySnd c.P sc k node u) SegsLe
+    (fun (j : Nat) out => CarryCov c.P sc k T j out)
+    (fun o x hx => hx) segsLe_trans (fun x o1 o2 h hl => carryCov_mono h hl) _ o' v ?_ hI' hv id
+  · obtain ⟨hS, hle, hCov⟩ := hfin3
+    exact .inl ⟨v, rfl, hS, hle, fun j h1 h2 => hCov j (List.mem_range'_1.2 ⟨h1, by
+      change j < hi at h2; simp only [Std.Legacy.Range.size]; omega⟩)⟩
+  intro j hj o'' y hI'' hy
+  simp only [Std.Legacy.Range.size, List.mem_range'_1] at hj
+  have hju' := hrun' j hj.1 (by omega)
+  obtain ⟨ch, hch, hy⟩ := Walk.except_bind_ok hy
+  have hok := chainOf_ok _ j ch hch
+  extract_lets e upto jp at hy
+  have he : e = ch.hist.size - 1 := rfl
+  have hupto : upto = if ch.exit.isSome = true then min T e else T := rfl
+  have hsz := hok.1
+  obtain ⟨s1, hs1, hy⟩ := Walk.except_bind_ok hy
+  dsimp only at hy
+  have hat0 : ch.at 0 = j := by rw [chainAt_lt ch hsz]; exact hok.2.1
+  have hstep : ∀ s, (ch.exit = none ∨ s + 1 < ch.hist.size) →
+      (psPos r)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := fun s hs => chain_step hRet hok hs
+  have hup : ∀ t, t ≤ upto → t ≤ T ∧ (ch.exit = none ∨ t ≤ e) := by
+    intro t ht
+    rw [hupto] at ht
+    rcases hx : ch.exit with _ | q
+    · rw [hx] at ht; simp only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at ht; exact ⟨ht, .inl rfl⟩
+    · rw [hx] at ht; simp only [Option.isSome_some, ↓reduceIte] at ht; exact ⟨by omega, .inr (by omega)⟩
+  have hinit : ∀ t, 1 ≤ t → t ≤ upto → ∀ w,
+      Flock.Program.resolve c.P (c.P.child sc k t) ⟨true, 0, j⟩ = .ok w ↔
+        Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, ch.at t⟩ = .ok w := by
+    intro t h1 h2 w
+    obtain ⟨hT', hor⟩ := hup t h2
+    have fwd : ∀ w, Flock.Program.resolve c.P (c.P.child sc k t) ⟨true, 0, j⟩ = .ok w →
+        Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, ch.at t⟩ = .ok w := fun w hw =>
+      back_init c sc hd hn hform hRet ch.at h1 (fun s hs => hstep s (hor.imp id (fun h => by omega)))
+        (by rw [hat0]; exact hw)
+    refine ⟨fwd w, fun hw => ?_⟩
+    obtain ⟨w', hw'⟩ := hsucc t j h1 (by omega) hju'
+    have := fwd w' hw'
+    rw [hw] at this
+    obtain rfl := Except.ok.inj this
+    exact hw'
+  have hGt : ∀ t, 1 ≤ t → t ≤ upto → G (ch.at t) := by
+    intro t h1 h2
+    obtain ⟨-, hor⟩ := hup t h2
+    have := hstep (t - 1) (hor.imp id (fun h => by omega))
+    rw [show t - 1 + 1 = t by omega] at this
+    exact hcarry _ _ this
+  let G' : Nat → Prop := fun l => ∃ t, 1 ≤ t ∧ t ≤ upto ∧ ch.at t = l
+  have hjp : ∀ sn y, (∀ l ∈ sn, G' l) → (∀ t, 1 ≤ t → t ≤ upto → ch.at t ∈ sn) → jp () sn = .ok y →
+      (∃ s', y = .yield s' ∧ CarrySnd c.P sc k node u s' ∧ SegsLe o'' s' ∧ CarryCov c.P sc k T j s') ∨
+        (∃ s', y = .done s' ∧ False) := by
+    intro sn y hG hcs hy
+    simp only [jp] at hy
+    obtain ⟨v1, hv1, hy⟩ := Walk.except_bind_ok hy
+    rw [← Array.forIn_toList] at hv1
+    have hfin4 := forIn_cover _ (fun _ => False) (CarrySnd c.P sc k node u) SegsLe
+      (fun (l : Nat) out => ∀ w, Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, l⟩ = .ok w →
+        ∃ x ∈ segsPos out, den c.P sc x = .ok w)
+      (fun o x hx => hx) segsLe_trans
+      (fun l o1 o2 h hl w hw => by obtain ⟨x, hx, hxw⟩ := h w hw; exact ⟨x, hl x hx, hxw⟩) _ o'' v1 ?_ hI'' hv1 id
+    swap
+    · intro l hl o3 y3 hI3 hy3
+      obtain ⟨v', hv', hy3⟩ := Walk.except_bind_ok hy3
+      simp only [pure, Except.pure, Except.ok.injEq] at hy3
+      subst hy3
+      obtain ⟨t, ht1, ht2, rfl⟩ :=
+        hG _ (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (qsort_mem (fun x => x) _ hl)))
+      have hag1 := init_agree c sc hn hT (by omega)
+        (fun j' h1 h2 => by rw [show j' = ch.at t by omega]; exact hGt t ht1 ht2) hv'
+      have htT := (hup t ht2).1
+      refine .inl ⟨_, rfl, carrySnd_app hI3 ?_, segsLe_app _ _, fun w hw => ?_⟩
+      · intro x' hx' w hw hout
+        obtain ⟨val, hval, hxv⟩ := agree_src hag1 hx'
+        obtain ⟨j'', hj'', rfl⟩ := List.mem_map.1 hval
+        rw [List.mem_range'_1] at hj''
+        rw [show j'' = ch.at t by omega] at hxv
+        obtain ⟨w', hw'⟩ := hsucc t j ht1 (by omega) hju'
+        have := hxv w' ((hinit t ht1 ht2 w').1 hw')
+        rw [hw] at this
+        obtain rfl := Except.ok.inj this
+        exact ⟨t, ht1, by omega, j, hju', hw'⟩
+      · obtain ⟨x', hx', hxv⟩ := agree_tgt hag1
+          (List.mem_map.2 ⟨ch.at t, List.mem_range'_1.2 ⟨le_rfl, by omega⟩, rfl⟩) hw
+        exact ⟨x', by rw [segsPos_append]; exact List.mem_append_right _ hx', hxv⟩
+    obtain ⟨hS4, hle4, hR4⟩ := hfin4
+    have hcovI : ∀ t, 1 ≤ t → t ≤ upto → ∀ w,
+        Flock.Program.resolve c.P (c.P.child sc k t) ⟨true, 0, j⟩ = .ok w → ∃ x ∈ segsPos v1, den c.P sc x = .ok w :=
+      fun t h1 h2 w hw => hR4 (ch.at t)
+        ((Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.2
+          (Array.mem_toList_iff.2 (Std.HashSet.mem_toArray.2 (hcs t h1 h2)))) w ((hinit t h1 h2 w).1 hw)
+    have hfinal : ∀ s', y = .yield s' → CarrySnd c.P sc k node u s' → SegsLe v1 s' →
+        (∀ m, e < m → m ≤ T → ch.exit ≠ none → ∀ w,
+          Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, j⟩ = .ok w → ¬ InNodeAt c.P sc k w →
+            ∃ x ∈ segsPos s', den c.P sc x = .ok w) →
+        (∃ s', y = .yield s' ∧ CarrySnd c.P sc k node u s' ∧ SegsLe o'' s' ∧ CarryCov c.P sc k T j s') ∨
+          (∃ s', y = .done s' ∧ False) := by
+      intro s' hys hS hle hX
+      refine .inl ⟨s', hys, hS, segsLe_trans _ _ _ hle4 hle, fun m h1 h2 w hw hout => ?_⟩
+      by_cases hmu : m ≤ upto
+      · obtain ⟨x, hx, hxw⟩ := hcovI m h1 hmu w hw
+        exact ⟨x, hle x hx, hxw⟩
+      · rw [hupto] at hmu
+        rcases hx : ch.exit with _ | q
+        · rw [hx] at hmu; simp only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at hmu; omega
+        · rw [hx] at hmu
+          simp only [Option.isSome_some, ↓reduceIte] at hmu
+          exact hX m (by omega) h2 (by rw [hx]; simp) w hw hout
+    have hnode' : (c.P.defs[sc.d]!).body.nodes[k]! = node := by rw [hd]; exact hnode
+    split at hy
+    · rename_i q hq0
+      split at hy
+      · rename_i heT
+        have hqr := hok.2.2.2.1 q hq0
+        have hhe : ch.at e = ch.hist[e]! := chainAt_lt ch (by omega)
+        have hxq : (psPos r)[ch.hist[e]!]? = some (q.tgt, q.base) := retAt_pos _ hps hpp hqr.1
+        have hlt : ch.hist[e]! < (c.P.defs[node.fn]!).body.ret.count := by
+          rw [← hlenR]; exact (List.getElem?_eq_some_iff.1 hxq).1
+        have hb0 : 0 ≤ q.base := (hpos _ (List.mem_of_getElem? hxq)).1
+        have hE : ∀ it, it < T - e → ∀ w,
+            Flock.Program.resolve c.P (c.P.child sc k (it + 1 + e)) ⟨true, 0, j⟩ = .ok w ↔
+              Flock.Program.resolve c.P (c.P.child sc k it) ((c.P.defs[node.fn]!).body.ret.get ch.hist[e]!) =
+                .ok w := by
+          intro it hit w
+          have fwd : ∀ w, Flock.Program.resolve c.P (c.P.child sc k (it + 1 + e)) ⟨true, 0, j⟩ = .ok w →
+              Flock.Program.resolve c.P (c.P.child sc k it) ((c.P.defs[node.fn]!).body.ret.get ch.hist[e]!) =
+                .ok w := by
+            intro w hw
+            have := back_exit c sc hd hn hform hRet ch.at (e := e) (m := it + 1 + e) (by omega)
+              (fun s hs => hstep s (.inr (by omega))) (by rw [hat0]; exact hw)
+            rwa [show it + 1 + e - 1 - e = it by omega, hhe] at this
+          refine ⟨fwd w, fun hw => ?_⟩
+          obtain ⟨w', hw'⟩ := hsucc (it + 1 + e) j (by omega) (by omega) hju'
+          have := fwd w' hw'
+          rw [hw] at this
+          obtain rfl := Except.ok.inj this
+          exact hw'
+        have hEd : ∀ it w, Flock.Program.resolve c.P (c.P.child sc k it)
+            ((c.P.defs[node.fn]!).body.ret.get ch.hist[e]!) = .ok w →
+              den c.P (c.P.child sc k it) (q.tgt, q.base) = .ok w :=
+          fun it w hw => ret_den c sc hd hn hRet hxq hw
+        have hcE : ∀ m, e < m → m ≤ T → ∀ w, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, j⟩ = .ok w →
+            Flock.Program.resolve c.P (c.P.child sc k (m - 1 - e))
+              ((c.P.defs[node.fn]!).body.ret.get ch.hist[e]!) = .ok w ∧ m - 1 - e < T - e :=
+          fun m h1 h2 w hw => ⟨(hE (m - 1 - e) (by omega) w).1 (by rwa [show m - 1 - e + 1 + e = m by omega]),
+            by omega⟩
+        split at hy
+        · rename_i w0 hqt
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine hfinal v1 hy.symm hS4 (fun x hx => hx) (fun m h1 h2 _ w hw hout => absurd ?_ hout)
+          obtain ⟨hE', hit⟩ := hcE m h1 h2 w hw
+          have := hEd _ w hE'
+          rw [hqt] at this
+          exact ret_gate_in c sc hd hn hlaid (by omega)
+            (hgw w0 q.base (by rw [← hqt]; exact List.mem_of_getElem? hxq)) this
+        · cases hy
+        · rename_i i hqt
+          have hi0 : i ≠ 0 := fun h => hqr.2 (by rw [hqt, h])
+          have hiP := (hpos _ (List.mem_of_getElem? hxq)).2.2 i hqt
+          have hia : i < node.args.size := by omega
+          obtain ⟨b, hb⟩ : ∃ b : Nat, q.base = (b : Int) := ⟨q.base.toNat, (Int.toNat_of_nonneg hb0).symm⟩
+          have hbl : b < ((c.P.defs[node.fn]!).body.params[i]!).2.leaves := by
+            have h2 : (b : Int) < (((c.P.defs[node.fn]!).body.params[i]!).2.leaves : Int) := by
+              have := hiP.2; rw [hb] at this; exact this
+            exact_mod_cast h2
+          have hEr : ∀ it w, Flock.Program.resolve c.P (c.P.child sc k it)
+              ((c.P.defs[node.fn]!).body.ret.get ch.hist[e]!) = .ok w →
+                Flock.Program.resolve c.P sc ((node.args[i]!).seq.get (upIdx node i it b)) = .ok w := by
+            intro it w hw
+            have := hEd it w hw
+            rw [hqt, hb] at this
+            simp only [den, Int.toNat_natCast] at this
+            rw [if_neg (by omega)] at this
+            exact up_idx c.P sc hnode' (fun _ h => absurd h hi0) this
+          split at hy
+          · rename_i hxs
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at hxs
+            have hLe : (Option.map (fun x => ((x.2 : Nat) : Int)) (node.args[i]?.bind fun x => x.dims)).getD 0 =
+                ((((node.args[i]!).dims.map (·.2)).getD 0 : Nat) : Int) := by
+              rw [Array.getElem?_eq_getElem hia, getElem!_pos node.args i hia]
+              simp only [Option.bind_some]
+              cases (node.args[i]).dims <;> rfl
+            rw [hLe, hb] at hy
+            have hup' : ∀ it, upIdx node i it b = b + it * (((node.args[i]!).dims.map (·.2)).getD 0) + 0 := by
+              intro it
+              unfold upIdx
+              rw [hform]
+              dsimp only
+              rw [if_pos ⟨hi0, hxs.2⟩]
+              omega
+            split at hy
+            · rename_i bp hbp
+              obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              set L := ((node.args[i]!).dims.map (·.2)).getD 0 with hL
+              obtain ⟨pp, hpp⟩ : ∃ pp : Piece, pp = ⟨.gate 0, (b : Int), 1, 1, T - e, (L : Int)⟩ := ⟨_, rfl⟩
+              rw [← hpp] at hbp
+              have hq0 : ∀ x ∈ pos pp, 0 ≤ x.2 := by
+                intro x hx
+                rw [hpp] at hx
+                unfold pos at hx
+                simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
+                obtain ⟨r, -, u', -, rfl⟩ := hx
+                dsimp only
+                positivity
+              have hcov : ∀ t, t ∈ idxOf pp ↔ ∃ it j', (it < T - e ∧ j' = 0) ∧ t = upIdx node i it b := by
+                intro t
+                rw [hpp, mem_idxOf_row]
+                constructor
+                · rintro ⟨r', hr', u', hu', rfl⟩
+                  exact ⟨r', 0, ⟨hr', rfl⟩, by rw [hup']; omega⟩
+                · rintro ⟨it, j', ⟨hit, -⟩, rfl⟩
+                  exact ⟨it, hit, 0, by omega, hup' it⟩
+              have hqc : ∀ t ∈ idxOf pp, t < ((c.body.nodes[k]!).args[i]!).seq.count := by
+                intro t ht
+                obtain ⟨it, -, ⟨hit, -⟩, rfl⟩ := (hcov t).1 ht
+                rw [hnode]
+                exact hlo i (by omega) hiP.1 it (by omega) b hbl
+              have hag := throughPS_agree c sc hD (hA i hia) (by rw [hnode]; exact hR i hia) hq0 hqc hbp hv'
+              rw [hnode] at hag
+              have key := branch_iff (P := c.P) (sc := sc)
+                (fun t => Flock.Program.resolve c.P sc ((node.args[i]!).seq.get t))
+                (fun it _ => Flock.Program.resolve c.P (c.P.child sc k (it + 1 + e)) ⟨true, 0, j⟩)
+                (fun it j' => it < T - e ∧ j' = 0) (fun it _ => upIdx node i it b) hag hcov
+                (fun it j' w hB hS => hEr it w ((hE it hB.1 w).1 hS))
+                (fun it j' hB => hsucc (it + 1 + e) j (by omega) (by omega) hju')
+              refine hfinal (v1 ++ v') hy.symm (carrySnd_app hS4 ?_) (segsLe_app _ _)
+                (fun m h1 h2 _ w hw hout => ?_)
+              · intro x hx w hw hout
+                obtain ⟨it, j', ⟨hit, -⟩, hr⟩ := (key w).1 ⟨x, hx, hw⟩
+                exact ⟨it + 1 + e, by omega, by omega, j, hju', hr⟩
+              · obtain ⟨x, hx, hxw⟩ := (key w).2
+                  ⟨m - 1 - e, 0, ⟨by omega, rfl⟩, by rwa [show m - 1 - e + 1 + e = m by omega]⟩
+                exact ⟨x, by rw [segsPos_append]; exact List.mem_append_right _ hx, hxw⟩
+            · have hy := walkAtMost_bind _ _ _ hy
+              obtain ⟨sB, hsB, hy⟩ := Walk.except_bind_ok hy
+              simp only [pure, Except.pure, Except.ok.injEq] at hy
+              rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hsB
+              have hfin5 := forIn_cover _ (fun _ => False) (CarrySnd c.P sc k node u) SegsLe
+                (fun (it : Nat) out => ∀ w, Flock.Program.resolve c.P (c.P.child sc k it)
+                  ((c.P.defs[node.fn]!).body.ret.get ch.hist[e]!) = .ok w → ∃ x ∈ segsPos out, den c.P sc x = .ok w)
+                (fun o x hx => hx) segsLe_trans
+                (fun l o1 o2 h hl w hw => by obtain ⟨x, hx, hxw⟩ := h w hw; exact ⟨x, hl x hx, hxw⟩) _ v1 sB ?_
+                hS4 hsB id
+              swap
+              · intro it hit o5 y5 hI5 hy5
+                simp only [Std.Legacy.Range.size, List.mem_range'_1] at hit
+                obtain ⟨v', hv', hy5⟩ := Walk.except_bind_ok hy5
+                simp only [pure, Except.pure, Except.ok.injEq] at hy5
+                subst hy5
+                have hag := hC k it _ _ v' (by rw [hnode]; omega) (fun _ => by rw [hnode]; omega) hv'
+                rw [hnode] at hag
+                refine .inl ⟨_, rfl, carrySnd_app hI5 ?_, segsLe_app _ _, fun w hw => ?_⟩
+                · intro x hx w hw hout
+                  obtain ⟨val, hval, hxv⟩ := agree_src hag hx
+                  obtain ⟨j'', hj'', rfl⟩ := List.mem_map.1 hval
+                  rw [List.mem_range'_1] at hj''
+                  rw [show j'' = ch.hist[e]! by omega] at hxv
+                  obtain ⟨w', hw'⟩ := hsucc (it + 1 + e) j (by omega) (by omega) hju'
+                  have := hxv w' ((hE it (by omega) w').1 hw')
+                  rw [hw] at this
+                  obtain rfl := Except.ok.inj this
+                  exact ⟨it + 1 + e, by omega, by omega, j, hju', hw'⟩
+                · obtain ⟨x, hx, hxw⟩ := agree_tgt hag
+                    (List.mem_map.2 ⟨ch.hist[e]!, List.mem_range'_1.2 ⟨le_rfl, by omega⟩, rfl⟩) hw
+                  exact ⟨x, by rw [segsPos_append]; exact List.mem_append_right _ hx, hxw⟩
+              obtain ⟨hS5, hle5, hR5⟩ := hfin5
+              refine hfinal sB hy.symm hS5 hle5 (fun m h1 h2 _ w hw hout => ?_)
+              obtain ⟨hE', hit⟩ := hcE m h1 h2 w hw
+              exact hR5 (m - 1 - e) (by simp only [Std.Legacy.Range.size, List.mem_range'_1]; omega) w hE'
+          · rename_i hxs
+            obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+            simp only [pure, Except.pure, Except.ok.injEq] at hy
+            have hag := hC k 0 _ _ v' (by rw [hnode]; omega) (fun _ => by rw [hnode]; omega) hv'
+            rw [hnode] at hag
+            have hsh : ∀ it, upIdx node i it b = b := by
+              intro it
+              unfold upIdx
+              rw [hform]
+              simp only [Bool.and_eq_true, decide_eq_true_eq, not_and] at hxs
+              dsimp only
+              rw [if_neg (fun h => hxs (by omega) h.2)]
+            refine hfinal (v1 ++ v') hy.symm (carrySnd_app hS4 ?_) (segsLe_app _ _) (fun m h1 h2 _ w hw hout => ?_)
+            · intro x hx w hw hout
+              obtain ⟨val, hval, hxv⟩ := agree_src hag hx
+              obtain ⟨j'', hj'', rfl⟩ := List.mem_map.1 hval
+              rw [List.mem_range'_1] at hj''
+              rw [show j'' = ch.hist[e]! by omega] at hxv
+              obtain ⟨w', hw'⟩ := hsucc (0 + 1 + e) j (by omega) (by omega) hju'
+              have := hxv w' ((hE 0 (by omega) w').1 hw')
+              rw [hw] at this
+              obtain rfl := Except.ok.inj this
+              exact ⟨0 + 1 + e, by omega, by omega, j, hju', hw'⟩
+            · obtain ⟨hE', -⟩ := hcE m h1 h2 w hw
+              obtain ⟨w', hw'⟩ := hsucc (0 + 1 + e) j (by omega) (by omega) hju'
+              have h0 := (hE 0 (by omega) w').1 hw'
+              have r1 := hEr _ w hE'
+              have r2 := hEr 0 w' h0
+              rw [hsh] at r1 r2
+              rw [r1] at r2
+              obtain rfl := Except.ok.inj r2
+              obtain ⟨x, hx, hxw⟩ := agree_tgt hag
+                (List.mem_map.2 ⟨ch.hist[e]!, List.mem_range'_1.2 ⟨le_rfl, by omega⟩, rfl⟩) h0
+              exact ⟨x, by rw [segsPos_append]; exact List.mem_append_right _ hx, hxw⟩
+      · simp only [pure, Except.pure, Except.ok.injEq] at hy
+        exact hfinal v1 hy.symm hS4 (fun x hx => hx) (fun m h1 h2 _ => absurd h2 (by omega))
+    · rename_i hne
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      refine hfinal v1 hy.symm hS4 (fun x hx => hx) (fun m h1 h2 hx => ?_)
+      rcases hq : ch.exit with _ | q
+      · exact absurd hq hx
+      · exact absurd hq (hne q)
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hs1
+  have hG1 : ∀ l ∈ s1, G' l :=
+    insertLoop_mem G' (fun t => ch.hist[t]!) _ _ _ (fun x hx => by simp [seen0] at hx) (fun t ht => by
+      rw [List.mem_range'_1] at ht
+      exact ⟨t, ht.1, by omega, chainAt_lt ch (by omega)⟩) hs1
+  have hC1 : ∀ t, 1 ≤ t → t ≤ min upto e → ch.at t ∈ s1 := by
+    intro t h1 h2
+    rw [chainAt_lt ch (by omega)]
+    exact (insertLoop_has (fun t => ch.hist[t]!) _ _ _ hs1).2 t (List.mem_range'_1.2 ⟨h1, by omega⟩)
+  split at hy
+  · rename_i hue
+    have hx : ch.exit = none := by
+      rcases hx : ch.exit with _ | q
+      · rfl
+      · exfalso
+        rw [hupto, hx] at hue
+        simp only [Option.isSome_some, ↓reduceIte] at hue
+        omega
+    obtain ⟨hc, -⟩ := hok.2.2.2.2 hx
+    split at hy
+    · obtain ⟨s2, hs2, hy⟩ := Walk.except_bind_ok hy
+      simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hs2
+      refine hjp s2 y (insertLoop_mem G' (fun t => ch.hist[t]!) _ _ _ hG1 (fun t ht => ?_) hs2) (fun t h1 h2 => ?_) hy
+      · rw [List.mem_range'_1] at ht
+        by_cases ht0 : t = 0
+        · subst ht0
+          refine ⟨ch.hist.size, by omega, by omega, ?_⟩
+          unfold Desc.Chain.at
+          rw [if_neg (by omega), show ch.cyc = 0 by omega, Nat.sub_zero, Nat.mod_self]
+        · exact ⟨t, by omega, by omega, chainAt_lt ch (by omega)⟩
+      · obtain ⟨hk1, hk2⟩ := insertLoop_has (fun t => ch.hist[t]!) _ _ _ hs2
+        by_cases hte : t ≤ e
+        · exact hk1 _ (hC1 t h1 (by omega))
+        · rw [chainAt_idx]
+          obtain ⟨hlt, -⟩ := cyc_idx ch.hist.size ch.cyc t hc
+          refine hk2 _ (List.mem_range'_1.2 ⟨?_, by omega⟩)
+          unfold cycIdx
+          split <;> omega
+    · obtain ⟨s2, hs2, hy⟩ := Walk.except_bind_ok hy
+      simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hs2
+      refine hjp s2 y (insertLoop_mem G' (fun t => ch.at t) _ _ _ hG1 (fun t ht => ?_) hs2) (fun t h1 h2 => ?_) hy
+      · rw [List.mem_range'_1] at ht
+        exact ⟨t, by omega, by omega, rfl⟩
+      · obtain ⟨hk1, hk2⟩ := insertLoop_has (fun t => ch.at t) _ _ _ hs2
+        by_cases hte : t ≤ e
+        · exact hk1 _ (hC1 t h1 (by omega))
+        · exact hk2 t (List.mem_range'_1.2 ⟨by omega, by omega⟩)
+  · exact hjp s1 y hG1 (fun t h1 h2 => hC1 t h1 (by omega)) hy
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
