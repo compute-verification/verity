@@ -535,11 +535,11 @@ LEAN_LOCK = "lean-audit.json"
 LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
 
 
-def lean_change(repo: Path, commit: str) -> bool:
-    """Whether ``commit``'s own change (against its first parent) waits for a Lean check before a review landing: it touches a
-    lock, or a Lean source of a Lake package that has one, so neither a guarantee's statement nor a definition it reads reaches
-    `main` without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference)."""
-    files = changed(repo, f"{commit}^1", commit)
+def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
+    """Whether ``commit``'s own change (against its first parent, or ``base``) waits for a Lean check before a review landing: it
+    touches a lock, or a Lean source of a Lake package that has one, so neither a guarantee's statement nor a definition it reads
+    reaches `main` without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference)."""
+    files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK for f in files):
         return True
     if not (lean := [f for f in files if f.endswith(LEAN_SOURCES)]):
