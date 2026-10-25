@@ -6,9 +6,9 @@ description: >
   rule where the next agent will read it, or leave a short friction note when you can't fix it now. Holds the standing
   rulings that AGENTS.md and the other skills don't state (what an agent may change without asking, and protocol and
   claim rulings), and the `kind: friction` note format with its `severity: incident` flag. Use when you worked around
-  something, a step bit you twice, you see a better abstraction, you're unsure whether a change is yours to make, you
-  just got a ruling from Daniel, you're the coordinator reading friction notes, or a command fails for missing
-  credentials.
+  something, a step bit you twice, a step you repeat keeps you waiting, you see a better abstraction, you're unsure
+  whether a change is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or
+  a command fails for missing credentials.
 ---
 
 # Friction
@@ -34,7 +34,9 @@ Most friction is. Fix it at the source, in the PR you're working on or a small o
 - a bug in a shared tool that stops it doing what its own docs or help say;
 - a wrong or missing command, flag or gotcha in a skill or a `kb/` doc;
 - a failure message that didn't say how to fix the failure;
-- a flaky test: delete it; a needlessly slow one: shrink it or delete it.
+- a flaky test: delete it; a needlessly slow one: shrink it or delete it;
+- a loop of yours that keeps you waiting, a build, run or check you repeat that takes more than about 10 minutes: make it
+  incremental, warm or cached.
 
 Say what you fixed in the PR description. It needs no note.
 
@@ -66,7 +68,8 @@ still states it (`AGENTS.md`, `README.md`, the skills, docstrings, docs).
 ## 4. Note it, when you can't fix it now
 
 Write a friction note when the fix isn't yours or can't happen now, and the friction cost something: a failed run or check,
-about half an hour, or the second time you hit it. Not for what you fixed, and not for one-off slips. Search the notes
+about half an hour, the second time you hit it, or a wait of more than about 10 minutes that you repeat, even when nothing
+fails (give its minutes a wait and waits a day). Not for what you fixed, and not for one-off slips. Search the notes
 first: if one covers it, write a two-line note naming it under `recurs:`, because repeats are what get fixed. A note is a
 file, never a message, so it pings nobody; a blocker still goes to your coordinator as a message.
 
@@ -89,7 +92,8 @@ Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`.
 note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
 The admin (`@top`) reads new friction notes once a day (`research notes mcp`, `search_notes` with `kind: friction` and
-`since`) and turns a repeat into a fix assigned to its owner; only a repeat whose fix needs keys or a claim goes to Daniel.
+`since`) and turns a repeat or a repeated wait into a fix assigned to its owner with an ETA, then checks that the fix
+landed and held; only a repeat whose fix needs keys or a claim goes to Daniel.
 
 ## Standing rulings
 

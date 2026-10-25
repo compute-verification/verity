@@ -370,6 +370,12 @@ Research velocity comes first (Daniel, 6 Oct). Be as generous as possible with w
 cutting any gate, review or step that slows landing without catching real errors, and fix what breaks later. Our machines
 are research infrastructure, not a rehearsal of deployment, so don't mimic deployment settings.
 
+**Waiting is a bug** (Daniel, 25 Oct). A step you repeat (a build, a run, a check, a queue) that makes you wait more than
+about 10 minutes each time is friction even when it never fails. Fix it at the source, or take it to its owner that day
+with its numbers: minutes a wait, waits a day. The same goes for a rule or a ruling, Daniel's included: when one costs
+velocity, push back through your coordinator with the numbers and the change you'd make. The owner of a slow loop fixes
+it ahead of its other work.
+
 Solve the current task with the smallest clear implementation. Reuse existing code and commands before adding
 abstractions or procedures. Enforce deterministic requirements in code, with the fix in the failure message, rather than
 in prose. Remove obsolete rules and machinery rather than accumulating them.
