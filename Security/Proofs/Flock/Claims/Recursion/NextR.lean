@@ -18,8 +18,8 @@ the transcript never absorbs (the openings, `params`, `zerocheck.finalC`, `liger
 * **A rep's proof** (`FitsRep`, `readRep`): rep `k`'s rounds are the schedule's (`RecDeploy.repSchedAt`); round `j`'s
   rows are its committed tops' nodes, then, where it absorbs, one row of the element values its squeeze answers (`vals`
   of the `j`-th chunk of `repFrames`, `T` among them). The proof's cap is round 0's nodes for its table, its recursive
-  caps the rounds' tops in order, its nonces `0`, and its absorbed fields of the lengths the frames read (`AbsLens`), so
-  no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, keeping the last
+  caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
+  (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, keeping the last
   message's proof only where no frame reads (`absorbedFrom`, `repFrames_absorbedFrom`): what it reads of the last
   message changes no absorbed value (`readRep_last`). The nonces are absorbed (`.bytes (le64 n)`) but no opened row
   carries one, so the fit fixes them at `0`, the only nonce a deployed prover sends: every grinder ignores its bits
@@ -179,29 +179,11 @@ def repCtx (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (r₀ : List By
 def chunksOf (c : RepCtx) (p : Flock.Proof) (T : F128) : List (List Frame) :=
   (chunks (repFrames c.st c.sch c.dom c.n p T)).1
 
-/-- **The absorbed fields' lengths**, each the count the rep's frames read (`decodeProof`'s at the rep's shape): the
-zerocheck's and lincheck's rounds, their vectors, the ring switches, the Ligerito messages, out-of-domain values, nonces
-and `yr`, at a schedule of at least two levels. A longer array would carry entries no frame reads, and two vectors
-absorbed back to back would split one row two ways. -/
-structure AbsLens (c : RepCtx) (p : Flock.Proof) : Prop where
-  levels : 1 ≤ c.sch.levels.size - 1
-  round1ab : p.zerocheck.round1ab.size = 64
-  round1c : p.zerocheck.round1c.size = 64
-  zcRounds : p.zerocheck.rounds.size = c.st.m - 6
-  lcRounds : p.lincheck.rounds.size = c.st.fold.kLog - 6
-  zPartial : p.lincheck.zPartial.size = 64
-  switches : p.ringSwitches.size = c.n
-  switch : ∀ v ∈ p.ringSwitches, v.size = 128
-  messages : p.ligerito.messages.size = c.sch.k0 + 8 + 7 * (c.sch.levels.size - 1 - 1)
-  oods : p.ligerito.oodValues.size = 1 + 2 * (c.sch.levels.size - 1)
-  queryNonces : p.ligerito.queryNonces.size = c.sch.levels.size - 1 + 1
-  claimNonces : p.ligerito.claimNonces.size = 3 * (c.sch.levels.size - 1) + 2
-  consistencyNonces : p.ligerito.consistencyNonces.size = c.sch.levels.size - 1 + 1
-  yr : p.ligerito.finalProof.yr.size = 2 ^ (c.sch.ext + 1)
-
 /-- **A proof and `T` fit a rep's opened rounds**: one chunk per round, as the schedule has; the cap is its table's
-level-0 top's nodes (round 0's); its recursive caps the rounds' tops, in order; every nonce `0`; its absorbed fields of
-the lengths the frames read; and round `j`'s rows hold the values the `j`-th chunk absorbs. -/
+level-0 top's nodes (round 0's); its recursive caps the rounds' tops, in order; every nonce `0`; the lengths a proof
+decoded at the rep's shape has (`DecodeZL.ProofSizes`: no field carries an entry no frame reads, and two vectors
+absorbed back to back can't split one row two ways), at a schedule of at least two levels; and round `j`'s rows hold
+the values the `j`-th chunk absorbs. -/
 structure FitsRep (c : RepCtx) (rows : List (List ByteArray)) (p : Flock.Proof) (T : F128) : Prop where
   rounds : (chunksOf c p T).length = rows.length
   sched : c.sched.length = rows.length
@@ -209,7 +191,9 @@ structure FitsRep (c : RepCtx) (rows : List (List ByteArray)) (p : Flock.Proof) 
   tops : p.ligerito.recursiveCaps.toList.map Array.toList = topGroups c.sched rows
   nonces : (∀ n ∈ p.ligerito.queryNonces, n = 0) ∧ (∀ n ∈ p.ligerito.claimNonces, n = 0) ∧
     ∀ n ∈ p.ligerito.consistencyNonces, n = 0
-  lens : AbsLens c p
+  sizes : ∃ e, c.n = 2 + e ∧
+    FlockSoundness.Discharge.DecodeZL.ProofSizes (FlockSoundness.Refine.shapeOf c.st c.sch e) p
+  levels : 2 ≤ c.sch.levels.size
   elems : ∀ j < rows.length, RowsAt (c.sched.getD j default) (rows.getD j []) (vals ((chunksOf c p T).getD j []))
 
 /-- **The absorbed fields of `a`, the rest of `q`**: every field a rep's frames read is `a`'s; `params`,
@@ -269,10 +253,11 @@ theorem fitsRep_absorbedFrom {c : RepCtx} {rows : List (List ByteArray)} {a : Fl
   have e : chunksOf c (absorbedFrom a q) T = chunksOf c a T := by
     unfold chunksOf
     rw [repFrames_absorbedFrom]
-  have hl := h.lens
+  obtain ⟨x, hn, hs⟩ := h.sizes
   exact ⟨by rw [e]; exact h.rounds, h.sched, h.cap, h.tops, h.nonces,
-    ⟨hl.1, hl.2, hl.3, hl.4, hl.5, hl.6, hl.7, hl.8, hl.9, hl.10, hl.11, hl.12, hl.13, hl.14⟩,
-    by rw [e]; exact h.elems⟩
+    ⟨x, hn, hs.r1ab, hs.r1c, hs.zcRounds, hs.lcRounds, hs.zPartial, hs.rs, hs.rsEach, hs.cap, hs.capEach, hs.rcaps,
+      hs.rcapsEach, hs.yr, hs.messages, hs.queryNonces, hs.oodValues, hs.claimNonces, hs.consistencyNonces⟩,
+    h.levels, by rw [e]; exact h.elems⟩
 
 /-- The rep's round messages: each round's framed bytes. -/
 def framesOf (c : RepCtx) (p : Flock.Proof) (T : F128) : List Claims.Msg := (chunksOf c p T).map encs

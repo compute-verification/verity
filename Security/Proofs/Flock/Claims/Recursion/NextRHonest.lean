@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.NextR
+import Proofs.Flock.Claims.Recursion.RepFramesLig
 
 /-!
 # An honest prover's rounds read back at `nextR`
@@ -14,23 +15,27 @@ that.
   (`rec_live.top_rows`), then, where the round absorbs, one row of the values the `j`-th chunk of the rep's frames
   absorbs (`message_rows`, `vals`). Each round's rows are joined (`joinR`). The last message is any that the reader `rd`
   reads as the proofs.
-* **The honest proofs** (`HonestRep`, `SchedOf`): each rep's absorbed fields have the lengths its frames read
-  (`AbsLens`, which `ProofShaped` at the rep's file shape gives: `FlockComplete`'s `repShaped`), every nonce is `0` (the
-  deployed provers', D20), and each recursive cap has its level's `2^cap` nodes. Both reps of a table carry its level-0
-  cap, as `sessionP` commits each table once. The rep's schedule is `RecVStar.repRounds` at its frames' `m`, `k_log` and
-  claims.
-* **The statements**: `RepFits` (the honest proof fits the honest rows) and `FitUnique` (rows fix a fitting proof's
-  absorbed fields and its `T`) give `RepReadsBack`, that `readRep` reads the honest proof back (`repReadsBack_of`). That
-  gives `ReadsBack`, that `decR` decides on the honest messages and reads exactly the honest proofs
-  (`readsBack_of_rep`).
+* **The honest proofs** (`HonestRep`, `SchedOf`): each rep's proof has the lengths a proof decoded at the rep's shape
+  has (`DecodeZL.ProofSizes`, which `ProofShaped` at that shape gives: `FlockComplete`'s `repShaped`), and every nonce
+  is `0` (the deployed provers', D20). Both reps of a table carry its level-0 cap, as `sessionP` commits each table
+  once. The rep's schedule is `RecVStar.repRounds` at its frames' `m`, `k_log` and claims.
+* **Rows fix the fit** (`fitUnique`): two fits of one rep's rows have one cap, recursive caps and nonces, so frames of
+  one skeleton (`skel`, `repFrames_skel`), and in each round one value row (`RowsAt.vals_eq`), so one rep's frames
+  (`eq_of_skel_vals`, `fits_frames`), which fix every absorbed field and `T` (`repFrames_fields`, `ligFrames_fields`).
+* **The statements**: `RepFits` (the honest proof fits the honest rows) and `fitUnique` give `RepReadsBack`, that
+  `readRep` reads the honest proof back (`repReadsBack_of`). That gives `ReadsBack`, that `decR` decides on the honest
+  messages and reads exactly the honest proofs (`readsBack_of_rep`).
 
-Open: `RepFits` and `FitUnique`, which match `RecVStar.repRounds` with `repFrames`' chunks round by round.
+Open: `RepFits`, which matches `RecVStar.repRounds` with `repFrames`' chunks round by round.
 -/
 
 namespace FlockDeploy
 
 open Flock
-open FlockSoundness.Refine (Frame colBytes)
+open FlockSoundness.Refine (Frame colBytes colBytes_inj)
+open FlockSoundness.Discharge.DecodeZL (ProofSizes)
+open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames repFrames_chunks_snd repFrames_fields zcFrames
+  lcFrames rsFrames ligFrames ligFrames_fields levelFr introFr queryFr chFr kFr rs_size)
 
 /-! ## What the honest prover sends -/
 
@@ -59,20 +64,20 @@ def honestMsgs (caps : Array (Array ByteArray)) (reps : List (List (List ByteArr
     List Claims.Msg :=
   (joinR ((capRows caps).map rowMsg) :: reps.flatten.map fun rs => joinR (rs.map rowMsg)) ++ [last]
 
-/-- **An honest rep's proof**: its absorbed fields of the lengths its frames read (`AbsLens`), every nonce `0`, and one
-recursive cap per level after the first, each of its level's `2^cap` nodes. -/
+/-- **An honest rep's proof**: the lengths a proof decoded at the rep's shape has (`DecodeZL.ProofSizes`, which
+`ProofShaped` gives), at a schedule of at least two levels, and every nonce `0`. -/
 structure HonestRep (c : RepCtx) (p : Flock.Proof) : Prop where
-  lens : AbsLens c p
+  sizes : ∃ e, c.n = 2 + e ∧
+    FlockSoundness.Discharge.DecodeZL.ProofSizes (FlockSoundness.Refine.shapeOf c.st c.sch e) p
+  levels : 2 ≤ c.sch.levels.size
   nonces : (∀ n ∈ p.ligerito.queryNonces, n = 0) ∧ (∀ n ∈ p.ligerito.claimNonces, n = 0) ∧
     ∀ n ∈ p.ligerito.consistencyNonces, n = 0
-  caps : p.ligerito.recursiveCaps.size = c.sch.levels.size - 1
-  capNodes : ∀ (i : ℕ) (h : i < p.ligerito.recursiveCaps.size),
-    p.ligerito.recursiveCaps[i].size = 2 ^ (c.sch.levels.getD (i + 1) default).cap
 
 /-- **A rep's schedule is its frames'**: `RecVStar.repRounds` at the frames' `m`, `k_log` and claim count, at the
-frames' `fast100` schedule. -/
+frames' `fast100` schedule, of a setup that folds at its own `k_log`. -/
 def SchedOf (c : RepCtx) : Prop :=
-  fast100 c.st.m = some c.sch ∧ ∃ rs, RecVStar.repRounds c.st.m c.st.fold.kLog c.n = some rs ∧ c.sched = rs.toList
+  fast100 c.st.m = some c.sch ∧ c.st.fold.kLog = c.st.kLog ∧
+    ∃ rs, RecVStar.repRounds c.st.m c.st.fold.kLog c.n = some rs ∧ c.sched = rs.toList
 
 /-- Rows one message can join (`rowsOf_joinR`): fewer than `2^64`, each shorter than `2^64` bytes. -/
 def RowsFit (rs : List ByteArray) : Prop := rs.length < 2 ^ 64 ∧ ∀ r ∈ rs, r.size < 2 ^ 64
@@ -84,9 +89,9 @@ def RepFits : Prop :=
   ∀ (c : RepCtx) (p : Flock.Proof) (T : F128), SchedOf c → HonestRep c p → p.cap.toList = c.cap0 →
     FitsRep c (repRows c p T) p T
 
-/-- **Rows fix a fitting proof's absorbed fields and its `T`.** -/
+/-- **Rows fix a fitting proof's absorbed fields and its `T`**, at a setup that folds at its own `k_log`. -/
 def FitUnique : Prop :=
-  ∀ (c : RepCtx) (rows : List (List ByteArray)) (p p' : Flock.Proof) (T T' : F128),
+  ∀ (c : RepCtx) (rows : List (List ByteArray)) (p p' : Flock.Proof) (T T' : F128), c.st.fold.kLog = c.st.kLog →
     FitsRep c rows p T → FitsRep c rows p' T' → ∀ q, absorbedFrom p' q = absorbedFrom p q ∧ T' = T
 
 /-- **One honest rep reads back**: from the honest rows, with the honest proof as the last message's, `readRep` reads
@@ -121,6 +126,178 @@ def ReadsBack : Prop :=
         c₁, ((List.range ps.size).map fun k => framesOf (repCtx spec sts c₁ (capRows caps) k) ps[k]! (Ts k)).flatten.zip
           cs.tail.dropLast, ⟨fl.stmt, fl.j, ps⟩⟩
 
+/-! ## Rows fix the fit -/
+
+/-- A frame with its element values blanked. -/
+def skel : Frame → Frame
+  | .dom b => .dom b
+  | .label b => .label b
+  | .one _ => .one default
+  | .vec vs => .vec (List.replicate vs.length default)
+  | .bytes b => .bytes b
+  | .sq k n => .sq k n
+
+theorem skel_dom (b : ByteArray) : skel (.dom b) = .dom b := rfl
+theorem skel_label (b : ByteArray) : skel (.label b) = .label b := rfl
+theorem skel_one (v : F128) : skel (.one v) = .one default := rfl
+theorem skel_vec (vs : List F128) : skel (.vec vs) = .vec (List.replicate vs.length default) := rfl
+theorem skel_bytes (b : ByteArray) : skel (.bytes b) = .bytes b := rfl
+theorem skel_sq (k : UInt8) (n : ℕ) : skel (.sq k n) = .sq k n := rfl
+
+theorem vals_append : ∀ (a b : List Frame), vals (a ++ b) = vals a ++ vals b
+  | [], _ => rfl
+  | .dom _ :: a, b => vals_append a b
+  | .label _ :: a, b => vals_append a b
+  | .one v :: a, b => congrArg (v :: ·) (vals_append a b)
+  | .vec vs :: a, b => by
+    show vs ++ vals (a ++ b) = vs ++ vals a ++ vals b
+    rw [vals_append a b, List.append_assoc]
+  | .bytes _ :: a, b => vals_append a b
+  | .sq _ _ :: a, b => vals_append a b
+
+theorem vals_flatten : ∀ L : List (List Frame), vals L.flatten = (L.map vals).flatten
+  | [] => rfl
+  | l :: L => by rw [List.flatten_cons, vals_append, vals_flatten L, List.map_cons, List.flatten_cons]
+
+/-- **Frames are their skeleton and their values.** -/
+theorem eq_of_skel_vals : ∀ {fs fs' : List Frame}, fs.map skel = fs'.map skel → vals fs = vals fs' → fs = fs'
+  | [], [], _, _ => rfl
+  | [], _ :: _, h, _ => by simp at h
+  | _ :: _, [], h, _ => by simp at h
+  | f :: fs, f' :: fs', h, hv => by
+    rw [List.map_cons, List.map_cons, List.cons.injEq] at h
+    obtain ⟨h1, h2⟩ := h
+    cases f <;> cases f' <;> try (simp only [skel, reduceCtorEq] at h1; done)
+    · rw [Frame.dom.inj h1, eq_of_skel_vals h2 hv]
+    · rw [Frame.label.inj h1, eq_of_skel_vals h2 hv]
+    · rename_i v v'
+      obtain ⟨e, hv⟩ := List.cons.inj (show v :: vals fs = v' :: vals fs' from hv)
+      rw [e, eq_of_skel_vals h2 hv]
+    · rename_i vs vs'
+      have hl : vs.length = vs'.length := by simpa using congrArg List.length (Frame.vec.inj h1)
+      obtain ⟨e, hv⟩ := List.append_inj (show vs ++ vals fs = vs' ++ vals fs' from hv) hl
+      rw [e, eq_of_skel_vals h2 hv]
+    · rw [Frame.bytes.inj h1, eq_of_skel_vals h2 hv]
+    · obtain ⟨rfl, rfl⟩ := Frame.sq.inj h1
+      rw [eq_of_skel_vals h2 hv]
+
+/-- **A round's rows fix the values it absorbs.** -/
+theorem RowsAt.vals_eq {s : RecVStar.SchedRound} {rs : List ByteArray} {vs vs' : List F128} (h : RowsAt s rs vs)
+    (h' : RowsAt s rs vs') : vs = vs' := by
+  cases hb : s.2.2.2
+  · rw [h.2.2 hb, h'.2.2 hb]
+  · have e := h.2.1.symm.trans h'.2.1
+    rw [if_pos hb, if_pos hb] at e
+    exact colBytes_inj (by simpa using congrArg Array.toList (ByteArray.mk.inj (List.cons.inj e).1))
+
+/-- **Two fits of one rep's rows with one skeleton have one rep's frames.** -/
+theorem fits_frames {c : RepCtx} {rows : List (List ByteArray)} {p p' : Flock.Proof} {T T' : F128}
+    (h : FitsRep c rows p T) (h' : FitsRep c rows p' T')
+    (hs : (repFrames c.st c.sch c.dom c.n p T).map skel = (repFrames c.st c.sch c.dom c.n p' T').map skel) :
+    repFrames c.st c.sch c.dom c.n p T = repFrames c.st c.sch c.dom c.n p' T' := by
+  refine eq_of_skel_vals hs ?_
+  have hv : (chunksOf c p T).map vals = (chunksOf c p' T').map vals := by
+    refine List.ext_getElem (by rw [List.length_map, List.length_map, h.rounds, h'.rounds]) fun j hj hj' => ?_
+    rw [List.length_map, h.rounds] at hj
+    rw [List.getElem_map, List.getElem_map, ← List.getD_eq_getElem _ [], ← List.getD_eq_getElem _ []]
+    exact (h.elems j hj).vals_eq (h'.elems j hj)
+  rw [← chunks_flatten (repFrames c.st c.sch c.dom c.n p T), ← chunks_flatten (repFrames c.st c.sch c.dom c.n p' T'),
+    repFrames_chunks_snd, repFrames_chunks_snd, List.append_nil, List.append_nil, vals_flatten, vals_flatten]
+  exact congrArg List.flatten hv
+
+theorem kFr_skel (m : Flock.F256 × Flock.F256) :
+    (kFr m).map skel = [.vec [default, default], .vec [default, default]] := rfl
+
+theorem chFr_skel (p p' : Flock.LigeritoProof) :
+    ∀ (k msg msg' : ℕ), (chFr p msg k).map skel = (chFr p' msg' k).map skel
+  | 0, _, _ => rfl
+  | k + 1, msg, msg' => by
+    simp only [chFr, List.map_cons, List.map_append, kFr_skel, chFr_skel p p' k (msg + 1) (msg' + 1)]
+
+theorem introFr_skel {p p' : Flock.LigeritoProof} (hc : p.claimNonces = p'.claimNonces) (dim ood msg cbn : ℕ) :
+    (introFr p dim ood msg cbn).map skel = (introFr p' dim ood msg cbn).map skel := by
+  simp only [introFr, List.map_cons, List.map_append, kFr_skel, skel_one, hc]
+
+theorem queryFr_skel {p p' : Flock.LigeritoProof} (hq : p.queryNonces = p'.queryNonces)
+    (hs : p.consistencyNonces = p'.consistencyNonces) (lv : Flock.Level) (qn cn : ℕ) :
+    (queryFr p lv qn cn).map skel = (queryFr p' lv qn cn).map skel := by
+  simp only [queryFr, hq, hs]
+
+theorem levelFr_skel {sch : Flock.Schedule} {p p' : Flock.LigeritoProof}
+    (hr : p.recursiveCaps = p'.recursiveCaps) (hc : p.claimNonces = p'.claimNonces)
+    (hq : p.queryNonces = p'.queryNonces)
+    (hs : p.consistencyNonces = p'.consistencyNonces) (hy : p.finalProof.yr.size = p'.finalProof.yr.size) (i : ℕ) :
+    (levelFr sch p i).map skel = (levelFr sch p' i).map skel := by
+  unfold levelFr
+  rw [List.map_append, List.map_append, chFr_skel p p']
+  congr 1
+  split
+  · simp only [List.map_cons, List.map_append, kFr_skel, hr, hc, introFr_skel hc, queryFr_skel hq hs]
+  · have e : ∀ q : Flock.LigeritoProof, (q.finalProof.yr.toList.map Frame.one).map skel =
+        List.replicate q.finalProof.yr.size (.one default) := fun q => by
+      rw [List.map_map, show skel ∘ Frame.one = fun _ => Frame.one default from rfl, List.map_const',
+        Array.length_toList]
+    simp only [List.map_append, List.map_cons, List.map_nil, e, hy, hc, queryFr_skel hq hs]
+
+theorem ligFrames_skel {sch : Flock.Schedule} {cap : Array ByteArray} {T T' : F128} {p p' : Flock.LigeritoProof}
+    (hr : p.recursiveCaps = p'.recursiveCaps) (hc : p.claimNonces = p'.claimNonces)
+    (hq : p.queryNonces = p'.queryNonces) (hs : p.consistencyNonces = p'.consistencyNonces)
+    (hy : p.finalProof.yr.size = p'.finalProof.yr.size) :
+    (ligFrames sch T cap p).map skel = (ligFrames sch T' cap p').map skel := by
+  have hlv : (List.range' 0 (sch.levels.size - 1)).flatMap (fun i => (levelFr sch p i).map skel) =
+      (List.range' 0 (sch.levels.size - 1)).flatMap (fun i => (levelFr sch p' i).map skel) := by
+    congr 1
+    funext i
+    exact levelFr_skel hr hc hq hs hy i
+  have hch := chFr_skel p p' sch.k0 1 1
+  simp only [ligFrames, List.map_cons, List.map_append, List.map_flatMap, List.map_nil, skel_one, kFr_skel, hch, hr,
+    hc, hlv, introFr_skel hc, queryFr_skel hq hs]
+
+/-- **Two proofs of one shape with one cap, recursive caps and nonces have frames of one skeleton**, whatever their
+values and batched values. -/
+theorem repFrames_skel {st : Flock.Setup} {sch : Flock.Schedule} {d : ByteArray} {n : ℕ} {sh : Flock.Shape}
+    {p p' : Flock.Proof} {T T' : F128} (hp : ProofSizes sh p) (hp' : ProofSizes sh p') (hcap : p.cap = p'.cap)
+    (hr : p.ligerito.recursiveCaps = p'.ligerito.recursiveCaps) (hc : p.ligerito.claimNonces = p'.ligerito.claimNonces)
+    (hq : p.ligerito.queryNonces = p'.ligerito.queryNonces)
+    (hs : p.ligerito.consistencyNonces = p'.ligerito.consistencyNonces) :
+    (repFrames st sch d n p T).map skel = (repFrames st sch d n p' T').map skel := by
+  have hrs : ∀ k : ℕ, (p.ringSwitches[k]!).size = (p'.ringSwitches[k]!).size := fun k => by
+    rw [rs_size hp, rs_size hp']
+  have hlg := ligFrames_skel (sch := sch) (cap := p'.cap) (T := T) (T' := T') hr hc hq hs (hp.yr.trans hp'.yr.symm)
+  simp only [repFrames, zcFrames, lcFrames, rsFrames, List.map_cons, List.map_append, List.map_flatMap, List.map_nil,
+    skel_dom, skel_label, skel_one, skel_vec, skel_bytes, skel_sq, Array.length_toList, hp.r1ab, hp'.r1ab, hp.r1c,
+    hp'.r1c, hp.zPartial, hp'.zPartial, hcap, hrs, hlg]
+
+theorem zeros_eq {a b : Array UInt64} (hs : a.size = b.size) (ha : ∀ n ∈ a, n = 0) (hb : ∀ n ∈ b, n = 0) : a = b :=
+  Array.ext hs fun _ h1 h2 => by rw [ha _ (Array.getElem_mem h1), hb _ (Array.getElem_mem h2)]
+
+/-- **Rows fix a fitting proof's absorbed fields and its `T`**: two fits have one cap (round 0's), recursive caps (the
+rounds' tops) and nonces (`0`), so frames of one skeleton (`repFrames_skel`) and, round by round, of one value row
+(`RowsAt.vals_eq`): one rep's frames (`fits_frames`), which fix every absorbed field (`repFrames_fields`,
+`ligFrames_fields`) and `T`. -/
+theorem fitUnique : FitUnique := by
+  intro c rows p p' T T' hk h h' q
+  obtain ⟨e, hn, hp⟩ := h.sizes
+  obtain ⟨e', hn', hp'⟩ := h'.sizes
+  obtain rfl : e' = e := by omega
+  have hcap : p.cap = p'.cap := Array.toList_inj.1 (h.cap.trans h'.cap.symm)
+  have hinj : Function.Injective (Array.toList : Array ByteArray → List ByteArray) :=
+    fun _ _ he => Array.toList_inj.1 he
+  have hr : p.ligerito.recursiveCaps = p'.ligerito.recursiveCaps :=
+    Array.toList_inj.1 (List.map_injective_iff.2 hinj (h.tops.trans h'.tops.symm))
+  have hq := zeros_eq (hp.queryNonces.trans hp'.queryNonces.symm) h.nonces.1 h'.nonces.1
+  have hc := zeros_eq (hp.claimNonces.trans hp'.claimNonces.symm) h.nonces.2.1 h'.nonces.2.1
+  have hs := zeros_eq (hp.consistencyNonces.trans hp'.consistencyNonces.symm) h.nonces.2.2 h'.nonces.2.2
+  have hF := fits_frames h h' (repFrames_skel hp hp' hcap hr hc hq hs)
+  rw [hn] at hF
+  obtain ⟨-, ha, hb, hzr, hA, hB, hl, hrs, hlig⟩ := repFrames_fields hp hp' hk hF
+  obtain ⟨-, hm, -, ho, -, -, hy⟩ := ligFrames_fields hp hp' h.levels hlig
+  have hT : T = T' := by
+    unfold ligFrames at hlig
+    exact Frame.one.inj (List.cons.inj (List.cons.inj (List.append_inj hlig rfl).1).2).1
+  refine ⟨?_, hT.symm⟩
+  simp only [absorbedFrom, hcap, ha, hb, hzr, hA, hB, hl, hrs, hr, hm, hq, ho, hc, hs, hy]
+
 /-! ## From one rep to the session -/
 
 theorem absorbedFrom_self (p : Flock.Proof) : absorbedFrom p p = p := by
@@ -128,12 +305,12 @@ theorem absorbedFrom_self (p : Flock.Proof) : absorbedFrom p p = p := by
     cn⟩⟩
   rfl
 
-/-- **One rep reads back where the honest proof fits and fits uniquely.** -/
-theorem repReadsBack_of (hE : RepFits) (hU : FitUnique) : RepReadsBack := by
+/-- **One rep reads back where the honest proof fits**, as fits are unique (`fitUnique`). -/
+theorem repReadsBack_of (hE : RepFits) : RepReadsBack := by
   intro c p T hs hp hc
   have hf := hE c p T hs hp hc
   have hx : ∃ pT : Flock.Proof × F128, FitsRep c (repRows c p T) pT.1 pT.2 := ⟨(p, T), hf⟩
-  obtain ⟨h1, h2⟩ := hU c _ p _ T _ hf (Classical.choose_spec hx) p
+  obtain ⟨h1, h2⟩ := fitUnique c _ p _ T _ hs.2.1 hf (Classical.choose_spec hx) p
   unfold readRep
   rw [dif_pos hx, h1, absorbedFrom_self, h2]
 
