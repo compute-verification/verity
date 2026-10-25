@@ -438,6 +438,12 @@ def receipts(window: Mapping) -> int:
     return sum(window["lengths"])
 
 
+SHARED = ("a record drawn more than one window a coin (groups_per_coin) has no line: the line reads each window's own "
+          "draw")
+"""Why a record drawn more than one window a coin (`audit.Params.groups_per_coin`) has no line: the line reads each
+window's own draw, min(s, U_t) of its receipts, and such a window holds its share of its draw's."""
+
+
 def of_summary(record: Mapping, samples: int, seen: Sequence[Seen]) -> tuple[list[Group], list[tuple[int, int]]]:
     """The groups and windows the line reads of an accepted session's record (the Lean verifier's, as its `outcome`
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
@@ -479,9 +485,12 @@ def times_off(record: Mapping, seen: Sequence[Seen]) -> str | None:
 def line_of_record(record: Mapping, *, samples: int, seen: Sequence[Seen], per: int, block_bytes: int,
                    chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`) and its registered
-    blocks (the record's `blocks`, the registration the session ran on). On the record's `clock` the times seen are
-    held to the record's, refused after `of_summary`'s refusals where they differ (`times_off`); on another
-    (`CLOCKS`) the record doesn't hold them."""
+    blocks (the record's `blocks`, the registration the session ran on). Refused for a record drawn more than one
+    window a coin (`groups_per_coin`, `SHARED`). On the record's `clock` the times seen are held to the record's,
+    refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record doesn't
+    hold them."""
+    if record.get("groups_per_coin", 1) != 1:
+        raise Refused(SHARED)
     groups, windows = of_summary(record, samples, seen)
     if clock == "record" and (why := times_off(record, seen)) is not None:
         raise Refused(why)
@@ -539,6 +548,8 @@ def _record(j: object) -> Mapping:
         _nat(pace, "k")
         _nat(pace, "window_ns")
     _hex(_field(j, "appends"), "appends")
+    if "groups_per_coin" in j:
+        _nat(j, "groups_per_coin")
     return j
 
 

@@ -798,7 +798,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
             total += x
         memory = {f: {"delta": total} for f in al.ledger.FORMS} | {al.ledger.TIME_HELD: {"refused": "unpaced"}}
         window = {"lengths": [4096], "profile": {"delta": profile, "drawn": {"receipt": 48}}}
-        return {"k": 0, "record": {"profile": {"windows": [window] * passes}},
+        return {"k": 0, "record": {"public": {}, "profile": {"windows": [window] * passes}},
                 "ledger": {"delta": d, "inputs": {"passes": passes}, "declared": {"memory": memory}}}
 
     a, b = session(2.0 ** -40, 700, 2.0 ** -60), session(2.0 ** -30, 96, 0.0)
@@ -858,7 +858,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
     window = {"lengths": [2 ** 27], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": drawn}}}
     memory = {f: {"delta": delta} for f in al.ledger.FORMS}
-    s = {"k": k, "record": {"profile": {"windows": [window] * passes}},
+    s = {"k": k, "record": {"public": {}, "profile": {"windows": [window] * passes}},
          "ledger": {"inputs": {"passes": passes}, "declared": {"memory": memory}}}
     e = al.session_error(s)
     parts = {n: al.line.number(e["exact"][f"delta_{n}"]) for n in al.ledger.DELTA_PARTS}

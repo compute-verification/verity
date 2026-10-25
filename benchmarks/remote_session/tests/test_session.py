@@ -152,12 +152,12 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
         then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        binding=None, **kv):
+        binding=None, groups_per_coin: int = 1, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
-    (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end. With `store` (a
-    `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding` the verifier binds the registration
-    to its pinned model."""
+    (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a draw; `then(v)` once
+    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
+    the verifier binds the registration to its pinned model."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
@@ -176,7 +176,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
-                          transcript=transcript, challenger=challenger, appends=appends, binding=binding)
+                          transcript=transcript, challenger=challenger, appends=appends, binding=binding,
+                          groups_per_coin=groups_per_coin)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -1341,12 +1342,58 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
 
 
+def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
+        tmp_path, monkeypatch):
+    """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each drawn at its last window's
+    close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
+    first draw's two receipts leave at least two of its windows a share of none, which the close accepts and no
+    openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
+    transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
+    at a receipt."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import json
+
+    import replay
+
+    (r,), (pr,) = run("honest", windows=5, samples=2, groups_per_coin=4, transcript=tmp_path)
+    assert r["accepted"] and pr["accepted"] and r["disagreement"] is None, r["failure"]
+    assert r["record"]["public"]["groups_per_coin"] == 4 and r["lean_record"]["groups_per_coin"] == 4
+    assert r["challenger"]["reason"] is None
+    seen = r["windows_seen"]
+    assert len({w["draws_sent_ns"] for w in seen[:4]}) == 1 and seen[4]["draws_sent_ns"] >= seen[3]["draws_sent_ns"]
+    first = [len(r["draws"].get(t, [])) for t in range(4)]
+    assert sum(first) == 2 and first.count(0) >= 2 and len(r["draws"][4]) == 2
+    assert sorted(t for t, v in r["verify_cpu_ns"].items()) == list(range(5))
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 5 + 2
+    with replay.server() as s:
+        row = replay.replay(case, s)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted", row
+    (bad,), (pbad,) = run("skip:0.5", windows=5, samples=12, groups_per_coin=4)
+    assert not bad["accepted"] and not pbad["accepted"] and bad["failure"]["failure"] == "receipt"
+    assert bad["disagreement"] is None
+
+
+def test_a_session_drawn_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts(
+        tmp_path, monkeypatch, capsys):
+    """`--groups-per-coin 2` with a `--paced` session at F = 1: no property covers one window in flight at g > 1, so
+    the Lean verifier's `session` request refuses it, and the driver refuses the pair before it listens."""
+    monkeypatch.setattr(sys, "argv", ["verifier.py", "--out", str(tmp_path / "out"), "--groups-per-coin", "2",
+                                      "--paced", "2:8:12:2", "2:8:12:2:1"])
+    with pytest.raises(SystemExit) as e:
+        verifier.main()
+    assert e.value.code == 2 and "one window in flight" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
 def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_makes_of_it(tmp_path):
     """`line_record` with the session's transcript (`session`) runs `Session.run` on it and reads the line off the
     record that run makes (`Line.lineOfRun`, `LineHeld`'s `lineOf`): the line of the session's kept record, given
     beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
     a transcript cut short of its verdict, `samples` other than its parameters' and times seen off the record's are
-    refused; on the challenger's clock the times aren't held to the record."""
+    refused, and a transcript drawn two windows a coin has no line, as its record has none (`line.SHARED`); on the
+    challenger's clock the times aren't held to the record."""
     import copy
     import json
 
@@ -1378,8 +1425,8 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
             "refused": "the Lean verifier gave the session no record"}
         with pytest.raises(lv.LeanError, match="samples: the session's"):
             call({**bare, "session": case, "samples": inputs["samples"] + 1})
-        with pytest.raises(lv.LeanError, match="its own openings coin"):
-            call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}})
+        assert call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}}) == {
+            "refused": verifier.line.SHARED}
         why = verifier.line.record_run_json(late)["refused"]
         assert why.startswith("window 1 was seen released at") and call({**late, "session": case}) == {"refused": why}
         assert "refused" not in call({**late, "session": case, "clock": "challenger"})
