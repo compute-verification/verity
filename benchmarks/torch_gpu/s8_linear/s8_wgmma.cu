@@ -24,15 +24,16 @@
 
 #define DEV __device__ __forceinline__
 
-// one launch's arguments, a __grid_constant__ parameter (wgmma.py's `Params`): the tensor maps live in parameter space
-struct Params {
+// one launch's arguments, a __grid_constant__ parameter (wgmma.py's `Params`): the tensor maps live in parameter space.
+// Aligned to 128 bytes, CUDA 13's CUtensorMap alignment (CUDA 12's is 64), so the layout is the same under either
+struct alignas(128) Params {
   CUtensorMap a, b;    // X: M rows of K bytes, boxes of TM rows; W: N rows, boxes of BN rows (wgmma.py's `tmap`)
   const float* sa;     // s_a [M]
   const float* sw;     // s_w [N]
   uint16_t* y;         // y [M, N], bf16 words, row-major
   int M, N, K, group;  // group: tile rows a raster group
 };
-static_assert(offsetof(Params, sa) == 256 && offsetof(Params, M) == 280 && sizeof(Params) == 320, "wgmma.py's Params");
+static_assert(offsetof(Params, sa) == 256 && offsetof(Params, M) == 280 && sizeof(Params) == 384, "wgmma.py's Params");
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma (pearl_c_sm90.cu's)
 DEV uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
