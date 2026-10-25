@@ -157,7 +157,7 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
                     md = json.load(open(mj))
                     if isinstance(md, dict) and md.get("hash"):
                         idx[str(md["hash"])] = os.path.dirname(mj)
-                except Exception:  # noqa: BLE001
+                except (OSError, ValueError):
                     continue
             _TRITON_CACHE_INDEX[root] = idx
         d = idx.get(str(h))
@@ -179,7 +179,7 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
                 out["meta"] = {k: md.get(k) for k in ("name", "num_warps", "num_stages", "num_ctas", "cluster_dims", "enable_fp_fusion", "debug", "shared",
                                                       "ptx_version", "target", "maxnreg", "launch_cooperative_grid") if k in md}
                 break
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError):
             continue
     return out
 
