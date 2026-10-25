@@ -140,22 +140,16 @@ theorem piopCut_counts (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap roo
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
     l'.size = l.size + piopZk st extras ∧ l'.size + t.k = l.size + t'.k := by
   unfold piopCut at h
-  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := run_bind_ok h
-  try dsimp only at h
-  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := run_bind_ok h
-  try dsimp only at h
-  obtain ⟨u, t₃, l₃, h₃, h⟩ := run_bind_ok h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, hA⟩ := run_bind_ok h
+  try dsimp only at hA
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, hB⟩ := run_bind_ok hA
+  try dsimp only at hB
+  obtain ⟨u, t₃, l₃, h₃, hC⟩ := run_bind_ok hB
   obtain ⟨rfl, rfl⟩ := Replay.rankCheckP_go h₃
-  try dsimp only at h
-  obtain ⟨⟨ss, T, sws⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
-  first
-  | (obtain ⟨h, rfl⟩ := Prod.mk.inj h
-     obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj h))
-  | (obtain ⟨rfl, rfl⟩ := Replay.rankCheckP_go h₄
-     try dsimp only at h
-     obtain ⟨⟨ss, T, sws⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
-     obtain ⟨h, rfl⟩ := Prod.mk.inj h
-     obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj h))
+  try dsimp only at hC
+  obtain ⟨⟨ss, T, sws⟩, t₄, l₄, h₄, hD⟩ := run_bind_ok hC
+  obtain ⟨hE, rfl⟩ := Prod.mk.inj hD
+  obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj hE)
   have s1 := (zerocheckCut_at coin n hm _ _ _ _ _ h₁).2
   have s2 := (lincheckCut_at coin n _ _ _ _ _ h₂).2
   have s3 := (ringSwitchCut_sws coin n _ _ (by simp [abcClaims]) h₄).2.1
