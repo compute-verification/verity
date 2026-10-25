@@ -8,8 +8,8 @@
 * each leg reads the answers of the legs before it, and its port's case reaches onsite;
 * `TABLE` names every onsite component once, a leg is its file in `legs/`, and onsite's components are read from
   `CoreOnsite.lean` as written;
-* the horizon's union bound over periods, vacuous at the sum of δ reaching 1, and the network certifier's K added over
-  periods and pooled over a week, a month and a year with its eps;
+* the horizon's union bound over periods, vacuous at the sum of δ reaching 1, and the network certifier's K over a
+  week, a month and a year with the faulty units paid for once (`HorizonLeakAccepted`), each period's K beside it;
 * the loop's period keeps only the window's public files, and its circuit is the one registered before it ran (slow).
 """
 from __future__ import annotations
@@ -18,6 +18,7 @@ import json
 import stat
 import sys
 from argparse import Namespace
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -209,26 +210,47 @@ def test_the_horizon_is_a_union_bound_over_periods():
     assert h["composed"] == "reject"
 
 
-def _communication(verdict: str, K: int = 0, eps: str = "0", windows: int = 1) -> dict:
-    row = {"verdict": verdict, "protocol": C.CERTIFIER,
-           "quantity": {"K": K, "eps": eps, "windows": windows} if verdict == "accept" else None}
+def _period(units: int, drawn: int, K: int = 24, schedules: int = 4, cells: int = 3, free: int = 1,
+            jitter: int = 2) -> dict:
+    return {"K": K, "eps": "1/100", "windows": 1, "schedules": schedules, "cells": cells,
+            "audits": [{"units": units, "drawn": drawn, "free": free, "jitter": jitter}]}
+
+
+def _communication(verdict: str, quantity: dict | None = None) -> dict:
+    row = {"verdict": verdict, "protocol": C.CERTIFIER, "quantity": quantity if verdict == "accept" else None}
     return {"protocols": {"integrity": {"verdict": "missing"}, "communication": row}, "composed": {"verdict": "reject"}}
 
 
-def test_the_network_certifiers_k_adds_over_periods_and_is_pooled_per_span():
-    reports = [_communication("accept", 15000, "1/100", 1), _communication("reject"),
-               _communication("accept", 16001, "1/100", 2)]
-    c = C.horizon(reports, period_s=3600)["communication"]
-    assert {k: c[k] for k in ("periods", "accepted", "refused", "K", "eps", "vacuous", "windows", "K_per_window")} == {
-        "periods": 3, "accepted": 2, "refused": 1, "K": 31001, "eps": "1/50", "vacuous": False, "windows": 3,
-        "K_per_window": "31001/3"}
-    assert c["week"] == {"periods": 168, "K": 2604084, "eps": "1", "vacuous": True}
-    assert c["month"]["periods"] == 720 and c["year"]["periods"] == 8760 and c["year"]["K"] == 135784380
-    tiny = [_communication("accept", 10, "1/1000000", 1)]
-    assert C.horizon(tiny, period_s=3600)["communication"]["year"] == {"periods": 8760, "K": 87600,
-                                                                      "eps": "219/25000", "vacuous": False}
+def test_the_horizon_pays_for_the_faulty_units_once():
+    def fmax(units: int, drawn: int, delta: Fraction) -> int:
+        return C.horizon_leak([_period(units, drawn)], delta)["Fmax"]
+    assert fmax(1024, 64, Fraction(1, 100)) == 74
+    assert fmax(1024, 2, Fraction(1, 100)) == 2358
+    mixed = {**_period(3, 3), "audits": [*_period(3, 3)["audits"], *_period(2, 1)["audits"]]}
+    assert C.horizon_leak([mixed], Fraction(1, 100))["q"] == "1/2"
+    assert C.horizon_leak([mixed], Fraction(1, 100))["Fmax"] == 10
+
+
+def test_the_network_certifiers_k_is_pooled_once_per_span_with_the_per_window_figure_beside_it():
+    p = _period(3, 3)
+    reports = [_communication("accept", p), _communication("reject"), _communication("accept", p)]
+    c = C.communication(reports, period_s=60, spans={"five": 300}, machines=10)
+    assert {k: c[k] for k in ("periods", "accepted", "refused")} == {"periods": 3, "accepted": 2, "refused": 1}
+    assert c["per_window"] == [{"K": 24, "eps": "1/100", "windows": 1, "share": 0.5}] * 2
+    so_far = c["pooled"]["1/100"]
+    assert (so_far["units"], so_far["Fmax"], so_far["K"]) == (6, 5, 8 + 6 + 80 + 15 + 2 + 4)
+    five = c["five"]["pooled"]["1/100"]
+    assert c["five"]["periods"] == 5 and five["windows"] == 5 and five["q"] == "1"
+    assert five["terms"] == {"schedules": 20, "cells": 15, "faulty_bits": 80, "faulty_sets": 20, "free": 5,
+                             "jitter": 10}
+    assert (five["units"], five["Fmax"], five["K"], five["share"]) == (15, 5, 150, 0.625)
+    assert five["e_for_eps_2delta"] == "1/500" and five["eps"].startswith("1/100 + ") and five["conditional"]
+    assert c["five"]["pooled"]["1/1000000"]["Fmax"] == 14 and c["five"]["pooled"]["1/1000000"]["K"] == 330
+    many = c["five"]["fleet"]["1/100"]
+    assert (many["machines"], many["delta_each"], many["Fmax_each"], many["K"], many["units"]) == (
+        10, "1/1000", 7, 1900, 150)
     none = C.horizon([_report("accept")], period_s=0)["communication"]
-    assert none["K"] == 0 and none["K_per_window"] is None and none["week"] == {"periods": None}
+    assert none["accepted"] == 0 and none["pooled"] is None and none["week"] == {"periods": None}
 
 
 @pytest.mark.slow

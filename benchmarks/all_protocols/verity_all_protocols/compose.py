@@ -38,6 +38,15 @@ MONTH_S = 30 * 86400
 CERTIFIER = "verity/certifier/v0"
 #: the spans `communication` pools the network certifier's K over
 SPANS_S = {"week": 7 * 86400, "month": MONTH_S, "year": 365 * 86400}
+#: the δ `communication` pools at
+POOL_DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
+#: a proof unit's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
+OUT_BITS = 16
+#: what `horizon_leak`'s K rests on until its two per-window inputs are discharged
+HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
+                     "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
+#: the machines `communication`'s fleet row joins, a stated parameter (the census holds no fleet size)
+FLEET = 1000
 
 
 def onsite_components(source: str | None = None) -> list[str]:
@@ -146,30 +155,68 @@ def horizon(reports: Sequence[Mapping[str, Any]], period_s: float, month_s: floa
             "communication": communication(reports, period_s), "composed": worst}
 
 
-def communication(reports: Sequence[Mapping[str, Any]], period_s: float,
-                  spans: Mapping[str, float] = SPANS_S) -> dict[str, Any]:
-    """The network certifier's leak bound over the periods so far and pooled over each of ``spans`` of ``period_s``
-    periods: a covert sender in the server moves at most an accepted period's ``K`` bits over its link, except with
-    probability its ``eps`` (`NetTiming.Guarantees.PeriodLeakAccepted`), so over periods the bits add and, by a union
-    bound, the eps too, ``vacuous`` once they reach 1. ``K_per_window`` is K over the periods' link-windows. A period
-    that didn't accept certifies nothing, and counts in ``refused``, as does another protocol's answer."""
+def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: int | None = None) -> dict[str, Any]:
+    """The network certifier's K over a monitoring period of ``count`` periods like ``periods`` (accepted
+    ``verity/certifier/v0`` publics; by default those periods alone), its windows one sequence, each on its own live
+    coins (`NetTiming.Guarantees.HorizonLeakAccepted`, #4367, on `HorizonWrongUnitsLe`, #4355): the faulty units are
+    paid for once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its audits, so
+    ``K = log2 #Ss + Σ_c log2(cap_c + 1) + Fmax·(16 + log2(N + 1)) + Σ_i (free_i + k_i·log2 Dj)``, ``N = Σ_i n_i``,
+    except with probability ``δ + Σ_i (e_i + e'_i)``: δ once, and each window's soundness and leak errors, which have no
+    number yet (``e_for_eps_2delta`` is the per-window error at which that sum stays within 2δ). The schedule, cell,
+    free-input and jitter terms are the periods' own, scaled to ``count``. ``share`` is K over the period's registered
+    output bits, 16 a unit. #4367 is conditional on its two per-window inputs (`HORIZON_CONDITION`), so this K is cited
+    as conditional."""
+    count = len(periods) if count is None else count
+    audits = [a for p in periods for a in p["audits"]]
+    q = min(Fraction(a["drawn"], a["units"]) for a in audits)
+    fmax = math.ceil(math.log(1 / float(delta)) / float(q))
+    scale = Fraction(count, len(periods))
+    N = math.ceil(scale * sum(a["units"] for a in audits))
+    terms = {"schedules": math.ceil(scale * sum(p["schedules"] for p in periods)),
+             "cells": math.ceil(scale * sum(p["cells"] for p in periods)),
+             "faulty_bits": OUT_BITS * fmax, "faulty_sets": math.ceil(fmax * math.log2(N + 1)),
+             "free": math.ceil(scale * sum(a["free"] for a in audits)),
+             "jitter": math.ceil(scale * sum(a["jitter"] for a in audits))}
+    K = sum(terms.values())
+    windows = math.ceil(scale * len(audits))
+    return {"periods": count, "windows": windows, "units": N, "q": str(q), "Fmax": fmax, "K": K, "terms": terms,
+            "share": K / (OUT_BITS * N), "eps": f"{delta} + Σ_i (e_i + e'_i) over {windows} windows",
+            "e_for_eps_2delta": str(delta / windows), "conditional": HORIZON_CONDITION}
+
+
+def fleet(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: int, machines: int = FLEET) -> dict[str, Any]:
+    """``machines`` machines, each its own network certifier over ``count`` periods like ``periods``, joined by a union
+    bound: each machine's `horizon_leak` at ``delta / machines``, so the K add and the δ add back to ``delta``. The
+    union bound across machines is not in Lean."""
+    one = horizon_leak(periods, delta / machines, count)
+    return {"machines": machines, "delta_each": str(delta / machines), "K": machines * one["K"], "share": one["share"],
+            "units": machines * one["units"], "Fmax_each": one["Fmax"], "eps": f"{delta} + Σ over machines and windows "
+            "of (e_i + e'_i)", "lean": "per machine; the union bound over machines is not in Lean",
+            "conditional": HORIZON_CONDITION}
+
+
+def communication(reports: Sequence[Mapping[str, Any]], period_s: float, spans: Mapping[str, float] = SPANS_S,
+                  deltas: Sequence[Fraction] = POOL_DELTAS, machines: int = FLEET) -> dict[str, Any]:
+    """The network certifier over the periods so far and over each of ``spans`` of ``period_s`` periods, at each of
+    ``deltas``: the pooled K first (`horizon_leak`, one machine; `fleet`, ``machines`` of them), and beside it the
+    per-window figure, each accepted period's own ``K`` at its ``eps`` (`NetTiming.Guarantees.PeriodLeakAccepted`) with
+    its share of the period's output bits. A period that didn't accept certifies nothing, and counts in ``refused``, as
+    does another protocol's answer."""
     rows = [r["protocols"].get("communication") or {} for r in reports]
     got = [r["quantity"] for r in rows if r.get("verdict") == "accept" and r.get("protocol") == CERTIFIER]
-    K, eps, windows = sum(q["K"] for q in got), sum((Fraction(q["eps"]) for q in got), Fraction(0)), \
-        sum(q["windows"] for q in got)
     out: dict[str, Any] = {
-        "periods": len(rows), "accepted": len(got), "refused": len(rows) - len(got), "K": K,
-        "eps": str(min(eps, Fraction(1))), "vacuous": eps >= 1, "windows": windows,
-        "K_per_window": str(Fraction(K, windows)) if windows else None, "period_s": period_s}
+        "periods": len(rows), "accepted": len(got), "refused": len(rows) - len(got), "period_s": period_s,
+        "per_window": [{"K": q["K"], "eps": q["eps"], "windows": q["windows"],
+                        "share": q["K"] / (OUT_BITS * sum(a["units"] for a in q["audits"]))} for q in got],
+        "pooled": {str(d): horizon_leak(got, d) for d in deltas} if got else None}
     for name, span in spans.items():
         n = max(1, math.floor(span / period_s)) if period_s > 0 else None
-        row: dict[str, Any] = {"periods": n}
-        if n is not None and got:
-            pooled = n * eps / len(got)
-            row.update(K=math.ceil(Fraction(n * K, len(got))), eps=str(min(pooled, Fraction(1))), vacuous=pooled >= 1)
-        out[name] = row
+        out[name] = {"periods": n, **({"pooled": {str(d): horizon_leak(got, d, n) for d in deltas},
+                                       "fleet": {str(d): fleet(got, d, n, machines) for d in deltas}}
+                                      if n is not None and got else {})}
     return out
 
 
-__all__ = ["CERTIFIER", "MONTH_S", "PROTOCOL", "SPANS_S", "bind", "communication", "composed", "horizon", "onsite_check",
-           "onsite_components", "onsite_inputs", "stub_component"]
+__all__ = ["CERTIFIER", "FLEET", "HORIZON_CONDITION", "MONTH_S", "OUT_BITS", "POOL_DELTAS", "PROTOCOL", "SPANS_S",
+           "bind", "communication", "composed", "fleet", "horizon", "horizon_leak", "onsite_check", "onsite_components",
+           "onsite_inputs", "stub_component"]
