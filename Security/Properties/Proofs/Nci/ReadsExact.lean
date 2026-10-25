@@ -8756,6 +8756,30 @@ theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut
     rw [hsegs, Array.empty_append]
     exact hA
 
+/-- **`DownShape` in a decoded Definition's body**, from `downShape_of` with the decoder's facts and `specs_decoded`,
+wherever a batch's segments are `ShapeOk` (`BatchShape`). -/
+theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
+    (hDec : Decoded P) (hB : Resolve.BodyOk P d)
+    (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d))
+    (hBatch : ∀ fuel, DownShapeAt (ctxOf P memo d) fuel → CalleeShape (ctxOf P memo d) fuel →
+      BatchShape (ctxOf P memo d) fuel) :
+    DownShape (ctxOf P memo d) := by
+  refine downShape_of (ctxOf P memo d) (.top d 0 none) rfl hB ?_ ?_ ?_ hR
+    (fun fuel => (specs_decoded P memo hdP hDec hB hR hSO (.top d 0 none) rfl fuel).2.2.1) hBatch
+    (fun fuel hC hK => scanShape_of _ hB hSO fuel hC hK)
+  · intro k i hk hi
+    have := (hDec d hdP).2.2 k hk i hi
+    exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
+  · intro k i hk hi
+    exact ctxOf_argCount P memo d k i hk hi
+  · intro k i e L hdims hL hip
+    change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
+    by_cases hk : k < (P.defs[d]!).body.nodes.size
+    · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+      · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
+      · rw [getElem!_neg _ i hi] at hdims; cases hdims
+    · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
+
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
 decoded Program has them (`BodiesOk.retParts_reads`). -/
