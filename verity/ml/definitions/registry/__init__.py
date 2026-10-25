@@ -26,7 +26,8 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
   Invariants: importing ANY `verity.ml.definitions.registry.*` module registers the lazy families first (Python imports the package), so a
     descriptor decoded after such an import resolves as it did in veritor; family ORDER matters -- the two catch-alls (`{ORD=n}`,
     `Lifted[..]`) are registered last; a spec id no family matches is a decode failure, never a guessed definition; this module is
-    the one verity_vllm/ops/pod_bootstrap.sh's readiness check imports to prove `verity_vllm` resolves from the shipped tree (verity_vllm_from_tree).
+    the one verity_vllm/ops/pod_bootstrap.sh's readiness check imports to prove the Definitions resolve from the shipped tree
+    (distributions_from_tree's `definitions`).
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 

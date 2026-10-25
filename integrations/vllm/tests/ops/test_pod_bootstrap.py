@@ -123,7 +123,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree",
                  "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
-    assert set(checks["distributions_from_tree"]["value"]) == {"catalog", "kernels", "core"}
+    assert set(checks["distributions_from_tree"]["value"]) == {"catalog", "kernels", "core", "definitions"}
     assert rec["ok"] == all(c["ok"] for c in checks.values())
     assert (r.returncode == 0) == rec["ok"]
     meas = rec["measurements"]
