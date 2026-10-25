@@ -161,7 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
     device = Path(a.device)
-    signer = period.challenger(device, workers=len(os.sched_getaffinity(0)))
+    signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     if not (device / "sessions").exists():
         mc.SessionLog.create(device / "sessions")
     host, _, port = a.listen.rpartition(":")

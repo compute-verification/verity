@@ -25,10 +25,12 @@ import PousCheck.Run
   decision `Pous.Period.PeriodHeld` is about; `protocol_accepts` reads the protocol's acceptance as `accepts`.
 
 On acceptance it publishes the storage it certifies and the error that holds at, `{"certified", "eps", "s_bits"}`
-(`certify`): when P2's one certificate (`Certificate.p2`) covers the point (its `(w, c0, blocks per segment)`, its
-segment count, `k` at least its own and `Δ + RTT` within its rounds), `s_bits` is `⌊ρ·blocks·w⌋` and `eps` is
-`δ + 2^eps_log2`: a node holding fewer bits when the challenges arrived passes with probability at most `eps`, under
-the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous statement, and the profile names each gap.
+(`certify`): when a certificate covers the point (`certificate`: P2's registered one, `Certificate.p2`, at its
+`(w, c0, blocks per segment)` and segment count, else P2's proved family, `familyCertificate`, at the registered width
+and prime for `2^8` to `2^23` blocks; `k` at least its own and `Δ + RTT` within its rounds), `s_bits` is
+`⌊ρ·blocks·w⌋` and `eps` is `δ + 2^eps_log2`: a node holding fewer bits when the challenges arrived passes with
+probability at most `eps`, under the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous statement,
+and the profile names each gap.
 
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
@@ -104,16 +106,29 @@ def digest (pub : SetupProtocol.Public) : ByteArray :=
   | .ok s => Sha512.hash s.toUTF8
   | .error _ => ByteArray.empty
 
-/-- What an accepted run certifies at `pt`: P2's certificate when it covers the point, and why it doesn't otherwise. -/
+/-- `p2.family_certificate`: `P2SlackFamilyUncond`'s `λ = 128` row for a store at the registered width and prime of any
+block count from `2^8` to `2^23` (`p2.CERT_FAMILY_BLOCKS`), in any number of segments: the theorem is about
+`m1p B 16448 (2^16448 − 21065) b` for every such `B`. -/
+def familyCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+  if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 8 ≤ blocks && blocks ≤ 2 ^ 23 then
+    some { k := Certificate.CERT_K, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
+           theoremName := "Pous.SecurityProofs.P2SlackFamilyUncond", segments := none, claims := Certificate.P2_CLAIMS }
+  else none
+
+/-- `period.certificate`: P2's registered certificate (`Certificate.p2`) when the store is its point, segment count and
+all, else P2's proved family's (`familyCertificate`), else none. -/
+def certificate (q : Run.Point) : Option Certificate.Certificate :=
+  let p := q.params
+  match Certificate.p2 p.w p.c0 p.blocksPerSegment with
+  | some c => if c.segments == some p.segments then some c else familyCertificate p.w p.c0 p.blocks
+  | none => familyCertificate p.w p.c0 p.blocks
+
+/-- What an accepted run certifies at `pt`: the certificate when it covers the point, and why it doesn't otherwise. -/
 def gaps (pt : Run.Point) : Option Certificate.Certificate × List String :=
   let q := pt.params
-  match Certificate.p2 q.w q.c0 q.blocksPerSegment with
-  | none => (none, [s!"P2 has no certificate at (w, c0, blocks per segment) = ({q.w}, {q.c0}, {q.blocksPerSegment})"])
-  | some c =>
-    let segments := match c.segments with
-      | some n => if q.segments != n then [s!"W has {q.segments} segments; {c.theoremName} is about {n}"] else []
-      | none => []
-    (some c, c.refusals pt.k pt.limitNs ++ segments)
+  match certificate pt with
+  | none => (none, [s!"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"])
+  | some c => (some c, c.refusals pt.k pt.limitNs)
 
 /-- `δ + 2^eps_log2`, a certificate's error, exactly. -/
 def Certificate.eps (c : Certificate.Certificate) : Core.Ratio :=
@@ -265,7 +280,13 @@ private def TIE_PUB : SetupProtocol.Public :=
 #guard (certify Run.DEPLOYED).sBits == 2 ^ 19 * 16448 * 18 / 19
 #guard (certify Run.DEPLOYED).eps.toString == s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard (certify ⟨⟨64, 189, 4, 2⟩, 3, 1000⟩).sBits == 0
+#guard (gaps ⟨⟨64, 189, 4, 2⟩, 3, 1000⟩).2 == ["P2 has no certificate at (w, c0, blocks) = (64, 189, 8)"]
 #guard (gaps { Run.DEPLOYED with k := 104 }).2 == ["k = 104 is below the certificate's 105"]
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 256, 1⟩ }).sBits == 256 * 16448 * 18 / 19
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 256, 1⟩ }).eps.toString == s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2⟩ }).certified
+#guard !(certify { Run.DEPLOYED with params := ⟨16448, 21065, 255, 1⟩ }).certified
+#guard ((certificate Run.DEPLOYED).map (·.segments)) == some (some 8)
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 
 end PousCheck.RunProtocol
