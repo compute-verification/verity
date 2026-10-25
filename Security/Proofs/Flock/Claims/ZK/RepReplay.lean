@@ -122,10 +122,13 @@ theorem padsOf_get {lay : Zk.PadLayout} {mk : ℕ → F128} {i : ℕ} (hi : i < 
   rw [padsOf, getElem!_pos _ i (by simpa using hi), Array.getElem_map, Array.getElem_range]
 
 /-- Pad indices below the layout's length. -/
-macro "lay_lt" : tactic => `(tactic| (
-  simp only [Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc,
-    Zk.PadLayout.fc, Zk.PadLayout.fb, Zk.PadLayout.fa, Zk.PadLayout.ml, Zk.PadLayout.r1c, Zk.PadLayout.r1ab]
-  omega))
+theorem lay_lt_len (lay : Zk.PadLayout) :
+    (∀ i < 64, lay.r1ab i < lay.len) ∧ (∀ i < 64, lay.r1c i < lay.len) ∧
+      (∀ j < lay.nMlv, ∀ t < 2, lay.ml j t < lay.len) ∧ lay.fa < lay.len ∧ lay.fb < lay.len ∧ lay.fc < lay.len ∧
+      (∀ j < lay.nLc, ∀ t < 2, lay.lc j t < lay.len) ∧ (∀ i < 64, lay.zp i < lay.len) := by
+  unfold Zk.PadLayout.len Zk.PadLayout.tw Zk.PadLayout.hab Zk.PadLayout.zp Zk.PadLayout.lc Zk.PadLayout.fc
+    Zk.PadLayout.fb Zk.PadLayout.fa Zk.PadLayout.ml Zk.PadLayout.r1c Zk.PadLayout.r1ab
+  refine ⟨fun _ _ => ?_, fun _ _ => ?_, fun _ _ _ _ => ?_, ?_, ?_, ?_, fun _ _ _ _ => ?_, fun _ _ => ?_⟩ <;> omega
 
 /-! ## Closed forms -/
 
@@ -138,14 +141,15 @@ theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ 
     (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok ((zp, zc), t₁), l₁)) :
     zp = ZcZ.proof lay (padsOf lay mk) m (zcCoins coin l.size) tr0 ∧
       t₁ = ZcZ.tEnd lay (padsOf lay mk) m digest cap root (zcCoins coin l.size) tr0 t := by
+  obtain ⟨hLab, hLc, hLml, hLfa, hLfb, hLfc, -, -⟩ := lay_lt_len lay
   have hA := zerocheckCut_alike coin n hm digest cap root lay (padsOf lay mk) tr0 mk t l
-    (fun i hi => by rw [zc_r1ab_nil, f_zero_add, padsOf_get (by lay_lt)])
-    (fun i hi => by rw [zc_r1c_nil, f_zero_add, padsOf_get (by lay_lt)])
-    (fun i hi => by simp only [zc_msg_nil, f_zero_add]; rw [padsOf_get (by lay_lt)])
-    (fun i hi => by simp only [zc_msg_nil, f_zero_add]; rw [padsOf_get (by lay_lt)])
-    (by simp only [tr0, zc_tab_nil, f_zero_add]; rw [padsOf_get (by lay_lt)])
-    (by simp only [tr0, zc_tab_nil, f_zero_add]; rw [padsOf_get (by lay_lt)])
-    (by rw [dot_zero_right _ _ (zc_r1c_nil _ _), f_zero_add, padsOf_get (by lay_lt)])
+    (fun i hi => by rw [zc_r1ab_nil, f_zero_add, padsOf_get (hLab i hi)])
+    (fun i hi => by rw [zc_r1c_nil, f_zero_add, padsOf_get (hLc i hi)])
+    (fun i hi => by simp only [zc_msg_nil, f_zero_add]; rw [padsOf_get (hLml i (by omega) 0 (by omega))])
+    (fun i hi => by simp only [zc_msg_nil, f_zero_add]; rw [padsOf_get (hLml i (by omega) 1 (by omega))])
+    (by simp only [tr0, zc_tab_nil, f_zero_add]; rw [padsOf_get hLfa])
+    (by simp only [tr0, zc_tab_nil, f_zero_add]; rw [padsOf_get hLfb])
+    (by rw [dot_zero_right _ _ (zc_r1c_nil _ _), f_zero_add, padsOf_get hLfc])
   rw [h] at hA
   rcases hA with ⟨e, L, he, -⟩ | ⟨a, b, t', L, he, hy, hab, -⟩
   · simp only [Prod.mk.injEq, reduceCtorEq, false_and] at he
@@ -173,10 +177,12 @@ theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ �
       lp = LcZ.proof lay (padsOf lay mk) c m tr0 (Zc.out m zcs tr0) full (lcCoins coin l.size (c.kLog - 6)) ∧
       t₂ = LcZ.tEnd lay (padsOf lay mk) c m tr0 (Zc.out m zcs tr0) full (lcCoins coin l.size (c.kLog - 6)) t := by
   obtain ⟨full, hfull⟩ := RankAt.lincheckCut_fold coin n h
+  obtain ⟨-, -, -, -, -, -, hLlc, hLzp⟩ := lay_lt_len lay
   have hA := lincheckCut_alike coin n c m lay (padsOf lay mk) tr0 mk (Zc.out m zcs tr0) hz hρ rfl rfl t l
-    (fun full _ j hj => ⟨by simp only [LcZ.msg, lc_msg_nil, f_zero_add]; rw [padsOf_get (by lay_lt)],
-      by simp only [LcZ.msg, lc_msg_nil, f_zero_add]; rw [padsOf_get (by lay_lt)]⟩)
-    (fun i hi => by rw [lc_zrT_nil, f_zero_add, padsOf_get (by lay_lt)])
+    (fun full _ j hj => ⟨by
+        simp only [LcZ.msg, lc_msg_nil, f_zero_add]; rw [padsOf_get (hLlc j (by omega) 0 (by omega))],
+      by simp only [LcZ.msg, lc_msg_nil, f_zero_add]; rw [padsOf_get (hLlc j (by omega) 1 (by omega))]⟩)
+    (fun i hi => by rw [lc_zrT_nil, f_zero_add, padsOf_get (hLzp i hi)])
   rw [h] at hA
   rcases hA with ⟨e, L, he, -⟩ | ⟨a, b, t', L, he, hy, hab, -⟩
   · simp only [Prod.mk.injEq, reduceCtorEq, false_and] at he
