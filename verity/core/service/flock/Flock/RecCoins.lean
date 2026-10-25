@@ -146,12 +146,13 @@ def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
   return (spec, st)
 
-/-- A session record's `unit_draw`, when it is a draw (not absent, not null), as `verify` reads it (`Main.recordDraw`). -/
+/-- A session record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`), as `verify` reads it
+(`Main.recordDraw`). -/
 def recordDraw (record : String) : Option Json :=
   match Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 
