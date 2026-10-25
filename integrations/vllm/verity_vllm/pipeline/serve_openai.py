@@ -30,7 +30,9 @@ thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under 
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
-release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends).
+release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends), where each step's
+rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
+``serve.json``'s ``step_rows``).
 
 With the Commit on (the default), `NativeHostCommitter` commits every engine step exactly as it does a declared workload,
 values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -72,7 +74,7 @@ from typing import Any
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_seal as SS
-from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, new_http_id
+from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, ingress_of, param_of, served_statics,
                                                user_of)
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
@@ -551,7 +553,12 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)))
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
-    order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000) if opts.admit == "release-order" else None
+    order = rows = None
+    if opts.admit == "release-order":
+        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine.step_trace import scheduler_of
+        order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
+        rows = keep_scheduler_rows(get_model_runner(llm.vllm), scheduler_of(engine))
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)
@@ -568,6 +575,7 @@ def main(opts: Options) -> int:
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
+              "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
@@ -588,6 +596,8 @@ def main(opts: Options) -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
+        if rows is not None:
+            rows.uninstall()
         if com is not None:
             com.close()
     return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1
