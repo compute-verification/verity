@@ -268,6 +268,32 @@ theorem extTab_update_ne {n : ℕ} (C : Fin n → List 𝔽) (p : Fin n) (u : Li
   · exact Function.update_of_ne (fun e => hq (congrArg Fin.val e)) _ _
   · rfl
 
+/-- **One unopened position filled**: at a table of table `j`'s word that does not extract, any position takes a
+full-width column, `c :: 0…` with `c` from `zk_avoid`, after which the table still does not extract
+(`Claims.GS.agree_fill`). -/
+theorem zk_fill_step (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
+    (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hg : ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C) (p : Fin (wordLenJ true x j)) :
+    ∃ u, wideJ true x j u ∧ u ≠ 0 ∧
+      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j (Function.update C p u) := by
+  obtain ⟨w, hw0, hwOk⟩ : ∃ w, 0 < w ∧ ∀ u : List 𝔽, u.length = w → wideJ true x j u := by
+    have hp := p.isLt
+    cases h : (tables true x)[j]? with
+    | none => simp [wordLenJ, h] at hp
+    | some a =>
+      obtain ⟨_, st⟩ := a
+      exact ⟨2 ^ (Claims.Flock.zkLevel0 st.m).lanes, by positivity, fun u hu => by simp [wideJ, h, hu]⟩
+  obtain ⟨c, hc⟩ := zk_avoid rel (Claims.Flock.extTab C) p.val
+  refine ⟨c :: List.replicate (w - 1) 0, hwOk _ (by simp; omega), List.cons_ne_nil _ _, ?_⟩
+  rintro ⟨M, t, ht, hrel, hle, hag⟩
+  refine hg ⟨M, t, ht, hrel, hle, Claims.GS.agree_fill ((deployZk rel).enc M) (Claims.Flock.extTab C)
+    (Claims.Flock.extTab (Function.update C p (c :: List.replicate (w - 1) 0))) p.val
+    (fun q hq => extTab_update_ne C p _ hq) _ hag fun hcrit he => hc M hcrit ?_⟩
+  rw [extTab_update_self] at he
+  rw [he]
+  simp
+
+
 namespace Gen
 
 variable [S : ZkSetup]
@@ -299,15 +325,58 @@ theorem zk_fill_step (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
 
 end Gen
 
-/-- **One unopened position filled**: at a table of table `j`'s word that does not extract, any position takes a
-full-width column, `c :: 0…` with `c` from `zk_avoid`, after which the table still does not extract
-(`Claims.GS.agree_fill`). -/
-theorem zk_fill_step (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
-    (C : Fin (wordLenJ true x j) → List 𝔽)
-    (hg : ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C) (p : Fin (wordLenJ true x j)) :
-    ∃ u, wideJ true x j u ∧ u ≠ 0 ∧
-      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j (Function.update C p u) :=
-  Gen.zk_fill_step (S := S₀) (rel := rel) (x := x) (j := j) (C := C) (hg := hg) (p := p)
+/-- **`ExtendJ` at the untrimmed masked instance**, at every relation: a table of table `j`'s word with unopened
+positions that does not extract is filled one position at a time (`zk_fill_step`) to one of full-width columns that
+keeps its opened ones and does not extract. -/
+theorem zk_extendJ (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true) := by
+  intro x j _ C hC hg
+  suffices H : ∀ k (C : Fin (wordLenJ true x j) → List 𝔽), (Finset.univ.filter fun p => C p = 0).card = k →
+      (∀ p, Claims.Flock.orZeroJ (wideJ true) x j (C p)) →
+      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
+      ∃ C' : Fin (wordLenJ true x j) → List 𝔽, (∀ p, wideJ true x j (C' p)) ∧ (∀ p, C p ≠ 0 → C' p = C p) ∧
+        ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C' from H _ C rfl hC hg
+  intro k
+  induction k with
+  | zero =>
+    intro C hk hC hg
+    refine ⟨C, fun p => ?_, fun _ _ => rfl, hg⟩
+    rcases hC p with h0 | h
+    · have hmem : p ∈ Finset.univ.filter fun q => C q = 0 := Finset.mem_filter.2 ⟨Finset.mem_univ p, h0⟩
+      rw [Finset.card_eq_zero.1 hk] at hmem
+      exact absurd hmem (Finset.notMem_empty p)
+    · exact h
+  | succ k ih =>
+    intro C hk hC hg
+    have hpos : 0 < (Finset.univ.filter fun q => C q = 0).card := by
+      rw [hk]
+      exact Nat.succ_pos k
+    obtain ⟨p, hpm⟩ := Finset.card_pos.1 hpos
+    have hp : C p = 0 := (Finset.mem_filter.1 hpm).2
+    obtain ⟨u, hu, hu0, hg'⟩ := zk_fill_step rel x j C hg p
+    have hk' : (Finset.univ.filter fun q => Function.update C p u q = 0).card = k := by
+      have e : (Finset.univ.filter fun q => Function.update C p u q = 0) =
+          (Finset.univ.filter fun q => C q = 0).erase p := by
+        ext q
+        by_cases hq : q = p
+        · subst hq
+          simp [hu0]
+        · simp [hq]
+      rw [e, Finset.card_erase_of_mem hpm, hk]
+      simp
+    have hC' : ∀ q, Claims.Flock.orZeroJ (wideJ true) x j (Function.update C p u q) := by
+      intro q
+      by_cases hq : q = p
+      · subst hq
+        rw [Function.update_self]
+        exact .inr hu
+      · rw [Function.update_of_ne hq]
+        exact hC q
+    obtain ⟨C', hw, hkeep, hg''⟩ := ih _ hk' hC' hg'
+    refine ⟨C', hw, fun q hq => ?_, hg''⟩
+    have hqp : q ≠ p := fun h => hq (h ▸ hp)
+    rw [hkeep q (by rwa [Function.update_of_ne hqp]), Function.update_of_ne hqp]
+
 
 namespace Gen
 
@@ -366,13 +435,6 @@ theorem zk_extendJ (rel : Readable.Parsed → Readable.Relation) :
     rw [hkeep q (by rwa [Function.update_of_ne hqp]), Function.update_of_ne hqp]
 
 end Gen
-
-/-- **`ExtendJ` at the untrimmed masked instance**, at every relation: a table of table `j`'s word with unopened
-positions that does not extract is filled one position at a time (`zk_fill_step`) to one of full-width columns that
-keeps its opened ones and does not extract. -/
-theorem zk_extendJ (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true) :=
-  Gen.zk_extendJ (S := S₀) (rel := rel)
 
 namespace Gen
 
