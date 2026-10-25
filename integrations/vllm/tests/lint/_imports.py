@@ -10,7 +10,7 @@ is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``.  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, and ``settings``, the environment's registry, import
-nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
+nothing from the package but ``settings`` and sit in ``core`` so every layer may call them.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
 restricts a peer edge.
 """
@@ -45,7 +45,7 @@ LAYER = {
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
-    "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
+    "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports only settings from verity_vllm
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm

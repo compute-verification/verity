@@ -12,8 +12,9 @@ Read a setting as an attribute, ``settings.VERITY_WINDOW_MB`` (or `get` by name)
 at that read, never cached, or its default when the variable is unset or empty (`Setting.empty` keeps an empty string).  An
 undeclared name is an AttributeError.  A string that doesn't parse is a ValueError naming the variable.  A flag (`flag`)
 reads ``1``/``true``/``yes``/``on`` and ``0``/``false``/``no``/``off``, in any case, and refuses anything else.  `put`,
-`setdefault` and `unset` write a declared variable, for the processes this one starts and the libraries it loads.  `environ` is a
-copy of the whole environment, for code that passes it on.
+`setdefault` and `unset` write a declared variable, for the processes this one starts and the libraries it loads.  `raw`,
+`is_set` and the writers also take any variable of a declared family (`FAMILIES`), whose library declares its own (vLLM's
+switches as a target profile names them, ``engine.env``).  `environ` is a copy of the whole environment, for code that passes it on.
 
 `validate_environ` refuses a ``VERITY_*`` variable that neither this registry nor the rest of the tree reads (`ELSEWHERE`), naming
 it: ``verity-vllm`` runs it at startup, so a misspelt or retired setting fails the run instead of being ignored.
@@ -239,15 +240,21 @@ SETTINGS: dict[str, Setting] = _declare(
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
     S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
       "a Build records it"),
+    S("TORCHINDUCTOR_AUTOGRAD_CACHE", str, None, VALUE, "0: AOTAutograd compiles afresh (`engine.env.COMPILE_FRESH`)"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
+    S("TORCHINDUCTOR_FX_GRAPH_CACHE", str, None, VALUE, "0: Inductor compiles its FX graphs afresh (`engine.env.COMPILE_FRESH`)"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_ATTENTION_BACKEND", str, None, VALUE, "vLLM's attention backend, which the pinned vLLM no longer defines: a Build "
       "records it as ignored"),
     S("VLLM_BATCH_INVARIANT", str, None, VALUE, "vLLM's batch-invariant kernels, 1 as an engine profile's env sets it; the replay's "
       "dependencies record it"),
+    S("VLLM_CACHE_ROOT", str, None, WHERE, "vLLM's cache root; a compiled process's own beside its Inductor directory "
+      "(`engine.env.own_compile_dirs`)"),
     S("VLLM_DISABLE_COMPILE_CACHE", str, None, VALUE, "1: vLLM compiles afresh instead of loading its compile cache; the compiled "
       "records say which"),
+    S("VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS", str, None, WHERE, "seconds vLLM's multiprocess executor waits for a step's RPC; a TP "
+      "stage pins its own (`engine.env.step_timeout`)"),
     S("VLLM_LOGGING_LEVEL", str, None, DEBUG, "vLLM's log level (`engine.env.EXPORT` sets WARNING); a Build records it"),
     S("VLLM_USE_DEEP_GEMM", str, None, VALUE, "vLLM's DeepGEMM kernels for block-scaled FP8 (the target profile's `fp8_block_gemm` "
       "sets it); a Build records it"),
@@ -295,9 +302,14 @@ def setting(name: str) -> Setting:
     return s
 
 
+def _declared(name: str) -> None:
+    if name not in SETTINGS and not name.startswith(tuple(FAMILIES)):
+        raise AttributeError(f"{name} is not a declared setting or in a declared family (verity_vllm/settings.py)")
+
+
 def raw(name: str, environ: Mapping[str, str] | None = None) -> str | None:
-    """A declared setting's string as the environment holds it, None when unset."""
-    setting(name)
+    """A declared setting's (or a family member's) string as the environment holds it, None when unset."""
+    _declared(name)
     return (os.environ if environ is None else environ).get(name)
 
 
@@ -320,18 +332,18 @@ def get(name: str, environ: Mapping[str, str] | None = None) -> Any:
 
 def put(name: str, value: str) -> None:
     """Set a declared variable in this process's environment, which the processes it starts inherit."""
-    setting(name)
+    _declared(name)
     os.environ[name] = value
 
 
 def unset(name: str) -> None:
-    setting(name)
+    _declared(name)
     os.environ.pop(name, None)
 
 
 def setdefault(name: str, value: str) -> str:
     """Set a declared variable unless the environment holds it (empty included), as ``os.environ.setdefault``; its string."""
-    setting(name)
+    _declared(name)
     return os.environ.setdefault(name, value)
 
 

@@ -59,14 +59,22 @@ def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPat
         S.get("VERITY_NOT_A_SETTING")
 
 
-def test_put_and_unset_write_only_declared_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_put_and_unset_write_only_declared_variables_and_families(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VERITY_INT8_PARTS", "")
     S.put("VERITY_INT8_PARTS", "linears,attention")
     assert S.VERITY_INT8_PARTS == ("linears", "attention")
     S.unset("VERITY_INT8_PARTS")
     assert S.VERITY_INT8_PARTS == () and not S.is_set("VERITY_INT8_PARTS")
+    monkeypatch.setenv("VLLM_X", "")
+    S.put("VLLM_X", "1")
+    assert S.raw("VLLM_X") == "1" == S.setdefault("VLLM_X", "0")
+    S.unset("VLLM_X")
+    assert not S.is_set("VLLM_X")
     with pytest.raises(AttributeError):
-        S.put("VERITY_NOT_A_SETTING", "1")
+        S.get("VLLM_X")
+    for bad in ("VERITY_NOT_A_SETTING", "TORCH_X"):
+        with pytest.raises(AttributeError):
+            S.put(bad, "1")
 
 
 def test_setdefault_keeps_what_the_environment_holds_and_environ_is_a_copy(monkeypatch: pytest.MonkeyPatch) -> None:

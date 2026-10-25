@@ -4,14 +4,16 @@ The pins are ``setdefault``s: a value the operator exported wins. vLLM, torch an
 these once, at import or at engine construction, so each caller pins before it imports them. A ``TargetProfile``'s
 ``env()`` and the compiled-engine cache switches are overrides, written with plain assignment.
 
-Stdlib only, and nothing from ``verity_vllm``: every layer may call it (the config it needs comes in as arguments).
+Stdlib only, and nothing from ``verity_vllm`` but ``settings``, which imports nothing from it: every layer may call it (the config it
+needs comes in as arguments).  It reads and writes the environment through ``settings``.
 """
 from __future__ import annotations
 
-import os
 import tempfile
 from collections.abc import Mapping
 from typing import Any
+
+from verity_vllm import settings
 
 #: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay: vLLM's defaults but for these, each
 #: with its reason in `REASONS`.  Batch invariance is the row's execution label's (`engine.served.EXECUTIONS`), not the profile's.
@@ -59,7 +61,7 @@ INT8_CREDITED_READ = "VERITY_INT8_CREDITED_READ"
 
 
 def int8_credited_read() -> str | None:
-    return os.environ.get("VERITY_INT8_CREDITED_READ") or None
+    return settings.VERITY_INT8_CREDITED_READ
 
 
 #: The switches a served engine leaves at vLLM's defaults; a capture of record runs with none of them set, so the kernels it compares
@@ -70,21 +72,22 @@ SERVED_DEFAULTS = ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_
 
 def served_defaults() -> dict[str, str]:
     """Clear `SERVED_DEFAULTS` from the process environment (before vLLM is imported); returns the values cleared."""
-    return {k: os.environ.pop(k) for k in SERVED_DEFAULTS if k in os.environ}
+    cleared = {k: settings.raw(k) for k in SERVED_DEFAULTS if settings.is_set(k)}
+    for k in cleared:
+        settings.unset(k)
+    return cleared
 
 
 def pin(pins: Mapping[str, str]) -> dict[str, str]:
-    for k, v in pins.items():
-        os.environ.setdefault(k, v)
-    return {k: os.environ[k] for k in pins}
+    return {k: settings.setdefault(k, v) for k, v in pins.items()}
 
 
 def apply_engine(hf_home: str | None) -> dict[str, str]:
     """``ENGINE``, the checkpoint store's ``HF_HOME`` and ``HF_HUB_OFFLINE=1``; returns the ``ENGINE`` values in force."""
     got = pin(ENGINE)
     if hf_home:
-        os.environ.setdefault("HF_HOME", hf_home)
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        settings.setdefault("HF_HOME", hf_home)
+    settings.setdefault("HF_HUB_OFFLINE", "1")
     return got
 
 
@@ -98,8 +101,9 @@ def step_timeout(seconds: float) -> dict[str, str]:
 
 def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     """A ``TargetProfile.env()``: the profile's values replace whatever the process had."""
-    os.environ.update(env)
-    return {k: os.environ[k] for k in env}
+    for k, v in env.items():
+        settings.put(k, v)
+    return {k: settings.raw(k) for k in env}
 
 
 def apply_compile_fresh() -> dict[str, str]:
@@ -117,29 +121,29 @@ def own_compile_dirs(root: str) -> dict[str, str]:
 def compile_dirs() -> dict[str, str] | None:
     """The Inductor output-code dir and vLLM cache root this process was given as its own (``own_compile_dirs``, or exported with
     ``INDUCTOR_DIR_MARK`` by ``ops/served_commit.sh``), else None."""
-    ind, root = os.environ.get("TORCHINDUCTOR_CACHE_DIR"), os.environ.get("VLLM_CACHE_ROOT")
-    return {"inductor": ind, "vllm_cache": root} if os.environ.get(INDUCTOR_DIR_MARK) == "1" and ind and root else None
+    ind, root = settings.raw("TORCHINDUCTOR_CACHE_DIR"), settings.raw("VLLM_CACHE_ROOT")
+    return {"inductor": ind, "vllm_cache": root} if settings.raw(INDUCTOR_DIR_MARK) == "1" and ind and root else None
 
 
 def hide_devices() -> None:
     """No CUDA device is visible to this process (a meta-device build on a GPU host), whatever it inherited.  Takes effect
     only before torch initialises CUDA."""
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    settings.put("CUDA_VISIBLE_DEVICES", "")
 
 
 def snapshot() -> dict[str, str]:
-    return dict(os.environ)
+    return settings.environ()
 
 
 def set_since(before: Mapping[str, str]) -> dict[str, str]:
     """The keys set or changed since ``before`` (a `snapshot`). vLLM's batch invariance writes cuBLAS' and NCCL's switches while it
     builds an engine, so a process that resets its environment between Commits on one engine (`commit_group`, `hot.serve`) puts
     these back."""
-    return {k: v for k, v in os.environ.items() if before.get(k) != v}
+    return {k: v for k, v in settings.environ().items() if before.get(k) != v}
 
 
 def disable_compile_cache() -> None:
-    os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
+    settings.put("VLLM_DISABLE_COMPILE_CACHE", "1")
 
 
 def prepare_compiled_process_cache() -> dict[str, Any]:
@@ -150,13 +154,13 @@ def prepare_compiled_process_cache() -> dict[str, Any]:
     would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
     Llama-3.2-1B), recorded in the header as compilation.compile_cache = disabled."""
     out: dict[str, Any] = {}
-    if os.environ.get(INDUCTOR_DIR_MARK) != "1":
+    if settings.raw(INDUCTOR_DIR_MARK) != "1":
         d = tempfile.mkdtemp(prefix="verity_inductor_")
-        os.environ["TORCHINDUCTOR_CACHE_DIR"] = d
-        os.environ[INDUCTOR_DIR_MARK] = "1"
+        settings.put("TORCHINDUCTOR_CACHE_DIR", d)
+        settings.put(INDUCTOR_DIR_MARK, "1")
         out["inductor_cache_dir"] = d
     else:
-        out["inductor_cache_dir"] = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
+        out["inductor_cache_dir"] = settings.raw("TORCHINDUCTOR_CACHE_DIR")
     disable_compile_cache()
     out["compile_cache"] = "disabled"
     return out

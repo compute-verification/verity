@@ -225,3 +225,37 @@ def test_a_builds_target_facts_take_the_environment_as_before(build_target, env:
     env.setattr(torch.cuda, "is_available", lambda: False)
     doc = {"consulted": vllm_meta.consulted_facts(types.SimpleNamespace()), "host": export_compat.host_facts()}
     assert _digest(doc) == digest, doc
+
+
+@pytest.mark.parametrize(("values", "digest"), [
+    ({}, "3813a40a7b03445b7e6f6b574cbc002f"),
+    ({"VLLM_LOGGING_LEVEL": "DEBUG", "HF_HOME": "/mine", "HF_HUB_OFFLINE": "0", "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "60",
+      "VLLM_BATCH_INVARIANT": "1", "VLLM_USE_DEEP_GEMM": "1", "NCCL_P2P_DISABLE": "1", "VERITY_INT8_CREDITED_READ": "MODE:/so",
+      "VERITY_INDUCTOR_DIR_PER_PROCESS": "1", "TORCHINDUCTOR_CACHE_DIR": "/ind", "VLLM_CACHE_ROOT": "/vc", "CUDA_VISIBLE_DEVICES": "0"},
+     "6c7ab56434e2349ebfcb20b45c24ad67"),
+    (dict.fromkeys(("VLLM_LOGGING_LEVEL", "HF_HOME", "HF_HUB_OFFLINE", "VLLM_BATCH_INVARIANT", "NCCL_P2P_DISABLE",
+                    "VERITY_INT8_CREDITED_READ", "VERITY_INDUCTOR_DIR_PER_PROCESS", "TORCHINDUCTOR_CACHE_DIR", "VLLM_CACHE_ROOT"), ""),
+     "9591a1ca1664241c1c4ece6a93a9c1bb"),
+    ({"VERITY_INDUCTOR_DIR_PER_PROCESS": "true", "VERITY_INT8_CREDITED_READ": " ", "HF_HUB_OFFLINE": " 1", "TORCHINDUCTOR_CACHE_DIR": "/ind",
+      "VLLM_CACHE_ROOT": "/vc"}, "5935c48742a70b70cc8d9bbeb0797ebf"),
+])
+def test_the_engine_pins_take_and_write_the_environment_as_before(env: pytest.MonkeyPatch, values: dict[str, str], digest: str) -> None:
+    """What `engine.env` returns into the records (the served defaults it clears, the pins and targets in force, the compile
+    directories, the compiled process's cache) and the environment it leaves, from each environment an operator may export."""
+    import tempfile
+
+    from verity_vllm.engine import env as E
+
+    for k, v in values.items():
+        env.setenv(k, v)
+    env.setattr(tempfile, "mkdtemp", lambda prefix: f"/no/{prefix}x")
+    before = E.snapshot()
+    doc = {"int8": E.int8_credited_read(), "cleared": E.served_defaults(), "export": E.pin(E.EXPORT), "engine": E.apply_engine("/hf"),
+           "step": E.step_timeout(1800.0), "target": E.apply_target({"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_DEEP_GEMM": "0"}),
+           "dirs": E.compile_dirs(), "prepared": E.prepare_compiled_process_cache(), "fresh": E.apply_compile_fresh(),
+           "own": E.own_compile_dirs("/c"), "own_dirs": E.compile_dirs()}
+    E.hide_devices()
+    E.disable_compile_cache()
+    doc["since"] = {k: v for k, v in E.set_since(before).items() if k != "PYTEST_CURRENT_TEST"}
+    doc["environ"] = {k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}
+    assert _digest(doc) == digest, doc

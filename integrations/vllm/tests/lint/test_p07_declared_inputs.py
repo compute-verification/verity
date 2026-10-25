@@ -14,9 +14,10 @@ Checked today, against ``allowlists/p07_declared_inputs.json``:
 * ``seed-default``: a parameter named ``seed``/``*_seed``/``seed_*`` with a default value.
 
 ``SETTINGS_OWNER``, ``verity_vllm/settings.py``, is where the library reads and writes the environment: every variable is declared
-there, with the machine path a ``where`` setting defaults to, and every other ``environ`` use is a violation.  ``ENV_OWNERS`` are the two modules that did it before the registry, until
-their uses move there: they may read the environment and name machine paths (``pipeline/cli.py`` turns both into declared inputs,
-option defaults and ``config.RunEnv``; ``engine/env.py`` writes vLLM's pins), and they may only leave the set.
+there, with the machine path a ``where`` setting defaults to, and every other ``environ`` use is a violation.  ``ENV_OWNERS`` is
+``pipeline/cli.py``, which did it before the registry, until its uses move there: it may read the environment and name machine
+paths (it turns both into declared inputs, option defaults and ``config.RunEnv``), and it may only leave the set.
+``engine/env.py`` writes vLLM's pins, through the registry.
 The rule's torch-stub test (the plan digest is the same with torch present and stubbed out) is not a lint.
 """
 from __future__ import annotations
@@ -32,7 +33,7 @@ from . import _ratchet as R
 NAME = "p07_declared_inputs"
 RULE = "P7 (results depend only on declared inputs)"
 SETTINGS_OWNER = "verity_vllm/settings.py"
-ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"})
+ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/pipeline/cli.py"})
 ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.putenv", "os.unsetenv", "os.getenvb"})
 CWD_CALLS = frozenset({"os.getcwd", "os.getcwdb", "pathlib.Path.cwd", "Path.cwd"})
 MACHINE_PATH = re.compile(r"^(/workspace|/root|/home|/Users|/tmp|/mnt|/opt|/usr/local|/data|/scratch|/dev/shm)(/|$)")
@@ -132,9 +133,10 @@ PIN_PREFIXES = ("VLLM_", "HF_", "TORCHINDUCTOR_", "TOKENIZERS_")
 
 
 def pin_writes(src: str, rel: str) -> list[str]:
-    """Writes of a vLLM / Hugging Face / Inductor switch (literal key) and ``os.environ.update(<x>.env())`` outside
-    ``PIN_OWNER``: ``engine/env.py`` is the one writer of vLLM's pins (``pipeline/cli.py`` only reads the environment)."""
-    if rel == PIN_OWNER or "environ" not in src:
+    """Writes of a vLLM / Hugging Face / Inductor switch (literal key, through ``os.environ`` or ``settings.put``/``setdefault``)
+    and ``os.environ.update(<x>.env())`` outside ``PIN_OWNER``: ``engine/env.py`` is the one writer of vLLM's pins
+    (``pipeline/cli.py`` only reads the environment)."""
+    if rel in (PIN_OWNER, SETTINGS_OWNER) or ("environ" not in src and "settings" not in src):
         return []
     tree = R.parse_src(src)
     aliases = R.aliases(tree)
@@ -145,6 +147,10 @@ def pin_writes(src: str, rel: str) -> list[str]:
             for t in node.targets if isinstance(node, ast.Assign) else [node.target]:
                 if isinstance(t, ast.Subscript) and aliases.resolve(t.value) == "os.environ":
                     keys.append(t.slice)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and aliases.resolve(node.func.value) == "verity_vllm.settings" and node.func.attr in ("put", "setdefault") \
+                and node.args:
+            keys.append(node.args[0])
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and aliases.resolve(node.func.value) == "os.environ" and node.args:
             if node.func.attr == "setdefault":
@@ -182,20 +188,25 @@ def test_only_engine_env_writes_vllm_pins() -> None:
     assert not out, f"write vLLM's switches through verity_vllm.engine.env: {out}"
     bad = (
         "import os\n"
+        "from verity_vllm import settings\n"
         "os.environ.setdefault('VLLM_BATCH_INVARIANT', '1')\n"
         "def build(target):\n"
         "    os.environ['HF_HUB_OFFLINE'] = '1'\n"
         "    os.environ.update(target.env())\n"
         "    os.environ['VERITY_RETAIN'] = 'x'\n"
         "    os.environ.update(saved)\n"
+        "    settings.put('VLLM_USE_DEEP_GEMM', '0')\n"
+        "    settings.setdefault('TORCHINDUCTOR_CACHE_DIR', '/d')\n"
+        "    settings.put('VERITY_RETAIN', 'x')\n"
     )
     assert sorted(w.split(" ", 1)[1] for w in pin_writes(bad, "verity_vllm/x.py")) == [
-        "<module> VLLM_BATCH_INVARIANT", "build HF_HUB_OFFLINE", "build os.environ.update(....env())"]
+        "<module> VLLM_BATCH_INVARIANT", "build HF_HUB_OFFLINE", "build TORCHINDUCTOR_CACHE_DIR", "build VLLM_USE_DEEP_GEMM",
+        "build os.environ.update(....env())"]
     assert pin_writes(bad, "verity_vllm/engine/env.py") == []
 
 
 def test_env_owners_only_shrink() -> None:
-    assert ENV_OWNERS <= {"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"}, \
+    assert ENV_OWNERS <= {"verity_vllm/pipeline/cli.py"}, \
         f"use the environment through {SETTINGS_OWNER} (verity_vllm.settings), not a new owner: {sorted(ENV_OWNERS)}"
 
 
