@@ -24,8 +24,6 @@ from typing import Any
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
-import wire
-
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "verity/core/protocols/remote_bandwidth/lean"
 EXE = "remote-audit-verifier"
@@ -184,13 +182,6 @@ def receive_event(t: Any, i: Any, root: bytes, change: Any, step: Any) -> dict:
             "step": step if type(step) is int else None}
 
 
-def opening_json(o: audit.Opening) -> dict:
-    return {"block": o.block.hex(), "digest": o.digest.hex(), "leaf": o.leaf.hex(), "leaf_salt": o.leaf_salt.hex(),
-            "pass": o.pass_index, "payload_path": [x.hex() for x in o.payload_path],
-            "payload_salt": o.payload_salt.hex(), "position": o.position,
-            "receipt_path": [x.hex() for x in o.receipt_path], "tile": o.tile.hex()}
-
-
 def verdict_json(v: audit.Verdict) -> dict:
     return {"accepted": v.window} if v.accepted else {
         "at": None if v.at is None else list(v.at), "failure": v.failure, "window": v.window}
@@ -243,7 +234,7 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
                                  tuple(w["stale"]), tuple(w["arrived_ns"])) for t, w in enumerate(j["windows"])),
         registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
         j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
-        None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), samples=samples)
+        None if pace is None else audit.Pace(pace["k"], pace["window_ns"], pace.get("in_flight", 2)), samples=samples)
 
 
 def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
@@ -260,12 +251,14 @@ class Transcript:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
     parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),
-    a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
-    (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
-    openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
-    verifier answers reads the commitment. Openings are decoded and written only once the session's passes are over
-    (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of JSON, and decoding them beside a timed pass
-    would take the verifier's process from the loop whose stamps the memory line reads."""
+    a window's openings frames as the wire carried them (`verify`, `frames`) where its verdict was set, and the coins the
+    challenger released (`close`, `released_coins`, which returns the file's path, bytes and sha256). Both verifiers
+    read the frames as the live ones do (`Wire.openingsOf`, `wire.openings_of`): a frame that doesn't decode leaves the
+    window no openings, so its replay rejects it as the session did. Every released coin is kept, never its salt: the
+    case replays each under a zero salt, and nothing a verifier answers reads the commitment. Frames are written only
+    once the session's passes are over (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of hex, and
+    writing them beside a timed pass would take the verifier's process from the loop whose stamps the memory line
+    reads."""
 
     def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
@@ -317,12 +310,9 @@ class Transcript:
                         put(item[1])
                         continue
                     self.passes.wait()
-                    put(f'{{"kind":"verify","t":{item[1]},"openings":[')
-                    first = True
-                    for body in item[2]:
-                        for o in wire.decode_openings(body) or ():
-                            put(("" if first else ",") + json.dumps(opening_json(o), separators=(",", ":")))
-                            first = False
+                    put(f'{{"kind":"verify","t":{item[1]},"frames":[')
+                    for k, body in enumerate(item[2]):
+                        put(("," if k else "") + '"' + body.hex() + '"')
                     put("]}")
             self.result = {"path": str(self.path), "bytes": n, "sha256": h.hexdigest(), "events": events}
         except OSError as e:

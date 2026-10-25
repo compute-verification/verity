@@ -199,14 +199,25 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     draws = len(r.windows) * r.samples
     assert draws == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
-    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.sketch(r, n)
-                          + draws * 2.0 ** -64)
+    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
+                          + ledger.sketch(r, n) + draws * 2.0 ** -64)
     d = ledger.delta_parts(r, n)
     assert d == {"profile": r.windows[0].profile.delta, "slack": P * 2.0 ** -audit.SLACK_LOG2,
-                 "sketch": ledger.sketch(r, n), "rejection": draws / 2 ** 64} and tuple(d) == ledger.DELTA_PARTS
-    assert snap.delta == d["profile"] + d["slack"] + d["sketch"] + d["rejection"] and draws > 0
+                 "hiding": ledger.hiding(r), "sketch": ledger.sketch(r, n), "rejection": draws / 2 ** 64}
+    assert tuple(d) == ledger.DELTA_PARTS
+    assert snap.delta == d["profile"] + d["slack"] + d["hiding"] + d["sketch"] + d["rejection"] and draws > 0
     assert Fraction(d["rejection"]) == Fraction(draws, 2 ** ledger.REJECTION_LOG2)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
+
+
+def test_the_coin_commitments_hiding_is_charged(store) -> None:
+    """`ledger.hiding` is `PooledDraw`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries."""
+    s, prover, passes, clock = drive(store, params(), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r = s.record()
+    assert len(r.windows) > 1 and ledger.hiding(r) == pytest.approx(len(r.windows) * 2.0 ** -191, rel=1e-12)
+    assert ledger.hiding(r) == ledger.hiding_over(len(r.windows))
 
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:
@@ -216,12 +227,12 @@ def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part
 
 
 def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
-    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t Adv(prf t), k_t the draws window t requested: a constant,
-    since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the record's draws there
-    are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far more than AuditRO's
-    slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger charges 3·70 at the
-    record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its three additions' rounding.  A record
-    whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
+    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + Σ_t Adv(prf t), k_t the draws window t
+    requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
+    record's draws there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
+    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
+    charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its four additions'
+    rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
     s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
@@ -233,8 +244,8 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     D = Fraction(deltas.pop())
     delta_s, delta = Fraction(ledger.sketch(r, n)), Fraction(r.windows[0].profile.delta)
     assert delta_s > 0 and Fraction(ledger.delta_parts(r, n)["rejection"]) == Fraction(sum(k), 2 ** 64)
-    held = delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2)
-    slack, rounding = Fraction(r.passes, 2 ** audit.SLACK_LOG2), 3 * D / 2 ** 53
+    held = delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
+    slack, rounding = Fraction(r.passes, 2 ** audit.SLACK_LOG2), 4 * D / 2 ** 53
     assert D >= held and abs(D - held - slack) <= rounding < slack
     assert D - Fraction(sum(k) - sum(drawn), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):

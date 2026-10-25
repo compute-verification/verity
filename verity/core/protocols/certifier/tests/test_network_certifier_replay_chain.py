@@ -1,7 +1,9 @@
-"""The replay's state chain (`replay_chain`): the rows' layout and their refusals, `ReplayAdvance` and `ReplayLoad`
-against `advance` and `load` on random and edge cases, the front's log shifter against slicing, the window's produced
-values opened at every unit's read, the carry and the empty start (`check_chain`), a two-window session through both
-parts, and the cost `size` reports."""
+"""The replay's state chain (`replay_chain`): the rows' layout and their refusals, sync and with async scheduling (AS)
+and the walk entries (EW), each shape's state and arrivals `ReplayStep_v1`'s fields and bits, `ReplayAdvance`,
+`ReplayLoad` and `ReplayClose` against `advance`, `load` and `close` on random and edge cases, the front's log shifter
+against slicing, the window's produced values opened at every unit's read, the carry and the empty start
+(`check_chain`), a two-window session through all three parts, decisions a window leaves unread carried to the next and
+refused only at the session's end, and the cost `size` reports."""
 from __future__ import annotations
 
 import random
@@ -16,7 +18,12 @@ from verity.ml.circuits.boolean.forms import Circuit
 SMALL = RC.Shape(R=3, W=2, A=3, L=40, NB=20, IW=4, Q=5, D=6, P=3, K=3)
 #: A a power of two (AC = 3 > DW = 1), one decision and one step a window
 NARROW = RC.Shape(R=2, W=1, A=4, L=16, NB=8, IW=3, Q=6, D=1, P=1, K=2)
-SHAPES = (SMALL, NARROW)
+#: async scheduling and 5-bit walk entries; walk entries alone
+ASYNC = RC.Shape(**{**SMALL.statics(), "AS": 1, "EW": 5})
+WALK = RC.Shape(**{**NARROW.statics(), "EW": 3})
+#: vLLM run 8eb1's engine class (protocol/served-shape.md) under its AsyncScheduler
+SERVED = RC.Shape(R=8, W=1, A=9, L=512, NB=101626, IW=9, Q=4, D=32, P=54, K=4, AS=1)
+SHAPES = (SMALL, NARROW, ASYNC, WALK, SERVED)
 PROGRAM, REGISTRATION = "replay-chain-test", "ab" * 64
 
 
@@ -24,18 +31,20 @@ def _u(rng, w):
     return rng.randrange(1 << w)
 
 
+def _entry(rng, S, prefix, names):
+    w = {n: wd for n, _c, wd in RC.state_fields(S) + RC.queue_fields(S)}
+    return tuple(_u(rng, w[f"{prefix}_{k}"]) for k in names)
+
+
 def _rand_row(rng: random.Random, S, *, heads: bool = True) -> RC.Row:
-    Z = RC.widths(S)
-    return RC.Row(tuple((_u(rng, S.IW), _u(rng, Z.LW), _u(rng, Z.LW), _u(rng, Z.LW), _u(rng, Z.LW))
-                        for _ in range(rng.randint(0, S.R))),
-                  tuple((_u(rng, S.IW), _u(rng, Z.LW), _u(rng, Z.LW), _u(rng, Z.LW)) for _ in range(rng.randint(0, S.W))),
+    return RC.Row(tuple(_entry(rng, S, "run", RC.running_names(S)) for _ in range(rng.randint(0, S.R))),
+                  tuple(_entry(rng, S, "wait", RC.waiting_names(S)) for _ in range(rng.randint(0, S.W))),
                   rng.randrange(S.NB), rng.randint(0, S.Q) if heads else 0, rng.randint(0, S.D) if heads else 0,
                   rng.randint(0, S.P) if heads else 0)
 
 
 def _rand_arrivals(rng, S, n):
-    Z = RC.widths(S)
-    return tuple((_u(rng, S.IW), _u(rng, Z.LW), _u(rng, Z.LW)) for _ in range(n))
+    return tuple(_entry(rng, S, "q", RC.arrival_names(S)) for _ in range(n))
 
 
 def _rand_window(rng: random.Random, S) -> RC.Window:
@@ -59,30 +68,59 @@ def test_the_rows_layout():
     used = 3 * (1 + 4 + 4 * 6) + 2 * (1 + 4 + 3 * 6) + 5 + 3 + 3 + 2
     assert RC.width(S) == S.width == 16 * -(-used // 16) and S.words == RC.width(S) // 16
     assert RC.window_width(S) == S.window_width == 16 * -(-(5 * (1 + 4 + 2 * 6) + 6 + 3) // 16)
+    A = ASYNC
+    assert [n for n, _c, _w in RC.state_fields(A)] == ["run_valid", "run_id", "run_P", "run_O", "run_out", "run_comp",
+                                                       "run_pfx", "wait_valid", "wait_id", "wait_P", "wait_O", "wait_out",
+                                                       "free", "run_fin", "run_cap", "wait_cap"]
+    assert RC.state_fields(A)[6] == ("run_pfx", 3, 5) and RC.state_fields(A)[13:] == [("run_fin", 3, 1),
+                                                                                       ("run_cap", 3, 1), ("wait_cap", 2, 1)]
+    assert RC.window_fields(A)[3:6] == [("q_O", 5, 6), ("q_cap", 5, 1), ("dec", 6, 1)]
+    assert RC.front_fields(A)[-1] == ("arr_cap", 3, 1) and RC.arrival_fields(A)[-1] == ("a_cap", 3, 1)
+    assert RC.width(A) == 16 * -(-(used + 3 * 5 + 3 + 3 + 2) // 16)
+    assert RC.window_width(A) == 16 * -(-(5 * (1 + 4 + 2 * 6 + 1) + 6 + 3) // 16)
+    assert (RC.running_names(A), RC.waiting_names(A), RC.arrival_names(A)) == (
+        ("id", "P", "O", "out", "comp", "cap", "fin", "pfx"), ("id", "P", "O", "out", "cap"), ("id", "P", "O", "cap"))
+    assert RC.running_names(WALK) == ("id", "P", "O", "out", "comp", "pfx") and RC.arrival_names(WALK) == ("id", "P", "O")
 
 
-def test_the_state_is_replay_steps():
-    """The state row's state is ReplayStep_v1's state input and next-state output, field for field, and the front is its
-    arrivals input."""
-    RS = pytest.importorskip("verity.core.protocols.certifier.replay_step")
+def _step_statics(RS, S):
     from types import SimpleNamespace
 
-    for S in SHAPES:
-        st = SimpleNamespace(**RS.statics(S.R, S.W, S.A, {"max_num_seqs": S.R, "max_num_batched_tokens": 64,
-                                                          "max_model_len": S.L, "num_gpu_blocks": S.NB}, S.IW))
-        names = {n for n, _c, _w in RC.state_fields(S)}
-        arr = {n for n, _c, _w in RC.front_fields(S)}
-        assert [f for f in RS._in_fields(st) if f[0] in names] == RC.state_fields(S)
-        assert [f for f in RS._out_fields(st) if f[0] in names] == RC.state_fields(S)
-        assert [f for f in RS._in_fields(st) if f[0] in arr] == RC.front_fields(S)
-        assert [f for f in RS._in_fields(st) if f[0] == "bits"] == [("bits", S.A, 1)]
-        state = RS.State((RS.Req(1, 5, 3, 1, 6),), (RS.Req(2, 4, 2, 0, 0),), 11)
-        arrivals = ((3, 7, 2), (4, 2, 1))
-        args = RS.arguments(st, state, RS.Inputs(tuple(RS.Req(i, p, o, 0, 0) for i, p, o in arrivals)))
-        row = RC.Row(((1, 5, 3, 1, 6),), ((2, 4, 2, 0),), 11)
-        want = [b for (n, _c, _w), a in zip(RS._in_fields(st), args) if n in names for b in a]
-        assert list(RC.state_bits(row, S)) == want
-        assert list(RC.front_bits(S, arrivals)) == [b for (n, _c, _w), a in zip(RS._in_fields(st), args) if n in arr for b in a]
+    return SimpleNamespace(**RS.statics(S.R, S.W, S.A, {"max_num_seqs": S.R, "max_num_batched_tokens": 64,
+                                                        "max_model_len": S.L, "num_gpu_blocks": S.NB,
+                                                        "async_scheduling": bool(S.AS)}, S.IW, S.EW))
+
+
+@pytest.mark.parametrize("S", SHAPES)
+def test_the_state_is_replay_steps(S):
+    """The state row's state is ReplayStep_v1's state input and next-state output, field for field (with AS and EW,
+    the async group and the walk entries), and the front is its arrivals input; a state's bits and an arrival's are
+    `ReplayStep_v1.arguments`', and its circuit's next-state bits are the row's state of the next state it decodes."""
+    RS = pytest.importorskip("verity.core.protocols.certifier.replay_step")
+    st = _step_statics(RS, S)
+    n, ins = len(RC.state_fields(S)), RS._in_fields(st)
+    assert RS._state_fields(st) == RC.state_fields(S) == ins[:n] == RS._out_fields(st)[-n:]
+    assert ins[n:n + len(RC.front_fields(S))] == RC.front_fields(S)
+    assert ins[n + len(RC.front_fields(S))] == ("bits", S.A, 1)
+    state = RS.State((RS.Req(1, 5, 3, 1, 6, cap=S.AS, fin=0, pfx=S.EW and 2), RS.Req(3, 2, 4, 2, 3, pfx=S.EW and 1)),
+                     (RS.Req(2, 4, 2, 0, 0, cap=S.AS),), 11)
+    arrivals = (RS.Req(4, 7, 2, cap=S.AS), RS.Req(5, 2, 1))
+    inp = RS.Inputs(arrivals, bits=(1,) * S.A, row_pfx=tuple(S.EW and k + 1 for k in range(S.R)))
+    args = RS.arguments(st, state, inp)
+
+    def row_of(s):
+        return RC.Row(tuple(tuple(getattr(r, k) for k in RC.running_names(S)) for r in s.running),
+                      tuple(tuple(getattr(r, k) for k in RC.waiting_names(S)) for r in s.waiting), s.free)
+
+    assert list(RC.state_bits(row_of(state), S)) == [b for a in args[:n] for b in a]
+    front = tuple(tuple(getattr(r, k) for k in RC.arrival_names(S)) for r in arrivals)
+    assert list(RC.front_bits(S, front)) == [b for a in args[n:n + len(RC.front_fields(S))] for b in a]
+    from verity.ml.circuits.evaluation.bits import evaluate_bits
+
+    raw = evaluate_bits(RS.unit(**st.__dict__), *[[a] for a in args]).reshape(-1).tolist()
+    out, end = RS.decode(st, raw), RC._bits_of(RS._out_fields(st))
+    assert out.ok and out.state.running
+    assert raw[end - RC._bits_of(RC.state_fields(S)):end] == list(RC.state_bits(row_of(out.state), S))
 
 
 @pytest.mark.parametrize("S", SHAPES)
@@ -90,7 +128,8 @@ def test_round_trip(S):
     rng = random.Random(1)
     assert RC.decode(RC.encode(RC.empty(S), S), S) == RC.empty(S)
     empty = RC.encode(RC.empty(S), S)
-    at = RC._bits_of(RC.state_fields(S)) - RC.widths(S).BW
+    fs = RC.state_fields(S)
+    at = RC._bits_of(fs[:[n for n, _c, _w in fs].index("free")])
     assert empty[at:at + RC.widths(S).BW] == tuple((S.NB - 1) >> j & 1 for j in range(RC.widths(S).BW))
     assert sum(empty) == bin(S.NB - 1).count("1")
     assert not any(RC.encode_window(RC.Window(), S))
@@ -147,6 +186,14 @@ def test_decode_refuses():
         with pytest.raises(RC.MalformedRow):
             RC.decode_window(bits, S)
             pytest.fail(why)
+    A = ASYNC
+    ab, afs = RC.encode(RC.Row(((1, 5, 3, 1, 6, 1, 0, 3),), (), 11), A), RC.row_fields(A)
+    for name, element in (("run_fin", 1), ("wait_cap", 0), ("run_pfx", 2)):
+        with pytest.raises(RC.MalformedRow, match="empty slot"):
+            RC.decode(_bits_with(A, ab, afs, name, element, 1), A)
+    awb = RC.encode_window(RC.Window(((4, 3, 3, 1),), ()), A)
+    with pytest.raises(RC.MalformedRow, match="empty slot"):
+        RC.decode_window(_bits_with(A, awb, RC.window_fields(A), "q_cap", 1, 1), A)
 
 
 def test_encode_refuses():
@@ -160,6 +207,54 @@ def test_encode_refuses():
             RC.encode_window(w, S)
     with pytest.raises(RC.MalformedRow):
         RC.front_bits(S, ((0, 0, 0),) * 4)
+    A = ASYNC
+    for r in (RC.Row(running=((0, 0, 0, 0, 0),)), RC.Row(waiting=((0, 0, 0, 0),)),
+              RC.Row(running=((0, 0, 0, 0, 0, 0, 0, 0, 0),)), RC.Row(running=((0, 0, 0, 0, 0, 0, 0, 32),))):
+        with pytest.raises(RC.MalformedRow):
+            RC.encode(r, A)
+    with pytest.raises(RC.MalformedRow, match="an entry is"):
+        RC.encode(RC.Row(running=((0, 0, 0, 0, 0, 1, 0, 0),)), S)
+    with pytest.raises(RC.MalformedRow, match="an entry is"):
+        RC.encode_window(RC.Window(queue=((0, 0, 0),)), A)
+    with pytest.raises(RC.MalformedRow):
+        RC.front_bits(A, ((0, 0, 0, 2),))
+    with pytest.raises(RC.MalformedRow):
+        RC.load_arguments(A, RC.Row(), RC.Window(), [(1, 1, 1)], (), 0, 0, RC.encode(RC.Row(), A),
+                          RC.encode_window(RC.Window(), A))
+
+
+def test_the_shape():
+    assert (SMALL.AS, SMALL.EW) == (0, 0) and RC.STATICS[-2:] == ("AS", "EW") and SMALL.statics()["AS"] == 0
+    for bad in ({"AS": 2}, {"EW": -1}, {"AS": True}, {"R": 0}, {"EW": 1.0}):
+        with pytest.raises(ValueError):
+            RC.Shape(**{**SMALL.statics(), **bad})
+
+
+def test_the_async_fields_ride_the_chain():
+    """With AS and EW the chain's parts move the fields the sync rows lack, each refusal the circuit's too: the load
+    writes the window's arrivals' caps into the window row's `q_cap` behind the queue's, the step's arrivals carry their
+    caps from the window row, and the step's next state (`fin`, `cap`, `pfx`) is the next row's."""
+    S = ASYNC
+    last = RC.Window(((3, 1, 1, 0), (4, 3, 3, 1)), (1,))
+    prev = RC.Row(((1, 5, 3, 1, 6, 1, 0, 7),), ((2, 4, 2, 0, 1),), 11, 1, 1, 0)
+    got = RC.load(S, prev, last, [(5, 2, 1, 1)], (0, 1), 2)
+    assert got == (RC.Row(prev.running, prev.waiting, 11, 0, 0, 2), RC.Window(((4, 3, 3, 1), (5, 2, 1, 1)), (0, 1)))
+    nxt, win = RC.encode(got[0], S), RC.encode_window(got[1], S)
+    capless = RC.encode_window(RC.Window(((4, 3, 3, 1), (5, 2, 1, 0)), (0, 1)), S)
+    assert RC.evaluate_load(S, [RC.load_arguments(S, prev, last, [(5, 2, 1, 1)], (0, 1), 2, 2, nxt, w)
+                                for w in (win, capless)]) == [1, 0]
+    cur, win = got
+    arr, bits = RC.front(S, win, cur)
+    assert arr == ((4, 3, 3, 1), (5, 2, 1, 1)) and bits == (0, 1, 0)
+    stepped = RC.Row(((1, 5, 3, 2, 7, 1, 1, 9), (4, 3, 3, 0, 3, 1, 0, 2)), (), 9)
+    ref = RC.advance(S, win, cur, True, stepped, arr, bits, 1, 1)
+    assert ref == RC.Row(stepped.running, (), 9, 1, 1, 1)
+    flipped = ((4, 3, 3, 0), (5, 2, 1, 1))
+    assert RC.advance(S, win, cur, True, stepped, flipped, bits, 1, 1) is None
+    other = RC.encode(RC.Row(((1, 5, 3, 2, 7, 1, 0, 9), (4, 3, 3, 0, 3, 1, 0, 2)), (), 9, 1, 1, 1), S)
+    cases = [RC.advance_arguments(S, win, cur, True, stepped, a, bits, 1, 1, n)
+             for a, n in ((arr, RC.encode(ref, S)), (flipped, RC.encode(ref, S)), (arr, other))]
+    assert RC.evaluate_advance(S, cases) == [(1, 1), (0, 1), (0, 1)]
 
 
 @pytest.mark.parametrize("n", [1, 3, 4])
@@ -237,7 +332,7 @@ def test_advance_refuses():
         "a decision bit that isn't the window's": (cur, True, arr, (0, 0, 1), 1, 2, False),
         "taken past what is left": (cur, True, arr, bits, 3, 2, False),
         "used past what is left": (at, True, *RC.front(S, win, at), 0, 2, False),
-        "the window's last step leaves a decision": (last, True, *RC.front(S, win, last), 0, 1, False),
+        "the window's last step leaves a decision, which carries": (last, True, *RC.front(S, win, last), 0, 1, True),
         "the window's last step reads the rest": (last, True, *RC.front(S, win, last), 0, 2, True),
         "an idle step leaves the row as it is": (idle, False, (), (0, 0, 0), 3, 3, True),
     }
@@ -268,9 +363,11 @@ def _load_case(S, rng, k):
     qh = rng.randint(0, len(last.queue))
     prev = RC.Row(prev.running, prev.waiting, prev.free, qh, len(last.decisions), 0)
     if k % 6 == 0:
-        prev = RC.Row(prev.running, prev.waiting, prev.free, qh, max(0, len(last.decisions) - 1), 0)
+        prev = RC.Row(prev.running, prev.waiting, prev.free, qh, rng.randint(0, len(last.decisions)), 0)
     elif k % 6 == 1:
         prev = RC.Row(prev.running, prev.waiting, prev.free, qh, len(last.decisions), 1)
+    elif k % 6 == 2 and len(last.decisions) < S.D:
+        prev = RC.Row(prev.running, prev.waiting, prev.free, qh, len(last.decisions) + 1, 0)
     arrivals = _rand_arrivals(rng, S, rng.randint(0, S.K))
     decisions = tuple(rng.randint(0, 1) for _ in range(rng.randint(0, S.D)))
     steps = rng.randint(0, (1 << RC.widths(S).PW) - 1)
@@ -306,12 +403,17 @@ def test_load_refuses():
     ok = RC.load(S, prev, last, arr, (1, 0), 2)
     assert ok == (RC.Row(prev.running, (), 11, 0, 0, 2), RC.Window(((4, 3, 3), (5, 2, 1), (6, 3, 2), (7, 1, 1)), (1, 0)))
     P2 = RC.Shape(**{**S.statics(), "P": 2})
+    carried = RC.Row(prev.running, (), 11, 1, 1, 0)
+    assert RC.load(S, carried, last, arr, (1, 0), 2) == (ok[0], RC.Window(ok[1].queue, (1, 1, 0))), "the unread carried"
+    assert RC.load(S, prev, last, arr, (1,), 0) == (RC.Row(prev.running, (), 11, 0, 0, 0), RC.Window(ok[1].queue, (1,))), (
+        "decisions in a window with no step, for the next to read")
     refused = {
-        "the last window left a decision": (S, RC.Row(prev.running, (), 11, 1, 1, 0), last, arr, (1, 0), 2),
         "the last window left a step": (S, RC.Row(prev.running, (), 11, 1, 2, 1), last, arr, (1, 0), 2),
+        "the last window read past its decisions": (S, RC.Row(prev.running, (), 11, 1, 3, 0), last, arr, (1, 0), 2),
         "the queue overflows Q": (S, RC.Row(prev.running, (), 11, 0, 2, 0), last, arr * 2, (), 1),
+        "the carried and the window's decisions overflow D": (S, RC.Row(prev.running, (), 11, 1, 0, 0), last, arr,
+                                                               (1, 0, 1, 1, 0), 2),
         "more steps than P": (P2, prev, last, arr, (), 3),
-        "decisions with no step": (S, prev, last, arr, (1,), 0),
     }
     for why, (shape, p, lw, a, d, s) in refused.items():
         assert RC.load(shape, p, lw, a, d, s) is None, why
@@ -324,10 +426,79 @@ def test_load_refuses():
     assert RC.evaluate_load(S, [past]) == [0], "a decision past the count"
     over = RC.load_arguments(S, prev, last, arr, (1, 0), 7, 2, nxt, win)
     assert RC.evaluate_load(S, [over]) == [0], "a count past D"
+    c0, c1 = RC.load(S, carried, last, arr, (1, 0), 2)
+    cargs = RC.load_arguments(S, carried, last, arr, (1, 0), 2, 2, RC.encode(c0, S), RC.encode_window(c1, S))
+    assert RC.evaluate_load(S, [cargs, list(args[:-1]) + [list(RC.encode_window(c1, S))]]) == [1, 0], (
+        "the carried decisions written before the window's, and only when the last window left them")
     gap = list(args)
     gap[2] = list(gap[2])
     gap[2][0], gap[2][2] = 0, 1
     assert RC.evaluate_load(S, [gap]) == [0], "the arrivals' valid slots not a prefix"
+
+
+def test_load_refuses_a_carry_it_cant_hold():
+    """The two refusals the carry adds, each against the rows the circuit writes when that check alone is skipped: the
+    carried and the window's decisions past D (2 + 5 of 6: the row cut to D, ``left`` 7), and a last window read past
+    its decisions (``dh`` 5 of 2, which wraps the carried count to 5 and writes the window's decision at 5)."""
+    S = SMALL
+    last = RC.Window(((3, 1, 1),), (1, 1))
+    over, past = RC.Row((), (), 11, 0, 0, 0), RC.Row((), (), 11, 0, 5, 0)
+    five = (1, 0, 1, 1, 0)
+    assert RC.load(S, over, last, (), five, 2) is None and RC.load(S, past, last, (), (1,), 1) is None
+    wfs = RC.window_fields(S)
+    cut = _bits_with(S, RC.encode_window(RC.Window(((3, 1, 1),), ((1, 1) + five)[:S.D]), S), wfs, "left", 0, 7)
+    wrapped = RC.encode_window(RC.Window(((3, 1, 1),), (0, 0, 0, 0, 0, 1)), S)
+    cases = [RC.load_arguments(S, over, last, (), five, len(five), 2, RC.encode(RC.Row((), (), 11, 0, 0, 2), S), cut),
+             RC.load_arguments(S, past, last, (), (1,), 1, 1, RC.encode(RC.Row((), (), 11, 0, 0, 1), S), wrapped)]
+    assert RC.evaluate_load(S, cases) == [0, 0]
+
+
+def _close_cases(S, rng, n):
+    cases, want = [], []
+    for k in range(n):
+        win, row = _rand_window(rng, S), _rand_row(rng, S)
+        dh = len(win.decisions) if k % 2 else rng.randint(0, S.D)
+        row = RC.Row(row.running, row.waiting, row.free, row.qh, dh, 0 if k % 3 else row.steps)
+        cases.append(RC.close_arguments(S, row, win))
+        want.append(int(RC.close(S, row, win)))
+    return cases, want
+
+
+@pytest.mark.parametrize("S", SHAPES)
+def test_close_circuit_is_its_specification(S):
+    cases, want = _close_cases(S, random.Random(7), 200)
+    assert RC.evaluate_close(S, cases) == want
+    assert 0 < sum(want) < len(want)
+
+
+def test_a_window_leaves_decisions_to_the_next_and_the_session_reads_them_all():
+    """A5 charges a decision up to two windows before its step's: window 0 brings three decisions and its one step reads
+    one, window 1 brings none and reads one, window 2 brings one and reads the last two. Each load writes the window's
+    decisions after the unread ones, each part's circuit accepts what its specification does, and `ReplayClose`
+    accepts the session; ended after window 0 or 1, with decisions unread, it is refused."""
+    S = SMALL
+    cur, last, ends = RC.empty(S), RC.Window(), []
+    for decisions, reads in (((1, 0, 1), [1]), ((), [1]), ((0,), [2])):
+        loaded = RC.load(S, cur, last, (), decisions, len(reads))
+        assert loaded is not None
+        args = RC.load_arguments(S, cur, last, (), decisions, len(decisions), len(reads), RC.encode(loaded[0], S),
+                                 RC.encode_window(loaded[1], S))
+        assert RC.evaluate_load(S, [args]) == [1]
+        cur, win = loaded
+        for u in range(S.P):
+            used = reads[u] if u < len(reads) else 0
+            arr, bits = RC.front(S, win, cur)
+            stepped = RC.Row(free=cur.free)
+            nxt = RC.advance(S, win, cur, True, stepped, arr, bits, 0, used)
+            assert nxt is not None
+            args = RC.advance_arguments(S, win, cur, True, stepped, arr, bits, 0, used, RC.encode(nxt, S))
+            assert RC.evaluate_advance(S, [args])[0][0] == 1
+            cur = nxt
+        ends.append((cur, win))
+        last = win
+    assert [w.decisions for _r, w in ends] == [(1, 0, 1), (0, 1), (1, 0)] and [r.dh for r, _w in ends] == [1, 1, 2]
+    assert [RC.close(S, r, w) for r, w in ends] == [False, False, True]
+    assert RC.evaluate_close(S, [RC.close_arguments(S, r, w) for r, w in ends]) == [0, 0, 1]
 
 
 def _session(S, rng):
@@ -336,7 +507,7 @@ def _session(S, rng):
     windows, cur, last, rid = [], RC.empty(S), RC.Window(), 0
     for w in range(2):
         n = S.P if w == 0 else 1
-        arrivals = [(rid + k, 3 + k, 2) for k in range(2)]
+        arrivals = [(rid + k, 3 + k, 2) + ((k,) if S.AS else ()) for k in range(2)]
         rid += 2
         decisions = (1, 0)
         rows = [cur]
@@ -359,8 +530,9 @@ def _session(S, rng):
     return windows
 
 
-def test_a_session_through_the_chain():
-    S, rng = SMALL, random.Random(4)
+@pytest.mark.parametrize("S", (SMALL, ASYNC))
+def test_a_session_through_the_chain(S):
+    rng = random.Random(4)
     values, carry = [], None
     for rows, win, units in _session(S, rng):
         v = RC.commit_window(PROGRAM, rows, win, S, REGISTRATION, carry=carry)
@@ -386,6 +558,12 @@ def test_a_session_through_the_chain():
                 assert RC.evaluate_advance(S, [args])[0][0] == 1
         values.append(v)
         carry = v
+    end = {}
+    for value, at in ((v.state, RC.close_reads(S)[RC.VALUE]), (v.window, RC.close_reads(S)[RC.WINDOW])):
+        for name, p in at.items():
+            assert G.verify_read(value.domain, value.root, p, value.bcs[p], value.path(p), RC.SCHEMA)
+            end[name] = RC.unrow(value.rows[p])
+    assert RC.evaluate_close(S, [[list(end["row"]), list(end["window"])]]) == [1]
     ops = [RC.openings(v) for v in values]
     assert (ops[0][0][0], ops[0][1][0]) == RC.empty_openings(PROGRAM, S)
     assert ops[1][0][0] == ops[0][0][-1] and ops[1][1][0] == ops[0][1][-1]
@@ -438,6 +616,7 @@ def test_commit_window_refuses():
 def test_size(S):
     got = RC.size(S)
     assert got["ands_per_step"] == ands(RC.advance_unit(S)) and got["ands_load"] == ands(RC.load_unit(S))
+    assert got["ands_close"] == ands(RC.close_unit(S))
     assert got["ands_per_window"] == S.P * got["ands_per_step"] + got["ands_load"]
     assert got["width"] == S.width and got["window_width"] == S.window_width and got["rows_per_window"] == S.P + 2
     assert got["reads_per_window"] == 3 * S.P + 4 and got["record_bytes_per_window"] == 128 * (S.P + 4)

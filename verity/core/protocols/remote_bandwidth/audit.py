@@ -39,7 +39,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    every coin is drawn once, and an append no root follows, or one sent again, rejects the session (`coin`);
    a block released (`Session.release`) is in no later plan, and one the release names withdrawn (released before its
    encode landed, so never written) was in no earlier plan either; and an appended block is in no plan of a window L
-   or more after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a
+   or more after the window it joined (`Params.lifetime`, the windows of T in 30 s, `lifetime_windows`): one kept
+   longer is released and appended again, under a
    fresh index and a fresh coin, so a fresh bound key, and a session that defers residency to the encode
    (`Params.deferred`) has L ≥ 2.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
@@ -67,8 +68,10 @@ many reads of a node's registered blocks the node made in each window, from rece
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
-   only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's), and then charges what
-   their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
+   only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's) and the session's schedule
+   check (`schedule`, `Session.scheduled`: every pass's plan the published schedule's at its step, `schedule.py`), and
+   then charges what their carriers may hold (μ_carrier); without both, those receipts are certified but not
+   credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
@@ -102,6 +105,7 @@ from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
 from . import pooled as _pooled
+from . import schedule as _schedule
 from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
@@ -129,13 +133,30 @@ DELTA = 2.0 ** -40
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
+RECEIPT_LIMIT = 1 << 64
+"""A window's receipts, its passes' lengths summed, stay below this: `Session.receive` rejects with `plan` a pass that
+would take them to it, so each draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
+`U < 2^448`)."""
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
-LIFETIME = 60
-"""L, the lifetime cap, in windows: a block appended after the codec seed is in no plan of a window L or more after the
-window it joined (the window of the first root received after its append), so it leaves the credited store within L
-windows unless the prover appends it again, which gives it a fresh index and a fresh coin, and so a fresh bound key.
-60 windows is an hour at the stated window."""
+LIFETIME_NS = 30 * 10**9
+"""D, the lifetime cap's duration: a block appended after the codec seed is in no plan of a window L or more after the
+window it joined (the window of the first root received after its append), L = `lifetime_windows(T)` the whole windows
+of T in D, so it leaves the credited store within L windows unless the prover appends it again, which gives it a fresh
+index and a fresh coin, and so a fresh bound key.  A carrier of a declared circuit's may work on a block from its coin
+until it leaves, so what the carriers may hold grows with the passes in L windows
+(`Accounting.Guarantees.DeclaredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
+both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
+
+
+def lifetime_windows(window_ns: int, deferred: bool = False, life_ns: int = LIFETIME_NS) -> int:
+    """L, the lifetime cap in windows of `window_ns` (a paced session's: its groups, at their nominal length): the whole
+    windows in `life_ns`, at least 1, and at least 2 for a session that defers residency (`Params.deferred`), so at the
+    stated 60 s window it is 1, or 2 deferred, and at 1 s it is 30."""
+    for name, v in (("window_ns", window_ns), ("life_ns", life_ns)):
+        if type(v) is not int or v < 1:
+            raise ValueError(f"the lifetime's {name} is a positive integer of nanoseconds, not {v!r}")
+    return max(2 if deferred else 1, life_ns // window_ns)
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,18 +167,27 @@ class Pace:
     t − 1 has its root, and window 0's at once), and leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)),
     never sooner than `Params.window_ns` after its challenge (`Session.next_boundary_ns`).  When its coins leave
     follows its roots, so is a value: its γ is declared per fixed window of `window_ns`, the stated T, from its first
-    challenge (`ledger.windows`)."""
+    challenge (`ledger.windows`).
+
+    `in_flight` f is the windows in flight: at 2 (the default) the schedule above, the next coin out while the
+    window's last pass runs.  At 1, window t's boundary message is due once t has its k roots and leaves after the
+    last of them arrived, at the latest at max(its challenge + k·A, D_(t−1)); a root of window t after its boundary
+    is out of turn (`order`), so every coin leaves after the root before it (`coins.released_reason`), and the
+    prover idles a round trip between windows.  `to_json` names `in_flight` only at 1."""
 
     k: int
     window_ns: int = WINDOW_NS
+    in_flight: int = 2
 
     def __post_init__(self) -> None:
         for name in ("k", "window_ns"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"a pace's {name} is a positive integer")
+        if type(self.in_flight) is not int or self.in_flight not in (1, 2):
+            raise ValueError(f"a pace's in_flight is 1 or 2, not {self.in_flight!r}")
 
     def to_json(self) -> dict:
-        return {"k": self.k, "window_ns": self.window_ns}
+        return {"k": self.k, "window_ns": self.window_ns} | ({"in_flight": 1} if self.in_flight == 1 else {})
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,11 +197,14 @@ class Params:
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
     boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
-    registration's, the lifetime cap L on an appended block, in windows (`LIFETIME`), and whether the prover defers an
+    registration's, the lifetime cap L on an appended block, in windows (None: `lifetime_windows` of the stated
+    window, `LIFETIME_NS`), and whether the prover defers an
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
     block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
     before it may be resident.  `pace` paces the session (`Pace`, None for a stated window each): its windows are
-    then groups of at most k passes, the last the closing window."""
+    then groups of at most k passes, the last the closing window, and L counts groups: by default as many as the
+    pace's stated window would hold of `LIFETIME_NS`, the fewest the life allows, which the verifier raises to the
+    groups of their nominal length (`lifetime_windows(T // groups)`)."""
 
     blocks: int
     deadline_ns: int
@@ -185,7 +218,7 @@ class Params:
     bind: bool = False
     layout: str = receipts.LAYOUT
     rows: int | None = None
-    lifetime: int = LIFETIME
+    lifetime: int | None = None
     deferred: bool = False
     pace: Pace | None = None
     groups_per_coin: int = 1
@@ -195,14 +228,18 @@ class Params:
     window (`pooled_windows`)."""
 
     def __post_init__(self) -> None:
-        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
-            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
-                raise ValueError(f"{name} is a positive integer")
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
         if self.pace is not None and (type(self.pace) is not Pace or self.windows < 2):
             raise ValueError(f"a paced session is a Pace's, with at least one window and the closing window, not "
                              f"{self.windows} windows under {self.pace!r}")
+        if self.lifetime is None:
+            stated = self.window_ns if self.pace is None else self.pace.window_ns
+            if type(stated) is int and stated >= 1:
+                object.__setattr__(self, "lifetime", lifetime_windows(stated, self.deferred))
+        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"{name} is a positive integer")
         if self.deferred and self.lifetime < 2:
             raise ValueError(f"a session that defers residency has a lifetime of at least 2 windows, not "
                              f"{self.lifetime}: a block appended in window w is resident from w or w + 1, so its "
@@ -696,7 +733,8 @@ class Record:
     capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
     and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
     Given how many land in a window, they are uniform over its receipts, so its own reading holds at its share's
-    count (none at a share of none)."""
+    count (none at a share of none).  A record whose pace has one window in flight (`Pace.in_flight`) releases each
+    window's challenge after every root of the window before arrived, and one that doesn't is refused."""
 
     registration: bytes
     coins: bytes
@@ -717,6 +755,9 @@ class Record:
     samples: int | None = None
 
     def __post_init__(self) -> None:
+        if self.pace is not None and self.pace.in_flight == 1 and any(
+                a > w.released_ns for v, w in zip(self.windows, self.windows[1:]) for a in v.arrived_ns):
+            raise ValueError("at one window in flight a window's challenge leaves after the window before's last root")
         if self.samples is None:
             return
         if type(self.samples) is not int or self.samples < 1:
@@ -880,7 +921,8 @@ class Session:
         """Why this session's coins are not the challenger's as it signed them (`coins.released_reason`), the commitment
         `signed` and the roots `received` read from the challenger's side; None when they are."""
         return coins.released_reason(self.coins, [w.roots for w in self.windows],
-                                     [a[2].root for a in self._appends], signed, received)
+                                     [a[2].root for a in self._appends], signed, received,
+                                     2 if self.params.pace is None else self.params.pace.in_flight)
 
     def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey, pins: Any, main: Any,
                        verify: coins.Verify, period: str | None = None) -> str | None:
@@ -924,7 +966,8 @@ class Session:
 
     def boundary(self) -> coins.LiveOpening | None:
         """The end of the next unended window: the following window's challenge, or None, the close, after the last.
-        Refused sooner than `window_ns` after the window's challenge left."""
+        Refused sooner than `window_ns` after the window's challenge left, and at one window in flight
+        (`Pace.in_flight`) before its last root arrived."""
         self._live()
         now = self.clock()
         t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
@@ -933,14 +976,16 @@ class Session:
         if now < self.windows[t].released_ns + self.params.window_ns:
             raise SessionError(f"window {t} is {self.params.window_ns} ns, stated: its boundary may leave at "
                                f"{self.windows[t].released_ns + self.params.window_ns} ns, not {now}")
+        if self._one_in_flight and any(now < a for a in self.windows[t].arrived):
+            raise SessionError(f"window {t}'s boundary leaves after its last root at one window in flight, not at {now}")
         self.windows[t].boundary_ns = now
         return self._release(t + 1, now) if t + 1 < self.params.windows else None
 
     def next_boundary_ns(self) -> int | None:
         """When the next unended window's boundary message (`boundary`) is to leave on the verifier's clock, given the
         roots received so far: `window_ns` after its challenge, or in a paced session (`Pace`) then once it is due,
-        and at the latest at max(its challenge + (k − 1)·A, the window before's deadline).  None once every window
-        has ended or before the session starts."""
+        and at the latest at max(its challenge + (k − 1)·A, the window before's deadline), at one window in flight
+        max(its challenge + k·A, that deadline).  None once every window has ended or before the session starts."""
         t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
         if t is None:
             return None
@@ -949,9 +994,17 @@ class Session:
         if pace is None:
             return soonest
         k = pace.k
+        if self._one_in_flight:
+            if len(w.roots) >= k:
+                return max(soonest, w.arrived[-1])
+            return max(soonest, w.released_ns + k * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
         if len(w.roots) >= k - 1 and (k > 1 or t == 0 or len(self.windows[t - 1].roots) >= 1):
             return soonest
         return max(soonest, w.released_ns + (k - 1) * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
+
+    @property
+    def _one_in_flight(self) -> bool:
+        return self.params.pace is not None and self.params.pace.in_flight == 1
 
     def append(self, root: bytes, count: int) -> tuple[int, bytes] | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
@@ -1014,13 +1067,15 @@ class Session:
         """Root `i` of window `t`, its pass's plan as the prover sends it, and the step it covers, as they arrive: `runs`
         (None: the registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`,
         the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
-        registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released;
-        its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
-        `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        registered store).  A plan is over the store's blocks so far, registered and appended, holds none released,
+        and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
+        that joined a window `Params.lifetime` or more before `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
         plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
-        most k roots, and a later one is out of turn (`order`).  The root's arrival, the clock now, goes in the record.
+        most k roots, and a later one is out of turn (`order`), as is, at one window in flight (`Pace.in_flight`), a
+        root that passes every other check after its window's boundary.  The root's arrival, the clock now, goes in
+        the record.
         Returns the rejection they cause, if any."""
         self._live()
         if not self.windows:
@@ -1054,9 +1109,13 @@ class Session:
             return self._fail(t, "plan")
         if self._gone and any(self._released(f, c) for f, c in plan.runs):
             return self._fail(t, "plan")
+        if sum(p.length for p in self.windows[t].plans) + plan.length >= RECEIPT_LIMIT:
+            return self._fail(t, "plan")
         self._joined.extend([t] * (len(self._appends) - len(self._joined)))
         if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
             return self._fail(t, "lifetime")
+        if self._one_in_flight and self.windows[t].boundary_ns is not None:
+            return self._fail(t, "order")
         if extent > N:
             held = [(max(f, N), f + c) for f, c in (change[0] if change is not None else plan.runs) if f + c > N]
             if held:
@@ -1135,12 +1194,13 @@ class Session:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-        """Window t's verdict on the prover's openings of its draws, in the order drawn."""
+        """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
+        no draws, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
             raise SessionError(f"window {t} has no draws awaiting openings")
-        if len(openings) != len(w.draws):
+        if not w.draws or len(openings) != len(w.draws):
             return self._fail(t, "malformed")
         key, receipters = self.registration.key, {}
         for (i, p), o in zip(w.draws, openings):
@@ -1200,6 +1260,19 @@ class Session:
                                                             for w in self.windows):
             return "accepted"
         return None
+
+    @property
+    def appended(self) -> tuple[tuple[int, int], ...]:
+        """The session's appends as it numbered them, `(first, count)`, in order."""
+        return tuple((first, commitment.count) for first, _, commitment, _ in self._appends)
+
+    def scheduled(self, schedule: _schedule.Schedule) -> Scheduled:
+        """The schedule check (`schedule.check`, of record in `lean/RemoteAudit/Schedule.lean`) on this session's own
+        passes, each plan as received and the step it named, and its appends: its verdict, which `ledger` requires
+        before it credits an appended block, or `schedule.Refused` and why not."""
+        passes = [(s, plan.runs) for w in self.windows for s, plan in zip(w.steps, w.plans, strict=True)]
+        bits = _schedule.check(schedule, self.params.blocks, passes, self.appended)
+        return Scheduled(self.registration.digest, self.commitment.root, bits)
 
     def record(self) -> Record:
         """The session's record, once every window is accepted."""
@@ -1442,6 +1515,23 @@ class RequirementLink(Protocol):
     def mapped(self, record: Record) -> bool: ...
 
 
+@dataclass(frozen=True, slots=True)
+class Scheduled:
+    """The schedule check's verdict on a session (`Session.scheduled`, `schedule.check`): every pass's plan was the
+    published schedule's at the pass's step and the appends were the schedule's, so each pass's layout is the verifier's
+    fixed function of the schedule (`Accounting.ScheduleDeterministic`), steered only through its `bits`.  It names its
+    session by its registration and its coin commitment's root, as the record does (`Record.registration`,
+    `Record.coins`).  `bits` is the `a` that `Accounting.Assumptions.SteeredLayout` reads for this session: fewer than
+    2^bits schedules encode in its bits, so the layout takes fewer than 2^bits values whatever the coins."""
+
+    registration: bytes
+    coins: bytes
+    bits: int
+
+    def of(self, record: Record) -> bool:
+        return self.registration == record.registration and self.coins == record.coins
+
+
 class _Terms:
     __slots__ = ()
 
@@ -1493,7 +1583,9 @@ class Ledger(_Terms):
     the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
     `linked`: whether the credit is the served circuit's (its reads at each pass's step, on a `RequirementLink`:
     `linked_bits`); without a link
-    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `error` is the
+    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `steering`: the
+    bits of the schedule the passes' layout was checked against when appended blocks are credited (`Scheduled.bits`,
+    the `a` of `SteeredLayout`), None when none are.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
     `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s."""
 
@@ -1511,6 +1603,7 @@ class Ledger(_Terms):
     error: float
     error_horizon: float
     linked: bool = False
+    steering: int | None = None
 
     @property
     def worst(self) -> WindowLedger:
@@ -1522,7 +1615,8 @@ class Ledger(_Terms):
 
     def to_json(self) -> dict:
         w, h = self.worst, self.worst_horizon
-        return {**self._json(), "linked": self.linked, "windows": [x.to_json() for x in self.windows],
+        return {**self._json(), "linked": self.linked, "steering_bits": self.steering,
+                "windows": [x.to_json() for x in self.windows],
                 "error": {"windows": self.error, "horizon": self.error_horizon},
                 "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
                           "window": w.window}}
@@ -1567,8 +1661,8 @@ def pooled(record: Record) -> tuple[float, float]:
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
-    draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes
-    (`Accounting.Guarantees.Remote.PooledDraw`).
+    draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
+    + the coin commitment's hiding terms (`Accounting.Guarantees.Remote.PooledDraw`, `ledger.hiding`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
     `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
@@ -1641,7 +1735,8 @@ def linked_bits(window: WindowRecord, requirement: RequirementLink, block_bytes:
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
-           credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None) -> Ledger:
+           credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None,
+           schedule: Scheduled | None = None) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record credits are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
@@ -1656,8 +1751,11 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
-    that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
-    its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
+    that fails is refused), and only with this session's schedule check (`schedule`, `Session.scheduled`): every
+    pass's plan the published schedule's at its step, so the layout the appended blocks are read at is the verifier's
+    function of the schedule, steered through its bits alone (`Ledger.steering`, the `a` of `SteeredLayout`).
+    Without it, or with another session's, crediting them is refused.  Crediting them charges μ_carrier, each pass the
+    least of the verdict's carrier bytes and its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
     memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
     circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
@@ -1669,6 +1767,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    if credit_post_seed is not None and (type(schedule) is not Scheduled or not schedule.of(record)):
+        raise ValueError("appended blocks are credited only on this session's schedule check (`Session.scheduled`): "
+                         "without it the layout they are read at may follow the coins and the encodings, and no "
+                         "SteeredLayout bound a has content")
     epsilon, link_delta = 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
@@ -1738,4 +1840,5 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
                   windows=tuple(windows), error=sum(w.profile.delta for w in record.windows) + beside,
-                  error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None)
+                  error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None,
+                  steering=schedule.bits if credit else None)

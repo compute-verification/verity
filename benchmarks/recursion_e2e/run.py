@@ -12,6 +12,7 @@
     store  RESULT... [--merge]     the results and their table as one art (research data put); prints its art: id
 
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
+       --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
        --cpu (GPU=0: the CPU prover, no lease) --on MACHINE --cores 0-31 --mem-gb G --cpus 32 --max-min M
        --env KEY=VALUE ...
 """
@@ -46,7 +47,16 @@ FW_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 84
         "cap": 63, "cap-L1": 86, "cap-L2": 74, "cap-L3": 51}
 MARGIN = 1.5
 SETUP_MIN = 5  # the job's start, its retention record and its result
-OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "negative": 30}
+OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "forge-after": 15,
+             "negative": 30}
+#: the forgeries the firewall stops before release (FIREWALL-REFUSED, no session for Lean), which forge-after makes on the
+#: honest sessions after proving instead (forge_after.CASES)
+FORGE_AFTER = ("coef", "dirs", "message")
+FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs", "filler")  # rec_vstage.FORGERIES
+#: the honest statement each forgery's one session is sized as (rec_vstage's docstring: the level or part it forges); the
+#: firewall stops a forged session no later than its release, so this bounds it
+FORGED_AS = {"message": "alg-p0", "sum": "alg-p0", "comb": "alg-p0", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
+             "filler": "alg-p0"}
 
 # Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
 # plain runs, pinned to CORES (infra, 24 Oct 13:08Z); vy-nebius-1/2/3 and vy-nebius-cpu-1 take runs only through slots.
@@ -63,6 +73,8 @@ STAGES = {
     "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode (firewall: the Lean session loop)",
     "oreplay": "upstream's replay --zk of each V* session",
     "lean": "flock-verify verify --zk on each V* session with V*'s own inputs, the inner session, the inner statement",
+    "forge-after": "coef, dirs and message forged on the honest L0 and alg-p0 sessions' statements after proving "
+                   "(forge_after.py), each refused by Lean beside its accepted honest control",
     "negative": "the lean step again over each copy of the inner session with one coin of rep 0 flipped, which Lean must refuse",
 }
 
@@ -93,7 +105,8 @@ def max_min(a) -> int:
     """The job's limit: its statements' firewalled sessions (with MARGIN) plus each other step's minutes per repeat."""
     sessions = a.oprove_warm + a.oprove_runs
     fw = "firewall" in a.modes.split(",")
-    oprove = MARGIN * sessions * sum(FW_S[s] for s in statements(levels(a))) / 60 if fw else 15
+    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[FORGED_AS[k]] for k in forge(a))) / 60 \
+        if fw else 15
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the firewall, OPROVE_GPU=0), and its proofs: a minute a statement
@@ -136,7 +149,22 @@ def preset(a: argparse.Namespace) -> argparse.Namespace:
     if a.e2e:
         a.steps, a.repeat, a.oprove_runs, a.oprove_warm = ",".join(E2E), 1, 1, 0
         a.env = ["WARM=0", "RUNS=1", *a.env]
+    if forge_after(a) and "lean" in steps(a.steps) and not a.no_forge_after:
+        a.steps = ",".join([*steps(a.steps), "forge-after"])
     return a
+
+
+def forge(a) -> list[str]:
+    kinds = a.forge.replace(",", " ").split()
+    bad = [k for k in kinds if k not in FORGERIES]
+    if bad:
+        raise SystemExit(f"--forge: {', '.join(bad)} not among {', '.join(FORGERIES)}")
+    return kinds
+
+
+def forge_after(a) -> list[str]:
+    """The forged statements' kinds forge-after makes after proving: on whenever --forge runs one of them."""
+    return [k for k in FORGE_AFTER if k in forge(a)]
 
 
 def direct(a) -> bool:
@@ -153,6 +181,7 @@ def job_env(a: argparse.Namespace) -> list[str]:
     node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if direct(a) else ["GPU=0"] if a.cpu else []
     return [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
             f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
+            f"FORGE={','.join(forge(a))}", *([f"FORGE_AFTER={','.join(forge_after(a))}"] if "forge-after" in steps(a.steps) else []),
             *node, *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
 
 
@@ -284,7 +313,8 @@ def main(argv: list[str] | None = None) -> int:
     def point(p):
         p.add_argument("--K", type=int, default=4096)
         p.add_argument("--N", type=int, default=2)
-        p.add_argument("--steps", default=",".join(STEPS))
+        p.add_argument("--steps", default=",".join(s for s in STEPS if s != "forge-after"),
+                       help="default every step but forge-after, which --forge adds")
         p.add_argument("--repeat", type=int, default=3, help="each CPU step's invocations (REPEAT_<STEP>=n via --env)")
         p.add_argument("--modes", default="firewall", help="oprove's prover sides (firewall, host, dev); the last one's "
                        "sessions are the ones oreplay, lean and negative verify (default firewall: outer proofs go through "
@@ -294,6 +324,9 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--lease-min", type=int, default=0, help="each prove's GPU lease, minutes (85's GPU_MAX_MIN; default "
                        "sized from the firewall's L3 session: lease_min)")
         p.add_argument("--neg", default="challenge,query", help="inner coins the negative flips, space or comma separated ('' for none)")
+        p.add_argument("--forge", default="", help=f"85's forgeries vstage stages and oprove proves (of {', '.join(FORGERIES)}; "
+                       "default none); with any of coef, dirs, message the forge-after step runs after lean")
+        p.add_argument("--no-forge-after", action="store_true", help="--forge without the forge-after step")
         p.add_argument("--cpu", action="store_true", help="GPU=0: the CPU prover end to end, no lease (a small K and N)")
         p.add_argument("--oprove-gpu", choices=["auto", "0", "1"], default="auto",
                        help="V*'s prover: 0 the CPU prover (auto under the firewall: node 1's lease pool stops a lease whose "
