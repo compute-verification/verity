@@ -33,8 +33,9 @@ round coins, each opened after its recorded round root, read through the challen
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
 Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`). Its
-`weights-salt` against `core_check.weights_salt` likewise, over live Pearl-C passes' salt coins: the session opened on
-the pass's weights' root and releasing its salt coin alone.
+`live-salt` against `core_check.live_salt` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
+salt-only session the auditor's ledger reserves, opens on the pass's weights' root and ends complete, its commitment read
+from the session's own files), compared output for output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
 multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
@@ -234,8 +235,9 @@ def test_pass_and_draw(pass_server):
     print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
     assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
-    for part in (CC.LIVE_PASS_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.BEYOND_SALT,
-                 "the pass's coins are malformed: a live coin commitment is",
+    for part in (CC.LIVE_UNHELD, CC.LIVE_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.INCOMPLETE,
+                 "the pass's salt coin opens against the epoch's published coin commitment",
+                 "the coin commitment's coins are not a Pearl-C salt session's",
                  "the auditor's ledger opens no challenger session for this window"):
         assert any(_template(part) in k for k in PASSED), part
     assert "draw accept" in PASSED and len(PASSED) > 40
@@ -597,40 +599,44 @@ def test_salt(pass_server):
         assert any(_template(part) in k for k in SALTED), part
 
 
-WEIGHTS_SALTED: Counter[str] = Counter()
+LIVE_SALTED: Counter[str] = Counter()
 
 
-def weights_salt(case: dict) -> dict | None:
-    refused = CC.weights_salt(*rounds_cases.weights_salt_args(case))
-    WEIGHTS_SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
-    return None if refused is None else {"refused": list(refused)}
+def live_salt(case: dict) -> dict:
+    salt, refused = CC.live_salt(*passes.live_salt_args(case))
+    LIVE_SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return {"salt": salt.hex()} if refused is None else {"refused": list(refused)}
 
 
-WEIGHTS_SALT = D.Port("pouw-check-difftest", "weights-salt", weights_salt, package=LEAN, need_rejects=False,
-                      of_record=V.RECORD_VERDICT,
-                      inputs=st.builds(rounds_cases.weights_salt_instance, st.randoms(use_true_random=False),
-                                       st.sampled_from(["honest"] * (len(rounds_cases.WEIGHTS_SALT_NAMES) // 4)
-                                                       + rounds_cases.WEIGHTS_SALT_NAMES)))
+LIVE_SALT = D.Port("pouw-check-difftest", "live-salt", live_salt, package=LEAN, need_rejects=False,
+                   of_record=V.RECORD_VERDICT,
+                   inputs=st.builds(passes.live_salt_instance, st.randoms(use_true_random=False),
+                                    st.sampled_from(["honest"] * (len(passes.LIVE_SALT_NAMES) // 4)
+                                                    + passes.LIVE_SALT_NAMES)))
 
 
-def test_weights_salt(pass_server):
-    """Generated live Pearl-C passes' salt coins, read through the challenger's signed session the auditor's signed ledger
-    reserves, opens on the pass's weights' root and ends incomplete, then each mutation over a few seeds (`replay`): a
-    session opened on another root, a log showing another root, a coin released beyond the salt coin, and every other
-    refusal of `core_check.weights_salt`."""
-    WEIGHTS_SALTED.clear()
-    stats = D.run(WEIGHTS_SALT, examples=300, server=pass_server)
-    swept = Counter(D.replay(WEIGHTS_SALT, rounds_cases.weights_salt_instance(random.Random(f"{name}/{seed}"), name),
+def test_live_salt(pass_server):
+    """Generated live Pearl-C passes, salted by a salt-only session the auditor's signed ledger reserves, opens on the
+    pass's weights' root and ends complete, read through the session's own files, then each mutation over a few seeds
+    (`replay`): a session opened on another root, #3868's H1 layout, a session reserved for another layout or ended
+    incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
+    other refusal of `core_check.live_salt`."""
+    LIVE_SALTED.clear()
+    stats = D.run(LIVE_SALT, examples=300, server=pass_server)
+    swept = Counter(D.replay(LIVE_SALT, passes.live_salt_instance(random.Random(f"{name}/{seed}"), name),
                              pass_server)[0]
-                    for name in ["honest", *rounds_cases.WEIGHTS_SALT_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest weights-salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
-          f"{dict(sorted(WEIGHTS_SALTED.items()))}")
-    assert "accept" in WEIGHTS_SALTED
-    for part in (CC.NO_RESERVE, CC.WEIGHTS_ROOT_FORM, CC.WEIGHTS_NOT_RECEIVED, CC.BEYOND_SALT,
+                    for name in ["honest", *passes.LIVE_SALT_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest live-salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(LIVE_SALTED.items()))}")
+    assert "accept" in LIVE_SALTED
+    for part in (CC.NO_RESERVE, CC.RESERVE_LAYOUT, CC.INCOMPLETE, CC.LIVE_NOT_RECEIVED, CC.LIVE_NOT_SIGNED, CC.LIVE_SALT,
+                 CC.LIVE_SESSION, "the pass's manifest is not a JSON object", "the pass's manifest names no schema",
+                 "the pass's matmuls are not", "every weight of the workload is committed, and only those",
                  "not trusted: the auditor's ledger opens no challenger session for this window",
                  "the verifier's challenger key is malformed", "not trusted: no auditor's ledger",
-                 "not trusted: the challenger record's signature does not verify", "the coin commitment's ",
+                 "not trusted: the challenger record's signature does not verify",
+                 "the coin commitment's coins are not a Pearl-C salt session's", "the pass's coins are malformed: ",
                  "the salt's a live coin opening is", "the salt's coin was not opened after", "not its pouw/salt coin #",
                  "the salt's coin does not open", "the salt's coin is epoch #", "the salt's coin opening is malformed",
                  *PIN_PARTS):
-        assert any(_template(part) in k for k in WEIGHTS_SALTED), part
+        assert any(_template(part) in k for k in LIVE_SALTED), part

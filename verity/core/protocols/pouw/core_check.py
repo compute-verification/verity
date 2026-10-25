@@ -35,9 +35,9 @@ certified window, whose verifier holds the network certifier's reveal for it (`s
 `salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
 before it drew that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
 challenger runs it before it asks the certifier for one, since the certifier reveals a window once.  A live Pearl-C
-pass (`pouw_pearl_c_host.epoch_of`, VLLM-95) took its salt coin from a session of the auditor host's challenger opened
-on the pass's weights' root: its verifier holds that session as `rounds` reads one (`LIVE_PASS`), never the pass's
-word, and the pass's salt coin passes `weights_salt` under it.
+pass (`pouw_pearl_c_host.epoch_of`, VLLM-95), whose manifest's coins are a live session's, took its salt coin from a
+salt-only session of the auditor host's challenger opened on the pass's weights' root: its verifier holds the auditor's
+ledger and that session's files as `rounds` reads them (`LIVE`), and the pass passes `live_salt` under them.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded draw `COIN_EARLY` too.  `work_units` is the same rule under the law ``work:k``: each work
@@ -46,8 +46,9 @@ stratum's ``Draw.subset`` on its own stream of that key (`credit.drawn` draws a 
 same session as `rounds`: S is the session the auditor's signed ledger reserves for the window and R the root its open
 entry opened S on, which the verifier recomputes from the window's record and S (`salt.window_open_root`); the
 session's signed log shows R alone as what its salt coin followed, and under the commitment it signed the salt coin
-opened once, after R.  `weights_salt` is its Pearl-C form: R is the pass's weights' root, and the session released its
-salt coin alone, so it ends with ``complete: false``.
+opened once, after R.  `live_salt` is its Pearl-C form (LIVESALT2, `Properties.Pouw.LiveSalt`): R is the pass's weights'
+root W, the session is reserved for the salt coin alone (`window.SALT_FAMILIES`) and counts only when the ledger ends it
+complete, and the pass's coins, salt coin, salt and session are held to what the ledger and the session's files show.
 `rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
 `sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
 opens and ends for the window, under the window's pinned key, run from a commit the host's pins log records on main's
@@ -1098,46 +1099,27 @@ def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | Non
     return salt, "certifier"
 
 
-#: a live Pearl-C pass's coins as its verifier holds them: the window's pinned challenger key, the auditor's ledger's
-#: lines, the host's pins log, the verifier's copy of main's first-parent history and the session's files
-LIVE_PASS = ("key", "ledger", "main", "pins", "session")
-LIVE_PASS_FORM = ("a live pass's coins are the verifier's {key, ledger, main, pins, session}: the pinned challenger key, "
-                  "the auditor's ledger, the host's pins log, main's first-parent history and the session's files")
-LIVE_NOT_SIGNED = "the pass's coin commitment is not the one its session's challenger signed"
-LIVE_SESSION = ("the pass's session is not the gate's answer, without its secret, for the session the auditor's ledger "
-                "opened on its weights' root: its session, seq, root and commitment")
+#: a live Pearl-C pass's inputs as its verifier holds them (`pass_epoch`'s `live`): the window's pinned challenger key,
+#: the auditor's ledger's lines, the host's pins log, the verifier's copy of main's first-parent history and the
+#: session's files
+LIVE = ("key", "ledger", "main", "pins", "session")
+LIVE_FORM = ("a live pass's verifier holds {key, ledger, main, pins, session}: the pinned challenger key, the auditor's "
+             "ledger, the host's pins log, main's first-parent history and the session's files")
+LIVE_UNHELD = ("the pass's coins are a live session's: only a verifier holding the auditor's ledger reads a pass salted by "
+               "a live session")
 
 
-def _carries(s: Any, sid: str, seq: int, root: bytes, c: Ch.LiveCommitment) -> bool:
-    """Whether `s`, the session a pass's manifest carries, is the gate's open answer for session `sid`, opened at ledger
-    entry `seq` on `root` under commitment `c`, without its hello's ``secret`` (`pouw_h1_challenger.carried`)."""
-    return (isinstance(s, dict) and "secret" not in s and s.get("session") == sid and _int(s.get("seq"))
-            and s["seq"] == seq and s.get("root") == root.hex() and s.get("commitment") == c.root.hex())
-
-
-def _live_salt(m: dict, coins: Any, us: list[dict], roots: dict[int, bytes], verify: Ch.Verify) -> tuple[bytes, str]:
-    """A live Pearl-C pass's salt (`pouw_pearl_c_host.epoch_of`'s): `coins` are the verifier's `LIVE_PASS`, and the pass's
-    salt coin passes `weights_salt` under them, the session's root the pass's weights' root.  The manifest's ``coins``
-    are the commitment that session's challenger signed and its ``session`` the gate's answer for it (`_carries`); the
-    salt is `audit.salt_of` of the coin, the commitment and the weights' root."""
-    if not (isinstance(coins, dict) and sorted(coins) == list(LIVE_PASS)):
-        raise Co.DomainError(LIVE_PASS_FORM)
-    _check_workload(us, roots)
-    root = weights_root(Co.SCHEME, roots)
-    try:
-        claimed = Ch.LiveCommitment.from_json(m.get("coins"))
-    except Ch.CoinError as e:
-        raise Co.DomainError(f"the pass's coins are malformed: {e}") from None
-    refused, got = _weights_salt(coins["key"], coins["ledger"], coins["pins"], coins["main"], coins["session"],
-                                 root.hex(), m["salt_opening"], verify)
+def _live_salt(m: dict, live: Any, verify: Ch.Verify) -> tuple[bytes, str]:
+    """A live Pearl-C pass's salt, `live_salt` under the verifier's `LIVE` inputs `live`: its ``manifest`` refusal is
+    `Refused`, any other `DomainError`."""
+    if live is None:
+        raise Co.DomainError(LIVE_UNHELD)
+    if not (isinstance(live, dict) and sorted(live) == list(LIVE)):
+        raise Co.DomainError(LIVE_FORM)
+    salt, refused = live_salt(live["key"], live["ledger"], live["pins"], live["main"], live["session"], m, verify)
     if refused is not None:
-        raise Co.DomainError(refused[1])
-    c, o, sid, seq = got
-    if claimed != c:
-        raise Co.DomainError(LIVE_NOT_SIGNED)
-    if not _carries(m.get("session"), sid, seq, root, c):
-        raise Co.DomainError(LIVE_SESSION)
-    return derive(o.coin, EPOCH_SALT_DOMAIN, {"epoch": c.epoch, "coins": c.root, "weights": root}).stream("salt", 32), "live coin"
+        raise (Refused if refused[0] == "manifest" else Co.DomainError)(refused[1])
+    return salt, "live coin"
 
 
 def _coin_salt(m: dict, coins: Any, recorded: bool, us: list[dict], roots: dict[int, bytes]) -> tuple[bytes, str]:
@@ -1164,7 +1146,7 @@ def _coin_salt(m: dict, coins: Any, recorded: bool, us: list[dict], roots: dict[
 
 def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None, context: str = "",
                 committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None,
-                verify: Ch.Verify | None = None) -> tuple[bytes, str]:
+                live: Any = None, verify: Ch.Verify | None = None) -> tuple[bytes, str]:
     """`manifest_epoch`: the pass's epoch salt re-started from its manifest, and how it was had.  Raises `DomainError`
     (the coin rule's) or `Refused` (a manifest it can't read)."""
     if reveal is not None:
@@ -1184,11 +1166,11 @@ def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None
     if schema == MANIFEST_SCHEMA:
         if "salt_opening" not in m:
             raise Co.DomainError("the pass has no salt coin")
-        if coins is None:
+        if isinstance(m.get("coins"), dict) and m["coins"].get("scheme") == Wd.LIVE_SCHEME:
+            salt, how = _live_salt(m, live, lms_verify if verify is None else verify)
+        elif coins is None:
             raise Co.DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the "
                                  "verifier holds")
-        if isinstance(coins, dict) and "ledger" in coins:
-            salt, how = _live_salt(m, coins, us, roots, lms_verify if verify is None else verify)
         else:
             salt, how = _coin_salt(m, coins, recorded, us, roots)
     elif "beacon" in m:
@@ -1207,23 +1189,24 @@ def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None
 
 def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False, reveal: bytes | None = None,
                committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None,
-               verify: Ch.Verify | None = None) -> tuple[str | None, tuple[str, str] | None]:
+               live: Any = None, verify: Ch.Verify | None = None) -> tuple[str | None, tuple[str, str] | None]:
     """How the pass's salt was had (``coin``, ``live coin``, ``recorded beacon`` in a replay of a recorded pass, or
     ``certifier``) and None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts
     its epoch under `coins`, the challenger's own coin commitment (its JSON), and the window's `context` names it by its
-    SHA-512.  A live Pearl-C pass's verifier holds the challenger session its salt coin came from instead, as
-    `LIVE_PASS` (``{key, ledger, main, pins, session}``, the challenger's signatures checked with `verify`, by default
-    `lms_verify`): the pass's salt coin passes `weights_salt` under them (``live coin``), and its manifest carries that
-    session's commitment and the gate's answer for it.  A certified window's verifier holds `reveal`, the certifier's
-    salt for the PoUW window the context names, as `salt.revealed` read it, `committed`, what PoUW recorded with the
-    certifier before it drew that salt, as `salt.committed` read it, and the window's `stream` and `prover`; its window
+    SHA-512.  A live Pearl-C pass, whose manifest's coins are a live session's (`window.LIVE_SCHEME`), is read only
+    through the verifier's `live` inputs (`LIVE`, ``{key, ledger, main, pins, session}``, the challenger's signatures
+    checked with `verify`, by default `lms_verify`; a verifier that holds none refuses it) and passes `live_salt` under
+    them (``live coin``, its ``salt`` refusals here ``coin``'s); `coins` plays no part in it.  A certified window's
+    verifier holds `reveal`, the certifier's salt for the PoUW window the context names, as `salt.revealed` read it,
+    `committed`, what PoUW recorded with the certifier before it drew that salt, as `salt.committed` read it, and the
+    window's `stream` and `prover`; its window
     passes only a pass salted by it (`MANIFEST_CERTIFIED`, the salt `salt.pouw_salt(reveal, p, stream, prover)`) over
     weights whose root `salt.pouw_record` binds with the stream and the prover in `committed`, and a certified pass
     passes only there."""
     if raw is None:
         return None, ("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
     try:
-        _, how = _epoch_salt(_manifest(raw), coins, recorded, reveal, context, committed, stream, prover, verify)
+        _, how = _epoch_salt(_manifest(raw), coins, recorded, reveal, context, committed, stream, prover, live, verify)
     except Co.DomainError as e:
         return None, ("coin", str(e))
     except Refused as e:
@@ -1403,20 +1386,25 @@ OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_r
 NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
 
 
-#: a live Pearl-C pass's salt rule (`weights_salt`)
-WEIGHTS_ROOT_FORM = "the pass's weights' root is not a SHA-512 digest"
-WEIGHTS_NOT_RECEIVED = "the challenger's log does not show the weights' root as the one root its salt coin followed"
-BEYOND_SALT = ("the challenger's log shows a coin released beyond the salt coin: a live Pearl-C pass's session releases "
-               "its salt coin alone")
+#: a live Pearl-C pass's salt rule (`live_salt`)
+RESERVE_LAYOUT = ("the auditor's ledger reserves the pass's session for another layout than a Pearl-C salt session's, its "
+                  "salt coin alone")
+INCOMPLETE = ("the auditor's ledger does not end the pass's session complete, having released its salt coin and nothing "
+              "else")
+LIVE_NOT_RECEIVED = "the challenger's log does not show the weights' root as the one root its salt coin followed"
+LIVE_NOT_SIGNED = "the pass's coin commitment is not the one its session's challenger signed"
+LIVE_SALT = "the pass's salt is not its live coin's and the weights'"
+LIVE_SESSION = ("the pass's session is not the gate's answer, without its secret, for the session the auditor's ledger "
+                "opened on its weights' root: its session, seq, root and commitment")
 
 
 def _salt_session(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, verify: Ch.Verify
                   ) -> tuple[tuple[str, str] | None, Any]:
-    """The session the salt rules read (`salt`, `weights_salt`): the one the auditor's signed v2 ledger `ledger` opens and
+    """The session the salt rules read (`salt`, `live_salt`): the one the auditor's signed v2 ledger `ledger` opens and
     ends closed for `window` under the pinned challenger key `key`, run from a commit the host's pins log `pins` records
-    on main's first-parent line `main` (`challenger.pinned_session`), its files `session` (`challenger.session_named`),
-    its signed commitment a live epoch's, and reserved before it opened.  (None, (commitment, roots received, the
-    ledger's reserve and open entries)), or the refusal and None."""
+    on main's first-parent line `main` (`challenger.pinned_session`), and its files `session`
+    (`challenger.session_named`).  (None, (the ledger's session, its signed commitment, the roots its log shows it
+    received)), or the refusal and None."""
     try:
         k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
@@ -1426,50 +1414,100 @@ def _salt_session(key: Any, ledger: Any, pins: Any, main: Any, window: Any, sess
         c, received = Ch.session_named(a, k, session, verify)
     except Ch.CoinError as e:
         return ("coin", f"the challenger's session is not trusted: {e}"), None
-    why = Wd.live_epoch_reason(c)
-    if why is not None:
-        return ("coin", why), None
-    named = {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == a.session}
-    if "reserve" not in named:
-        return ("salt", NO_RESERVE), None
-    return None, (c, received, named["reserve"], named["open"])
+    return None, (a, c, received)
 
 
-def _weights_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, weights_root: Any, opening: Any,
-                  verify: Ch.Verify) -> tuple[tuple[str, str] | None, Any]:
-    """`weights_salt`: (None, (commitment, opening, session id, its open's seq)), or the refusal and None."""
-    if not (_str(weights_root) and _DIGEST.fullmatch(weights_root)):
-        return ("salt", WEIGHTS_ROOT_FORM), None
-    refused, got = _salt_session(key, ledger, pins, main, {"root": weights_root}, session, verify)
-    if refused is not None:
-        return refused, None
-    c, received, reserve, opened = got
-    w = bytes.fromhex(weights_root)
-    if received.get(Wd.SALT, ()) != (w,):
-        return ("salt", WEIGHTS_NOT_RECEIVED), None
-    if any(roots for label, roots in received.items() if label != Wd.SALT):
-        return ("salt", BEYOND_SALT), None
+def _named(ledger: list[str], sid: str) -> dict[str, dict]:
+    """Session `sid`'s entries in the auditor's ledger (which `pinned_session` has read), by kind."""
+    return {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == sid}
+
+
+def _jeq(a: Any, b: Any) -> bool:
+    """`a` and `b` are one JSON value (`SampledProofs.jeq`): one canonical text, a boolean never a number."""
     try:
-        o = Ch.LiveOpening.from_json(opening)
+        return _canon(a) == _canon(b)
+    except Refused:
+        return False
+
+
+def _carries(s: Any, sid: str, seq: int, root: bytes, commitment: str) -> bool:
+    """Whether `s`, the session a pass's manifest carries, is the gate's open answer for session `sid`, opened at ledger
+    entry `seq` on `root` under the commitment whose root is `commitment` (hex), without its hello's ``secret``
+    (`pouw_h1_challenger.carried`)."""
+    return (isinstance(s, dict) and "secret" not in s and s.get("session") == sid and _int(s.get("seq"))
+            and s["seq"] == seq and s.get("root") == root.hex() and s.get("commitment") == commitment)
+
+
+def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
+              ) -> tuple[bytes | None, tuple[str, str] | None]:
+    """A live Pearl-C pass's salt and None, or None and the refusal (``manifest``, ``coin`` or ``salt``, and why): `salt`'s
+    rule with the pass's weights' root W in place of a window's open root, its session and commitment read from the
+    auditor's ledger and the session's own files, never the manifest.  The pass's manifest `manifest` (an object) is
+    `MANIFEST_SCHEMA`'s, and W `audit.weights_root` of its workload's weights (`_workload`, `_check_workload`).  The
+    session is the one the auditor's signed v2 ledger `ledger` opens on ``{root: W}`` and ends closed under the pinned
+    challenger key `key`, run from a commit the host's pins log `pins` records on main's first-parent line `main`, from
+    its files `session` (`_salt_session`), and it counts (LIVESALT2): its signed commitment is a Pearl-C salt session's
+    (`window.salt_epoch_reason`); the ledger reserved it for that layout (``families`` `window.SALT_FAMILIES`; a session
+    opened without a reserve is refused, `NO_RESERVE`), opened it binding that reserve, and ended it complete, having
+    released its salt coin and nothing else (``released`` ``{pouw/salt: 1}``); and its signed log shows W, alone, as the
+    root its salt coin followed.  Then the manifest's ``coins`` are that commitment, its ``salt_opening`` the
+    commitment's ``pouw/salt`` coin 0 opened after W (`challenger.live_reason`), its ``salt`` `audit.salt_of` of that
+    coin over W, and its ``session`` the gate's open answer for the session without its secret: the ledger's session,
+    its open's seq, W and the commitment the ledger's end names (`_carries`).  The verifier's signatures are checked
+    with `verify`.  Two passes over one W read one session, so one salt."""
+    m = manifest
+    if not isinstance(m, dict):
+        return None, ("manifest", "the pass's manifest is not a JSON object")
+    schema = m.get("schema")
+    if schema != MANIFEST_SCHEMA:
+        return None, ("manifest", "the pass's manifest names no schema") if not _str(schema) else \
+            ("coin", f"schema {schema!r}, not {MANIFEST_SCHEMA}")
+    try:
+        us, roots = _workload(m)
+        _check_workload(us, roots)
+    except Refused as e:
+        return None, ("manifest", str(e))
+    except Co.DomainError as e:
+        return None, ("coin", str(e))
+    w = weights_root(Co.SCHEME, roots)
+    refused, got = _salt_session(key, ledger, pins, main, {"root": w.hex()}, session, verify)
+    if refused is not None:
+        return None, refused
+    a, c, received = got
+    why = Wd.salt_epoch_reason(c)
+    if why is not None:
+        return None, ("salt", why)
+    named = _named(ledger, a.session)
+    if "reserve" not in named:
+        return None, ("salt", NO_RESERVE)
+    reserve, opened, end = named["reserve"], named["open"], named["end"]["body"]
+    if not _jeq(reserve["body"].get("families"), [list(f) for f in Wd.SALT_FAMILIES]):
+        return None, ("salt", RESERVE_LAYOUT)
+    if not _jeq(opened["body"].get("reserve"), reserve["seq"]):
+        return None, ("salt", NO_RESERVE)
+    if not (end.get("complete") is True and _jeq(end.get("released"), {Wd.SALT: 1})):
+        return None, ("salt", INCOMPLETE)
+    if received != {Wd.SALT: (w,)}:
+        return None, ("salt", LIVE_NOT_RECEIVED)
+    try:
+        claimed = Ch.LiveCommitment.from_json(m.get("coins"))
     except Ch.CoinError as e:
-        return ("coin", f"the salt's {e}"), None
+        return None, ("coin", f"the pass's coins are malformed: {e}")
+    if claimed != c:
+        return None, ("coin", LIVE_NOT_SIGNED)
+    try:
+        o = Ch.LiveOpening.from_json(m.get("salt_opening"))
+    except Ch.CoinError as e:
+        return None, ("coin", f"the salt's {e}")
     why = Ch.live_reason(c, o, Wd.SALT, 0, w)
     if why is not None:
-        return ("coin", f"the salt's {why}"), None
-    return None, (c, o, reserve["session"], opened["seq"])
-
-
-def weights_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, weights_root: Any, opening: Any,
-                 verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when `opening` is a live Pearl-C pass's salt coin: `salt`'s rule with the weights' root `weights_root` (hex)
-    as the session's root, not a window's open root.  The one session the auditor's signed v2 ledger opens for
-    ``{root: weights_root}`` and ends closed, read as `salt` reads its session (`_salt_session`: the pinned key `key`,
-    the pins log `pins`, main's first-parent line `main` and the session's files `session`), reserved before it opened;
-    its signed log shows the weights' root as the one root its salt coin followed and no other coin released (these
-    sessions end with ``complete: false``, the one form that does: every other form's session releases every coin of
-    its families); and under the commitment it signed, a live epoch's, `opening` is the epoch's ``pouw/salt`` coin 0
-    opened after the weights' root (`challenger.live_reason`).  Else the refusal (``coin`` or ``salt``, and why)."""
-    return _weights_salt(key, ledger, pins, main, session, weights_root, opening, verify)[0]
+        return None, ("coin", f"the salt's {why}")
+    salt = derive(o.coin, EPOCH_SALT_DOMAIN, {"epoch": c.epoch, "coins": c.root, "weights": w}).stream("salt", 32)
+    if m.get("salt") != salt.hex():
+        return None, ("coin", LIVE_SALT)
+    if not _carries(m.get("session"), a.session, opened["seq"], w, a.commitment):
+        return None, ("coin", LIVE_SESSION)
+    return salt, None
 
 
 def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
@@ -1489,8 +1527,14 @@ def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any,
     refused, got = _salt_session(key, ledger, pins, main, window, session, verify)
     if refused is not None:
         return refused
-    c, received, reserve, opened = got
-    s, r = reserve["session"], bytes.fromhex(Ch.root_of(opened))
+    a, c, received = got
+    why = Wd.live_epoch_reason(c)
+    if why is not None:
+        return "coin", why
+    named = _named(ledger, a.session)
+    if "reserve" not in named:
+        return "salt", NO_RESERVE
+    s, r = a.session, bytes.fromhex(Ch.root_of(named["open"]))
     hexes = [bytes.fromhex(x) if _str(x) and _DIGEST.fullmatch(x) else None for x in (weights_root, requests_root)]
     if None in hexes:
         return "salt", SALT_FORM
@@ -1586,8 +1630,8 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "LIVE_PASS", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
            "answer", "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity",
-           "integrity_json", "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason",
-           "registered", "rounds", "salt", "unit_draw", "verify_path", "weights_salt", "window_domain", "work_k",
+           "integrity_json", "law_name", "line", "live_salt", "lms_verify", "opening", "params", "pass_epoch", "ratio",
+           "recorded_reason", "registered", "rounds", "salt", "unit_draw", "verify_path", "window_domain", "work_k",
            "work_units"]
