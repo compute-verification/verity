@@ -12566,6 +12566,212 @@ theorem widths_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (h
       (batchOne_w c hB hL fuel hD hC hA hAP hR hRW hLF) (batchStride_w c hB hL fuel hD hC hR hRW hLF))
     (fun fuel hC hK => scanW_of c hB fuel hC hK)
 
+/-- **The decoder's facts the widths read**, as `Flock.Program.getDef` gives every Definition and `bodiesLaidOut`
+checks: a primitive is one gate, a composite's body is laid out from its first gate to its last (`Walk.LaidOut`), and
+its nodes call what the decoder lets them: a primitive node a primitive, a Call or a scan a composite. -/
+def WidthFacts (P : Prog) : Prop :=
+  ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).gates = 1) ∧
+    ((P.defs[d]!).prim = false → Laid P d ∧
+      (P.defs[d]!).body.offsets[(P.defs[d]!).body.nodes.size]! = (P.defs[d]!).gates ∧
+      ∀ k < (P.defs[d]!).body.nodes.size,
+        (((P.defs[d]!).body.nodes[k]!).form = .prim → (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = true) ∧
+        (((P.defs[d]!).body.nodes[k]!).form = .call ∨ ((P.defs[d]!).body.nodes[k]!).form = .scan →
+          (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false))
+
+/-- **`down`, `fromCallee`, `throughArg` and `carry` name a decoded composite's gates with their widths**, from
+`widths_of` with the decoder's facts (`Decoded`, `WidthFacts`), wherever its callees' summaries hold `RetOk` and name
+theirs (`RetW`). -/
+theorem widths_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
+    (hp : (P.defs[d]!).prim = false) (hDec : Decoded P) (hWF : WidthFacts P) (hB : Resolve.BodyOk P d)
+    (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn)
+    (hRW : ∀ k node, (ctxOf P memo d).node k = .ok node → RetW P memo node.fn) :
+    ∀ fuel, DownWAt (ctxOf P memo d) fuel ∧ CalleeW (ctxOf P memo d) fuel ∧
+      ThroughW (ctxOf P memo d) fuel ∧ CarryW (ctxOf P memo d) fuel := by
+  have hfn : ∀ k node, (ctxOf P memo d).node k = .ok node → node.fn < P.defs.size := by
+    intro k node hn
+    have hk := node_lt hn
+    have := (hB.1 k hk).1
+    have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
+    rwa [hg] at this
+  have hpr : ∀ f : Nat, (P.defs[f]!).prim = true → f < P.defs.size := by
+    intro f hf
+    by_contra hlt
+    rw [getElem!_neg P.defs f hlt] at hf
+    cases hf
+  obtain ⟨hLd, -, hnodes⟩ := (hWF d hdP).2 hp
+  refine widths_of (ctxOf P memo d) (.top d 0 none) rfl hB hLd
+    (fun f hf => (hWF f (hpr f hf)).1 hf) (fun f hf => (hDec f (hpr f hf)).1 hf)
+    (fun k node hn => by
+      have hk := node_lt hn
+      have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
+      rw [← hg]
+      exact hnodes k hk)
+    (argOk_decoded P memo hdP hDec) (fun k i hk hi => ctxOf_argCount P memo d k i hk hi) ?_ hR hRW
+    (fun k node hn hp' => ⟨((hWF node.fn (hfn k node hn)).2 hp').1, ((hWF node.fn (hfn k node hn)).2 hp').2.1⟩)
+  intro k i e L hdims hL hip
+  change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
+  by_cases hk : k < (P.defs[d]!).body.nodes.size
+  · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+    · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL hip
+    · rw [getElem!_neg _ i hi] at hdims; cases hdims
+  · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
+
+/-- **What `Desc.summarize` gives Definition `d` names its gates with their widths** (`RetW`), wherever `down`'s
+segments are `ShapeOk` (`DownShape`) and name the body's gates with their widths (`DownWAt`) in its body, and the
+decoder's facts on its return hold (`summarize_retOk`'s argument). -/
+theorem summarize_retW (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
+    (hdP : d < P.defs.size) (hRP : RetParts P) (hB : Resolve.BodyOk P d)
+    (hS : (P.defs[d]!).prim = false → DownShape (ctxOf P memo d))
+    (hW : (P.defs[d]!).prim = false → DownWAt (ctxOf P memo d) Flock.Steps.FUEL)
+    (h : Desc.summarize P memo d = .ok s) (m : Array Desc.Summary) (hm : m[d]! = s) : RetW P m d := by
+  unfold RetW
+  rw [hm]
+  unfold Desc.summarize at h
+  extract_lets defn body c ret0 acc0 at h
+  split at h
+  · simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    intro w p hx
+    rw [psPos_default] at hx
+    cases hx
+  · rename_i hp
+    have hp' : (P.defs[d]!).prim = false := by simpa using hp
+    obtain ⟨ret, hret, h⟩ := Walk.except_bind_ok h
+    obtain ⟨acc, -, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rw [← Array.forIn_toList] at hret
+    obtain ⟨outs, hF, hout⟩ := forIn_trace2 _ _ ret0 ret hret
+    obtain ⟨hpe, hnn⟩ := (hRP d hdP).2 hp'
+    have hpe' : body.ret = Seq.ofParts body.ret.parts := hpe
+    have hnn' : ∀ q ∈ body.ret.parts.toList, PartNonneg q := hnn
+    have hpos : psPos (Desc.ofSeq body.ret) = (List.range body.ret.count).map fun t => refPos (body.ret.get t) := by
+      rw [(ofSeq_pos body.ret hnn').2.1]
+      conv => rhs; rw [hpe']
+      rw [partsPos_get]
+    have hqs : ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList).flatMap pos =
+        psPos (Desc.ofSeq body.ret) := by
+      rw [← segsPos_pieces _ (ofSeq_reps body.ret)]; rfl
+    have hx : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q,
+        ∃ t < body.ret.count, x = refPos (body.ret.get t) := by
+      intro q hq x hx
+      have : x ∈ psPos (Desc.ofSeq body.ret) := by
+        rw [← hqs]; exact List.mem_flatMap.2 ⟨q, hq, hx⟩
+      rw [hpos, List.mem_map] at this
+      obtain ⟨t, ht, e⟩ := this
+      exact ⟨t, List.mem_range.1 ht, e.symm⟩
+    have hrefOk : ∀ t < body.ret.count, Resolve.RefOk P d body.nodes.size (body.ret.get t) := hB.2
+    have hq1 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q, 0 ≤ x.2 := by
+      intro q hq x hxq
+      obtain ⟨t, -, rfl⟩ := hx q hq x hxq
+      simp [refPos]
+    have hq2 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q,
+        Fits (ctxOf P memo d) x := by
+      intro q hq x hxq k hk
+      obtain ⟨t, ht, rfl⟩ := hx q hq x hxq
+      simp only [refPos, Tgt.ref.injEq] at hk
+      have := (hrefOk t ht).2 hk.1
+      rw [← hk.2]
+      show ((body.ret.get t).j : Int) < _
+      exact_mod_cast this.2
+    have hq3 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ x ∈ pos q,
+        ∀ i, x.1 = .ref true i → i < (ctxOf P memo d).body.params.size ∧
+          x.2 < (((ctxOf P memo d).body.params[i]!).2.leaves : Int) := by
+      intro q hq x hxq i hi
+      obtain ⟨t, ht, rfl⟩ := hx q hq x hxq
+      simp only [refPos, Tgt.ref.injEq] at hi
+      have := (hrefOk t ht).1 hi.1
+      rw [← hi.2]
+      exact ⟨this.1, by show ((body.ret.get t).j : Int) < _; exact_mod_cast this.2⟩
+    have hq4 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), ∀ w p,
+        (Tgt.gate w, p) ∈ pos q → LocW P d p.toNat w := by
+      intro q hq w p hxq
+      obtain ⟨t, -, he⟩ := hx q hq _ hxq
+      simp [refPos] at he
+    have hq0 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), 0 < q.count := by
+      intro q hq
+      obtain ⟨g, hg, hqg⟩ := List.mem_flatMap.1 hq
+      unfold Desc.ofSeq at hg
+      rw [of_segs, Array.toList_filter, List.mem_filter, Array.toList_map, List.mem_map] at hg
+      obtain ⟨⟨q', -, rfl⟩, hc⟩ := hg
+      have e : q = q' := by simpa [Seg.one] using hqg
+      subst e
+      simpa [Desc.Seg.count, Seg.one] using hc
+    have hgo : ∀ g ∈ ret.toList, ShapeOk P d g ∧ GateW P d g := by
+      intro g hg
+      rw [hout] at hg
+      rcases mem_foldl outs ret0 g hg with hg | ⟨v, hv, hg⟩
+      · exact absurd hg (by simp [ret0])
+      · obtain ⟨q, hq, hqv⟩ := forall2_mem hF v hv
+        exact ⟨hS hp' Flock.Steps.FUEL q v (hq0 q hq) (hq1 q hq) (hq2 q hq) (hq3 q hq) hqv g hg,
+          hW hp' q v (hq0 q hq) (hq1 q hq) (hq2 q hq) (hq3 q hq) (hq4 q hq) hqv g hg⟩
+    obtain ⟨-, hpsPos, -⟩ := of_ok ret fun g hg => (hgo g hg).1.1
+    intro w p hx'
+    rw [hpsPos] at hx'
+    obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx'
+    exact (hgo g hg).2 w p hxg
+
+theorem retW_push {P : Prog} {r : Array Desc.Summary} {f : Nat} (hf : f < r.size) (v : Desc.Summary)
+    (h : RetW P r f) : RetW P (r.push v) f := by
+  unfold RetW at h ⊢
+  rwa [getElem!_pos (r.push v) f (by simp; omega), Array.getElem_push_lt hf, ← getElem!_pos r f hf]
+
+/-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` and names its gates with
+their widths** (`RetW`), wherever `memoOf_retOk`'s facts and the widths' (`WidthFacts`) hold. -/
+theorem memoOf_retW (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
+    (hRP : RetParts P) (hDec : Decoded P) (hWF : WidthFacts P)
+    (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
+    (hnr : ∀ d < P.defs.size, (Desc.reached P)[d]! = true →
+      ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
+    (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
+    (hSO : ∀ m d, ScanOut (ctxOf P m d)) :
+    ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P memo f ∧ RetW P memo f := by
+  unfold memoOf at h
+  extract_lets seen memo0 at h
+  have h' := ok_bind_pure h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h'
+  have := forIn_range_idx (fun t (r : Array Desc.Summary) => r.size = t ∧
+      ∀ f < t, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P r f ∧ RetW P r f) _ P.defs.size ?_
+    P.defs.size 0 memo0 memo (by simp) ⟨rfl, fun f hf => absurd hf (Nat.not_lt_zero _)⟩ (by simpa using h')
+  · exact fun f hf => (this.2 f (by simpa using hf))
+  intro t r y htP ⟨hsz, hI⟩ hy
+  obtain ⟨v, rfl, hv⟩ : ∃ v, y = .yield (r.push v) ∧
+      ((seen[t]! = true ∧ ¬t = P.root) → Desc.summarize P r t = .ok v) := by
+    split at hy
+    · rcases hs : Desc.summarize P r t with e | v
+      · rw [hs] at hy; cases hy
+      · rw [hs] at hy
+        change Except.ok (ForInStep.yield (r.push v)) = Except.ok y at hy
+        injection hy with hy
+        exact ⟨v, hy.symm, fun _ => rfl⟩
+    · rename_i hc
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      exact ⟨default, hy.symm, fun h => absurd h hc⟩
+  refine ⟨_, rfl, by simp [hsz], fun f hf hrf hfr => ?_⟩
+  rcases Nat.lt_succ_iff_lt_or_eq.1 hf with hf | rfl
+  · exact ⟨retOk_push (by omega) v (hI f hf hrf hfr).1, retW_push (by omega) v (hI f hf hrf hfr).2⟩
+  · replace hv := hv ⟨hrf, hfr⟩
+    have hRR : (P.defs[f]!).prim = false → ∀ k node, (ctxOf P r f).node k = .ok node →
+        RetOk P r node.fn ∧ RetW P r node.fn := by
+      intro hp k node hn
+      have hk := node_lt hn
+      have hg := node_get hn
+      change k < (P.defs[f]!).body.nodes.size at hk
+      change (P.defs[f]!).body.nodes[k]! = node at hg
+      rw [← hg]
+      exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP hrf k hk)
+    have hlast : (r.push v)[f]! = v := by
+      subst hsz
+      rw [getElem!_pos (r.push v) r.size (by simp), Array.getElem_push_eq]
+    have hS : (P.defs[f]!).prim = false → DownShape (ctxOf P r f) := fun hp =>
+      downShape_decoded P r htP hDec (hB f htP hrf) (fun k n hn => (hRR hp k n hn).1) (hSO r f)
+    refine ⟨summarize_retOk P r f v htP hRP (hB f htP hrf) hS
+      (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (fun k n hn => (hRR hp k n hn).1) (hSO r f) sc
+        hsc Flock.Steps.FUEL).1) hv (r.push v) hlast, ?_⟩
+    exact summarize_retW P r f v htP hRP (hB f htP hrf) hS
+      (fun hp => (widths_decoded P r htP hp hDec hWF (hB f htP hrf) (fun k n hn => (hRR hp k n hn).1)
+        (fun k n hn => (hRR hp k n hn).2) Flock.Steps.FUEL).1) hv (r.push v) hlast
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
