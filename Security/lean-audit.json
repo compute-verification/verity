@@ -1852,10 +1852,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Flock.Guarantees.ServerBlocks.CR": {
-   "owner": "@proofs",
-   "digest": "3a88b9b953ac300d7f959e30dfad72a1b62db0941fc398825edab5ac42ec4992"
   }
  },
  "meaning": [
@@ -35275,7 +35271,6 @@
     "Flock.Guarantees.ServerBlocks": "2bdc4119b6d361e7b9db427f1b32a2d8eaf08caf15141e5a56c206f0124af2fe",
     "Flock.Guarantees.ServerBlocks.B": "f23a3b2c1c8872071c32d29c689897b1bd9afe004cd2d42cedac8ee04360c990",
     "Flock.Guarantees.ServerBlocks.BlockEscapes": "8315a8d605d7bf0d51e5d9e5a2f246590ae7c4a163a9b0daddea3e3e50c6d3c7",
-    "Flock.Guarantees.ServerBlocks.CR": "3a88b9b953ac300d7f959e30dfad72a1b62db0941fc398825edab5ac42ec4992",
     "Flock.Guarantees.ServerBlocks.T": "5fdca4918bfb46193fabe73d812e963c087ca41b58dba3ce568756f32407e80b",
     "Flock.Guarantees.ServerBlocks.W": "bb3d0174259c103a680b55829531bd0b4ba9ab4680e786f63cbbd3548f7803bd",
     "Flock.Guarantees.ServerBlocks.blockWrong": "439527aed93ffdccf97c5b56bafb95886ef1956f699ed2e2b1ea9567b25f8010",
