@@ -1,8 +1,9 @@
 """Dither's J10-R units ($DITHER_SO_UNITS=j10r: `benchmarks/hash/dither/j10r_units.py`, the host units the gate holds the
-GPU's receipts to word for word) in RT-ALGO-16's verifier form (#3574): a call's unit u = ri (N / 32) + cj at position
-u0 + u reads its call's seed_c at u0 and the blocks core's credit derives for tile t = u at the call's slot M
-(`core_check.j10r_blocks`), so its public rows are credit's `public_table` and its receipt `h1tile.j10r_reference`'s at
-them; and `forms.form_of` labels such an arm by #3574."""
+GPU's receipts to word for word) in RT-ALGO-16's verifier form (#3574): a call's first position u0 is credit's (the
+window's earlier calls' units), its unit u = ri (N / 32) + cj at position u0 + u reads its call's seed_c at u0 and the
+blocks core's credit derives for tile t = u at the call's slot M (`core_check.j10r_blocks`), so its public rows are
+credit's `public_table` and its receipt `h1tile.j10r_reference`'s at them; and `forms.form_of` labels such an arm by
+#3574 when it is on credit's layout (`forms.j10r_part`)."""
 from __future__ import annotations
 
 import functools
@@ -41,6 +42,21 @@ def dither(name: str):
             sys.modules["receipts"] = shadow
 
 
+@functools.cache
+def served(name: str):
+    """`benchmarks/pouw/served_h1/<name>.py`, imported as dither imports it (served_h1 on sys.path); sys.path is restored
+    and the served_h1 modules it loaded are dropped from sys.modules."""
+    here, path, before = DITHER.parents[1] / "pouw" / "served_h1", list(sys.path), set(sys.modules)
+    sys.path.insert(0, str(here))
+    try:
+        return __import__(name)
+    finally:
+        sys.path[:] = path
+        for m in set(sys.modules) - before:
+            if Path(getattr(sys.modules[m], "__file__", None) or "/").parent == here:
+                sys.modules.pop(m)
+
+
 def _units(m: int, n: int) -> list[tuple[int, int]]:
     """A call's units (ri, cj) in dither's order, unit u = ri (n / 32) + cj (`j10r_units.call_receipts`)."""
     return [divmod(u, n // TILE[1]) for u in range((m // TILE[0]) * (n // TILE[1]))]
@@ -60,6 +76,23 @@ def test_each_units_blocks_are_the_ones_credit_derives_at_the_slot(m):
         units = units if m == 64 else units[:per] + units[-per:]
         assert all(JU.blocks(m, k, ri, cj) == CC.j10r_blocks(m, k, TILE, t // per, t % per)
                    for ri, cj in units for t in [ri * per + cj]), (n, k)
+
+
+@pytest.mark.parametrize("t", [64, 2048])
+def test_each_calls_first_position_is_credits_u0(t):
+    """The arm's call w of step s starts at s U + off(w) (`serve.static_layout`, dither's `u_step` and `offs`): credit's
+    u0 for that call, the sum of `credit.call_work`'s sizes before it in the window's layout at M = T (two layers of
+    Llama-3.1-8B's linears, three steps)."""
+    SV = served("serve")
+    names = [f"{x}{layer}" for layer in range(2) for x in ("qkv", "o", "gate_up", "down")]
+    nk = LLAMA * 2
+    steps = 3
+    layout = {"calls": [[nm, s] for s in range(steps) for nm in names], "m": t, "tile": list(TILE),
+              "linears": [[nm, k, n] for nm, (n, k) in zip(names, nk)]}
+    sizes = [size for size, _work in Cr.call_work(layout)]
+    offs, u = SV.static_layout([n for n, _k in nk], t)
+    want = [s * u + offs[w] for s in range(steps) for w in range(len(names))]
+    assert [sum(sizes[:i]) for i in range(len(sizes))] == want
 
 
 def test_the_arms_public_rows_are_credits():
