@@ -1848,6 +1848,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.PeriodRun.Sound": {
+   "owner": "@lean",
+   "digest": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba"
   }
  },
  "meaning": [
@@ -3252,6 +3256,12 @@
    "assumptions": [],
    "type_hash": "2349616973612a78bdb833e74d98a7ec19326ddf536e89213964f9e18066707f"
   },
+  "Accounting.SecurityProofs.JointHorizon": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizon : Accounting.Guarantees.JointHorizon"],
+   "assumptions": [],
+   "type_hash": "52c4ce2f8005c313ffa4a0e785a9679cdbb09e369d9d64275a43023bbda85986"
+  },
   "Accounting.SecurityProofs.JointPerRun": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.JointPerRun : Accounting.Guarantees.JointPerRun"],
@@ -3264,11 +3274,11 @@
    "assumptions": [],
    "type_hash": "dc12aa2ed2a07c0007c3d7e72ba8302577bc0a4da2bb06db02379eba87f8b9bd"
   },
-  "Accounting.SecurityProofs.JointHorizon": {
-   "owner": "@lean"
-  },
   "Accounting.SecurityProofs.JointPeriod": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointPeriod : Accounting.Guarantees.JointPeriod"],
+   "assumptions": [],
+   "type_hash": "199c3429112a2415364481b6adda32dad7324bcf045feef1f65fd46b2d7717d1"
   },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
@@ -10990,8 +11000,8 @@
    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": "frozen (no-function,hash): It is PearlCEndToEndPerRun on the machine that stops a run at its budget (Pouw.PearlC.CostModel.withStop, Security/Definitions/Pouw/PearlC/W1Stop.lean), from the γ-gap property per coin GγPerCoin, a hypothesis (at W1 priced, the conjecture the per-run bound rests on), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function. At W1 priced (CM := W1.w1Priced dv salt) and the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt), its hypothesis GγPerCoin rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and GγPerCoin is open there (claim pouw-gamma-per-coin). It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": "frozen (no-function,hash): It carries PearlCStopEndToEndPerRun, from the γ-gap property per coin GγPerCoin over Pearl-C's game with a uniform oracle, to the compute audit of an abstract run of the device model whose cost on the stopping machine the priced sum covers (Accounting.RealizesPearlCPriced, Security/Definitions/Accounting/PerRun.lean), not to a Lean function. At W1 priced (CM := W1.w1Priced dv salt) and the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt), its hypothesis GγPerCoin rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and GγPerCoin is open there (claim pouw-gamma-per-coin). It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Accounting.SecurityProofs.JointPerRunPriced": "frozen (no-function): Like JointPerRun, it composes the three audits' per-run guarantees, the compute audit's on the priced sum, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointPeriod": "frozen (no-function): Like JointPerRun, it composes the five audits' per-period guarantees (PeriodRun.Sound), each a hypothesis over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizon": "frozen (no-function): Like JointPeriod, over a horizon of periods on one coin space: every period's five per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointPeriod": "frozen (no-function): Like JointPerRun, it composes the five audits' per-period guarantees (PeriodRun.Sound), each a hypothesis over an abstract period of the device model whose verdicts are a field of the run (PeriodRun.accepts), not a Lean function (Security/Definitions/Accounting/JointPeriod.lean). With that field as its function it still misfits: it bounds a Pouw.pr event, which shape.events does not list, and takes the coins' Nonempty and the circuit's and the run's Prop fields (PeriodRun.fits), which are no premise.",
+   "Accounting.SecurityProofs.JointHorizon": "frozen (no-function): Like JointPeriod, over a horizon of periods on one coin space: every period's five per-period guarantees (PeriodRun.Sound) are hypotheses over an abstract period of the device model whose verdicts are a field of the run (PeriodRun.accepts), not a Lean function (Security/Definitions/Accounting/JointPeriod.lean). With that field as its function it still misfits: it bounds a Pouw.pr event, which shape.events does not list, and takes the coins' Nonempty and the circuit's and the runs' Prop fields (PeriodRun.fits), which are no premise.",
    "Accounting.SecurityProofs.CovertResidualPerRunPriced": "frozen (no-function): Like JointPerRunPriced, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Memory.Adds": "frozen (no-function): It composes PoUS's own guarantee, AuditSecure over the abstract audit game (Security/Definitions/Pous/Model/Audit.lean) taken as a hypothesis, with the counting core: lemma M of the actual-circuit model, counting the help (an (M + H)-bit responder), about no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsOn": "frozen (no-function): It composes PoUS's AuditSecureOn over the ring model (Security/Definitions/Pous/P2/Cost.lean), taken as a hypothesis, with the counting core: lemma M counting the help, about no function of the code.",
@@ -12633,9 +12643,10 @@
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
+    "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
-    "Accounting.SecurityProofs.JointPeriodStated",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -13428,13 +13439,12 @@
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
   },
   "Definitions.Accounting.Guarantees.JointPeriod": {
-   "digest": "4590de64342346533c730880c716f5708df0125ceb3504fc0efb6c59a0faa4ac",
+   "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
    "definitions": {
     "Accounting.Guarantees.JointHorizon": "13e5429cabeb841c24bf9031914538c97d8fbe295f591ebc88baa39a906673e3",
-    "Accounting.Guarantees.JointPeriod": "f440ccdd941661360c971df94372c1e981d3ecec5fa9e0c9bd35ccbb8c6a038c",
-    "Accounting.Guarantees.JointPeriodStated": "f7a1dd87bd4f55bdb2947bf19b8b7a56d02cf8a730f08fd80a6170ca4eaeb5d8"
+    "Accounting.Guarantees.JointPeriod": "f440ccdd941661360c971df94372c1e981d3ecec5fa9e0c9bd35ccbb8c6a038c"
    },
-   "guarantees": ["Accounting.SecurityProofs.JointPeriodStated"]
+   "guarantees": ["Accounting.SecurityProofs.JointHorizon", "Accounting.SecurityProofs.JointPeriod"]
   },
   "Definitions.Accounting.Guarantees.Localization": {
    "digest": "2375ead4630b5640c3072e6aa1ed43cc3a9fd821a28e01d786c4cc2577d78fe4",
@@ -14354,9 +14364,10 @@
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
+    "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
-    "Accounting.SecurityProofs.JointPeriodStated",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -14400,7 +14411,7 @@
     "Accounting.instDecidableEqAudit": "551d5bbb9d5a40c37cbcc687b93b265d4cb0120365b1f1fc79580bc9478d7e60",
     "Accounting.instFintypeAudit": "dc9e117e0e88e8b554ce66dc5272159cd8ee10f8ae1184a3bfe1034a0b87a87d"
    },
-   "guarantees": ["Accounting.SecurityProofs.JointPeriodStated"]
+   "guarantees": ["Accounting.SecurityProofs.JointHorizon", "Accounting.SecurityProofs.JointPeriod"]
   },
   "Definitions.Accounting.Memory": {
    "digest": "6611399160c026f613e5e66208c6725847cddb1f299db2addf06baedfcf3efef",
@@ -17210,7 +17221,8 @@
     "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
-    "Accounting.SecurityProofs.JointPeriodStated",
+    "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
@@ -17563,7 +17575,8 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
-    "Accounting.SecurityProofs.JointPeriodStated",
+    "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointPeriod",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -22916,9 +22929,10 @@
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
+    "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
-    "Accounting.SecurityProofs.JointPeriodStated",
+    "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
