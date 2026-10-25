@@ -85,14 +85,14 @@ Accepted.lean   an accepted run of the network certificate check is a run of the
                                Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
                                each unless the run yields a SHA-512 collision or an LMS forgery
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
-CheckAxioms.lean               one #print axioms line per statement and witness, then 13 more lemmas
+CheckAxioms.lean               one #print axioms line per statement and witness, then eight more lemmas
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-lake env lean CheckAxioms.lean                              # the axioms of the 54 statements, 16 witnesses, 6 agreements and 13 lemmas
+lake env lean CheckAxioms.lean                              # the axioms of the 46 statements, 16 witnesses and 8 lemmas
 # the difftest is the certifier program's: see its package, ../../../verity/core/protocols/certifier/lean/
 ~~~
 
