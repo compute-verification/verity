@@ -6,9 +6,10 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.  A mismatch exits 3 before any launch.
 1. The check, on every case in CHECK (fixture.py's): S and O are filled with 0xA5 and QK^T and PV run on the case's
    inputs; each buffer must equal the fixture's byte for byte (every word the Definition defines, and 0xA5A5 everywhere
-   else).  Each tiling runs at 4 warps a block, then at 1 and at 8, which give the tiles to other warps: the same bytes.
-   The tilings are q8 (a block per 8 query rows, head and sequence) and, where 8 divides the query heads a KV head serves,
-   h8 (a block per query row, 8 heads and sequence).  A control arm fills the buffers and launches nothing, and must be
+   else).  The tilings are q8 (a block per 8 query rows, head and sequence), at 4, 1 and 8 warps a block, and, where 8
+   divides the query heads a KV head serves, h8 (8 heads a tile, a block per query row and sequence and Y blocks of head
+   groups), with one group a block of 1 warp, every 8th group a block of 8 warps, and all of them in one block of 4 warps:
+   each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers and launches nothing, and must be
    rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
    them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests.
 2. The torch functions (attn.py's qk and pv, the skeleton's interface), on every decode case (one query a sequence): once
@@ -17,10 +18,10 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    is not compared); for FULL, each sequence's digests.
    Exit 4 if any check fails, before anything is timed.
 3. Diagnostic timing (information only, not a panel row), at the H200 model's decode step (TIME_B sequences, TIME_H query
-   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here in both tilings, each
-   the median of REPS after a warm-up, interleaved rep by rep with torch's SDPA (its default choice of backend, and
-   FlashAttention's alone; both include the softmax these two leave out) and with torch's two bf16 batched matmuls
-   (cuBLAS), on the card.
+   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here at every h8 launch
+   shape (Y and warps; q8 where h8 doesn't apply) and through attn.py, each the median of REPS after a warm-up,
+   interleaved rep by rep with torch's SDPA (its default choice of backend, and FlashAttention's alone; both include the
+   softmax these two leave out) and with torch's two bf16 batched matmuls (cuBLAS), on the card.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -157,21 +158,30 @@ class Attn:
     def kernel(self, op: str, tiling: str):
         return self.funcs[f"attn_{op}_d{self.D}" + ("_h8" if tiling == "h8" else "")]
 
-    def launch(self, op: str, tiling: str, warps: int) -> None:
-        """attn.grid's blocks for ``tiling``, of ``warps`` warps."""
+    def launch(self, op: str, tiling: str, warps: int, Y: int = 0) -> None:
+        """attn.grid's blocks for ``tiling`` (h8: Y blocks of head groups), of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
         params = (vp * 1)(C.cast(C.pointer(args), vp))
-        self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid(tiling, self.B, self.H, self.Mq), 32 * warps, 1, 1, 0, None,
-                params, None)
+        self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid(tiling, self.B, self.H, self.Mq, Y), 32 * warps, 1, 1, 0,
+                None, params, None)
+
+    def shapes(self) -> list[tuple[str, int, int]]:
+        """The check's launches, (tiling, warps, Y): q8 at 4, 1 and 8 warps; h8 one group a block of 1 warp, every 8th group
+        a block of 8 warps, and every group in one block of 4 warps."""
+        out = [("q8", w, 0) for w in WARPS]
+        if "h8" in self.tilings:
+            g = self.H // 8
+            out += [("h8", 1, g), ("h8", 8, max(1, g // 8)), ("h8", 4, 1)]
+        return out
 
     def poison(self) -> None:
         self.cu("cuMemsetD8_v2", self.S, POISON, int(np.prod(self.s_shape)) * 2)
         self.cu("cuMemsetD8_v2", self.O, POISON, int(np.prod(self.o_shape)) * 2)
         self.cu("cuCtxSynchronize")
 
-    def run(self, tiling: str, warps: int) -> None:
-        self.launch("qk", tiling, warps)
-        self.launch("pv", tiling, warps)
+    def run(self, tiling: str, warps: int, Y: int = 0) -> None:
+        self.launch("qk", tiling, warps, Y)
+        self.launch("pv", tiling, warps, Y)
         self.cu("cuCtxSynchronize")
 
     def outputs(self) -> tuple[np.ndarray, np.ndarray]:
@@ -180,6 +190,10 @@ class Attn:
     def free(self) -> None:
         for p in (*self.dev.values(), self.S, self.O):
             self.cu("cuMemFree_v2", p)
+
+
+def arm_name(tiling: str, warps: int, Y: int) -> str:
+    return f"{tiling}@{warps}w" + (f"/y{Y}" if Y else "")
 
 
 def sha(a: np.ndarray) -> str:
@@ -199,17 +213,16 @@ def check_case(cu: Cuda, funcs: dict, path: str) -> dict:
     row = _head(name, z, a)
     row["words"] = {"S": int((z["S"] != 0xA5A5).sum()), "O": int((z["O"] != 0xA5A5).sum())}
     ok = True
-    for tiling in a.tilings:
-        for warps in WARPS:
-            a.poison()
-            a.run(tiling, warps)
-            S, O = a.outputs()
-            arm = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum()), "S_sha512": sha(S), "O_sha512": sha(O)}
-            if arm["S_mismatches"] or arm["O_mismatches"]:
-                ok = False
-                arm["examples"] = [{"buffer": k, "at": i, "got": int(got[tuple(i)]), "want": int(z[k][tuple(i)])}
-                                   for k, got in (("S", S), ("O", O)) for i in np.argwhere(got != z[k])[:4].tolist()]
-            row["arms"][f"{tiling}@{warps}w"] = arm
+    for tiling, warps, Y in a.shapes():
+        a.poison()
+        a.run(tiling, warps, Y)
+        S, O = a.outputs()
+        arm = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum()), "S_sha512": sha(S), "O_sha512": sha(O)}
+        if arm["S_mismatches"] or arm["O_mismatches"]:
+            ok = False
+            arm["examples"] = [{"buffer": k, "at": i, "got": int(got[tuple(i)]), "want": int(z[k][tuple(i)])}
+                               for k, got in (("S", S), ("O", O)) for i in np.argwhere(got != z[k])[:4].tolist()]
+        row["arms"][arm_name(tiling, warps, Y)] = arm
     a.poison()
     S, O = a.outputs()
     ctl = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum())}
@@ -249,18 +262,17 @@ def full_case(cu: Cuda, funcs: dict, path: str) -> dict:
         a.free()
         return row
     ok = True
-    for tiling in a.tilings:
-        for warps in WARPS:
-            a.poison()
-            a.run(tiling, warps)
-            S, O = a.outputs()
-            sd, od = gen.digests(S), gen.digests(O)
-            arm = {"S_sequences_differing": int((sd != f["S"]).any(axis=1).sum()), "O_sequences_differing": int((od != f["O"]).any(axis=1).sum()),
-                   "S_sha512": sha(S), "O_sha512": sha(O)}
-            if arm["S_sequences_differing"] or arm["O_sequences_differing"]:
-                ok = False
-                arm["examples"] = {k: np.flatnonzero((d != f[k]).any(axis=1))[:8].tolist() for k, d in (("S", sd), ("O", od))}
-            row["arms"][f"{tiling}@{warps}w"] = arm
+    for tiling, warps, Y in a.shapes():
+        a.poison()
+        a.run(tiling, warps, Y)
+        S, O = a.outputs()
+        sd, od = gen.digests(S), gen.digests(O)
+        arm = {"S_sequences_differing": int((sd != f["S"]).any(axis=1).sum()), "O_sequences_differing": int((od != f["O"]).any(axis=1).sum()),
+               "S_sha512": sha(S), "O_sha512": sha(O)}
+        if arm["S_sequences_differing"] or arm["O_sequences_differing"]:
+            ok = False
+            arm["examples"] = {k: np.flatnonzero((d != f[k]).any(axis=1))[:8].tolist() for k, d in (("S", sd), ("O", od))}
+        row["arms"][arm_name(tiling, warps, Y)] = arm
     a.poison()
     S, O = a.outputs()
     ctl = {"S_sequences_differing": int((gen.digests(S) != f["S"]).any(axis=1).sum()),
@@ -338,22 +350,26 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
     e0, e1 = cu.event(), cu.event()
     ms = C.c_float()
 
-    def ours(op, tiling, warps):
+    def ours(op, tiling, warps, Y=0):
         cu("cuEventRecord", e0, None)
-        a.launch(op, tiling, warps)
+        a.launch(op, tiling, warps, Y)
         cu("cuEventRecord", e1, None)
         cu("cuEventSynchronize", e1)
         cu("cuEventElapsedTime", C.byref(ms), e0, e1)
         return ms.value
 
-    # a warp per key tile of QK^T and per d tile of PV
-    qk_w, pv_w = min(8, -(-L // 16)), D // 16
     arms = {}
-    for tiling in a.tilings:
-        arms[f"qk_{tiling}"] = lambda tiling=tiling: ours("qk", tiling, qk_w)
-        arms[f"pv_{tiling}"] = lambda tiling=tiling: ours("pv", tiling, pv_w)
-    out = {"part": "timing", "shape": {"B": B, "H": H, "Hkv": Hkv, "D": D, "L": L, "queries_per_sequence": 1}, "reps": reps,
-           "warps": {"qk": qk_w, "pv": pv_w}, "note": "diagnostic only; SDPA includes the softmax qk and pv leave out"}
+    if "h8" in a.tilings:  # every launch shape of the head-group kernels: Y blocks of head groups, of 1 to 8 warps
+        g = H // 8
+        for Y in sorted({max(1, g >> s) for s in range(0, 8)}, reverse=True):
+            for w in (1, 2, 4, 8):
+                for op in ("qk", "pv"):
+                    arms[f"{op}_h8@{w}w/y{Y}"] = lambda op=op, w=w, Y=Y: ours(op, "h8", w, Y)
+    else:  # a warp per key tile of QK^T and per d tile of PV
+        arms["qk_q8"] = lambda: ours("qk", "q8", min(8, -(-L // 16)))
+        arms["pv_q8"] = lambda: ours("pv", "q8", D // 16)
+    out = {"part": "timing", "shape": {"B": B, "H": H, "Hkv": Hkv, "D": D, "L": L, "queries_per_sequence": 1, "kpv": attn.PAD_K},
+           "reps": reps, "attn_py_launch": attn.H8_LAUNCH, "note": "diagnostic only; SDPA includes the softmax qk and pv leave out"}
     try:
         import torch
         import torch.nn.functional as F
@@ -411,8 +427,11 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
     for _ in range(reps):
         for arm, fn in arms.items():
             got[arm].append(fn())
-    out["median_ms"] = {arm: round(statistics.median(ts), 4) for arm, ts in got.items()}
-    out["ours_qk_plus_pv_ms"] = {t: round(out["median_ms"][f"qk_{t}"] + out["median_ms"][f"pv_{t}"], 4) for t in a.tilings}
+    med = out["median_ms"] = {arm: round(statistics.median(ts), 4) for arm, ts in got.items()}
+    out["best_ms"] = {op: min(((t, arm) for arm, t in med.items() if arm.startswith(f"{op}_h8@") or arm == f"{op}_q8"), default=None)
+                      for op in ("qk", "pv")}
+    if all(out["best_ms"].values()):
+        out["best_qk_plus_pv_ms"] = round(out["best_ms"]["qk"][0] + out["best_ms"]["pv"][0], 4)
     a.free()
     return out
 
