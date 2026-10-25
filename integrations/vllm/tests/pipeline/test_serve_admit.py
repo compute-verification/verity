@@ -1,12 +1,18 @@
 """serve-openai's ``--admit release-order`` (`serve_admit.ReleaseOrder`) on CPU: requests reach the engine in the warden's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
 later ones, and a release that never comes (the warden dropped it) or is refused holds them only until its skip, never for
-good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock."""
+good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.
+
+And a step's rows (`serve_admit.keep_scheduler_rows`, VLLM-98): Model Runner V2's own order puts a later-admitted shorter
+prompt's first row ahead of an earlier one's (endpoint 2's windows 220 and 237); with the scheduler's order kept, a step's
+new rows are in admission order, decodes first."""
 from __future__ import annotations
 
 import json
 import socket
+import sys
 import threading
+import types
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -14,11 +20,13 @@ from typing import Any
 import pytest
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, Tokenizer, records
+from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_openai import SSE_DONE
+from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 
 class Timers:
@@ -124,6 +132,111 @@ def test_unnumbered_malformed_repeated_and_new_runs():
     assert fwd == ["rNone", "r1", "r0"] and g.run == "b" and g.next == 1
     arrive(g, 7, run="a")                            # a's, after b began: unordered
     assert fwd[-1] == "r7" and g.summary()["stale"] == 1 and g.summary()["runs"] == 2
+
+
+# ---------------------------------------------------------------------------------------------------------------- a step's rows
+
+RUNNER_MODULE = "tests.pipeline.fake_model_runner_v2"
+
+
+def runner_module() -> types.ModuleType:
+    """Model Runner V2's module as the step reads it (vllm/v1/worker/gpu/model_runner.py at d9105ea8): its runner's
+    ``gather_batch_req_state`` lays the step out by the module's ``sort_batch_req_ids``, looked up when the step runs."""
+    mod = types.ModuleType(RUNNER_MODULE)
+    mod.sort_batch_req_ids = RQ.sort_batch_req_ids
+
+    class GPUModelRunner:
+        decode_query_len = 1
+
+        def gather_batch_req_state(self, so: Any) -> list[str]:
+            return mod.sort_batch_req_ids(so.num_scheduled_tokens, so.scheduled_spec_decode_tokens, self.decode_query_len)
+
+    GPUModelRunner.__module__ = RUNNER_MODULE
+    mod.GPUModelRunner = GPUModelRunner
+    return mod
+
+
+@pytest.fixture
+def v2():
+    mod = runner_module()
+    sys.modules[RUNNER_MODULE] = mod
+    yield mod
+    del sys.modules[RUNNER_MODULE]
+
+
+def fcfs_step(running: dict[str, int], new: dict[str, int], drafts: dict[str, list[int]] | None = None) -> SimpleNamespace:
+    """A `SchedulerOutput` as vLLM's FCFS scheduler lists it: its running requests in running order, then the ones it
+    newly schedules in waiting-queue order, the admission order; each with its scheduled rows."""
+    rows = {**running, **new}
+    return SimpleNamespace(num_scheduled_tokens=rows, scheduled_spec_decode_tokens=drafts or {},
+                           scheduled_new_reqs=[SimpleNamespace(req_id=r) for r in new], total_num_scheduled_tokens=sum(rows.values()))
+
+
+FCFS = SimpleNamespace(scheduler_config=SimpleNamespace(policy="fcfs"))
+DECODES = {f"running.{i}": 1 for i in range(5)}
+#: endpoint 2 (r20261024-222638-0a91), window 237: varied.00035 (128 tokens, admitted 110), then varied.00036 (81, admitted
+#: 111), both first scheduled in its step 0 beside the running decodes
+W237 = fcfs_step(DECODES, {"varied.00035": 128, "varied.00036": 81})
+#: window 220: varied.00008/9/10 (86, 230 and 239 tokens, admitted 83/84/85) first scheduled in one step; a prefix-cache
+#: hit leaves 00010 fewer rows to schedule than 00009
+W220 = fcfs_step({}, {"varied.00008": 86, "varied.00009": 230, "varied.00010": 207})
+
+
+def test_model_runner_v2_lays_co_admitted_prefills_out_by_length(v2):
+    runner = v2.GPUModelRunner()
+    assert runner.gather_batch_req_state(W237) == [*DECODES, "varied.00036", "varied.00035"]
+    assert runner.gather_batch_req_state(W220) == ["varied.00008", "varied.00010", "varied.00009"]
+
+
+def test_release_order_keeps_the_schedulers_rows(v2):
+    runner, vllms = v2.GPUModelRunner(), v2.sort_batch_req_ids
+    rows = sa.keep_scheduler_rows(runner, FCFS)
+    try:
+        assert hooks.live("admit-rows") and v2.sort_batch_req_ids is sa.scheduler_order
+        assert runner.gather_batch_req_state(W237) == [*DECODES, "varied.00035", "varied.00036"]
+        assert runner.gather_batch_req_state(W220) == ["varied.00008", "varied.00009", "varied.00010"]
+        # H1's batch order reads the runner module's sort, so its tables follow the same order
+        assert [r for r, _ in RQ.batch_order(runner, W237)] == [*DECODES, "varied.00035", "varied.00036"]
+    finally:
+        rows.uninstall()
+    assert v2.sort_batch_req_ids is vllms and not hooks.live("admit-rows")
+    assert runner.gather_batch_req_state(W237)[-2:] == ["varied.00036", "varied.00035"]
+
+
+def test_a_new_row_of_one_token_stays_behind_the_earlier_admitted_prefill(v2):
+    # the token budget leaves the later-admitted request one row: vLLM puts it among the decodes, ahead of the earlier one
+    step = fcfs_step({"running.0": 1, "running.1": 1}, {"early": 2045, "late": 1})
+    runner = v2.GPUModelRunner()
+    assert runner.gather_batch_req_state(step) == ["running.0", "running.1", "late", "early"]
+    with sa.keep_scheduler_rows(runner, FCFS):
+        assert runner.gather_batch_req_state(step) == ["running.0", "running.1", "early", "late"]
+
+
+def test_requests_verifying_drafts_stay_first(v2):
+    step = fcfs_step({"running.0": 1, "verify": 3}, {"new": 40}, drafts={"verify": [7, 8]})
+    with sa.keep_scheduler_rows(v2.GPUModelRunner(), FCFS):
+        assert v2.GPUModelRunner().gather_batch_req_state(step) == ["verify", "running.0", "new"]
+
+
+def test_keeping_the_schedulers_rows_is_refused_without_its_premises(v2):
+    v1_runner = type("GPUModelRunner", (), {"__module__": __name__})()
+    with pytest.raises(RuntimeError, match="VLLM_USE_V2_MODEL_RUNNER"):
+        sa.keep_scheduler_rows(v1_runner, FCFS)
+    for sched in (SimpleNamespace(scheduler_config=SimpleNamespace(policy="priority")), SimpleNamespace()):
+        with pytest.raises(RuntimeError, match="FCFS"):
+            sa.keep_scheduler_rows(v2.GPUModelRunner(), sched)
+    assert not hooks.live("admit-rows")
+
+
+def test_the_pinned_runner_orders_rows_as_its_mirror_and_takes_the_schedulers_order():
+    """On a pod (vLLM installed): vLLM's own ``sort_batch_req_ids`` inverts windows 220 and 237 as the mirror does, and
+    `keep_scheduler_rows` replaces it in Model Runner V2's module."""
+    mr = pytest.importorskip("vllm.v1.worker.gpu.model_runner")
+    for step in (W237, W220):
+        assert mr.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1) == RQ.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1)
+    runner = type("GPUModelRunner", (), {"__module__": mr.__name__})()
+    with sa.keep_scheduler_rows(runner, FCFS):
+        assert mr.sort_batch_req_ids(W237.num_scheduled_tokens, {}, 1) == list(W237.num_scheduled_tokens)
 
 
 # ---------------------------------------------------------------------------------------------------------------- over HTTP
