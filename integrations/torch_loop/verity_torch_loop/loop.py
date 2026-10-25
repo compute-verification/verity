@@ -10,7 +10,8 @@
 * **Serving** (:class:`TorchLoop`, an `interface.Integration`): each request is one token, embedded and run through the MLP
   for ``steps`` decode steps, step s + 1 reading step s's output. Every linear's units are recorded into the window as they
   are computed (`Window.record`), labelled with the request, step, layer and op path they serve, which Verity never reads.
-  The circuit is fixed by the loop's shape (no compiler, no advice). ``tamper``: a loop whose recorded outputs are not its
+  The circuit is fixed by the loop's shape (no compiler, no advice), or registered as its compiler's output on its schedule
+  (`compile`), the schedule committed as advice. ``tamper``: a loop whose recorded outputs are not its
   model's (bit 0 of every output word flipped before it is recorded), which the proof of any drawn unit must refuse.
 """
 from __future__ import annotations
@@ -30,6 +31,8 @@ LINEARS = ("up_proj", "down_proj")
 #: The MLP's width. C-Flock's unit statement needs a committed row longer than one SHA-512 block (over 111 bytes): at 128
 #: the s8 rows ``x`` and ``wrow`` are 128 bytes, at 64 no row is.
 H = 128
+#: the embedding's rows: a request is one of these token ids
+VOCAB = 16
 
 
 def template(k: int):
@@ -60,7 +63,7 @@ class Layer:
 class Model:
     """The two-layer W8A8 MLP of width ``h``, its weights and a ``vocab``-row embedding drawn from ``seed``."""
 
-    def __init__(self, h: int = H, vocab: int = 16, seed: int = 0) -> None:
+    def __init__(self, h: int = H, vocab: int = VOCAB, seed: int = 0) -> None:
         g = torch.Generator().manual_seed(seed)
         self.h, self.seed = h, seed
         self.embed = torch.randn(vocab, h, generator=g)
@@ -119,8 +122,9 @@ class TorchLoop:
                     x = torch.relu(y.to(torch.float32)) if layer == 0 else y.to(torch.float32)
                 self.outputs[r, step] = x
 
-    def window(self, law: dict, cap: int = 16) -> IF.Window:
-        """The loop's window under ``law`` in members of at most ``cap`` units, every unit recorded."""
-        win = IF.Window(self.circuit(), self.run_root, law, cap)
+    def window(self, law: dict, cap: int = 16, advice: dict | None = None) -> IF.Window:
+        """The loop's window under ``law`` in members of at most ``cap`` units, every unit recorded; ``advice``: the binding
+        of its compiler and its schedule's commitment (`interface.advice_binding`), when its circuit is the compiler's."""
+        win = IF.Window(self.circuit(), self.run_root, law, cap, advice=advice)
         self.run(win)
         return win

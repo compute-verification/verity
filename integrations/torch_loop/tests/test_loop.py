@@ -1,7 +1,8 @@
 """The torch loop as an integration of Verity's (`verity.ml.windows.interface`): its model computes its template's function,
 its written window is the one core's registration check derives (and a port under another domain is refused), the
 verifier's window from its records alone is the loop's, the circuit it registers before running is the one it writes, its
-unit composes into C-Flock's unit statement, a tampering loop's outputs are not its Definition's, and it loads no vLLM."""
+compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule, its unit
+composes into C-Flock's unit statement, a tampering loop's outputs are not its Definition's, and it loads no vLLM."""
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +16,7 @@ import pytest
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.windows import interface as IF, rows as CS
-from verity_torch_loop import loop as L, serve as S
+from verity_torch_loop import compile as C, loop as L, serve as S
 
 LAW = D.parse_law("stratified:2")
 
@@ -67,6 +68,32 @@ def test_the_circuit_it_registers_before_running_is_the_one_it_writes(tmp_path, 
     assert tampered["circuit"] == before and list(tampered["mismatched"].values()) == [2 * L.H]
 
 
+def test_its_compiler_compiles_the_committed_schedule_to_the_circuit_it_registers(tmp_path, capsys):
+    shape = ["--law", "subset:2", "--requests", "3", "--steps", "1", "--cap", "32"]
+    assert S.main(["--out", str(tmp_path / "w"), "--opening", str(tmp_path / "opening.json"), *shape]) == 0
+    capsys.readouterr()
+    rec = json.loads((tmp_path / "w" / "registration.json").read_text())["window"]
+    data, root = IF.opened_advice(C.compiler(), json.loads((tmp_path / "opening.json").read_text()))
+    assert rec["compiler"] == C.compiler() and rec["advice"] == {"root": root, "bits": 8 * len(data)}
+    compile_ = ["--law", "subset:2", "--cap", "32", "--out", str(tmp_path / "c.json"), "--advice"]
+    (tmp_path / "advice.bin").write_bytes(data)
+    assert C.main([*compile_, str(tmp_path / "advice.bin")]) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {"bits": 8 * len(data)}
+    theirs, mine = (json.loads(p.read_text()) for p in (tmp_path / "c.json", tmp_path / "w" / "circuit.json"))
+    assert theirs["run"] == theirs["context"] == "" and IF.circuit_of(theirs) == IF.circuit_of(mine)
+    (tmp_path / "other.bin").write_bytes(C.schedule_bytes([3, 7], 1))
+    assert C.main([*compile_, str(tmp_path / "other.bin")]) == 0
+    assert IF.circuit_of(json.loads((tmp_path / "c.json").read_text())) != IF.circuit_of(mine)
+
+
+@pytest.mark.parametrize("advice", [b"", b"not json", b'{"requests": [3], "steps": 1}', b'{"requests":[16],"steps":1}',
+                                    b'{"requests":[3],"steps":0}', b'{"requests":[],"steps":1}', b'{"requests":[3],"steps":1,"x":0}'])
+def test_its_compiler_refuses_advice_that_is_not_a_schedule(tmp_path, capsys, advice):
+    (tmp_path / "a.bin").write_bytes(advice)
+    assert C.main(["--advice", str(tmp_path / "a.bin"), "--out", str(tmp_path / "c.json")]) == C.REFUSED
+    assert "not" in capsys.readouterr().err and not (tmp_path / "c.json").exists()
+
+
 @pytest.mark.slow
 def test_its_unit_composes_into_c_flocks_unit_statement(tmp_path):
     """The statement a drawn member is proved under, from the circuit record's rows (a5's composer does the same): C-Flock
@@ -83,7 +110,7 @@ def test_its_unit_composes_into_c_flocks_unit_statement(tmp_path):
 
 
 def test_the_loop_loads_no_vllm():
-    code = ("import sys, verity_torch_loop.loop, verity_torch_loop.serve; "
+    code = ("import sys, verity_torch_loop.compile, verity_torch_loop.loop, verity_torch_loop.serve; "
             "print(sorted(m for m in sys.modules if m.split('.')[0] in ('verity_vllm', 'vllm')))")
     got = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=Path(L.__file__).parents[1])
     assert got.stdout.strip() == "[]"
