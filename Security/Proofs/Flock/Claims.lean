@@ -142,6 +142,7 @@ import Proofs.Flock.Claims.Recursion.VerdictParts
 import Proofs.Flock.Claims.Recursion.ResAccepts
 import Proofs.Flock.Claims.Recursion.RowSlots
 import Proofs.Flock.Claims.Recursion.FinalPiece
+import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
