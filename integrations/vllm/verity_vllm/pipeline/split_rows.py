@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import SPLIT_OF, SPLITS, Template, split_keys, template
 
@@ -70,13 +70,16 @@ def unit_rows(tp: Template) -> tuple[list[tuple[str, str, int, list[str]]], list
 
 
 def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, float]:
+    """A row's dot step, inverse and scale; ``statics`` as a binding holds them or as the record spells them (every value a string,
+    SCALE ``{"f64":"<hex>"}``)."""
     from verity_vllm.program.kernels import derived_rows as D
+    from verity_vllm.program.kernels.ir_rows import f64_statics
     from verity_vllm.program.kernels.kernel_registry import prim_static
 
     dot, inv = prim_static(statics, "DOT", what), prim_static(statics, "INV", what)
     if dot not in D.TC_DOT16_BY_PRIM or inv not in D.INV_SUM_BY_PRIM:
         raise ValueError(f"{what}: no twin for DOT={dot} / INV={inv} (k16 steps {sorted(D.TC_DOT16_BY_PRIM)}, INV {sorted(D.INV_SUM_BY_PRIM)})")
-    return D.TC_DOT16_BY_PRIM[dot], D.INV_SUM_BY_PRIM[inv], float(statics["SCALE"])
+    return D.TC_DOT16_BY_PRIM[dot], D.INV_SUM_BY_PRIM[inv], float(f64_statics({"SCALE": statics["SCALE"]})["SCALE"])
 
 
 def splits(qn: np.ndarray, qr: np.ndarray, kv: np.ndarray, statics: dict[str, Any], what: str) -> tuple[np.ndarray, np.ndarray]:

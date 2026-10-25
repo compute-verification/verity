@@ -13,7 +13,8 @@ nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside a
 name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
 segment's first piece.
 
-`descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`.
+`descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
+`descAgrees_of_readsExact` (`Properties.Proofs.Nci.Agrees`) from it alone, the other two proved.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Novel
@@ -29,7 +30,7 @@ exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
-    Desc.inputsAtRoot P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
+    Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     ∀ k < nodeCount P,
       (∀ s ∈ reads[k]!, s.count ≠ 0 → ∀ q, s.ps[0]? = some q →
         Desc.nodeOf (rootOffs P) q.base.toNat < nodeCount P ∧
@@ -229,7 +230,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
 their widths, the gates outside it that its gates read, θ's taken out, each once; `novelWidth` sums their widths, and so
 does `NciCheck.ius`. -/
 theorem novelExact_of (hR : ReadsExact) : NovelExact := by
-  intro bytes P reads mask own c dv hdec hov hlo hin han hc hms hos hdsz hmask hown hdiv hn u hu
+  intro bytes P reads mask own c dv hdec hov hlo hin hwk han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
   obtain ⟨hcN, -, -, -, -⟩ := circuitOf_ok P c hc
   have hng : ∀ k g, g ∈ nodeGates P k ↔ (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]! := mem_nodeGates P
@@ -242,7 +243,7 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
     intro g hg
     obtain ⟨k, hk, h'⟩ := node_exists (rootOffs P) (nodeCount P) h0 g (by rw [hK]; exact hg)
     exact ⟨k, hk, (hng k g).2 h'⟩
-  have hRk := hR bytes P reads c hdec hov hlo hin han hc
+  have hRk := hR bytes P reads c hdec hov hlo hin hwk han hc
   obtain ⟨-, hI⟩ := intoOf_spec (rootOffs P) own mask reads dv.n
   set segs := (Desc.intoOf (rootOffs P) own mask reads dv.n)[u]! with hsegs
   -- every gate a collected segment names, with its width, its segment and their root nodes
@@ -326,7 +327,9 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
   refine Finset.sum_congr rfl fun a _ => ?_
   cases dv.theta.contains a <;> simp
 
-/-- **`DescAgrees`, from the three open statements**: `Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
+/-- **`DescAgrees`, from three statements** (`Resolve.bodiesOk` proves the second, and
+`OperandsResolve.operandsResolve_of` the first from it):
+`Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
 (`Resolve.operandsEarlier_of`, `Walk.gatesLocated_of`), and `ReadsExact` gives `NovelExact` (`novelExact_of`). -/
 theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (hR : ReadsExact) :
     Properties.DescAgrees :=

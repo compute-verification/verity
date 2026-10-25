@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline.serving_templates import SLICES, Template, _bind, template
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -27,7 +27,7 @@ def extent(tp: Template, statics: Mapping[str, Any]) -> int:
 def read(m: CS.Member, rows: Sequence[tuple[str, Any, dict, dict]], store: Any, weights: Callable, arrivals: dict[str, int] | None,
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units, row by row, then unit (i_0, i_1, ..) in row-major order of the row's extents along the template's
-    axes: each argument group (``slices(pi, store, weights, rid, arrive, group)``, `serving_rows._slices`) its parameter's element
+    axes: each argument group (``slices(pi, store, weights, rid, arrive, group, bits=b)``, `serving_rows._slices`) its parameter's element
     i_k along each axis it carries and whole along the others, and the output the row's output element (i_0, i_1, ..), the
     parameters' dimensions those of the row's Definition; every port its elements' bytes in u16 words (``Template.packed``).  One
     index entry per row, the range of its units."""
@@ -52,7 +52,7 @@ def read(m: CS.Member, rows: Sequence[tuple[str, Any, dict, dict]], store: Any, 
         y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
         if y is None:
             raise LookupError(f"row {r['i']} output {member}: {why}")
-        got = [per_unit(elements(slices(pi, store, weights, rid, arrive, g), b, f"{what} argument {k}"), dims(ty), c, ext,
+        got = [per_unit(elements(slices(pi, store, weights, rid, arrive, g, bits=b), b, f"{what} argument {k}"), dims(ty), c, ext,
                         f"{what} argument {k}") for k, (g, b, (_nm, ty), c) in enumerate(zip(r["args"], bits, params, carry))]
         ys = elements([np.asarray(y)], bits[-1], f"{what} output {member}")
         got.append(per_unit(ys, [*ext, ys.size // n], range(len(ext)), ext, f"{what} output {member}"))

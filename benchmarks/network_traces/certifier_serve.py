@@ -3,8 +3,10 @@ served vLLM OpenAI endpoint, and the offline check of what it published.
 
 **Topology.** The client, outside the boundary, holds one link connection to the certifier's host. There the certifier
 (`active.Proxy` with its salt on, signing every record and every reveal) forwards each request it releases over
-loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), and the shim sends
-it to the endpoint over HTTP or HTTPS and frames the stream it gets back as canonical events:
+loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), with its place in
+the release order and the certifier's run id (`x-verity-release`, `x-verity-release-run`: `release`), and the shim
+sends it to the endpoint over HTTP or HTTPS with those two headers, so that `serve-openai --admit release-order` takes
+requests in the order the certifier released them, and frames the stream it gets back as canonical events:
 
     client ──link──▶ certifier host: [ Proxy ──loopback──▶ shim ] ──HTTP(S)──▶ endpoint
 
@@ -71,8 +73,8 @@ reads requests from outside).
   fit goes to the next window's first bucket, which admission takes behind the salt frame. The plan's `model_release`
   is the admission's (`active_replay.model_releases(admission=…)`), and a D at which admission would hold one of the
   plan's requests past the window it was sent in doesn't fit. The check reads each window's served counts in the clear
-  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict of record shows only
-  accept or reject.
+  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict shows only accept or
+  reject.
 
 **The varied plan** (`plan --traffic varied`, `varied_plan`) drops every premise of the served plan's on the traffic:
 no fixed response length, no fixed request size, no request-major order, no window that must end idle, no min_tokens
@@ -141,8 +143,9 @@ certified, the I/O, the audit and the salt accept.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
-  and committed records, N2's verdict of record through `LinkWindows` (commit, register, select, deliver, outcome) on
-  the certified records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
+  and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
+  `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
+  records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
@@ -157,8 +160,10 @@ certified, the I/O, the audit and the salt accept.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
-certifier's salt for it and certificate, or the link-window the signer refused), `proxy.json.gz`, the shim's
-`server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and `check.json`. Records, certificates,
+certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's clock
+certificate of each egress window's sync, public, which an advised link's verifier reads: `read_clocks`),
+`proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and
+`check.json`. Records, certificates,
 the certifier's salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal
 publishes them so that its check can be replayed. No PoUW salt is written, only its SHA-512
 (`active_replay.fingerprint`). With `CERTIFIER_SERVE_TIMING` set, `serve` also writes `publisher_timing.json`: when
@@ -184,7 +189,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import replace
 from fractions import Fraction
@@ -196,8 +201,8 @@ from verity.core.protocols.certifier import audit as host_audit, calibration
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
-    LmsSigner, RecordHead, parameters_digest
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, ClockCertificate, Direction, \
+    Issuer, LmsKey, LmsSigner, RecordHead, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
@@ -336,6 +341,24 @@ def certified_from_json(doc: dict) -> CertifiedRecord:
                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
 
 
+def clock_json(clock: ClockCertificate) -> dict:
+    c = clock.certificate
+    return {"sync": [clock.sync.delta, str(clock.sync.rho)],
+            "certificate": {f: _enc(getattr(c, f)) for f in type(c).__slots__}}
+
+
+def clock_from_json(doc: dict) -> ClockCertificate:
+    delta, rho = doc["sync"]
+    return ClockCertificate(ClockSync(delta, Fraction(rho)),
+                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
+
+
+def read_clocks(path: Path) -> list[ClockCertificate]:
+    """`clocks.jsonl`: the certifier's clock certificates, one for each egress window it signed the sync of (a link's
+    clock source of record, `LinkWindows(clock_certificates=…)`); none for a run without the file."""
+    return [clock_from_json(json.loads(line)) for line in path.read_text().splitlines()] if path.exists() else []
+
+
 def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRecord], list]:
     """`certified.jsonl`: the certified records by (direction, window), and the link-windows the signer refused."""
     got, refused = {}, []
@@ -353,7 +376,8 @@ class CertifyingPublisher(ar.Publisher):
     """The served proxy's `publish`: `Publisher`'s files, and each record certified by `issuer` as the network certifier
     hands it over, under the N2 link's name `link`, the one name both ends of a link-window share
     (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the link-window under `refused` when the
-    signer refuses."""
+    signer refuses. An egress record handed with the sync the shaper ran its window under (`ServedProxy`) gets that
+    sync's clock certificate too (`Issuer.clock`), one line of `clocks.jsonl`, none when the signer refuses."""
 
     def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True) -> None:
         super().__init__(out, setup, threaded)
@@ -362,7 +386,13 @@ class CertifyingPublisher(ar.Publisher):
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
 
-    def keep(self, record, params) -> None:
+    def __call__(self, record, params, sync: ClockSync | None = None) -> None:
+        if self.executor is None:
+            self.keep(record, params, sync)
+        else:
+            self.futures.append(self.executor.submit(self.keep, record, params, sync))
+
+    def keep(self, record, params, sync: ClockSync | None = None) -> None:
         start = time.monotonic(), time.thread_time()
         super().keep(record, params)
         kept = time.monotonic(), time.thread_time()
@@ -372,6 +402,10 @@ class CertifyingPublisher(ar.Publisher):
                 else certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
+        if sync is not None and direction is Direction.EGRESS and \
+                (clock := self.issuer.clock(self.link, record.window, sync)) is not None:
+            with open(self.out / "clocks.jsonl", "a") as fh:
+                fh.write(json.dumps(clock_json(clock)) + "\n")
         if self.timing is not None:
             end = time.monotonic(), time.thread_time()
             self.timing.append({"link": record.link, "window": record.window, "start": start[0], "kept": kept[0],
@@ -425,10 +459,10 @@ class CertifierProcess:
     def sign(self, message: bytes) -> bytes:
         return self.pool.submit(_certifier_call, "sign", message).result()
 
-    def __call__(self, record, params) -> None:
+    def __call__(self, record, params, sync: ClockSync | None = None) -> None:
         if self.submits is not None:
             self.submits.append((record.link, record.window, time.monotonic()))
-        self.futures.append(self.pool.submit(_certifier_call, "keep", record, params))
+        self.futures.append(self.pool.submit(_certifier_call, "keep", record, params, sync))
 
     def close(self) -> None:
         for f in self.futures:
@@ -806,12 +840,24 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
 
 # The certifier.
 
-class ServedProxy(Proxy):
-    """`active.Proxy`, keeping the windows whose salt it has revealed, so that `serve` stops once every one is."""
+class ServedProxy(ar.ReleaseProxy):
+    """`active.Proxy` whose server gets each request with its place in the release order (`active_replay.ReleaseProxy`),
+    keeping the windows whose salt it has revealed, so that `serve` stops once every one is, and handing its `publish`,
+    with each egress record, the sync its own shaper ran the window under (`Shaper.syncs`), which the certifier signs
+    (`CertifyingPublisher`, `CertifierProcess`)."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.revealed: set[int] = set()
+        if kwargs.get("publish") is not None:
+            publish, shaper = self.publish, self.shaper
+
+            def clocked(record, params) -> None:
+                ran = shaper.syncs
+                egress = record.link == shaper.certifier.link and record.window < len(ran)
+                publish(record, params, ran[record.window] if egress else None)
+
+            self.publish = clocked
 
     def reveal(self, window, registration, request=None):
         out = super().reveal(window, registration, request)
@@ -935,7 +981,7 @@ async def client(plan: dict, report: dict, deployment: dict, out: Path, link: tu
 
 # The offline check.
 
-def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
+def certified_io(plan: dict, setup: ar.Setup, in_records, out_records, aborted: Collection[str] = ()) -> dict:
     """The certified I/O of a varied run, read from the records' frames alone (the module docstring's "The certified
     I/O"): each request's ingress ordinal (its stream), release and fields (`active.id_request_fields`) from the
     ingress frames, and its response's token ids and frames (canonical position, egress bucket) from the egress id
@@ -945,7 +991,10 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     compact plan each egress frame is a compact cell (`active.compact_record_data`), and the finish is the records'
     too: only the last is marked, a stop on an EOS id, `COMPACT_LAST` alone at `max_tokens` exactly, and no other
     record carries an EOS id. Where a response stops is the server's word here, as an EOS id event's is: only the I/O
-    tie holds it to the ids the model sampled (`active.compact_finish_violations`)."""
+    tie holds it to the ids the model sampled (`active.compact_finish_violations`). `aborted` are the users whose
+    finish in the Commit is a client's abort, which nothing on the link says: one of theirs ends instead short of
+    `max_tokens`, unmarked and on no EOS id (finish `abort`), and its marked finish is refused. `check` reads no Commit,
+    so it gives none."""
     e, i = setup.egress_params, setup.ingress_params
     compact = bool(plan.get("compact"))
     marks: dict[int, list] = defaultdict(list)
@@ -992,7 +1041,7 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
                 position += 1
     eos, finish = set(plan["varied"]["eos_token_ids"]), Counter()
     for r in requests:
-        out, m = r["output"], r["max_tokens"]
+        out, m, gone = r["output"], r["max_tokens"], r["user"] in aborted
         stops = [k for k, t in enumerate(out) if t in eos]
         ends = marks[r["stream"]]
         if not out:
@@ -1006,14 +1055,19 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
         elif compact and ends[-1] == "stop" and not stops:
             r["finish"] = "a stop on an id that isn't EOS"
         elif compact:
-            short = "a length finish short of max_tokens"
-            r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
+            short, unmarked = "a length finish short of max_tokens", "no finish"
+            if gone:
+                unmarked = "abort" if len(out) < m else "an abort at max_tokens"
+            r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: unmarked}[ends[-1]]
         elif stops and stops[0] != len(out) - 1:
             r["finish"] = "a token after EOS"
         else:
-            r["finish"] = "eos" if stops else "length" if len(out) == m else "short of max_tokens without EOS"
+            r["finish"] = ("eos" if stops else "length" if len(out) == m else "abort" if gone
+                           else "short of max_tokens without EOS")
+        if gone and r["finish"] in ("eos", "length"):
+            r["finish"] = f"a finish {r['finish']} where the Commit's is abort"
         finish[r["finish"]] += 1
-        if r["finish"] not in ("eos", "length"):
+        if r["finish"] not in ("eos", "length", "abort"):
             violations.append([r["stream"], r["finish"]])
     return {"accepted": not violations and bool(requests), "requests": len(requests),
             "tokens": sum(len(r["output"]) for r in requests), "finish": dict(finish), "violations": violations[:20],
@@ -1125,7 +1179,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
         draw = stream.select(registration)
         try:
             outcome = (stream.deliver(draw, [lw.session(opening, draw)])
-                       or lw.outcome(stream, draw, opening, syncs))
+                       or lw.unproved_outcome(stream, draw, opening, syncs))
         except ValueError as err:
             row["n2"] = f"no verdict: {err}"
             break

@@ -275,6 +275,29 @@ def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> N
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
+#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU (g0-g7, since 24 Oct 18:00Z) in GPU_SLOTS
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3")
+GPU_SLOTS = "/workspace/research/locks/gpu/slots"
+
+
+def _env_flags(spec: ResolvedSpec) -> list[str]:
+    flags = []
+    if os.environ.get("VERITY_BENCH_VENV"):
+        flags += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
+    for name, setting in point_environment(spec).items():
+        flags += ["--env", f"{name}={setting}"]
+    return flags
+
+
+def _point_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+    return [
+        "bash", "benchmarks/harness/run_point.sh",
+        "--spec", _relative_spec(source, root),
+        "--point", item.point.id,
+        "--identity", item.identity,
+    ]
+
+
 def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
     spec = plan.spec
     command = [
@@ -295,32 +318,67 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
     ]
     if spec.admission.max_minutes is not None:
         command += ["--max-min", str(spec.admission.max_minutes)]
-    if os.environ.get("VERITY_BENCH_VENV"):
-        command += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
-    for name, setting in point_environment(spec).items():
-        command += ["--env", f"{name}={setting}"]
-    command += [
+    return [*command, *_env_flags(spec), "--", *_point_command(plan, source, item, root)]
+
+
+def direct_minutes(spec: ResolvedSpec, node: str) -> float:
+    """The spec's admission max_minutes, which bounds a direct point's run, slot and lease, once `node` is a GPU node."""
+
+    if node not in DIRECT_NODES:
+        raise ValueError(f"--direct {node}: not a GPU node with gpu slots ({', '.join(DIRECT_NODES)}), so a point there "
+                         f"gets no GPU; a GPU node that has {GPU_SLOTS} joins verity_bench.jobs.DIRECT_NODES")
+    if spec.admission.max_minutes is None:
+        raise ValueError(f"--direct needs spec {spec.id!r}'s admission max_minutes: it bounds the run, its slot and its "
+                         "GPU lease")
+    return spec.admission.max_minutes
+
+
+def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str) -> list[str]:
+    """The point as a `research run --on NODE` through one of the node's GPU slots, its GPUs from the node's gpu-lease:
+    the queued point's tool, identity and environment, for a node whose launcher takes only slot runs."""
+
+    spec = plan.spec
+    minutes = direct_minutes(spec, node)
+    return [
+        "research", "run",
+        "--on", node,
+        "--project", "verity",
+        "--campaign", "vllm-bench",
+        "--source", str(root),
+        "--cwd", "source",
+        "--timeout", f"{minutes:g}m",
+        "--require-result",
+        "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
+        *_env_flags(spec),
         "--",
-        "bash", "benchmarks/harness/run_point.sh",
-        "--spec", _relative_spec(source, root),
-        "--point", item.point.id,
-        "--identity", item.identity,
+        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "--run-max", f"{minutes * 60:g}",
+        "--",
+        # Without --max-min a lease has no end, which gpu-lease refuses while a booked window lies ahead; a guest's GPU
+        # job is preemptible, as the queued point's is.
+        "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
+        "--",
+        *_point_command(plan, source, item, root),
     ]
-    return command
 
 
 def _execute(command: Sequence[str], root: Path) -> int:
     return subprocess.run(command, cwd=root, check=False).returncode
 
 
-def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute) -> int:
-    """Launch one recorded research run for each incomplete point."""
+def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
+             direct: str | None = None) -> int:
+    """Launch one recorded research run for each incomplete point: queued, or with `direct` on that node's GPU slots."""
 
     root = root or repository_root()
+    if direct is not None:
+        direct_minutes(plan.spec, direct)
     for item in plan.points:
         if item.passing_run is not None:
             continue
-        rc = execute(research_command(plan, source, item, root), root)
+        command = (research_command(plan, source, item, root) if direct is None
+                   else direct_command(plan, source, item, root, direct))
+        rc = execute(command, root)
         if rc:
             return rc
     return 0

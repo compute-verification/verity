@@ -19,11 +19,13 @@ import Models.Nci.Guarantees.PackedTraining
 import Models.Nci.Guarantees.Activations
 import Models.Nci.Guarantees.Covering
 import Models.Nci.Guarantees.CoveringTwoCosts
+import Models.Nci.Guarantees.CoveringPriced
 import Models.Nci.Guarantees.CoverAdditive
 import Models.Nci.Guarantees.CoverFanOut
 import Models.Nci.Guarantees.CoverFanOutValue
 import Models.Nci.Guarantees.CoverPartialSum
 import Models.Nci.Guarantees.CoverTraining
+import Models.Nci.Guarantees.CoverChained
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
 import Models.Pouw.Assumptions
@@ -32,6 +34,8 @@ import Models.NetworkCertifier.Assumptions
 import Models.NetworkCertifier.Guarantees
 import Models.NetworkCertifier.Assumptions.AdviceString
 import Models.NetworkCertifier.Guarantees.AdviceString
+import Models.NetworkCertifier.Guarantees.AdviceV1
+import Models.NetworkCertifier.Guarantees.WindowCharge
 import Models.NetworkCertifier.Guarantees.Warden
 import Models.Flock.Guarantees
 import Models.Accounting.Assumptions.Remote

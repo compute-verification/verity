@@ -155,8 +155,8 @@ def fresh_prefix_cache(engine: Engine) -> None:
 
 
 def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[dict[str, list[int]], dict]:
-    """Add every request with *our* request ids and step the engine until all finish (driver.run_requests; with declared
-    `arrive_step`s, `run_requests_arrivals`).  `timing["requests"]` carries the realized per-request steps (D87)."""
+    """Add every request with *our* request ids and step the engine until all finish (`arrivals.run_requests_arrivals`, at
+    each request's declared `arrive_step`).  `timing["requests"]` carries the realized per-request steps (D87)."""
     fresh_prefix_cache(engine)
     class _R:
         def __init__(self, d: dict, order: int) -> None:
@@ -202,9 +202,9 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
         chunks.on_step(outs)
     rs = [_R(r, i) for i, r in enumerate(requests)]
     params_for = lambda r: sampling_params({"max_tokens": r.max_tokens, "seed": r.seed, "n": r.n, **r.params}, sampling)  # noqa: E731
-    # [D87] one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` is the driver's loop, and its `engine_steps`
-    # counts forwards (the observer's / gates' unit) rather than step() iterations (vLLM V1 returns the previous forward's sample, so
-    # iterations = forwards + 1); verity_vllm.engine.engine_driver.run_requests stays available for callers that want the raw iteration count
+    # [D87] one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` adds every request before the first step, and
+    # its `engine_steps` counts forwards (the observer's / gates' unit) rather than step() iterations (vLLM V1 returns the previous
+    # forward's sample, so iterations = forwards + 1); the raw iteration count is its `step_iterations`
     outs, timing = run_requests_arrivals(engine.llm, rs, params_for, on_step=_collect)
     timing["arrivals"] = any(r.arrive_step > 0 for r in rs)
     try:
