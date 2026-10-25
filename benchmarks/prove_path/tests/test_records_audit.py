@@ -2,10 +2,12 @@
 (`verity.ml.windows.interface`) under core's registration:
 
 * the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
-  the registration binds;
+  the registration binds; a window with row tables is refused until its records carry their segment roots;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
-  circuit is another and a length other than the registered one;
+  circuit is another or that writes none, and a length other than the registered one or none;
+* a compiler registered under a commit runs from a checkout of that commit, not the auditing tree's, and a commit whose code
+  doesn't hash to the registered digest is refused;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
@@ -44,7 +46,7 @@ ADVICE = bytes(range(40))
 
 FAKE = '''import argparse, json, sys
 ap = argparse.ArgumentParser()
-for f in ("--record", "--expect", "--advice", "--out"):
+for f in ("--record", "--expect", "--advice", "--out", "--say", "--write"):
     ap.add_argument(f)
 ap.add_argument("--bits", type=int)
 a = ap.parse_args()
@@ -52,16 +54,17 @@ data = open(a.advice, "rb").read()
 if data.hex() != a.expect:
     sys.stderr.write("advice this compiler can't compile")
     sys.exit(2)
-open(a.out, "w").write(open(a.record).read())
-print(json.dumps({"bits": 8 * len(data) if a.bits is None else a.bits}))
+if a.write != "no":
+    open(a.out, "w").write(open(a.record).read())
+print(a.say if a.say is not None else json.dumps({"bits": 8 * len(data) if a.bits is None else a.bits}))
 '''
 
 
-def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True) -> SimpleNamespace:
-    """A window of ``n`` coordinates in members of ``cap``, its advice committed under `COMPILER` (or none), written and
+def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER) -> SimpleNamespace:
+    """A window of ``n`` coordinates in members of ``cap``, its advice committed under ``compiler`` (or none), written and
     registered through the interface under core's registration."""
-    reg = IF.commit_advice(COMPILER, ADVICE)
-    bound = IF.advice_binding(COMPILER, reg.root.hex(), 8 * len(ADVICE)) if advice else None
+    reg = IF.commit_advice(compiler, ADVICE)
+    bound = IF.advice_binding(compiler, reg.root.hex(), 8 * len(ADVICE)) if advice else None
     win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, D.parse_law(LAW), cap, advice=bound)
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
@@ -111,17 +114,31 @@ def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(wri
     other = dict(op, salts=[("00" if op["salts"][0][:2] != "00" else "01") + op["salts"][0][2:], *op["salts"][1:]])
     short = {**doc, "members": [{**doc["members"][0], "n": 3}, *doc["members"][1:]]}
     for name, (compilers, window, opening), codes in (
-            ("a compiler the verifier doesn't hold", ({}, w, op), ["compiler", "compiles", "circuit", "length"]),
+            ("a compiler the verifier doesn't hold", ({}, w, op), ["compiler", "code", "compiles", "circuit", "length"]),
             ("another digest", (_compilers(tmp_path, doc), {**w, "compiler": {**COMPILER, "digest": "00" * 64}}, op),
-             ["compiler", "advice", "compiles", "circuit", "length"]),
-            ("an opening of another root", (_compilers(tmp_path, doc), w, other), ["advice", "compiles", "circuit", "length"]),
+             ["compiler", "advice", "code", "compiles", "circuit", "length"]),
+            ("an opening of another root", (_compilers(tmp_path, doc), w, other),
+             ["advice", "code", "compiles", "circuit", "length"]),
             ("a compiler refusing the advice", (_compilers(tmp_path, doc, expect="00"), w, op), ["compiles", "circuit", "length"]),
             ("another circuit", (_compilers(tmp_path, short), w, op), ["circuit"]),
-            ("another length", (_compilers(tmp_path, doc, bits=8 * len(ADVICE) + 1), w, op), ["length"])):
+            ("another length", (_compilers(tmp_path, doc, bits=8 * len(ADVICE) + 1), w, op), ["length"]),
+            ("a length that isn't a whole number", (_compilers(tmp_path, doc, say='{"bits": "320"}'), w, op), ["length"]),
+            ("a length that's a boolean", (_compilers(tmp_path, doc, say='{"bits": true}'), w, op), ["length"]),
+            ("no length line", (_compilers(tmp_path, doc, say="compiled"), w, op), ["length"])):
         v, bound = RA.compile_check(doc, window, opening, compilers, tmp_path / "c")
         assert (v["codes"], bound) == (codes, None), name
     v, _ = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, expect="00"), tmp_path / "c")
     assert v["detail"]["refused"] and "can't compile" in v["detail"]["stderr"]
+
+
+def test_a_command_that_exits_0_without_writing_its_circuit_fails_the_circuit_check(written, tmp_path):
+    """The command writes inside a fresh directory, so a stale ``compiled.json`` from an earlier compile is never compared."""
+    w, doc, op = written.rec["window"], written.doc, written.opening
+    assert RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")[0]["ok"]
+    assert (tmp_path / "c" / "compiled.json").exists()
+    v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, write="no"), tmp_path / "c")
+    assert (v["codes"], bound) == (["circuit"], None) and "output" in v["detail"]
+    assert not (tmp_path / "c" / "compiled.json").exists()
 
 
 def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp_path):
@@ -146,6 +163,78 @@ def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp
     got = RA.negatives(fw, held, fixed.doc, tmp_path / "n")
     assert set(got) == {"registration-naming-another-circuit", "registration-naming-another-run",
                         "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                           *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_a_window_is_compiled_at_its_registered_commit_from_a_tree_at_another(tmp_path, monkeypatch):
+    """A registered compiler is (name, digest, commit): the audit compiles from its own checkout of the commit, refused unless
+    the digest it computes there is the registered one. The compiler's code at commit A charges the advice's length; at B
+    it charges a byte more. From a tree at B, a window registered under A is audited with A's code, and one naming B under
+    A's digest, a commit the repository doesn't hold, or a compiler whose table entry names no code is refused."""
+    repo = tmp_path / "repo"
+    (repo / "fake").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    (repo / "fake" / "compiler.py").write_text(FAKE)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "A")
+    a, da = IF.commit_of(repo), IF.compiler_digest(COMPILER["name"], repo, ["fake"])
+    (repo / "fake" / "compiler.py").write_text(FAKE.replace("8 * len(data) if", "8 * len(data) + 8 if"))
+    _git(repo, "commit", "-qam", "B")
+    b, db = IF.commit_of(repo), IF.compiler_digest(COMPILER["name"], repo, ["fake"])
+    assert a != b and da != db
+
+    compiler = {"name": COMPILER["name"], "digest": da, "commit": a}
+    s = _write(tmp_path / "w", compiler=compiler)
+    w, doc, op = s.rec["window"], s.doc, s.opening
+    assert w["compiler"] == compiler
+    (tmp_path / "record.json").write_text(json.dumps({**doc, "run": "", "context": ""}))
+    entry = {"digest": da, "argv": [sys.executable, "fake/compiler.py", "--record", str(tmp_path / "record.json"),
+                                    "--expect", ADVICE.hex()], "code": ["fake"], "pythonpath": ["."]}
+    table = {COMPILER["name"]: entry}
+
+    v, bound = RA.compile_check(doc, w, op, table, tmp_path / "c", repo)
+    assert v["ok"], v
+    assert (v["detail"]["at"], v["detail"]["bits"], bound["compiler"]) == (a, 8 * len(ADVICE), compiler)
+    held = {"run": RUN, "circuit": w["circuit"], "compiled": True, **bound, "compilers": table, "opening": op, "repo": repo,
+            "output": json.loads((tmp_path / "c" / "compiled.json").read_text())}
+    assert RA.source(w, held)["ok"]
+    got = RA.negatives(w, held, doc, tmp_path / "n")
+    assert got["registration-naming-another-commit"] == {"refused": True, "codes": ["compiler"]}
+    assert all(x["refused"] for x in got.values()), got
+
+    monkeypatch.setattr(RA, "tree_root", lambda: repo)
+    for name, (window, compilers, why) in {
+            "the auditing tree's code, at B": ({**w, "compiler": {"name": COMPILER["name"], "digest": da}}, table, "hashes to"),
+            "commit B under A's digest": ({**w, "compiler": {**compiler, "commit": b}}, table, "hashes to"),
+            "a commit the repository doesn't hold": ({**w, "compiler": {**compiler, "commit": "e" * 40}}, table, "check out"),
+            "a table entry naming no code": (w, {COMPILER["name"]: {k: x for k, x in entry.items() if k != "code"}}, "no code"),
+    }.items():
+        v, bound = RA.compile_check(doc, window, op, compilers, tmp_path / "c", repo)
+        assert (v["codes"], bound) == (["code", "compiles", "circuit", "length"], None), name
+        assert why in v["detail"]["code"], (name, v["detail"])
+    v, _ = RA.compile_check(doc, {**w, "compiler": {**compiler, "digest": db, "commit": b}}, op, table, tmp_path / "c", repo)
+    assert v["codes"][:2] == ["compiler", "advice"]
+    assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
+    mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
+    assert not mine.row_tables
+    monkeypatch.setattr(IF, "of_records", lambda d, law, resolve: (SimpleNamespace(row_tables=("t0", "t1")), doc))
+    with pytest.raises(ValueError, match="2 row tables.*segment roots.*refused until they do"):
+        RA.verifier_window(written.dir, D.parse_law(LAW), None)
+
+
+def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
+    base = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", "00" * 64, "--m0-pythonpath", ".", "--bin", "b",
+            "--lean", "l", "--firewall", "f", "--out", "o"]
+    with pytest.raises(SystemExit) as e:
+        RA.main(base)
+    assert e.value.code == 2 and "--run" in capsys.readouterr().err
 
 
 def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):

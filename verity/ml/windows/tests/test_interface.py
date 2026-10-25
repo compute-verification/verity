@@ -6,7 +6,9 @@ the verifier's window is rebuilt from the circuit record alone. A window written
 may not import core."""
 from __future__ import annotations
 
+import hashlib
 import json
+import subprocess
 
 import numpy as np
 import pytest
@@ -158,9 +160,48 @@ def test_a_circuit_record_its_templates_dont_make_is_refused():
 def test_an_advice_binding_is_well_formed():
     c = {"name": "compiler", "digest": "cd" * 64}
     assert I.advice_binding(c, "ef" * 64, 12) == {"compiler": c, "advice": {"root": "ef" * 64, "bits": 12}}
-    for bad in [({"name": "c"}, "ef" * 64, 1), (c, "ef" * 32, 1), (c, "ef" * 64, -1), (c, "ef" * 64, True)]:
+    at = {**c, "commit": "0a" * 20}
+    assert I.advice_binding(at, "ef" * 64, 12)["compiler"] == at
+    for bad in [({"name": "c"}, "ef" * 64, 1), (c, "ef" * 32, 1), (c, "ef" * 64, -1), (c, "ef" * 64, True),
+                ({**c, "commit": "0a" * 19}, "ef" * 64, 1), ({**c, "commit": "main"}, "ef" * 64, 1), ({**c, "other": 1}, "ef" * 64, 1)]:
         with pytest.raises(ValueError):
             I.advice_binding(*bad)
+
+
+def test_a_compilers_digest_is_its_name_and_the_code_git_lists_under_its_paths(tmp_path):
+    repo, plain = tmp_path / "repo", tmp_path / "plain"
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=repo, check=True,
+                              capture_output=True, text=True).stdout.strip()
+
+    (repo / "pkg").mkdir(parents=True)
+    git("init", "-q")
+    (repo / "pkg" / "c.py").write_text("x = 1\n")
+    (repo / "other.py").write_text("y = 1\n")
+    (repo / ".gitignore").write_text("build/\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    d = I.compiler_digest("c", repo, ["pkg"])
+    assert I.code_files(repo, ["pkg"]) == {"pkg/c.py": hashlib.sha512(b"x = 1\n").hexdigest()}
+    assert I.commit_of(repo) == git("rev-parse", "HEAD") and I.compiler_digest("other", repo, ["pkg"]) != d
+    (repo / "other.py").write_text("y = 2\n")
+    (repo / "pkg" / "README.md").write_text("docs\n")
+    (repo / "pkg" / "build").mkdir()
+    (repo / "pkg" / "build" / "out.bin").write_bytes(b"\0")
+    assert I.compiler_digest("c", repo, ["pkg"]) == d
+    (repo / "pkg" / "new.py").write_text("z = 1\n")
+    assert I.compiler_digest("c", repo, ["pkg"]) != d
+    (repo / "pkg" / "new.py").unlink()
+    (repo / "pkg" / "c.py").write_text("x = 2\n")
+    assert I.compiler_digest("c", repo, ["pkg"]) != d
+    with pytest.raises(ValueError, match="no file"):
+        I.code_files(repo, ["nothing"])
+    plain.mkdir()
+    (plain / "c.py").write_text("x = 1\n")
+    for f in (lambda: I.code_files(plain, ["."]), lambda: I.commit_of(plain)):
+        with pytest.raises(ValueError, match="not a git work tree"):
+            f()
 
 
 def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
