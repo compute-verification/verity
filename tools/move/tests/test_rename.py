@@ -132,6 +132,46 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
+def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
+    """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
+    quoted string names the module, and everywhere else the name stands."""
+    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    code = ("import Properties.RemoteAudit.Line.Record\nimport Proofs.Properties.RemoteAudit.Line\n"
+            "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
+            "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
+            'roots = ["Properties.RemoteAudit.Line", "Properties.RemoteAudit.Line.LineHeld"]\n')
+    assert areas.sub(code, "Security/Proofs/Properties/X.lean") == (
+        "import Properties.Accounting.Remote.Line.Record\nimport Proofs.Properties.Accounting.Remote.Line\n"
+        "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
+        "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
+        'roots = ["Properties.Accounting.Remote.Line", "Properties.RemoteAudit.Line.LineHeld"]\n')
+
+
+def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
+    """The areas move renames module `Properties.CertifierDevice` and keeps namespace `Properties.CertifierDevice`: the
+    rewrite and the declaration renames the locks need agree on what stands."""
+    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    code = ("import Properties.CertifierDevice\nimport Proofs.Properties.CertifierNetwork.Runs\n"
+            "namespace Properties.CertifierDevice\nopen Properties.NetworkCertifier Properties.NetworkCertifier.Bytes\n"
+            "/-- `Properties.CertifierDevice.failClosed`, stated in `Properties.CertifierNetwork.Runs`. -/\n"
+            "end Properties.CertifierDevice\n")
+    assert areas.sub(code, "Security/Proofs/Properties/X.lean") == (
+        "import Properties.NetworkCertifier.Device\nimport Proofs.Properties.NetworkCertifier.DeviceOutput.Runs\n"
+        "namespace Properties.CertifierDevice\nopen Properties.NetworkCertifier Properties.NetworkCertifier.Bytes\n"
+        "/-- `Properties.CertifierDevice.failClosed`, stated in `Properties.NetworkCertifier.DeviceOutput.Runs`. -/\n"
+        "end Properties.CertifierDevice\n")
+    assert areas.path("Security/Proofs/Properties/NetworkCertifier/Check.lean") == \
+        "Security/Proofs/Properties/NetworkCertifier/Check/Check.lean"
+    lock = {"layers": {"Properties.CertifierDevice": {"imports": ["Properties.Identity"]}},
+            "guarantees": {"Properties.CertifierDevice.failClosed": {}},
+            "reads": {"Definitions.Population.Exfiltration": {"definitions": {
+                "Properties.Identity.TaggedIsFlock": "00", "Population.Exfil.game": "00", "NciCheck.Properties.x": "00"}}}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    assert M.lock_moves(tmp_path, areas, ["lean-audit.json"]) == {}
+    out = json.loads(areas.sub(json.dumps(lock), "Security/Properties/lean-audit.json", M.record_spans(json.dumps(lock))))
+    assert out["layers"] == {"Properties.NetworkCertifier.Device": {"imports": ["Properties.Hash.Identity"]}}
+
+
 def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
              ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
@@ -226,6 +266,20 @@ def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
                                 "reads": {"Definitions.Warden": {"definitions": {"NetTiming.Certifier": "00"}}}}))
     assert M.main(["--root", str(toy), "--moves"]) == 0
     assert json.loads(capsys.readouterr().out) == {}
+
+
+def test_a_file_lands_where_another_leaves(toy):
+    """`S/Area.lean` -> `S/Area/Check.lean` while `S/Area/Check.lean` -> `S/Area/Check/Check.lean`: both arrive whole."""
+    (toy / "S/Area").mkdir(parents=True)
+    (toy / "S/Area.lean").write_text("import S.Area.Check\n")
+    (toy / "S/Area/Check.lean").write_text("theorem t : True := trivial\n")
+    (toy / "areas.toml").write_text('[words]\n"S/Area" = "S/Area/Check"\n"S.Area" = "S.Area.Check"\n')
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "areas")
+    assert M.main(["--root", str(toy), "--map", str(toy / "areas.toml")]) == 0
+    assert (toy / "S/Area/Check.lean").read_text() == "import S.Area.Check.Check\n"
+    assert (toy / "S/Area/Check/Check.lean").read_text() == "theorem t : True := trivial\n"
+    assert not (toy / "S/Area.lean").exists()
 
 
 def test_it_refuses_a_dirty_worktree(toy):

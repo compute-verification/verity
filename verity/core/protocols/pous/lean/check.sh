@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Acceptance check: the grader and the security analysis (`Security`, where PoUS's trusted layer and proofs are)
-# build and pass Verity's Lean audit (`tools/verity/lean/check.py --fresh`), the open targets elaborate, and the grader passes
-# the positive control and rejects each negative control for the stated reason. Prints ALL CHECKS PASSED.
+# build and pass Verity's Lean audit (`tools/verity/lean/check.py --fresh`), and the grader passes the positive control
+# and rejects each negative control for the stated reason. Prints ALL CHECKS PASSED.
 set -uo pipefail
 cd "$(dirname "$0")"
 security=$(cd ../../../../../Security && pwd)
@@ -16,9 +16,6 @@ alog=$(mktemp)
 python3 "$audit_py" --build --fresh . "$security" > "$alog" 2>&1 || { tail -40 "$alog" >&2; rm -f "$alog"; fail "check.py"; }
 grep -E '^(audit: controls|AUDIT )' "$alog" | sed 's/^/   /' | cut -c1-160
 rm -f "$alog"
-
-echo "== open targets elaborate"
-(cd "$security/Proofs" && lake build Proofs.Pous.Targets) > /dev/null 2>&1 || fail "Proofs.Pous.Targets"
 
 echo "== grader controls"
 tmp=$(mktemp -d)

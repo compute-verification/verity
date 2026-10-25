@@ -26,6 +26,7 @@ import Proofs.Nci.Packed
 import Proofs.Nci.PackedTraining
 import Proofs.Nci.Remote
 import Proofs.Nci.Verdict
+import Proofs.Nci.DescVerdict
 import Proofs.Nci.Activations
 import Proofs.Nci.Covering
 import Proofs.Nci.CoveringWitness

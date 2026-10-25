@@ -82,14 +82,15 @@ units derive their seed from in-circuit (decision 105), at the input `SHA-512(ta
 that names the roots the round committed, and it exists for every round except on one event `Off` of probability at
 most `ε_id(T, |J|)`.
 
-The seeded statements are stated in the random-oracle model: the window's seeds are uniform answers to the prover's
-queries naming its operands' roots (the coin type `Paths (Fin T_q → B) rounds`), and this premise is where that model
-is named; SHA-512 is no random oracle. The probability is over the window's seed answers only: the hashes of the
-commitments' trees, the live draw and the proofs' coins are not in this space. So `ε_id` is per prover: `Off` is an
-event of the play's own answers, taken for the prover at hand at its own `T_q` queries a round, and the collision
-part of its number is a SHA-512 collision in that prover's query log, priced by `ecr/sha-512` (`Claims.ExpectedCR`) on
-a finder that runs the play and reads its log, as `δ_b` is. A prover whose queries hold a collision, or open a node no
-query answered, can make `Off` likely; it fails the premise at any small `ε_id` and gets no bound.
+The seeded statements are stated as Fiat–Shamir in the random-oracle model (`fiat-shamir`): the window's seeds are
+uniform answers to the prover's queries naming its operands' roots (the coin type `Paths (Fin T_q → B) rounds`), and
+this premise is where that model is named; SHA-512 is no random oracle. The probability is over the window's seed
+answers only: the hashes of the commitments' trees, the live draw and the proofs' coins are not in this space. So `ε_id`
+is per prover: `Off` is an event of the play's own answers, taken for the prover at hand at its own `T_q` queries a
+round, and the collision part of its number is a SHA-512 collision in that prover's query log, priced by `ecr/sha-512`
+(`Claims.ExpectedCR`) on a finder that runs the play and reads its log, as `δ_b` is. A prover whose queries hold a
+collision, or open a node no query answered, can make `Off` likely; it fails the premise at any small `ε_id` and gets no
+bound.
 
 Alone it says only that `sq` names a query of every round off `Off` (`sq := fun _ _ => some 0` meets it): what ties
 `sq` to the proofs' seeds is `SeedLuckAt`'s last conjunct, which reads the same `sq`.

@@ -78,6 +78,7 @@ import Proofs.Pouw.PearlC.ChainCapKernelGamma
 import Proofs.Pouw.PearlC.ChainCapLoopGamma
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Proofs.Pouw.PearlC.Completeness
+import Proofs.Pouw.PearlC.DeadlineWitness
 import Proofs.Pouw.PearlC.DeviceCapGamma
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceChainCapGamma
@@ -128,6 +129,7 @@ import Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.ServedRev1Gamma
 import Proofs.Pouw.PearlC.Sm120Checks
+import Proofs.Pouw.PearlC.TTOutW1RowSeed
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileCapRev1Gamma
 import Proofs.Pouw.PearlC.TileCheck

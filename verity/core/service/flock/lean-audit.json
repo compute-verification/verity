@@ -34,9 +34,11 @@
   "Flock.Test.SpillRows",
   "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
+  "Flock.Test.PlainShared",
   "Flock.Test.Wires",
   "Flock.Test.TableCap",
   "Flock.Test.ProofCanon",
+  "Flock.Test.RecordText",
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
   "Flock.TmplEval",
@@ -46,6 +48,7 @@
   "Flock.TmplUnroll",
   "Flock.TmplAt",
   "Flock.TmplValue",
+  "Flock.TmplComputes",
   "Flock.Test.TmplAt",
   "Flock.Test.TmplValue",
   "Flock.Test.TmplRows",
@@ -55,6 +58,7 @@
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
+  "Flock.Test.PlainHidden",
   "VStar"
  ],
  "exempt": {

@@ -39,7 +39,7 @@ completing.
   bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
   every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
   premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
-  advantage.
+  advantage plus the coin commitment's hiding terms (`Accounting.Remote.Draw.Committed.hide`, hm96's).
 -/
 
 namespace Accounting.Remote.Held.Assumptions

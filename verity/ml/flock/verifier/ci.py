@@ -6,7 +6,9 @@
 
 For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
-  (`statement.registered`, `agree.py --registered`) for a statement that reads registered values;
+  (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
+  own K (`statement.stratified`, `agree.py --stratified`) for sessions drawn by the stratified law, and a plain session's
+  coins (`statement.coins`, `agree.py --coins`: `os` for a live server's OS coins);
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
@@ -71,10 +73,11 @@ def fetch(art, store):
     return files[0] if len(files) == 1 and files[0].is_file() else d
 
 
-def canonical(src, dst):
+def canonical(src, dst, records=("session.json",)):
     """The stored session directory `src` at `dst`, its record in the canonical text the writers emit
     (`record_text.session_text`): the stored vectors predate it. Its other files are hard links (copies across devices); a
-    record that isn't JSON is kept as it is."""
+    record that isn't JSON is kept as it is. `records`: the records to re-render, relative to `dst` (`canonical_tree`'s
+    are every `session.json` under it)."""
     if not dst.exists():
         def link(a, b):
             try:
@@ -82,15 +85,29 @@ def canonical(src, dst):
             except OSError:
                 shutil.copy2(a, b)
         shutil.copytree(src, dst, copy_function=link)
-        rec = dst / "session.json"
-        if rec.is_file():
+        for rec in (dst / r for r in (records(dst) if callable(records) else records)):
+            if not rec.is_file():
+                continue
             try:
                 v = json.loads(rec.read_text())
             except ValueError:
-                return dst
+                continue
             rec.unlink()
             rec.write_text(session_text(v))
     return dst
+
+
+def canonical_tree(src, dst):
+    """`canonical` of a stored tree of sessions: every `session.json` under it re-rendered. Only for a tree whose records
+    nothing binds by their bytes (a recursive set's inner record is: re-render the session being verified alone)."""
+    return canonical(src, dst, lambda d: [p.relative_to(d) for p in d.rglob("session.json")])
+
+
+def fetch_sessions(art, store):
+    """`fetch`, as a `canonical_tree` copy under store/<id>.canonical/: a stored set whose sessions a test verifies."""
+    ref, _, path = art.partition("/")
+    d = canonical_tree(fetch(ref, store), store / (ref.split(":", 1)[1] + ".canonical"))
+    return d / path if path else d
 
 
 def py(*args):
@@ -143,6 +160,10 @@ def run_set(i, s, a, ups, store):
            "--out", w / "agree", "--jobs", a.session_jobs, "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]
+    if "stratified" in st:
+        cmd += ["--stratified", str(st["stratified"])]
+    if "coins" in st:
+        cmd += ["--coins", st["coins"]]
     if "lean_refuses" in s:
         cmd += ["--lean-refuses", s["lean_refuses"]]
     if "lean_refuses_drawn" in s:

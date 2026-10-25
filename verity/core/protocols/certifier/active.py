@@ -511,14 +511,18 @@ def _name_field(s: str, what: str) -> bytes:
 
 
 def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int, temperature: float = 0.0,
-               top_p: float = 1.0, seed: int = 0, frame_bytes: int) -> bytes:
+               top_p: float = 1.0, seed: int = 0, frame_bytes: int, offset: int = LENGTH.size) -> bytes:
     """A canonical `/v1/completions` request of a token-id prompt, whose every field is at a place fixed by the
     prompt's length and the frame size alone, in the link frames `request_frames` puts it in: `ID_REQUEST_HEAD`, its
     body's length in `ID_DIGITS` characters (HTTP's optional whitespace before it), in the first frame, then the body,
     streamed, with no stop strings: `max_tokens` and `seed` in `ID_DIGITS` characters, `temperature` and `top_p` in
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
-    At 4096-byte frames every field but the prompt's is in the first frame."""
+    At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the warden's cells
+    (`warden.cells`, which carry the bytes alone)."""
+    if offset not in (0, LENGTH.size):
+        raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):
         raise ValueError("an id request's prompt is at least one token id")
     pieces = [b'{"max_tokens":' + _u32_field(max_tokens, "max_tokens"),
@@ -528,7 +532,7 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
               b',"user":' + _name_field(user, "a user"), b',"prompt":',
               *((b"," if k else b"[") + _u32_field(t, "a prompt id") for k, t in enumerate(prompt)), b"]}"]
     room = frame_bytes - HEADER.size
-    at = LENGTH.size + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
+    at = offset + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
     if at > room or max(map(len, pieces)) > room:
         raise ValueError(f"a {frame_bytes}-byte frame has no room for an id request's head or a field")
     parts = []

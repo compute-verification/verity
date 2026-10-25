@@ -995,9 +995,11 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
+    premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
+                                  "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -1430,7 +1432,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
-    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -1443,15 +1446,16 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                         "[...]}}, not: {claim: why}}")]
     fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
     assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
-    found = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
-             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"]) and d["name"] not in assumptions}
+    preds = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
+             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"])}
+    found = {c: m for c, m in preds.items() if c not in assumptions}
     for c, m in sorted(found.items()):
         if c not in ws and c not in nots:
             fails.append(Failure("claims.no-witnesses", c, f"claims: {c} ({m}) is a claim definition with no witnesses: name "
                                  f"its `{c}_fails` (a theorem that it is false at a toy instance) and `{c}_meets` (its "
                                  f"checkable antecedents hold at each deployed record) under `claims.witnesses`, or list it "
                                  f"under `claims.not` with the reason it is no claim"))
-    for c in sorted((set(ws) | set(nots)) - set(found)):
+    for c in sorted((set(ws) | set(nots)) - set(preds)):
         fails.append(Failure("claims.stale", c, f"claims: {c} is listed under `claims` but is no predicate of the spec under "
                              f"{', '.join(rule['modules'])}; remove the entry"))
     for c, why in sorted(nots.items()):
@@ -1526,7 +1530,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
-    definitions unfolded and a `Premises` abbrev seen through:
+    definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
+    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -2128,7 +2133,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}
