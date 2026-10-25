@@ -11,8 +11,8 @@ import Proofs.Flock.Claims.Recursion.CoinPos
 no part would have to hold off any witnesses (`hrest`). Neither holds.
 
 `lastSplitP` is the split with the verdict replaced by pieces of the code side's choice (`pieces`, `pholds`), each one a
-part can own, and one obligation, `hpieces`: wherever the reading holds and every piece does, the verdict holds. The
-other four checks of `VerdictR` stay as they are (`VerdictP.base`). `ownP` gives the base checks and the pieces their
+part can own, and one obligation, `hpieces`: wherever the reading holds, the other four checks of `VerdictR` do and
+every piece does, the verdict holds. Those four stay as they are (`VerdictP.base`). `ownP` gives the base checks and the pieces their
 owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the lowering facts are then one per piece.
 
 `staged_rep_drawn` is the coin side of a `rec-residuals` piece: at a staged part whose statement shows coins `c`,
@@ -42,12 +42,13 @@ theorem VerdictP.mem_bases {q : VerdictR} (h : q ≠ .verdict) : q ∈ VerdictP.
   cases q <;> simp_all [VerdictP.bases]
 
 /-- **The split with the verdict in pieces**: `VerdictR`'s checks but the verdict, then the pieces at the inner
-statement. Where the reading holds and every piece does, the verdict holds (`hpieces`), so `nextR_sound` makes the
-last step accept. -/
+statement. Where the reading, the base checks and every piece hold, the verdict holds (`hpieces`), so `nextR_sound`
+makes the last step accept. -/
 def lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg → List Q)
     (pholds : Q → Msg → List Msg → List Coin → Prop)
     (hpieces : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ReadOkR rd x ms cs →
-      (∀ q ∈ pieces x, pholds q x ms cs) → holdsR H rd .verdict x ms cs) :
+      (∀ b ∈ VerdictP.bases, holdsR H rd b x ms cs) → (∀ q ∈ pieces x, pholds q x ms cs) →
+        holdsR H rd .verdict x ms cs) :
     LastSplitR H rd (VerdictP Q) where
   checks x := VerdictP.bases.map .base ++ (pieces x).map .piece
   holds q x ms cs := match q with
@@ -57,8 +58,9 @@ def lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces
     refine FlockDeploy.nextR_sound H rd x ms cs hr fun q => ?_
     by_cases hq : q = .verdict
     · subst hq
-      exact hpieces x ms cs hr fun p hp =>
-        hc (.piece p) (List.mem_append_right _ (List.mem_map.2 ⟨p, hp, rfl⟩))
+      exact hpieces x ms cs hr
+        (fun b hb => hc (.base b) (List.mem_append_left _ (List.mem_map.2 ⟨b, hb, rfl⟩))) fun p hp =>
+          hc (.piece p) (List.mem_append_right _ (List.mem_map.2 ⟨p, hp, rfl⟩))
     · exact hc (.base q) (List.mem_append_left _ (List.mem_map.2 ⟨q, VerdictP.mem_bases hq, rfl⟩))
 
 /-- **The split verdict's inventory**: the base checks as `ownB` gives them, each piece as `ownQ` does. -/
@@ -74,7 +76,8 @@ gives it, a piece of the verdict among them. -/
 theorem decompB_lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg → List Q)
     (pholds : Q → Msg → List Msg → List Coin → Prop)
     (hpieces : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ReadOkR rd x ms cs →
-      (∀ q ∈ pieces x, pholds q x ms cs) → holdsR H rd .verdict x ms cs)
+      (∀ b ∈ VerdictP.bases, holdsR H rd b x ms cs) → (∀ q ∈ pieces x, pholds q x ms cs) →
+        holdsR H rd .verdict x ms cs)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
