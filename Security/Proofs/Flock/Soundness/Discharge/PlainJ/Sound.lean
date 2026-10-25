@@ -80,8 +80,9 @@ theorem plain_session_soundJ
       (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPJ ht dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ ht dj x₀) (tabPJ ht dj x₀)
-          ((rsPJ ht dj x₀ hc hpub hpt hU hscope).binding (rsPJ_computes ht dj x₀ hc hpub hpt hU hscope)) k Rw M ρ t' := by
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ (Reg := Reg) ht dj x₀) (tabPJ (Reg := Reg) ht dj x₀)
+          ((rsPJ ht dj x₀ hc hpub hpt hU hscope (Reg := Reg)).binding (rsPJ_computes ht dj x₀ hc hpub hpt hU hscope)) k Rw M
+          ρ t' := by
   intro σ hCR hKS
   exact (Placed.keyProg c hU n).flock_headline_live_tables_subset_miss (Layout.outsOf c hU n) kd hkd Lb src hA3
     (planPJ (Reg := Reg) ht dj x₀) (tabPJ ht dj x₀)
