@@ -16,7 +16,7 @@ The code's check is `RemoteAudit.Schedule.check`
 are not its published schedule's (`Schedule.plan`) and returns the schedule's bits.
 `Properties.RemoteAudit.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance, and
 `Properties.RemoteAudit.steered_of_scheduleDeterministic` derives `SteeredLayout` at `a + 1` bits from it
-(`Security/Properties/Proofs/RemoteAudit/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
+(`Security/Proofs/Properties/RemoteAudit/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
 and not `ScheduleDeterministic` at any `a`).
 -/
 

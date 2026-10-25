@@ -4,7 +4,7 @@ import Definitions.Claims
 /-!
 # Relative security for matmul PoUW: the vocabulary its guarantees read (trusted)
 
-The definitions `Models.Pouw.Guarantees.RelativeSecurity` and `Models.Pouw.Assumptions.RelativeSecurity` read, moved
+The definitions `Definitions.Pouw.Guarantees.RelativeSecurity` and `Definitions.Pouw.Assumptions.RelativeSecurity` read, moved
 verbatim from `Proofs.Pouw.RelativeSecurity` (same names, namespace and section variables), so the lock's `reads`
 follow them into the spec:
 

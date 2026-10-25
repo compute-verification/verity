@@ -1,4 +1,4 @@
-import Models.Flock.Guarantees.SamplingClaims
+import Definitions.Flock.Guarantees.SamplingClaims
 
 /-! `Flock.SecurityProofs.SamplingClaimsStated : Flock.Guarantees.SamplingClaimsStated`, by reflexivity: the guarantee is
 there for its record, which holds the sampling claims' text. -/
