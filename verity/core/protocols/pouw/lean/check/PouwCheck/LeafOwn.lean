@@ -15,6 +15,8 @@ places the tile statement's reads (`h1window.table_reads`):
   K and ti the tile's row block (the lane reads its A row at `rowOf l s` from there);
 * `b`: the weights' `<prefix>b/<K>` from row `b0 + C·tj`, b0 the call's linear's first row in it and tj the tile's
   column block (`colOf l t` from there);
+* at a chunked K (`Credit.chunks?` n > 1) `a`'s and `b`'s bases are leaf indices, n times those rows (`h1window.place`,
+  the chunk lanes' base);
 * `zy` and `receipt`: the call's `<prefix>zy@<c>` and `<prefix>receipt@<c>` from row `t`, one row a tile;
 * the partials: their own table from row 0 (`PouwWindow.Lanes.selfPlace`), the leaf's produced value.
 
@@ -69,9 +71,10 @@ def placeOf (pre : String) (layout : Json) (steps call t : Nat) :
   let j := ((List.range' (s * each) (call - s * each)).filter fun c' => kOf (calls.getD c' "") == some k).length
   let b0 := ((lins.takeWhile (·.1 != lin)).filter (·.2.1 == k)).foldl (fun a x => a + x.2.2) 0
   let (ti, tj) := (t / per, t % per)
+  let x := (Credit.chunks? k).getD 1
   let place := fun (v : String) =>
-    if v == "a" then (s!"{pre}a/{k}@{s}", m * j + r * ti)
-    else if v == "b" then (s!"{pre}b/{k}", b0 + c * tj)
+    if v == "a" then (s!"{pre}a/{k}@{s}", x * (m * j + r * ti))
+    else if v == "b" then (s!"{pre}b/{k}", x * (b0 + c * tj))
     else if v == "zy" then (s!"{pre}zy@{call}", t)
     else if v == "receipt" then (s!"{pre}receipt@{call}", t)
     else PouwWindow.Lanes.selfPlace v

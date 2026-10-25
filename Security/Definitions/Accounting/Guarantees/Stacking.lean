@@ -100,7 +100,8 @@ certified read, at `reads` bytes a window (the property's parameters; its lifeti
 link's bits here), an encode of `x` bits costing `encodeBitsCost` at the deployed codec (p1024, 3 rounds) in the gate
 model's restricted class (at most `B` operand bits a budgeted gate, on more than `εnum/εden` of the draws), `⊤` where
 the model has no circuit computing the words. Under `Accounting.Assumptions.EncodeChainHardness` at `E` budgeted units
-a word, the shortfall terms are the deployed guarantee's at rebuilt bits `X + C` a pass,
+a word and `ε ≥ 2^−64` (p1024 and 3 rounds are inside the rest of its floor), the shortfall terms are the deployed
+guarantee's at rebuilt bits `X + C` a pass,
 
   `C = 8·R_in·life + 1024·(c_ρ·reads·life)/E`,
 
@@ -159,7 +160,7 @@ def StackedSessionConservationSketchDeployed : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden →
+    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
     (∀ w η j ι c σ, ∃ K : RateSketch.Carrier N 128,
       (∀ Es R O,
@@ -192,8 +193,8 @@ inputs may depend on the pass's certified stream and oracle, so they may be rece
 side reads and the certified stream take in at most `L` bits in every world (`PIChip.linkBitsEven`; the session's own
 link bound `L_all` counts the carrier's reads too, and is any). With each carrier's circuit within the property's
 budgets, an encode costing `encodeBitsCost` over the codec's field `Fc` at `k` rounds, and
-`Accounting.Assumptions.EncodeChainHardness` at `E` budgeted units a word of `8·bytes` bits, as in
-`StackedSessionConservationSketchDeployed`, the bound is `RemoteSessionConservationRelay`'s at side link `L + C`,
+`Accounting.Assumptions.EncodeChainHardness` at `E` budgeted units a word of `8·bytes` bits, inside its floor
+(`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), as in `StackedSessionConservationSketchDeployed`, the bound is `RemoteSessionConservationRelay`'s at side link `L + C`,
 
   `C = 8·R_in·life + 8·bytes·(c_ρ·reads·life)/E`,
 
@@ -232,7 +233,8 @@ def StackedSessionConservationRelay : Prop :=
     Assumptions.KeyBinding T M δ enc →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    Assumptions.EncodeChainHardness Fc k B E εnum εden →
+    Assumptions.EncodeChainHardness Fc k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ Fc.p →
+      Fc.p % 4 = 3 →
     (∀ w η j ι c, ∃ K : Rate.PassProvenance N b h ρ (ℕ → Bool),
       (∀ Es R O v i, ((A.window w η).device j ι c).side Es R O v (2 * i + 1) = K.run Es R O i) ∧
       (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧
@@ -304,7 +306,7 @@ def StackedRequirementSketchDeployed : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden →
+    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
     (∀ w η j ι c σ, ∃ K : RateSketch.Carrier N 128,
       (∀ Es R O,
@@ -374,7 +376,8 @@ def StackedRequirementRelay : Prop :=
     Assumptions.KeyBinding T M δ enc →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    Assumptions.EncodeChainHardness Fc k B E εnum εden →
+    Assumptions.EncodeChainHardness Fc k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ Fc.p →
+      Fc.p % 4 = 3 →
     (∀ w η j ι c, ∃ K : Rate.PassProvenance N b h ρ (ℕ → Bool),
       (∀ Es R O v i, ((A.window w η).device j ι c).side Es R O v (2 * i + 1) = K.run Es R O i) ∧
       (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧

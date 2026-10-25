@@ -14,6 +14,7 @@ import Flock.Ligerito
 import Flock.Comp
 import Flock.Tags
 import Flock.Net
+import Flock.SplitNL
 import Flock.Lookup
 import Flock.Circuit
 import Flock.Public
@@ -52,6 +53,7 @@ import Flock.Registered
 import Flock.RegKnown
 import Flock.KnownRead
 import Flock.JsonKeys
+import Flock.RecordText
 import Flock.Keccak
 import Flock.RecCoins
 import Flock.RecSetup

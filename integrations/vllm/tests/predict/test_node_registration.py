@@ -128,6 +128,7 @@ def _manifest(d, sha=None):
     return str(p)
 
 
+@pytest.mark.slow
 def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_check(commit):
     """Two spawned rank processes, on the pinned checkpoint: the log passes `check_baseline`, and each rank's θ parameter i is
     `registered_rows.commit` of the tensor that rank registered under its field i's name, under the salts written to --salts and

@@ -261,6 +261,7 @@ def test_the_v2_logs_are_the_gpus_words_on_the_probes_edges(name):
         assert got == list(PROBE_EDGES[name].values()), (name, f, [hex(g) for g in got])
 
 
+@pytest.mark.slow
 def test_the_v2_logs_are_the_gpus_words_on_every_probed_input(tmp_path):
     """Every input word of the probe (20,007 for logf, 20,005 for log1pf: the edges, then random negatives and NaNs), against each FTZ
     build's output on the L40S and the H100.  Skipped where the evidence store is unreachable."""

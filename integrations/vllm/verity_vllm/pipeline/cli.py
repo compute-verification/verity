@@ -27,6 +27,7 @@ PROG = "verity-vllm"
 COMMANDS: dict[str, tuple[str, str]] = {
     "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
     "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
+    "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "boolean-purity": ("verity_vllm.program.boolean", "the Definitions a Program reaches that are not Boolean (or, --dry-run, would)"),
     "boolean-replay": ("verity_vllm.pipeline.boolean_replay", "a deferred Commit's replay with every pick evaluated on bits"),
@@ -36,6 +37,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "capture-map": ("verity_vllm.check.capture_map", "a capture map against a module inventory (check), its tap counts and value ids"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
     "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
@@ -81,6 +83,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "served": ("verity_vllm.acquire.served", "the served-compiled Program and required-value manifest (build), the GEMM routes it needs (routes)"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
     "served-pin": ("verity_vllm.acquire.served_artifact", "a served row's pinned compile artifact: seed a fresh Inductor dir with its autotune winners (seed), check a dir's (check)"),
+    "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
     "profile-descriptor": ("verity_vllm.program.profile_descriptor", "where a serialised descriptor's bytes go"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
@@ -88,7 +91,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
     "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
-    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+    "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                             "switch), and a checkpoint's staging (staged)"),
     "rejudge": ("verity_vllm.pipeline.tp.rejudge", "recompute a finished TP Commit's GPU-free gates from its saved outputs"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
@@ -109,6 +112,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
     "telemetry-admission": ("verity_vllm.pipeline.telemetry.admission_commands", "empirical admission planner"),
     "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
     "tp-commit": ("verity_vllm.pipeline.tp.commit", "tensor-parallel Commit"),

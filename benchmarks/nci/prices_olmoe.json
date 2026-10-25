@@ -1,0 +1,538 @@
+{
+ "about": "Per-weight prices (bits) of updated weights by role, measured on OLMoE-1B-7B-0924's published checkpoints (AdamW MoE), for benchmarks/nci/covering_priced.py --prices. Roles: qkv (attention q, k, v), attn_out (o), mlp_in / mlp_out = the ROUTED EXPERTS' gate+up / down (OLMoE's only MLPs; K2's routed experts read them), router, head, embed, norm (all measured), dense_mlp_in / dense_mlp_out = the dense-MLP equivalent (OLMoE attention x Pythia's MLP/attention ratio; K2's dense layer-0 MLP and shared expert, read by a loader that splits them, else they take mlp_in / mlp_out). Points olmoe@T: theta = step T, D = 5,000 steps (21B tokens), +10k: D = 10,000. Points pythia-P×olmoe@T: covering_priced's Pythia prices with the routed experts, router and norms at Pythia's attention price times OLMoE's measured ratio to attention at T; their cheapest tiers are Pythia's. cheapest: theta's forward-code classes over the block matrices (no Adam-v deciles: OLMoE publishes no optimizer state). Tiers by name: `theta 0.1%/1%/10%` are theta-selectable (theta's forward-code class over the block matrices; olmoe@T's 10% from the run's tables.md), `adam-v ...` also need theta's Adam-v decile (Pythia-160m's classes.out, selectable only with the optimizer state registered); `1%` and `0.1%` keep their first meaning (olmoe@T: theta's; the Pythia-anchored points: Pythia's code x Adam-v).",
+ "caveats": "AdamW only: no Muon-trained MoE publishes intermediate checkpoints (Moonshot's Moonlight-16B-A3B, Kimi K2 and Kimi-Linear repos hold final weights only), so MuonClip is unmeasured; on a matched dense pair (300M Llama, deqing/convergent-llama-300M-{muon,adamw}-original, run r20261024-180717-a305) Muon's block matrices cost x1.11-1.14 / x1.19-1.35 / x1.39-1.65 AdamW's (bf16 / FP8 / FP4) and its MLP-to-attention ratio was 0.96 / 0.89-0.94 / 0.78-0.91. OLMoE's q and k are QK-normed and cost more than v and o; against v and o alone the routed experts cost x1.03-1.08 / x1.07-1.15 / x1.09-1.25, which puts the anchored points' K2 mean at x1.04-1.28 instead of x0.91-1.10 of the experts-at-dense-price mean. D = 5,000 steps (21B tokens) is OLMoE's finest spacing, against Pythia's 1,000 (2.1B tokens): absolute OLMoE prices are not Pythia's; the ratios held when D doubled (600k: D = 10,000). OLMoE publishes no fp32 master or Adam moments, so its prices use theta's bf16 codes only.",
+ "runs": [
+  "r20261024-183258-1475"
+ ],
+ "method": "art:044580cc14c18dcb55b1e69da10d0e0f3f6ef1321ed11375c50953a1af8dc7d2 wcodecs.py (sha256 9c229ccaf81de333c3bb8e4be4cd273a0534a9e82fc734f74700a0e0cd22cd18), lowest numel-weighted codec mean per class",
+ "lr": {
+  "10000-15000": {
+   "lr_t0": 0.0003999646935656385,
+   "lr_t1": 0.00039990193227110025,
+   "shrink": 0.8187537059847093,
+   "rev_t0": "step10000-tokens41B",
+   "rev_t1": "step15000-tokens62B"
+  },
+  "600000-605000": {
+   "lr_t0": 0.0002187148462350348,
+   "lr_t1": 0.00021633828035921493,
+   "shrink": 0.896941563645129,
+   "rev_t0": "step600000-tokens2516B",
+   "rev_t1": "step605000-tokens2537B"
+  },
+  "600000-610000": {
+   "lr_t0": 0.0002187148462350348,
+   "lr_t1": 0.00021396235292592473,
+   "shrink": 0.8054606214575751,
+   "rev_t0": "step600000-tokens2516B",
+   "rev_t1": "step610000-tokens2558B"
+  },
+  "1150000-1155000": {
+   "lr_t0": 4.111100462038298e-05,
+   "lr_t1": 4.086293818986087e-05,
+   "shrink": 0.9797162994762104,
+   "rev_t0": "step1150000-tokens4823B",
+   "rev_t1": "step1155000-tokens4844B"
+  }
+ },
+ "points": {
+  "olmoe@10k": {
+   "bf16": {
+    "qkv": 10.1848,
+    "attn_out": 9.9555,
+    "mlp_in": 10.2829,
+    "mlp_out": 10.2539,
+    "router": 9.3149,
+    "head": 9.5757,
+    "embed": 10.0403,
+    "norm": 4.7499,
+    "dense_mlp_in": 9.9907,
+    "dense_mlp_out": 9.9907
+   },
+   "fp8": {
+    "qkv": 5.849,
+    "attn_out": 5.5595,
+    "mlp_in": 5.9767,
+    "mlp_out": 5.9411,
+    "router": 5.071,
+    "head": 5.0983,
+    "embed": 5.593,
+    "norm": 1.1275,
+    "dense_mlp_in": 5.5124,
+    "dense_mlp_out": 5.5124
+   },
+   "fp4": {
+    "qkv": 2.8914,
+    "attn_out": 2.6979,
+    "mlp_in": 2.9417,
+    "mlp_out": 2.915,
+    "router": 2.1974,
+    "head": 2.4097,
+    "embed": 2.7749,
+    "norm": 0.3416,
+    "dense_mlp_in": 2.5577,
+    "dense_mlp_out": 2.5577
+   }
+  },
+  "olmoe@600k": {
+   "bf16": {
+    "qkv": 9.7366,
+    "attn_out": 8.8497,
+    "mlp_in": 9.4931,
+    "mlp_out": 9.4145,
+    "router": 8.6661,
+    "head": 8.6575,
+    "embed": 9.8439,
+    "norm": 3.5072,
+    "dense_mlp_in": 9.407,
+    "dense_mlp_out": 9.407
+   },
+   "fp8": {
+    "qkv": 5.3378,
+    "attn_out": 4.5732,
+    "mlp_in": 5.1663,
+    "mlp_out": 5.0973,
+    "router": 4.5413,
+    "head": 4.3745,
+    "embed": 5.4002,
+    "norm": 0.6904,
+    "dense_mlp_in": 4.9113,
+    "dense_mlp_out": 4.9113
+   },
+   "fp4": {
+    "qkv": 2.4674,
+    "attn_out": 1.9072,
+    "mlp_in": 2.329,
+    "mlp_out": 2.2743,
+    "router": 1.6684,
+    "head": 1.7813,
+    "embed": 2.6038,
+    "norm": 0.1746,
+    "dense_mlp_in": 2.0938,
+    "dense_mlp_out": 2.0938
+   }
+  },
+  "olmoe@600k+10k": {
+   "bf16": {
+    "qkv": 9.9607,
+    "attn_out": 9.1035,
+    "mlp_in": 9.8399,
+    "mlp_out": 9.7586,
+    "router": 8.7605,
+    "head": 8.9233,
+    "embed": 10.1088,
+    "norm": 3.7343,
+    "dense_mlp_in": 9.6359,
+    "dense_mlp_out": 9.6359
+   },
+   "fp8": {
+    "qkv": 5.5763,
+    "attn_out": 4.7751,
+    "mlp_in": 5.5139,
+    "mlp_out": 5.4193,
+    "router": 4.6218,
+    "head": 4.5996,
+    "embed": 5.7009,
+    "norm": 0.7489,
+    "dense_mlp_in": 5.1301,
+    "dense_mlp_out": 5.1301
+   },
+   "fp4": {
+    "qkv": 2.6681,
+    "attn_out": 2.0678,
+    "mlp_in": 2.5864,
+    "mlp_out": 2.5164,
+    "router": 1.7255,
+    "head": 1.9631,
+    "embed": 2.8199,
+    "norm": 0.1991,
+    "dense_mlp_in": 2.2654,
+    "dense_mlp_out": 2.2654
+   }
+  },
+  "olmoe@1150k": {
+   "bf16": {
+    "qkv": 8.4807,
+    "attn_out": 7.4924,
+    "mlp_in": 7.8332,
+    "mlp_out": 7.8397,
+    "router": 7.0164,
+    "head": 6.8793,
+    "embed": 8.6999,
+    "norm": 2.1514,
+    "dense_mlp_in": 8.1224,
+    "dense_mlp_out": 8.1224
+   },
+   "fp8": {
+    "qkv": 4.2577,
+    "attn_out": 3.4227,
+    "mlp_in": 3.7349,
+    "mlp_out": 3.7343,
+    "router": 3.1329,
+    "head": 2.9072,
+    "embed": 4.4153,
+    "norm": 0.3567,
+    "dense_mlp_in": 3.8638,
+    "dense_mlp_out": 3.8638
+   },
+   "fp4": {
+    "qkv": 1.6635,
+    "attn_out": 1.0931,
+    "mlp_in": 1.2479,
+    "mlp_out": 1.2508,
+    "router": 0.7546,
+    "head": 0.7805,
+    "embed": 1.7998,
+    "norm": 0.0764,
+    "dense_mlp_in": 1.3685,
+    "dense_mlp_out": 1.3685
+   }
+  },
+  "pythia-160m@100k×olmoe@600k": {
+   "bf16": {
+    "qkv": 6.694,
+    "attn_out": 7.314,
+    "mlp_in": 6.8183,
+    "mlp_out": 6.7618,
+    "head": 5.912,
+    "embed": 7.268,
+    "router": 6.2243,
+    "norm": 2.519,
+    "dense_mlp_in": 6.667,
+    "dense_mlp_out": 6.665
+   },
+   "fp8": {
+    "qkv": 2.767,
+    "attn_out": 3.286,
+    "mlp_in": 2.9078,
+    "mlp_out": 2.869,
+    "head": 2.095,
+    "embed": 3.161,
+    "router": 2.556,
+    "norm": 0.3886,
+    "dense_mlp_in": 2.718,
+    "dense_mlp_out": 2.733
+   },
+   "fp4": {
+    "qkv": 0.695,
+    "attn_out": 0.972,
+    "mlp_in": 0.7648,
+    "mlp_out": 0.7468,
+    "head": 0.54,
+    "embed": 0.931,
+    "router": 0.5479,
+    "norm": 0.0574,
+    "dense_mlp_in": 0.663,
+    "dense_mlp_out": 0.662
+   }
+  },
+  "pythia-160m@140k×olmoe@1150k": {
+   "bf16": {
+    "qkv": 5.817,
+    "attn_out": 6.75,
+    "mlp_in": 5.756,
+    "mlp_out": 5.7608,
+    "head": 1.583,
+    "embed": 6.474,
+    "router": 5.1558,
+    "norm": 1.5809,
+    "dense_mlp_in": 5.988,
+    "dense_mlp_out": 5.955
+   },
+   "fp8": {
+    "qkv": 2.078,
+    "attn_out": 2.813,
+    "mlp_in": 2.0863,
+    "mlp_out": 2.086,
+    "head": 0.264,
+    "embed": 2.501,
+    "router": 1.75,
+    "norm": 0.1993,
+    "dense_mlp_in": 2.137,
+    "dense_mlp_out": 2.137
+   },
+   "fp4": {
+    "qkv": 0.418,
+    "attn_out": 0.717,
+    "mlp_in": 0.4042,
+    "mlp_out": 0.4052,
+    "head": 0.127,
+    "embed": 0.59,
+    "router": 0.2444,
+    "norm": 0.0247,
+    "dense_mlp_in": 0.431,
+    "dense_mlp_out": 0.433
+   }
+  },
+  "pythia-410m@100k×olmoe@600k": {
+   "bf16": {
+    "qkv": 6.124,
+    "attn_out": 6.338,
+    "mlp_in": 6.1498,
+    "mlp_out": 6.0988,
+    "head": 6.359,
+    "embed": 6.531,
+    "router": 5.6141,
+    "norm": 2.272,
+    "dense_mlp_in": 6.194,
+    "dense_mlp_out": 6.028
+   },
+   "fp8": {
+    "qkv": 2.275,
+    "attn_out": 2.438,
+    "mlp_in": 2.3246,
+    "mlp_out": 2.2935,
+    "head": 2.412,
+    "embed": 2.543,
+    "router": 2.0434,
+    "norm": 0.3107,
+    "dense_mlp_in": 2.284,
+    "dense_mlp_out": 2.169
+   },
+   "fp4": {
+    "qkv": 0.486,
+    "attn_out": 0.548,
+    "mlp_in": 0.5018,
+    "mlp_out": 0.4901,
+    "head": 0.559,
+    "embed": 0.61,
+    "router": 0.3595,
+    "norm": 0.0376,
+    "dense_mlp_in": 0.488,
+    "dense_mlp_out": 0.44
+   }
+  },
+  "pythia-410m@140k×olmoe@1150k": {
+   "bf16": {
+    "qkv": 5.04,
+    "attn_out": 5.483,
+    "mlp_in": 4.9003,
+    "mlp_out": 4.9043,
+    "head": 5.357,
+    "embed": 5.571,
+    "router": 4.3893,
+    "norm": 1.3459,
+    "dense_mlp_in": 5.228,
+    "dense_mlp_out": 5.037
+   },
+   "fp8": {
+    "qkv": 1.492,
+    "attn_out": 1.77,
+    "mlp_in": 1.4404,
+    "mlp_out": 1.4402,
+    "head": 1.674,
+    "embed": 1.811,
+    "router": 1.2082,
+    "norm": 0.1376,
+    "dense_mlp_in": 1.569,
+    "dense_mlp_out": 1.46
+   },
+   "fp4": {
+    "qkv": 0.249,
+    "attn_out": 0.322,
+    "mlp_in": 0.2192,
+    "mlp_out": 0.2198,
+    "head": 0.298,
+    "embed": 0.335,
+    "router": 0.1326,
+    "norm": 0.0134,
+    "dense_mlp_in": 0.263,
+    "dense_mlp_out": 0.234
+   }
+  }
+ },
+ "cheapest": {
+  "olmoe@10k": {
+   "1%": {
+    "bf16": 7.4006,
+    "fp8": 3.3977,
+    "fp4": 1.1396
+   },
+   "0.1%": {
+    "bf16": 6.9549,
+    "fp8": 3.0668,
+    "fp4": 0.9652
+   },
+   "theta 0.1%": {
+    "bf16": 6.9549,
+    "fp8": 3.0668,
+    "fp4": 0.9652
+   },
+   "theta 1%": {
+    "bf16": 7.4006,
+    "fp8": 3.3977,
+    "fp4": 1.1396
+   },
+   "theta 10%": {
+    "bf16": 8.014,
+    "fp8": 3.998,
+    "fp4": 1.444
+   }
+  },
+  "olmoe@600k": {
+   "1%": {
+    "bf16": 6.409,
+    "fp8": 2.5652,
+    "fp4": 0.8154
+   },
+   "0.1%": {
+    "bf16": 5.8045,
+    "fp8": 2.1521,
+    "fp4": 0.6221
+   },
+   "theta 0.1%": {
+    "bf16": 5.8045,
+    "fp8": 2.1521,
+    "fp4": 0.6221
+   },
+   "theta 1%": {
+    "bf16": 6.409,
+    "fp8": 2.5652,
+    "fp4": 0.8154
+   },
+   "theta 10%": {
+    "bf16": 7.015,
+    "fp8": 3.11,
+    "fp4": 1.033
+   }
+  },
+  "olmoe@600k+10k": {
+   "1%": {
+    "bf16": 6.7367,
+    "fp8": 2.8485,
+    "fp4": 0.9723
+   },
+   "0.1%": {
+    "bf16": 6.0562,
+    "fp8": 2.3901,
+    "fp4": 0.708
+   },
+   "theta 0.1%": {
+    "bf16": 6.0562,
+    "fp8": 2.3901,
+    "fp4": 0.708
+   },
+   "theta 1%": {
+    "bf16": 6.7367,
+    "fp8": 2.8485,
+    "fp4": 0.9723
+   },
+   "theta 10%": {
+    "bf16": 7.388,
+    "fp8": 3.463,
+    "fp4": 1.264
+   }
+  },
+  "olmoe@1150k": {
+   "1%": {
+    "bf16": 4.9803,
+    "fp8": 1.461,
+    "fp4": 0.3951
+   },
+   "0.1%": {
+    "bf16": 4.3569,
+    "fp8": 1.2278,
+    "fp4": 0.3365
+   },
+   "theta 0.1%": {
+    "bf16": 4.3569,
+    "fp8": 1.2278,
+    "fp4": 0.3365
+   },
+   "theta 1%": {
+    "bf16": 4.9803,
+    "fp8": 1.461,
+    "fp4": 0.3951
+   },
+   "theta 10%": {
+    "bf16": 5.515,
+    "fp8": 1.859,
+    "fp4": 0.478
+   }
+  },
+  "pythia-160m@100k×olmoe@600k": {
+   "1%": {
+    "bf16": 3.425,
+    "fp8": 0.741,
+    "fp4": 0.188
+   },
+   "0.1%": {
+    "bf16": 2.786,
+    "fp8": 0.574,
+    "fp4": 0.101
+   },
+   "theta 0.1%": {
+    "bf16": 3.015,
+    "fp8": 0.751,
+    "fp4": 0.208
+   },
+   "theta 1%": {
+    "bf16": 3.65,
+    "fp8": 0.883,
+    "fp4": 0.214
+   },
+   "theta 10%": {
+    "bf16": 4.451,
+    "fp8": 1.148,
+    "fp4": 0.289
+   },
+   "adam-v 0.1%": {
+    "bf16": 2.786,
+    "fp8": 0.574,
+    "fp4": 0.101
+   },
+   "adam-v 1%": {
+    "bf16": 3.425,
+    "fp8": 0.741,
+    "fp4": 0.188
+   },
+   "adam-v 10%": {
+    "bf16": 4.274,
+    "fp8": 1.061,
+    "fp4": 0.283
+   }
+  },
+  "pythia-160m@140k×olmoe@1150k": {
+   "1%": {
+    "bf16": 2.265,
+    "fp8": 0.453,
+    "fp4": 0.121
+   },
+   "0.1%": {
+    "bf16": 1.54,
+    "fp8": 0.314,
+    "fp4": 0.075
+   },
+   "theta 0.1%": {
+    "bf16": 1.646,
+    "fp8": 0.472,
+    "fp4": 0.134
+   },
+   "theta 1%": {
+    "bf16": 2.376,
+    "fp8": 0.582,
+    "fp4": 0.14
+   },
+   "theta 10%": {
+    "bf16": 3.561,
+    "fp8": 0.802,
+    "fp4": 0.205
+   },
+   "adam-v 0.1%": {
+    "bf16": 1.54,
+    "fp8": 0.314,
+    "fp4": 0.075
+   },
+   "adam-v 1%": {
+    "bf16": 2.265,
+    "fp8": 0.453,
+    "fp4": 0.121
+   },
+   "adam-v 10%": {
+    "bf16": 3.397,
+    "fp8": 0.732,
+    "fp4": 0.198
+   }
+  }
+ }
+}

@@ -155,7 +155,6 @@ def test_decode_agrees_with_the_model(T: int, kind: str) -> None:
     _agree_decode(T, kind)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("T", [2, 16, 17, 31, 32, 64, 65])
 @pytest.mark.parametrize("kind", ["spread", "large", "special", "uniform", "tiny"])
 def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> None:
@@ -177,8 +176,7 @@ CAPTURED = [
 ]
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("case,b,digest", CAPTURED, ids=[f"T={c['seqlens'][b]}" for c, b, _ in CAPTURED])
+@pytest.mark.parametrize("case,b,digest", [*CAPTURED[:2], pytest.param(*CAPTURED[2], marks=pytest.mark.slow)], ids=[f"T={c['seqlens'][b]}" for c, b, _ in CAPTURED])
 def test_decode_reproduces_the_captured_hardware_output(case: dict, b: int, digest: str) -> None:
     """`TritonMlaDecode_v1` at GLM-4.7-Flash's statics (20 heads, 512 + 64 latent, sm_scale 2^-4) on a captured request: its
     output words hash to what the RTX PRO 6000 (sm_120) wrote. The only check of the Definition itself at the served widths,

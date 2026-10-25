@@ -279,8 +279,8 @@ It is stated for models whose registration is an oracle program's output with it
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
 shrink the provers it quantifies over. It is the shape of relative security's
 premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStaged`,
-`Extraction`), and it is carded on the random-oracle card with gap (7)'s grinding
-(`Accounting.Assumptions.Compose.SeedGrind`), so that Daniel rules on the random oracle once. -/
+`Extraction`), and it is carded on the random-oracle card with the seeded windows' premise
+(`Accounting.Assumptions.Compose.SeedExtractedAt`), so that Daniel rules on the random oracle once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : Layout → Prop)

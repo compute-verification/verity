@@ -20,7 +20,7 @@ floor holds there on paper only. The verifier can't observe which case a run is 
 
 The four floors rest on `ServiceSoundStaged` and `ServiceSoundOverlap`, which are false below 1 at SHA-512 (an
 adversary that hard-codes a collision breaks binding in every round). Each has a restatement per prover beside it,
-stated and not yet proved (`StagedFloorKPerProver`, `StagedFloorKOneSidedPerProver`, `OverlapFloorKPerProver`,
+proved (`StagedFloorKPerProver`, `StagedFloorKOneSidedPerProver`, `OverlapFloorKPerProver`,
 `OverlapFloorKOneSidedPerProver`): the same floor and the same luck, on the premises per prover, with each adversary's
 error its own (`breakBound`), `ecr/sha-512` at that adversary's collision finders within budgets computed from its
 time, `⊤` where they fail it, and each value of its coins capped at 1
@@ -117,7 +117,7 @@ def OverlapFloorKOneSided : Prop :=
     ServiceFloor Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 
-/-! ### The floors per prover (stated, not yet proved)
+/-! ### The floors per prover
 
 Each restates one floor above on the service premise per prover (`ServiceSoundStagedPerProver`,
 `ServiceSoundOverlapPerProver`) and concludes it adversary by adversary (`ServiceFloorPerProver`): the same floor `F`

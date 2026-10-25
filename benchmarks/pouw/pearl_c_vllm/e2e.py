@@ -40,7 +40,10 @@ replays its own capture, which also keeps each call's A words and tree.  Its gat
 replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
 counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
 check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
-``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
+``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), ``--whole-defer-a``
+(with ``--whole-defer``) each call's A tree beside its own forming and GEMM, ``--whole-tree-sm`` (with
+``--whole-defer-a``) that GEMM leaving the tree's CTA its SM, and ``--whole-fork-stats`` (with ``--whole-defer``) each
+call's A scales beside its A commitment, under the same gate.
 
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
@@ -209,7 +212,10 @@ def install(model, args, coins):
     opening = coins.open("salt", weights_root(roots))
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key)
+                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                              whole_defer_a=getattr(args, "whole_defer_a", False),
+                              whole_fork_stats=getattr(args, "whole_fork_stats", False),
+                              whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
         spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
@@ -248,7 +254,8 @@ def arm_of(mode: str, run, args):
 
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
-    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
+    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes repeat
+    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the epoch numbers calls across passes."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -258,9 +265,9 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
         seen.add(tuple(W.shape))
         for m in (PREFILL, BATCH):
             x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-            commits, served = [], None
+            commits, served, at = [], None, run.epoch_calls()
             for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
-                run.begin()
+                run.begin(at=at)
                 run.poison()
                 run.omit = frozenset(omit)
                 y = run.gemm(w, x, W, None)
@@ -293,8 +300,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
     and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
     decode steps replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit,
-    and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture's stages
-    are a weight's, sized by the first retained capture's m₁₆, so a run whose vLLM graphs captured them checks at that m."""
+    and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
+    stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured."""
     import torch
     m = BATCH if m is None else m
     dev = next(iter(weights.values())).device
@@ -309,6 +316,7 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
 
     run.graphs = False
     run.begin()
+    at = run.cur.base
     run.poison()
     forward()
     want = ended(forward())
@@ -326,7 +334,7 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     run.end()
     got, staged = [], []
     for _ in range(2):
-        run.begin()
+        run.begin(at=at)
         run.poison()
         for _ in range(2):
             staged.append(run.whole_replay(calls))
@@ -360,6 +368,7 @@ def whole_retained_check(run, forward, side) -> bool:
     try:
         run.graphs = False
         run.begin(retain=str(dirs[0]))
+        at = run.cur.base
         forward()
         want = ended()
         run.graphs = True
@@ -374,7 +383,7 @@ def whole_retained_check(run, forward, side) -> bool:
         finally:
             calls = run.whole_capture_end()
         run.end()
-        run.begin(retain=str(dirs[1]))
+        run.begin(retain=str(dirs[1]), at=at)
         run.whole_replay(calls)
         graph.replay()
         run.whole_replayed(calls)
@@ -395,9 +404,9 @@ def schedule_check(run, weights: dict) -> dict:
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
     xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
-    commits, mine = {}, run.schedule.name
+    commits, mine, at = {}, run.schedule.name, run.epoch_calls()
     for name in ("serial", mine):
-        run.begin(schedule=name)
+        run.begin(schedule=name, at=at)
         run.poison()
         for x in xs:
             run.gemm(w, x, W, None)
@@ -420,10 +429,10 @@ def graphs_check(run, weights: dict) -> list[dict]:
             continue
         seen.add(tuple(W.shape))
         x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-        got = []
+        got, at = [], run.epoch_calls()
         for graphs in (False, True, True):
             run.graphs = graphs
-            run.begin()
+            run.begin(at=at)
             run.poison()
             y = run.gemm(w, x, W, None).clone()
             flags = run.flag_buf[:BATCH].clone()
@@ -580,8 +589,9 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 if whole is not None:
                     whole.take()
                 for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
-                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     want = cmd["want"][name]
+                    run.repeat_at = want.get("base")     # the timed pass's call indices, so its commitment can repeat
+                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
                                  **({"whole_step": whole.take()} if whole is not None else {})}
@@ -591,8 +601,10 @@ def serve(conn, args, group: str, coins: dict) -> None:
                             whole.enabled = False
                         try:
                             if whole is not None:
+                                run.repeat_at = want.get("base")
                                 _, _, ref, _ = timed(p, sp)
                             run.graphs = False
+                            run.repeat_at = want.get("base")
                             _, _, eager, _ = timed(p, sp)
                         finally:
                             run.graphs = True
@@ -645,14 +657,18 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`).
-    A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same record
-    gets the one opening again, and after any other record a refusal, so nothing redraws."""
+    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
+    which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
+    epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
+    refusal, so nothing redraws."""
 
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        self.challenger, self.opened = Challenger(epoch, entropy or verifier.coins), {}
+        from verity.core.protocols.sampled_proofs.challenger import served_claim
+        entropy = verifier.coins if entropy is None else entropy
+        served_claim(entropy)
+        self.challenger, self.opened = Challenger(epoch, entropy), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
@@ -821,7 +837,8 @@ def split(results: dict) -> dict:
 def state_entropy(path: str):
     """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
     verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`)."""
+    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
+    by the Lean's claim instance (`verifier.CLAIM`)."""
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
     p = Path(path)
@@ -836,6 +853,7 @@ def state_entropy(path: str):
     def take(n: int) -> bytes:
         at[0] += n
         return data[at[0] - n:at[0]]
+    take.claim = verifier.CLAIM
     return take
 
 
@@ -869,6 +887,9 @@ def smoke(args) -> None:
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"),
                  "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
+                 "whole_defer_a": getattr(args, "whole_defer_a", False),
+                 "whole_fork_stats": getattr(args, "whole_fork_stats", False),
+                 "whole_tree_sm": getattr(args, "whole_tree_sm", False),
                  "capture": getattr(args, "capture", None), "statement": getattr(args, "statement", None), "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
     def step(name, f):
@@ -1023,6 +1044,14 @@ def main() -> None:
                     help="(with --whole-step) the arm engine's CUDA-graph batch sizes, comma-separated (default the decode batch)")
     ap.add_argument("--whole-defer", action="store_true",
                     help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
+    ap.add_argument("--whole-defer-a", action="store_true",
+                    help="(with --whole-defer) and each call's A tree beside its own forming and GEMM, on a kernel whose "
+                         "pipeline splits A's commitment")
+    ap.add_argument("--whole-tree-sm", action="store_true",
+                    help="(with --whole-defer-a) the GEMM beside each call's A tree launching one persistent CTA fewer, "
+                         "leaving the tree's CTA its SM")
+    ap.add_argument("--whole-fork-stats", action="store_true",
+                    help="(with --whole-defer) and each call's A scales beside its A commitment")
     ap.add_argument("--statement", metavar="CUBIN",
                     help="(with --whole-step) hm96_rows.cu's cubin: adds pearlc-zk, each decode forward's rows committed in the "
                          "ZK statement's format too, once after the forward (served_zk/statement.py)")
@@ -1043,6 +1072,12 @@ def main() -> None:
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
+    if args.whole_defer_a and not args.whole_defer:
+        ap.error("--whole-defer-a defers A's trees beside the deferred tile hashing: it needs --whole-defer")
+    if args.whole_tree_sm and not args.whole_defer_a:
+        ap.error("--whole-tree-sm leaves a deferred A tree its SM: it needs --whole-defer-a")
+    if args.whole_fork_stats and not args.whole_defer:
+        ap.error("--whole-fork-stats forks A's scales within a deferred whole capture: it needs --whole-defer")
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
     if args.smoke:
@@ -1054,7 +1089,8 @@ def main() -> None:
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
                  "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
-                 "whole_step": args.whole_step, "whole_defer": args.whole_defer, "capture": args.capture,
+                 "whole_step": args.whole_step, "whole_defer": args.whole_defer, "whole_defer_a": args.whole_defer_a,
+                 "whole_fork_stats": args.whole_fork_stats, "whole_tree_sm": args.whole_tree_sm, "capture": args.capture,
                  "statement": args.statement, "run": os.environ.get("RESEARCH_RUN_ID"),
                  "coins": coins.commitment.to_json(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

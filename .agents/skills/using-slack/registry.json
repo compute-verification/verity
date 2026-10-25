@@ -366,7 +366,6 @@
         "Security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
-        "Security/Definitions/Accounting/Guarantees/Remote.lean",
         "Security/Definitions/Accounting/Guarantees/Requirement.lean",
         "Security/Definitions/Accounting/Guarantees/Responder.lean",
         "Security/Proofs/Accounting/Bandwidth.lean",
@@ -514,7 +513,7 @@
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
         "tools/research/tests/test_linear.py",
-        "integrations/slack-events/"
+        "infra/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
@@ -543,7 +542,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
@@ -586,6 +585,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py"

@@ -119,6 +119,12 @@ What an agent may change:
 - (2 Oct) An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
   census's dense datasheet peak for its dtype, to one significant digit.
 
+Landing:
+
+- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the whole
+  check before a landing. A PR that changes a `lean-audit.json` lock keeps its Lean check first, and reviewers are agents ci
+  staffs, never the PR's owner. Drive does it with `land = "review"` (AGENTS.md "Checking and merging").
+
 Protocols and claims:
 
 - (23 Oct) `Security/` is three trees, `Definitions/`, `Properties/` and `Proofs/`, with one name per area across them:
@@ -142,7 +148,7 @@ Protocols and claims:
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute horizon with every window at most 1%, and never changes the model's logits.
 - (18 Oct, ASK-16) PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
+  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
   knowledge soundness keeps the collision form.
 - (19 Oct, ASK-72 and ASK-73) The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor

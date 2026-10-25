@@ -2,15 +2,15 @@
 170acd49f3115f583161ca1f20c2d210d102933ad8a54d80a64702ab35c9630a  lakefile.toml
 e76a73face016098c6dd6a03974c4241b0616741a755c5a50fc2eac9d524de62  lake-manifest.json
 ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
-01e13d29d6a41837ecfa6f10e09ad98358282a3a516fff6b3a69bf48b61cc414  Grader/Registry.lean
+2f188ed35bb56e1f4422fe20707556a869d42310537faed68cb1674f7004edef  Grader/Registry.lean
 523acb9f1a3d9130b5ba40834aeb6acd44a5e6e4a44924f0f81da99f5bb8cde4  Grader/Main.lean
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../../Security/lean-toolchain
 c8bb54b77da8e87a326e56ebe8c5c4598d5260ef54f1b7a3720b2992b4204850  ../../../../../Security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
-da0c064b30f5df1a030467927eaf57f22075a414b02396bb6984e01c3cf6edda  ../../../../../Security/Proofs/lakefile.toml
+eb550a21df3dd0a1dd70950232b11c70cc287a9da2cc4e18ae7588eef60bfb51  ../../../../../Security/Proofs/lakefile.toml
 dff5d799d07c5962dde6e0967f8925956561be6b011b7e0187188495fcbe8088  ../../../../../Security/Proofs/lake-manifest.json
 13ebe8f2454e2d12130d6f13a8459b436cbfaad3da5c843ae172a0ec9fecc5e9  ../../../../../Security/Definitions/Pous.lean
-fac3443bdbe5502866168496fb061078a837074ee0198b5c093754b9ee7cd811  ../../../../../Security/Proofs/Pous/Statements.lean
+3dec494c279c59a29d7d17d53987e71bfce51434dc21052f220abca76e219eca  ../../../../../Security/Proofs/Pous/Statements.lean
 57d86e4aa918aa43d237c72f4cf793324c1269dd6aa4a3c70550d7da7dc22c15  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
 525fb6166c7097d9230cb2f3515df9ee9d5a9874ddff7dcd69fa838759b8ec2e  ../../../../../Security/Definitions/Pous/Accounting/EraseMeets.lean
@@ -23,7 +23,7 @@ d288169b3dc60861ae150688cdc6facb8ae60d95a9ab91704852285843434db0  ../../../../..
 c1f3114390c593fcab239b629bed7ac2aa8ba42a4c405b0c54b1875a9a611b8d  ../../../../../Security/Definitions/Pous/Assumptions/P2.lean
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
-de852f1fb0eec0b610c4d96de24075afcb0ea43c884f11d6451a5891eaab126f  ../../../../../Security/Definitions/Pous/Guarantees.lean
+7efa0ece48a262059ddb80af87b9b71d46181a043cd22d2edaf93de9249c7c0c  ../../../../../Security/Definitions/Pous/Guarantees.lean
 e42e5066c3a3ad7077406e623e58ffba216e6be149d5b09f4931518da6afb6fc  ../../../../../Security/Definitions/Pous/Guarantees/P2.lean
 c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Definitions/Pous/Guarantees/SecureErasure.lean
 553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean

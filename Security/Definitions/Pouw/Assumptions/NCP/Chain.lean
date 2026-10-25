@@ -91,7 +91,7 @@ def LeadIndWitness : Prop :=
     P.toProtocol.Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain (fun _ => 0) ∧
     (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →
-      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain γ₀ (fun _ _ => 0)) ∧
+      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain γ₀ (fun _ _ => 0)) ∧
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain ∧ 0 < Lay.N ∧ ∀ u < Lay.N, P.d ∣ (Lay.shape u).k
 
 end Pouw.NCP.Chain

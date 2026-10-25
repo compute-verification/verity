@@ -14,8 +14,9 @@ the coins, with the carriers' cost read from the property's caps (`Gates.Propert
 `Accounting.Assumptions.EncodeChainHardness`) and the audit linked to `W`'s placed requirement (A1's
 `Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
 appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
-weights and the filler are the registration audit's to count. Its theorem waits on the red team of the statement, so
-the lock lists the statement as `unstated`; the proof's pieces are in `Security/Proofs/Accounting/DeclaredCircuit.lean`.
+weights and the filler are the registration audit's to count. Its theorem is
+`Accounting.SecurityProofs.DeclaredCircuitRequirement`, in `Security/Proofs/Accounting/DeclaredCircuit/Requirement.lean`
+with its pieces beside it.
 -/
 
 namespace Accounting.Guarantees
@@ -27,14 +28,33 @@ open scoped ENNReal
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the deployed parameters.**
 
 *The audit.* `StackedSessionConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
-16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window, and a store per pass made by the append-coin
-rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M` positions, each append's choices `choose c ω a κ_<a`
-fixed before its own coin keys its blocks). Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where `c` is
-the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so the layout
-may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
-(`Accounting.Assumptions.SteeredLayout`). Each append has its own coin, uniform and independent of the others', so a
-re-key, which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
-`joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`).
+16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window (the 1 s window's count; a longer window's
+audit instantiates `G` by verifying a uniform 2,773 of its draws, and a paced session's when each group draws at least
+2,773), and a store per pass made by the append-coin rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M`
+positions, each append's choices `choose c ω a κ_<a` fixed before its own coin keys its blocks). `P` is fixed before
+the session's coins, and the code holds a window to it only in a paced session (#3786), whose windows are its groups of
+at most `k` passes (the audit refuses a group's root `k + 1`, `order`, in Python and Lean): a paced session reads `G` at
+`P = k`, a group of fewer passes as one padded with passes that hold no tile of `W`
+(note:memory-accounting/20261024T1630Z-report-carrier-life). The code caps no unpaced window's passes yet, so a
+KV-credited session meets `G` when it is paced. Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where
+`c` is the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so
+the layout may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
+(`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
+check (#3828) at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
+`Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
+check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
+`Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
+appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin, over which
+the check refuses a schedule (memory-accounting's steer-cap, in progress), not the bits of the one schedule a session
+published: a prover whose schedule is 200 bits on most coins and 300 where it steers meets `SteeredLayout` only at 301
+(RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, open until the cap lands). A layout that follows a
+coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
+`a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
+which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
+`joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
+of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`,
+#3786), with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
+nominal length.
 
 *The prover system.* Its pass devices are verbatim (`rate-sketch-verbatim`), and they are told their pass's summary:
 `A` has a session for each value of the summary (`RateSketch.SketchSummarySession`), and pass `j` of window `w` runs
@@ -92,9 +112,10 @@ short of its passes' credit by more than `(0.01 + γ)` of its `P·N·32768`, is 
 **The steering.** The layout reads no window coin, so the draws' term and the signs' rank term (`n·ε`) don't see it,
 and the tag-guess term holds at every store. The query term is a correct digest of a tile with a sector the device
 never obtained, which needs the pass's blocks uniform: key binding gives that per pass at `2^a` times the uniform
-probability, `δ` once. A pass short by `k` more tiles than the slack needs `k + 1` such digests at distinct unobtained
-sectors, at `2^-96` each, so `k` tiles of slack a pass trade for `k·(96 − log₂(q_r·τ))` bits of steering: about 63
-bits a tile at `q_r·τ = 2^33`, the steering costing about 520 bits of `γ`'s numerator a bit. The devices are told the
+probability, `δ` once. A pass short by `k` more tiles than the slack needs `k + 1` distinct unobtained positions, tile
+sectors or the stream's, among its correct digests, at `2^-96` each, so `k` tiles of slack a pass trade for
+`k·(96 − log₂(q_r·τ))` bits of steering: about 63 bits a tile at `q_r·τ = 2^33` (41 at the stated cap of `2^55`), the
+steering costing about 520 bits of `γ`'s numerator a bit. The devices are told the
 summary, so a device may aim at the layout the prover steered to. Each summary fixes both the layout and the devices,
 so the union over the `2^a` summaries covers them together: an adaptive device costs nothing beyond `2^a`. At
 `a = k = 0` the bound is `StackedSessionConservationSketchDeployed`'s.
@@ -117,15 +138,33 @@ node's devices held the tiles, and that the bits taken from outside the store ar
 boundary, are attribution's (`certifier-coverage`, `trusted-nebius-host` and the tiers' bandwidths at the deadline). A
 node that registers `R` times pays `δ_G` once a registration.
 
-Proof (to come, as `Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's
-inputs are at most `8·R_L` and its encodes at most `L·c·P·N·4096` units (`OfCircuit` with the property), so every pass
-rebuilds at most `X_r·τ + C` bits of its appended tiles, and its tiles of `W` are appended tiles; the conservation runs
-on a pass's tiles of `W` alone (their sectors held, read, linked or rebuilt), so the rebuilds of registered tiles,
-which nothing bounds, never enter it; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed
-tag (at every store and every device), or a pass with `k + 1` correct digests of unobtained sectors of its tiles of
-`W`; `KeyBinding` at the whole layout, with a union inside the uniform store over the `2^a` summaries, each fixing the
-layout `slot c s` and the devices of session `s` (`KeyBinding.pr_steered_le`), bounds that pass at
-`2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's credit is at most a tile's bits for each of its tiles of `W`.
+`G` credits nothing once `γ ≥ 1 − 0.0015`, because a pass's credit is at most its `N` tiles' bits and the event's
+threshold is then negative. The carrier term grows with the carrier's life, `128·L·P·c/E` of the store with `P·N·4096`
+bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T_w` is short: at the 18 Oct caps
+(c = 0.442 for 8B, 0.0918 for 70B TP8, 61 ms passes) `ε` a session is 10% at a life of 35 s for 8B and 171 s for 70B.
+At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
+492 passes as a paced session of 12 groups of `k = 82` a 60 s stretch at `L = 6`). At the stated 60 s window
+`⌊D/T_w⌋ = 0`, so `L = L_min`: 16.25% and 4.16% at `L = 1`, and 31.52% and 7.33% at `L = 2` for a prover that defers
+residency, as the vLLM serving store does (note:memory-accounting/20261024T1630Z-report-carrier-life; the earlier
+60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
+2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
+its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1`, at a decode schedule and
+at a prefill. The decode witness (#3924, `Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
+sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness (#3994,
+`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
+group a page, so a chunk may complete several pages while their coins are out; its credit is exactly its tiles' bits,
+and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
+
+Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
+most `8·R_L` and its encodes at most `L·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds at
+most `X_r·τ + C` bits of its appended tiles, and its tiles of `W` are appended tiles; the conservation runs on a pass's
+tiles of `W` alone (their sectors held, read, linked or rebuilt), so the rebuilds of registered tiles, which nothing
+bounds, never enter it; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed tag (at every
+store and every device), or a pass with `k + 1` correct digests behind distinct unobtained positions of its tiles of
+`W` and the stream, at most one sector a tile; `KeyBinding` at the whole layout, with a union inside the uniform store
+over the `2^a` summaries, each fixing the layout `slot c s` and the devices of session `s` (`KeyBinding.pr_steered_le`),
+bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's credit is at most a tile's bits for each of its tiles of
+`W`.
 
 Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game on a store per pass whose layout reads
 the codec and the append coins through an `a`-bit summary the pass's devices are told, each append's blocks read
@@ -154,7 +193,7 @@ def DeclaredCircuitRequirement : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden →
+    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →
