@@ -3384,4 +3384,157 @@ theorem param_lt (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (s
   Resolve.resolve_lt P ⟨hF.1, hF.2.1⟩ (good_bodyOk P hF) (laidOut_of P hwk) sc.off sc ⟨true, i, j⟩
     ⟨hg, ⟨fun _ => ⟨hi, hj⟩, fun h => by cases h⟩, fun _ => le_refl _, fun h => by cases h⟩ h
 
+/-! ## Segments, widths and `UsedExact` of every reached Definition from the decoder's facts -/
+
+/-- **Every segment a body node's read splits is as `down` gives it** (`ShapeOk`, `RepsOk`), in a decoded Definition
+whose callees' summaries hold `RetOk`: `rootShape` in any body (`piece_shape`, `throughPS_shape`,
+`carriesRead_shape`), with `reps_fuel` through `carriesRead_of`. -/
+theorem bodySegs (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.size) (hDec : Decoded P)
+    (hBd : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
+    (hSO : ScanOut (ctxOf P r d)) {k : Nat} {node : Flock.Program.Node} (hn : (ctxOf P r d).node k = .ok node)
+    {s : Seg} (hs : (∃ i, FromDown (ctxOf P r d) k i s) ∨ FromRows (ctxOf P r d) k node s ∨
+      FromCarry (ctxOf P r d) k node s) : ShapeOk P d s ∧ RepsOk s := by
+  have hSh := shapes_decoded P r hd hDec hBd hR hSO Flock.Steps.FUEL
+  have hA := argOk_decoded P r hd hDec
+  have hRp := reps_fuel (ctxOf P r d) Flock.Steps.FUEL
+  have hPS : ∀ k node i p bp segs, (ctxOf P r d).node k = .ok node →
+      Desc.throughPS ((ctxOf P r d).arg k i) p = some bp →
+      Desc.down (ctxOf P r d) Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, ShapeOk P d s := by
+    intro k node i p bp segs hn hp hd'
+    have hk := node_lt hn
+    by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
+    · exact throughPS_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i)
+        hp hd'
+    · rw [throughPS_empty (ctxOf_arg_ge P r d k i hi')] at hp
+      cases hp
+  have hk := node_lt hn
+  rcases hs with ⟨i, lo, hi, q, hq, segs, hd', hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd', hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
+  · refine ⟨?_, hRp.1 q segs hd' s (Array.mem_toList_iff.2 hs)⟩
+    by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
+    · exact piece_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
+        s (Array.mem_toList_iff.2 hs)
+    · rw [pieces_empty (ctxOf_arg_ge P r d k i hi')] at hq
+      simp at hq
+  · refine ⟨?_, hRp.1 p segs hd' s (Array.mem_toList_iff.2 hs)⟩
+    obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
+    exact hPS k node i p' p segs hn hp' hd' s (Array.mem_toList_iff.2 hs)
+  · refine ⟨carriesRead_shape _ hR hSh.2.1 hSh.2.2.1 hPS k node segs hn hfs hn2 hc s (Array.mem_toList_iff.2 hs), ?_⟩
+    exact carriesRead_of RepsOk _ hR (fun k _ _ _ m a b segs _ _ h => hRp.2.1 k m a b segs h)
+      (fun k _ _ _ lo hi segs _ h => hRp.2.2.1 k 0 0 _ segs h) (fun _ _ _ _ bp segs _ _ h => hRp.1 bp segs h)
+      k node segs hn hfs hn2 hc s (Array.mem_toList_iff.2 hs)
+
+theorem retW_congr {P : Prog} {m m' : Array Desc.Summary} {f : Nat} (e : m[f]! = m'[f]!)
+    (h : RetW P m f) : RetW P m' f := by
+  unfold RetW at h ⊢
+  rw [← e]
+  exact h
+
+/-- **A reached composite's callees name their gates with their widths over the summaries before it**
+(`memoOf_retW`, `retW_congr`). -/
+theorem prefix_retW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    (hWF : WidthFacts P) {f : Nat} (hf : f < P.defs.size) (hrf : (Desc.reached P)[f]! = true)
+    (hpf : (P.defs[f]!).prim = false) {r : Array Desc.Summary} (hpre : ∀ f' < f, r[f']! = memo[f']!) :
+    ∀ k node, (ctxOf P r f).node k = .ok node → RetW P r node.fn := by
+  obtain ⟨-, -, -, hDec, hRP, hSO, hcf, hnr, hB⟩ := hF
+  intro k node hn
+  have hk : k < (P.defs[f]!).body.nodes.size := node_lt hn
+  have hg : (P.defs[f]!).body.nodes[k]! = node := node_get hn
+  have hlt := hcf f hf k hk
+  rw [← hg]
+  exact retW_congr (hpre _ hlt).symm (memoOf_retW P memo hm hRP hDec hWF hcf hnr hB hSO _ (by omega)
+    (reached_closed P hcf f hrf hpf k hk) (hnr f hf hrf k hk)).2
+
+/-- **Every segment a body node's read splits names the body's gates with their widths** (`GateW`): `rootW` in any
+decoded composite whose callees' summaries hold `RetOk` and name theirs. -/
+theorem bodyW (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.size) (hpd : (P.defs[d]!).prim = false)
+    (hDec : Decoded P) (hWF : WidthFacts P) (hBd : Resolve.BodyOk P d)
+    (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
+    (hRW : ∀ k node, (ctxOf P r d).node k = .ok node → RetW P r node.fn) {k : Nat} {node : Flock.Program.Node}
+    (hn : (ctxOf P r d).node k = .ok node) {s : Seg}
+    (hs : (∃ i, FromDown (ctxOf P r d) k i s) ∨ FromRows (ctxOf P r d) k node s ∨
+      FromCarry (ctxOf P r d) k node s) : GateW P d s := by
+  have hW := widths_decoded P r hd hpd hDec hWF hBd hR hRW Flock.Steps.FUEL
+  have hA := argOk_decoded P r hd hDec
+  have hPS : ∀ k node i p bp segs, (ctxOf P r d).node k = .ok node →
+      Desc.throughPS ((ctxOf P r d).arg k i) p = some bp →
+      Desc.down (ctxOf P r d) Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, GateW P d s := by
+    intro k node i p bp segs hn hp hd'
+    have hk := node_lt hn
+    by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
+    · exact throughPS_w _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hp hd'
+    · rw [throughPS_empty (ctxOf_arg_ge P r d k i hi')] at hp
+      cases hp
+  have hk := node_lt hn
+  rcases hs with ⟨i, lo, hi, q, hq, segs, hd', hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd', hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
+  · by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
+    · exact piece_w _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
+        s (Array.mem_toList_iff.2 hs)
+    · rw [pieces_empty (ctxOf_arg_ge P r d k i hi')] at hq
+      simp at hq
+  · obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
+    exact hPS k node i p' p segs hn hp' hd' s (Array.mem_toList_iff.2 hs)
+  · refine carriesRead_of (GateW P d) _ hR ?_ ?_ hPS k node segs hn hfs hn2 hc s (Array.mem_toList_iff.2 hs)
+    · intro k' node' hn' hf' m a b segs' hm' _ h'
+      refine hW.2.1 k' m a b segs' hm' ?_ h'
+      have hk' := node_lt hn'
+      have hg : (P.defs[d]!).body.nodes[k']! = node' := node_get hn'
+      exact (((hWF d hd).2 hpd).2.2 k' hk').2 (Or.inr (by rw [hg]; exact hf'))
+    · intro k' node' hn' hm0 lo hi' segs' hlv h'
+      exact init_w _ hn' hW.2.2.1 hm0 hlv h'
+
+/-- **A gate position a body node reads is one of the body's gates** (`bodyW`, `locW_lt`). -/
+theorem bodyGate_lt (P : Prog) (r : Array Desc.Summary) {d : Nat} (s : Desc.Summary) (h : Desc.summarize P r d = .ok s)
+    (hd : d < P.defs.size) (hpd : (P.defs[d]!).prim = false) (hDec : Decoded P) (hWF : WidthFacts P)
+    (hBd : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
+    (hRW : ∀ k node, (ctxOf P r d).node k = .ok node → RetW P r node.fn) (hSO : ScanOut (ctxOf P r d))
+    {k : Nat} (hk : k < (P.defs[d]!).body.nodes.size) {node : Flock.Program.Node}
+    (hn : (ctxOf P r d).node k = .ok node) (w : Nat) (p : Int)
+    (hx : (Tgt.gate w, p) ∈ nodePos (ctxOf P r d) node k) : p < ((P.defs[d]!).gates : Int) := by
+  obtain ⟨g, hg, hxg⟩ := nodePos_seg P r d s h hpd hk hn hx
+  obtain ⟨hL, hlast, -⟩ := (hWF d hd).2 hpd
+  have h1 := locW_lt (bodyW P r hd hpd hDec hWF hBd hR hRW hn hg w p hxg) hL hlast
+  have h0 := ((bodySegs P r hd hDec hBd hR hSO hn hg).1.2.1 _ hxg).1
+  omega
+
+/-- **`UsedExact` of every reached composite Definition but the root**, with the decoder's facts (`RootFacts`,
+`WidthFacts`, `Desc.walkable`), wherever every reference of a primitive node of a reached composite is read by a
+member (`hCov`) and, over the summaries before a Definition, `NodeSet` holds of each of its nodes calling a composite
+once its composite callees' `UsedExact` does there (`hComp`): `memoOf_usedExact`, each step `usedExact_of` with
+`nodeSet_prim_of`, `bodySegs`, `bodyGate_lt` and `param_lt`. -/
+theorem usedExact_all (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
+    (hWF : WidthFacts P) (hwk : Desc.walkable P = true)
+    (hCov : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → (P.defs[d]!).prim = false →
+      ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (P.defs[d]!).body.nodes[k]! = node →
+      (P.defs[node.fn]!).prim = true →
+      ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+        ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+          ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+        (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t)
+    (hComp : ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → (P.defs[f]!).prim = false →
+      ∀ r : Array Desc.Summary, r.size = f → (∀ f' < f, r[f']! = memo[f']!) →
+      Desc.summarize P r f = .ok memo[f]! →
+      (∀ k < (P.defs[f]!).body.nodes.size, (P.defs[((P.defs[f]!).body.nodes[k]!).fn]!).prim = false →
+        UsedExact P r ((P.defs[f]!).body.nodes[k]!).fn) →
+      ∀ k < (P.defs[f]!).body.nodes.size, (P.defs[((P.defs[f]!).body.nodes[k]!).fn]!).prim = false →
+        NodeSet P r f k) :
+    ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → (P.defs[f]!).prim = false →
+      UsedExact P memo f := by
+  refine memoOf_usedExact P memo hm hF.2.2.2.2.2.2.1 hF.2.2.2.2.2.2.2.1
+    fun f hf hrf hfr hp r hsz hpre hs hU => ?_
+  have hDec := hF.2.2.2.1
+  have hBd := hF.2.2.2.2.2.2.2.2 f hf hrf
+  have hSO := hF.2.2.2.2.2.1 r f
+  have hR := prefix_retOk P memo hm hF hf hrf hp hpre
+  have hRW := prefix_retW P memo hm hF hWF hf hrf hp hpre
+  obtain ⟨hL, hlast, -⟩ := (hWF f hf).2 hp
+  refine usedExact_of P r memo f hs hp hL hlast (fun k hk => ?_)
+    (fun k hk node hn g hg => bodySegs P r hf hDec hBd hR hSO hn hg)
+    (fun k hk node hn w p hx => bodyGate_lt P r _ hs hf hp hDec hWF hBd hR hRW hSO hk hn w p hx)
+    (fun sc hsc hg i j a hi hj h => by subst hsc; exact param_lt P hF hwk sc hg hi hj h)
+  have hn := ctx_node P r f hk
+  obtain ⟨rs, hrs⟩ := summarize_reads P r f _ hs hp k hk
+  rcases hpc : (P.defs[((P.defs[f]!).body.nodes[k]!).fn]!).prim with _ | _
+  · exact hComp f hf hrf hfr hp r hsz hpre hs hU k hk hpc
+  · exact nodeSet_prim_of P r hF hWF hf hrf hp hR hn hpc hrs (hCov f hf hrf hp k hk _ rfl hpc)
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
