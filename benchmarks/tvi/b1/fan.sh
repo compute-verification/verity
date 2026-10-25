@@ -11,7 +11,7 @@ mkdir -p /workspace/jobs/tvi/scratch
 S=$(mktemp -d /workspace/jobs/tvi/scratch/b1fan.XXXXXX)
 trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
-cp "$HERE"/block.py "$HERE"/counted.py "$HERE"/quant.py "$IN"/gsm8k_test.jsonl "$S"/
+cp "$HERE"/block.py "$HERE"/cheap.py "$HERE"/counted.py "$HERE"/quant.py "$IN"/gsm8k_test.jsonl "$S"/
 mkdir -p "$S/extra" && tar -C "$S/extra" -xzf "$IN/constriction.tgz"
 cd "$S"
 PYC=/workspace/jobs/venv312/bin/python
@@ -21,6 +21,7 @@ export PYTHONPATH="$S/extra:$S" OUT FMT="${FMT:-fp8t}" DATA="$S/gsm8k_test.jsonl
 echo "fmt $FMT ckpt $CKPT boundaries ${BOUNDARIES:-1,13} lbs ${LBS:-1,2,3} k ${K:-2e7}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv
 "$PYC" -c 'import constriction, torch; print("constriction ok", torch.__version__, torch.cuda.get_device_name(0))'
-"$PYC" block.py "${MODEL:-Qwen/Qwen2.5-1.5B-Instruct}" "$CKPT" 2>&1 | grep --line-buffered -v -E 'Warning|warn\(' \
-  | tee "$OUT/log-block-$FMT.txt"
+SCRIPT="${SCRIPT:-block.py}"
+"$PYC" "$SCRIPT" "${MODEL:-Qwen/Qwen2.5-1.5B-Instruct}" "$CKPT" 2>&1 | grep --line-buffered -v -E 'Warning|warn\(' \
+  | tee "$OUT/log-${SCRIPT%.py}-$FMT${EMB:+-emb-$EMB}.txt"
 ls -la "$OUT"

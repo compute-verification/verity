@@ -192,15 +192,15 @@ def split(X, lens):
 
 
 # ----------------------------------------------------------------------------------------------------------- the run
-def rollouts(model1, tok, rows, n, maxnew, seed):
+def rollouts(model1, tok, rows, n, maxnew, seed, batch=16):
     """whole rollouts of theta' (T = 1) on the first n problems, prompt and completion, cut after the first stop token"""
     tok.padding_side = "left"
     prompts = [tok.apply_chat_template([{"role": "user", "content": r["q"] + SUFFIX}], add_generation_prompt=True,
                                        tokenize=False) for r in rows[:n]]
     torch.manual_seed(seed)
     seqs = []
-    for j in range(0, n, 16):
-        b = tok(prompts[j:j + 16], return_tensors="pt", padding=True).to(DEV)
+    for j in range(0, n, batch):
+        b = tok(prompts[j:j + batch], return_tensors="pt", padding=True).to(DEV)
         with torch.no_grad():
             g = model1.generate(**b, do_sample=True, temperature=1.0, top_p=1.0, top_k=0, repetition_penalty=1.0,
                                 max_new_tokens=maxnew, eos_token_id=STOP_IDS, pad_token_id=STOP_IDS[1])
