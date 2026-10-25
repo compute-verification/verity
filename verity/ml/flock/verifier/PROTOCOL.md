@@ -1675,9 +1675,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
    than 65536`;
 5. no public input ports: `public input ports (--public-inputs)`;
-6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
-   own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
-   table row): `a shared-row public file (header shared_rows)`;
+6. no shared-row public file, except at a statement with hidden outputs and `hm96-sha512/v1` leaves whose verifier holds
+   its own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
+   table row), with or without `--zk` (plain leaves stay refused): `a shared-row public file (header shared_rows)`;
 7. wherever the wires feed the unit or the outputs (the unit reads more than one input group, or a tail stage returns
    the outputs: `ProvedScope.wiresFeed`), an order of the wires that fills every slot's input ports from the leaves, each
    slot reading only port bits among its inputs (`ProvedScope.wiresAcyclic`): `a slot no order of the wires computes from
@@ -1744,9 +1744,10 @@ the wires don't feed passes `scopeOkH`, and the headlines at the unit's program 
 passed `wiresAcyclic`, and the headlines at the template instance's program (`instProg`, `FailClosed.Inst`) cover it. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
-`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose
-rows read no `pub.tables = none` and so cover rule 6's shared-row exception), and elsewhere `--registered F` accepts no
-more than the verifier does without it. The live server refuses the same statements with the same reason
+`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`; without
+`--zk`, `--registered F` at hidden outputs, `FailClosed.SoundExecHR` over `VerifiesR`, the hidden headline with every
+drawn unit's registered reads checked; both on rows that read no `pub.tables = none` and so cover rule 6's shared-row
+exception), and elsewhere `--registered F` accepts no more than the verifier does without it. The live server refuses the same statements with the same reason
 (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise. Its rule 6 reads the registered reads off the public header
 (`registered`): the Lean verifier holds `--registered F` exactly when the header names them, refusing either without the
