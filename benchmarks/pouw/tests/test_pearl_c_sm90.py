@@ -203,24 +203,30 @@ def test_kernel_constants_match_the_reference():
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
-    read a stale line), the forming and pa_w first; and pd_commit lets the forming launch behind it."""
-    def body(start):
-        at = SOURCE.index(start)
-        return SOURCE[at:SOURCE.index("\n}\n", at)]
+    read a stale line), the forming, pa_w and widen_a first; and PDL_PD_KERNELS' pd_commit waits first too, then lets the
+    forming launch behind it."""
+    def body(start, src=SOURCE):
+        at = src.index(start)
+        return src[at:src.index("\n}\n", at)]
 
-    gemm, form, pa_w = (body(x) for x in ("DEV void gemm_body", "DEV void form_body", 'void pa_w('))
+    gemm, form, pa_w, widen_a = (body(x) for x in ("DEV void gemm_body", "DEV void form_body", 'void pa_w(', "void widen_a("))
     head = gemm[:gemm.index("pdl_entry();")]
     assert "__syncthreads();" in head and "if (wg == NWG)" not in head and "b_row(" not in head
     assert set(re.findall(r"\btma_\w+", head)) == {"tma_prefetch_l2"}
     assert "cp.async.bulk.prefetch.tensor.2d.L2.global" in body("DEV void tma_prefetch_l2")
-    for b in (form, pa_w):
+    for b in (form, pa_w, widen_a):
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head
     assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
-    assert "#ifdef PD_PDL\n  asm volatile(\"griddepcontrol.launch_dependents;\"" in pd
+    commit = body("DEV void pd_commit_t(", pd)
+    head = commit[:commit.index("#ifdef PD_PDL")]
+    assert "a.p[" not in head and "a.i[" not in head and "reinterpret_cast" not in head, head
+    assert commit.index("#ifdef PD_PDL\n") < commit.index("griddepcontrol.wait;\\n\\tgriddepcontrol.launch_dependents;")
+    assert RUN.PDL_PD_KERNELS == {"widen_a", *(f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED))}
+    assert {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)} <= set(kernel_names())
 
 
 SASS_OK = "\n".join([
@@ -359,7 +365,7 @@ def grouped_kernels() -> list[str]:
 
 
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK} - set(grouped_kernels())
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK, RUN.PDL_PD_MARK} - set(grouped_kernels())
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -369,7 +375,7 @@ def kernel_names() -> list[str]:
     (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
     pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
-    return own_kernels() + [RUN.PDL_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
+    return own_kernels() + [RUN.PDL_MARK, RUN.PDL_PD_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -542,13 +548,17 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "mem", "check"] and rows[0]["uuid"] == UUID and rows[0]["cc"] == [9, 0]
-    assert rows[1]["pdl"] is True and any(json.loads(x).get("pdl") for x in log.read_text().splitlines())
-    unmarked = tmp_path / "unmarked.jsonl"
-    old = dry_env(ship, unmarked, FAKE_KERNELS=",".join(n for n in kernel_names() if n != RUN.PDL_MARK))
-    r2 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=old, capture_output=True,
-                        text=True)
-    assert r2.returncode == 4 and json.loads(r2.stdout.splitlines()[1])["pdl"] is False, r2.stderr
-    assert not any(json.loads(x).get("pdl") for x in unmarked.read_text().splitlines())   # a cubin whose kernels don't wait
+    pdl = {ev["name"] for ev in map(json.loads, log.read_text().splitlines()) if ev.get("pdl")}
+    assert rows[1]["pdl"] is True and {"widen_a", "pd_commit_851", "gemm_pearlc_d"} <= pdl
+    # a cubin whose kernels don't wait launches nothing programmatically, and one whose widen_a and pd_commit don't, not those
+    for mark, plain in ((RUN.PDL_MARK, RUN.PDL_KERNELS | RUN.PDL_PD_KERNELS), (RUN.PDL_PD_MARK, RUN.PDL_PD_KERNELS)):
+        unmarked = tmp_path / f"unmarked_{mark}.jsonl"
+        old = dry_env(ship, unmarked, FAKE_KERNELS=",".join(n for n in kernel_names() if n != mark))
+        r2 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=old,
+                            capture_output=True, text=True)
+        assert r2.returncode == 4 and json.loads(r2.stdout.splitlines()[1])["pdl"] is (mark == RUN.PDL_PD_MARK), r2.stderr
+        pdl = {ev["name"] for ev in map(json.loads, unmarked.read_text().splitlines()) if ev.get("pdl")}
+        assert not pdl & plain and bool(pdl) is (mark == RUN.PDL_PD_MARK), (mark, pdl)
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
     failed = rows[2]["variants"]["h100"]["failed"]
     assert {f"y@gemm_pearlc/{t}/grid3" for t, *_ in RUN.TILES} <= set(failed)
@@ -617,8 +627,9 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     # pa_w adds up
     names = {ev["name"] for ev in launched}
     assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "pa_w", "gemm_words"} <= names
-    # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
-    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep"}
+    # the main lane's PDL_KERNELS and PDL_PD_KERNELS start behind the launch before them, and no other launch does
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == (RUN.PDL_KERNELS | RUN.PDL_PD_KERNELS) & names >= {
+        "gemm_pearlc_d", "pa_w", "form_s5_ep"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 
