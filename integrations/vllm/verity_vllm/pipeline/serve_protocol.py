@@ -1,7 +1,8 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
 CPU tests; `framing_agrees` holds the two to each other. `IdsProtocol` (``--protocol ids``) streams the scan's id form
-instead, for the warden, which forwards the server's bytes into its cells unchanged."""
+instead to the warden's id requests, since the warden forwards the server's bytes into its cells unchanged, and answers
+every other request as vLLM does (`of`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -10,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.core.protocols.certifier import io_tie as IT
+from verity.core.protocols.certifier import active as A, io_tie as IT, release as REL
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
@@ -74,6 +75,10 @@ class PlainProtocol:
 
     def __init__(self, force_include_usage: bool = False) -> None:
         self.force_include_usage = force_include_usage
+
+    def of(self, request: bytes) -> PlainProtocol:
+        """The protocol that answers `request` (its head and body as the server read them): this one."""
+        return self
 
     def parse(self, body: Any) -> Completion:
         if not isinstance(body, dict):
@@ -222,9 +227,10 @@ ID_PAYLOAD = 503
 
 
 class IdsProtocol:
-    """The scan's id form (``--protocol ids``). The warden relays bytes: what the server sends goes into its egress
-    cells unchanged, and the scan's egress reads each cell as one id event. So a streamed response here has no HTTP head
-    and no chunked body:
+    """The scan's id form (``--protocol ids``) for the warden's id requests, and ``base`` for every other request (`of`),
+    so that clients straight to the endpoint (the network certifier's shim and probes, the load) get vLLM's HTTP and JSON.
+    The warden relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
+    each cell as one id event. So a streamed response here has no HTTP head and no chunked body:
     - each token id its own `io_tie.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id right-
       aligned in 10 characters, spaces before the blank line), whatever the delta carries;
     - no usage chunk, whatever ``force_include_usage``;
@@ -240,6 +246,26 @@ class IdsProtocol:
         IT.id_event(0, payload)
         self.payload = payload
         self.base = VllmProtocol(force_include_usage) if base is None else base
+
+    def of(self, request: bytes) -> IdsProtocol | PlainProtocol:
+        """This protocol if `request` is a warden's id request (`id_request_of`), else ``base``."""
+        return self if self.id_request_of(request) else self.base
+
+    def id_request_of(self, request: bytes) -> bool:
+        """Whether `request` (its head and body as the server read them) is an id request as the warden forwards it:
+        without the release headers it puts on the server's copy (`release.with_release`), exactly `active.id_request`
+        of its own fields in the scan's B = P + 9-byte cells, from their first byte (``offset`` 0)."""
+        head, _, body = request.partition(b"\r\n\r\n")
+        line, *fields = head.split(b"\r\n")
+        kept = b"".join(f + b"\r\n" for f in fields
+                        if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER))
+        try:
+            b = json.loads(body)
+            got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
+            canonical = A.id_request(**got, frame_bytes=self.payload + A.HEADER.size, offset=0)
+            return canonical == line + b"\r\n" + kept + b"\r\n" + body
+        except (ValueError, KeyError, TypeError):
+            return False
 
     def parse(self, body: Any) -> Completion:
         req = self.base.parse(body)
