@@ -481,8 +481,8 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
     write_state(jobs=0, reuses=0)
     log(f"serving {wdir} (key {str(key_doc.get('key'))[:16]}, reason: {reason}); importing commit_delta")
     t_imp = time.time()
-    import torch  # noqa: E402
-    from verity_vllm.pipeline import cli, commit as cd  # noqa: E402
+    import torch
+    from verity_vllm.pipeline import cli, commit as cd
 
     cd._HOT = {"jobs": 0, "restart_reason": reason}
     rel_sig0 = release_json_sig()

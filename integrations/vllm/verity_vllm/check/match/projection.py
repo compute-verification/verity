@@ -17,7 +17,7 @@ class Projection(PX.CachedKv, C.Prog):
     of its cached prefix: `prefix_reads.CachedKv`)."""
 
     def __init__(self, oracle: C.Prog, label: str, inst_idx: list[int], tok_node: int, weights_node: "int | set[int] | frozenset[int]",
-                 seed_node: int | None = None, peer_node: int | None = None):  # noqa: D107
+                 seed_node: int | None = None, peer_node: int | None = None):
         # no super().__init__: reuse the decoded oracle, never decode twice
         self.label = label
         self._fold = oracle

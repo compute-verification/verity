@@ -7,7 +7,7 @@ PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.progra
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.act import SiluMul  # noqa: F401
+from verity_vllm.program.registry.act import SiluMul
 
 SEMANTIC_ID = "act/SiluMul@v2"
 

@@ -33,7 +33,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.dense import GeluTanhMulBf16, gelu_tanh_bf16_bits, BETA_BITS, KAPPA_BITS, HALF_BITS, ONE_BITS, ZERO_BITS  # noqa: F401
+from verity_vllm.program.registry.dense import GeluTanhMulBf16, gelu_tanh_bf16_bits, BETA_BITS, KAPPA_BITS, HALF_BITS, ONE_BITS, ZERO_BITS
 
 SEMANTIC_ID = "dense/GeluTanhMulBf16@v1"
 
