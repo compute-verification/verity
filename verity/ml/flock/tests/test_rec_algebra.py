@@ -28,6 +28,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.boolean.forms import Circuit
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
+from verity_flock.record_text import session_text
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
@@ -317,7 +318,7 @@ def _reason(i: int, claims: int) -> str:
 
 def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
     d.mkdir()
-    (d / "session.json").write_text(json.dumps(record))
+    (d / "session.json").write_text(session_text(record))
     for r, b in enumerate(proofs):
         (d / f"circuit.rep{r}.bin").write_bytes(b)
 

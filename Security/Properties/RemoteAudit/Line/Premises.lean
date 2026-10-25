@@ -1,56 +1,45 @@
-import Definitions.Accounting.Remote.Draw
 import Properties.RemoteAudit.Line.Record
 
 /-!
 # What the line of record assumes of its record (`Properties.RemoteAudit.Line`)
 
-The code-to-model premises of `Properties.RemoteAudit.Line.LineHeld`, each a named `Prop` taken as a hypothesis: what
-ties the record a gate run's line reads (`Record`, through the Lean verifier's record of the session,
-`Record.summary`) to the trace (`Accounting.Remote.Held.Trace`) and the opening draw (`Accounting.Remote.Draw.Session`)
-the memory model states its guarantees over. `LineHeld` reads them, like the model's premises, at the trace of record
-(`ofRecord`), whose verdict is the Lean verifier's on the record, so on every outcome where `Verified` holds. Each is an
-equality between a model object and the record, and says what would close it.
+The code-to-model premise of `Properties.RemoteAudit.Line.LineHeld`, a named `Prop` taken as a hypothesis: what ties
+the record a gate run's line reads (`Record`, through the Lean verifier's record of the session, `Record.summary`) to
+the trace (`Accounting.Remote.Held.Trace`) the memory model states its guarantees over. `LineHeld` reads it, like the
+model's premises, at the trace of record (`ofRecord`), whose verdict is the Lean verifier's on the record.
 
 * `Registered`: the trace's registered blocks are those of the registration the session ran on (`Node.blocks`). The
   line reads N off the Lean verifier's record (`Summary.blocks`, which a run gives as the node's registration's), and
   the line of record credits a session only when the verifier's process held that registration's hello to the pinned
   model's store (`RemoteAudit.Store.hold`, `auditor_line.py`'s *bound*): what is left is the model's naming of its
-  store, that the trace is over that registration's blocks. It closes once the trace is indexed by the registration
-  (`Trace.blocks` read off it), a change to `Definitions`.
-* `SizesOfRecord`: on an accepted record each draw's receipts in the Lean verifier's record (`Record.receipts`: a
-  window's `Σ lengths_t`, `Session.WindowSummary`, at one window a coin, and its `g` windows' summed at
-  `Node.groupsPerCoin` g, `drawReceipts`) are the draw's `size c`, so the model's draws are the session's ⌈W/g⌉ draws.
-  The draws need no premise: the line reads draw `c`'s from the record and refuses one that isn't `min(s, U_c)` at the
-  session's `samples` (`RemoteAudit.Line.ofSummaryAt`), the model's `Draw.Session.draws` at `s = Node.params.samples`,
-  so `Properties.RemoteAudit.LineCoversSession` gives the line's W at least the session's pooled bound. It closes once
-  the draw's sizes are the record's (`size c ω` the record at `ω`'s, which needs a bound `m` on an accepted draw's
-  receipts and `Live` read at those sizes).
-* `DrawFits`: the session's draws have fewer than `2^448` receipts (`m`, the draw's bound on `U_c`), so each draw's
-  sampler word is the top bits of its stream's first SHA-512 block (`Accounting.Remote.Draw.width`). No code bounds a
-  draw's receipts yet; gate run 7's windows have 130,023,424, and a draw of g windows has up to g times a window's.
+  store, that the trace is over that registration's blocks. It closes once the trace is indexed by its registered
+  blocks (`Trace N`, `Trace.blocks` gone), a change to `Definitions.Accounting.Remote.Held` that retypes every remote
+  guarantee: `Definitions.Accounting.Remote.Held`, `Models.Accounting.Assumptions.RemoteHeld`,
+  `Models.Accounting.Assumptions.RemoteDraw`, `Models.Accounting.Assumptions.RemoteSketch`,
+  `Models.Accounting.Guarantees.RemoteHeld`, `Models.Accounting.Guarantees.RemoteDraw`,
+  `Models.Accounting.Guarantees.RemoteSketch`, `Proofs.Accounting.RemoteHeld` and its `Draw`, `Line`, `Meets`,
+  `OverTime`, `Sketch` and `Window`, and `Properties.RemoteAudit.Line` with its `Premises` and `Record`; with it every
+  lock record that reads `Trace` changes.
 
-That the line has one group for each of the session's windows is no premise: an accepted session has its parameters'
-`windows` windows (`Properties.RemoteAudit.AcceptedMinPasses` at one window a coin, and at every g the invariant
-`Shared.step` keeps, `Properties.RemoteAudit.Shared.sstep`), and the line's groups are its record's windows
-(`RemoteAudit.Line.ofSummaryAt`). The record's clock is the trace's: that each credited pass ran inside its group's
-window on the record's clock is the model's own `Paced` premise read at `recordPace`.
+The rest of what the line reads of its record is code, proved, at any windows a draw g (`Node.groupsPerCoin`). The
+draw's sizes are the record's: `LineHeld` reads the draw at `recordDraw`, one draw for each of the session's `⌈W/g⌉`
+(`Node.draws`), draw `c`'s size the receipts its windows have in the state the record's session reaches, and on an
+accepted record those are the Lean verifier's record's (`Record.receipts`, `drawReceipts`), which the line reads. Each
+is below `receiptMax + 1 = 2^64 < 2^448`, so each draw's sampler word is the top bits of its stream's first SHA-512
+block (`Accounting.Remote.Draw.width`): `receive` rejects a pass that would take its window's receipts to
+`RECEIPT_LIMIT` (`Properties.RemoteAudit.ReceiptsBelowLimit`), which bounds a draw at g = 1, and above it the line
+refuses a draw whose windows' receipts sum to `RECEIPT_LIMIT` or more (`RemoteAudit.Line.ofSummaryAt`). The line has
+one group for each of the session's windows: an accepted session has its parameters' `windows` windows
+(`Session.State.outcome`, its parameters kept by `Shared.run` at every g), and the line's groups are its record's
+windows (`RemoteAudit.Line.ofSummaryAt`). The record's clock is the trace's: that each credited pass ran inside its
+group's window on the record's clock is the model's own `Paced` premise read at `recordPace`.
 -/
 
 namespace Properties.RemoteAudit.Line
 
-open Accounting.Remote.Held Accounting.Remote.Draw
+open Accounting.Remote.Held
 
 /-- **The registered store**: the trace's registered blocks are the node's registration's. -/
 def Registered {Ω : Type} (T : Trace Ω) (node : Node) : Prop := T.blocks = node.blocks
-
-/-- **The record's draws are the draw's**: on every accepting outcome each draw's receipts in the Lean verifier's
-record (a window's at one window a coin) are the draw's size of that draw. -/
-def SizesOfRecord {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X) (T : Trace (Coins n κ X))
-    (node : Node) (rec : Coins n κ X → Record) : Prop :=
-  ∀ ω, T.accepts ω → (rec ω).receipts node = Array.ofFn fun t => (D.size t ω : ℕ)
-
-/-- **The draw's word fits a block**: a draw has fewer than `2^448` receipts, so each draw's sampler word lies in its
-stream's first SHA-512 block. -/
-def DrawFits (m : ℕ) : Prop := m < 2 ^ 448
 
 end Properties.RemoteAudit.Line

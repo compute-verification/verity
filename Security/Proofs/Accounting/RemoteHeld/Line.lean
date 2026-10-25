@@ -12,12 +12,12 @@ import Properties.Proofs.RemoteAudit.Shared
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`), the
 receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
 (`holdsAnd` of `SketchBound`, from `SketchBoundAt` and `NoOutsideCompute` by `sketchBound_of_noOutside`, and
-`Draw.pooledDraw`, so at most the W the line reads: `LineCoversSession` at the
-record's draws, which are the draw's by `SizesOfRecord` and the line's check of their draws, `ofSummaryAt_ok`,
-`wrong_le_line`), every stretch of the line read off the record credits what the trace held (`heldAt_of`), its groups
-one for each of the session's windows and its registered blocks the node's (`record_summary`: `Shared.run` at any
-windows a draw keeps the parameters and registration, `frame_run`, and an accepted state has its parameters' windows,
-`windows_of_accepted`):
+`Draw.pooledDraw` at the records read through the coin commitment, `recordCommitted`, so at most the W the line reads:
+`LineCoversSession` at the record's draws, whose receipts on an accepted record are `recordDraw`'s sizes,
+`receipts_of_line`, and the line's check of their draws, `wrong_le_line`), every stretch of the line read off the
+record credits what the trace held (`heldAt_of`), its groups one for each of the session's windows and its registered
+blocks the node's (`record_summary`: `Shared.run` at any windows a draw keeps the parameters and registration,
+`frame_run`, and an accepted state has its parameters' windows, `windows_of_accepted`):
 
 * the arithmetic link (`stretchBound`, `Properties.Proofs.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
@@ -51,15 +51,17 @@ theorem ofSummary_ok {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : 
       simp only [hd]
 
 /-- What `ofSummaryAt` reads of a record it accepts: one group a window, and each draw's receipts and draws
-(`drawReceipts`, a window's at one window a coin), its draws `min(s, U_c)`. -/
+(`drawReceipts`, a window's at one window a coin), its draws `min(s, U_c)`, and above one window a coin each draw's
+receipts below `RECEIPT_LIMIT`. -/
 theorem ofSummaryAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {gs : Array Group} {ws : Array (ℕ × ℕ)} (h : ofSummaryAt g sm samples seen = .ok (gs, ws)) :
-    gs.size = sm.windows.size ∧ ws = (drawReceipts g sm.windows).map fun u => (u, min samples u) := by
+    gs.size = sm.windows.size ∧ ws = (drawReceipts g sm.windows).map (fun u => (u, min samples u)) ∧
+      (1 < g → ∀ u ∈ drawReceipts g sm.windows, u < RemoteAudit.Session.RECEIPT_LIMIT) := by
   unfold ofSummaryAt at h
   by_cases hg : g ≤ 1
   · rw [ite_eq_left hg] at h
     obtain ⟨h1, h2⟩ := ofSummary_ok h
-    refine ⟨h1, ?_⟩
+    refine ⟨h1, ?_, fun _ => absurd hg (by omega)⟩
     rw [h2, drawReceipts, ite_eq_left hg, Array.map_map]
     rfl
   · rw [ite_eq_right hg] at h
@@ -69,15 +71,22 @@ theorem ofSummaryAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : �
       split at h
       · cases h
       · rename_i hf
-        cases h
-        refine ⟨by simp, ?_⟩
-        rw [drawReceipts, ite_eq_right hg, Array.map_map]
-        conv => lhs; rw [← Array.map_id (drawsOf g sm.windows)]
-        refine Array.map_congr_left fun p hp => ?_
-        obtain ⟨u, d⟩ := p
-        have hd := Array.findIdx?_eq_none_iff.1 hf (u, d) hp
-        simp only [bne_eq_false_iff_eq] at hd
-        simp [hd]
+        split at h
+        · cases h
+        · rename_i hl
+          cases h
+          refine ⟨by simp, ?_, fun _ u hu => ?_⟩
+          · rw [drawReceipts, ite_eq_right hg, Array.map_map]
+            conv => lhs; rw [← Array.map_id (drawsOf g sm.windows)]
+            refine Array.map_congr_left fun p hp => ?_
+            obtain ⟨u, d⟩ := p
+            have hd := Array.findIdx?_eq_none_iff.1 hf (u, d) hp
+            simp only [bne_eq_false_iff_eq] at hd
+            simp [hd]
+          · rw [drawReceipts, ite_eq_right hg] at hu
+            obtain ⟨⟨u', d⟩, hp, rfl⟩ := Array.mem_map.1 hu
+            have hd := Array.findIdx?_eq_none_iff.1 hl (u', d) hp
+            simpa using hd
 
 /-- A line `lineOfRecordAt` computes is `line` at the record's groups, draws and registered blocks. -/
 theorem lineOfRecordAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : Array Seen}
@@ -148,21 +157,27 @@ theorem windows_of_accepted {s : RemoteAudit.Session.State} (hout : s.outcome = 
       exact hc.1
     · cases hout
 
+/-- An accepted run, at any windows a draw, ends with the node's `windows` windows. -/
+theorem windows_of_verified {node : Node} {r : Record} {rs : Array RemoteAudit.Session.Result}
+    {s : RemoteAudit.Session.State} (hrun : r.run node = .ok (rs, s)) (hout : s.outcome = some "accepted") :
+    s.windows.size = node.windows ∧ s.reg = node.reg := by
+  obtain ⟨hp, hr⟩ := frame_run (show _root_.RemoteAudit.Shared.run node.groupsPerCoin
+    (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) r.events = .ok (rs, s)
+    from hrun)
+  exact ⟨(windows_of_accepted hout).trans (congrArg RemoteAudit.Session.Params.windows hp), hr⟩
+
 /-- **One group a window**: the Lean verifier's record of a session it accepts, at any windows a draw, has the node's
 `windows` windows, and the node's registered blocks. -/
 theorem record_summary {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm) : sm.windows.size = node.windows ∧ sm.blocks = node.blocks := by
   obtain ⟨rs, s, hrun, hout⟩ := hv
-  have hrun' : _root_.RemoteAudit.Shared.run node.groupsPerCoin (RemoteAudit.Session.State.init node.params node.reg
-      r.coins r.appendCoins r.notBeforeNs) r.events = .ok (rs, s) := hrun
   have hs : s.summary = some sm := by
     unfold Record.summary at hsm
     rw [hrun] at hsm
     exact hsm
   obtain ⟨h1, h2⟩ := summary_of hs
-  obtain ⟨hp, hr⟩ := frame_run hrun'
-  exact ⟨h1.trans ((windows_of_accepted hout).trans (congrArg RemoteAudit.Session.Params.windows hp)),
-    h2.trans (congrArg RemoteAudit.Registration.blocks hr)⟩
+  obtain ⟨hW, hr⟩ := windows_of_verified hrun hout
+  exact ⟨h1.trans hW, h2.trans (congrArg RemoteAudit.Registration.blocks hr)⟩
 
 /-- `firstPass` grows with the groups it counts. -/
 theorem firstPass_mono {gs : Array Group} {a b : ℕ} (h : a ≤ b) : firstPass gs a ≤ firstPass gs b := by
@@ -302,21 +317,158 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     linarith
   exact ⟨hspan, hheld, fun R hR => weights_le hwts hR hheld hspan⟩
 
-/-- Where the record's draws' receipts are the draw's sizes, the trace's wrong receipts below the session's pooled
-bound at the line's `δ` are below the W every line of the record reads (`LineCoversSession`): the line reads each
-draw's draws off the record and refuses any but `min(s, U_c)`, the draw's at the session's `samples`. -/
-theorem wrong_le_line {node : Node} {n m κ : ℕ} {X : Type} {D : Session n m (fun _ => node.params.samples) κ X}
-    {T : Trace (Coins n κ X)} {rec : Coins n κ X → Record} (hU : SizesOfRecord D T node rec) {ω : Coins n κ X}
-    (ha : T.accepts ω) (hw : (T.wrong ω : ℝ) ≤ D.pooled node.delta ω) :
+/-- A run at `g` windows a draw that runs every event reaches its last state one event at a time. -/
+theorem reach_of_fold (g : ℕ) (l : List RemoteAudit.Session.Event) :
+    ∀ (acc : Array RemoteAudit.Session.Result × RemoteAudit.Session.State) out,
+      List.foldlM (fun (acc : Array RemoteAudit.Session.Result × RemoteAudit.Session.State) e => do
+        let (r, s') ← _root_.RemoteAudit.Shared.step g acc.2 e
+        pure (acc.1.push r, s')) acc l = .ok out →
+      List.foldlM (reachStep g) acc.2 l = .ok out.2 := by
+  induction l with
+  | nil => intro acc out h; simp only [List.foldlM_nil] at h ⊢; cases h; rfl
+  | cons e l ih =>
+    intro acc out h
+    rw [List.foldlM_cons] at h
+    rw [List.foldlM_cons]
+    cases he : _root_.RemoteAudit.Shared.step g acc.2 e with
+    | error err => rw [he] at h; cases h
+    | ok rs' =>
+      rw [he] at h
+      obtain ⟨r, s''⟩ := rs'
+      have hr : reachStep g acc.2 e = .ok s'' := by simp only [reachStep, he]
+      rw [hr]
+      exact ih (acc.1.push r, s'') out h
+
+/-- Where the record's session runs every event, the state it reaches is its run's last. -/
+theorem reached_of_run {node : Node} {r : Record} {rs : Array RemoteAudit.Session.Result}
+    {s : RemoteAudit.Session.State} (h : r.run node = .ok (rs, s)) : r.reached node = s := by
+  unfold Record.run _root_.RemoteAudit.Shared.run at h
+  rw [← Array.foldlM_toList] at h
+  have hk : List.foldlM (reachStep node.groupsPerCoin)
+      (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) r.events.toList =
+      .ok s := reach_of_fold _ _ _ _ h
+  unfold Record.reached
+  rw [← Array.foldlM_toList, hk]
+
+/-- Each window's receipts in a state's summary are its window's. -/
+theorem summary_receipts {s : RemoteAudit.Session.State} {sm : RemoteAudit.Session.Summary}
+    (h : s.summary = some sm) :
+    sm.windows.map receipts = (Array.range s.windows.size).map fun t => s.windows[t]!.receipts := by
+  unfold RemoteAudit.Session.State.summary at h
+  split at h
+  · cases h
+  · simp only [Option.some.injEq] at h
+    subst h
+    apply Array.ext
+    · simp
+    · intro i h1 h2
+      simp only [Array.getElem_map, Array.getElem_range]
+      rfl
+
+/-- Each window's receipts in a state's summary are its window's, as arrays. -/
+theorem summary_windows {s : RemoteAudit.Session.State} {sm : RemoteAudit.Session.Summary}
+    (h : s.summary = some sm) : sm.windows.map receipts = s.windows.map RemoteAudit.Session.Win.receipts := by
+  rw [summary_receipts h]
+  apply Array.ext
+  · simp
+  · intro i h1 h2
+    have hi : i < s.windows.size := by simpa using h1
+    simp only [Array.getElem_map, Array.getElem_range]
+    rw [getElem!_pos s.windows i hi]
+
+/-- Two arrays whose maps agree sum alike over any of their slices. -/
+theorem foldl_extract_congr {α β : Type} (f : α → ℕ) (g : β → ℕ) {as : Array α} {bs : Array β}
+    (h : as.map f = bs.map g) (a b : ℕ) :
+    (as.extract a b).foldl (fun x w => x + f w) 0 = (bs.extract a b).foldl (fun x w => x + g w) 0 := by
+  rw [← Array.foldl_map (f := f) (g := fun x y => x + y), ← Array.foldl_map (f := g) (g := fun x y => x + y),
+    Array.map_extract, Array.map_extract, h]
+
+/-- **The record's draws are the draw's**: on an accepted record whose draws the line reads, each draw's receipts in the
+Lean verifier's record are those its windows have in the state the record's session reaches, and below
+`RECEIPT_LIMIT`, so `recordDraw`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
+above it the line refuses a draw that isn't (`ofSummaryAt_ok`). -/
+theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
+    (hsm : r.summary node = some sm)
+    (hlim : 1 < node.groupsPerCoin → ∀ u ∈ drawReceipts node.groupsPerCoin sm.windows,
+      u < RemoteAudit.Session.RECEIPT_LIMIT) :
+    drawReceipts node.groupsPerCoin sm.windows =
+      Array.ofFn fun c : Fin node.draws => min (r.drawReceiptsAt node c) receiptMax := by
+  obtain ⟨rs, s, hrun, hout⟩ := hv
+  have hs : s.summary = some sm := by
+    unfold Record.summary at hsm
+    rw [hrun] at hsm
+    exact hsm
+  have hreach := reached_of_run hrun
+  have hW := (windows_of_verified hrun hout).1
+  have hS := summary_windows hs
+  have hsz := (summary_of hs).1
+  by_cases hg : node.groupsPerCoin ≤ 1
+  · have hrun' : RemoteAudit.Session.run (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins
+        r.notBeforeNs) r.events = .ok (rs, s) := (Properties.RemoteAudit.Shared.run_le_one hg _ _).symm.trans hrun
+    have hL := Properties.RemoteAudit.receiptsBelowLimit _ _ _ _ _ _ _ _ hrun'
+    have hD : node.draws = node.windows := by unfold Node.draws; rw [ite_eq_left hg]
+    rw [drawReceipts, ite_eq_left hg, hS]
+    apply Array.ext
+    · simp [hD, hW]
+    · intro i h1 h2
+      have hi : i < s.windows.size := by simpa using h1
+      have hat : r.drawReceiptsAt node i = s.windows[i].receipts := by
+        rw [Record.drawReceiptsAt, ite_eq_left hg, Record.receiptsAt, hreach, Array.getElem?_eq_getElem hi]
+        all_goals rfl
+      have hle : r.drawReceiptsAt node i ≤ receiptMax := by
+        have := hL i hi
+        unfold receiptMax
+        omega
+      simp only [Array.getElem_map, Array.getElem_ofFn]
+      rw [← hat]
+      exact (min_eq_left hle).symm
+  · have hD : node.draws = (node.windows + node.groupsPerCoin - 1) / node.groupsPerCoin := by
+      unfold Node.draws; rw [ite_eq_right hg]
+    have hlim' := hlim (by omega)
+    rw [drawReceipts, ite_eq_right hg] at hlim' ⊢
+    apply Array.ext
+    · simp [drawsOf, hD, hsz, hW]
+    · intro i h1 h2
+      have hu := hlim' _ (Array.getElem_mem h1)
+      have hat : r.drawReceiptsAt node i = ((drawsOf node.groupsPerCoin sm.windows).map (·.1))[i] := by
+        rw [Record.drawReceiptsAt, ite_eq_right hg, hreach]
+        simp only [drawsOf, Array.getElem_map, Array.getElem_range]
+        exact (foldl_extract_congr receipts RemoteAudit.Session.Win.receipts hS _ _).symm
+      have hle : r.drawReceiptsAt node i ≤ receiptMax := by
+        unfold receiptMax
+        omega
+      simp only [Array.getElem_ofFn]
+      rw [← hat]
+      exact (min_eq_left hle).symm
+
+/-- `m < 2^448`: each draw's sampler word lies in its stream's first SHA-512 block. -/
+theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
+  unfold receiptMax RemoteAudit.Session.RECEIPT_LIMIT
+  exact Nat.lt_of_lt_of_le (Nat.sub_lt (Nat.two_pow_pos 64) Nat.one_pos)
+    (Nat.pow_le_pow_right (by norm_num) (by norm_num))
+
+/-- On an accepted record, the trace's wrong receipts below the record's draw's pooled bound at the line's `δ` are
+below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
+the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
+draw's sizes (`receipts_of_line`). -/
+theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.draws κ X)}
+    {rec : Coins node.draws κ X → Record} {correct : Fin node.draws → Coins node.draws κ X → Finset ℕ}
+    {ω : Coins node.draws κ X} (hv : Verified node (rec ω))
+    (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline
-  have hR := hU ω ha
-  simp only [Record.receipts, hsm] at hR
-  have e2 : (Array.ofFn fun t => (D.size t ω : ℕ)).map (fun u => (u, min node.params.samples u)) =
-      Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω) :=
-    Array.map_ofFn (f := fun t => (D.size t ω : ℕ)) (g := fun u => (u, min node.params.samples u))
-  rw [(ofSummaryAt_ok hs).2, hR, e2] at hl
-  have hc := Properties.RemoteAudit.lineCoversSession n m _ κ X D ω node.delta _ _ _ _ _ _ _ l hl
+  obtain ⟨-, hws, hlim⟩ := ofSummaryAt_ok hs
+  have hR : drawReceipts node.groupsPerCoin sm.windows =
+      Array.ofFn fun c => ((recordDraw node rec correct).size c ω : ℕ) :=
+    receipts_of_line hv hsm hlim
+  have e2 : (Array.ofFn fun t => ((recordDraw node rec correct).size t ω : ℕ)).map
+      (fun u => (u, min node.params.samples u)) =
+      Array.ofFn fun t => (((recordDraw node rec correct).size t ω : ℕ), (recordDraw node rec correct).draws t ω) :=
+    Array.map_ofFn (f := fun t => ((recordDraw node rec correct).size t ω : ℕ))
+      (g := fun u => (u, min node.params.samples u))
+  rw [hws, hR, e2] at hl
+  have hc := Properties.RemoteAudit.lineCoversSession node.draws receiptMax _ κ X (recordDraw node rec correct) ω
+    node.delta _ _ _ _ _ _ _ l hl
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc
 
@@ -325,13 +477,14 @@ theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.c
 
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro node n m κ X Cm _ prf rest F com T rec δs O hl hsq hd hS hr hp hcov hk hO hm hL hR hC hN hU
+  intro node κ X Cm _ prf rest recs correct com T δs r F O hl hsq hd hS hr hp hcov hk hO hL hR hC hN
   have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledDraw prf rest F com (ofRecord T node rec) (delta_nonneg node) hm hL hR hC)
+    (Draw.pooledDraw prf rest F com (ofRecord T node r) (delta_nonneg node) receiptMax_lt hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node rec).accepts ω := hω.1
+  have ha : (ofRecord T node r).accepts ω := hω.1
   have hc := charge_units node
-  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN ha hω.1 h.1 (wrong_le_line hU ha h.2)
+  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN ha hω.1 h.1
+    (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
   · intro h0
     simp only [Node.link, ns]
     push_cast
@@ -341,13 +494,13 @@ theorem lineHeld : LineHeld := by
 
 /-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
 theorem lineHeldIdentity : LineHeldIdentity := by
-  intro node n m κ X Cm _ prf rest F com T rec δs O hI hsq hd hS hr hp hcov hk hO hm hL hR hC hN hU
+  intro node κ X Cm _ prf rest recs correct com T δs r F O hI hsq hd hS hr hp hcov hk hO hL hR hC hN
   have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledDraw prf rest F com (ofRecord T node rec) (delta_nonneg node) hm hL hR hC)
+    (Draw.pooledDraw prf rest F com (ofRecord T node r) (delta_nonneg node) receiptMax_lt hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node rec).accepts ω := hω.1
+  have ha : (ofRecord T node r).accepts ω := hω.1
   have hc := charge_units node
   exact heldAt_of 0 (by omega) (fun _ => le_rfl) (links_of_identity hI) (by simpa using hc.1) (by simpa using hc.2.1) hsq hd
-    hS hr hp hcov hN ha hω.1 h.1 (wrong_le_line hU ha h.2)
+    hS hr hp hcov hN ha hω.1 h.1 (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 
 end Properties.RemoteAudit.Line.SecurityProofs

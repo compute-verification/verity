@@ -27,6 +27,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/AdviceV1.lean  trusted: advice v1's charge, `ChargeCount_v1{N}`'s reference one for one: the
                                counting arithmetic coder (Tally, countStep), the book's KT estimate at min(run, 2),
                                a window's charge (window) and a run's (charges), the streams no window refuses (Streams)
+../../Definitions/NetworkCertifier/AdviceV1Counted.lean  trusted: advice v1's charge with a separate count code
+                               (CountCode, lengths meeting Kraft): a window's charge (windowCounted) and a run's
 ../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
 ../../Models/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: the leak bound through the wire with advice v1's charge
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
@@ -54,7 +56,9 @@ AdviceString.lean  the leak bound (the advice string's charge, through the wire,
                                          encodings whose length meets `BitsCount`
 AdviceV1.lean   advice v1's charge counts: a coder state's weight (width over 2^bits) is kept by a
                                          scaling and split by a symbol, so the weights 2^(−charge) sum to at most 1;
-                                         `BitsCount` for advice v1 (bitsCount), and the leak bounds with it
+                                         `BitsCount` for advice v1 (bitsCount), and the leak bounds with it; with
+                                         counts, the decisions' weight times the counts' under any Kraft count code
+                                         (bitsCount_counted, kraft_of_prefixFree)
 Warden.lean     the warden's channel bound: its lane is the client view of its first late cell
                                          (wardenLane_eq), the count, the whole run's bound
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
@@ -194,7 +198,12 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   charged `c` bits or fewer (Kraft, under any registered book), and the leak bound's three with advice v1's charge and
   no assumption on it, `EncardAccSeqsWithinLeConstantRateV1`, `EncardDecodableWithinLeCompiledV1`,
   `EncardDecodableWithinLeCompiledPerWindowV1`. That `ChargeCount_v1`'s circuit computes the Lean charge is
-  circuit-check's (the circuit against `arith_encode.py`'s reference), not proved here.
+  circuit-check's (the circuit against `arith_encode.py`'s reference), not proved here. The same four for windows that
+  may send nonzero counts, each charged its decisions' charge plus any count code's length (lengths meeting Kraft, as
+  every prefix-free code's do): `EncardChargedLeCounted`, `EncardAccSeqsWithinLeConstantRateV1Counted`,
+  `EncardDecodableWithinLeCompiledV1Counted`, `EncardDecodableWithinLeCompiledPerWindowV1Counted`. The count code is a
+  parameter, a separate code: advice v1 codes its counts inside the arithmetic coder (`ChargeCount_v2`'s window), which
+  this does not model.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):

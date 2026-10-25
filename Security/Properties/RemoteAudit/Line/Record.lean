@@ -1,4 +1,5 @@
 import Definitions.Accounting.Remote.Held
+import Definitions.Accounting.Remote.Draw
 import RemoteAudit.Session
 import RemoteAudit.Shared
 import RemoteAudit.Line
@@ -10,11 +11,11 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
 (`Accounting.Remote.Held.Pace`) the memory model reads it as:
 
 * `Node`: what is fixed before the coins: the session's parameters, the windows a draw (`groups_per_coin`, g) and the
-  registration it runs on (so its windows, one group each, `Node.windows`, and its registered blocks, `Node.blocks`),
-  the groups a stretch, a block's bytes, the node's on-chip storage and memory in bytes, its rates
-  (`RemoteAudit.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks` are
-  those rates in the model's units: a tick is a nanosecond on the record's clock and a block is `blockBytes`. Its δ is
-  a nonnegative rational (`ℚ≥0`): the line computes at no δ outside `(0, 1)`.
+  registration it runs on (so its windows, one group each, `Node.windows`, its draws, `Node.draws`, and its registered
+  blocks, `Node.blocks`), the groups a stretch, a block's bytes, the node's on-chip storage and memory in bytes, its
+  rates (`RemoteAudit.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks`
+  are those rates in the model's units: a tick is a nanosecond on the record's clock and a block is `blockBytes`. Its
+  δ is a nonnegative rational (`ℚ≥0`): the line computes at no δ outside `(0, 1)`.
 * `Record`: what one outcome gives: the verifier's inputs (its coins, the earliest coin release and the session's
   events in order) and what the auditor saw of each window (`RemoteAudit.Line.Seen`: its coin's release and last root,
   and its passes' reads by kind).
@@ -24,6 +25,15 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
   exactly where it accepts. The line reads it (`lineOf`, `lineOfRecordAt`): each window's passes, each draw's receipts
   and draws (`drawReceipts`: draw `c` is windows `c·g … (c + 1)·g − 1`, a window at g = 1), and the registered blocks;
   `Record.groups` and `Record.receipts` are its groups, one a window, and its draws' receipts.
+* `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
+  first event that throws; `Record.receiptsAt` its windows' receipts and `Record.drawReceiptsAt` its draws'.
+* `recordDraw`: the record's opening draw (`Accounting.Remote.Draw.Session`), one draw for each of the session's
+  (`Node.draws`), draw `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
+  (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
+  that `Live`, a draw's size fixed by the coins before it, can hold of a session whose acceptance turns on later coins.
+* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Draw.Committed`):
+  holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordDraw`;
+  `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
 * `ofRecord`: a trace with the Lean verifier's verdict on the record as its own, the trace the line's premises read.
 * `recordPace`: the record's groups as the model's paced session, group `g`'s first pass the passes before it, its coin
   and its end `e_g` the record's as `stretches` reads them (`ended`); past the last group its coin stands, so the coins
@@ -58,6 +68,11 @@ structure Node where
 
 /-- The session's windows, one group each: its parameters'. -/
 def Node.windows (n : Node) : ℕ := n.params.windows
+
+/-- The session's draws: its windows `g` a draw, `⌈W/g⌉` of them (`RemoteAudit.Line.drawsOf`), one a window at
+g ≤ 1. -/
+def Node.draws (n : Node) : ℕ :=
+  if n.groupsPerCoin ≤ 1 then n.windows else (n.windows + n.groupsPerCoin - 1) / n.groupsPerCoin
 
 /-- `N`, the registered blocks: the registration's. -/
 def Node.blocks (n : Node) : ℕ := n.reg.blocks
@@ -118,6 +133,60 @@ def Record.receipts (node : Node) (r : Record) : Array ℕ :=
   match r.summary node with
   | some sm => drawReceipts node.groupsPerCoin sm.windows
   | none => #[]
+
+/-- One event through the Lean verifier at `g` windows a draw: the state it leaves, or the state it was given where it
+throws. -/
+def reachStep (g : ℕ) (s : RemoteAudit.Session.State) (e : RemoteAudit.Session.Event) :
+    Except RemoteAudit.Session.State RemoteAudit.Session.State :=
+  match _root_.RemoteAudit.Shared.step g s e with
+  | .ok (_, s') => .ok s'
+  | .error _ => .error s
+
+/-- The state the record's session reaches in the Lean verifier: its run's last where every event runs, else the
+state before the first event that throws. -/
+def Record.reached (node : Node) (r : Record) : RemoteAudit.Session.State :=
+  match r.events.foldlM (reachStep node.groupsPerCoin)
+      (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) with
+  | .ok s => s
+  | .error s => s
+
+/-- Window `t`'s receipts in the state the record's session reaches, its passes' lengths summed (`Session.Win.receipts`),
+`0` for a window it never opened. -/
+def Record.receiptsAt (node : Node) (r : Record) (t : ℕ) : ℕ :=
+  ((r.reached node).windows[t]?.map RemoteAudit.Session.Win.receipts).getD 0
+
+/-- Draw `c`'s receipts in the state the record's session reaches: window `c`'s at g ≤ 1 (`receiptsAt`), and above it
+those of its windows `c·g … (c + 1)·g − 1` the state has, summed. -/
+def Record.drawReceiptsAt (node : Node) (r : Record) (c : ℕ) : ℕ :=
+  if node.groupsPerCoin ≤ 1 then r.receiptsAt node c
+  else ((r.reached node).windows.extract (c * node.groupsPerCoin) (c * node.groupsPerCoin + node.groupsPerCoin)).foldl
+    (fun a w => a + w.receipts) 0
+
+/-- `m`, the most receipts a draw the line reads has: `receive` rejects a pass that would take its window's receipts to
+`RECEIPT_LIMIT` (`Properties.RemoteAudit.ReceiptsBelowLimit`), and the line refuses a draw of `g` > 1 windows with
+`RECEIPT_LIMIT` or more (`RemoteAudit.Line.ofSummaryAt`). -/
+def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
+
+/-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
+the state the record's session reaches at `ω` (at most `receiptMax`), drawing `min(s, U_c)` at the session's
+`samples`, with the correct receipts `correct`. -/
+def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.draws κ X → Record)
+    (correct : Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
+    Accounting.Remote.Draw.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
+  size c ω := ⟨min ((rec ω).drawReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
+  correct := correct
+
+/-- **The records' opening draw, read through the coin commitment**: holding commitment `c`, the prover's record at
+`ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordDraw`), with the correct receipts
+`correct c`. -/
+def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
+    (recs : Cm → Accounting.Remote.Draw.Coins node.draws κ X → Record)
+    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
+    Accounting.Remote.Draw.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
+  view c := recordDraw node (recs c) (correct c)
+
+/-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/
+def played {Ω Cm : Type} (recs : Cm → Ω → Record) (com : Ω → Cm) (ω : Ω) : Record := recs (com ω) ω
 
 /-- `s`, the node's squarings a tick. -/
 noncomputable def Node.squarings (n : Node) : ℝ := (n.rates.squaringsPerS : ℝ) / (ns : ℝ)

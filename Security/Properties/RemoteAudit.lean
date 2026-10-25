@@ -47,6 +47,7 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `PassesStepped`: each pass recorded has one plan, one step and one chain head, and the steps strictly increase in
   arrival order (window, then pass) below `2^64`;
 * `PassesReadDistinct`: each pass recorded reads distinct blocks of the store as it stands;
+* `ReceiptsBelowLimit`: each window recorded has fewer than `2^64` receipts, its passes' lengths summed;
 * `AppendsInOrder`: the appends are the store's next indices in order, append `k` answered with append coin `k`;
 * `PassesChained`: the session's head is the chain over its appends, and each pass's head the chain over a prefix of
   them, past which its plan reads nothing, so its seed binds every append its plan reads;
@@ -208,6 +209,14 @@ def PassesReadDistinct : Prop :=
     Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
       ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].plans.size),
         ReadsDistinct s.windows[t].plans[i] s.extent
+
+/-- Every window the verifier records has fewer than `2^64` receipts, its passes' lengths summed (`receive` rejects with
+`plan` a pass that would take them to `RECEIPT_LIMIT`). -/
+def ReceiptsBelowLimit : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      ∀ t (ht : t < s.windows.size), s.windows[t].receipts < Session.RECEIPT_LIMIT
 
 /-- The appends are the store's next indices in order (append `k` starts where the one before it ends, the first at
 `N`, and the store ends at the last), and append `k` answered with the `k`-th append coin, each drawn once. -/

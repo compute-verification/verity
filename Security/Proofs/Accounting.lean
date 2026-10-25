@@ -18,6 +18,11 @@ import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
 import Proofs.Accounting.DeclaredCircuit
+import Proofs.Accounting.DeclaredCircuit.Tiles
+import Proofs.Accounting.DeclaredCircuit.Credit
+import Proofs.Accounting.DeclaredCircuit.Slack
+import Proofs.Accounting.DeclaredCircuit.Session
+import Proofs.Accounting.DeclaredCircuit.Requirement
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
@@ -37,6 +42,8 @@ import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Stacking
+import Proofs.Accounting.DeclaredCircuit.Witness
+import Proofs.Accounting.DeclaredCircuit.WitnessPrefill
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages

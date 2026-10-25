@@ -68,6 +68,8 @@ ARM = "arm"
 STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
+OF_RECORD = "of-record"
+GOAL = "goal"
 ABANDONED = "abandoned"
 REPLAY_SET = "replay_set"
 REPLAY_EXPECT = "replay_expect"
@@ -307,6 +309,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
        "approach record, the <campaign>/<slug> that replaces it"),
+    _k(OF_RECORD, GROUP_RESULT, BOOL, "the lane's word that this run or artifact is the evidence of record for its `goal`; the one it "
+       "replaces gets superseded_by"),
+    _k(GOAL, GROUP_RESULT, TEXT, "the outcome or done-condition the run or artifact is evidence for, as its lane names it (O1-live, O2-proof)"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
        "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),

@@ -949,6 +949,15 @@ def plan_both(r: Run) -> None:
     r.receive(0, 0, bytes(64), runs=((0, 2),), change=((), ()), step=0)
 
 
+def receipts_at_limit(r: Run) -> None:
+    """The store appended to the codec's `max_blocks` and passes of all of it, until one would take window 0's
+    receipts to `RECEIPT_LIMIT`: that pass rejects with `plan`."""
+    r.start()
+    r.commit(bytes(64), P512.max_blocks - r.store.extent)
+    for i in range(audit.RECEIPT_LIMIT // P512.max_blocks):
+        r.receive(0, i, bytes([i]) * 64, runs=((0, P512.max_blocks),), step=i)
+
+
 def plan_released(r: Run) -> None:
     r.start()
     r.run()
@@ -1279,6 +1288,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "plan-change-overlapping": (World(), {}, lambda r: plan_change(r, (((3, 2), (4, 1)), ())), "plan"),
     "plan-both": (World(), {}, plan_both, "plan"),
     "plan-released": (World(), {}, plan_released, "plan"),
+    "plan-receipts-at-limit": (World(), {}, receipts_at_limit, "plan"),
     "release-twice": (World(), {}, lambda r: release(r, ((2, 1),)), "release"),
     "release-malformed": (World(), {}, lambda r: release(r, ((5, 3),)), "release"),
     "release-adjacent": (World(), W1, lambda r: (release(r, ((3, 1),)), r.run(Plan(((0, 1), (4, 2)), 6)),

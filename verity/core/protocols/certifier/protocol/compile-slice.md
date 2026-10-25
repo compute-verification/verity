@@ -74,9 +74,41 @@ past the count with en 0, and 34 idle steps), with the seal's rows in ``srv`` (`
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each unit is
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
-holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole. The
-scan leaves out the pieces with at most one nonzero byte (`sparse_pieces`), which a proof's encoding holds whatever the
-witness.
+holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
+- A piece is left out of that scan if and only if its value occurs, raw or as hex at any nibble, in what the verifier
+  receives of the statement: the staged circuit, the proof streams (`circuit.rep*.bin`, which `session.json`'s
+  `proof_sha512` hashes), ``pub``'s rows (`pub-*.bin`) and the round messages (`rounds[*].msg`, decoded). No piece is
+  left out for its byte count (REDTEAM's rule, note:network-accounting/20261024T0558Z-finding-redteam-v3, phase 18).
+- The driver still leaves out, by byte count, the pieces with at most one nonzero byte (`sparse_pieces`) and a carry row
+  with at most one (`carry_rows.sparse`), until the shared helper (#3916) puts the rule in their place. A run's
+  left-out pieces are checked under the rule after it.
+
+**The proof of record is run r20261024-211633-861e** (#3886 at 6e29d34e7c, the w212 and demonstration slices).
+- At w212: 10 units of 857,866 ANDs (k_log 23). m0's verifier and Lean `verify --zk` accept, and the audit is complete
+  with no wrong unit (δ 2⁻²⁰).
+  - The honest unit's word is 0x3f, and it is accepted.
+  - Seven negatives are refused by their words: flip 0x2e, charge 0x37, arrival 0x2f, cleared 0x3e, carry 0x3b,
+    cleared-read 0x2d and sixpass 0x2f.
+  - restart is refused by ``CH-carry``, and sixpass-own by the native ``srv`` check.
+- At the demonstration class: 12 units of 59,341 ANDs, accepted and complete, every verdict as its reference says. The
+  made-up table is refused by ``cache`` alone (0x1f), and restart by ``CH-first``.
+- The verifier received 347,887,598 bytes at w212 and 103,356,161 at the demonstration class. They hold none of the
+  837 and 654 witness pieces scanned, and no ``cin`` or ``cout`` row.
+- Under the rule, the left-out pieces are clean (art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973,
+  the check and its logs).
+  - Of w212's 44 sparse pieces, 38 occur nowhere in what the verifier received. The other six occur only in the proof
+    streams and round messages.
+  - The demonstration class's restart starts from the zero carry. Its row occurs in the same files' zero padding.
+- Each of the six sits on framing:
+  - the count and padding fields of round 0's protocol descriptor and of `flock-pcs-open-batch-v0`'s message;
+  - the 5 and 8 fields of the 176-byte rounds;
+  - in the proof stream, the length 128 of `initial_cap` and of a ring switch's `s_hat_v`, each behind a grinding nonce
+    that the verifier's reader requires to be 0. The `s_hat_v` window's one other byte is the last byte of the
+    previous field element, 0 there (0x92 in the demonstration class's proof).
+- Each message hit is the same 16 bytes at the paired round of the demonstration class's proof, whose circuit and
+  witness differ.
+- Run r20261024-202836-67d7, at #3886's head before #3887's copies (852,357 ANDs), has the same verdicts. Its six
+  flagged pieces are the same framing (REDTEAM's differential, run r20261024-211716-ae3b).
 
 **The slice's ZK runs with its coder**, before the charge was `ChargeLink_v1`:
 - At the demonstration class (49,113 ANDs a unit), the honest unit and ten negatives, with the made-up table refused

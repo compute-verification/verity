@@ -256,7 +256,9 @@ def drawsOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) :=
 
 /-- `ofSummary` of a record drawn `g` windows a coin (`Shared`): `ofSummary` at g = 1; above it the same groups, one a
 window, and the record's draws in place of its windows (`drawsOf`), refused unless each draw drew `min(s, U)` of its
-`U` receipts at the session's `samples` `s`, as `Shared.close`'s draw does. -/
+`U` receipts at the session's `samples` `s`, as `Shared.close`'s draw does, and has fewer than `RECEIPT_LIMIT` (2^64)
+receipts, as `receive` holds each window to: the memory model's draw reads at most `2^64 − 1` receipts a draw
+(`Properties.RemoteAudit.Line.receiptMax`), and a draw's windows' receipts, each below the limit, need not be. -/
 def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
     Except String (Array Group × Array (Nat × Nat)) :=
   if g ≤ 1 then ofSummary sm samples seen
@@ -267,10 +269,13 @@ def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array S
     match ds.findIdx? fun (u, d) => d != min samples u with
     | some c => .error s!"draw {c} drew {ds[c]!.2} of its {ds[c]!.1} receipts, not min({samples}, {ds[c]!.1})"
     | none =>
-      .ok ((Array.range sm.windows.size).map fun t =>
-          ({ releasedNs := seen[t]!.releasedNs, lastNs := seen[t]!.lastNs, passes := sm.windows[t]!.lengths.size,
-             least := seen[t]!.least, weights := seen[t]!.weights, hbm := seen[t]!.hbm,
-             host := seen[t]!.host } : Group), ds)
+      match ds.findIdx? fun (u, _) => Session.RECEIPT_LIMIT ≤ u with
+      | some c => .error s!"draw {c} has {ds[c]!.1} receipts, not fewer than 2^64"
+      | none =>
+        .ok ((Array.range sm.windows.size).map fun t =>
+            ({ releasedNs := seen[t]!.releasedNs, lastNs := seen[t]!.lastNs, passes := sm.windows[t]!.lengths.size,
+               least := seen[t]!.least, weights := seen[t]!.weights, hbm := seen[t]!.hbm,
+               host := seen[t]!.host } : Group), ds)
 
 /-- `lineOfRecord` of a record drawn `g` windows a coin: `line` at the groups and draws `ofSummaryAt` reads, its W the
 pooled bound of the record's draws; at g = 1 `lineOfRecord`'s. -/

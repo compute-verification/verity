@@ -87,9 +87,8 @@ R \;=\; \frac{1}{g}\,\min_A \frac{\rho_A}{m_A}, \qquad \text{pretraining efficie
 
 - \(\rho_A\) is the policy's slowdown for training strategy \(A\): the board and the library compute it from \(A\)'s traits.
 - \(m_A(C) = C_{\text{ref}}(L_A(C))/C\) is \(A\)'s compute multiplier: the compute the reference recipe needs to reach the
-  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`)
-  and the labs' effective compute (`anthropic-2023-rsp/1`, `deepmind-2024-fsf/1`), with the reference and the test set
-  made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
+  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`),
+  with the reference and the test set made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
   \(C_{\text{ref}}(L)\) from a Chinchilla-form law (`besiroglu-2024-chinchilla-replication/2`).
 - \(g\) is algorithmic progress in the base recipe (architecture, data, optimizer, allocation) since the last pretrain. It
   applies with or without the policy, so the talk shows it and then brackets it. Loss-based estimates put it near 2.5x
