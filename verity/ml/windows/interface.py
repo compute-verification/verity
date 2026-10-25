@@ -7,8 +7,9 @@ at a time, in four records:
    names the ports that are the system's external I/O. The window's ``circuit.json`` (`circuit_record`) holds the whole
    layout the verifier reads, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
-   public cap on the advice's length) and the advice's hiding commitment (`verity.ml.commitments.advice`): its root and its
-   length in bits, which is charged. Verity never reads the advice.
+   public cap on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
+   hiding commitment (`verity.ml.commitments.advice`): its root and its length in bits, which is charged. Verity never
+   reads the advice.
 3. **The values** (:class:`Window`): each unit's values as computed (`Window.record`: one array per parameter and one per
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
@@ -37,6 +38,7 @@ import importlib
 import json
 import pkgutil
 import re
+import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,6 +64,8 @@ ADVICE_SCHEME = "verity-vllm/advice-windows/advice/v1"
 #: the advice's bytes as rows of this many bits, the last zero-padded (`advice_rows`)
 ADVICE_ROW_BITS = 256
 _DIGEST = re.compile("[0-9a-f]{128}")
+#: a git commit id (SHA-1, or SHA-256 in a SHA-256 repository): a locator for code, never a commitment, which is the digest
+_COMMIT = re.compile("[0-9a-f]{40}|[0-9a-f]{64}")
 _ID = re.compile(r"([A-Za-z][A-Za-z0-9]*_v[0-9]+)(?:\{(.*)\})?", re.S)
 
 
@@ -251,15 +255,48 @@ def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
 
 
 def advice_binding(compiler: Mapping[str, str], root: str, bits: int) -> dict[str, Any]:
-    """The registration's binding of a circuit's compiler and advice: the compiler's ``name`` and ``digest`` and the root and
-    length in bits of the advice's hiding commitment (`verity.ml.commitments.advice`), each refused unless well-formed."""
-    if set(compiler) != {"name", "digest"} or not isinstance(compiler["name"], str) or not _DIGEST.fullmatch(str(compiler["digest"])):
-        raise ValueError(f"a compiler is its name and its 64-byte digest in hex, not {dict(compiler)!r}")
+    """The registration's binding of a circuit's compiler and advice: the compiler's ``name`` and ``digest``, with the
+    ``commit`` its code is at when the integration gives one (where a verifier fetches code that hashes to the digest,
+    `compiler_digest`), and the root and length in bits of the advice's hiding commitment (`verity.ml.commitments.advice`),
+    each refused unless well-formed."""
+    if not {"name", "digest"} <= set(compiler) <= {"name", "digest", "commit"} or not isinstance(compiler["name"], str) \
+            or not _DIGEST.fullmatch(str(compiler["digest"])) or ("commit" in compiler and not _COMMIT.fullmatch(str(compiler["commit"]))):
+        raise ValueError(f"a compiler is its name, its 64-byte digest in hex and optionally its git commit, not {dict(compiler)!r}")
     if not _DIGEST.fullmatch(str(root)):
         raise ValueError(f"the advice's root is 64 bytes, 128 hex digits, not {root!r}")
     if isinstance(bits, bool) or not isinstance(bits, int) or bits < 0:
         raise ValueError(f"the advice's length is a whole number of bits, not {bits!r}")
-    return {"compiler": {"name": compiler["name"], "digest": compiler["digest"]}, "advice": {"root": root, "bits": bits}}
+    return {"compiler": {k: compiler[k] for k in ("name", "digest", "commit") if k in compiler}, "advice": {"root": root, "bits": bits}}
+
+
+def code_files(root: str | Path, paths: Sequence[str]) -> dict[str, str]:
+    """The files git lists under the repository ``paths`` at the work tree ``root`` (tracked, or untracked and not ignored, so
+    build outputs don't count; ``*.md`` aside, which computes nothing), each by its path to the SHA-512 of its bytes. Refused
+    where ``root`` is not a git work tree, or holds no file under ``paths``."""
+    root = Path(root)
+    p = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *paths], cwd=root,
+                       capture_output=True)
+    if p.returncode != 0:
+        raise ValueError(f"{root} is not a git work tree: {p.stderr.decode(errors='replace').strip()[-200:]}")
+    files = sorted({f for f in p.stdout.decode().split("\0") if f and not f.endswith(".md") and (root / f).is_file()})
+    if not files:
+        raise ValueError(f"no file under {list(paths)} at {root}")
+    return {f: hashlib.sha512((root / f).read_bytes()).hexdigest() for f in files}
+
+
+def compiler_digest(name: str, root: str | Path, code: Sequence[str]) -> str:
+    """A registered compiler's digest: its name and its code (`code_files` under the repository paths ``code`` at the work tree
+    ``root``). The integration computes it on the tree it runs from; the verifier recomputes it on its own checkout of the
+    commit the registration names, over the paths its own table names, and runs the compiler only from that checkout."""
+    return hashlib.sha512(canonical_json({"name": str(name), "code": code_files(root, code)})).hexdigest()
+
+
+def commit_of(root: str | Path) -> str:
+    """The commit the work tree ``root`` is at, in hex: the ``commit`` an integration registers its compiler under."""
+    p = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(root), capture_output=True, text=True)
+    if p.returncode != 0 or not _COMMIT.fullmatch(p.stdout.strip()):
+        raise ValueError(f"{root} is not a git work tree at a commit: {p.stderr.strip()[-200:]}")
+    return p.stdout.strip()
 
 
 def advice_tree_binding(compiler: Mapping[str, str]) -> bytes:

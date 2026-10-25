@@ -4,29 +4,36 @@ The records, every one in the window's directory but the advice's opening:
 
 * **the circuit** in proof units with its public layout (``circuit.json``), which the registration binds by SHA-512;
 * **the compiler and the advice**, when the circuit depends on run-time choices: the registration's window names the compiler
-  (``compiler``: its name and digest, which carries the public cap on the advice's length) and the advice's hiding commitment
-  (``advice``: its root and its length in bits, which is charged); the advice is a bit string the audit never interprets;
+  (``compiler``: its name and digest, which carries the public cap on the advice's length, and the commit its code is at)
+  and the advice's hiding commitment (``advice``: its root and its length in bits, which is charged); the advice is a bit
+  string the audit never interprets;
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
 * **on a draw, the drawn units' openings** (``m<k>-private.bin``), which reach only the prover behind the firewall.
 
 The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`interface.resolve`), or, for a
-template the verifier lowers from its own input set (``--template-sets``), that set's Definition. Before the draw the audit
-holds the registration to that circuit, to the run root the run published (``--run``, default the circuit record's) and,
-for a compiled circuit, to the compiler and advice it was compiled from (`source`), and runs the compile check
-(`compile_check`, the named gap until the compile unit exists): the advice's opening opens the registered root under the
-registered compiler, and that compiler, run as the command the verifier's own table names for it (``--compilers``), makes
+template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
+is refused until its records carry their segment roots. Before the draw the audit holds the registration to that circuit,
+to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
+(`source`), and runs the compile check (`compile_check`, the named gap until the compile unit exists): the advice's opening
+opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
+names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
 the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 An integration's labels are never read.
 
-    records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE | --circuit SHA512) [--run HEX] \\
+    records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local --main FILE]
 
-``--compilers FILE``: ``{name: {"digest": hex, "argv": [...]}}``, the registered compilers the verifier holds, each by the
-name and digest a registration names it under. The compile command is ``argv --advice FILE --out FILE``:
+``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
+registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
+the commit its compiler's code is at; the audit checks that commit out of ``--repo`` (default this tree's repository) into
+a worktree of its own, recomputes the digest there over the repository paths ``code`` (`interface.compiler_digest`),
+refuses the compiler unless it is the registered one, and runs ``argv`` in that checkout with ``pythonpath`` (repository
+paths) as its ``PYTHONPATH``: never the auditing tree's code. A registration naming no commit runs ``argv`` from the
+auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 
 * ``--advice FILE``: the opened advice's bytes (the opening's ``advice``), nothing else of the window: the command's other
   inputs are fixed in ``argv``;
@@ -52,7 +59,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -92,40 +99,100 @@ def _verdict(ok: Mapping[str, bool], detail: Mapping[str, Any] | None = None) ->
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": dict(detail or {})}
 
 
+def tree_root() -> Path:
+    """The auditing tree: the repository this file is in, whose compilers run for a registration naming no commit."""
+    return Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE, capture_output=True, text=True,
+                               check=True).stdout.strip())
+
+
+@contextlib.contextmanager
+def checkout(repo: Path, commit: str, at: Path) -> Iterator[Path]:
+    """``commit`` of ``repo`` checked out at ``at`` in its own worktree, removed after; a commit ``repo`` doesn't hold is a
+    ValueError (fetch it into ``repo`` first)."""
+    p = subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", "--quiet", str(at), commit],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        raise ValueError(f"{repo} can't check out commit {commit}: {p.stderr.strip()[-300:]}")
+    try:
+        yield at
+    finally:
+        subprocess.run(["git", "-C", str(repo), "worktree", "remove", "--force", str(at)], capture_output=True)
+
+
+def compiler_code(entry: Mapping[str, Any], compiler: Mapping[str, Any], at: Path | None) -> None:
+    """That the compiler about to run is the registered one, or a ValueError saying why not. At a checkout ``at`` of the
+    registration's ``commit``, the digest this verifier computes (`interface.compiler_digest`, over the code paths its own
+    table names, ``code``) must be the registered digest: the commit only says where to fetch that code. With no commit, the
+    auditing tree's compiler runs, the table's digest the verifier's word for it, recomputed there when the table names
+    ``code``."""
+    if at is not None and not entry.get("code"):
+        raise ValueError("the verifier's table names no code for this compiler, so a checkout's digest can't be recomputed")
+    if entry.get("code"):
+        got = IF.compiler_digest(compiler["name"], at or tree_root(), entry["code"])
+        if got != compiler.get("digest"):
+            where = f"commit {compiler['commit']}" if at is not None else "the auditing tree"
+            raise ValueError(f"the code at {where} hashes to {got[:16]}, not the registered {str(compiler.get('digest'))[:16]}")
+
+
+def _bits(stdout: str) -> int | None:
+    """The length a compile command charges: its last stdout line's ``{"bits": N}``, or None for anything else."""
+    try:
+        bits = json.loads(stdout.strip().splitlines()[-1]).get("bits")
+    except (IndexError, ValueError, AttributeError):
+        return None
+    return bits if isinstance(bits, int) and not isinstance(bits, bool) else None
+
+
 def compile_check(circuit: Mapping[str, Any], window: Mapping[str, Any], opening: Any, compilers: Mapping[str, Any],
-                  scratch: Path) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                  scratch: Path, repo: Path | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """The compile check: the registration's compiler is one the verifier holds, under the digest it holds (``compiler``); the
-    opening opens the registered advice root under that compiler (``advice``); the compiler's command on the opened advice
-    exits 0 (``compiles``), the circuit record it writes is ``circuit`` less its run's fields (``circuit``) and the length it
-    charges is the registered one (``length``). The command runs only on advice that opens. -> (the verdict, the compiler and
-    advice it verified, or None)."""
+    opening opens the registered advice root under that compiler (``advice``); the code that runs is the registered compiler's
+    (``code``, `compiler_code`: a registration naming a ``commit`` is compiled from that commit of ``repo``, default the
+    auditing tree's repository, checked out in a worktree of its own, with the table's ``pythonpath`` under it); the
+    compiler's command on the opened advice exits 0 (``compiles``), the circuit record it writes is ``circuit`` less its
+    run's fields (``circuit``) and the length it charges is the registered one (``length``). The command runs only on advice
+    that opens, and writes inside a fresh directory. -> (the verdict, the compiler and advice it verified, or None)."""
     c, adv = window.get("compiler"), window.get("advice")
     c, adv = (c if isinstance(c, Mapping) else {}), (adv if isinstance(adv, Mapping) else {})
     entry = compilers.get(c.get("name")) if isinstance(c.get("name"), str) else None
-    ok = {"compiler": entry is not None and entry.get("digest") == c.get("digest"), "advice": False, "compiles": False,
-          "circuit": False, "length": False}
+    ok = {"compiler": entry is not None and entry.get("digest") == c.get("digest"), "advice": False, "code": False,
+          "compiles": False, "circuit": False, "length": False}
     detail: dict[str, Any] = {"compiler": dict(c), "advice": dict(adv)}
     try:
         data, root = IF.opened_advice(c, opening)
         ok["advice"] = root == adv.get("root")
     except (ValueError, KeyError, TypeError) as e:
         data, detail["opening"] = None, str(e)
+    scratch.mkdir(parents=True, exist_ok=True)
+    (scratch / "compiled.json").unlink(missing_ok=True)
     if ok["compiler"] and ok["advice"]:
-        scratch.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=scratch) as d:   # the opened advice, the verifier's under the named gap
-            (Path(d) / "advice.bin").write_bytes(data)
-            t0 = time.time()
-            p = subprocess.run([*entry["argv"], "--advice", str(Path(d) / "advice.bin"), "--out", str(scratch / "compiled.json")],
-                               capture_output=True, text=True)
-        detail.update(compile_s=round(time.time() - t0, 1), rc=p.returncode, refused=p.returncode == REFUSED,
-                      stderr=p.stderr[-2000:])
-        ok["compiles"] = p.returncode == 0
-        if ok["compiles"]:
-            theirs = json.loads((scratch / "compiled.json").read_text())
-            ok["circuit"] = IF.circuit_of(theirs) == IF.circuit_of(circuit)
-            bits = json.loads(p.stdout.strip().splitlines()[-1]).get("bits")
-            ok["length"] = isinstance(bits, int) and not isinstance(bits, bool) and bits == adv.get("bits")
-            detail["bits"] = bits
+        with tempfile.TemporaryDirectory(dir=scratch) as d, contextlib.ExitStack() as held:
+            d, at, env = Path(d), None, None
+            try:
+                if "commit" in c:
+                    at = held.enter_context(checkout(repo or tree_root(), str(c["commit"]), d / "tree"))
+                    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(at / p) for p in entry.get("pythonpath", ()))}
+                compiler_code(entry, c, at)
+                ok["code"] = True
+            except (ValueError, OSError, subprocess.CalledProcessError) as e:
+                detail["code"] = str(e)
+            if ok["code"]:
+                (d / "advice.bin").write_bytes(data)   # the opened advice, the verifier's under the named gap
+                t0 = time.time()
+                p = subprocess.run([*entry["argv"], "--advice", str(d / "advice.bin"), "--out", str(d / "compiled.json")],
+                                   cwd=at, env=env, capture_output=True, text=True)
+                detail.update(compile_s=round(time.time() - t0, 1), rc=p.returncode, refused=p.returncode == REFUSED,
+                              stderr=p.stderr[-2000:], at=c.get("commit", "the auditing tree"))
+                ok["compiles"] = p.returncode == 0
+                if ok["compiles"]:
+                    try:
+                        theirs = json.loads((d / "compiled.json").read_text())
+                        ok["circuit"] = IF.circuit_of(theirs) == IF.circuit_of(circuit)
+                        (scratch / "compiled.json").write_text(json.dumps(theirs))
+                    except (OSError, ValueError, AttributeError) as e:
+                        detail["output"] = f"{type(e).__name__}: {e}"
+                    detail["bits"] = _bits(p.stdout)
+                    ok["length"] = detail["bits"] is not None and detail["bits"] == adv.get("bits")
     v = _verdict(ok, detail)
     return v, ({"compiler": dict(c), "advice": dict(adv)} if v["ok"] else None)
 
@@ -144,9 +211,9 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
     """What the audit refuses before any draw about the records: a registration naming another circuit or another run root,
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
-    compiler, another advice root or another length, or binding neither (a circuit passed off as the compiler's), the
-    advice's opening under another salt (which opens no registered root), and a circuit record other than the compiler's
-    output (``held["output"]``, the compile check's, its first member one unit short)."""
+    compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
+    compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
+    the compiler's output (``held["output"]``, the compile check's, its first member one unit short)."""
     cases = {"registration-naming-another-circuit": {**w, "circuit": "00" * 64},
              "registration-naming-another-run": {**w, "run": "00" * 64}}
     if held.get("compiler") is None:
@@ -156,11 +223,13 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
                   "registration-naming-another-advice-root": {**w, "advice": {**w["advice"], "root": "00" * 64}},
                   "registration-charging-another-length": {**w, "advice": {**w["advice"], "bits": w["advice"]["bits"] + 1}},
                   "registration-binding-no-compiler-or-advice": {k: v for k, v in w.items() if k not in ("compiler", "advice")}}
+        if "commit" in w["compiler"]:
+            cases["registration-naming-another-commit"] = {**w, "compiler": {**w["compiler"], "commit": "00" * 20}}
     out = {name: source(x, held) for name, x in cases.items()}
     if held.get("compiler") is not None:
         op = dict(held["opening"])
         op["salts"] = [f"{int(op['salts'][0][:2], 16) ^ 1:02x}{op['salts'][0][2:]}", *op["salts"][1:]]
-        v, _ = compile_check(circuit, w, op, held["compilers"], scratch)
+        v, _ = compile_check(circuit, w, op, held["compilers"], scratch, held.get("repo"))
         out["opening-under-another-salt"] = v
         if (theirs := held.get("output")) is not None:
             m0 = theirs["members"][0]
@@ -224,12 +293,18 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`interface.resolve`)."""
+    input set, whose Definition it resolves to; any other template from Verity's catalog (`interface.resolve`). A window
+    with row tables is refused: a5 checks their segment roots against the ones recorded before each coin (``step_roots``),
+    which the records don't carry yet."""
     import a5 as A5
 
     own = A5.template_sets(template_sets) if template_sets else {}
     resolve = lambda t: own[t][1] if t in own else IF.resolve(t)  # noqa: E731
     mine, doc = IF.of_records(window_dir, law, resolve)
+    if mine.row_tables:
+        raise ValueError(f"the window has {len(mine.row_tables)} row tables, and its records don't carry the segment roots "
+                         "recorded before each segment's coin, so the audit can't check the tables against them: refused "
+                         "until they do")
     sets = {**own, **{t: (composer(resolve(t), st), resolve(t)) for t, st in doc["statements"].items()}}
     return mine, doc, sets
 
@@ -259,15 +334,16 @@ def audit(a: argparse.Namespace) -> int:
     rec = json.loads((wdir / "registration.json").read_text())
     w = rec.get("window") or {}
     body = (wdir / "circuit.json").read_bytes()
-    held: dict[str, Any] = {"run": a.run or mine.run, "circuit": a.circuit or hashlib.sha512(body).hexdigest(),
+    held: dict[str, Any] = {"run": a.run, "circuit": a.circuit or hashlib.sha512(body).hexdigest(),
                             "compiled": True, "compiler": None, "advice": None}
     compiled = None
     if a.opening:
         compilers, opening = json.loads(Path(a.compilers).read_text()), json.loads(Path(a.opening).read_text())
-        compiled, bound = compile_check(doc, w, opening, compilers, out / "compile")
+        repo = Path(a.repo) if a.repo else None
+        compiled, bound = compile_check(doc, w, opening, compilers, out / "compile", repo)
         output = out / "compile" / "compiled.json"
         held.update(compiled=compiled["ok"], compiler=(bound or {}).get("compiler") or w.get("compiler"),
-                    advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening,
+                    advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
     more = negatives(w, held, doc, out / "negatives")
@@ -336,10 +412,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
     p.add_argument("--law", required=True, help="the proof service's law of the window (subset:K, stratified:K, work:K)")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
-    p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv}}")
+    p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
+                   "code, pythonpath}}")
+    p.add_argument("--repo", help="with --opening: the repository a registered compiler's commit is checked out from (default "
+                   "this tree's)")
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
-    p.add_argument("--run", help="the run root the verifier holds the window to, the one the run published (default the "
-                   "circuit record's)")
+    p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
