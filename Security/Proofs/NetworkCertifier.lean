@@ -10,6 +10,7 @@ import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.SampledAudit
 import Proofs.NetworkCertifier.SampledCharge
+import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -30,7 +31,8 @@ whole windows), `AdviceString` (the leak bound: the advice string's charge), `Ad
 the leak bound with it), `WindowCharge` (advice v1's whole-window charge counts, and the leak bound with it),
 `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
 (the warden's channel bound),
-and every lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
+and every lemma behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis until
+PRF-144 proves it (`NetTiming.sampledLeak`). `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
