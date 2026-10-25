@@ -1,4 +1,4 @@
-"""PoUS's session verdict (`pous.verdict_circuit`): its gates are `gates`' list, the list `Proofs.Pous.Verdict.verdictProg`
+"""PoUS's session verdict (`pous.verdict_circuit`): its gates are `gates`' list, the list `PousVerdict.verdictProg`
 restates and proves of; it agrees with the reference `verdict_value` on rounds that hit and that miss each way, and at
 M = 0 with `memory_challenger.verdict` on a signed session; its AND count at the audit's 132 challenges."""
 from __future__ import annotations

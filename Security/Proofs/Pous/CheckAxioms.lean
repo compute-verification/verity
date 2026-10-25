@@ -147,3 +147,6 @@ appear here. `tools/verity/lean/check.py` checks every declaration; this list is
 #print axioms PousP2Rounds.round_tight
 #print axioms PousP2Rounds.round_trunc
 #print axioms PousP2Rounds.round_trunc_b19
+-- the verdict as one proof unit, `PousVerdict_v1{K, M, LIMIT}`, decides `contAccepts` (not pinned)
+#print axioms PousVerdict.verdictProg_accepts
+#print axioms PousVerdict.verdict_accepts

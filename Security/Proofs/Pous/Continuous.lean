@@ -1,4 +1,5 @@
 import Proofs.Pous.Continuous.MissCount
+import Proofs.Pous.Continuous.Verdict
 import Proofs.Pous.Continuous.Verifier
 import Proofs.Pous.Continuous.PerAnswer
 import Proofs.Pous.Continuous.Band
@@ -34,4 +35,7 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
   (`PousContinuous.band_cont_time_average_row`), and the rows `D = 0, 1, 2, 5`
   (`PousContinuous.band_family_continuous_time_average`; pinned as
   `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`).
+* `Continuous/Verdict.lean`: the verdict as one proof unit, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
+  `contAccepts M` holds on the records its openings determine (`PousVerdict.verdictProg_accepts`,
+  `PousVerdict.verdict_accepts`), not pinned.
 -/

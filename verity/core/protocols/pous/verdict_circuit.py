@@ -14,9 +14,9 @@ Every array is of `Value<1>`, and a byte string is bits in byte order, bit t bei
 is 1 iff at most M of the K rounds miss: `Pous.contAccepts M` over the rounds' verdicts
 (`Security/Definitions/Pous/Model/Continuous.lean`), the continuous audit's ``max_misses = M`` over ``n = K`` challenges.
 At M = 0 it is the per-round part of `memory_challenger.verdict`: no round wrong, none late, every record its own round.
-`Proofs.Pous.Verdict.verdictProg_eval` (`Security/Proofs/Pous/Verdict.lean`) proves it of the gates.
+`PousVerdict.verdictProg_accepts` (`Security/Proofs/Pous/Continuous/Verdict.lean`) proves it of the gates.
 
-**The gates** (`gates`, which `Proofs.Pous.Verdict.verdictProg` restates, and the body is written from gate for gate):
+**The gates** (`gates`, which `PousVerdict.verdictProg` restates, and the body is written from gate for gate):
 the K·1248 input bits, the constants 0 and 1, then per round
 
 - one ``Xor3(a, b, 1)`` (``a = b``) for each of the 32 bits of j against round j's constant and each of the 512 digest
@@ -110,7 +110,8 @@ def _sums(gs: list[Gate], ps: Sequence[int], cs: Sequence[int]) -> list[int]:
 
 def gates(K: int, M: int, LIMIT: int) -> tuple[list[Gate], list[int]]:
     """The unit's gates in layout order and its output wire: ``("input",)``, ``("const", b)``, ``("not", (i,))``,
-    ``("and", wires)``, ``("xor", wires)``, wire i being gate i.  `Proofs.Pous.Verdict.verdictProg` is this list."""
+    ``("and", wires)``, ``("xor", wires)``, wire i being gate i.  `PousVerdict.verdictProg` restates it builder for
+    builder."""
     _statics(K, M, LIMIT)
     n = (RECORD_BITS + DIGEST_BITS) * K
     gs: list[Gate] = [("input",)] * n + [("const", 0), ("const", 1)]
@@ -139,7 +140,7 @@ def gates(K: int, M: int, LIMIT: int) -> tuple[list[Gate], list[int]]:
 
 
 def round_verdict(LIMIT: int, j: int, record: bytes, expected: bytes) -> str:
-    """Round j's verdict as `Proofs.Pous.Verdict.roundVerdict` states it: ``hit``, ``wrong``, ``late`` or ``reject``."""
+    """Round j's verdict as `PousVerdict.roundVerdict` states it: ``hit``, ``wrong``, ``late`` or ``reject``."""
     rj = int.from_bytes(record[J_AT:J_AT + 4], "big")
     send = int.from_bytes(record[SEND_AT:SEND_AT + 8], "big")
     receipt = int.from_bytes(record[RECEIPT_AT:RECEIPT_AT + 8], "big")

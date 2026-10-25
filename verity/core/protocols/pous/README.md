@@ -67,7 +67,7 @@ signed session in the clear and publishes only the verdict. It accepts S1's LMS 
 (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
 `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof unit, its one output bit the public verdict: 1
 iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
-the expected digest of its block (`Proofs.Pous.Verdict.verdictProg_eval`, `Security/Proofs/Pous/Verdict.lean`).
+the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
 
 ~~~python
 from verity.ml.crypto import lms
