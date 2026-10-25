@@ -100,11 +100,12 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
     return .ok (c, pb, cm, tables)
 
 /-- A recursive session's inner statement's registered reads (§16.16, a plain-leaves statement): with the verifier's own
-registered reads, its description read from the developer's registration (`Registered.checkDescription`); without, a
-statement that names registered reads is refused, as `Registered.check` refuses one. -/
+registered reads, a circuit that names each port once (`Registered.namesOnce`) and its description read from the
+developer's registration (`Registered.checkDescription`); without, a statement that names registered reads is refused, as
+`Registered.check` refuses one. -/
 def checkDescription (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   match registered with
-  | some own => Registered.checkDescription st.c st.pub own
+  | some own => Registered.namesOnce st.c >>= fun _ => Registered.checkDescription st.c st.pub own
   | none => Registered.check st.c st.pub none false
 
 /-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the

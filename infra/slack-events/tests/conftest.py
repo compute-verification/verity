@@ -196,8 +196,6 @@ def world(tmp_path, monkeypatch, registry):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("RESEARCH_NOTES", str(notes))
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{published}")
-    monkeypatch.setenv("RESEARCH_PR_BRANCHES", str(tmp_path / "pr-branches.json"))
-    monkeypatch.setattr(rs, "GH", str(tmp_path / "no-gh"))
     monkeypatch.setattr(rs, "_now", lambda: datetime.fromtimestamp(T0, timezone.utc))
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "dummy-notes-token")
     pushed: list[str] = []
