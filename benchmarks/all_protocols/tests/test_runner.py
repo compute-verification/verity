@@ -255,7 +255,8 @@ def test_the_network_certifiers_k_is_pooled_once_per_span_with_the_per_window_fi
 
 @pytest.mark.slow
 def test_the_loop_period_keeps_only_public_files(tmp_path):
-    a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"})
+    a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"},
+                  periods=1)
     d, loop = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
     assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept
@@ -265,5 +266,6 @@ def test_the_loop_period_keeps_only_public_files(tmp_path):
     reg = json.loads((d / "registration.json").read_text())
     assert reg["window"]["circuit"] == p["circuit"] == loop["circuit_before"]
     assert p["run_root"] == loop["run"] and p["tools"] == {"x": "y"} and p["node"] == "test-node"
+    assert p["periods"] == 1
     assert p["prover_env"] == {"FC_ZK_SELF_CHECK": "skip"}
     assert loop["mismatched"]
