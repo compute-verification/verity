@@ -97,9 +97,10 @@ open Classical in
 /-- **The registered openings open the deployed commitment** (the bridge's `Transports`, at `SampledKSLive`'s
 commitment, roots, hash and registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of
 `u` and every opening `o` of `g`'s registered commit string at the prover's registration, some data opens `g`'s claims
-position to `o`'s bit there, under the registration's roots at SHA-512. With `tr` chosen by it, it is
-`WrongSet.Transports execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb sha512Msg Cd (stmtOf P kd desc q roots) (reg σ) u
-(wireAt Cc d) tr` at every `u`. -/
+position to `o`'s bit there, under the registration's roots at SHA-512. With `tr i o := ⟨i, vb.bit (vb.val o) (φ i), d⟩`,
+`d` chosen by it, it is `WrongSet.Transports execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb sha512Msg Cd
+(stmtOf P kd desc q roots) (reg σ) u φ tr` at every `u`, `kd`, `desc`, `q` and every `φ` that maps into `P.io u` only
+committed positions, its wire's (`φ i ∈ P.io u → posOf Cc (φ i) = i`). -/
 def _root_.Flock.Bridge.TransportsLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -114,15 +115,10 @@ def _root_.Flock.Bridge.TransportsLive : Prop :=
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
-    (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
-    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (qF qS : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
