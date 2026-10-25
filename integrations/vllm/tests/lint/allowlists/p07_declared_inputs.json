@@ -86,8 +86,6 @@
     {"file": "verity_vllm/check/replay/replay.py", "kind": "seed-default", "symbol": "Replayer.__init__", "detail": "seed"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "seed-default", "symbol": "tier_b", "detail": "seed"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "seed-default", "symbol": "tier_c", "detail": "seed"},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "broad-except", "symbol": "_continuation_rule", "detail": "except Exception"},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "broad-except", "symbol": "population", "detail": "except Exception"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "environ", "symbol": "<module>", "detail": "VERITY_REPLAY_FORK_GC_FREEZE"},
     {"file": "verity_vllm/check/replay/replay_dump.py", "kind": "environ", "symbol": "dump_row_words", "detail": "VERITY_REPLAY_DUMP_DIR"},
     {"file": "verity_vllm/check/replay/replay_dump.py", "kind": "environ", "symbol": "dump_row_words", "detail": "VERITY_REPLAY_DUMP_FAMILIES"},
