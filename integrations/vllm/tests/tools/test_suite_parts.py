@@ -78,7 +78,8 @@ def test_launch_runs_each_part_as_a_suites_run_of_its_modules():
         assert cmd[:at] == ["research", "run", "--on", "auto", "--mem-gb", str(SP.JOB_MEM_GB), "--cwd", "source"]
         assert cmd[at + 1:at + 3] == ["bash", "-lc"] and len(cmd) == at + 4
         assert f"P=$(python3 integrations/vllm/tools/suite_parts.py {k}/3) && test -n \"$P\" && " in cmd[-1]
-        assert cmd[-1].endswith("tools/verity/check/suites.py verity-vllm --jobs \"$(nproc)\" --fresh -- $P")
+        assert cmd[-1].endswith("tools/verity/check/suites.py verity-vllm"
+                                " --jobs \"$(nproc)\" --logs \"$OUT/logs\" --fresh -- $P")
 
 
 def test_a_parts_job_runs_its_modules_and_stops_on_an_empty_part(tmp_path):
@@ -108,3 +109,10 @@ def test_the_seconds_table_prints_from_a_report(tmp_path, capsys):
     (tmp_path / "r.json").write_text(json.dumps({"passed": {"tests/test_a.py::t": 25.0}}))
     assert SP.main(["--seconds", str(tmp_path / "r.json")]) == 0
     assert capsys.readouterr().out.strip() == '"tests/test_a.py": 25,'
+
+
+def test_the_seconds_table_sums_the_reports_of_every_part(tmp_path, capsys):
+    (tmp_path / "1.json").write_text(json.dumps({"passed": {"tests/test_a.py::t": 25.0, "tests/test_b.py::t": 12.0}}))
+    (tmp_path / "2.json").write_text(json.dumps({"passed": {"tests/test_b.py::u": 12.0}}))
+    assert SP.main(["--seconds", str(tmp_path / "1.json"), str(tmp_path / "2.json")]) == 0
+    assert capsys.readouterr().out.split("\n")[:2] == ['    "tests/test_a.py": 25,', '    "tests/test_b.py": 24,']

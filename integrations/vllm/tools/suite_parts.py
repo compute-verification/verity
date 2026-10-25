@@ -1,12 +1,12 @@
 """verity-vllm's tests in N parts, each a `suites.py verity-vllm` run of its own, so N jobs run the suite at once (VLLM-112).
 
-    python3 integrations/vllm/tools/suite_parts.py 2/6             part 2 of 6: its test modules, from integrations/vllm
-    python3 integrations/vllm/tools/suite_parts.py --list 6        each part's modules and estimated seconds
-    python3 integrations/vllm/tools/suite_parts.py launch 6        the 6 parts as `research run --on auto` jobs; their run ids
-    python3 integrations/vllm/tools/suite_parts.py launch 6 -- --fresh     with suites.py options (--fresh, --quick)
+    python3 integrations/vllm/tools/suite_parts.py 2/8             part 2 of 8: its test modules, from integrations/vllm
+    python3 integrations/vllm/tools/suite_parts.py --list 8        each part's modules and estimated seconds
+    python3 integrations/vllm/tools/suite_parts.py launch          the 8 parts as `research run --on auto` jobs; their run ids
+    python3 integrations/vllm/tools/suite_parts.py launch 8 -- --fresh     with suites.py options (--fresh, --quick)
 
-The suite is CPU-bound at about 7000 CPU-s (r20261025-164354-e533: 12926 tests, 6931 s of test time, its 5 xdist workers'
-7194 CPU-s), so one 4-CPU job can't run it in under about 29 min, and `tests/program` alone, one flat directory, is half of
+The suite is CPU-bound at about 12000 CPU-s on 4-CPU jobs (r20261025-202541-cb5f and its 5 sibling parts: 13462 tests,
+12320 CPU-s), so one 4-CPU job can't run it in under about 50 min, and `tests/program` alone, one flat directory, is half of
 it. A part is a list of test modules handed to pytest (`suites.py verity-vllm -- <modules>`), so the suite, its inputs, its
 guard and its configuration stay as they are. suites.py keys every pass on the pytest arguments (the suite's, each module's
 and the whole run's traced pass), so a part's pass answers only for that part, never for the suite or for another part.
@@ -18,6 +18,7 @@ unbalances the parts), so a stale table costs balance, never a test.
 
 `launch` starts each part as `research run --on auto` does for any suite run, with `--jobs` the CPUs the job holds:
 suites.py's default counts each process at its `TEST_PROCESS_GB` of 9 GB, which runs the suite in one process in a 16 GB job.
+Each part keeps its suites.py logs in its run's `out/logs`, whose `integrations_vllm.json` `--seconds` reads.
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ TESTPATHS = ("tests",)
 #: pytest's default `python_files` and `norecursedirs` (the suite's pyproject.toml sets neither)
 PYTHON_FILES = ("test_*.py", "*_test.py")
 NORECURSE = ("*.egg", ".*", "_darcs", "build", "CVS", "dist", "node_modules", "venv", "{arch}", "__pycache__")
-DEFAULT_PARTS = 6
+DEFAULT_PARTS = 8
 #: a module SECONDS doesn't name: about the mean of those it leaves out (2.1 s in r20261025-200148-c421)
 DEFAULT_S = 2.0
 #: each test module's seconds of test time in a full run, the modules over 20 s (r20261025-200148-c421: main 272d1a6f74 on
@@ -87,7 +88,8 @@ SECONDS: dict[str, float] = {
 #: what each part's job runs, from the repository's root; {k}/{n} names the part and {opts} the suites.py options. A part that
 #: lists nothing stops the job: suites.py with no modules would run the whole suite
 JOB = ("uv sync -q --all-packages --extra torch-cpu && P=$(python3 integrations/vllm/tools/suite_parts.py {k}/{n})"
-       " && test -n \"$P\" && uv run tools/verity/check/suites.py verity-vllm --jobs \"$(nproc)\"{opts} -- $P")
+       " && test -n \"$P\" && uv run tools/verity/check/suites.py verity-vllm"
+       " --jobs \"$(nproc)\" --logs \"$OUT/logs\"{opts} -- $P")
 #: the memory each part's job asks for: 4 CPUs' workers at the suite's worker_gb
 JOB_MEM_GB = 32
 
@@ -172,11 +174,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("n", nargs="?", type=int, default=DEFAULT_PARTS,
                     help=f"launch: the number of parts (default {DEFAULT_PARTS})")
     ap.add_argument("--list", type=int, metavar="N", help="each of N parts' modules and estimated seconds")
-    ap.add_argument("--seconds", type=Path, metavar="REPORT", help="SECONDS from a suites.py report of a full run")
+    ap.add_argument("--seconds", type=Path, nargs="+", metavar="REPORT",
+                    help="SECONDS from suites.py reports of a full run, or of every part of one")
     a = ap.parse_args(argv)
     if a.seconds:
         import json
-        for m, s in table(json.loads(a.seconds.read_text())).items():
+        passed = {k: v for r in a.seconds for k, v in json.loads(r.read_text()).get("passed", {}).items()}
+        for m, s in table({"passed": passed}).items():
             print(f'    "{m}": {s},')
         return 0
     if a.list:

@@ -84,7 +84,7 @@ parallel = true
 # r20261019-050410-3339), 12 GB on 8 (25 Oct, r20261025-200148-c421: test_codec's alias test took 6.3 GB over the 5.6 GB held
 # before it), 15.5 GB on 5 (r20261025-164354-e533). `--mem-gb`, or a job's memory cgroup, divides by this, but suites.py's default
 # `--jobs` counts 9 GB a process, so a 16 GB job runs the suite in one process unless `--jobs` says more. tools/suite_parts.py
-# runs it as 6 parts at once, each on its job's CPUs
+# runs it as 8 parts at once, each on its job's CPUs (a sixth on 4 workers: 8.5, 6.2, 6.0 and 3.5 GB, r20261025-202541-5a90)
 worker_gb = 8
 # the full suite took 10,187 s on 5 workers (r20261018-214339-1952), past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the
 # tests over 5 s (their `slow` marks)
