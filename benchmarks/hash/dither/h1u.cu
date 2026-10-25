@@ -632,11 +632,24 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #if H1U_JCS && (!H1U_JX || H1U_JN2 || (H1U_JPROBE & 1) || (H1U_JCS != 2 && H1U_JCS != 4))
 #error "H1U_JCS (2 or 4) shares JX's column blocks, which JN2 and the hash-free probe don't hash one at a time"
 #endif
-// a JCS unit's column-block group: its 2 r buffers (set s's block e at s % 2 * r + e), its rank, r = 1 << lr, and its
-// named barrier
+// H1U_JSB = 1 (with JCS): a column block's B fragments (B + c + U) are the same in its r warps, so they share them too:
+// in each group of NS segments, the warp of rank e loads B for and unpacks the next group's segments jj with jj % r = e
+// and stores their fragments in the group's shared slots (double-buffered by group where r > 1); the warps meet once a
+// group and read every segment's fragments back. B leaves the load ring; the same fragments and receipts
+#ifndef H1U_JSB
+#define H1U_JSB 0
+#endif
+#if H1U_JSB && !H1U_JCS
+#error "H1U_JSB shares a JCS column block's B fragments, so it needs H1U_JCS"
+#endif
+constexpr int JSB_NS = H1U_JPD + H1U_JRING;
+// a JCS unit's column-block group: its 2 r buffers (set s's block e at s % 2 * r + e), its rank, r = 1 << lr, its
+// named barrier and (H1U_JSB) its fragment slots: segment jj of group G at sb[(r > 1 ? G % 2 : 0) NS + jj], lane's
+// eight words as two uint4
 struct JShare {
   u32 (*buf)[32][17];
   u32 rank, lr, bar;
+  uint4 (*sb)[2][32];
 };
 struct alignas(16) WarpSmemJC {
   NoiseMid nm;
@@ -716,6 +729,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr bool PI = RW && H1U_JPI;
   static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
   constexpr bool PBK = RW && (H1U_JPROBE & 2), PAK = RW && (H1U_JPROBE & 4);
+  constexpr bool SB = CS && H1U_JSB;
+  static_assert(!SB || (NS == JSB_NS && 16 % NS == 0 && !PBK), "H1U_JSB's groups are the ring's NS segments of a chunk");
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -839,7 +854,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       } else {
         a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + ka);
       }
-      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kb);
+      if constexpr (!SB) b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kb);
     }
   };
   // PI: the rows' pointers at segment PD of the ring pass to come (A's one under XS), the L2 prefetches' at segment 16
@@ -870,13 +885,52 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       } else {
         a[r] = ld2<H1U_L2HINT>(par[r] + 32 * jo);
       }
-      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(pbr[r] + 32 * jo);
+      if constexpr (!SB) b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(pbr[r] + 32 * jo);
     }
   };
   if (PF) {
 #pragma unroll
     for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
   }
+  // SB: B of the warp's segments of the group from segment sn (jj % r = rank), their fragments (with the column bits cb
+  // of their chunk, from its segment jn) put in the group's slots, and the column blocks of chunk-loop step i
+  uint2 bn[SB ? NS : 1][4];
+  const auto sb_load = [&](u32 sn) {
+#pragma unroll
+    for (int jj = 0; jj < NS; ++jj)
+      if ((jj & ((1u << js.lr) - 1)) == js.rank)
+#pragma unroll
+        for (int r = 0; r < 4; ++r)
+          bn[jj][r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + 32 * (sn + jj) + 8 * q);
+  };
+  const auto sb_put = [&](u32 sn, const uint8_t* cb, u32 jn) {
+    uint4(*d)[2][32] = js.sb + (js.lr ? ((sn / NS) & 1) * NS : 0);
+#pragma unroll
+    for (int jj = 0; jj < NS; ++jj)
+      if ((jj & ((1u << js.lr) - 1)) == js.rank) {
+        u32 f[4][2];
+#pragma unroll
+        for (int nt = 0; nt < 4; ++nt) {
+          const u32 col = 8 * nt + g;
+          const uint2 b8 = bn[jj][nt];
+          const u32 cb8 = cb[col * 68 + 4 * (jn + jj) + q];
+          const u32 c0 = expand4(cb8 & 15u), c1 = expand4(cb8 >> 4);
+          if constexpr (BW) {
+            // the masks from U here, once a put, rather than 16 registers held for the unit
+            const u32 l7 = ulo[nt] & 0x7F7F7F7Fu, h7 = uhi[nt] & 0x7F7F7F7Fu;
+            const u32 l8 = ~ulo[nt] & 0x80808080u, h8 = ~uhi[nt] & 0x80808080u;
+            f[nt][0] = (((b8.x & 0x7F7F7F7Fu) + l7 + c0) ^ (b8.x & 0x80808080u)) ^ l8;
+            f[nt][1] = (((b8.y & 0x7F7F7F7Fu) + h7 + c1) ^ (b8.y & 0x80808080u)) ^ h8;
+          } else {
+            f[nt][0] = addw(b8.x, ulo[nt] + c0);
+            f[nt][1] = addw(b8.y, uhi[nt] + c1);
+          }
+        }
+        d[jj][0][lane] = make_uint4(f[0][0], f[0][1], f[1][0], f[1][1]);
+        d[jj][1][lane] = make_uint4(f[2][0], f[2][1], f[3][0], f[3][1]);
+      }
+  };
+  const auto sb_cw = [&](u32 i) { return js.buf[(((i >> js.lr) & 1) << js.lr) + (i & ((1u << js.lr) - 1))]; };
   // CS: set st's blocks i = r st + e (pass i's, i = 0 the coins' block), lane's e and column (32 / r of them a warp)
   const auto cs_hash = [&](u32 st) {
     const u32 cl = 5 - js.lr, e = lane >> cl, col = (js.rank << cl) + (lane & ((1u << cl) - 1)), i = (st << js.lr) + e;
@@ -1068,6 +1122,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           uhi8[nt] = ~uhi[nt] & 0x80808080u;
         }
       }
+      if constexpr (SB) {
+        if (chunks) {
+          sb_load(0);
+          sb_put(0, reinterpret_cast<const uint8_t*>(&sb_cw(1)[0][0]), 0);
+          js_sync(js);
+        }
+      }
       continue;
     }
     const uint8_t* rbits = nullptr;
@@ -1078,6 +1139,9 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     }
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
+      if constexpr (SB) {
+        if (16 * blk + j0 + NS < ks) sb_load(16 * blk + j0 + NS);
+      }
 #pragma unroll
       for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
@@ -1144,8 +1208,20 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           }
         }
         u32 wbf[OS ? 4 : 1][2], cf[PL ? 4 : 1][2], b0[PL ? 4 : 1][2];  // PL: c as 0/1 B fragments, B itself
+        if constexpr (SB) {
+          const uint4(*d)[2][32] = js.sb + (js.lr ? (((16 * blk + j0) / NS) & 1) * NS : 0);
+          const uint4 v0 = d[jj][0][lane], v1 = d[jj][1][lane];
+          bf[0][0] = v0.x;
+          bf[0][1] = v0.y;
+          bf[1][0] = v0.z;
+          bf[1][1] = v0.w;
+          bf[2][0] = v1.x;
+          bf[2][1] = v1.y;
+          bf[3][0] = v1.z;
+          bf[3][1] = v1.w;
+        }
 #pragma unroll
-        for (int nt = 0; nt < 4; ++nt) {
+        for (int nt = 0; nt < (SB ? 0 : 4); ++nt) {
           const u32 col = 8 * nt + g;
           const uint2 b8 = cw[nt];
           const u32 cb8 = cbits[col * 68 + 4 * j + q];
@@ -1206,6 +1282,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         for (int r = 0; r < 4; ++r) pbr[r] += PBK ? 0 : 32 * NS;
         pfa += ASEG * NS;
         pfb += 32 * NS;
+      }
+      if constexpr (SB) {
+        const u32 sn = 16 * blk + j0 + NS, jn = (j0 + NS) & 15;
+        if (sn < ks) {
+          sb_put(sn, jn ? cbits : reinterpret_cast<const uint8_t*>(&sb_cw(it + 1)[0][0]), jn);
+          js_sync(js);
+        }
       }
     }
     __syncwarp();
@@ -2840,10 +2923,10 @@ __device__ __forceinline__ u32 nth_rb(const uint8_t* __restrict__ live, u32 nrb,
 }
 
 // h1umj_one under H1U_JCS: slot gu of its call's tiles (nl live row blocks, r = 1 << lr of them a tile; r = 1 is the
-// unit gu itself), its group's buffers in jcb
+// unit gu itself), its group's buffers in jcb and (H1U_JSB) its fragment slots in jsb
 __device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                          const uint8_t* __restrict__ live, u32 gu, u32 nl, u32 lr, WarpSmemJC& S,
-                                         u32 (*jcb)[32][17]) {
+                                         u32 (*jcb)[32][17], uint4 (*jsb)[2][32]) {
   u32 lo = 0, hi = ncalls;
   while (hi - lo > 1) {
     const u32 mid = (lo + hi) >> 1;
@@ -2862,7 +2945,7 @@ __device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 n
       u = nth_rb(live, nrb, d / ncb, false) * ncb + d % ncb;
     }
   }
-  const JShare js{jcb + ((2 * k) << lr), wp / C, lr, 1 + k};
+  const JShare js{jcb + ((2 * k) << lr), wp / C, lr, 1 + k, H1U_JSB ? jsb + (lr ? 2 * k : k) * JSB_NS : nullptr};
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, false, true, WarpSmemJC, true>(
         c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, S, js);
@@ -2883,6 +2966,12 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   if (!sm_keep<CAP, true>(smid, q, den, cap, next)) return;
   __shared__ WarpSmemJC smem[WARPS];
   __shared__ u32 jcb[2 * WARPS][32][17];
+#if H1U_JSB
+  // a group's slots: 2 NS where r > 1 (WARPS / r groups), NS where r = 1
+  __shared__ uint4 jsb[WARPS * JSB_NS][2][32];
+#else
+  uint4(*jsb)[2][32] = nullptr;
+#endif
   __shared__ u32 claim;
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0, nrb = M / 32;
   // r: H1U_JCS live row blocks a tile, else 2, else 1, the most that divides them; more than 1 only where every call's
@@ -2904,7 +2993,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
     const u32 g0 = claim, gu = g0 + wp;
     if (g0 >= total) break;
     if (gu >= total) continue;
-    h1umj_cs(calls, ncalls, M, live, gu, nl, lr, smem[wp], jcb);
+    h1umj_cs(calls, ncalls, M, live, gu, nl, lr, smem[wp], jcb, jsb);
     __syncwarp();
   }
 #else
