@@ -68,6 +68,8 @@ QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
 #: a comment ruff reads as a ``noqa``: the hash, then ``noqa`` or ``noqa: CODE, ...``, or a file's ``ruff: noqa`` (or ``flake8:``)
 NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
+#: a unified diff's hunk header: the new side's first line and its count (1 when left out)
+HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
 
@@ -323,19 +325,31 @@ def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
     return [(n, lines[n - 1].strip()) for n in sorted(rows)]
 
 
+def added_rows(lo: str, hi: str, path: str) -> set[int]:
+    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds."""
+    rows: set[int] = set()
+    for m in HUNK.finditer(git("diff", "--no-renames", "-U0", lo, hi, "--", path)):
+        rows.update(range(int(m[1]), int(m[1]) + int(m[2] or 1)))
+    return rows
+
+
 def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]:
     """(each ``noqa`` line the change adds, as ``file:line: text``; how many it adds; how many it removes) over the
     ``*.py`` files it changes under ``integrations/vllm``.  Lines are matched by their stripped text across those files, so
-    one that moves, within a file or to another, is neither."""
+    one that moves, within a file or to another, is neither.  Of lines with the same text, those the diff adds are named
+    first, so a new copy of a common line (a bare ``noqa: BLE001``) is named where it was added."""
     files = [f for f in diff if f.startswith(f"{INTEGRATION}/") and f.endswith((".py", ".pyi"))]
     was = Counter(text for f in files for _, text in noqa_lines(lo, f))
     now = [(f, n, text) for f in files for n, text in noqa_lines(hi, f)]
     added, removed = Counter(t for *_, t in now) - was, was - Counter(t for *_, t in now)
-    named, left = [], Counter(added)
-    for f, n, text in now:
-        if left[text]:
-            left[text] -= 1
-            named.append(f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}")
+    fresh = {f: added_rows(lo, hi, f) for f in {f for f, _, text in now if added[text]}}
+    left, picked = Counter(added), set()
+    for new_first in (True, False):
+        for f, n, text in now:
+            if left[text] and (f, n) not in picked and (n in fresh[f]) == new_first:
+                left[text] -= 1
+                picked.add((f, n))
+    named = [f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}" for f, n, text in now if (f, n) in picked]
     return named, sum(added.values()), sum(removed.values())
 
 

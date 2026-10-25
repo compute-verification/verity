@@ -1,10 +1,10 @@
 """`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
-merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's count), a new, moved or renamed ratchet, the changes
-it doesn't judge, the base's lint code run on the change's tree (a loosened, deleted or bypassed lint fails, naming what it
-still finds; a tightened one passes once its findings are fixed), the ruff lint rerun with the base's config and pin (a
-loosened config, lint or pin fails), the `noqa` count (no change adds more than it removes; a moved one is kept; only
-comments count), the exemptions (a revert, a pure move the base's move_check certifies), and its
-command line."""
+merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's
+count), a new, moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
+loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
+ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
+than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
+(a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
 
 import importlib.util
@@ -204,7 +204,7 @@ def test_merge_bases_that_conflict_are_refused_with_how_to_leave_one(repo):
     repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "merge side", "side")
     repo.git("checkout", "-q", "main")
     repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "Queue: #7 side", "side")
-    with pytest.raises(G.GitError, match="don't merge cleanly, so it has no one base to be judged against: merge .* into the branch"):
+    with pytest.raises(G.GitError, match="don't merge cleanly, so it has no one base to be judged against: merge .* into the"):
         G.gate("main", "pr")
     repo.git("checkout", "-q", "pr")
     repo.git("merge", "-q", "--no-ff", "-m", "merge main again", "main")
@@ -438,6 +438,15 @@ def test_a_change_adds_no_more_noqa_lines_than_it_removes(repo):
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("passed", 1, 1)
     assert c["why"] == "1 `# noqa` line(s) added, 1 removed"
+
+
+def test_a_new_copy_of_a_noqa_line_is_named_where_the_diff_adds_it(repo):
+    bare = "    except Exception:  # noqa: BLE001"
+    repo.commit("one", {A_PY: f"try:\n    A = 1\n{bare}\n    A = 0\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("another", {A_PY: f"try:\n    A = 1\n{bare}\n    A = 0\ntry:\n    B = 1\n{bare}\n    B = 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["fix"]) == ("failed", 1, [f"verity_vllm/a.py:7: {bare.strip()}"])
 
 
 def test_a_noqa_that_moves_with_its_code_is_kept_and_a_file_wide_one_counts(repo):
