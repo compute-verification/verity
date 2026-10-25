@@ -4,8 +4,8 @@
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), the public
   default seed a request without one is sampled under (`engine.served_seed`), and ℓ, the public cap on the advice's length in bits.
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
-  the state of the requests the window carries across its open and close), private: what serving decided that nothing registered
-  predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
+  the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
+  that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
   given as the warden's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
@@ -16,9 +16,10 @@
   T, C)`, under the policy its body names (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
   (`output_len` − 1), C its prefix-cache hit (the cached request wrapper: every layer's first C key and value rows are its `prefix`
   input, the producers' rows, which GP-01 records per block). The one row async scheduling runs past a request's last kept output
-  samples nothing kept: it is `discarded`, in no Program. A request's (LP, T, C, policy) reads its own advice record and body
-  alone, never its batch; requests of one (LP, T, C, policy) share one Program. A chunked or preempted request compiles to the
-  same Program: chunking and preemption are advice no Program reads.
+  samples nothing kept: it is `discarded`, in no Program; a request its client aborted (finish `abort`) compiles as one that
+  stopped at its last kept output, since the endpoint frees it after the step in flight. A request's (LP, T, C, policy) reads
+  its own advice record and body alone, never its batch; requests of one (LP, T, C, policy) share one Program. A chunked or
+  preempted request compiles to the same Program: chunking and preemption are advice no Program reads.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
   The Program holds each of its positions C..LP+T-1 once, in the row that first reaches it: a chunked prefill's chunks are its
@@ -263,7 +264,8 @@ def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, v
 
 def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tuple[int, ...], dict]:
     """Request `i`'s certified prompt and sampling parameters, held to its advice record: the prompt is `prompt_len` token ids of
-    the vocabulary, and its `max_tokens` bounds `output_len`, reached exactly when it finished on length."""
+    the vocabulary, and its `max_tokens` bounds `output_len`, reached exactly when it finished on length (an abort is before it:
+    at its cap vLLM has finished it on length, and the abort finds nothing to free)."""
     if not isinstance(body, Mapping) or any(type(k) is not str for k in body):
         raise Unexpressible(f"request {i} ({q.id!r}): no certified request body carries its id")
     prompt = body.get("prompt")
@@ -276,7 +278,7 @@ def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
     m = params.get("max_tokens")
     if type(m) is not int or m < 1:
         raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs the cap in the body, a positive integer)")
-    if q.output_len > m or (q.finish == "length" and q.output_len != m):
+    if q.output_len > m or (q.finish == "length" and q.output_len != m) or (q.finish == "abort" and q.output_len == m):
         raise Unexpressible(f"request {i}: {q.output_len} kept outputs, finished on {q.finish}, against its max_tokens {m}")
     if q.finish == "eos" and params.get("ignore_eos") is True:
         raise Unexpressible(f"request {i}: finished on a stop token with ignore_eos set")

@@ -1,5 +1,6 @@
 """`window_advice`: a Commit window that carries nothing is I1 v0's, byte for byte; one that carries a request across its open or
-close is version 1, round-trips, and opens only where the last window closed."""
+close is version 1, round-trips, and opens only where the last window closed; one that aborts a request is version 2, charged a
+bit a request more, and every window has the one encoding."""
 from __future__ import annotations
 
 import pytest
@@ -70,5 +71,63 @@ def test_decode_refuses_a_version_1_string_version_0_can_say(monkeypatch):
     data = WA.encode(a)
     monkeypatch.undo()
     assert data[0] == WA.VERSION
-    with pytest.raises(WA.MalformedAdvice, match="carries nothing in or out is I1 v0's"):
+    with pytest.raises(WA.MalformedAdvice, match="carries nothing in or out and aborts nothing is I1 v0's"):
         WA.decode(data)
+
+
+# a, aborted after 2 outputs: the endpoint frees it after the step in flight, whose row for it is the lag row past its last output
+ROWS = _steps((0, 0, 3), (0, 3, 1), (0, 4, 1))
+ABORTED = WA.Advice((WA.RequestAdvice("a", 3, 2, "abort"),), ROWS, (0, 1))
+STOPPED = WA.Advice((WA.RequestAdvice("a", 3, 2, "eos"),), ROWS, (0, 1))
+
+
+def test_an_aborted_request_is_version_2_round_trips_and_is_charged_its_finish_bits():
+    assert STOPPED.version == 0 and ABORTED.version == WA.ABORTS
+    data = WA.encode(ABORTED)
+    assert data[0] == WA.ABORTS and WA.decode(data) == ABORTED and WA.encode(WA.decode(data)) == data
+    assert WA.from_json(WA.to_json(ABORTED)) == ABORTED and WA.to_json(ABORTED)["requests"][0]["finish"] == "abort"
+    # version 1's header (n_carried, a 6-bit width and no bits) and one finish bit more a request than I1 v0's
+    assert WA.total_bits(ABORTED) == WA.total_bits(STOPPED) + 6 + 1
+    assert sum(WA.bits_by_window(ABORTED, 1).values()) == WA.total_bits(ABORTED)
+    with pytest.raises(WA.MalformedAdvice, match="aborts one, isn't I1 v0 advice"):
+        ABORTED.i1()
+    with pytest.raises(WA.MalformedAdvice, match="finish must be one of"):
+        I1.RequestAdvice("a", 3, 2, "abort")
+
+
+def test_an_aborted_request_is_freed_at_its_last_row_and_a_row_past_it_is_refused():
+    assert WA.close(ABORTED) == ()
+    with pytest.raises(WA.MalformedAdvice, match="past request 0's 5 known tokens"):
+        WA.Advice((WA.RequestAdvice("a", 3, 2, "abort"),), _steps((0, 0, 3), (0, 3, 1), (0, 4, 1), (0, 5, 1)), (0, 1))
+
+
+def test_a_carried_request_aborted_in_the_next_window_follows_its_record():
+    aborted = WA.RequestAdvice("a", 3, 3, "abort")
+    w1 = WA.Advice((aborted,), _steps((0, 0, 3), (0, 3, 1)), (0, 1))
+    w2 = WA.Advice((aborted,), _steps((0, 4, 1), (0, 5, 1)), (0,), (AT_CLOSE,))
+    assert w1.version == w2.version == WA.ABORTS and WA.close(w1) == (WA.Close(0, AT_CLOSE, True),) and WA.close(w2) == ()
+    WA.follows(w1, w2)
+    assert WA.decode(WA.encode(w2)) == w2
+    with pytest.raises(WA.MalformedAdvice, match="not as the last window left it"):
+        WA.follows(w1, WA.Advice((WA.RequestAdvice("a", 3, 3, "eos"),), w2.steps, w2.release, w2.carried))
+
+
+def test_a_window_built_of_i1_records_is_the_window_of_its_own():
+    assert WA.Advice((I1.RequestAdvice("a", 3, 2, "eos"),), ROWS, (0, 1)) == STOPPED
+    assert type(WA.decode(WA.encode(STOPPED)).requests[0]) is WA.RequestAdvice
+
+
+def test_decode_refuses_a_version_2_string_that_aborts_nothing_and_a_finish_of_3(monkeypatch):
+    monkeypatch.setattr(WA.Advice, "version", property(lambda self: WA.ABORTS))
+    alone, carried = WA.encode(STOPPED), WA.encode(W2)
+    monkeypatch.undo()
+    assert alone[0] == carried[0] == WA.ABORTS
+    with pytest.raises(WA.MalformedAdvice, match="aborts nothing is I1 v0's"):
+        WA.decode(alone)
+    with pytest.raises(WA.MalformedAdvice, match="aborts no request is version 1, not 2"):
+        WA.decode(carried)
+    monkeypatch.setattr(WA, "FINISHES", ("eos", "length", "", "abort"))
+    three = WA.encode(ABORTED)
+    monkeypatch.undo()
+    with pytest.raises(WA.MalformedAdvice, match="request 0's finish 3 names none of"):
+        WA.decode(three)

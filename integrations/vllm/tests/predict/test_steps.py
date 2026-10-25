@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.predict import batch as B
 from verity_vllm.predict.build import Unexpressible, _Specs, build_program, model_shape
 from verity_vllm.predict.common import _arr
@@ -193,8 +194,8 @@ def test_ill_formed_advice_is_refused_by_name():
         compile_steps(reg, data[: len(data) // 2], ingress)
     with pytest.raises(Unexpressible, match=rf"the advice is {8 * len(data)} bits, over the registered cap ℓ = {8 * len(data) - 8} bits"):
         compile_steps(_registered(cap_bits=8 * len(data) - 8), data, ingress)
-    with pytest.raises(Unexpressible, match="ill-formed advice: window advice version 2, not 0 or 1"):
-        compile_steps(reg, bytes([2]) + data[1:], ingress)
+    with pytest.raises(Unexpressible, match="ill-formed advice: window advice version 3, not 0, 1 or 2"):
+        compile_steps(reg, bytes([3]) + data[1:], ingress)
     with pytest.raises(Unexpressible, match="not a bytearray"):
         compile_steps(reg, bytearray(data), ingress)
     with pytest.raises(ValueError, match="the cap ℓ is a whole number of bits"):
@@ -417,6 +418,20 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
     assert c.steps[3] == [] and c.discarded == [(3, 0, 10, 1)] and c.summary()["discarded"] == [[3, 0, 10, 1]]
     c = compile_steps(reg, *_session([(8, 4, GREEDY)], steps))
     assert (c.requests[0].T, c.discarded, len(c.steps[3])) == (3, [], 1)
+
+
+def test_an_aborted_request_compiles_as_one_stopped_at_its_last_kept_output():
+    """Request 0's client aborted it after 3 outputs, and the endpoint freed it after the step in flight, whose row (step 3) ran past
+    them: it compiles to the Program of a stop at 3 outputs, that row discarded, with ignore_eos set or not. At its max_tokens vLLM
+    has finished it on length, so an abort there is refused."""
+    reg = _registered()
+    stopped, ingress = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]])
+    aborted = WA.Advice((WA.RequestAdvice("q0", 8, 3, "abort"),), stopped.steps, stopped.release)
+    c, d = compile_steps(reg, stopped, ingress), compile_steps(reg, aborted, {"q0": {**ingress["q0"], "ignore_eos": True}})
+    assert [(u.digest, u.T) for u in d.requests] == [(u.digest, u.T) for u in c.requests]
+    assert d.steps == c.steps and d.discarded == c.discarded == [(3, 0, 10, 1)]
+    with pytest.raises(Unexpressible, match="request 0: 3 kept outputs, finished on abort, against its max_tokens 3"):
+        compile_steps(reg, aborted, {"q0": {**ingress["q0"], "max_tokens": 3}})
 
 
 def test_partial_refuses_request_by_request():
