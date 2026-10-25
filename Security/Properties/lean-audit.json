@@ -254,7 +254,8 @@
     "Properties.NciDesc"
    ],
    "except": [],
-   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof"
+   "why": "the description-sized check's property is stated over the code it is about (NciCheck.Desc) and the NCI properties it relates it to, never over a proof",
+   "sealed": true
   },
   "Properties.CertifierDevice": {
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
@@ -319,7 +320,8 @@
     "Properties.RemoteAudit.Line.Record",
     "Properties.RemoteAudit.Schedule"
    ],
-   "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
+   "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
+   "sealed": true
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
