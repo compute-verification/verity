@@ -428,6 +428,21 @@ def port_refusals(inst: IT.Instance, link: Link, seed: bytes = b"w") -> list[str
     return [WR.refusal(ports[f"{IT.PORT}[{s}]"], dom, *port_statement(inst, s)) for s in range(inst.shape.S)]
 
 
+def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
+    """REDTEAM phase 19 #2: `warden_rows.refusal` climbs under the `dom` it is handed, and the Lean verifier under its
+    port's own `domain` and `leaves`, so a port naming another domain or leaf count (another Commit's, say) gets
+    another verdict there: the host's read refuses to stand in for it rather than answer for the domain it was
+    handed."""
+    link = small()
+    inst, count = commit(SMALL, link, 0), len(link.port)
+    dom = IT.domain(_h(b"portw"), count)
+    port_ = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, SMALL.P)["port[0]"]
+    assert WR.refusal(port_, dom, *port_statement(inst, 0)) is None
+    for wrong in ({"domain": _h(b"another domain").hex()}, {"leaves": 2 * count}):
+        with pytest.raises(ValueError, match="names"):
+            WR.refusal(port_ | wrong, dom, *port_statement(inst, 0))
+
+
 def test_the_ports_reads_are_the_commits_registration():
     """The fake Commit's port tree is `verity.ml.commitments.advice`'s registration of its rows (`hm96-sha512/row/v2`
     leaves under `domain`), the form the served rows' registration takes, so its root is one the Lean verifier's
