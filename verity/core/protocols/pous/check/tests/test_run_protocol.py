@@ -259,7 +259,7 @@ def test_drawn_runs_agree(test_server) -> None:
     framed = st.builds(lambda c, m: m(c), st.builds(case_of, documents(rs)), st.sampled_from(FRAMING))
     setup_edited = st.builds(lambda c, m, x: m(c, x), st.builds(case_of, st.builds(Run.doc, rs)),
                              st.sampled_from(SETUP_EDITS), st.integers(0, 2 ** 16))
-    port = D.ProtocolPort(EXE, TEST.reference, st.one_of(cases, cases, framed, setup_edited), package=LEAN,
+    port = D.ProtocolPort(EXE, TEST.reference, st.one_of(cases, cases, cases, framed, setup_edited), package=LEAN,
                           serve=("--test", "serve"))
-    stats = D.run(port, examples=300, server=test_server)
+    stats = D.run(port, examples=400, server=test_server)
     assert stats.counts.get("accept", 0) > 20 and stats.counts.get("reject", 0) > 100, stats
