@@ -250,7 +250,7 @@ theorem acc_sclose {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s' 
     rw [h3 u] at h ⊢
     split at h
     · rename_i hc
-      rw [if_pos hc]
+      rw [ite_eq_left hc]
       simp only [drawW] at h ⊢
       split at h
       · rename_i hE
@@ -392,9 +392,10 @@ theorem drawLink_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Resu
       rw [(plans_frz hf (hall _ hu)).2, hsh _ hu, (plans_frz hf (hall _ hu)).1,
         passesBefore_congr s s' (c * g) (c * g + j0)
           (fun j hj => hpl _ (List.mem_map.2 ⟨j, List.mem_range.2 (by omega), rfl⟩))]
-  · rcases sstep_of hg he with ⟨t, now, rfl, hcl⟩ | ⟨hn, hs⟩
-    swap
-    · exfalso; rw [keep_dr (keep_nonclose hn hs)] at hc'; exact h0 hc'
+  · obtain ⟨t, now, rfl, hcl⟩ : ∃ t now, e = .close t now ∧ Shared.close g s t now = .ok (r, s') := by
+      rcases sstep_of hg he with h | ⟨hn, hs⟩
+      · exact h
+      · exfalso; rw [keep_dr (keep_nonclose hn hs)] at hc'; exact h0 hc'
     rcases sclose_spec hcl with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, hrd, -, -, -, -, -, -, hdraws, hs'⟩
     · exact (h0 hc').elim
     · exfalso
@@ -512,7 +513,8 @@ theorem foldl_append_eq (l : List Nat) (f : Nat → Array Nat) : ∀ acc : Array
     apply Array.ext'
     simp
 
-theorem lengthsOf_draw {g : Nat} {s : State} (hs : ∀ u, s.windows[u]!.plans.size = s.windows[u]!.roots.size)
+theorem lengthsOf_draw {g : Nat} {s : State}
+    (hs : ∀ u : Nat, s.windows[u]!.plans.size = s.windows[u]!.roots.size)
     (c : Nat) : lengthsOf (drawRecords g s c) = drawLengths g s c := by
   have key : ∀ L : List Nat, (L.map s.record).flatMap (fun w => (w.passes.map (·.plan.length)).toList) =
       L.flatMap (fun u => (s.windows[u]!.plans.map (·.length)).toList) := by
@@ -528,7 +530,8 @@ theorem passesBefore_succ (s : State) (first k : Nat) :
     passesBefore s first (first + (k + 1)) = passesBefore s first (first + k) + s.windows[first + k]!.plans.size := by
   simp [passesBefore, List.range_succ, List.sum_append]
 
-theorem passCount_draw {g : Nat} {s : State} (hs : ∀ u, s.windows[u]!.plans.size = s.windows[u]!.roots.size)
+theorem passCount_draw {g : Nat} {s : State}
+    (hs : ∀ u : Nat, s.windows[u]!.plans.size = s.windows[u]!.roots.size)
     (c : Nat) : ∀ k, k ≤ (drawRecords g s c).length →
       passCount ((drawRecords g s c).take k) = passesBefore s (c * g) (c * g + k) := by
   intro k
@@ -549,7 +552,7 @@ theorem sessionDrawsRecords : SessionDrawsRecords := by
   obtain ⟨⟨⟨hInv, -, -⟩, -⟩, -, hp, hr, hco, hdig, hL, hA⟩ :=
     srun_inv g (LinkInv g params reg coins) (fun _ _ _ _ hx he => linkInv_step hg hx he) _ events rs s
       (linkInv_init g params reg coins appendCoins notBeforeNs hm) h
-  have hs : ∀ u, s.windows[u]!.plans.size = s.windows[u]!.roots.size := sizes_all hInv
+  have hs : ∀ u : Nat, s.windows[u]!.plans.size = s.windows[u]!.roots.size := sizes_all hInv
   obtain ⟨drawn, hdraws, hsh⟩ := hL c hc
   refine ⟨drawn, by rw [lengthsOf_draw hs, ← hdig, ← hco, ← hp]; exact hdraws, fun k hk => ?_⟩
   have hlen := length_drawRecords (g := g) s c
