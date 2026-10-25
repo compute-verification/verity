@@ -536,7 +536,7 @@ theorem ref_get (node : Flock.Program.Node) (i m t : Nat) :
 
 /-- **`RootSet` at a root node calling a primitive**: its positions name exactly the gates its gates read, none of
 them its own, given the node's references in range and resolving below it (`hLow`), its operands' indices in range
-(`hOp`), and every reference read by some member (`hCov`). -/
+(`hOp`), and every reference read by some member unless it is a batch of none (`hCov`). -/
 theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hc : circuitOf P = .ok c)
     (hl : Desc.rootLaidOut P = true) (hL : Laid P P.root) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
@@ -549,7 +549,7 @@ theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hc : 
     (hLow : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∀ a,
       Flock.Program.resolve P P.rootScope ((node.args[i]!).seq.get t) = .ok a → a < (rootOffs P)[k]!)
     (hOp : Resolve.OpOk node (P.defs[node.fn]!))
-    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+    (hCov : ¬ (node.form == .batch && node.n == 0) = true → ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
       ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
@@ -629,7 +629,7 @@ theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hc : 
     obtain ⟨v, hv, hxv⟩ := agree_src (hag i hi') hx
     obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hv
     have ht' := List.mem_range.1 ht
-    obtain ⟨m, hm, t', ht'', hidx⟩ := hCov i hi' t ht'
+    obtain ⟨m, hm, t', ht'', hidx⟩ := hCov hb i hi' t ht'
     have hops := (hloc m hm _).1 (locR_root hc (g := (rootOffs P)[k]! + m) (by omega))
     obtain ⟨a', ha'⟩ := operands_ok P _ _ m hops i hi' t' ht''
     rw [ref_get, hidx] at ha'
@@ -3122,14 +3122,14 @@ theorem good_reached (P : Prog) (hF : RootFacts P) : ∀ sc, Resolve.Good P sc �
 
 /-- **`RootSet` at a root node calling a primitive**, `rootSet_prim`'s premises from the decoder's facts (`RootFacts`,
 `WidthFacts`, `Desc.walkable`) and resolution staying below the node (`Resolve.start_ok`, `Resolve.resolve_lt`), but
-that every reference of the node is read by a member (`hCov`). -/
+that every reference of the node is read by a member unless it is a batch of none (`hCov`). -/
 theorem rootSet_prim_of (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) (hwk : Desc.walkable P = true) (c : Circuit) (hc : circuitOf P = .ok c)
     (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
     (hp : (P.defs[node.fn]!).prim = true) (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs)
     (hgt : ∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w)
-    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+    (hCov : ¬ (node.form == .batch && node.n == 0) = true → ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
       ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
@@ -3176,14 +3176,15 @@ theorem rootSet_prim_of (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = 
   exact rootSet_prim P memo c hc hl hL hk hn hp hG hrs hgt hD hA hR hLow hOp hCov
 
 /-- **`RootSet` from two statements of one root node**, with the decoder's facts (`RootFacts`, `WidthFacts`): at one
-calling a primitive, that every reference of its arguments is read by a member (`rootSet_prim_of`); at one calling a
+calling a primitive, that every reference of its arguments is read by a member unless it is a batch of none
+(`rootSet_prim_of`); at one calling a
 composite, `NodeSet` at the root (`rootSet_comp`). -/
 theorem rootSet_of
     (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
     (hWF : ∀ bytes P, Flock.Program.decode bytes = .ok P → Desc.walkable P = true → WidthFacts P)
     (hCov : ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
       Desc.walkable P = true → ∀ k < nodeCount P, ∀ node, (P.defs[P.root]!).body.nodes[k]! = node →
-      (P.defs[node.fn]!).prim = true →
+      (P.defs[node.fn]!).prim = true → ¬ (node.form == .batch && node.n == 0) = true →
       ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
         ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
           ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
@@ -3208,7 +3209,8 @@ theorem rootSet_of
 
 /-- **`NodeSet` at a node calling a primitive**, in any activation: its positions name outside it exactly what its
 gates read there, given its arguments' references in range, its operands' indices in range (`hOp`) and every reference
-read by a member (`hCov`), and each position it reads resolves, the member's gate being located (`Located`). -/
+read by a member unless it is a batch of none (`hCov`), and each position it reads resolves, the member's gate being
+located (`Located`). -/
 theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : Laid P d)
     (hkb : k < (P.defs[d]!).body.nodes.size) (hend : (P.defs[d]!).body.offsets[k + 1]! ≤ (P.defs[d]!).gates)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (ctxOf P memo d).node k = .ok node)
@@ -3218,7 +3220,7 @@ theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : La
     (hA : ∀ i < node.args.size, ArgOk (ctxOf P memo d) k i)
     (hR : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, Resolve.RefOk P d k ((node.args[i]!).seq.get t))
     (hOp : Resolve.OpOk node (P.defs[node.fn]!))
-    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+    (hCov : ¬ (node.form == .batch && node.n == 0) = true → ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
       ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
@@ -3281,7 +3283,7 @@ theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : La
       Flock.Program.operands P sc node m = .ok ops ∧ ∃ a,
         Flock.Program.resolve P sc ((node.args[i]!).seq.get t) = .ok a ∧ a ∈ ops := by
     intro i hi t ht
-    obtain ⟨m, hm, t', ht'', hidx⟩ := hCov i hi t ht
+    obtain ⟨m, hm, t', ht'', hidx⟩ := hCov hb i hi t ht
     obtain ⟨ops, hl⟩ := hloc (sc.off + ((P.defs[sc.d]!).body.offsets[k]! + m)) (by omega) (by omega)
     have hops := (hloc' m hm ops).1 hl
     obtain ⟨a', ha'⟩ := operands_ok P _ _ m hops i hi t' ht''
@@ -3327,7 +3329,7 @@ theorem nodeSet_prim_of (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (
     (hR0 : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn) {k : Nat}
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (ctxOf P r d).node k = .ok node)
     (hp : (P.defs[node.fn]!).prim = true) (hrs : Desc.nodeReads (ctxOf P r d) k = .ok rs)
-    (hCov : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+    (hCov : ¬ (node.form == .batch && node.n == 0) = true → ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
       ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t) :
@@ -3498,14 +3500,14 @@ theorem bodyGate_lt (P : Prog) (r : Array Desc.Summary) {d : Nat} (s : Desc.Summ
 
 /-- **`UsedExact` of every reached composite Definition but the root**, with the decoder's facts (`RootFacts`,
 `WidthFacts`, `Desc.walkable`), wherever every reference of a primitive node of a reached composite is read by a
-member (`hCov`) and, over the summaries before a Definition, `NodeSet` holds of each of its nodes calling a composite
+member unless it is a batch of none (`hCov`) and, over the summaries before a Definition, `NodeSet` holds of each of its nodes calling a composite
 once its composite callees' `UsedExact` does there (`hComp`): `memoOf_usedExact`, each step `usedExact_of` with
 `nodeSet_prim_of`, `bodySegs`, `bodyGate_lt` and `param_lt`. -/
 theorem usedExact_all (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) (hwk : Desc.walkable P = true)
     (hCov : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (P.defs[d]!).body.nodes[k]! = node →
-      (P.defs[node.fn]!).prim = true →
+      (P.defs[node.fn]!).prim = true → ¬ (node.form == .batch && node.n == 0) = true →
       ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
         ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
           ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
