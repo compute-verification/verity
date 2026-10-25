@@ -19,7 +19,7 @@ storage: its verdict is real and its quantity vacuous.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: `W` is the period's records, the coins are
 fresh from the OS, and the signer is a key at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes
-once beside the periods. Every party runs on the one node, so `trusted-nebius-host`'s premise that the memory challenger
+once beside the periods. Every party runs on the one node, so `trusted-host`'s premise that the memory challenger
 runs on a machine the prover doesn't control is not met by this run: it exercises the code, not the deployment.
 """
 

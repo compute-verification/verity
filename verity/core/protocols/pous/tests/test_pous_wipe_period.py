@@ -154,7 +154,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
-    assert answer["profile"]["placement"]["trusted-nebius-host"] == "holds: the memory challenger ran on auditor, not the prover's n0"
+    assert answer["profile"]["placement"]["trusted-host"] == "holds: the memory challenger ran on auditor, not the prover's n0"
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     record = json.loads((out / "wipe.json").read_text())

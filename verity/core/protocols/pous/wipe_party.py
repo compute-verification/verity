@@ -1,5 +1,5 @@
 """The streamed wipe's memory challenger as a party of its own, so it runs on a host the prover doesn't control (the
-challenger host, `trusted-nebius-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
+challenger host, `trusted-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
@@ -37,7 +37,7 @@ from . import memory_challenger as mc
 from . import streamed_wipe as sw
 
 MODULE = "verity.core.protocols.pous.wipe_party"
-PREMISE = "trusted-nebius-host"
+PREMISE = "trusted-host"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -160,7 +160,7 @@ class Party:
 
 
 def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-nebius-host`'s premise holds: that the memory challenger ran on a
+    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
     machine the prover doesn't control, which is never the prover's node."""
     held = host != node
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},

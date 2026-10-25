@@ -230,7 +230,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     (`wipe_party.Party.of`; on this node by default, a process whose key and session log are in `wipe-challenger`
     beside the periods) and the prover here. With `wipe-protocol` among the period's tools, the Lean answers (the
     verifier of record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and
-    `out/wipe.json`. Which host ran each party, and whether `trusted-nebius-host`'s premise holds
+    `out/wipe.json`. Which host ran each party, and whether `trusted-host`'s premise holds
     (`wipe_party.placement`), go in `wipe.json` and in an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
