@@ -670,6 +670,7 @@ PEARL_C_PERIOD = D.Port("pouw-check-difftest", "pearl-c-period", pearl_c_period,
                                                          + period_cases.NAMES)))
 
 
+@pytest.mark.slow
 def test_pearl_c_period(pass_server):
     """Generated Pearl-C periods, then each mutation over a few seeds (`replay`): passes or earlier epochs out of form, a
     session the close lists that no pass presents (an abandoned one among them), a session reserved for another layout
