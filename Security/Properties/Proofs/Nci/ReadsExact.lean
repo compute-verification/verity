@@ -11924,6 +11924,204 @@ theorem scanW_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
     rw [hsegs, Array.empty_append]
     exact hA
 
+/-- Leaf `e` of a batch whose members each return `L` leaves at gates `B + j * s`, `G` apart, at gate
+`B + e * F` (`affineOf`'s step `F`): member `e / L`'s leaf `e % L`. -/
+theorem affine_pos {e L : Nat} {B s G : Int} (hLG : L = 1 ∨ G = (L : Int) * s) :
+    B + (e : Int) * (if (L == 1) = true then G else s) =
+      ((e / L : Nat) : Int) * G + (B + ((e % L : Nat) : Int) * s) := by
+  split
+  · rename_i h1
+    have h1' : L = 1 := by simpa using h1
+    subst h1'
+    rw [Nat.div_one, Nat.mod_one]
+    push_cast
+    ring
+  · rename_i h1
+    have h1' : L ≠ 1 := by simpa using h1
+    rw [hLG.resolve_left h1']
+    have hdm : (e : Int) = ((e / L : Nat) : Int) * (L : Int) + ((e % L : Nat) : Int) := by
+      exact_mod_cast (Nat.div_add_mod' e L).symm
+    rw [hdm]
+    ring
+
+/-- **A batch of a composite's piece in its one-run case** names the body's gates with their widths: leaf `e` of the
+node is member `e / L`'s return leaf `e % L`, a gate of the run its callee names with its width (`RetW`), in laid-out
+bodies. `batchW_of`'s `hAff`. -/
+theorem batchAffine_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c.d)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
+    (hRW : ∀ k node, c.node k = .ok node → RetW c.P c.memo node.fn)
+    (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
+      (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates) :
+    ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → affineOf c k node q = some p →
+      GateW c.P c.d (Seg.one p) := by
+  intro q k node p ht hn hform hp hL0 h0 hq hf ha
+  obtain ⟨hok, hpos, -, -, hpp⟩ := hR k node hn
+  have hRWk := hRW k node hn
+  obtain ⟨hLc, hlast⟩ := hLF k node hn hp
+  have hdo := downOk_of hB hn
+  have hk := node_lt hn
+  have hnode := node_get hn
+  unfold affineOf at ha
+  dsimp only at ha
+  split at ha
+  swap
+  · cases ha
+  rename_i hc
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hc
+  obtain ⟨⟨hsz, hreps⟩, hps⟩ := hc
+  obtain ⟨s0, hs0⟩ := Array.size_eq_one_iff.1 hsz
+  obtain ⟨g0, hg0⟩ := Array.size_eq_one_iff.1 (by rw [hs0] at hps; exact hps)
+  rw [hs0] at ha hreps
+  simp only [hg0] at ha
+  have e1 : (#[s0] : Array Seg)[0]! = s0 := rfl
+  have e2 : (#[g0] : Array Piece)[0]! = g0 := rfl
+  rw [e1] at hreps
+  simp only [e2] at ha
+  rcases hgt : g0.tgt with _ | w
+  · rw [hgt] at ha; cases ha
+  rw [hgt] at ha
+  dsimp only at ha
+  split at ha
+  swap
+  · cases ha
+  rename_i hc
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
+  obtain ⟨⟨hrows, hlen⟩, hFG⟩ := hc
+  simp only [Option.some.injEq] at ha
+  subst ha
+  rw [e1] at hg0
+  have hflat : psPos (c.memo[node.fn]!).ret = pos g0 := by
+    rw [psPos_flat _ hok (fun x hx => by
+      rw [hs0] at hx
+      simp at hx
+      subst hx; exact hreps), hs0]
+    simp [hg0, posAll_singleton]
+  have hg0c : 0 < g0.count := hpp s0 (by rw [hs0]; simp) g0 (by rw [hg0]; simp)
+  have hr1 : g0.rows = 1 := by
+    unfold Desc.Piece.count at hg0c
+    rcases Nat.lt_or_ge g0.rows 1 with h | h
+    · rw [show g0.rows = 0 by omega, Nat.zero_mul] at hg0c; omega
+    · omega
+  intro w' x hx
+  rw [segPos_one, pos_eq_map, List.mem_map] at hx
+  obtain ⟨t, ht', he⟩ := hx
+  simp only [Prod.mk.injEq] at he
+  obtain ⟨hw, rfl⟩ := he
+  have hw' : w = w' := by simpa [Desc.Piece.affine] using hw
+  rw [← hw', ppt_affine]
+  have ht'' : t < q.count := List.mem_range.1 ht'
+  have hmem : (q.tgt, ppt q t) ∈ pos q := by
+    rw [pos_eq_map]; exact List.mem_map.2 ⟨t, List.mem_range.2 ht'', rfl⟩
+  have he0 : 0 ≤ ppt q t := hq _ hmem
+  have hfe : ppt q t < ((c.body.nodes[k]!).out.leaves : Int) := hf _ hmem k ht
+  rw [hnode] at hfe
+  obtain ⟨e, he⟩ := Int.eq_ofNat_of_zero_le he0
+  rw [he] at hfe ⊢
+  have hel : e < node.out.leaves := by exact_mod_cast hfe
+  have hdk := hdo e hel
+  simp only [hform] at hdk
+  have hmn := hdk.1
+  have hLpos : 0 < (c.P.defs[node.fn]!).outLeaves := Nat.pos_of_ne_zero hL0
+  have hjL : e % (c.P.defs[node.fn]!).outLeaves < g0.len := by rw [hlen]; exact Nat.mod_lt _ hLpos
+  have hgm := at_mem_pos hr1 hjL
+  rw [hgt] at hgm
+  have hRj := hRWk w _ (by rw [hflat]; exact hgm)
+  have hj0 : 0 ≤ g0.at (e % (c.P.defs[node.fn]!).outLeaves) := (hpos _ (by rw [hflat]; exact hgm)).1
+  obtain ⟨n', hn'⟩ := Int.eq_ofNat_of_zero_le hj0
+  rw [hn', Int.toNat_natCast] at hRj
+  have hnl := locW_lt hRj hLc hlast
+  subst hnode
+  have hm' : e / (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves < (c.body.nodes[k]!).members := by
+    rw [members_batch hform]; exact hmn
+  have key := locW_child c.P hL hk hp hm' hnl hRj
+  have hpe := affine_pos (e := e) (B := (c.body.offsets[k]! : Int) + g0.base) (s := g0.stride)
+    (G := ((c.P.defs[(c.body.nodes[k]!).fn]!).gates : Int)) hFG
+  have hat : g0.at (e % (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves) =
+      g0.base + ((e % (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves : Nat) : Int) * g0.stride := rfl
+  have hfin : (c.body.offsets[k]! : Int) + g0.base + (e : Int) *
+      (if ((c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves == 1) = true then
+        ((c.P.defs[(c.body.nodes[k]!).fn]!).gates : Int) else g0.stride) =
+      ((c.body.offsets[k]! + e / (c.P.defs[(c.body.nodes[k]!).fn]!).outLeaves *
+        (c.P.defs[(c.body.nodes[k]!).fn]!).gates + n' : Nat) : Int) := by
+    rw [hpe, Int.add_assoc, ← hat, hn']
+    push_cast
+    ring
+  rw [hfin, Int.toNat_natCast]
+  exact key
+
+/-- A batch's piece of one row and any other stride, position by position through `down`: segments naming the body's
+gates with their widths. -/
+theorem batchPts_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
+    {segs : Array Seg} (h : batchPts c fuel q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
+  unfold batchPts at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  rw [range'_size] at h
+  have hpt : ∀ t, pos { q with base := q.at t, stride := 1, len := 1 } = [(q.tgt, q.at t)] := by
+    intro t
+    simp [pos, h1]
+  exact loop_mem _ (fun t => Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 }) (List.range q.len)
+    (fun t htm segs hs => by
+      have hm := at_mem_pos h1 (List.mem_range.1 htm)
+      exact hD _ segs (by simp [Desc.Piece.count, h1])
+        (by rw [hpt t]; intro x hx; simp only [List.mem_singleton] at hx; subst hx; exact hq _ hm)
+        (by rw [hpt t]; intro x hx; simp only [List.mem_singleton] at hx; subst hx; exact hf _ hm)
+        (by rw [hpt t]; intro x hx i hi; simp only [List.mem_singleton] at hx; subst hx; rw [ht] at hi; cases hi)
+        (by rw [hpt t]; intro w p hx; simp only [List.mem_singleton, Prod.mk.injEq] at hx; rw [ht] at hx
+            exact absurd hx.1 (by intro e; cases e))
+        hs) segs h
+
+/-- What `batchOne` gives a batch of a composite's piece of one row and stride 1, past its one-run case, names the
+body's gates with their widths. -/
+def BatchOneW (c : Desc.Ctx) (fuel : Nat) : Prop :=
+  ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
+    q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
+    ∀ s ∈ segs.toList, GateW c.P c.d s
+
+/-- **`BatchW` from its cases**: a batch of a composite's piece row by row and position by position through `down`
+(`byRows_w`, `batchPts_w`), and in its one-run, stride-1 and whole-member-stride cases wherever those name the body's
+gates with their widths (`batchShape_of`'s argument). -/
+theorem batchW_of (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel)
+    (hAff : ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → affineOf c k node q = some p → GateW c.P c.d (Seg.one p))
+    (hOne : BatchOneW c fuel)
+    (hStride : ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 →
+      (q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0) →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchStride c fuel k node q = .ok segs →
+      ∀ s ∈ segs.toList, GateW c.P c.d s) :
+    BatchW c fuel := by
+  intro q segs k node ht hn hform hp h0 hff hq hf h
+  by_cases hL : (c.P.defs[node.fn]!).outLeaves = 0
+  · exact absurd h (down_batch0 c fuel q ht hff hn hform hp hL h0 segs)
+  rcases ha : affineOf c k node q with _ | p
+  · by_cases hr : q.rows > 1
+    · rw [down_batch_rows c fuel q ht hff hn hform hp hL h0 ha hr] at h
+      exact byRows_w c fuel hD q (Nat.pos_of_ne_zero h0) hq hf
+        (fun x hx i hi => by rw [mem_pos_tgt hx, ht] at hi; cases hi)
+        (fun w p hx => by have e := mem_pos_tgt hx; rw [ht] at e; cases e) h
+    by_cases hs : q.stride = 1
+    · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
+      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) hs hq hf h
+    by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
+    · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
+      exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) hcp hq hf h
+    rw [down_batch_pts c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
+    exact batchPts_w c fuel hD q ht (rows_one h0 hr) hq hf h
+  · rw [down_batch_affine c fuel q ht hff hn hform hp hL h0 ha] at h
+    simp only [Except.ok.injEq] at h
+    subst h
+    intro s hs
+    simp only [List.mem_singleton] at hs
+    subst hs
+    exact hAff q k node p ht hn hform hp hL h0 hq hf ha
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
