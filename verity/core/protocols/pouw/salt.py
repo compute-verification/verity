@@ -30,6 +30,9 @@ published, once, and only until its reveal deadline on its own clock after p's e
 * `window_open_root(weights_root, requests_root, session)` is a live window's open root: what the auditor's gate opens
   the window's challenger session on and its salt coin opens after, which the verifier recomputes from the window's
   record and the session the gate reserved (`core_check.salt`).
+* `pass_open_root(weights_root, k)` is a live Pearl-C salt epoch's open root, for epoch k over a weights' root: what the
+  gate opens the epoch's salt-only session on and its salt coin opens after, which the verifier recomputes from the
+  pass's weights and its ``pass_index``.
 """
 from __future__ import annotations
 
@@ -62,6 +65,10 @@ PROVER_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
 #: `window_open_root`'s domain tag
 WINDOW_OPEN_TAG = b"verity/pouw-window-open/v1"
+#: `pass_open_root`'s domain tag: 24 ASCII bytes, no terminator
+PASS_OPEN_TAG = b"verity/pouw-pass-open/v1"
+#: the refusal of a live Pearl-C pass whose ``pass_index`` isn't one (`pass_index_reason`)
+PASS_FORM = "a live Pearl-C pass names its salt epoch's number (its 'pass_index'), an integer in [0, 2^64)"
 #: a live window's round-0 request table's root, a frame-v3-sha512 root
 REQUESTS_ROOT_BYTES = 64
 #: a challenger session's id, as the auditor's gate assigns it when it reserves the session (``s20261020T114752Z-9e52``)
@@ -136,6 +143,28 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
         raise DomainError(f"a challenger session's id is 1 to 64 of [A-Za-z0-9._:-], starting alphanumeric, not {session!r}")
     return hashlib.sha512(WINDOW_OPEN_TAG + weights_root + requests_root
                           + hashlib.sha512(session.encode("ascii")).digest()).digest()
+
+
+def pass_open_root(weights_root: bytes, k: int) -> bytes:
+    """A live Pearl-C salt epoch's open root: SHA-512(`PASS_OPEN_TAG` ‖ weights_root ‖ k as 8 bytes big-endian), 96 bytes
+    hashed with no separator, as `window_open_root` joins its parts (`test_pass_open_root_form` pins it).
+
+    `weights_root` is the epoch's `audit.weights_root` and `k` its pass index (a manifest's ``pass_index``): the epochs
+    over one weights' root, one per install or measured interval, are numbered 0, 1, 2, … in the order they start. The
+    gate opens the epoch's salt-only session on this root, its challenger opens the salt coin only after it, and the
+    verifier recomputes it from the pass's weights and ``pass_index``, never reading it from the pass. The salt stays
+    `audit.salt_of` of that coin over `weights_root`. The message is 96 bytes where a window-open root's is 218, and the
+    tags differ, so no pass root's message is a window root's."""
+    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
+        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+    if pass_index_reason(k) is not None:
+        raise DomainError(f"{PASS_FORM}, not {k!r}")
+    return hashlib.sha512(PASS_OPEN_TAG + weights_root + k.to_bytes(8, "big")).digest()
+
+
+def pass_index_reason(k: Any) -> str | None:
+    """`PASS_FORM` unless `k` is a pass index: an int (not a bool) in [0, 2^64); None when it is."""
+    return None if type(k) is int and 0 <= k < 1 << 64 else PASS_FORM
 
 
 def prover_id(public_key: bytes) -> bytes:
@@ -270,7 +299,7 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES",
-           "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT",
-           "committed", "context", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered", "revealed",
-           "unit_reason", "window_of", "window_open_root"]
+__all__ = ["PASS_FORM", "PASS_OPEN_TAG", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations",
+           "Reregistered", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES",
+           "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "committed", "context", "pass_index_reason", "pass_open_root", "pouw_record",
+           "pouw_salt", "pouw_window", "prover_id", "registered", "revealed", "unit_reason", "window_of", "window_open_root"]

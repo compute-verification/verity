@@ -89,9 +89,7 @@ def test_a_pearl_c_salt_session_is_its_salt_coin_alone():
     assert salt.families == ((Wd.SALT, 1),) and Wd.salt_epoch_reason(salt) is None
     assert Wd.live_epoch_reason(salt) is not None
     h1 = Wd.live_challenger(7, 1, entropy("h")).commitment
-    assert Wd.salt_epoch_reason(h1) == ("the coin commitment's coins are [['pouw/salt', 1], ['pouw/draw', 1], "
-                                        "['pouw/round', 1]], not a Pearl-C salt session's [['pouw/salt', 1]]: its salt "
-                                        "coin alone")
+    assert Wd.salt_epoch_reason(h1) == "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
     two = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, ((Wd.SALT, 2),), entropy("t")).commitment
     assert "not a Pearl-C salt session's" in Wd.salt_epoch_reason(two)
     other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.SALT_FAMILIES, entropy("v")).commitment
