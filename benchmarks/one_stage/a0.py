@@ -32,6 +32,8 @@ from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
+import r2_population as R2
+
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
 #: M0's set-bound frame domains (verity_flock.circuit.BINDING_TAG), each tag with its identity digest; v1 is M0's before
@@ -427,7 +429,7 @@ def main() -> int:
     neg["registration-root-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], first: "00" * 64}, header["instances"])
     neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, P.population_program(template, n - 1), query, law, SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
                 leaf_layer=leaf_layer)
@@ -444,7 +446,7 @@ def main() -> int:
         a.lean_verify, st, n, out / "session", out / "neg-public-body", rec,
         lambda r, digest: V.check(r, program, query, law, SCHEME, want, leaf_layer=digest))
     if a.bind:
-        other_part = P.digest(P.partition(P.population_program(template, n - 1), query))
+        other_part = P.digest(P.partition(R2.program([(template, n)], mixed=False), query))
         b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])
         neg["statement-binds-another-partition"] = {"refused": not b["ok"], "each": b["each"]}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}

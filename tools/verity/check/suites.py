@@ -106,7 +106,9 @@ over all of them with pytest-xdist, whose workers load the guard too; each worke
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run one at a
 time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
 does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
-suite runs in one process.
+suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
+`--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of ten
+lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -230,6 +232,15 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None =
         kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
         limits.append(kb / 2**20)
     return min(n, max(1, int(min(limits) // TEST_PROCESS_GB))) if limits else n
+
+
+#: the thread-pool sizes a test process inherits, each left as the environment sets it
+THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+
+
+def threads_per_process(jobs: int) -> int:
+    """Each test process's thread pools: the CPUs this process may use shared by the ``jobs`` test processes that run at once."""
+    return max(1, cpus() // max(1, jobs))
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
@@ -1545,11 +1556,13 @@ def store_custody() -> None:
 
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
-        reuse: list[str] = (), timeout_s: float = 0.0) -> Result:
+        reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
+    for var in THREAD_VARS if threads > 0 else ():
+        env.setdefault(var, str(threads))
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_DENY=json.dumps(dropped(suite, allowed)),
                VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0",
@@ -2000,7 +2013,7 @@ def main(argv: list[str] | None = None) -> int:
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
-                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0)
+                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0, threads_per_process(jobs))
 
     def finish(fut) -> None:
         s, k, paths, deps = futures[fut]

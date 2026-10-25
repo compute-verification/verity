@@ -177,6 +177,34 @@ theorem pump_spec (st : State) (s : Nat) : PumpOK st (st.pump s) := by
     · intro r hr
       exact ⟨Quiet.setStream _ _ _, hr⟩
 
+theorem opened_fst (st : State) (s : Nat) :
+    (st.opened s).1 = ((st.setStream s { st.stream s with phase := .open }).pump s).1 := by
+  unfold State.opened
+  generalize (st.setStream s { st.stream s with phase := .open }).pump s = y
+  rcases y with ⟨_, _⟩
+  rfl
+
+/-- An opened connection's actions: its ordinal header, or what `pump` writes. -/
+theorem opened_mem {st : State} {s : Nat} {a : Action} (h : a ∈ (st.opened s).2) :
+    a = .writeUpstream s (ordinalHeader s) false ∨
+      a ∈ ((st.setStream s { st.stream s with phase := .open }).pump s).2 := by
+  unfold State.opened at h
+  generalize (st.setStream s { st.stream s with phase := .open }).pump s = y at h ⊢
+  rcases y with ⟨_, acts⟩
+  dsimp only at h ⊢
+  split at h
+  · rcases Array.mem_append.1 h with h | h
+    · exact Or.inl (by simpa using h)
+    · exact Or.inr h
+  · exact Or.inr h
+
+theorem opened_spec (st : State) (s : Nat) : PumpOK st (st.opened s) := by
+  obtain ⟨p1, p2⟩ := pump_spec (st.setStream s { st.stream s with phase := .open }) s
+  refine ⟨by rw [opened_fst]; exact (Quiet.setStream _ _ _).trans p1, fun a ha => ?_⟩
+  rcases opened_mem ha with rfl | ha
+  · exact ⟨_, _, _, rfl⟩
+  · exact p2 a ha
+
 theorem checkForwarding_quiet (st : State) (now : Nat) : Quiet st (st.checkForwarding now) := by
   unfold State.checkForwarding
   dsimp only
@@ -206,12 +234,26 @@ theorem linkRead_quiet (st : State) (now : Nat) (data : ByteArray) : Quiet st (s
     · intro b hb
       exact Quiet.same rfl rfl hb
 
-theorem egressEvent_quiet (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
-    Quiet st (st.egressEvent s event ready) := by
-  unfold State.egressEvent
+theorem egressFrame_quiet (st : State) (s position : Nat) (bytes : ByteArray) (ready : Int) :
+    Quiet st (st.egressFrame s position bytes ready) := by
+  unfold State.egressFrame
   dsimp only
   split
   · exact Quiet.shaper (ShRel.arrive _ _ _ _)
+  · exact Quiet.shaper (ShRel.fault _ _)
+
+theorem egressEvent_quiet (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
+    Quiet st (st.egressEvent s event ready) := by
+  unfold State.egressEvent
+  split
+  · exact egressFrame_quiet _ _ _ _ _
+  · exact Quiet.shaper (ShRel.fault _ _)
+
+theorem egressRecord_quiet (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
+    Quiet st (st.egressRecord s position record ready) := by
+  unfold State.egressRecord
+  split
+  · exact egressFrame_quiet _ _ _ _ _
   · exact Quiet.shaper (ShRel.fault _ _)
 
 theorem upstreamEnd_quiet (st : State) (s now : Nat) : Quiet st (st.upstreamEnd s now) := by
@@ -226,8 +268,13 @@ theorem upstreamRead_quiet (st : State) (s now : Nat) (data : ByteArray) : Quiet
   dsimp only
   split
   · exact upstreamEnd_quiet _ _ _
-  · refine Id.bind_inv (Quiet st) (Quiet st) _ _ ?_ (fun _ h => h)
-    exact forIn_inv_arr _ (Quiet.setStream _ _ _) (fun _ _ b hb => hb.trans (egressEvent_quiet _ _ _ _))
+  · split
+    · refine Id.bind_inv (Quiet st) (Quiet st) _ _ ?_ (fun _ h => h)
+      refine forIn_inv_arr _ (Quiet.setStream _ _ _) (fun u _ b hb => ?_)
+      rcases u with ⟨position, record⟩
+      exact hb.trans (egressRecord_quiet _ _ _ _ _)
+    · refine Id.bind_inv (Quiet st) (Quiet st) _ _ ?_ (fun _ h => h)
+      exact forIn_inv_arr _ (Quiet.setStream _ _ _) (fun _ _ b hb => hb.trans (egressEvent_quiet _ _ _ _))
 
 /-! ## The bucketer before its certifier ticks -/
 
@@ -251,12 +298,43 @@ theorem EnqRel.foldl (c : Certifier) (l : Array (Int × ByteArray)) :
     rcases x with ⟨_, f⟩
     exact h.trans (EnqRel.enqueue c' f))
 
+theorem enqueue_first_eq (c : Certifier) (frame : ByteArray) :
+    c.enqueue frame true = c ∨ (∃ r, c.enqueue frame true = c.doFault r) ∨
+      (c.fault = none ∧ frame.size = c.params.frameBytes ∧
+        c.enqueue frame true = { c with queue := #[frame] ++ c.queue }) := by
+  unfold Certifier.enqueue
+  by_cases h1 : c.fault.isSome
+  · simp [h1]
+  · simp only [h1, Bool.false_eq_true, ite_false]
+    by_cases h2 : frame.size ≠ c.params.frameBytes
+    · exact Or.inr (Or.inl ⟨.malformed, by simp [h2]⟩)
+    · by_cases h3 : c.queue.size ≥ c.params.queueCapacity
+      · exact Or.inr (Or.inl ⟨.overflow, by simp [h2, h3]⟩)
+      · exact Or.inr (Or.inr ⟨by simpa using h1, by simpa using h2, by simp [h2, h3]⟩)
+
+theorem Shape.enqueueFirst {c : Certifier} {link : String} {p : Params} (h : Shape c link p) (f : ByteArray) :
+    Shape (c.enqueue f true) link p := by
+  rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨hn, hsz, he⟩ <;> rw [he]
+  · exact h
+  · exact h.doFault r
+  · refine ⟨h.link, h.params, ?_, ?_⟩
+    · intro g hg
+      rcases Array.mem_append.1 hg with hg | hg
+      · rw [Array.mem_singleton.1 hg, hsz, h.params]
+      · exact h.sizes g hg
+    · simp [hn]
+
+theorem EnqRel.enqueueFirst (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f true) := by
+  refine ⟨?_, ?_, ?_, ?_, fun _ _ h => h.enqueueFirst f⟩ <;>
+    rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨-, -, he⟩ <;> rw [he] <;>
+    simp [doFault_link, doFault_params, doFault_rows, doFault_window]
+
 theorem takeOwn_rel (b : Bucketer) : b.takeOwn.t = b.t ∧ EnqRel b.certifier b.takeOwn.certifier := by
   unfold Bucketer.takeOwn
   dsimp only
   split
   · split
-    · exact ⟨rfl, EnqRel.enqueue _ _⟩
+    · exact ⟨rfl, EnqRel.enqueueFirst _ _⟩
     · exact ⟨rfl, EnqRel.refl _⟩
   · exact ⟨rfl, EnqRel.refl _⟩
 
@@ -290,10 +368,10 @@ theorem enter_rel (b : Bucketer) : b.enter.t = b.t ∧ EnqRel b.certifier b.ente
 theorem pre_rel (b : Bucketer) : b.takeOwn.enter.t = b.t ∧ EnqRel b.certifier b.takeOwn.enter.certifier :=
   ⟨(enter_rel _).1.trans (takeOwn_rel b).1, (takeOwn_rel b).2.trans (enter_rel _).2⟩
 
-theorem follow_certifier (b : Bucketer) (n : Nat) : (b.follow n).certifier = b.certifier := by
+theorem follow_certifier (b : Bucketer) (row : Slots) : (b.follow row).certifier = b.certifier := by
   unfold Bucketer.follow; split <;> rfl
 
-theorem follow_t (b : Bucketer) (n : Nat) : (b.follow n).t = b.t := by
+theorem follow_t (b : Bucketer) (row : Slots) : (b.follow row).t = b.t := by
   unfold Bucketer.follow; split <;> rfl
 
 theorem bucketer_tick (b : Bucketer) :
@@ -720,6 +798,14 @@ theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
     refine ⟨hq.trans p1, fun a ha => ?_⟩
     obtain ⟨s, b, d, rfl⟩ := p2 a (Array.mem_toList_iff.1 ha)
     exact IngressAct.upstream _ _ _ _ _
+  have opened_ok : ∀ s y, st.opened s = y → Quiet st y.1 ∧
+      ∀ a ∈ y.2.toList, IngressAct c.ingressLink c.ingress a := by
+    intro s y hy
+    subst hy
+    obtain ⟨p1, p2⟩ := opened_spec st s
+    refine ⟨p1, fun a ha => ?_⟩
+    obtain ⟨s, b, d, rfl⟩ := p2 a (Array.mem_toList_iff.1 ha)
+    exact IngressAct.upstream _ _ _ _ _
   have saltPump_ok : ∀ st' y, Quiet st st' → st'.saltPump = y → Quiet st y.1 ∧
       ∀ a ∈ y.2.toList, IngressAct c.ingressLink c.ingress a := by
     intro st' y hq hy
@@ -749,7 +835,7 @@ theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
       · cases heq; exact ⟨linkRead_quiet _ _ _, fun a ha => by simp at ha⟩
       · cases heq; exact none_ok
     · split at heq
-      · exact pump_ok _ _ _ (Quiet.setStream _ _ _) heq
+      · exact opened_ok _ _ heq
       · cases heq; exact none_ok
     · split at heq
       · cases heq; exact ⟨(Quiet.bucketFault _ _).trans (Quiet.setStream _ _ _), fun a ha => by simp at ha⟩

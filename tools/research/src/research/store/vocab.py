@@ -68,6 +68,8 @@ ARM = "arm"
 STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
+OF_RECORD = "of-record"
+GOAL = "goal"
 ABANDONED = "abandoned"
 REPLAY_SET = "replay_set"
 REPLAY_EXPECT = "replay_expect"
@@ -102,6 +104,8 @@ CHALLENGER_PINS = "challenger-pins"                   # on a challenger-pins/v1 
 CHALLENGER_PINS_VALUES = ("head",)
 CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v1 put, by infra's publisher: a head it published
 CHALLENGER_MODELS_VALUES = ("head",)
+MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
+MEMORY_LINE_OF_RECORD_VALUES = ("lean",)
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -179,10 +183,13 @@ MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "thread
 #: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
 #: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
+#: A run, as a label's ref names it: its id, r<YYYYMMDD>-<HHMMSS>-<4 hex>.
+RUN_REF_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: Keys whose label is only read with its ref: the form that ref must take, and what it names.
 REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
     ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
-    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
+    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
+    MEMORY_LINE_OF_RECORD: (RUN_REF_RE, "the auditor_line.py run whose auditor_line.json is the line (its run id, r<YYYYMMDD>-<HHMMSS>-<hex>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
@@ -298,6 +305,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
        "approach record, the <campaign>/<slug> that replaces it"),
+    _k(OF_RECORD, GROUP_RESULT, BOOL, "the lane's word that this run or artifact is the evidence of record for its `goal`; the one it "
+       "replaces gets superseded_by"),
+    _k(GOAL, GROUP_RESULT, TEXT, "the outcome or done-condition the run or artifact is evidence for, as its lane names it (O1-live, O2-proof)"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
        "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
@@ -316,6 +326,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
        "superseded); the latest label wins", KERNEL_OUTCOMES),
     _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
+    _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, ENUM, "on a gate run's verifier run, by its lane: its memory line of record is the "
+       "auditor_line.json of --ref's auditor_line.py run, and that file's line_by, which must be lean (the Lean verifier's line, held "
+       "exactly to line.py's); a line.py-only line is not of record. The file must carry conditional_on naming NoOutsideCompute "
+       "(statement C in full, a premise of LineHeld): the line is conditional on it until certifiers cover the gate node's boundary, "
+       "and a file without the field is not of record. Gate runs 5-7's labels (credited-..., off-vocab) predate the rule",
+       MEMORY_LINE_OF_RECORD_VALUES),
     # verification
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
        "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),

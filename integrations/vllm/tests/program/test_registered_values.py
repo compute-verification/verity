@@ -88,6 +88,7 @@ def test_fa2_check_inf_attention_scale_input(masked_from):
     assert _const_id(scale) not in _held(new)
 
 
+@pytest.mark.slow
 def test_derive_registered_values_evaluates_like_the_constants_program():
     """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
     `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""
@@ -130,6 +131,7 @@ def test_target_profile_registered_values_is_declared_true_or_absent():
     assert both["registered_values"] is True and both["ir"] == "boolean"
 
 
+@pytest.mark.slow
 def test_derive_registered_values_on_bits_reads_the_values_through_boolean_definitions():
     """The tiny registered-values serve on bits: every Call has a Boolean version (the norms with eps an input, `Attention_v14`),
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""

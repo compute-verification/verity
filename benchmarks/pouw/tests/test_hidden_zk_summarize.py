@@ -29,6 +29,9 @@ TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · wor
              "statement form the soundness proof does not cover")
 #: a session's verdict, once every check has passed, when it has no draw
 NO_DRAW = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+#: a drawn session's verdict, once every check has passed, without the verifier's program (`ProvedScope.NO_PROGRAM`)
+NO_PROGRAM = ("refused: a session without the verifier's program (--program): a verifier that cannot read the Program "
+              "cannot know what the statement computes, nor which of its values are registered")
 
 
 def _proved(d: Path, verdicts: dict[str, bool | str | None]) -> None:
@@ -80,13 +83,15 @@ def test_a_stage_only_config_claims_no_pass(tmp_path):
     assert s["zk"] is None and s["controls"] == {} and s["lean"] == {} and s["circuit_sha512"] == "ab"
 
 
-def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_accept(tmp_path):
+def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_are_refused_only_for_want_of_a_program(tmp_path):
     d = _staged(tmp_path, "hidden")
-    _proved(d, {"honest-own": True, "st-honest": True, "st-output_claim_false": False})
+    _proved(d, {"honest-own": NO_PROGRAM, "st-honest": NO_PROGRAM, "st-output_claim_false": False})
     s = _summary(tmp_path, "hidden-k64")
     assert s["all_pass"] is True and {t: (c["expect"], c["verdict"]) for t, c in s["lean"].items()} == {
-        "honest-own": ("ACCEPT", "ACCEPT"), "st-honest": ("ACCEPT", "ACCEPT"), "st-output_claim_false": ("REJECT", "REJECT")}
-    # a refusal is no pass for it: neither a session without a draw (D12) nor its rows' form
-    for why in (NO_DRAW, TILE_FORM):
+        "honest-own": ("REFUSED", "REFUSED"), "st-honest": ("REFUSED", "REFUSED"),
+        "st-output_claim_false": ("REJECT", "REJECT")}
+    # no other verdict is a pass for it: not an acceptance a verifier without the Program gave, nor a session without a
+    # draw (D12), nor its rows' form
+    for why in (True, NO_DRAW, TILE_FORM):
         _proved(d, {"honest-own": why})
         assert _summary(tmp_path, "hidden-k64")["lean"]["honest-own"]["pass"] is False

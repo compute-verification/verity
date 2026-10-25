@@ -23,6 +23,8 @@ import ast
 import re
 from functools import lru_cache
 
+import pytest
+
 from . import _ratchet as R
 
 NAME = "p07_declared_inputs"
@@ -167,6 +169,7 @@ def test_no_new_violations() -> None:
                     "optional dependency, re-raise or record broad exceptions, and make seeds required.")
 
 
+@pytest.mark.slow
 def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
 
