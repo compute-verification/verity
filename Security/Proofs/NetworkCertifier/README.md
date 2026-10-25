@@ -48,7 +48,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty units add under a sampled audit: their
                                committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
                                sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
-                               audit gives that count (AdviceIn, freeInputs, AsFree, RLeak)
+                               audit gives that count (AdviceIn, freeInputs, AsReg, RLeak)
 ../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean  trusted: the leak bound under a sampled audit, and what
                                an accepted one establishes (SampledLeakAccepted)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -80,7 +80,7 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
                                          committed gate at one bit leaves every step's egress as it was
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
-                                         hypothesis (sampledLeak; sampledLeak_free at the free inputs)
+                                         hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
@@ -229,7 +229,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardDecodableWithinLeCompiledPerWindowV1Whole`. That `ChargeCount_v2`'s circuit computes the Lean charge is
   circuit-check's (the circuit against `window_charge.py`'s `reference_window`), not proved here.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
-  `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
+  `EncardWardenDecodableLe`, under `trusted-host` (`Verity.Assumptions.TrustedHost`).
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
   `RAcc δ` on the statements whose layout fits the program: no faulty unit is drawn `all`, and the advice holding the
   faulty units' committed gates at the trace's values makes `Accepted` every run the trace carries.
@@ -239,13 +239,13 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
   `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible faulty set: the inputs other than the
   ingress, the faulty units' committed bits and the choice of faulty set. `SampledLeakAccepted` is what an accepted
-  sampled audit establishes: with `SampledAuditAccepted` (PRF-144, stated, not proved) as its hypothesis and
-  `Claims.Sampling.KS` at the deployment, the carried sequences of length `k` are among those the count bounds except
-  with probability `δ + ε_ks + ε_bind` (`RLeak`), and the count holds with `c` the number of free inputs, the inputs
-  other than the ingress (`freeInputs`, at `AsFree`). It is `SampledLeak.lean`'s `sampledLeak_free`. `RAcc`'s advice is
-  any value of those inputs, so they are charged at every value; a smaller `c` (the registration's inputs fixed, advice
-  v1's charge) needs `SampledAuditAccepted` to pin that advice. Both `SampledAuditAccepted` and `Claims.Sampling.KS`
-  are named assumptions in the lock.
+  sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Claims.Sampling.KS` at the deployment,
+  the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
+  (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
+  (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. It is `SampledLeak.lean`'s
+  `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
+  registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
+  `Claims.Sampling.KS` are named assumptions in the lock.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
