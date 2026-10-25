@@ -50,7 +50,8 @@ ap.add_argument("--bits", type=int)
 a = ap.parse_args()
 data = open(a.advice, "rb").read()
 if data.hex() != a.expect:
-    sys.exit("advice this compiler can't compile")
+    sys.stderr.write("advice this compiler can't compile")
+    sys.exit(2)
 open(a.out, "w").write(open(a.record).read())
 print(json.dumps({"bits": 8 * len(data) if a.bits is None else a.bits}))
 '''
@@ -119,6 +120,8 @@ def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(wri
             ("another length", (_compilers(tmp_path, doc, bits=8 * len(ADVICE) + 1), w, op), ["length"])):
         v, bound = RA.compile_check(doc, window, opening, compilers, tmp_path / "c")
         assert (v["codes"], bound) == (codes, None), name
+    v, _ = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, expect="00"), tmp_path / "c")
+    assert v["detail"]["refused"] and "can't compile" in v["detail"]["stderr"]
 
 
 def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp_path):
@@ -192,8 +195,9 @@ print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vll
 
 def test_the_served_compilers_command_charges_the_registered_length_and_refuses_what_it_cant_compile(tmp_path, monkeypatch, capsys):
     """``prove_path.py circuit``, the served window's registered compiler as `records_audit.compile_check` runs it, on the
-    synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, the window over its Programs stubbed): it writes the
-    circuit record and prints the length the registration charges, and exits nonzero on advice it can't compile."""
+    synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
+    window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
+    registration charges, and exits `records_audit.REFUSED` on advice it can't compile."""
     import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.pipeline import serving_rows as SRW
@@ -201,17 +205,19 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     s = _served(tmp_path, monkeypatch)
     loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
     monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
-    seen = {}
-    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (seen.update(run=run, kw=kw) or "W", []))
-    monkeypatch.setattr(SRW, "circuit_record", lambda window: {"format": IF.CIRCUIT, "window": window})
-    (tmp_path / "part.json").write_text(json.dumps({"templates": [], "law": "subset:1"}))
+    window = IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_law(LAW), 4).window
+    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, []) if run == "" else None)
+    (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
     base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--partition",
             str(tmp_path / "part.json"), "--out", str(tmp_path / "out.json")]
     capsys.readouterr()
     assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
-    assert json.loads(capsys.readouterr().out) == {"bits": s.bound["advice"]["bits"]}
-    assert json.loads((tmp_path / "out.json").read_text()) == {"format": IF.CIRCUIT, "window": "W"} and seen["run"] == ""
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
+    out = json.loads((tmp_path / "out.json").read_text())
+    assert out["format"] == IF.CIRCUIT and (out["run"], out["context"]) == ("", "") and set(out) == set(IF.circuit_record(
+        window, "x", IF.templates_of(window)))
+    assert IF.window_of_record(out, D.parse_law(LAW), IF.resolve).partition_digest == window.partition_digest
     (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
-    assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == 2
+    assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
     assert "prove_path.py circuit:" in capsys.readouterr().err

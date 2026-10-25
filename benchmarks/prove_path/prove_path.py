@@ -106,7 +106,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, free_ports  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, free_ports  # noqa: E402, F401
 from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
@@ -1074,7 +1074,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(circuit_of_advice(a)))
         except ValueError as e:
             print(f"prove_path.py circuit: {e}", file=sys.stderr)
-            return 2
+            return REFUSED
         return 0
     if a.cmd == "serve-standin":
         print(json.dumps(serve_standin(a), sort_keys=True))

@@ -25,10 +25,17 @@ An integration's labels are never read.
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local --main FILE]
 
-``--compilers FILE``: ``{name: {"digest": hex, "argv": [...]}}``, the registered compilers the verifier holds. A compiler's
-command takes ``--advice FILE --out FILE``, writes the circuit record it compiles to ``--out`` (its run's own fields,
-`interface.RUN_FIELDS`, aside) and prints ``{"bits": N}``, the advice's length it charges, as its last line; it refuses
-advice it can't compile, or advice over its cap, with a nonzero exit. ``--forged``: the window holds a forged unit, and the
+``--compilers FILE``: ``{name: {"digest": hex, "argv": [...]}}``, the registered compilers the verifier holds, each by the
+name and digest a registration names it under. The compile command is ``argv --advice FILE --out FILE``:
+
+* ``--advice FILE``: the opened advice's bytes (the opening's ``advice``), nothing else of the window: the command's other
+  inputs are fixed in ``argv``;
+* it writes to ``--out`` the circuit record it compiles the advice to (``verity/window-circuit/v1``, `interface.circuit_bytes`),
+  its `interface.RUN_FIELDS` (``run``, ``context``) empty, since it knows no run; the check compares the rest;
+* it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
+* it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
+
+``--forged``: the window holds a forged unit, and the
 audit passes when every check before the draw passed and Lean refused the outcome (the prover runs with its self-check
 skipped, ``FC_ZK_SELF_CHECK=skip``, so it sends proofs of the false witness).
 """
@@ -58,6 +65,9 @@ from verity.ml.windows import interface as IF  # noqa: E402
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
 PORTS = range(10000, 32000)
+#: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
+#: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
+REFUSED = 2
 
 
 def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
@@ -107,7 +117,8 @@ def compile_check(circuit: Mapping[str, Any], window: Mapping[str, Any], opening
             t0 = time.time()
             p = subprocess.run([*entry["argv"], "--advice", str(Path(d) / "advice.bin"), "--out", str(scratch / "compiled.json")],
                                capture_output=True, text=True)
-        detail.update(compile_s=round(time.time() - t0, 1), rc=p.returncode, stderr=p.stderr[-2000:])
+        detail.update(compile_s=round(time.time() - t0, 1), rc=p.returncode, refused=p.returncode == REFUSED,
+                      stderr=p.stderr[-2000:])
         ok["compiles"] = p.returncode == 0
         if ok["compiles"]:
             theirs = json.loads((scratch / "compiled.json").read_text())
