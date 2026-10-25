@@ -185,6 +185,9 @@ the standing rulings stated nowhere else.
   honest serving passes. No guarantee rests on it (exfiltration security, infiltration security, work soundness), since
   each is stated about the registered circuit. The developer validates it empirically: circuit-check, the hardware
   captures, the served outputs. Nobody proves it, lists it as an assumption, or counts it as an open gap in a guarantee.
+  A circuit that is registered and passes circuit-check is the one its guarantees are about (Daniel, 25 Oct). Lean holds
+  one description of it, the parsed circuit file the verifier checks: any other layer's circuit is defined from that
+  file, so no proof, premise or open gap relates two descriptions of one circuit.
 - **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
   values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
   schedulers, and none enters `verity/`. An integration hands Verity only:
