@@ -359,7 +359,7 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   table names for it (`prove_path.py circuit` for a served window), on advice that opens the registered root, and holds its
   output to the circuit record (less the run root and the coins' context) and its charged length to the registered one. It
   imports no `verity_vllm` code. The exception is a template whose Definition is still vLLM's (`SiluMul_v2`, `RoPEHead_v1`):
-  the input set loads it from `verity_vllm.program.registry` until #3927 moves those Definitions into `verity`.
+  the input set loads it from `verity.ml.definitions.registry` until #3927 moves those Definitions into `verity`.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   Programs come from `--row-dir`, and the Build manifest falls back to `<row dir>/manifest.json`, checked against the record's

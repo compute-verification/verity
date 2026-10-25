@@ -154,7 +154,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     fn = kind("token_select_stochastic", V=V, CONSTRUCTION=tp.effective_sampler_construction())
     out.append(Template(f"token select (top-p, derived S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, BATCH), own("r"),
                         expect=(False, None), why="its S operand is SplitsFor_v1(live rows): the batch picks the nucleus at top_p < 1"))
-    from verity_vllm.program.registry.topp_geometry import registered_splits, splits_for_v1
+    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for_v1
     at = lambda n: kind("token_select_stochastic_split", V=V, S=splits_for_v1(n, tp.num_sms))  # noqa: E731
     S_reg = registered_splits(tp.num_sms)
     fn = kind("token_select_stochastic_split", V=V, S=S_reg)

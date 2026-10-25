@@ -94,8 +94,8 @@ def template(t: str) -> Template:
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity_vllm.program import boolean as BB
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions import boolean as BB
+    from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     errors = BB.load()
@@ -150,7 +150,7 @@ def cols_refused(word: str) -> str | None:
 
     if spec_base(word) != "AllReduceMultimem_v1":
         return None
-    from verity_vllm.program.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import tp_allreduce as TA
 
     S = spec_statics(word)
     try:
@@ -250,7 +250,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
 def split_keys(T: int, NS: int, BN: int) -> list[int]:
     """Each non-empty split's key count, in split order, of a ``SPLITS`` row of T keys in NS splits of BN-key blocks
     (`sparse_mla_split.split_blocks`: only the token's last block is partial)."""
-    from verity_vllm.program.registry.sparse_mla_split import split_blocks
+    from verity.ml.definitions.registry.sparse_mla_split import split_blocks
 
     return [min(T, b1 * BN) - b0 * BN for b0, b1 in split_blocks(T, NS, BN)]
 

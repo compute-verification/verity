@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.config import option
-from verity_vllm.program.boolean import dry_run, load_program, purity
+from verity.ml.definitions.boolean import dry_run, load_program, purity
 
 
 @dataclass

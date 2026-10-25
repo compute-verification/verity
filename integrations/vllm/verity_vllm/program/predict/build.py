@@ -780,7 +780,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
-    from verity_vllm.program.replay import replayer
+    from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="predicted: a switched row's, checked by its trace (predict.aot)",
                                register=False)

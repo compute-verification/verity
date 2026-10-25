@@ -72,10 +72,10 @@ import numpy as np
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import dsv4_compressor_twin as T
-from verity_vllm.program.kernels import flashmla_twin as FT
-from verity_vllm.program.registry import dsv4_compressor as R
-from verity_vllm.program.registry import dsv4_indexer as I
+from verity.ml.definitions.numerics import dsv4_compressor_twin as T
+from verity.ml.definitions.numerics import flashmla_twin as FT
+from verity.ml.definitions.registry import dsv4_compressor as R
+from verity.ml.definitions.registry import dsv4_indexer as I
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-compressor-capture/v1"
@@ -698,7 +698,7 @@ def ptx(outdir: Path) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the decode's row reader at the row they write."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import flashmla as F
+    from verity.ml.definitions.registry import flashmla as F
 
     row = {"D": D, "QB": QB, "EPS": EPS}
     targets = {

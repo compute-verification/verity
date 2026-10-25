@@ -9,7 +9,7 @@ from verity.ml.circuits.defs import PrimitiveDefinition, bind
 from verity.ml.circuits.layout import Scope, GateSelection, resolve
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Concat, Strided, runs
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 
 def node_leaf_gate(sc: Scope, j: int, leaf: int) -> int:
@@ -178,7 +178,7 @@ if __name__ == "__main__":
             okc, wc = check(P3, sb, chain, f"    PV chain merge per d ({len(pv)} k-steps)")
     # 4. MoE router: scans (carry 96 bits) and NvExpf calls
     try:
-        from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+        from verity_vllm.program.quarantine.ov_moe import moe as Q
         P4 = Program(bind(Q.MoeRouterTopK, E=8, TOPK=2, VPT=8))
         sc4 = P4.circuit.root_scope
         ok4, w4 = check(P4, sc4, body_parts(sc4), "MoeRouterTopK_v1{E=8,TOPK=2} nodes/iterations")
@@ -186,7 +186,7 @@ if __name__ == "__main__":
         print("MoE skipped:", type(e).__name__, str(e)[:120])
     # 5. Gumbel: the Const64 gates
     try:
-        from verity_vllm.program.registry import sampling as G
+        from verity.ml.definitions.registry import sampling as G
         P5 = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
         sc5 = P5.circuit.root_scope
         ok5, w5 = check(P5, sc5, body_parts(sc5), "GumbelArgmaxBf16_v1{V=8} nodes")

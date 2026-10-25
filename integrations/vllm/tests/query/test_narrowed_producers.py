@@ -17,7 +17,7 @@ torch = pytest.importorskip("torch")
 
 from verity_vllm.check.replay import coverage as COV, index as IX, population as RP  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 from verity_vllm.query.manifest.bind import Binder, coverage_check  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
 from verity_vllm.query.required import request_manifest  # noqa: E402

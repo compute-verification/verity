@@ -28,7 +28,7 @@ from verity_vllm.commit import identity as ID
 from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
-from verity_vllm.program.registry import catalog
+from verity.ml.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "deepseek_v4"

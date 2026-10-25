@@ -13,8 +13,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
-# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity_vllm.program.registry`, which imports
-# their twins in `verity_vllm.program.kernels`), and the integration's quarantine, difftest and relation modules.
+# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity.ml.definitions.registry`, which imports
+# their twins in `verity.ml.definitions.numerics`), and the integration's quarantine, difftest and relation modules.
 # The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
@@ -25,17 +25,17 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/circuit", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/program/__init__.py", "verity/ml/definitions/__init__.py",
-          "integrations/vllm/verity_vllm/program/registry",
-          "integrations/vllm/verity_vllm/program/kernels", "integrations/vllm/verity_vllm/commit/__init__.py",
+          "verity/ml/definitions/registry",
+          "verity/ml/definitions/numerics", "integrations/vllm/verity_vllm/commit/__init__.py",
           "integrations/vllm/verity_vllm/commit/challenge.py",
-          "integrations/vllm/verity_vllm/program/registry/quarantine",
-          "integrations/vllm/verity_vllm/program/registry/mla_capture.py",
-          "integrations/vllm/verity_vllm/program/registry/moe_difftest.py",
-          "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py",
-          "integrations/vllm/verity_vllm/program/kernels/relations.py",
-          "integrations/vllm/verity_vllm/program/kernels/sampling_rng.py",
-          "integrations/vllm/verity_vllm/program/kernels/libdevice_sampling.py",
-          "integrations/vllm/verity_vllm/program/kernels/rmsnorm_fused_sweep.py",
-          "integrations/vllm/verity_vllm/program/kernels/gemm_target_correspondence.py",
-          "integrations/vllm/verity_vllm/program/kernels/compiled_relations.py",
-          "integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py"]
+          "integrations/vllm/verity_vllm/program/quarantine",
+          "integrations/vllm/verity_vllm/program/mla_capture.py",
+          "integrations/vllm/verity_vllm/program/moe_difftest.py",
+          "integrations/vllm/verity_vllm/program/layer_norm_difftest.py",
+          "integrations/vllm/verity_vllm/program/relations.py",
+          "integrations/vllm/verity_vllm/program/sampling_rng.py",
+          "integrations/vllm/verity_vllm/program/libdevice_sampling.py",
+          "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",
+          "integrations/vllm/verity_vllm/program/gemm_target_correspondence.py",
+          "integrations/vllm/verity_vllm/program/compiled_relations.py",
+          "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"]

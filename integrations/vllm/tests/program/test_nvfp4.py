@@ -12,11 +12,11 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import nvfp4 as N4
-from verity_vllm.program.kernels import nvfp4_twins
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import nvfp4 as N4
+from verity.ml.definitions.numerics import nvfp4_twins
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 
 DOT = BlackwellNvf4OmmaDot64
 ONE = 0x3F800000

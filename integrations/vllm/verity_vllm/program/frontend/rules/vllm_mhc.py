@@ -31,7 +31,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import active
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _rows, _static_float, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.kernels.mhc_twin import tf32_num_split
+from verity.ml.definitions.numerics.mhc_twin import tf32_num_split
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 

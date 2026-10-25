@@ -11,10 +11,10 @@ import pytest
 
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_vocab
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import sampling_vocab
 from verity.ml.circuits.cut import call_scope
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 
 PAIRS = [(SM.GumbelTokenSelect, SM.GumbelTokenSelectSharedGreedy), (SM.GumbelTopPTokenSelect, SM.GumbelTopPTokenSelectSharedGreedy)]
 SPECIAL_TEMPS = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001,

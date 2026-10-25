@@ -9,7 +9,7 @@ import numpy as np
 from verity.ml.circuits.types import Array, Record
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry.prims import BF16, F32
 
 H, V, NL, FD, NH, QL, L, DN, DR, DV, I, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
 

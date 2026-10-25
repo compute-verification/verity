@@ -254,7 +254,7 @@ def on_bits(name: str, version: int, statics: Sequence[str], signature: Callable
     """The Boolean composite ``name_v{version}{statics}`` with body ``body`` (whose Calls are Boolean Definitions), documented by
     ``body``'s docstring, whose word view is the word Definition ``word`` bound at the same statics (`trace.word_of`), each static
     in ``lifted`` (a Boolean Definition) read as its own word view. A static-free one names ``word`` itself: the switch
-    (`verity_vllm.program.boolean`) finds a word Definition without bindings by its id alone."""
+    (`verity.ml.definitions.boolean`) finds a word Definition without bindings by its id alone."""
     d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
                             conformance="exact-model-tested", register=register)
     if statics:

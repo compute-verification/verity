@@ -163,7 +163,7 @@ def test_evaluation_targets_equal_the_definitions():
     sub = TM.subcircuit("gemm-coordinate", K=64)
     draws = [sub.draw(key, j) for j in range(64)]
     x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
-    from verity_vllm.program.registry import prims as VP
+    from verity.ml.definitions.registry import prims as VP
     assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
     ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
     assert np.array_equal(ref, evaluate_batch(sub.target(), x, w))
