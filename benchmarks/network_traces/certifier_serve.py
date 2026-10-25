@@ -23,7 +23,8 @@ namespace has no other interface. On real hosts it is only the route of the meas
   firewall and the challenger in one process, with the network registration of each link-window standing in for
   PoUW's registration of the window, which opens the window's salt;
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
-  window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys), not the deployed H = 20.
+  window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the
+  deployed key's is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
@@ -215,6 +216,9 @@ HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 EGRESS, INGRESS, N2_LINK = "responses", "requests", "served"
 HEIGHT = 10
+#: the processes `load_key` makes a key above `HEIGHT` in (at H = 20, about two minutes on eight cores); at or below
+#: it a key takes about a second in one, and a caller on a thread forks nothing
+KEYGEN_WORKERS = 8
 PROMPT = "Count from one to one hundred in words, separated by commas:"
 FILLER = " one, two, three, four, five, six, seven, eight, nine, ten,"
 REVEAL_MARGIN_S = 300.0
@@ -254,7 +258,8 @@ NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from th
 # Keys.
 
 def load_key(directory: Path, height: int = HEIGHT) -> lms.PrivateKey:
-    """The LMS key (N = 64, W = 1) in `directory`, made there first at `height` when absent, in the challengers' layout
+    """The LMS key (N = 64, W = 1) in `directory`, made there first at `height` when absent (above `HEIGHT` in
+    `KEYGEN_WORKERS` processes), in the challengers' layout
     (`benchmarks/live_challenger/serve.py`'s `load_key`): `seed` (secret, 0600), `public` (`I ‖ T[1]`), `tree.bin`
     (its tree, checked against `public` and `tree.sha512`), its leaf state `state.json`, and `public.json`, the public
     key as a deployment record carries it."""
@@ -282,7 +287,7 @@ def load_key(directory: Path, height: int = HEIGHT) -> lms.PrivateKey:
                 or hashlib.sha512(public + raw).digest() != check_p.read_bytes()):
             raise SystemExit(f"{tree_p} is not the tree of {public_p} at {params}")
     else:
-        key = lms.keygen(params, seed)
+        key = lms.keygen(params, seed, workers=KEYGEN_WORKERS if params.H > HEIGHT else 1)
         raw, public = b"".join(key.tree[1:]), lms.public_key(key)
         for path, data in ((tree_p, raw), (public_p, public), (check_p, hashlib.sha512(public + raw).digest())):
             path.write_bytes(data)
