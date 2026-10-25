@@ -198,7 +198,6 @@ theorem deriveLaw_subset (d : Program) (query law : Json) (table : Option Json) 
     have hs' : kindOf law = s := by simp [kindOf, hs]
     rw [hk] at hs'
     subst hs'
-    try dsimp only at h
     exact (Except.ok.inj h).symm
   next hne =>
     exfalso
@@ -220,25 +219,22 @@ theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Prog
     ∃ dr, Law.runOS f (.subset k) n = some dr ∧ ∀ x ∈ dr.units, x ∈ proved := by
   obtain ⟨n', named', derived, hn', hnamed', hder, units, hsub, hcase⟩ :=
     select_ok rule d query table none _ draw proved read h
-  rw [hn] at hn'
-  have e1 : n = n' := Except.ok.inj hn'
-  rw [e1] at hnamed hk
-  rw [e1]
-  rw [hnamed] at hnamed'
-  have e2 : named = named' := Except.ok.inj hnamed'
-  rw [e2] at hk
-  have hd : derived = none := deriveLaw_subset d query named' table derived (flockLaw_subset named' n' k hk).1 hder
-  rw [hd] at hcase
+  have e1 : n = n' := by rw [hn] at hn'; exact Except.ok.inj hn'
+  subst e1
+  have e2 : named = named' := by rw [hnamed] at hnamed'; exact Except.ok.inj hnamed'
+  subst e2
+  have hd : derived = none := deriveLaw_subset d query named table derived (flockLaw_subset named n k hk).1 hder
+  subst hd
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Draw.flockLaw named' n' = .ok parsed := hp
+  · have hp' : Draw.flockLaw named n = .ok parsed := hp
     rw [hk] at hp'
     have e3 : parsed = .subset k := (Except.ok.inj hp').symm
-    rw [e3] at hu
-    have hu' : Draw.drawUnits (.subset k) n' (Law.streamOf (f 0)) = .ok (units, read') := hu
-    have heq := drawUnits_subset_runOS k n' f
+    subst e3
+    have hu' : Draw.drawUnits (.subset k) n (Law.streamOf (f 0)) = .ok (units, read') := hu
+    have heq := drawUnits_subset_runOS k n f
     rw [hu'] at heq
-    cases hr : Law.runOS f (.subset k) n' with
+    cases hr : Law.runOS f (.subset k) n with
     | none =>
       rw [hr] at heq
       exact absurd heq (by simp [Except.toOption])
