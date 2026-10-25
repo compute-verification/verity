@@ -14,9 +14,9 @@ game's circuit, partition and transcript, every faulty slot is a unit wrong on e
   of a circuit without rows;
 * `GatesAgree C p`: the program `p` is the circuit `C` gate by gate, and returns only `C`'s outputs;
 * `UnitsAgree P Q`: the partition `Q` has one slot per unit of `P`, slot `u` one proof unit, the gates of unit `u`;
-* `OpensOn P val X`: the openings `val` carry the transcript `X` on every committed wire of `P`;
+* `OpensOn P val Xr`: the openings `val` carry the transcript `Xr` on every committed wire of `P`;
 * `runIn_localEval`: a unit's gates computed by the claims' `runIn` are the game's `localEval`;
-* `not_faulty_of_correct`: a unit correct in `X` is not faulty;
+* `not_faulty_of_correct`: a unit correct in `Xr` is not faulty;
 * `wrongRegZ_of_faulty`, `card_faulty_le_card_wrongRegZ`: a faulty slot is a unit wrong on the registration, so there
   are at most as many faulty slots as units wrong on it.
 -/
@@ -45,9 +45,9 @@ def UnitsAgree {C : Circuit} {n : ℕ} (P : Partition C n) (Q : _root_.Claims.Sa
   Q.rus.length = n ∧ ∀ u : Fin n, ∃ l : List ℕ, Q.rus[u.val]? = some [l] ∧
     ∀ g, g ∈ l ↔ ∃ h : g < C.N, P.unit ⟨g, h⟩ = some u
 
-/-- **The openings `val` carry the transcript `X`** on every committed wire of `P`. -/
-def OpensOn {C : Circuit} {n : ℕ} (P : Partition C n) (val : ℕ → Option Bool) (X : Fin C.N → Bool) : Prop :=
-  ∀ g ∈ P.committed, val g.val = some (X g)
+/-- **The openings `val` carry the transcript `Xr`** on every committed wire of `P`. -/
+def OpensOn {C : Circuit} {n : ℕ} (P : Partition C n) (val : ℕ → Option Bool) (Xr : Fin C.N → Bool) : Prop :=
+  ∀ g ∈ P.committed, val g.val = some (Xr g)
 
 theorem ofOp_ne_const {N : ℕ} (o : Op N) (b : Bool) : ofOp o ≠ some (.const b) := by
   cases o <;> simp [ofOp]
@@ -94,10 +94,10 @@ theorem mem_committed_of_reads {u : Fin n} {g a : Fin C.N} (hu : P.unit g = some
 
 /-- **The claims' `runIn` is the game's `localEval`** on a unit's gates, when every value read from outside the unit is
 the opening of a transcript. -/
-theorem runIn_localEval (hG : GatesAgree C p) {val : ℕ → Option Bool} {X : Fin C.N → Bool} (hO : OpensOn P val X)
+theorem runIn_localEval (hG : GatesAgree C p) {val : ℕ → Option Bool} {Xr : Fin C.N → Bool} (hO : OpensOn P val Xr)
     {u : Fin n} {l : List ℕ} (hl : ∀ g, g ∈ l ↔ ∃ h : g < C.N, P.unit ⟨g, h⟩ = some u) {ref : ℕ → Option Bool}
     (href : ∀ i, i ∉ l → ref i = val i) :
-    ∀ m (g : Fin C.N), g.val = m → P.unit g = some u → p.runIn ref l g.val = some (P.localEval X u g) := by
+    ∀ m (g : Fin C.N), g.val = m → P.unit g = some u → p.runIn ref l g.val = some (P.localEval Xr u g) := by
   intro m
   induction m using Nat.strong_induction_on with
   | _ m ih =>
@@ -109,7 +109,7 @@ theorem runIn_localEval (hG : GatesAgree C p) {val : ℕ → Option Bool} {X : F
   have hlt : g.val < p.gates.length := by rw [hG.1]; exact g.isLt
   have hx : p.gates[g.val]? = some p.gates[g.val] := List.getElem?_eq_getElem hlt
   have hx' : ofOp (C.op g) = some p.gates[g.val] := (hG.2.1 g).symm.trans hx
-  rw [_root_.Claims.Sampling.Boundary.runIn_eq, hx, Option.bind_some, P.localEval_of_mem X hu]
+  rw [_root_.Claims.Sampling.Boundary.runIn_eq, hx, Option.bind_some, P.localEval_of_mem Xr hu]
   refine ofOp_val hx' hni _ fun a ha => ?_
   have hag : a.val < g.val := C.topo g a ha
   by_cases hal : a.val ∈ l
@@ -120,14 +120,14 @@ theorem runIn_localEval (hG : GatesAgree C p) {val : ℕ → Option Bool} {X : F
     exact ih a.val (hgm ▸ hag) a rfl hau
   · have hau : P.unit a ≠ some u := fun h => hal ((hl a.val).2 ⟨a.isLt, h⟩)
     simp only [hal, ↓reduceIte]
-    rw [read_eq_of_agree hG, href _ hal, hO a (mem_committed_of_reads hu ha hau), P.localEval_of_not_mem X hau]
+    rw [read_eq_of_agree hG, href _ hal, hO a (mem_committed_of_reads hu ha hau), P.localEval_of_not_mem Xr hau]
 
 /-- **A unit correct in the transcript is not faulty**, at a one-stage statement whose program, partition and openings
 are the game's circuit, partition and transcript. -/
 theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
     {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
-    {X : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) X)
-    {u : Fin n} (hc : P.Correct X u) : ¬ _root_.Claims.Sampling.Faulty H Cm s Q w u.val := by
+    {Xr : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xr)
+    {u : Fin n} (hc : P.Correct Xr u) : ¬ _root_.Claims.Sampling.Faulty H Cm s Q w u.val := by
   obtain ⟨l, hQ, hl⟩ := hU.2 u
   intro hF
   apply hF
@@ -170,14 +170,14 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
         exact fun h => hg'l ((hl g').2 ⟨hg'N, h⟩)
     have hrefg : _root_.Claims.Sampling.RU.ref s.prog [l] (w.val H Cm s) (fun _ => false) g = w.val H Cm s g := by
       simp [_root_.Claims.Sampling.RU.ref, hgates, hb]
-    refine ⟨X ⟨g, hgN⟩, by rw [hrefg]; exact hO _ hgc, ?_⟩
+    refine ⟨Xr ⟨g, hgN⟩, by rw [hrefg]; exact hO _ hgc, ?_⟩
     rw [runIn_localEval hG hO hl href g ⟨g, hgN⟩ rfl hgu, hc _ hgc hgu]
 
 /-- **A faulty slot is a wrong unit** of the transcript. -/
 theorem wrong_of_faulty {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
     {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
-    {X : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) X)
-    {u : Fin n} (hF : _root_.Claims.Sampling.Faulty H Cm s Q w u.val) : u ∈ P.wrong X :=
+    {Xr : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xr)
+    {u : Fin n} (hF : _root_.Claims.Sampling.Faulty H Cm s Q w u.val) : u ∈ P.wrong Xr :=
   P.mem_wrong.2 fun hc => not_faulty_of_correct hG hU hO hc hF
 
 end Units
@@ -192,30 +192,30 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
 omit [Fintype K] [DecidableEq K] in
-/-- **A faulty slot is a unit wrong on the registration** `R` at the transcript `X`, at a one-stage statement whose
-program, partition and openings are the game's circuit, partition and `X`. -/
+/-- **A faulty slot is a unit wrong on the registration** `R` at the transcript `Xr`, at a one-stage statement whose
+program, partition and openings are the game's circuit, partition and `Xr`. -/
 theorem wrongRegZ_of_faulty {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
     {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
-    {X : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) X)
+    {Xr : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xr)
     (R : Reg) {u : Fin n} (hF : _root_.Claims.Sampling.Faulty H Cm s Q w u.val) :
-    u ∈ wrongRegZ A P planZ tab vb R X :=
-  wrong_subset_wrongRegZ A P planZ tab vb R X (wrong_of_faulty hG hU hO hF)
+    u ∈ wrongRegZ A P planZ tab vb R Xr :=
+  wrong_subset_wrongRegZ A P planZ tab vb R Xr (wrong_of_faulty hG hU hO hF)
 
 omit [Fintype K] [DecidableEq K] in
-/-- **At most as many faulty slots as units wrong on the registration** `R` at the transcript `X`: so the game's bound
+/-- **At most as many faulty slots as units wrong on the registration** `R` at the transcript `Xr`: so the game's bound
 on `K₀ ≤ #wrongRegZ` bounds the claims' `K₀ ≤ #faulty`. -/
 theorem card_faulty_le_card_wrongRegZ {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
     {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
-    {X : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) X)
-    (R : Reg) : (_root_.Claims.Sampling.faulty H Cm s Q w).card ≤ (wrongRegZ A P planZ tab vb R X).card := by
+    {Xr : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xr)
+    (R : Reg) : (_root_.Claims.Sampling.faulty H Cm s Q w).card ≤ (wrongRegZ A P planZ tab vb R Xr).card := by
   classical
   calc (_root_.Claims.Sampling.faulty H Cm s Q w).card
-      ≤ ((wrongRegZ A P planZ tab vb R X).map Fin.valEmbedding).card := by
+      ≤ ((wrongRegZ A P planZ tab vb R Xr).map Fin.valEmbedding).card := by
         refine Finset.card_le_card fun v hv => ?_
         simp only [_root_.Claims.Sampling.faulty, Finset.mem_filter, Finset.mem_range] at hv
         rw [hU.1] at hv
         exact Finset.mem_map.2 ⟨⟨v, hv.1⟩, wrongRegZ_of_faulty A P planZ tab vb hG hU hO R hv.2, rfl⟩
-    _ = (wrongRegZ A P planZ tab vb R X).card := Finset.card_map _
+    _ = (wrongRegZ A P planZ tab vb R Xr).card := Finset.card_map _
 
 end Reg
 
