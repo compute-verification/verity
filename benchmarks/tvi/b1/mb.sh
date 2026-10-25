@@ -2,7 +2,8 @@
 # B1's 1-5 MB points on A2's GSM8K curve, one leased GPU, one SEED: for each of ARMS (default lora1 lora1h lora2), GRPO with
 # A2's grpo.py and recipe (a2/, 150 steps, in-job greedy and T = 1 evals), then counted.py (watch.py) on its final checkpoint;
 # then every final checkpoint served unmerged through vLLM's LoRA path (as A2 evaluated lora16), then the step-75 checkpoints.
-# A phase whose estimate would run past the job's end (START + MAX_MIN) is skipped, never cut short.
+# A phase whose estimate would run past the job's end (START + MAX_MIN) is skipped, never cut short. UNMERGED (default ARMS;
+# empty skips) names the arms served unmerged; MID=0 skips the step-75 checkpoints.
 #   research run --queue --source CHECKOUT --project verity --gpus 1 --max-min 90 --cwd source \
 #     --send gsm8k_train.jsonl --send gsm8k_test.jsonl --send gsm8k.txt --env SEED=1 -- bash benchmarks/tvi/b1/mb.sh
 set -uo pipefail
@@ -74,12 +75,13 @@ for arm in $ARMS; do
   analyze "step$STEPS" 4
 done
 
-if fits 8 "unmerged evals"; then
+UNMERGED="${UNMERGED-$ARMS}"
+if [ -n "$UNMERGED" ] && fits 8 "unmerged evals"; then
   timeout $(( END - $(date +%s) )) "$PYV" evalckpts.py --root "$CKPT_ROOT" --glob "*/step$STEPS" --model "$MODEL" --data "$S/data" \
-    --out "$OUT" --n 4 --temperature 1.0 --unmerged "${ARMS// /+}" > "$OUT/log-evalckpts.txt" 2>&1
+    --out "$OUT" --n 4 --temperature 1.0 --unmerged "${UNMERGED// /+}" > "$OUT/log-evalckpts.txt" 2>&1
   echo "$(date -u +%H:%MZ) unmerged evals rc=$?"
   grep -h '^{' "$OUT/log-evalckpts.txt" || true
 fi
-analyze "step*" 8
+[ "${MID:-1}" = 1 ] && analyze "step*" 8
 kill "$MON" 2>/dev/null
 ls -la "$OUT"
