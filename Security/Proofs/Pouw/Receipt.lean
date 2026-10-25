@@ -1,4 +1,4 @@
-import Models.Pouw.Guarantees.Receipt
+import Definitions.Pouw.Guarantees.Receipt
 import Proofs.Pouw.Receipt.Duo
 import Proofs.Pouw.Receipt.Window
 import Proofs.Pouw.Receipt.Li
@@ -14,7 +14,7 @@ import Proofs.Pouw.Receipt.Xor
 duo's four words anywhere in a run, its checkpoints every four words and the kernel of its long runs are in
 `Receipt/Window.lean`.
 
-Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
+Each statement of `Definitions/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
 `Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, the served receipt in
 `Receipt/DuoReceipt.lean`, fx1's transport of each in `Receipt/Fx1.lean`, and li's half steps and checkpoints in
 `Receipt/Li.lean`.
