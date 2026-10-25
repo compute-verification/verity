@@ -157,12 +157,16 @@ def test_onsite_accepting_while_bandwidth_is_undecided_is_undecided(tmp_path):
     assert r["composed"]["verdict"] == "undecided"
 
 
+#: onsite's ports, by the leg each answers for
+PORTS = {"NetworkCheck.Period.protocol": "certifier", "PouwCheck.protocol": "pouw",
+         "SampledProofs.OneStage.protocol": "sampled-proofs"}
+
+
 def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
-    assert onsite == ["Stub.certifier", "Stub.pous", "Stub.pouw", "Stub.sampledProofs"], \
+    assert onsite == [*PORTS, "Stub.bandwidth", "Stub.pous"], \
         "onsite's components changed: a port replaced a stub, so the runner may now decide through `onsite check`"
-    named = sorted(e.component for e in T.TABLE if e.onsite)
-    assert named == sorted(C.stub_component(x) for x in onsite)
+    assert sorted(PORTS.get(x) or C.stub_component(x) for x in onsite) == sorted(e.component for e in T.TABLE)
     assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 5
     assert T.TABLE[0].name == "integrity", "integrity runs first: PoUW's evidence is its answer"
 

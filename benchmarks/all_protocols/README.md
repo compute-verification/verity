@@ -16,6 +16,13 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   records alone: live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record's audit record, turned
   into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`): at most `public.bound` of the window's units wrong,
   except with probability δ.
+- `legs/certifier.py`: communication, real. A link carries the loop's requests and step outputs (read back from its
+  window) through the network certifier, certifier-serve's planned profile on an injected clock; each link-window's unit
+  is proved `--zk` behind the Lean firewall and decided by N2's verifier of record (`n2_zk.py prove`;
+  `ALLP_CERTIFIER_PROVE=0` decides in the clear, which answers `undecided`), and `network-period check`
+  (`verity/certifier/v0`) decides the period with the integrity leg's audit, publishing `K`. `certifier.month.json` has
+  the month's bound at δ = 1% and 10⁻⁶ (`HorizonLeakAccepted`, conditional). The certifier runs on the prover's node, a
+  rehearsal; `ALLP_CERTIFIER_RUN` names a run of vy-challenger-1's gate instead.
 - `verity_all_protocols/compose.py`: the composed verdict. A rejecting leg rejects it (onsite's reject dominance). It is
   `pending-ports` while a leg is missing or has no case, or any of onsite's components (read from `CoreOnsite.lean`) is
   still a stub, since a stub answers for itself, not for the protocol. Once all of them are ports, `onsite check` decides
@@ -30,7 +37,7 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
 | work | PoUW | `legs/pouw.py` | compute-accounting | missing |
 | space | PoUS | `legs/pous.py` | memory-accounting | missing |
 | bandwidth | the bandwidth audit over PoUS's store, or remote bandwidth | `legs/bandwidth.py` | memory-accounting | missing |
-| communication | the network certifier | `legs/certifier.py` | network-accounting | missing |
+| communication | the network certifier | `legs/certifier.py` | network-accounting | real |
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 32 -- \
