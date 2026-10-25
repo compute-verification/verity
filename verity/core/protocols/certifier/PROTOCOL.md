@@ -482,6 +482,10 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   positions carries each of the bucket's E = S·P port entries, its id and its index e (W = 32 + D bits), and its
   (2D − 1)·2^(D − 1) switches are witness. Every setting is a permutation, and `IoTieMatch` holds each data cell's
   routed entry to the index the map names, so the switches can only find entries, never choose them.
+  `IoTieRoute{W, D}` is built recursively: a column of 2^(D − 1) `IoTieSwitch{W}`es, the two halves'
+  `IoTieRoute{W, D − 1}`, and a column. Its ANDs, their order and its lowering's circuit digest are the flat network's
+  (`test_the_recursive_route_is_the_flat_one`, the sidecar's pins). Each depth is built once, so the build's memory is
+  the wiring's. The flat trace took about 1.9 KB a gate: 15 GB at `IoTieRoute{42, 12}`, which now takes 129 MB.
 
 **(c) Decision: the stream is the warden's, and a bucket has one order.**
 - **The stream** is warden framing: the request's ingress ordinal, which the warden writes from the connection it
@@ -671,9 +675,10 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     20,300,946. Of them, IoTieRequest's scan is 166,816 and 2,669,055, and the sort's `IoTieRoute{CB + 33, D2}`
     1,978,368 (D2 = 12) and 10,174,464 (D2 = 14). With the port opened in the unit they were 20,569,541 and
     38,169,048: `IoTiePort{512, 6, 10}` adds 17,868,101 ANDs and a join, as it does to `IoTieBucket{256, 16, 512, 6,
-    10}` (20,009,029, against 2,140,927). Building them takes 15.1 GB and 84.7 GB (204 s and 1,241 s), nearly all of
-    it `IoTieRoute`'s flat trace. A bucket reads the steps that compute its own fields, so a step whose tokens'
-    fields are in k buckets is read k times, and each bucket's sort is over its NK + E members.
+    10}` (20,009,029, against 2,140,927). Building them takes 1.3 GB and 4.7 GB (29 s and 88 s,
+    r20261025-005959-9e62). `IoTieRoute`'s flat trace took 15.1 GB and 84.7 GB (204 s and 1,241 s). A bucket reads
+    the steps that compute its own fields, so a step whose tokens' fields are in k buckets is read k times, and each
+    bucket's sort is over its NK + E members.
     A cheaper split has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival
     order, and hold every computation and cache hit to it in the Commit's units; the tie would then read the
     bucket's stream entries in order with no map or sort.
@@ -966,10 +971,10 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root are
   compute's and vllm's.
 
-**Reuse.** The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTieBucket`) are Boolean
-composites with no hash. No unit hashes a row or climbs a tree: both ties read the warden's registered rows, and the
-egress and ingress-ids ties the Commit's, whose rows the statement's registered-read slots hash (`NetworkRowDigest`'s
-and `Hm96Sha512Leaf`'s work) and whose paths the verifier climbs.
+**Reuse.** The new Definitions (`IoTieCell`, `IoTieSwitch`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`,
+`IoTieBucket`) are Boolean composites with no hash. No unit hashes a row or climbs a tree: both ties read the warden's
+registered rows, and the egress and ingress-ids ties the Commit's, whose rows the statement's registered-read slots
+hash (`NetworkRowDigest`'s and `Hm96Sha512Leaf`'s work) and whose paths the verifier climbs.
 
 **The prototype** (`io_tie`, on the warden's own egress and a fake upstream's port) has the reference
 (`io_tie.reference`, in the clear), the Boolean Definitions above, and their tests:

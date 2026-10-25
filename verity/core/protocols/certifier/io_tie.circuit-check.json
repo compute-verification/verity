@@ -17,7 +17,12 @@
    "and": 1047
   },
   "IoTieRoute_v1{W=36,D=4}": {
-   "and": 2016
+   "and": 2016,
+   "type": "ff22aaef6bad6cef815ade229cfedbb0eb1819f567ce0fd123d5d898b2e7b2f40d3ca222945884f63200f2b6ece29272f6219bf9e57a460bde13ed7558e3d605"
+  },
+  "IoTieSwitch_v1{W=36}": {
+   "and": 36,
+   "type": "045340e2f9a9c321c1770eda927b99d7f706a29f66004c6a484184194567f4261fb877dfe5ce7642b1859cfba8e7cebb87c13afd9ecd3d6ae842bd7a9556b7d5"
   }
  }
 }
