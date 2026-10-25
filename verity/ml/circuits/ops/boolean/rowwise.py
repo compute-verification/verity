@@ -13,7 +13,8 @@ and ``cvt.rn.bf16.f32``:
 - ``m`` is the first greatest x_i (+0 and -0 one value, so the earlier is kept, as `F32MaxRef_v1`'s fold keeps it), or 0x7FFF
   when any x_i is a NaN. It is one of the x_i, so `SoftmaxMax` outputs it exactly, in 16 bits.
 - ``e_j = MUFU.EX2.FTZ(RN(RN(f32(x_j) - f32(m)) * L))``, L = RN32(log2 e) = 0x3FB8AA3B (`MufuEx2Ftz_v2`'s builder): the
-  reference's `F32ExpRn_v1` has no Boolean form, and MUFU.EX2 is what an sm_120 kernel computes.
+  reference's `F32ExpRn_v1` has no Boolean form, and MUFU.EX2 is what an sm_90 kernel computes, read from the sm_89 table
+  as the H200 Definitions read it (`verity_vllm.program.kernels.fa3_model`: assumed identical on sm_90).
 - ``s = (((+0 + e_0) + e_1) + ...) + e_{N-1}``, in ascending order, and ``r = RN(1 / s)``. `SoftmaxRecip` outputs r's low
   (HALF = 0) or high (HALF = 1) 16 bits.
 - ``p_j = bf16_rn(RN(e_j * r))``. `SoftmaxOut` recomputes e_j from x_j and m, so it reads x_j, m and r's two halves.
