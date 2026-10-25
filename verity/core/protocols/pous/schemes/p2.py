@@ -45,6 +45,8 @@ leaves and challenge derivation), not with the expander.
   forward queries per answer and any depth, is accepted with probability at most `1% + 2^-128`.  The 128 bits per block
   are a budget for structure an instantiation might leak.  That is **abstract M1** on P2's exact domain `[0, p)`:
   independent forward-only uniform permutations of `[0, p)`, with no hypothesis, and the same for both codecs.
+  `P2.certificate` is it at the registered point alone (`2^19` blocks); `family_certificate` is it for any v4 store in
+  that block range, which the run protocol takes where the registered one doesn't fit.
 - **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
@@ -103,6 +105,10 @@ POINT = (16448, 21065, 1 << 16)
 segments."""
 
 CERT_BLOCKS = 1 << 19
+
+CERT_FAMILY_BLOCKS = (1 << 8, 1 << 23)
+"""The block counts `P2SlackFamilyUncond` proves its `λ = 128` row at `k = 105` for, at the registered width and prime
+(`family_certificate`)."""
 
 CERT_K = 105
 """The spec's k (decision F6): `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
@@ -358,18 +364,28 @@ def _check(params: P2Params, s: int) -> None:
         raise ValueError(f"segment {s} is outside 0..{params.segments - 1}")
 
 
+def encode_blocks(params: P2Params, salt: bytes, s: int, j0: int, payloads: bytes) -> list[bytes]:
+    """Blocks `j0, j0 + 1, …` of segment `s` of C from their payloads, `len(payloads)` a whole number of them: a slice of
+    `encode_segment`, so a segment's blocks can be encoded apart (each block's keys are its own)."""
+    _check(params, s)
+    f, pb, nb = _field(params), params.payload_bytes, params.block_bytes
+    n, rest = divmod(len(payloads), pb)
+    if rest or not 0 <= j0 <= j0 + n <= params.blocks_per_segment:
+        raise ValueError(f"blocks {j0}.. of {len(payloads)} payload bytes are not whole blocks of segment {s}")
+    keys, out = segment_keys(params, salt, s), []
+    for j in range(n):
+        k, t = keys(j0 + j)
+        m = int.from_bytes(payloads[j * pb:(j + 1) * pb], "big")
+        out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "big"))
+    return out
+
+
 def encode_segment(params: P2Params, prims, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
     """Segment `s` of C: `c_j = ρ(σ_K(ρ(m_j + t_j)))` per block (two roots each)."""
     _check(params, s)
     if len(w_seg) != params.segment_bytes:
         raise ValueError(f"a segment of W is {params.segment_bytes} bytes")
-    f, pb, nb = _field(params), params.payload_bytes, params.block_bytes
-    keys, out = segment_keys(params, salt, s), []
-    for j in range(params.blocks_per_segment):
-        k, t = keys(j)
-        m = int.from_bytes(w_seg[j * pb:(j + 1) * pb], "big")
-        out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "big"))
-    return out
+    return encode_blocks(params, salt, s, 0, w_seg)
 
 
 def decode_segment(params: P2Params, prims, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes:
@@ -444,7 +460,20 @@ class P2ChaCha(P2):
     expander = CHACHA8
 
 
-__all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+def family_certificate(params: P2Params) -> Certificate | None:
+    """`P2SlackFamilyUncond`'s `λ = 128` row for a v4 store at the registered width and prime of any block count in
+    `CERT_FAMILY_BLOCKS`, in any number of segments: the theorem is about `m1p B 16448 (2^16448 − 21065) b` for every such
+    `B`, and segments only frame each block's keys.  `P2.certificate` stays the registered point's alone, the one the
+    memory challenger's coverage and the timed audit's Lean properties read; the run protocol (`period.gaps`,
+    `PousCheck.RunProtocol.gaps`) takes this one where the registered one doesn't fit."""
+    lo, hi = CERT_FAMILY_BLOCKS
+    if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
+        return None
+    return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+
+
+__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "P2", "P2ChaCha", "P2Params",
-           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment", "expand_prefix",
-           "segment_keys", "segment_seed", "sha512_keys", "stream"]
+           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream"]
