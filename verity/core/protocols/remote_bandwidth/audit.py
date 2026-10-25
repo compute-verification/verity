@@ -95,7 +95,7 @@ import os
 import secrets
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
@@ -736,7 +736,9 @@ class Record:
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
     (`RequirementLink.mapped`), and the receipts every draw requested (`Params.samples`, None in a record no session
     made): a draw of U receipts drew min(`samples`, U), so `samples` is the k_t of the draw's rejection Σ_t k_t/2^64
-    (`ledger.rejection`), which a draw opening all its receipts doesn't show.  `public` is what acceptance makes
+    (`ledger.rejection`), which a draw opening all its receipts doesn't show.  `samples` is also the session's draw cap
+    s and `append_coins` the append coins its coin commitment reserved, which bound every window of the session,
+    whatever its outcome (`ledger.binding`; None in a record no session made).  `public` is what acceptance makes
     public; `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
     and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
@@ -756,6 +758,7 @@ class Record:
     rows: int = receipts.SKETCH_ROWS
     appended: int = 0
     released: int = 0
+    append_coins: int | None = field(default=None, kw_only=True)
     lifetime: int | None = None
     appends: bytes | None = None
     pace: Pace | None = None
@@ -1290,7 +1293,16 @@ class Session:
         return Scheduled(self.registration.digest, self.commitment.root, cap)
 
     def record(self) -> Record:
-        """The session's record, once every window is accepted."""
+        """The session's record, once every window is accepted, with its bounds (`bounded`)."""
+        return self.bounded(self._record())
+
+    def bounded(self, record: Record) -> Record:
+        """`record` with the bounds every window of this session obeys, whatever its outcome: its draw cap and the
+        append coins its coin commitment reserved (`Record.samples`, `Record.append_coins`, `ledger.binding`)."""
+        return replace(record, samples=self.params.samples, append_coins=self.commitment.family(coins.APPEND) or 0)
+
+    def _record(self) -> Record:
+        """The session's record without its bounds."""
         self._live()
         if len(self.windows) != self.params.windows or any(w.verdict is None or not w.verdict.accepted for w in self.windows):
             raise SessionError("a record needs every window of the session accepted")

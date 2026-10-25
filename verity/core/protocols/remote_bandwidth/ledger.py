@@ -181,24 +181,43 @@ def compressions(record: audit.Record, node: Node) -> int:
     return math.ceil(node.sha512_per_s * record.span_ns / 1e9)
 
 
+def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max_blocks: int) -> int:
+    """|L_t|, the most receipts a window of a session can have at any outcome, from its protocol structure: its passes,
+    at most the pace's k (a (k + 1)-th root is refused as `order`) or, unpaced, fewer than `audit.STEP_LIMIT` (each
+    pass's step is above the last's and below it), each receipting at most the store's extent once (a plan repeats no
+    block): the registered `blocks` when the session reserved no append coins, so no append takes it past them, and
+    the codec's `max_blocks` when it did."""
+    passes = audit.STEP_LIMIT - 1 if pace is None else pace.k
+    return passes * (blocks if append_coins == 0 else max_blocks)
+
+
+def binding_over(windows: int, receipts: int, samples: int, queries: int) -> float:
+    """`binding` over a session of `windows` windows, at most `receipts` receipts a window (`window_receipts`) and a
+    draw cap of `samples`, its prover making at most `queries` SHA-512 compressions over the span."""
+    s = min(samples, receipts)
+    return windows * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
+
+
 def binding(record: audit.Record, node: Node) -> float:
     """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
-    receipt moved, presented with an accepted row other than the one its root holds, the likeliest given what precedes
-    its window's coin, which hashes a SHA-512 collision (`Hash.Guarantees.RowBinding`).  Window t's fork finder runs
-    the prover twice from its cut on independent coins and checks both runs' openings, q_t = 2·F·C +
-    2·s'_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s);
-    under claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
+    receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
+    the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
+    prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·F·C +
+    2·s_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s); under
+    claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
     `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
-    L_t the receipts window t can open, s_t its draws and split_t the chance that the two runs' roots differ; where the
-    cut fixes the roots, split_t = 0 and that is Σ_t √(U_t·s'_t)·q_t/2^256.5, read here at the record's U_t and s'_t.
-    The deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
-    yet and this charge takes it as 0 (note:20261025T0010Z-report-bind-fork)."""
-    fc = node.sketch_outside * compressions(record, node)
-    total = 0.0
-    for w in record.windows:
-        s = w.profile.drawn["receipt"]
-        total += math.sqrt(w.receipts * s) * (2 * fc + 2 * s * OPENING_HASHES)
-    return total / 2 ** 256.5
+    L_t a set holding every receipt window t opens at every outcome, s_t the session's draw cap and split_t the chance
+    that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
+    prover's play: this charges them at `window_receipts` and the record's `samples`.  Where the cut fixes the roots,
+    split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
+    deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
+    yet: this charge takes it as 0, pending the change that sends the prover no commitment to a window's openings coin
+    before its roots (the gap `binding-split`, `PROTOCOL.md` §8)."""
+    if record.samples is None or record.append_coins is None:
+        raise ValueError("the binding term is charged at the session's bounds, its draw cap and its append coins, "
+                         "which a record no session made doesn't state")
+    L = window_receipts(record.pace, record.blocks, record.append_coins, record.codec.max_blocks)
+    return binding_over(len(record.windows), L, record.samples, node.sketch_outside * compressions(record, node))
 
 
 @dataclass(frozen=True, slots=True)
@@ -388,8 +407,8 @@ def _paced(record: audit.Record) -> str | None:
 def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
-    (`hiding`), the receipts' binding term (`binding`), SketchBound's δs (`sketch`) and the draw's rejection
-    (`rejection`)."""
+    (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
+    draw's rejection (`rejection`)."""
     return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
             "hiding": hiding(record), "binding": binding(record, node), "sketch": sketch(record, node),
             "rejection": rejection(record)}
