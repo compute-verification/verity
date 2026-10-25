@@ -12,12 +12,14 @@ the server can move through the wardens in the period, as `NetTiming.Guarantees.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own):
 
-    {"audits": [{"free": f, "steps": k}, …], "cells": [cap, …], "jitter": Dj, "key": hex(I ‖ T[1]),
+    {"audits": [{"free": f, "steps": k}, …], "cells": [cap, …], "first": w₀, "jitter": Dj, "key": hex(I ‖ T[1]),
      "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex, "session": hex(session),
      "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
 each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-horizon `k`), each warden connection's cell cap over the period (`cap_c`), the observations' jitter bound `Dj ≥ 1`, the
+horizon `k`), each warden connection's cell cap over the period (`cap_c`), the session's window the period starts at
+(`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many periods), the
+observations' jitter bound `Dj ≥ 1`, the
 network certifier's LMS public key and parameters and the certifier session (32 bytes) every certificate binds, the link
 (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for the link (the partition object's `program`,
 `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
@@ -42,7 +44,8 @@ auditor's device, issued for it.
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 
 * the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
-* link-window `w`: its registration names the link's Program and the provenance `{"kind": "served", "window": w}`;
+* link-window `w` (the `i`-th, `w = w₀ + i`): its registration names the link's Program and the provenance
+  `{"kind": "served", "window": w}`;
   both certificates are the key's, name the link, their end and `w`, and verify under LMS over `certificate_message` in
   the session; the clock certificate is the key's egress certificate of the link at `w`, signs `clock_digest(sync)`
   and verifies, and its sync is in Σ_sync (`advice`); and the answer is one-stage's for that registration's digest,
@@ -56,12 +59,13 @@ auditor's device, issued for it.
                          "wrong_units": b}, …],
      "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
 
+with `eps` the union of the audits' δ, an exact ratio (`Core.Ratio.toString`): except with probability at most `eps`,
+every audit's wrong units are within its bound, and so K bounds the period's leak;
+
 with `b` the audit's bound on wrong units at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
 `⌈log2 Σ_{j ≤ b} C(N, j)⌉` (the possible faulty sets of a uniform `subset:k` draw: every set of at most `b` units),
 `faulty_bits` = `16 · b` (a proof unit's outputs are at most 16 bits), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of
-the terms. The schedules term charges each link-window's sync, the one the clock certificate signs. `eps` is the
-probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum in lowest terms
-(`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
+the terms. The schedules term charges each link-window's sync, the one the clock certificate signs.
 
 **Profile**: the link, each window's certified sync `[δ, num, den]`, and `m`.
 
@@ -95,6 +99,7 @@ structure Audit where
 structure Params where
   audits : Array Audit
   cells : Array Nat
+  first : Nat
   jitter : Nat
   link : String
   lms : Lms.Params
@@ -156,7 +161,7 @@ def syncSetOf (j : Json) : V NetworkCertifier.SyncSet := do
   else throw "sync_set: non-empty, each delta and each rho listed once"
 
 def paramsKeys : List String :=
-  ["audits", "cells", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 
 def paramsOf (j : Json) : V Params := do
   exactly j paramsKeys "the object"
@@ -164,6 +169,7 @@ def paramsOf (j : Json) : V Params := do
     exactly a ["free", "steps"] "an audit"
     pure ({ free := ← Flock.J.nat a "free" "an audit", steps := ← Flock.J.nat a "steps" "an audit" } : Audit)
   let cells ← (← Flock.J.arr j "cells" "the object").mapM (Flock.J.asNat · "cells")
+  let first ← Flock.J.nat j "first" "the object"
   let jitter ← Flock.J.nat j "jitter" "the object"
   unless 1 ≤ jitter do throw "jitter: the observations' jitter bound is at least 1"
   let link ← Flock.J.str j "link" "the object"
@@ -181,7 +187,7 @@ def paramsOf (j : Json) : V Params := do
   let syncSet ← syncSetOf (← Flock.J.get j "sync_set" "the object")
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
-  pure { audits, cells, jitter, link, lms, key, session, program, syncSet, windows }
+  pure { audits, cells, first, jitter, link, lms, key, session, program, syncSet, windows }
 
 /-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record), the record's own format the tag. -/
 def registrationOf (j : Json) (ctx : String) : V Registration := do
@@ -337,11 +343,13 @@ structure Public where
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.audits.map (·.bits)).foldl (· + ·) 0
 
-/-- `Σ_i δ_i` over the audits, exactly, in lowest terms: the union bound on `K` failing. -/
-def Public.eps (x : Public) : Core.Ratio :=
-  let (n, d) := x.audits.foldl (fun (n, d) t => (n * t.facts.delta.den + t.facts.delta.num * d, d * t.facts.delta.den))
-    (0, 1)
-  ⟨n / Nat.gcd n d, d / Nat.gcd n d⟩
+/-- `a + b`, exactly. -/
+def ratioAdd (a b : Core.Ratio) : Core.Ratio :=
+  (Core.Ratio.mk' (a.num * b.den + b.num * a.den) (a.den * b.den)).getD a
+
+/-- The union of the audits' δ: the probability, at most, that some audit's bound fails, so that K fails to bound the
+period's leak. -/
+def Public.eps (x : Public) : Core.Ratio := x.audits.foldl (fun r t => ratioAdd r t.facts.delta) ⟨0, 1⟩
 
 /-- The bound's terms from the audits' layout terms and facts, the cells' caps, the jitter bound, `#Σ_sync` and the
 link-windows. -/
@@ -368,7 +376,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
   else if e.audits.size ≠ c.audits.size then
     .reject s!"evidence: {e.audits.size} audits' answers for {c.audits.size} registered"
   else
-    let ws := (c.windows.zip e.windows).zipIdx.map fun ((reg, x), w) => windowCheck p w reg x
+    let ws := (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) => windowCheck p (p.first + i) reg x
     let as := (c.audits.zip e.audits).zipIdx.map fun ((reg, a), i) => auditCheck i reg a
     match firstFinding (ws.toList.map findingOf ++ as.toList.map findingOf) with
     | some (.reject, r) => .reject r
@@ -412,9 +420,9 @@ def protocol : Core.Protocol where
 -- 2 syncs over 3 link-windows, and jitter below 2 over 3 steps
 #guard (terms #[⟨0, 3⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
   3 + 3 + (0 + 9 + 64 + 3)
--- eps over audits at δ = 1/10, 1/15 and 1/6 is 1/3; over none it is 0
-#guard (terms #[⟨0, 0⟩, ⟨0, 0⟩, ⟨0, 0⟩] #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1
-  ).eps.toString == "1/3"
+-- two audits at δ = 1/100 and 1/10^6: ε = 10001/1000000
+#guard (terms #[⟨0, 1⟩, ⟨0, 1⟩] #[{ units := 4, drawn := 1, delta := ⟨1, 100⟩, wrong := 0 },
+  { units := 4, drawn := 1, delta := ⟨1, 1000000⟩, wrong := 0 }] #[] 1 1 1).eps.toString == "10001/1000000"
 #guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
 
 end NetworkCheck.Period

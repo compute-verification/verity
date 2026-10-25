@@ -1159,7 +1159,7 @@ class Peer:
             return id_request(**fields, user=name, frame_bytes=self.B_in)
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B_in)
-        body = self.body if self.body is not None else live_body(q["session"], self.live_model)
+        body = q.get("body") or (self.body if self.body is not None else live_body(q["session"], self.live_model))
         return live_request_bytes(name, body, q["frames"], self.B_in)
 
     async def read(self, reader: asyncio.StreamReader, origin: float) -> None:
@@ -1771,9 +1771,9 @@ def live_comparisons(plan: dict, setup: Setup, frames: Sequence[LogicalFrame], r
     return {"model_syncs_met_windows": sum(w not in late for w in range(windows)), "hindsight": hindsight}
 
 
-def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dict:
+def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit, client: Path | None = None) -> dict:
     """The audit of one run's published records, and the comparisons with the reference and the model. The verifier
-    is `audit`, a class with `audit.Audit`'s interface."""
+    is `audit`, a class with `audit.Audit`'s interface; the peer's `peer.json` is in `client`, by default `run`."""
     setup = Setup(report)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
@@ -1878,7 +1878,7 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
         for b in in_frames.get(q["stream"], []):
             delivery[round(b * i.bucket_ms - q["trace_ms"], 3)] += 1
 
-    peer = json.loads((run / "peer.json").read_text())
+    peer = json.loads(((client or run) / "peer.json").read_text())
     zero = bytes(e.allocation * e.frame_bytes)
     wire = []
     for rec in sorted(out_records, key=lambda r: r.window):

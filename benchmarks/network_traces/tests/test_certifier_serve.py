@@ -280,6 +280,27 @@ def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
     assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
 
 
+def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_made_in_its_workers(tmp_path,
+                                                                                                    monkeypatch):
+    """`certifier-rehearse`'s command passes its keys' height, the deployed key's (20) unless the request gives one,
+    as `rehearse`'s `--height`, which makes both keys at it; `load_key` makes a key above `HEIGHT` in
+    `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in one,
+    and either loads back from its files."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
+    given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
+                                                       "u")[2:])
+    assert (plain.height, given.height) == (cs.lms.DEPLOYED.H, 10) and cs.KEYGEN_WORKERS == 8
+    keygen, workers = cs.lms.keygen, []
+    monkeypatch.setattr(cs.lms, "keygen", lambda params, seed, workers=1, seen=workers: (
+        seen.append((params.H, workers)), keygen(params, seed, workers))[1])
+    for h in (cs.HEIGHT, cs.HEIGHT + 1):
+        made = cs.load_key(tmp_path / f"h{h}", h)
+        assert cs.load_key(tmp_path / f"h{h}").tree == made.tree and len(made.tree) == 2 ** (h + 1)
+    assert workers == [(cs.HEIGHT, 1), (cs.HEIGHT + 1, cs.KEYGEN_WORKERS)]
+
+
 def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
     """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
