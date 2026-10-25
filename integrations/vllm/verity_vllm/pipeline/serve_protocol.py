@@ -1,13 +1,16 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
-CPU tests; `framing_agrees` holds the two to each other."""
+CPU tests; `framing_agrees` holds the two to each other. `IdsProtocol` (``--protocol ids``) streams the scan's id form
+instead, for the warden, which forwards the server's bytes into its cells unchanged."""
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from verity.core.protocols.certifier import io_tie as IT
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
@@ -64,6 +67,8 @@ class PlainProtocol:
     (``exclude_unset=True`` for a choice chunk, ``exclude_none=True`` for the usage chunk)."""
 
     name = "plain"
+    #: a stream is an HTTP response: its head, then each frame one chunk of a chunked body
+    http = True
     UNSUPPORTED = {"echo": (None, False), "logprobs": (None,), "n": (None, 1), "best_of": (None, 1), "use_beam_search": (None, False),
                    "prompt_embeds": (None,), "suffix": (None,)}
 
@@ -129,6 +134,10 @@ class PlainProtocol:
         if usage is not None:
             out["usage"] = usage
         return _compact(out)
+
+    def events(self, **chunk: Any) -> bytes:
+        """One engine delta's bytes in the stream: its `chunk` as one SSE event."""
+        return sse(self.chunk(**chunk))
 
     def usage_chunk(self, *, request_id: str, created: int, model: str, usage: dict[str, int]) -> str:
         return _compact({"id": request_id, "object": "text_completion", "created": created, "model": model, "choices": [], "usage": usage})
@@ -208,7 +217,55 @@ class VllmProtocol(PlainProtocol):
                                        token_ids=token_ids, prompt_token_ids=prompt_token_ids)]).model_dump_json()
 
 
-PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol}
+#: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
+ID_PAYLOAD = 503
+
+
+class IdsProtocol:
+    """The scan's id form (``--protocol ids``). The warden relays bytes: what the server sends goes into its egress
+    cells unchanged, and the scan's egress reads each cell as one id event. So a streamed response here has no HTTP head
+    and no chunked body:
+    - each token id its own `io_tie.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id right-
+      aligned in 10 characters, spaces before the blank line), whatever the delta carries;
+    - no usage chunk, whatever ``force_include_usage``;
+    - then exactly `io_tie.TRAILER`, ``data: [DONE]`` and the blank line.
+
+    Requests are parsed and sampled as ``base`` does (`VllmProtocol` by default, `PlainProtocol` on CPU), and a whole
+    response (``stream`` false) is its."""
+
+    name = "ids"
+    http = False
+
+    def __init__(self, force_include_usage: bool = False, *, payload: int = ID_PAYLOAD, base: PlainProtocol | None = None) -> None:
+        IT.id_event(0, payload)
+        self.payload = payload
+        self.base = VllmProtocol(force_include_usage) if base is None else base
+
+    def parse(self, body: Any) -> Completion:
+        req = self.base.parse(body)
+        return dataclasses.replace(req, include_usage=False, continuous_usage=False,
+                                   return_token_ids=req.return_token_ids or req.stream)
+
+    def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> Any:
+        return self.base.sampling_params(req, max_tokens, defaults)
+
+    def brought(self, req: Completion) -> dict[str, Any]:
+        return self.base.brought(req)
+
+    def seeded(self, params: Any) -> Any:
+        return self.base.seeded(params)
+
+    def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
+        return self.base.max_tokens(req, max_model_len, prompt_len, defaults)
+
+    def events(self, *, token_ids: list[int] | None, **_: Any) -> bytes:
+        return b"".join(IT.id_event(int(t), self.payload) for t in token_ids or ())
+
+    def response(self, **kw: Any) -> str:
+        return self.base.response(**kw)
+
+
+PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol, "ids": IdsProtocol}
 
 
 FRAMING_BASE = {"request_id": "cmpl-0123-0", "created": 1, "model": "m"}
