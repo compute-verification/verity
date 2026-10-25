@@ -8361,6 +8361,12 @@
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
+  "NetTiming.SecurityProofs.SampledAuditAccepted": {
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
+   "assumptions": [],
+   "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048"
+  },
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted"],
@@ -10287,12 +10293,6 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
-  },
-  "NetTiming.SecurityProofs.SampledAuditAccepted": {
-   "owner": "@proofs",
-   "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
-   "assumptions": [],
-   "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048"
   }
  },
  "shape": {
@@ -14987,7 +14987,7 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
@@ -15568,7 +15568,7 @@
     "Claims.Sampling.universal_meets",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
@@ -17120,7 +17120,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
@@ -17136,12 +17136,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
-   "digest": "3e714f9391fa9dfc51619b38590282c0e7e13766ed86776d397aaa6cbc6fbea8",
+   "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
    "definitions": {
-    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0",
-    "NetTiming.Guarantees.SampledAuditAcceptedStated": "9009d1c7c22120166c4aa4c882e7e18b18de3dc9633d6988c52ae4436b74a55b"
+    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated", "NetTiming.SecurityProofs.SampledLeakAccepted"]
+   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAccepted", "NetTiming.SecurityProofs.SampledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
    "digest": "cbbc23a5cbd08ab3e0a390eb6382d7810d6bce7be5e52c22b59e835d04139f01",
@@ -17225,7 +17224,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
@@ -17256,7 +17255,7 @@
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
-    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted"
    ]
   },
